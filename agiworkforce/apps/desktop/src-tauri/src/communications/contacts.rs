@@ -1,5 +1,6 @@
-use rusqlite::{params, Connection, Result as SqliteResult};
+use rusqlite::{params, Result as SqliteResult};
 use tokio::fs;
+use tokio_rusqlite::Connection;
 use tracing::{debug, info, warn};
 
 use crate::error::{Error, Result};
@@ -11,111 +12,138 @@ pub struct ContactManager {
 }
 
 impl ContactManager {
-    pub fn new(conn: Connection) -> Self {
-        Self { conn }
+    pub async fn new(path: impl AsRef<str>) -> Result<Self> {
+        let conn = Connection::open(path.as_ref())
+            .await
+            .map_err(|e| Error::Generic(format!("Failed to open contacts database: {}", e)))?;
+        Ok(Self { conn })
     }
 
-    pub fn create_contact(&self, contact: &Contact) -> Result<i64> {
+    pub async fn create_contact(&self, contact: &Contact) -> Result<i64> {
         debug!("Creating contact: {}", contact.email);
         let now = chrono::Utc::now().timestamp();
+
+        let email = contact.email.clone();
+        let display_name = contact.display_name.clone();
+        let first_name = contact.first_name.clone();
+        let last_name = contact.last_name.clone();
+        let phone = contact.phone.clone();
+        let company = contact.company.clone();
+        let notes = contact.notes.clone();
+
         self.conn
-            .execute(
-                "INSERT INTO contacts (email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![
-                    contact.email,
-                    contact.display_name,
-                    contact.first_name,
-                    contact.last_name,
-                    contact.phone,
-                    contact.company,
-                    contact.notes,
-                    now,
-                    now
-                ],
-            )
-            .map_err(Error::Database)?;
-        Ok(self.conn.last_insert_rowid())
+            .call(move |conn| {
+                conn.execute(
+                    "INSERT INTO contacts (email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![email, display_name, first_name, last_name, phone, company, notes, now, now],
+                )?;
+                Ok(conn.last_insert_rowid())
+            })
+            .await
+            .map_err(|e| Error::Generic(format!("Database error: {}", e)))
     }
 
-    pub fn get_contact(&self, id: i64) -> Result<Option<Contact>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at FROM contacts WHERE id = ?1")
-            .map_err(Error::Database)?;
-        match stmt.query_row(params![id], map_contact_row) {
+    pub async fn get_contact(&self, id: i64) -> Result<Option<Contact>> {
+        let result = self.conn
+            .call(move |conn| {
+                let mut stmt = conn
+                    .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at FROM contacts WHERE id = ?1")?;
+                let contact = stmt.query_row(params![id], map_contact_row)?;
+                Ok(contact)
+            })
+            .await;
+
+        match result {
             Ok(contact) => Ok(Some(contact)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(err) => Err(Error::Database(err)),
+            Err(e) => {
+                // tokio_rusqlite wraps rusqlite errors, check if it's QueryReturnedNoRows
+                let err_str = format!("{}", e);
+                if err_str.contains("Query returned no rows") || err_str.contains("QueryReturnedNoRows") {
+                    Ok(None)
+                } else {
+                    Err(Error::Generic(format!("Database error: {}", e)))
+                }
+            }
         }
     }
 
-    pub fn update_contact(&self, contact: &Contact) -> Result<()> {
+    pub async fn update_contact(&self, contact: &Contact) -> Result<()> {
         let now = chrono::Utc::now().timestamp();
+
+        let email = contact.email.clone();
+        let display_name = contact.display_name.clone();
+        let first_name = contact.first_name.clone();
+        let last_name = contact.last_name.clone();
+        let phone = contact.phone.clone();
+        let company = contact.company.clone();
+        let notes = contact.notes.clone();
+        let id = contact.id;
+
         self.conn
-            .execute(
-                "UPDATE contacts SET email = ?1, display_name = ?2, first_name = ?3, last_name = ?4, phone = ?5, company = ?6, notes = ?7, updated_at = ?8 WHERE id = ?9",
-                params![
-                    contact.email,
-                    contact.display_name,
-                    contact.first_name,
-                    contact.last_name,
-                    contact.phone,
-                    contact.company,
-                    contact.notes,
-                    now,
-                    contact.id
-                ],
-            )
-            .map_err(Error::Database)?;
-        Ok(())
+            .call(move |conn| {
+                conn.execute(
+                    "UPDATE contacts SET email = ?1, display_name = ?2, first_name = ?3, last_name = ?4, phone = ?5, company = ?6, notes = ?7, updated_at = ?8 WHERE id = ?9",
+                    params![email, display_name, first_name, last_name, phone, company, notes, now, id],
+                )?;
+                Ok(())
+            })
+            .await
+            .map_err(|e| Error::Generic(format!("Database error: {}", e)))
     }
 
-    pub fn delete_contact(&self, id: i64) -> Result<()> {
+    pub async fn delete_contact(&self, id: i64) -> Result<()> {
         self.conn
-            .execute("DELETE FROM contacts WHERE id = ?1", params![id])
-            .map_err(Error::Database)?;
-        Ok(())
+            .call(move |conn| {
+                conn.execute("DELETE FROM contacts WHERE id = ?1", params![id])?;
+                Ok(())
+            })
+            .await
+            .map_err(|e| Error::Generic(format!("Database error: {}", e)))
     }
 
-    pub fn list_contacts(
+    pub async fn list_contacts(
         &self,
         limit: Option<usize>,
         offset: Option<usize>,
     ) -> Result<Vec<Contact>> {
         let limit = limit.unwrap_or(100);
         let offset = offset.unwrap_or(0);
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at FROM contacts ORDER BY display_name, email LIMIT ?1 OFFSET ?2")
-            .map_err(Error::Database)?;
-        let contacts = stmt
-            .query_map(params![limit, offset], map_contact_row)
-            .map_err(Error::Database)?
-            .collect::<SqliteResult<Vec<_>>>()
-            .map_err(Error::Database)?;
-        Ok(contacts)
+
+        self.conn
+            .call(move |conn| {
+                let mut stmt = conn
+                    .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at FROM contacts ORDER BY display_name, email LIMIT ?1 OFFSET ?2")?;
+                let contacts = stmt
+                    .query_map(params![limit, offset], map_contact_row)?
+                    .collect::<SqliteResult<Vec<_>>>()?;
+                Ok(contacts)
+            })
+            .await
+            .map_err(|e| Error::Generic(format!("Database error: {}", e)))
     }
 
-    pub fn search_contacts(&self, query: &str, limit: usize) -> Result<Vec<Contact>> {
+    pub async fn search_contacts(&self, query: &str, limit: usize) -> Result<Vec<Contact>> {
         let search_pattern = format!("%{}%", query);
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at
-                      FROM contacts
-                      WHERE LOWER(email) LIKE LOWER(?1)
-                         OR LOWER(display_name) LIKE LOWER(?1)
-                         OR LOWER(first_name) LIKE LOWER(?1)
-                         OR LOWER(last_name) LIKE LOWER(?1)
-                      ORDER BY display_name, email
-                      LIMIT ?2")
-            .map_err(Error::Database)?;
-        let contacts = stmt
-            .query_map(params![search_pattern, limit], map_contact_row)
-            .map_err(Error::Database)?
-            .collect::<SqliteResult<Vec<_>>>()
-            .map_err(Error::Database)?;
-        Ok(contacts)
+
+        self.conn
+            .call(move |conn| {
+                let mut stmt = conn
+                    .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at
+                          FROM contacts
+                          WHERE LOWER(email) LIKE LOWER(?1)
+                             OR LOWER(display_name) LIKE LOWER(?1)
+                             OR LOWER(first_name) LIKE LOWER(?1)
+                             OR LOWER(last_name) LIKE LOWER(?1)
+                          ORDER BY display_name, email
+                          LIMIT ?2")?;
+                let contacts = stmt
+                    .query_map(params![search_pattern, limit], map_contact_row)?
+                    .collect::<SqliteResult<Vec<_>>>()?;
+                Ok(contacts)
+            })
+            .await
+            .map_err(|e| Error::Generic(format!("Database error: {}", e)))
     }
 
     pub async fn import_vcard(&self, file_path: &str) -> Result<usize> {
@@ -129,32 +157,36 @@ impl ContactManager {
         for card in split_vcards(&content) {
             if let Some(contact) = parse_vcard(card) {
                 let now = chrono::Utc::now().timestamp();
+
+                let email = contact.email.clone();
+                let display_name = contact.display_name.clone();
+                let first_name = contact.first_name.clone();
+                let last_name = contact.last_name.clone();
+                let phone = contact.phone.clone();
+                let company = contact.company.clone();
+                let notes = contact.notes.clone();
+
                 let changes = self
                     .conn
-                    .execute(
-                        "INSERT INTO contacts (email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
-                         ON CONFLICT(email)
-                         DO UPDATE SET
-                            display_name = excluded.display_name,
-                            first_name = excluded.first_name,
-                            last_name = excluded.last_name,
-                            phone = excluded.phone,
-                            company = excluded.company,
-                            notes = excluded.notes,
-                            updated_at = excluded.updated_at",
-                        params![
-                            contact.email,
-                            contact.display_name,
-                            contact.first_name,
-                            contact.last_name,
-                            contact.phone,
-                            contact.company,
-                            contact.notes,
-                            now
-                        ],
-                    )
-                    .map_err(Error::Database)?;
+                    .call(move |conn| {
+                        let rows = conn.execute(
+                            "INSERT INTO contacts (email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at)
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+                             ON CONFLICT(email)
+                             DO UPDATE SET
+                                display_name = excluded.display_name,
+                                first_name = excluded.first_name,
+                                last_name = excluded.last_name,
+                                phone = excluded.phone,
+                                company = excluded.company,
+                                notes = excluded.notes,
+                                updated_at = excluded.updated_at",
+                            params![email, display_name, first_name, last_name, phone, company, notes, now],
+                        )?;
+                        Ok(rows)
+                    })
+                    .await
+                    .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
                 if changes > 0 {
                     imported += 1;
@@ -170,7 +202,7 @@ impl ContactManager {
     pub async fn export_vcard(&self, file_path: &str) -> Result<usize> {
         info!("Exporting contacts to vCard file {}", file_path);
 
-        let contacts = self.list_contacts(None, None)?;
+        let contacts = self.list_contacts(None, None).await?;
         if contacts.is_empty() {
             fs::write(file_path, "")
                 .await

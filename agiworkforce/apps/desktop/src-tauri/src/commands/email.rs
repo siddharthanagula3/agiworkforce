@@ -358,23 +358,28 @@ pub async fn email_send(app_handle: AppHandle, request: SendEmailRequest) -> Res
 }
 
 /// Retrieve a contact manager bound to the application database.
-fn contact_manager(app_handle: &AppHandle) -> Result<ContactManager> {
-    let conn = open_connection(app_handle)?;
-    Ok(ContactManager::new(conn))
+async fn contact_manager(app_handle: &AppHandle) -> Result<ContactManager> {
+    let db_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|err| Error::Generic(format!("Failed to resolve data dir: {}", err)))?
+        .join("agiworkforce.db");
+
+    ContactManager::new(db_path.to_string_lossy().as_ref()).await
 }
 
 /// Create a new contact.
 #[command]
 pub async fn contact_create(app_handle: AppHandle, contact: Contact) -> Result<i64> {
-    let manager = contact_manager(&app_handle)?;
-    manager.create_contact(&contact)
+    let manager = contact_manager(&app_handle).await?;
+    manager.create_contact(&contact).await
 }
 
 /// Retrieve a single contact.
 #[command]
 pub async fn contact_get(app_handle: AppHandle, id: i64) -> Result<Option<Contact>> {
-    let manager = contact_manager(&app_handle)?;
-    manager.get_contact(id)
+    let manager = contact_manager(&app_handle).await?;
+    manager.get_contact(id).await
 }
 
 /// List contacts with pagination.
@@ -384,8 +389,8 @@ pub async fn contact_list(
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<Vec<Contact>> {
-    let manager = contact_manager(&app_handle)?;
-    manager.list_contacts(limit, offset)
+    let manager = contact_manager(&app_handle).await?;
+    manager.list_contacts(limit, offset).await
 }
 
 /// Search contacts by email or name.
@@ -395,31 +400,31 @@ pub async fn contact_search(
     query: String,
     limit: usize,
 ) -> Result<Vec<Contact>> {
-    let manager = contact_manager(&app_handle)?;
-    manager.search_contacts(&query, limit)
+    let manager = contact_manager(&app_handle).await?;
+    manager.search_contacts(&query, limit).await
 }
 
 /// Update an existing contact.
 #[command]
 pub async fn contact_update(app_handle: AppHandle, contact: Contact) -> Result<()> {
     info!("Updating contact {}", contact.id);
-    let manager = contact_manager(&app_handle)?;
-    manager.update_contact(&contact)
+    let manager = contact_manager(&app_handle).await?;
+    manager.update_contact(&contact).await
 }
 
 /// Delete a contact.
 #[command]
 pub async fn contact_delete(app_handle: AppHandle, id: i64) -> Result<()> {
     info!("Deleting contact {}", id);
-    let manager = contact_manager(&app_handle)?;
-    manager.delete_contact(id)
+    let manager = contact_manager(&app_handle).await?;
+    manager.delete_contact(id).await
 }
 
 /// Import contacts from a vCard file.
 #[command]
 pub async fn contact_import_vcard(app_handle: AppHandle, file_path: String) -> Result<usize> {
     info!("Importing contacts from {}", file_path);
-    let manager = contact_manager(&app_handle)?;
+    let manager = contact_manager(&app_handle).await?;
     manager.import_vcard(&file_path).await
 }
 
@@ -427,7 +432,7 @@ pub async fn contact_import_vcard(app_handle: AppHandle, file_path: String) -> R
 #[command]
 pub async fn contact_export_vcard(app_handle: AppHandle, file_path: String) -> Result<usize> {
     info!("Exporting contacts to {}", file_path);
-    let manager = contact_manager(&app_handle)?;
+    let manager = contact_manager(&app_handle).await?;
     manager.export_vcard(&file_path).await
 }
 
