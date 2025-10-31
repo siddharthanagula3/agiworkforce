@@ -1,0 +1,178 @@
+[package]
+name = "agiworkforce-desktop"
+version = "0.1.0"
+edition = "2021"
+authors = ["AGI Automation LLC"]
+description = "AGI Workforce desktop shell"
+
+[dependencies]
+# Tauri and Plugins
+tauri = { version = "2.0.0-rc.7", features = ["tray-icon", "devtools"] }
+tauri-plugin-shell = "2.0.0-rc.1"
+tauri-plugin-fs = "2.0.0-rc.1"
+tauri-plugin-dialog = "2.0.0-rc.1"
+tauri-plugin-notification = "2.0.0-rc.1"
+tauri-plugin-clipboard-manager = "2.0.0-rc.1"
+tauri-plugin-window-state = "2.0.0-rc.1"
+
+# Async Runtime
+tokio = { version = "1.37", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec", "compat"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+once_cell = "1.19"
+
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled", "backup", "blob", "chrono"] }
+tokio-rusqlite = "0.5"
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"] }
+postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"] }
+deadpool-postgres = "0.13"
+mysql_async = "0.34"
+mongodb = "2.8"
+redis = { version = "0.24", features = ["aio", "tokio-comp", "connection-manager"] }
+bson = "2.9"
+
+# HTTP Client
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+reqwest-middleware = "0.3"
+reqwest-retry = "0.5"
+urlencoding = "2.1"
+mime_guess = "2.0"
+
+# OAuth2
+oauth2 = "4.4"
+
+# Windows-specific
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.56", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Accessibility",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Direct3D11",
+    "Win32_System_Com",
+    "Win32_System_DataExchange",
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    "Win32_Security",
+    "Win32_System_Memory",
+    "Win32_System_SystemServices"
+] }
+
+# Input Simulation (cross-platform fallback)
+enigo = { version = "0.2", features = ["serde"] }
+rdev = "0.5"
+
+# Terminal/PTY
+portable-pty = "0.8"
+which = "6.0"
+
+# Security & Credentials
+keyring = "2.3"
+argon2 = "0.5"
+sha2 = "0.10"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+
+# Image Processing
+image = { version = "0.24.9", features = ["png", "jpeg", "webp"] }
+screenshots = "0.8"
+imageproc = "0.24"
+
+# Logging and Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+sentry = { version = "0.33", optional = true }
+
+# WebRTC (P2P)
+webrtc = "0.9"
+tokio-tungstenite = "0.21"
+
+# WebSocket
+tungstenite = "0.21"
+url = "2.5"
+
+# UUID and Time
+uuid = { version = "1.8", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.8"
+
+# Configuration
+config = "0.14"
+toml = "0.8"
+
+# File System
+notify = "6.1"
+walkdir = "2.5"
+glob = "0.3"
+dirs = "5.0"
+
+# Regex and Text
+regex = "1.10"
+unicode-segmentation = "1.11"
+
+# Performance
+rayon = "1.10"
+dashmap = "5.5"
+parking_lot = "0.12"
+
+# Compression
+flate2 = "1.0"
+zip = "0.6"
+
+# OCR (conditional)
+tesseract = { version = "0.15", optional = true }
+
+# Local LLM (conditional)
+llama-cpp-2 = { version = "0.1", optional = true }
+
+# Email and MIME parsing
+async-imap = "0.9"
+tokio-native-tls = "0.3"
+lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
+mailparse = "0.15"
+vcard = "0.4"
+
+[features]
+default = []
+ocr = ["tesseract"]
+local-llm = ["llama-cpp-2"]
+sentry = ["dep:sentry"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0-rc.7", features = [] }
+
+[dev-dependencies]
+tempfile = "3.10"
+mockall = "0.12"
+serial_test = "3.0"
+criterion = "0.5"
+proptest = "1.4"
+
+[[bench]]
+name = "automation_benchmarks"
+harness = false
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+strip = true
+panic = "abort"

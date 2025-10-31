@@ -1,0 +1,9 @@
+{
+  "name": "@agiworkforce/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "echo \"React Native start script not yet implemented\"",
+    "build": "echo \"React Native build not yet implemented\""
+  }
+}

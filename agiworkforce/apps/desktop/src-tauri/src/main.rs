@@ -1,0 +1,377 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use agiworkforce_desktop::{
+    build_system_tray,
+    commands::{
+        load_persisted_calendar_accounts, ApiState, AppDatabase, BrowserStateWrapper,
+        CalendarState, CloudState, DatabaseState, FileWatcherState, LLMState, ProductivityState,
+        SettingsServiceState, SettingsState,
+    },
+    db::migrations,
+    initialize_window,
+    settings::SettingsService,
+    state::AppState,
+    telemetry,
+};
+use rusqlite::Connection;
+use std::sync::{Arc, Mutex};
+use tauri::Manager;
+
+fn main() {
+    // Initialize telemetry (logging, tracing, metrics)
+    let _telemetry_guard = telemetry::init().expect("Failed to initialize telemetry");
+
+    tauri::Builder::default()
+        .setup(|app| {
+            // Initialize database
+            let db_path = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir")
+                .join("agiworkforce.db");
+
+            // Ensure parent directory exists
+            if let Some(parent) = db_path.parent() {
+                std::fs::create_dir_all(parent).expect("Failed to create data directory");
+            }
+
+            // Open database connection
+            let conn = Connection::open(&db_path).expect("Failed to open database");
+
+            // Run migrations
+            migrations::run_migrations(&conn).expect("Failed to run migrations");
+
+            tracing::info!("Database initialized at {:?}", db_path);
+
+            // Manage database state
+            app.manage(AppDatabase(Mutex::new(conn)));
+
+            // Initialize LLM router state
+            app.manage(LLMState::new());
+
+            // Initialize browser automation state
+            app.manage(BrowserStateWrapper::new());
+
+            // Initialize settings state (legacy)
+            app.manage(SettingsState::new());
+
+            // Initialize new settings service with database connection
+            let settings_conn =
+                Connection::open(&db_path).expect("Failed to open settings database");
+            let settings_service = SettingsService::new(Arc::new(Mutex::new(settings_conn)))
+                .expect("Failed to initialize settings service");
+            app.manage(SettingsServiceState::new(settings_service));
+
+            tracing::info!("Settings service initialized");
+
+            // Initialize file watcher state
+            app.manage(FileWatcherState::new());
+
+            tracing::info!("File watcher initialized");
+
+            // Initialize API state
+            app.manage(ApiState::new());
+
+            tracing::info!("API state initialized");
+
+            // Initialize database state
+            app.manage(tokio::sync::Mutex::new(DatabaseState::new()));
+
+            tracing::info!("Database state initialized");
+
+            // Initialize cloud storage state
+            app.manage(CloudState::new());
+
+            tracing::info!("Cloud storage state initialized");
+
+            // Initialize calendar state and restore persisted accounts
+            let calendar_state = CalendarState::new();
+            match Connection::open(&db_path) {
+                Ok(calendar_conn) => match load_persisted_calendar_accounts(&calendar_conn) {
+                    Ok(accounts) => {
+                        let mut restored = 0usize;
+                        {
+                            let manager = calendar_state.manager.lock();
+                            for (account_id, info, _) in accounts {
+                                manager.upsert_account(account_id, info, None);
+                                restored += 1;
+                            }
+                        }
+                        tracing::info!("Calendar manager restored {restored} account(s)");
+                    }
+                    Err(err) => {
+                        tracing::warn!("Failed to load calendar accounts: {err}");
+                    }
+                },
+                Err(err) => {
+                    tracing::warn!("Failed to open database for calendar restore: {err}");
+                }
+            }
+            app.manage(calendar_state);
+
+            // Initialize terminal session manager
+            let session_manager =
+                agiworkforce_desktop::terminal::SessionManager::new(app.handle().clone());
+            app.manage(session_manager);
+
+            tracing::info!("Terminal session manager initialized");
+
+            // Initialize productivity state
+            app.manage(ProductivityState::new());
+
+            tracing::info!("Productivity state initialized");
+
+            // Initialize window state
+            let state = AppState::load(&app.handle())?;
+            app.manage(state);
+
+            // Build system tray
+            if let Err(err) = build_system_tray(app) {
+                eprintln!("[tray] initialization failed: {err:?}");
+            }
+
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(err) = initialize_window(&window) {
+                    eprintln!("[window] initialization failed: {err:?}");
+                }
+            }
+
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            // Window commands
+            agiworkforce_desktop::commands::window_get_state,
+            agiworkforce_desktop::commands::window_set_pinned,
+            agiworkforce_desktop::commands::window_set_always_on_top,
+            agiworkforce_desktop::commands::window_set_visibility,
+            agiworkforce_desktop::commands::window_dock,
+            agiworkforce_desktop::commands::tray_set_unread_badge,
+            // Chat commands
+            agiworkforce_desktop::commands::chat_create_conversation,
+            agiworkforce_desktop::commands::chat_get_conversations,
+            agiworkforce_desktop::commands::chat_get_conversation,
+            agiworkforce_desktop::commands::chat_update_conversation,
+            agiworkforce_desktop::commands::chat_delete_conversation,
+            agiworkforce_desktop::commands::chat_create_message,
+            agiworkforce_desktop::commands::chat_get_messages,
+            agiworkforce_desktop::commands::chat_update_message,
+            agiworkforce_desktop::commands::chat_delete_message,
+            agiworkforce_desktop::commands::chat_send_message,
+            agiworkforce_desktop::commands::chat_get_conversation_stats,
+            agiworkforce_desktop::commands::chat_get_cost_overview,
+            agiworkforce_desktop::commands::chat_get_cost_analytics,
+            agiworkforce_desktop::commands::chat_set_monthly_budget,
+            // Cloud storage commands
+            agiworkforce_desktop::commands::cloud_connect,
+            agiworkforce_desktop::commands::cloud_complete_oauth,
+            agiworkforce_desktop::commands::cloud_disconnect,
+            agiworkforce_desktop::commands::cloud_list_accounts,
+            agiworkforce_desktop::commands::cloud_list,
+            agiworkforce_desktop::commands::cloud_upload,
+            agiworkforce_desktop::commands::cloud_download,
+            agiworkforce_desktop::commands::cloud_delete,
+            agiworkforce_desktop::commands::cloud_create_folder,
+            agiworkforce_desktop::commands::cloud_share,
+            // Email commands
+            agiworkforce_desktop::commands::email_connect,
+            agiworkforce_desktop::commands::email_list_accounts,
+            agiworkforce_desktop::commands::email_remove_account,
+            agiworkforce_desktop::commands::email_list_folders,
+            agiworkforce_desktop::commands::email_fetch_inbox,
+            agiworkforce_desktop::commands::email_mark_read,
+            agiworkforce_desktop::commands::email_delete,
+            agiworkforce_desktop::commands::email_send,
+            // Contact commands
+            agiworkforce_desktop::commands::contact_create,
+            agiworkforce_desktop::commands::contact_get,
+            agiworkforce_desktop::commands::contact_list,
+            agiworkforce_desktop::commands::contact_search,
+            agiworkforce_desktop::commands::contact_update,
+            agiworkforce_desktop::commands::contact_delete,
+            agiworkforce_desktop::commands::contact_import_vcard,
+            agiworkforce_desktop::commands::contact_export_vcard,
+            // Calendar commands
+            agiworkforce_desktop::commands::calendar_connect,
+            agiworkforce_desktop::commands::calendar_complete_oauth,
+            agiworkforce_desktop::commands::calendar_disconnect,
+            agiworkforce_desktop::commands::calendar_list_accounts,
+            agiworkforce_desktop::commands::calendar_list_calendars,
+            agiworkforce_desktop::commands::calendar_list_events,
+            agiworkforce_desktop::commands::calendar_create_event,
+            agiworkforce_desktop::commands::calendar_update_event,
+            agiworkforce_desktop::commands::calendar_delete_event,
+            agiworkforce_desktop::commands::calendar_get_system_timezone,
+            // Productivity commands
+            agiworkforce_desktop::commands::productivity_connect,
+            agiworkforce_desktop::commands::productivity_list_tasks,
+            agiworkforce_desktop::commands::productivity_create_task,
+            agiworkforce_desktop::commands::productivity_notion_list_pages,
+            agiworkforce_desktop::commands::productivity_notion_query_database,
+            agiworkforce_desktop::commands::productivity_notion_create_database_row,
+            agiworkforce_desktop::commands::productivity_trello_list_boards,
+            agiworkforce_desktop::commands::productivity_trello_list_cards,
+            agiworkforce_desktop::commands::productivity_trello_create_card,
+            agiworkforce_desktop::commands::productivity_trello_move_card,
+            agiworkforce_desktop::commands::productivity_trello_add_comment,
+            agiworkforce_desktop::commands::productivity_asana_list_projects,
+            agiworkforce_desktop::commands::productivity_asana_list_project_tasks,
+            agiworkforce_desktop::commands::productivity_asana_create_task,
+            agiworkforce_desktop::commands::productivity_asana_assign_task,
+            agiworkforce_desktop::commands::productivity_asana_mark_complete,
+            // Automation commands
+            agiworkforce_desktop::commands::automation_list_windows,
+            agiworkforce_desktop::commands::automation_find_elements,
+            agiworkforce_desktop::commands::automation_invoke,
+            agiworkforce_desktop::commands::automation_set_value,
+            agiworkforce_desktop::commands::automation_get_value,
+            agiworkforce_desktop::commands::automation_toggle,
+            agiworkforce_desktop::commands::automation_focus_window,
+            agiworkforce_desktop::commands::automation_send_keys,
+            agiworkforce_desktop::commands::automation_hotkey,
+            agiworkforce_desktop::commands::automation_click,
+            agiworkforce_desktop::commands::automation_clipboard_get,
+            agiworkforce_desktop::commands::automation_clipboard_set,
+            // Browser automation commands
+            agiworkforce_desktop::commands::browser_init,
+            agiworkforce_desktop::commands::browser_launch,
+            agiworkforce_desktop::commands::browser_open_tab,
+            agiworkforce_desktop::commands::browser_close_tab,
+            agiworkforce_desktop::commands::browser_list_tabs,
+            agiworkforce_desktop::commands::browser_navigate,
+            agiworkforce_desktop::commands::browser_go_back,
+            agiworkforce_desktop::commands::browser_go_forward,
+            agiworkforce_desktop::commands::browser_reload,
+            agiworkforce_desktop::commands::browser_get_url,
+            agiworkforce_desktop::commands::browser_get_title,
+            agiworkforce_desktop::commands::browser_click,
+            agiworkforce_desktop::commands::browser_type,
+            agiworkforce_desktop::commands::browser_get_text,
+            agiworkforce_desktop::commands::browser_get_attribute,
+            agiworkforce_desktop::commands::browser_wait_for_selector,
+            agiworkforce_desktop::commands::browser_select_option,
+            agiworkforce_desktop::commands::browser_check,
+            agiworkforce_desktop::commands::browser_uncheck,
+            agiworkforce_desktop::commands::browser_screenshot,
+            agiworkforce_desktop::commands::browser_evaluate,
+            agiworkforce_desktop::commands::browser_hover,
+            agiworkforce_desktop::commands::browser_focus,
+            agiworkforce_desktop::commands::browser_query_all,
+            agiworkforce_desktop::commands::browser_scroll_into_view,
+            // Migration commands
+            agiworkforce_desktop::commands::migration_test_lovable_connection,
+            agiworkforce_desktop::commands::migration_list_lovable_workflows,
+            agiworkforce_desktop::commands::migration_launch_lovable,
+            // LLM commands
+            agiworkforce_desktop::commands::llm_send_message,
+            agiworkforce_desktop::commands::llm_configure_provider,
+            agiworkforce_desktop::commands::llm_set_default_provider,
+            // Settings commands (legacy)
+            agiworkforce_desktop::commands::settings_save_api_key,
+            agiworkforce_desktop::commands::settings_get_api_key,
+            agiworkforce_desktop::commands::settings_load,
+            agiworkforce_desktop::commands::settings_save,
+            // Settings v2 commands
+            agiworkforce_desktop::commands::settings_v2_get,
+            agiworkforce_desktop::commands::settings_v2_set,
+            agiworkforce_desktop::commands::settings_v2_get_batch,
+            agiworkforce_desktop::commands::settings_v2_delete,
+            agiworkforce_desktop::commands::settings_v2_get_category,
+            agiworkforce_desktop::commands::settings_v2_save_api_key,
+            agiworkforce_desktop::commands::settings_v2_get_api_key,
+            agiworkforce_desktop::commands::settings_v2_load_app_settings,
+            agiworkforce_desktop::commands::settings_v2_save_app_settings,
+            agiworkforce_desktop::commands::settings_v2_clear_cache,
+            agiworkforce_desktop::commands::settings_v2_list_all,
+            // Screen capture commands
+            agiworkforce_desktop::commands::capture_screen_full,
+            agiworkforce_desktop::commands::capture_screen_region,
+            agiworkforce_desktop::commands::capture_get_windows,
+            agiworkforce_desktop::commands::capture_get_history,
+            agiworkforce_desktop::commands::capture_delete,
+            agiworkforce_desktop::commands::capture_save_to_clipboard,
+            // OCR commands
+            agiworkforce_desktop::commands::ocr_process_image,
+            agiworkforce_desktop::commands::ocr_process_region,
+            agiworkforce_desktop::commands::ocr_get_languages,
+            agiworkforce_desktop::commands::ocr_get_result,
+            agiworkforce_desktop::commands::ocr_process_with_boxes,
+            agiworkforce_desktop::commands::ocr_detect_languages,
+            agiworkforce_desktop::commands::ocr_process_multi_language,
+            agiworkforce_desktop::commands::ocr_preprocess_image,
+            // File operations commands
+            agiworkforce_desktop::commands::file_read,
+            agiworkforce_desktop::commands::file_write,
+            agiworkforce_desktop::commands::file_delete,
+            agiworkforce_desktop::commands::file_rename,
+            agiworkforce_desktop::commands::file_copy,
+            agiworkforce_desktop::commands::file_move,
+            agiworkforce_desktop::commands::file_exists,
+            agiworkforce_desktop::commands::file_metadata,
+            // Directory operations commands
+            agiworkforce_desktop::commands::dir_create,
+            agiworkforce_desktop::commands::dir_list,
+            agiworkforce_desktop::commands::dir_delete,
+            agiworkforce_desktop::commands::dir_traverse,
+            // File watcher commands
+            agiworkforce_desktop::commands::file_watch_start,
+            agiworkforce_desktop::commands::file_watch_stop,
+            agiworkforce_desktop::commands::file_watch_list,
+            agiworkforce_desktop::commands::file_watch_stop_all,
+            // Terminal commands
+            agiworkforce_desktop::commands::terminal_detect_shells,
+            agiworkforce_desktop::commands::terminal_create_session,
+            agiworkforce_desktop::commands::terminal_send_input,
+            agiworkforce_desktop::commands::terminal_resize,
+            agiworkforce_desktop::commands::terminal_kill,
+            agiworkforce_desktop::commands::terminal_list_sessions,
+            agiworkforce_desktop::commands::terminal_get_history,
+            // API commands
+            agiworkforce_desktop::commands::api_request,
+            agiworkforce_desktop::commands::api_get,
+            agiworkforce_desktop::commands::api_post_json,
+            agiworkforce_desktop::commands::api_put_json,
+            agiworkforce_desktop::commands::api_delete,
+            agiworkforce_desktop::commands::api_parse_response,
+            agiworkforce_desktop::commands::api_extract_json_path,
+            agiworkforce_desktop::commands::api_oauth_create_client,
+            agiworkforce_desktop::commands::api_oauth_get_auth_url,
+            agiworkforce_desktop::commands::api_oauth_exchange_code,
+            agiworkforce_desktop::commands::api_oauth_refresh_token,
+            agiworkforce_desktop::commands::api_oauth_client_credentials,
+            agiworkforce_desktop::commands::api_render_template,
+            agiworkforce_desktop::commands::api_extract_template_variables,
+            agiworkforce_desktop::commands::api_validate_template,
+            // Database commands
+            agiworkforce_desktop::commands::db_create_pool,
+            agiworkforce_desktop::commands::db_execute_query,
+            agiworkforce_desktop::commands::db_execute_prepared,
+            agiworkforce_desktop::commands::db_execute_batch,
+            agiworkforce_desktop::commands::db_close_pool,
+            agiworkforce_desktop::commands::db_list_pools,
+            agiworkforce_desktop::commands::db_get_pool_stats,
+            agiworkforce_desktop::commands::db_build_select,
+            agiworkforce_desktop::commands::db_build_insert,
+            agiworkforce_desktop::commands::db_build_update,
+            agiworkforce_desktop::commands::db_build_delete,
+            agiworkforce_desktop::commands::db_mongo_connect,
+            agiworkforce_desktop::commands::db_mongo_find,
+            agiworkforce_desktop::commands::db_mongo_find_one,
+            agiworkforce_desktop::commands::db_mongo_insert_one,
+            agiworkforce_desktop::commands::db_mongo_insert_many,
+            agiworkforce_desktop::commands::db_mongo_update_many,
+            agiworkforce_desktop::commands::db_mongo_delete_many,
+            agiworkforce_desktop::commands::db_mongo_disconnect,
+            agiworkforce_desktop::commands::db_redis_connect,
+            agiworkforce_desktop::commands::db_redis_get,
+            agiworkforce_desktop::commands::db_redis_set,
+            agiworkforce_desktop::commands::db_redis_del,
+            agiworkforce_desktop::commands::db_redis_exists,
+            agiworkforce_desktop::commands::db_redis_expire,
+            agiworkforce_desktop::commands::db_redis_hget,
+            agiworkforce_desktop::commands::db_redis_hset,
+            agiworkforce_desktop::commands::db_redis_hgetall,
+            agiworkforce_desktop::commands::db_redis_disconnect
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
