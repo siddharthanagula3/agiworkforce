@@ -41,6 +41,7 @@ struct PendingOAuth {
 }
 
 /// Calendar client that can handle multiple providers
+#[derive(Clone)]
 pub enum CalendarClient {
     Google(GoogleCalendarClient),
     Outlook(OutlookCalendarClient),
@@ -307,31 +308,160 @@ impl CalendarManager {
         Ok(())
     }
 
-    /// Execute an operation with a mutable client, ensuring refreshed tokens.
-    pub async fn with_client_mut<F, T>(&self, account_id: &str, f: F) -> Result<T>
-    where
-        F: FnOnce(
-            &mut CalendarClient,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + '_>>,
-    {
+    /// List calendars for an account
+    pub async fn list_calendars(&self, account_id: &str) -> Result<Vec<Calendar>> {
         self.ensure_client_loaded(account_id)?;
 
-        let mut entry = self
-            .clients
-            .get_mut(account_id)
-            .ok_or_else(|| Error::Other("Account not found".to_string()))?;
+        // Clone the client to avoid holding DashMap guard across await
+        let mut client = {
+            let entry = self
+                .clients
+                .get(account_id)
+                .ok_or_else(|| Error::Other("Account not found".to_string()))?;
+            entry.value().clone()
+        };
 
-        let client = entry.value_mut();
         client.ensure_valid_token().await?;
-        let result = f(client).await?;
+        let result = client.list_calendars().await?;
 
+        // Update token if changed
         if let Some(token) = client.token() {
+            if let Some(mut entry) = self.clients.get_mut(account_id) {
+                entry.value_mut().set_token(token.clone());
+            }
             if let Some(mut info) = self.accounts.get_mut(account_id) {
                 info.token = token;
             }
         }
 
         Ok(result)
+    }
+
+    /// List events for a calendar
+    pub async fn list_events(
+        &self,
+        account_id: &str,
+        request: &ListEventsRequest,
+    ) -> Result<EventListResponse> {
+        self.ensure_client_loaded(account_id)?;
+
+        let mut client = {
+            let entry = self
+                .clients
+                .get(account_id)
+                .ok_or_else(|| Error::Other("Account not found".to_string()))?;
+            entry.value().clone()
+        };
+
+        client.ensure_valid_token().await?;
+        let result = client.list_events(request.clone()).await?;
+
+        if let Some(token) = client.token() {
+            if let Some(mut entry) = self.clients.get_mut(account_id) {
+                entry.value_mut().set_token(token.clone());
+            }
+            if let Some(mut info) = self.accounts.get_mut(account_id) {
+                info.token = token;
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Create an event
+    pub async fn create_event(
+        &self,
+        account_id: &str,
+        request: &CreateEventRequest,
+    ) -> Result<CalendarEvent> {
+        self.ensure_client_loaded(account_id)?;
+
+        let mut client = {
+            let entry = self
+                .clients
+                .get(account_id)
+                .ok_or_else(|| Error::Other("Account not found".to_string()))?;
+            entry.value().clone()
+        };
+
+        client.ensure_valid_token().await?;
+        let result = client.create_event(request.clone()).await?;
+
+        if let Some(token) = client.token() {
+            if let Some(mut entry) = self.clients.get_mut(account_id) {
+                entry.value_mut().set_token(token.clone());
+            }
+            if let Some(mut info) = self.accounts.get_mut(account_id) {
+                info.token = token;
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Update an event
+    pub async fn update_event(
+        &self,
+        account_id: &str,
+        calendar_id: &str,
+        event_id: &str,
+        request: &UpdateEventRequest,
+    ) -> Result<CalendarEvent> {
+        self.ensure_client_loaded(account_id)?;
+
+        let mut client = {
+            let entry = self
+                .clients
+                .get(account_id)
+                .ok_or_else(|| Error::Other("Account not found".to_string()))?;
+            entry.value().clone()
+        };
+
+        client.ensure_valid_token().await?;
+        let result = client.update_event(calendar_id, event_id, request.clone()).await?;
+
+        if let Some(token) = client.token() {
+            if let Some(mut entry) = self.clients.get_mut(account_id) {
+                entry.value_mut().set_token(token.clone());
+            }
+            if let Some(mut info) = self.accounts.get_mut(account_id) {
+                info.token = token;
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Delete an event
+    pub async fn delete_event(
+        &self,
+        account_id: &str,
+        calendar_id: &str,
+        event_id: &str,
+    ) -> Result<()> {
+        self.ensure_client_loaded(account_id)?;
+
+        let mut client = {
+            let entry = self
+                .clients
+                .get(account_id)
+                .ok_or_else(|| Error::Other("Account not found".to_string()))?;
+            entry.value().clone()
+        };
+
+        client.ensure_valid_token().await?;
+        client.delete_event(calendar_id, event_id).await?;
+
+        if let Some(token) = client.token() {
+            if let Some(mut entry) = self.clients.get_mut(account_id) {
+                entry.value_mut().set_token(token.clone());
+            }
+            if let Some(mut info) = self.accounts.get_mut(account_id) {
+                info.token = token;
+            }
+        }
+
+        Ok(())
     }
 
     /// Remove an account/client from memory

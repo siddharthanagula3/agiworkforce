@@ -16,6 +16,7 @@ const CALENDAR_READWRITE_SCOPE: &str = "Calendars.ReadWrite";
 const USER_READ_SCOPE: &str = "User.Read";
 
 /// Outlook Calendar client (using Microsoft Graph API)
+#[derive(Clone)]
 pub struct OutlookCalendarClient {
     client: Client,
     oauth_client: OAuth2Client,

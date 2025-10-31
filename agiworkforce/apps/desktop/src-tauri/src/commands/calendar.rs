@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, TimeZone, Utc};
-use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -19,13 +18,13 @@ use crate::error::{Error, Result};
 
 /// Global calendar manager state
 pub struct CalendarState {
-    pub manager: Arc<Mutex<CalendarManager>>,
+    pub manager: Arc<CalendarManager>,
 }
 
 impl CalendarState {
     pub fn new() -> Self {
         Self {
-            manager: Arc::new(Mutex::new(CalendarManager::new())),
+            manager: Arc::new(CalendarManager::new()),
         }
     }
 }
@@ -71,7 +70,7 @@ pub async fn calendar_connect(
         config.provider
     );
 
-    let (auth_url, oauth_state) = state.manager.lock().start_oauth(
+    let (auth_url, oauth_state) = state.manager.start_oauth(
         config.provider,
         config.client_id,
         config.client_secret,
@@ -97,10 +96,7 @@ pub async fn calendar_complete_oauth(
     tracing::info!("Completing calendar OAuth flow");
 
     // Extract pending configuration
-    let (provider, settings, pkce) = {
-        let manager = state.manager.lock();
-        manager.take_pending(&request.state)?
-    };
+    let (provider, settings, pkce) = state.manager.take_pending(&request.state)?;
 
     // Exchange authorization code outside the manager lock
     let (mut account_info, mut client) =
@@ -130,7 +126,6 @@ pub async fn calendar_complete_oauth(
     // Register with manager
     state
         .manager
-        .lock()
         .upsert_account(account_id.clone(), account_info.clone(), Some(client));
 
     app.emit("calendar:connected", &account_id)
@@ -150,7 +145,7 @@ pub async fn calendar_disconnect(
 
     let conn = open_connection(&app)?;
     delete_calendar_account(&conn, &account_id)?;
-    state.manager.lock().remove_account(&account_id);
+    state.manager.remove_account(&account_id);
 
     app.emit("calendar:disconnected", &account_id)
         .map_err(|e| Error::Other(format!("Failed to emit event: {}", e)))?;
@@ -167,18 +162,9 @@ pub async fn calendar_list_calendars(
 ) -> Result<Vec<Calendar>> {
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state
-        .manager
-        .lock()
-        .upsert_account(account_id.clone(), info.clone(), None);
+    state.manager.upsert_account(account_id.clone(), info.clone(), None);
 
-    let calendars = state
-        .manager
-        .lock()
-        .with_client_mut(&account_id, |client| {
-            Box::pin(async move { client.list_calendars().await })
-        })
-        .await?;
+    let calendars = state.manager.list_calendars(&account_id).await?;
 
     persist_account(&state, &app, &account_id)?;
 
@@ -195,18 +181,9 @@ pub async fn calendar_list_events(
 ) -> Result<EventListResponse> {
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state
-        .manager
-        .lock()
-        .upsert_account(account_id.clone(), info.clone(), None);
+    state.manager.upsert_account(account_id.clone(), info.clone(), None);
 
-    let response = state
-        .manager
-        .lock()
-        .with_client_mut(&account_id, |client| {
-            Box::pin(async move { client.list_events(request).await })
-        })
-        .await?;
+    let response = state.manager.list_events(&account_id, &request).await?;
 
     persist_account(&state, &app, &account_id)?;
 
@@ -229,18 +206,9 @@ pub async fn calendar_create_event(
 
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state
-        .manager
-        .lock()
-        .upsert_account(account_id.clone(), info.clone(), None);
+    state.manager.upsert_account(account_id.clone(), info.clone(), None);
 
-    let event = state
-        .manager
-        .lock()
-        .with_client_mut(&account_id, |client| {
-            Box::pin(async move { client.create_event(request).await })
-        })
-        .await?;
+    let event = state.manager.create_event(&account_id, &request).await?;
 
     persist_account(&state, &app, &account_id)?;
 
@@ -264,17 +232,11 @@ pub async fn calendar_update_event(
 
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state
-        .manager
-        .lock()
-        .upsert_account(account_id.clone(), info.clone(), None);
+    state.manager.upsert_account(account_id.clone(), info.clone(), None);
 
     let event = state
         .manager
-        .lock()
-        .with_client_mut(&account_id, |client| {
-            Box::pin(async move { client.update_event(&calendar_id, &event_id, request).await })
-        })
+        .update_event(&account_id, &calendar_id, &event_id, &request)
         .await?;
 
     persist_account(&state, &app, &account_id)?;
@@ -302,22 +264,11 @@ pub async fn calendar_delete_event(
 
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state
-        .manager
-        .lock()
-        .upsert_account(account_id.clone(), info.clone(), None);
-
-    let delete_calendar_id = calendar_id.clone();
-    let delete_event_id = event_id.clone();
+    state.manager.upsert_account(account_id.clone(), info.clone(), None);
 
     state
         .manager
-        .lock()
-        .with_client_mut(&account_id, move |client| {
-            let calendar_id = delete_calendar_id.clone();
-            let event_id = delete_event_id.clone();
-            Box::pin(async move { client.delete_event(&calendar_id, &event_id).await })
-        })
+        .delete_event(&account_id, &calendar_id, &event_id)
         .await?;
 
     persist_account(&state, &app, &account_id)?;
@@ -349,9 +300,8 @@ pub async fn calendar_list_accounts(
     let conn = open_connection(&app)?;
     let records = list_calendar_accounts(&conn)?;
 
-    let mut manager = state.manager.lock();
     for (account_id, info, _) in &records {
-        manager.upsert_account(account_id.clone(), info.clone(), None);
+        state.manager.upsert_account(account_id.clone(), info.clone(), None);
     }
 
     let accounts = records
@@ -571,7 +521,7 @@ fn persist_account(
     app: &AppHandle,
     account_id: &str,
 ) -> Result<()> {
-    if let Some(info) = state.manager.lock().account_info(account_id) {
+    if let Some(info) = state.manager.account_info(account_id) {
         let conn = open_connection(app)?;
         let updated_at = Utc::now().timestamp();
         insert_calendar_account(&conn, account_id, &info, updated_at)?;

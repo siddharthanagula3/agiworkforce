@@ -90,12 +90,9 @@ fn main() {
                 Ok(calendar_conn) => match load_persisted_calendar_accounts(&calendar_conn) {
                     Ok(accounts) => {
                         let mut restored = 0usize;
-                        {
-                            let manager = calendar_state.manager.lock();
-                            for (account_id, info, _) in accounts {
-                                manager.upsert_account(account_id, info, None);
-                                restored += 1;
-                            }
+                        for (account_id, info, _) in accounts {
+                            calendar_state.manager.upsert_account(account_id, info, None);
+                            restored += 1;
                         }
                         tracing::info!("Calendar manager restored {restored} account(s)");
                     }

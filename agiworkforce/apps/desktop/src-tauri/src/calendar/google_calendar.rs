@@ -17,6 +17,7 @@ const CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.ev
 const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
 
 /// Google Calendar client
+#[derive(Clone)]
 pub struct GoogleCalendarClient {
     client: Client,
     oauth_client: OAuth2Client,
