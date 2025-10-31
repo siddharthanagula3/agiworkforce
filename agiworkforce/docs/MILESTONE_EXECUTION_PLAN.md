@@ -1,0 +1,237 @@
+# AGI Workforce Milestone Execution Plan
+
+## References
+- Development Plan v2.1 (see `AGI_Workforce_Complete_Development_Plan.md`, Milestones §1-18)
+- PRD v4.0 (see `AGI_Workforce_PRD_v4_0.md`, Launch Readiness §8, Success Metrics §2)
+
+## Guiding Targets (PRD v4.0)
+- Hit v1.0 launch in 90 days with all 16 MCPs live.
+- Maintain <0.1% crash rate and >95% task success during internal & paid betas.
+- Achieve cost transparency: real-time per-task cost dashboard and <\$0.0002 average task cost.
+- Support Product-Led Growth funnel: ready for 20 internal users by Day 45, 50 paid beta users by Day 60.
+- Ensure security posture acceptable for public launch (milestone 18 hard gate).
+
+## Global Pre-Flight TODO
+- [ ] Confirm dev environments (Windows focus, macOS/Linux secondary) & shared .env secrets vault.
+- [ ] Stand up CI matrix (`pnpm lint`, `pnpm typecheck`, `pnpm --filter @agiworkforce/desktop exec vitest run`, cargo checks, Playwright smoke placeholder).
+- [ ] Create central test data fixtures for conversations, automation tasks, settings.
+- [ ] Define documentation cadence (weekly changelog, milestone demo notes, updated README references).
+- [ ] Align agent responsibilities (see below) and communication channel (#product-dev).
+
+## Cross-Cutting Workstreams & Agents
+| Workstream | Description | Lead Agent(s) | Notes |
+|------------|-------------|---------------|-------|
+| Frontend (React/Tauri UI) | Desktop shell, chat UX, MCP frontends | Codex (primary), Gemini UI Agent | Coordinate with Tailwind design system tasks. |
+| Backend (Rust + SQLite) | MCP commands, LLM router, API | Claude (Rust), Gemini Analysis Agent | Pair with Perplexity for doc updates. |
+| Automation MCP QA | Windows, browser, filesystem, etc. | Claude QA, Codex QA, Gemini Automation | Establish sandbox VMs early. |
+| Documentation & Knowledge | Docs, in-app help, PRD deltas | Perplexity Doc Agent | Weekly audit to keep artifacts fresh. |
+| Security & Compliance | Sandbox execution, logging, guardrails | Claude Security Agent, Human QA | Start threat modeling by Milestone 11. |
+
+## Milestone Roadmap & TODOs
+Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
+
+### Milestone 1 — Foundation & Infrastructure (Dev Plan §M1)
+**Objectives:** finalize DB schema, logging, and core build tooling.
+
+- [x] Implement SQLite schema + migrations (conversations, messages, settings, automation_history, overlay_events) — Claude.
+- [x] Add `tracing-subscriber` JSON logging with rotation & Sentry wiring — Claude Security Agent.
+- [x] Verify `pnpm test` scaffolding + placeholder suites (unit + integration folders) — Codex QA.
+- [x] Smoke-test `cargo build`, `pnpm lint`, `pnpm --filter desktop exec vitest run` in CI — Codex.
+
+**Testing:** Rust unit tests for DB layer, Vitest smoke, CI gating.
+**Exit Gate:** DB auto-created on first run, base tests pass.
+
+_Notes:_ OCR runtime remains optional; the default build disables the `ocr` feature to avoid native Tesseract dependencies, while stub commands provide user-facing messaging until feature flag is enabled.
+
+### Milestone 2 — Core UI Shell (Dev Plan §M2)
+**Objectives:** frameless window, title bar, tray, docking, design system.
+
+- [x] Implement frameless Tauri window with persistence + multi-monitor support — Codex.
+- [x] Build custom title bar, always-on-top toggle, tray menu actions — Codex + Claude (tauri commands).
+- [x] Implement snapping/docking logic with persisted state — Codex.
+- [ ] Stand up Tailwind design tokens + base Radix components + theme toggle — Codex & Gemini UI.
+- [ ] DPI scaling regression suite (125%, 150%, 200%) manual checklist — Human QA.
+
+**Testing:** Storybook/visual regression (or snapshot), Vitest component specs, manual dock tests.
+**Exit Gate:** Window state persists, tray toggles, themes switch per acceptance criteria.
+
+### Milestone 3 — Chat Interface (Dev Plan §M3)
+**Objectives:** chat UI, Zustand stores, conversation management, mock backend.
+
+- [x] Flesh out Zustand `chatStore` & `settingsStore` with persistence — Codex.
+- [x] Implement virtualized message list + markdown/code rendering — Codex.
+- [x] Build input composer (attachments, model selector) — Codex.
+- [ ] Implement sidebar conversation UX (search, pin, rename, delete) — Codex.
+- [x] Mock Rust chat commands returning deterministic responses — Claude.
+
+**Testing:** Vitest for stores & components, Playwright E2E (create conversation, send message), DB persistence check.
+**Exit Gate:** Conversations persist across restarts; 1000+ message scroll remains smooth.
+
+### Milestone 4 — LLM Router & Cost Tracking (Dev Plan §M4)
+**Objectives:** multi-LLM routing engine, cost telemetry, caching.
+
+- [ ] Implement routing rules engine (provider selection, failover) in Rust — Claude.
+- [ ] Integrate cost tracking (per message, per conversation) with DB — Claude + Perplexity for docs.
+- [ ] Build in-app cost dashboard widgets — Codex.
+- [ ] Add settings UI for router rules & API keys (with secure storage) — Codex.
+- [ ] Establish unit/integration tests for routing + billing math — Claude QA & Gemini Analysis.
+
+**Testing:** Rust integration tests with mocked LLM clients, Vitest UI tests (cost overlays), Playwright scenario (provider fallback).
+**Exit Gate:** Accurate per-task cost appears within UI; router handles provider outage gracefully.
+
+### Milestone 5 — Windows Automation MCP (Dev Plan §M5)
+**Objectives:** Windows UI Automation end-to-end control via chat commands.
+
+- [ ] Implement UIA wrappers (element search, interactions, focus management) — Claude.
+- [ ] Create task DSL for button clicks, text entry, navigation — Claude.
+- [ ] Build chat commands & UI for describing automation tasks — Codex.
+- [ ] Log automation history entries into DB — Claude.
+- [ ] Develop Windows VM automated tests (WinAppDriver/PowerShell harness) — Claude QA + Human QA.
+
+**Testing:** Integration tests on Windows VM, telemetry verification, safety prompts for destructive actions.
+**Exit Gate:** User can request “click start menu and open Notepad” via chat; logs stored with success flag.
+
+### Milestone 6 — Browser Automation MCP (Dev Plan §M6)
+**Objectives:** Playwright-driven browser workflows (Chrome/Edge), cookie/session management.
+
+- [ ] Implement Playwright controller (launch, context isolation, auth) — Claude.
+- [ ] Expose high-level chat commands (navigate, fill forms, scrape) — Codex.
+- [ ] Add browser artifact preview (screenshots, extracted data) — Codex.
+- [ ] Capture decision history in automation log — Claude.
+- [ ] Create Playwright test suite (headless + headed) for key flows — Codex QA + Gemini Browser Agent.
+
+**Testing:** Playwright scenarios (login, data entry), security review for credential handling.
+**Exit Gate:** Chat-driven “log into example app and capture table” demo works in beta env.
+
+### Milestone 7 — Code Editor MCP (Dev Plan §M7)
+**Objectives:** Monaco-based editor, diff/patch flows, integration with repo actions.
+
+- [ ] Embed Monaco editor with multi-file tabs, syntax support — Codex.
+- [ ] Implement Rust backend for file read/write, diff previews — Claude.
+- [ ] Support code generation artifact insertion from chat — Codex.
+- [ ] Add versioning/undo safety (snapshot + revert) — Claude.
+- [ ] Build unit tests (Vitest) and integration tests (Rust) for file operations — Codex QA, Claude QA.
+
+**Exit Gate:** Users can ask agent to edit code file and review diff before applying.
+
+### Milestone 8 — Terminal MCP (Dev Plan §M8)
+**Objectives:** Embedded terminal with PTY support, command history, safe execution.
+
+- [ ] Implement PTY bridge (Tokio) with stream handling — Claude.
+- [ ] Build terminal UI (xterm.js) with session management — Codex.
+- [ ] Introduce sandbox policies + confirmation prompts for risky commands — Claude Security.
+- [ ] Persist session transcripts for audit — Claude.
+- [ ] Automated tests for command execution, prompt injection detection — Claude QA.
+
+**Exit Gate:** Chat can request “run npm install” and stream terminal output with guardrails.
+
+### Milestone 9 — Filesystem MCP (Dev Plan §M9)
+**Objectives:** File exploration, CRUD, search, upload/download hooking.
+
+- [ ] Implement Rust file service (list, read/write, delete with recycle bin) — Claude.
+- [ ] Build UI file browser & search with filters — Codex.
+- [ ] Integrate permission prompts & safe zones — Claude Security.
+- [ ] Add unit tests for path sanitization, integration tests for operations — Claude QA.
+
+**Exit Gate:** User can browse directories, view files, and execute safe file operations.
+
+### Milestone 10 — Database MCP (Dev Plan §M10)
+**Objectives:** Connect to SQLite/Postgres/MySQL, run queries, visualize results.
+
+- [ ] Build DB connection manager with credential storage — Claude.
+- [ ] Implement query runner with result grids + saved queries — Codex.
+- [ ] Provide schema explorer + ER diagram placeholders — Codex.
+- [ ] Add integration tests hitting local sample DBs — Gemini Data Agent + Claude QA.
+
+**Exit Gate:** Chat-driven request runs SQL against sample DB and returns structured output.
+
+### Milestone 11 — API MCP (Dev Plan §M11)
+**Objectives:** REST/GraphQL client, authentication support, response inspection.
+
+- [ ] Implement HTTP client with templated requests/signing — Claude.
+- [ ] Build UI for request builder, history, and environment variables — Codex.
+- [ ] Add response viewers (JSON tree, headers, latency) — Codex.
+- [ ] Contract tests using mocked servers, Postman parity — Claude QA.
+
+**Exit Gate:** Users can define API calls, execute, and reuse them safely.
+
+### Milestone 12 — Communications MCP (Dev Plan §M12)
+**Objectives:** Email/SMS/slack-style communications automation.
+
+- [ ] Integrate IMAP/SMTP + provider SDKs (Gmail, Outlook) — Claude.
+- [ ] Build templates + scheduling UI — Codex.
+- [ ] Implement chat-driven email triage workflows — Codex + Claude.
+- [ ] Add unit tests with mocked providers + manual QA on sandbox accounts — Gemini Comms Agent.
+
+**Exit Gate:** Agent can draft/send email from chat with audit log and confirmation.
+
+### Milestone 13 — Calendar MCP (Dev Plan §M13)
+**Objectives:** Calendar sync, meeting scheduling, conflict resolution.
+
+- [ ] Connect to Google & Microsoft calendar APIs — Claude.
+- [ ] Implement availability visualization + suggestion algorithm — Codex.
+- [ ] Build reminders and follow-up actions — Codex.
+- [ ] Integration tests against sandbox calendars, timezone regression cases — Gemini Calendar Agent.
+
+**Exit Gate:** Chat can book meeting, handle conflicts, and sync updates bi-directionally.
+
+### Milestone 14 — Productivity MCP (Dev Plan §M14)
+**Objectives:** Task/project management integrations (Notion, Trello, Jira).
+
+- [ ] Build connectors for top productivity tools w/ OAuth — Claude.
+- [ ] Create Kanban-like overview UI inside desktop app — Codex.
+- [ ] Support task creation/update workflows via chat — Codex.
+- [ ] Regression suite covering CRUD operations per provider — Gemini Productivity Agent.
+
+**Exit Gate:** Users manage tasks across providers from AGI Workforce with reliable sync.
+
+### Milestone 15 — Cloud Storage MCP (Dev Plan §M15)
+**Objectives:** Integrate Dropbox/Drive/OneDrive for file operations.
+
+- [x] Implement storage adapters (SDK auth, file streaming) — Claude.
+- [x] Build unified storage browser with previews — Codex.
+- [x] Add large-file upload/download with pause/resume — Codex.
+- [x] Load/Stress tests for 1GB transfers, checksum validation � Gemini Perf Agent.
+
+**Exit Gate:** Cloud files accessible/manipulable with proper audit/logging.
+
+### Milestone 16 — Document MCP (Dev Plan §M16)
+**Objectives:** Advanced document parsing, OCR (extends screen capture), summarization.
+
+- [ ] Expand OCR pipeline (language packs, accuracy metrics) — Claude.
+- [ ] Implement document ingestion (PDF, DOCX) with parsing + annotation — Codex.
+- [ ] Hook into chat for summarize/translate commands — Codex.
+- [ ] Accuracy/regression tests (golden docs) — Codex QA + Perplexity Doc Agent.
+
+**Exit Gate:** Documents can be ingested and manipulated with high OCR accuracy (>90%).
+
+### Milestone 17 — Mobile Companion MCP (Dev Plan §M17)
+**Objectives:** iOS/Android companion app for notifications, lightweight control.
+
+- [ ] Stand up React Native/Flutter app skeleton with auth — Mobile Contractor + Gemini Mobile Agent.
+- [ ] Implement push notifications and quick actions — Mobile team.
+- [ ] Sync conversation context and MCP triggers — Claude (API), Codex (desktop hooks).
+- [ ] Mobile E2E tests (Detox/Appium) + TestFlight/Play Store beta prep — Gemini Mobile Agent.
+
+**Exit Gate:** Mobile app receives workflow alerts and can trigger core MCPs remotely.
+
+### Milestone 18 — Security & Polish (Dev Plan §M18)
+**Objectives:** Final hardening, telemetry, accessibility, release packaging.
+
+- [ ] Complete threat modeling + penetration testing — Claude Security Agent.
+- [ ] Implement permissioning, audit dashboards, and kill-switches — Claude.
+- [ ] Finalize accessibility audit (WCAG 2.1 AA) — Codex + Human QA.
+- [ ] Package installers (Windows MSI, macOS DMG, Linux AppImage) w/ code signing — Claude + Release engineer.
+- [ ] Run release readiness checklist (PRD §8 Launch Readiness) — Product Lead.
+
+**Exit Gate:** All launch checklist items complete, release candidate signed and smoke-tested.
+
+## Monitoring & Reporting
+- Weekly milestone stand-up: track checkbox status, blockers, and risk burndown.
+- Maintain rolling burndown chart (velocity vs. 13-week timeline).
+- Update PRD and Development Plan with amendments after each milestone review.
+
+## Validation Strategy
+- Every milestone requires: unit tests (Rust/TS), integration/E2E coverage, manual scenario validation, and documentation update.
+- Beta readiness (Day 45, Day 60) checkpoints map to milestones 8 & 12 respectively—ensure gating tests automated in CI.
+- Success metrics tracked via telemetry dashboard (task success %, crash rate, cost) beginning Milestone 4.

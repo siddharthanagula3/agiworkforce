@@ -1,0 +1,10 @@
+{
+  "name": "@agiworkforce/signaling-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"WebSocket signaling server not yet implemented\"",
+    "start": "echo \"WebSocket signaling server start not yet implemented\""
+  }
+}
