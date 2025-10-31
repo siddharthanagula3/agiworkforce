@@ -18,6 +18,7 @@ import { DatabaseWorkspace } from './components/Database/DatabaseWorkspace';
 import { APIWorkspace } from './components/API/APIWorkspace';
 import { EmailWorkspace } from './components/Communications/EmailWorkspace';
 import { CalendarWorkspace } from './components/Calendar/CalendarWorkspace';
+import { ProductivityWorkspace } from './components/Productivity/ProductivityWorkspace';
 
 const App = () => {
   const isOverlayMode = typeof window !== 'undefined' && window.location.search.includes('mode=overlay');
@@ -57,6 +58,7 @@ const App = () => {
           {activeSection === 'database' && <DatabaseWorkspace className="h-full" />}
           {activeSection === 'communications' && <EmailWorkspace className="h-full" />}
           {activeSection === 'calendar' && <CalendarWorkspace className="h-full" />}
+          {activeSection === 'productivity' && <ProductivityWorkspace className="h-full" />}
           {activeSection === 'api' && <APIWorkspace className="h-full" />}
           {activeSection !== 'dashboard' &&
             activeSection !== 'migration' &&
@@ -69,6 +71,7 @@ const App = () => {
             activeSection !== 'database' &&
             activeSection !== 'communications' &&
             activeSection !== 'calendar' &&
+            activeSection !== 'productivity' &&
             activeSection !== 'api' && (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 {activeSection.charAt(0).toUpperCase() + activeSection.slice(1)} workspace is coming soon.
