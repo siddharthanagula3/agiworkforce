@@ -64,6 +64,9 @@ pub mod cloud;
 // Productivity tools (Notion, Trello, Asana)
 pub mod productivity;
 
+// Document MCP (M16) - Word, Excel, PDF support
+pub mod document;
+
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use tray::build_system_tray;
