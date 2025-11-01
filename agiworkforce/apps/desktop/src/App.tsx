@@ -19,6 +19,7 @@ import { APIWorkspace } from './components/API/APIWorkspace';
 import { EmailWorkspace } from './components/Communications/EmailWorkspace';
 import { CalendarWorkspace } from './components/Calendar/CalendarWorkspace';
 import { ProductivityWorkspace } from './components/Productivity/ProductivityWorkspace';
+import { DocumentWorkspace } from './components/Document/DocumentWorkspace';
 
 const App = () => {
   const isOverlayMode = typeof window !== 'undefined' && window.location.search.includes('mode=overlay');
@@ -59,6 +60,7 @@ const App = () => {
           {activeSection === 'communications' && <EmailWorkspace className="h-full" />}
           {activeSection === 'calendar' && <CalendarWorkspace className="h-full" />}
           {activeSection === 'productivity' && <ProductivityWorkspace className="h-full" />}
+          {activeSection === 'documents' && <DocumentWorkspace className="h-full" />}
           {activeSection === 'api' && <APIWorkspace className="h-full" />}
           {activeSection !== 'dashboard' &&
             activeSection !== 'migration' &&

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';\nimport { open } from '@tauri-apps/plugin-shell';
+import { useEffect, useMemo, useState } from 'react';
+import { open } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
 import { Calendar, Link, Plus, RefreshCcw, CalendarRange, Pencil, Trash2 } from 'lucide-react';
 

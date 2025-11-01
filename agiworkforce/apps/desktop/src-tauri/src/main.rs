@@ -4,8 +4,8 @@ use agiworkforce_desktop::{
     build_system_tray,
     commands::{
         load_persisted_calendar_accounts, ApiState, AppDatabase, BrowserStateWrapper,
-        CalendarState, CloudState, DatabaseState, FileWatcherState, LLMState, ProductivityState,
-        SettingsServiceState, SettingsState,
+        CalendarState, CloudState, DatabaseState, DocumentState, FileWatcherState, LLMState,
+        ProductivityState, SettingsServiceState, SettingsState,
     },
     db::migrations,
     initialize_window,
@@ -117,6 +117,11 @@ fn main() {
             app.manage(ProductivityState::new());
 
             tracing::info!("Productivity state initialized");
+
+            // Initialize document state
+            app.manage(DocumentState::new());
+
+            tracing::info!("Document state initialized");
 
             // Initialize window state
             let state = AppState::load(&app.handle())?;
@@ -367,7 +372,13 @@ fn main() {
             agiworkforce_desktop::commands::db_redis_hget,
             agiworkforce_desktop::commands::db_redis_hset,
             agiworkforce_desktop::commands::db_redis_hgetall,
-            agiworkforce_desktop::commands::db_redis_disconnect
+            agiworkforce_desktop::commands::db_redis_disconnect,
+            // Document commands
+            agiworkforce_desktop::commands::document_read,
+            agiworkforce_desktop::commands::document_extract_text,
+            agiworkforce_desktop::commands::document_get_metadata,
+            agiworkforce_desktop::commands::document_search,
+            agiworkforce_desktop::commands::document_detect_type
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

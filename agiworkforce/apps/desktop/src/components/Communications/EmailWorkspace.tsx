@@ -709,8 +709,8 @@ function parseRecipients(raw: string): EmailAddress[] {
 
 function formatAddresses(addresses: EmailAddress[]): string {
   if (addresses.length === 0) {
-  if (addresses.length === 0) {
     return '--';
+  }
   return addresses
     .map((address) => (address.name ? `${address.name} <${address.email}>` : address.email))
     .join(', ');
