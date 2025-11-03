@@ -1,0 +1,10 @@
+Add-Type -AssemblyName System.Drawing
+$bmp = New-Object System.Drawing.Bitmap(512, 512)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.Clear([System.Drawing.Color]::FromArgb(63, 81, 181))
+$font = New-Object System.Drawing.Font('Arial', 180, [System.Drawing.FontStyle]::Bold)
+$brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+$g.DrawString('AGI', $font, $brush, 50, 150)
+$bmp.Save('app-icon.png', [System.Drawing.Imaging.ImageFormat]::Png)
+$g.Dispose()
+$bmp.Dispose()
