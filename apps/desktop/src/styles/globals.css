@@ -1,0 +1,399 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: transparent;
+
+    /* Design System Colors - Light Theme */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    /* Design System Colors - Dark Theme */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  color: #f5f7fb;
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+@keyframes overlay-flash {
+  0% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45);
+    opacity: 0.95;
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(16, 20, 32, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-shell.is-focused {
+  border-color: rgba(86, 156, 214, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.app-shell.is-blurred {
+  border-color: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(30, 36, 56, 0.9), rgba(20, 24, 32, 0.9));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.title-bar__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.title-bar__logo {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(86, 156, 214, 0.3);
+  border: 1px solid rgba(86, 156, 214, 0.5);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.title-bar__text h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.title-bar__text p {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(245, 247, 251, 0.7);
+}
+
+.title-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.title-bar__button {
+  width: 32px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(245, 247, 251, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.title-bar__button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.title-bar__button.is-active {
+  background: rgba(86, 156, 214, 0.25);
+  border-color: rgba(86, 156, 214, 0.5);
+}
+
+.title-bar__button--danger {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
+.title-bar__button--danger:hover {
+  background: rgba(255, 107, 107, 0.15);
+}
+
+.title-bar__menu {
+  position: fixed;
+  min-width: 160px;
+  background: rgba(18, 22, 34, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 4px;
+  z-index: 1000;
+}
+
+.title-bar__menu button {
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: rgba(245, 247, 251, 0.85);
+}
+
+.title-bar__menu button:hover {
+  background: rgba(86, 156, 214, 0.2);
+}
+
+.app-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  padding: 16px;
+  position: relative;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px;
+  background: rgba(24, 28, 44, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.sidebar__section h2,
+.sidebar__section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sidebar__section p {
+  margin: 0;
+  color: rgba(245, 247, 251, 0.75);
+}
+
+.sidebar__section ul {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 0;
+  color: rgba(245, 247, 251, 0.7);
+}
+
+.stage {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.stage__card {
+  flex: 1;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(28, 34, 52, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.stage__card h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.stage__card p {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: rgba(245, 247, 251, 0.75);
+}
+
+.stage__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(86, 156, 214, 0.18);
+  border: 1px solid rgba(86, 156, 214, 0.4);
+  font-size: 12px;
+}
+
+.dock-visualizer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+}
+
+.dock-visualizer__preview,
+.dock-visualizer__state {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  border-radius: 12px;
+  transition: opacity 0.15s ease;
+}
+
+.dock-visualizer__preview {
+  background: rgba(86, 156, 214, 0.15);
+  border: 1px dashed rgba(86, 156, 214, 0.4);
+}
+
+.dock-visualizer__state {
+  background: rgba(86, 214, 178, 0.16);
+  border: 1px solid rgba(86, 214, 178, 0.35);
+}
+
+.dock-left {
+  left: 0;
+}
+
+.dock-right {
+  right: 0;
+}
+
+@media (max-width: 960px) {
+  .app-body {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    order: 2;
+  }
+}
