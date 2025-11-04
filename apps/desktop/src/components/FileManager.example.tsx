@@ -190,8 +190,8 @@ export function FileManagerExample() {
 
   // Load initial directory on mount
   useEffect(() => {
-    loadDirectory(currentPath);
-  }, []);
+    void loadDirectory(currentPath);
+  }, [currentPath]);
 
   // ============================================================================
   // UI RENDERING
