@@ -181,7 +181,11 @@ export const useCodeStore = create<CodeState>()(
           return;
         }
 
-        const [moved] = files.splice(currentIndex, 1);
+        const removed = files.splice(currentIndex, 1);
+        if (removed.length === 0) {
+          return;
+        }
+        const moved = removed[0]!;
         files.splice(targetIndex, 0, moved);
 
         const persisted = state.persistedOpenPaths.filter((p) => p !== path);
@@ -209,6 +213,9 @@ export const useCodeStore = create<CodeState>()(
         }
 
         const file = state.openFiles[fileIndex];
+        if (!file) {
+          return;
+        }
         const updatedFile: OpenFile = {
           ...file,
           content,
@@ -216,7 +223,7 @@ export const useCodeStore = create<CodeState>()(
         };
 
         const updatedFiles = state.openFiles.map((openFile, index) =>
-          index === fileIndex ? updatedFile : openFile
+          index === fileIndex ? updatedFile : openFile,
         );
 
         set({
@@ -232,6 +239,9 @@ export const useCodeStore = create<CodeState>()(
         }
 
         const file = state.openFiles[fileIndex];
+        if (!file) {
+          return;
+        }
         try {
           await invoke('file_write', { path, content: file.content });
 
@@ -243,7 +253,7 @@ export const useCodeStore = create<CodeState>()(
 
           set({
             openFiles: state.openFiles.map((openFile, index) =>
-              index === fileIndex ? updatedFile : openFile
+              index === fileIndex ? updatedFile : openFile,
             ),
           });
         } catch (error) {
@@ -257,16 +267,14 @@ export const useCodeStore = create<CodeState>()(
         const dirtyFiles = state.openFiles.filter((f) => f.isDirty);
 
         const savePromises = dirtyFiles.map((file) =>
-          invoke('file_write', { path: file.path, content: file.content })
+          invoke('file_write', { path: file.path, content: file.content }),
         );
 
         try {
           await Promise.all(savePromises);
 
           const newOpenFiles = state.openFiles.map((file) =>
-            file.isDirty
-              ? { ...file, originalContent: file.content, isDirty: false }
-              : file
+            file.isDirty ? { ...file, originalContent: file.content, isDirty: false } : file,
           );
 
           set({ openFiles: newOpenFiles });
@@ -284,6 +292,9 @@ export const useCodeStore = create<CodeState>()(
         }
 
         const file = state.openFiles[fileIndex];
+        if (!file) {
+          return;
+        }
         const revertedFile: OpenFile = {
           ...file,
           content: file.originalContent,
@@ -292,7 +303,7 @@ export const useCodeStore = create<CodeState>()(
 
         set({
           openFiles: state.openFiles.map((openFile, index) =>
-            index === fileIndex ? revertedFile : openFile
+            index === fileIndex ? revertedFile : openFile,
           ),
         });
       },
@@ -319,7 +330,7 @@ export const useCodeStore = create<CodeState>()(
         if (state.activeFilePath) {
           set({ activeFilePath: state.activeFilePath });
         } else if (state.persistedOpenPaths.length > 0) {
-          set({ activeFilePath: state.persistedOpenPaths[0] });
+          set({ activeFilePath: state.persistedOpenPaths[0] ?? null });
         }
       },
     }),
@@ -331,6 +342,6 @@ export const useCodeStore = create<CodeState>()(
         activeFilePath: state.activeFilePath,
         persistedOpenPaths: state.persistedOpenPaths,
       }),
-    }
-  )
+    },
+  ),
 );

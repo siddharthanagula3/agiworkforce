@@ -6,7 +6,7 @@ interface DeviceState {
   devices: DesktopSummary[];
   selectedDeviceId: string | null;
   loading: boolean;
-  error?: string;
+  error: string | null;
   fetchDevices: () => Promise<void>;
   selectDevice: (id: string) => void;
   sendQuickAction: (payload: CommandPayload) => Promise<void>;
@@ -16,12 +16,13 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   devices: [],
   selectedDeviceId: null,
   loading: false,
+  error: null,
   async fetchDevices() {
     const token = useAuthStore.getState().token;
     if (!token) {
       return;
     }
-    set({ loading: true, error: undefined });
+    set({ loading: true, error: null });
     try {
       const response = await deviceService.list(token);
       set((state) => ({
@@ -29,8 +30,9 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
         selectedDeviceId:
           state.selectedDeviceId && response.desktops.some((d) => d.id === state.selectedDeviceId)
             ? state.selectedDeviceId
-            : response.desktops[0]?.id ?? null,
+            : (response.desktops[0]?.id ?? null),
         loading: false,
+        error: null,
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load devices';

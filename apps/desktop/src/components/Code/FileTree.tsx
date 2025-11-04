@@ -62,16 +62,26 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
   const [tree, setTree] = useState<FileNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ path: string; isDirectory: boolean; x: number; y: number } | null>(
-    null
-  );
+  const [contextMenu, setContextMenu] = useState<{
+    path: string;
+    isDirectory: boolean;
+    x: number;
+    y: number;
+  } | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
   const refreshTimeout = useRef<number | null>(null);
   const normalizedRoot = useMemo(() => normalizePath(rootPath), [rootPath]);
 
   const fetchDirectoryEntries = async (path: string) => {
     const entries = await invoke<
-      { path: string; name: string; is_file: boolean; is_dir: boolean; size: number; modified: number }[]
+      {
+        path: string;
+        name: string;
+        is_file: boolean;
+        is_dir: boolean;
+        size: number;
+        modified: number;
+      }[]
     >('dir_list', { path });
 
     return entries
@@ -104,7 +114,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         };
         if (shouldExpand) {
           const nested = await buildTree(entry.path, expandSet);
-          child.children = nested.children;
+          child.children = nested.children ?? [];
         }
         children.push(child);
       } else {
@@ -134,15 +144,15 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
 
   const loadDirectory = async (
     path: string,
-    options?: { preserveExpansion?: boolean; expansionOverride?: Set<string> }
+    options?: { preserveExpansion?: boolean; expansionOverride?: Set<string> },
   ) => {
     setLoading(true);
     try {
       const expandSet = options?.expansionOverride
         ? new Set(options.expansionOverride)
         : options?.preserveExpansion
-        ? new Set(expandedPaths)
-        : new Set<string>();
+          ? new Set(expandedPaths)
+          : new Set<string>();
 
       expandSet.add(normalizePath(path));
       const root = await buildTree(path, expandSet);
@@ -437,7 +447,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         <div
           className={cn(
             'flex items-center gap-2 px-2 py-1 cursor-pointer rounded-md group transition-colors select-none',
-            isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
+            isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
           onClick={() => {
@@ -451,7 +461,11 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         >
           {node.isDirectory ? (
             <span className="text-muted-foreground">
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
             </span>
           ) : (
             <span className="w-4" />

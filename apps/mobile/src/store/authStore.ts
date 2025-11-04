@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { authService, type AuthResponse, type Credentials } from '../services/auth';
+import { useConnectionStore } from './connectionStore';
 
 const TOKEN_KEY = 'agiworkforce.mobile.token';
 
@@ -9,7 +10,7 @@ interface AuthState {
   user: AuthResponse['user'] | null;
   deviceId: string | null;
   status: 'idle' | 'pending' | 'authenticated' | 'error';
-  error?: string;
+  error: string | null;
   login: (credentials: Credentials) => Promise<void>;
   register: (credentials: Credentials) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,8 +31,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   deviceId: null,
   status: 'idle',
+  error: null,
   async login(credentials) {
-    set({ status: 'pending', error: undefined });
+    set({ status: 'pending', error: null });
     try {
       const response = await authService.login(credentials);
       await persistToken(response.token);
@@ -47,7 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   async register(credentials) {
-    set({ status: 'pending', error: undefined });
+    set({ status: 'pending', error: null });
     try {
       const response = await authService.register(credentials);
       await persistToken(response.token);
@@ -64,12 +66,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   async logout() {
     await persistToken(null);
+    useConnectionStore.getState().disconnect();
     set({
       token: null,
       user: null,
       deviceId: null,
       status: 'idle',
-      error: undefined,
+      error: null,
     });
   },
   async hydrate() {

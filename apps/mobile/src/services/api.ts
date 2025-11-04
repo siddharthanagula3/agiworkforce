@@ -6,19 +6,13 @@ export interface ApiClientOptions {
 
 function getBaseUrl(): string {
   const envUrl =
-    Constants.expoConfig?.extra?.apiBaseUrl ??
-    Constants.manifest?.extra?.apiBaseUrl ??
+    Constants.expoConfig?.extra?.['apiBaseUrl'] ??
+    Constants.manifest?.extra?.['apiBaseUrl'] ??
     process.env['MOBILE_API_BASE_URL'];
-  return typeof envUrl === 'string' && envUrl.length > 0
-    ? envUrl
-    : 'http://localhost:3000';
+  return typeof envUrl === 'string' && envUrl.length > 0 ? envUrl : 'http://localhost:3000';
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit,
-  token?: string | null,
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit, token?: string | null): Promise<T> {
   const response = await fetch(`${getBaseUrl()}${path}`, {
     ...options,
     headers: {
