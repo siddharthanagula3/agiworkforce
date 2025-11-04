@@ -5,6 +5,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: [],
+    include: [],
+    passWithNoTests: true,
     coverage: {
       enabled: false,
     },
