@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
@@ -72,7 +72,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
   const refreshTimeout = useRef<number | null>(null);
   const normalizedRoot = useMemo(() => normalizePath(rootPath), [rootPath]);
 
-  const fetchDirectoryEntries = async (path: string) => {
+  const fetchDirectoryEntries = useCallback(async (path: string) => {
     const entries = await invoke<
       {
         path: string;
@@ -95,45 +95,48 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         path: entry.path,
         isDirectory: entry.is_dir,
       }));
-  };
+  }, []);
 
-  const buildTree = async (path: string, expandSet: Set<string>): Promise<FileNode> => {
-    const entries = await fetchDirectoryEntries(path);
-    const children: FileNode[] = [];
+  const buildTree = useCallback(
+    async (path: string, expandSet: Set<string>): Promise<FileNode> => {
+      const entries = await fetchDirectoryEntries(path);
+      const children: FileNode[] = [];
 
-    for (const entry of entries) {
-      if (entry.isDirectory) {
-        const normalized = normalizePath(entry.path);
-        const shouldExpand = expandSet.has(normalized);
-        const child: FileNode = {
-          name: entry.name,
-          path: entry.path,
-          isDirectory: true,
-          expanded: shouldExpand,
-          children: [],
-        };
-        if (shouldExpand) {
-          const nested = await buildTree(entry.path, expandSet);
-          child.children = nested.children ?? [];
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          const normalized = normalizePath(entry.path);
+          const shouldExpand = expandSet.has(normalized);
+          const child: FileNode = {
+            name: entry.name,
+            path: entry.path,
+            isDirectory: true,
+            expanded: shouldExpand,
+            children: [],
+          };
+          if (shouldExpand) {
+            const nested = await buildTree(entry.path, expandSet);
+            child.children = nested.children ?? [];
+          }
+          children.push(child);
+        } else {
+          children.push({
+            name: entry.name,
+            path: entry.path,
+            isDirectory: false,
+          });
         }
-        children.push(child);
-      } else {
-        children.push({
-          name: entry.name,
-          path: entry.path,
-          isDirectory: false,
-        });
       }
-    }
 
-    return {
-      name: getNameFromPath(path),
-      path,
-      isDirectory: true,
-      expanded: true,
-      children,
-    };
-  };
+      return {
+        name: getNameFromPath(path),
+        path,
+        isDirectory: true,
+        expanded: true,
+        children,
+      };
+    },
+    [fetchDirectoryEntries],
+  );
 
   const stopRefreshTimer = () => {
     if (refreshTimeout.current) {
@@ -142,29 +145,32 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
-  const loadDirectory = async (
-    path: string,
-    options?: { preserveExpansion?: boolean; expansionOverride?: Set<string> },
-  ) => {
-    setLoading(true);
-    try {
-      const expandSet = options?.expansionOverride
-        ? new Set(options.expansionOverride)
-        : options?.preserveExpansion
-          ? new Set(expandedPaths)
-          : new Set<string>();
+  const loadDirectory = useCallback(
+    async (
+      path: string,
+      options?: { preserveExpansion?: boolean; expansionOverride?: Set<string> },
+    ) => {
+      setLoading(true);
+      try {
+        const expandSet = options?.expansionOverride
+          ? new Set(options.expansionOverride)
+          : options?.preserveExpansion
+            ? new Set(expandedPaths)
+            : new Set<string>();
 
-      expandSet.add(normalizePath(path));
-      const root = await buildTree(path, expandSet);
-      setTree(root);
-      setExpandedPaths(expandSet);
-    } catch (error) {
-      console.error('Failed to load directory:', error);
-      toast.error('Failed to load directory');
-    } finally {
-      setLoading(false);
-    }
-  };
+        expandSet.add(normalizePath(path));
+        const root = await buildTree(path, expandSet);
+        setTree(root);
+        setExpandedPaths(expandSet);
+      } catch (error) {
+        console.error('Failed to load directory:', error);
+        toast.error('Failed to load directory');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [expandedPaths, buildTree],
+  );
 
   useEffect(() => {
     setExpandedPaths(new Set([normalizedRoot]));
@@ -223,7 +229,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         setTree(null);
       }
     };
-  }, [rootPath, normalizedRoot]);
+  }, [rootPath, normalizedRoot, loadDirectory]);
 
   const toggleDirectory = async (node: FileNode) => {
     if (!node.isDirectory) return;
@@ -369,7 +375,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
-  const filterTree = (node: FileNode | null, query: string): FileNode | null => {
+  const filterTree = useCallback((node: FileNode | null, query: string): FileNode | null => {
     if (!node) return null;
     if (!query) return node;
 
@@ -391,7 +397,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
 
     return matches ? { ...node, children: [] } : null;
-  };
+  }, []);
 
   const handleContextMenu = (event: React.MouseEvent, node: FileNode) => {
     event.preventDefault();
@@ -436,7 +442,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     };
   }, [contextMenu]);
 
-  const displayTree = useMemo(() => filterTree(tree, searchQuery), [tree, searchQuery]);
+  const displayTree = useMemo(() => filterTree(tree, searchQuery), [tree, searchQuery, filterTree]);
 
   const renderNode = (node: FileNode, level = 0) => {
     const isSelected = selectedFile === node.path;

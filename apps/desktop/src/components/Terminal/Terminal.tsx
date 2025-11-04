@@ -20,12 +20,8 @@ export function Terminal({ sessionId, className }: TerminalProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const { theme } = useTheme();
-  const {
-    sendInput,
-    resizeTerminal,
-    setupOutputListener,
-    removeOutputListener,
-  } = useTerminalStore();
+  const { sendInput, resizeTerminal, setupOutputListener, removeOutputListener } =
+    useTerminalStore();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -38,51 +34,54 @@ export function Terminal({ sessionId, className }: TerminalProps) {
       fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
       fontSize: 14,
       lineHeight: 1.2,
-      theme: theme === 'dark' ? {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-        cursorAccent: '#1e1e1e',
-        selectionBackground: '#264f78',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d18b',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#e5e5e5',
-      } : {
-        background: '#ffffff',
-        foreground: '#333333',
-        cursor: '#333333',
-        cursorAccent: '#ffffff',
-        selectionBackground: '#add6ff',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#00bc00',
-        yellow: '#949800',
-        blue: '#0451a5',
-        magenta: '#bc05bc',
-        cyan: '#0598bc',
-        white: '#555555',
-        brightBlack: '#666666',
-        brightRed: '#cd3131',
-        brightGreen: '#14ce14',
-        brightYellow: '#b5ba00',
-        brightBlue: '#0451a5',
-        brightMagenta: '#bc05bc',
-        brightCyan: '#0598bc',
-        brightWhite: '#a5a5a5',
-      },
+      theme:
+        theme === 'dark'
+          ? {
+              background: '#1e1e1e',
+              foreground: '#d4d4d4',
+              cursor: '#d4d4d4',
+              cursorAccent: '#1e1e1e',
+              selectionBackground: '#264f78',
+              black: '#000000',
+              red: '#cd3131',
+              green: '#0dbc79',
+              yellow: '#e5e510',
+              blue: '#2472c8',
+              magenta: '#bc3fbc',
+              cyan: '#11a8cd',
+              white: '#e5e5e5',
+              brightBlack: '#666666',
+              brightRed: '#f14c4c',
+              brightGreen: '#23d18b',
+              brightYellow: '#f5f543',
+              brightBlue: '#3b8eea',
+              brightMagenta: '#d670d6',
+              brightCyan: '#29b8db',
+              brightWhite: '#e5e5e5',
+            }
+          : {
+              background: '#ffffff',
+              foreground: '#333333',
+              cursor: '#333333',
+              cursorAccent: '#ffffff',
+              selectionBackground: '#add6ff',
+              black: '#000000',
+              red: '#cd3131',
+              green: '#00bc00',
+              yellow: '#949800',
+              blue: '#0451a5',
+              magenta: '#bc05bc',
+              cyan: '#0598bc',
+              white: '#555555',
+              brightBlack: '#666666',
+              brightRed: '#cd3131',
+              brightGreen: '#14ce14',
+              brightYellow: '#b5ba00',
+              brightBlue: '#0451a5',
+              brightMagenta: '#bc05bc',
+              brightCyan: '#0598bc',
+              brightWhite: '#a5a5a5',
+            },
       allowProposedApi: true,
       allowTransparency: false,
       scrollback: 10000,
@@ -137,7 +136,7 @@ export function Terminal({ sessionId, className }: TerminalProps) {
           xtermRef.current.writeln('\r\n\x1b[33m[Process exited]\x1b[0m');
         }
         toast.info('Terminal session exited');
-      }
+      },
     ).catch((error) => {
       console.error('Failed to setup output listener:', error);
       toast.error('Failed to connect to terminal session');
@@ -152,21 +151,24 @@ export function Terminal({ sessionId, className }: TerminalProps) {
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [sessionId, theme]);
+  }, [sessionId, theme, sendInput, setupOutputListener, removeOutputListener]);
 
   // Handle theme changes
   useEffect(() => {
     if (!xtermRef.current) return;
 
-    const newTheme = theme === 'dark' ? {
-      background: '#1e1e1e',
-      foreground: '#d4d4d4',
-      cursor: '#d4d4d4',
-    } : {
-      background: '#ffffff',
-      foreground: '#333333',
-      cursor: '#333333',
-    };
+    const newTheme =
+      theme === 'dark'
+        ? {
+            background: '#1e1e1e',
+            foreground: '#d4d4d4',
+            cursor: '#d4d4d4',
+          }
+        : {
+            background: '#ffffff',
+            foreground: '#333333',
+            cursor: '#333333',
+          };
 
     xtermRef.current.options.theme = newTheme;
   }, [theme]);
