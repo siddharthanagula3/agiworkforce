@@ -99,7 +99,7 @@ export default defineConfig(async () => {
           },
         },
       },
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 3000,
     },
     resolve: {
       alias: {
