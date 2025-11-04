@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Editor, { Monaco, OnMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
+import { Save, RotateCcw, Copy, Check, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import { invoke } from '@tauri-apps/api/core';
 import { useTheme } from '../../hooks/useTheme';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
-import { Save, RotateCcw, Copy, Check, Download } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface CodeEditorProps {
   defaultValue?: string;
@@ -56,7 +57,6 @@ export function CodeEditor({
         const context = path ? { auto, path } : { auto };
         await onSave(nextValue, context);
       } else if (path) {
-        const { invoke } = await import('@tauri-apps/api/core');
         await invoke('file_write', { path, content: nextValue });
       }
 

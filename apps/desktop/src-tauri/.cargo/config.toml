@@ -5,5 +5,10 @@ incremental = false
 debug = false  # Disable debug info completely to avoid PDB issues
 strip = true
 
+# Force disable debug info for all dependencies
+[profile.dev.package."*"]
+debug = false
+strip = true
+
 [target.x86_64-pc-windows-msvc]
 linker = "link.exe"
