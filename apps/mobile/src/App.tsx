@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
@@ -21,14 +20,14 @@ import { useDeviceStore } from './store/deviceStore';
 import { useSyncStore } from './store/syncStore';
 import { useNotificationStore } from './store/notificationStore';
 import { createGatewayClient } from './services/websocket';
-import { mobileService } from './services/mobile';
+import { mobileService, type RegisterMobilePayload } from './services/mobile';
 
 const DEVICE_ID_KEY = 'agiworkforce.mobile.deviceId';
 
 type MainTab = 'overview' | 'remote' | 'activity' | 'settings';
 
 export default function App() {
-  const { status, hydrate, token, setDeviceId, deviceId } = useAuthStore();
+  const { status, hydrate, token, deviceId } = useAuthStore();
   const { fetchDevices } = useDeviceStore();
   const { pull, appendRecord } = useSyncStore();
   const notificationStore = useNotificationStore();
@@ -160,19 +159,42 @@ export default function App() {
         </Text>
       </View>
       <View style={styles.tabBar}>
-        <TabButton label="Overview" active={tab === 'overview'} onPress={() => setTab('overview')} />
+        <TabButton
+          label="Overview"
+          active={tab === 'overview'}
+          onPress={() => setTab('overview')}
+        />
         <TabButton label="Remote" active={tab === 'remote'} onPress={() => setTab('remote')} />
-        <TabButton label="Activity" active={tab === 'activity'} onPress={() => setTab('activity')} />
-        <TabButton label="Settings" active={tab === 'settings'} onPress={() => setTab('settings')} />
+        <TabButton
+          label="Activity"
+          active={tab === 'activity'}
+          onPress={() => setTab('activity')}
+        />
+        <TabButton
+          label="Settings"
+          active={tab === 'settings'}
+          onPress={() => setTab('settings')}
+        />
       </View>
       <View style={styles.body}>{mainContent}</View>
     </SafeAreaView>
   );
 }
 
-function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function TabButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
+    <TouchableOpacity
+      style={[styles.tabButton, active && styles.tabButtonActive]}
+      onPress={onPress}
+    >
       <Text style={[styles.tabButtonLabel, active && styles.tabButtonLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -195,14 +217,17 @@ async function ensureDeviceId(): Promise<string> {
   return generated;
 }
 
-async function registerMobileDevice(token: string, deviceId: string, pushToken?: string) {
+async function registerMobileDevice(token: string, deviceId: string, pushToken: string | null) {
   try {
-    await mobileService.register(token, {
+    const payload: RegisterMobilePayload = {
       clientId: deviceId,
       name: Device.deviceName ?? 'Mobile Companion',
       platform: Device.osName ?? 'unknown',
-      pushToken,
-    });
+    };
+    if (pushToken) {
+      payload.pushToken = pushToken;
+    }
+    await mobileService.register(token, payload);
   } catch (error) {
     console.warn('Failed to register mobile device', error);
   }

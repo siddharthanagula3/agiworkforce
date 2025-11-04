@@ -6,9 +6,16 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',
-    ecmaFeatures: { jsx: true }
+    ecmaFeatures: { jsx: true },
   },
-  settings: { react: { version: '18.2' } },
+  settings: {
+    react: { version: '18.2' },
+    'import/resolver': {
+      typescript: {
+        project: './tsconfig.base.json',
+      },
+    },
+  },
   plugins: ['@typescript-eslint', 'react', 'react-hooks', 'import'],
   extends: [
     'eslint:recommended',
@@ -17,13 +24,14 @@ module.exports = {
     'plugin:react-hooks/recommended',
     'plugin:import/recommended',
     'plugin:import/typescript',
-    'prettier'
+    'prettier',
   ],
   ignorePatterns: [
     'dist',
     'build',
     'out',
     'node_modules',
+    '**/node_modules/**',
     '**/src-tauri/**',
     'target',
   ],
@@ -35,24 +43,32 @@ module.exports = {
       'error',
       {
         argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_'
-      }
+        varsIgnorePattern: '^_',
+      },
     ],
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-namespace': 'off',
     'no-useless-catch': 'off',
     'import/no-named-as-default': 'off',
     'import/no-duplicates': 'off',
+    'import/default': 'off',
+    'import/no-named-as-default-member': 'off',
     'react-hooks/exhaustive-deps': 'off',
     'react/no-unescaped-entities': 'off',
-    'prefer-const': 'off'
+    'prefer-const': 'off',
   },
   overrides: [
     {
       files: ['apps/extension/src/**/*.js'],
       globals: {
-        chrome: 'readonly'
-      }
-    }
-  ]
+        chrome: 'readonly',
+      },
+    },
+    {
+      files: ['**/*.config.ts', '**/*.config.js', '**/*.config.cjs'],
+      rules: {
+        'import/no-unresolved': 'off',
+      },
+    },
+  ],
 };

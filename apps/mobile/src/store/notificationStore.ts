@@ -1,5 +1,8 @@
 import { create } from 'zustand';
-import { registerForPushNotificationsAsync, scheduleLocalNotification } from '../services/notifications';
+import {
+  registerForPushNotificationsAsync,
+  scheduleLocalNotification,
+} from '../services/notifications';
 
 interface NotificationEntry {
   id: string;
@@ -10,17 +13,20 @@ interface NotificationEntry {
 }
 
 interface NotificationState {
-  pushToken?: string;
+  pushToken: string | null;
   permissionGranted: boolean;
   registering: boolean;
   items: NotificationEntry[];
   registerPush: () => Promise<void>;
-  addNotification: (entry: Omit<NotificationEntry, 'id' | 'read' | 'timestamp'> & { id?: string; read?: boolean }) => void;
+  addNotification: (
+    entry: Omit<NotificationEntry, 'id' | 'read' | 'timestamp'> & { id?: string; read?: boolean },
+  ) => void;
   markAsRead: (id: string) => void;
   clear: () => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
+export const useNotificationStore = create<NotificationState>((set) => ({
+  pushToken: null,
   permissionGranted: false,
   registering: false,
   items: [],
@@ -28,13 +34,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     set({ registering: true });
     try {
       const result = await registerForPushNotificationsAsync();
-      if (result.granted) {
+      if (result.granted && result.token) {
         set({ pushToken: result.token, permissionGranted: true, registering: false });
       } else {
-        set({ permissionGranted: false, registering: false });
+        set({ pushToken: null, permissionGranted: false, registering: false });
       }
     } catch {
-      set({ registering: false, permissionGranted: false });
+      set({ pushToken: null, registering: false, permissionGranted: false });
     }
   },
   addNotification(entry) {

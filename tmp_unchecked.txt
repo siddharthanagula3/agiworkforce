@@ -1,0 +1,61 @@
+- [ ] Accuracy/regression tests (golden docs) — Codex QA + Perplexity Doc Agent.
+- [ ] Add browser artifact preview (screenshots, extracted data) — Codex.
+- [ ] Add integration tests hitting local sample DBs — Gemini Data Agent + Claude QA.
+- [ ] Add response viewers (JSON tree, headers, latency) — Codex.
+- [ ] Add settings UI for router rules & API keys (with secure storage) — Codex.
+- [ ] Add unit tests for path sanitization, integration tests for operations — Claude QA.
+- [ ] Add unit tests with mocked providers + manual QA on sandbox accounts — Gemini Comms Agent.
+- [ ] Align agent responsibilities (see below) and communication channel (#product-dev).
+- [ ] Automated tests for command execution, prompt injection detection — Claude QA.
+- [ ] Build chat commands & UI for describing automation tasks — Codex.
+- [ ] Build connectors for top productivity tools w/ OAuth — Claude.
+- [ ] Build DB connection manager with credential storage — Claude.
+- [ ] Build in-app cost dashboard widgets — Codex.
+- [ ] Build reminders and follow-up actions — Codex.
+- [ ] Build templates + scheduling UI — Codex.
+- [ ] Build terminal UI (xterm.js) with session management — Codex.
+- [ ] Build UI file browser & search with filters — Codex.
+- [ ] Build UI for request builder, history, and environment variables — Codex.
+- [ ] Capture decision history in automation log — Claude.
+- [ ] Complete threat modeling + penetration testing — Claude Security Agent.
+- [ ] Confirm dev environments (Windows focus, macOS/Linux secondary) & shared .env secrets vault.
+- [ ] Connect to Google & Microsoft calendar APIs — Claude.
+- [ ] Contract tests using mocked servers, Postman parity — Claude QA.
+- [ ] Create central test data fixtures for conversations, automation tasks, settings.
+- [ ] Create Kanban-like overview UI inside desktop app — Codex.
+- [ ] Create Playwright test suite (headless + headed) for key flows — Codex QA + Gemini Browser Agent.
+- [ ] Create task DSL for button clicks, text entry, navigation — Claude.
+- [ ] Define documentation cadence (weekly changelog, milestone demo notes, updated README references).
+- [ ] Develop Windows VM automated tests (WinAppDriver/PowerShell harness) — Claude QA + Human QA.
+- [ ] DPI scaling regression suite (125%, 150%, 200%) manual checklist — Human QA.
+- [ ] Establish unit/integration tests for routing + billing math — Claude QA & Gemini Analysis.
+- [ ] Expand OCR pipeline (language packs, accuracy metrics) — Claude.
+- [ ] Expose high-level chat commands (navigate, fill forms, scrape) — Codex.
+- [ ] Finalize accessibility audit (WCAG 2.1 AA) — Codex + Human QA.
+- [ ] Hook into chat for summarize/translate commands — Codex.
+- [ ] Implement availability visualization + suggestion algorithm — Codex.
+- [ ] Implement chat-driven email triage workflows — Codex + Claude.
+- [ ] Implement document ingestion (PDF, DOCX) with parsing + annotation — Codex.
+- [ ] Implement HTTP client with templated requests/signing — Claude.
+- [ ] Implement permissioning, audit dashboards, and kill-switches — Claude.
+- [ ] Implement Playwright controller (launch, context isolation, auth) — Claude.
+- [ ] Implement PTY bridge (Tokio) with stream handling — Claude.
+- [ ] Implement query runner with result grids + saved queries — Codex.
+- [ ] Implement routing rules engine (provider selection, failover) in Rust — Claude.
+- [ ] Implement Rust file service (list, read/write, delete with recycle bin) — Claude.
+- [ ] Implement sidebar conversation UX (search, pin, rename, delete) — Codex.
+- [ ] Implement UIA wrappers (element search, interactions, focus management) — Claude.
+- [ ] Integrate cost tracking (per message, per conversation) with DB — Claude + Perplexity for docs.
+- [ ] Integrate IMAP/SMTP + provider SDKs (Gmail, Outlook) — Claude.
+- [ ] Integrate permission prompts & safe zones — Claude Security.
+- [ ] Integration tests against sandbox calendars, timezone regression cases — Gemini Calendar Agent.
+- [ ] Introduce sandbox policies + confirmation prompts for risky commands — Claude Security.
+- [ ] Log automation history entries into DB — Claude.
+- [ ] Package installers (Windows MSI, macOS DMG, Linux AppImage) w/ code signing — Claude + Release engineer.
+- [ ] Persist session transcripts for audit — Claude.
+- [ ] Provide schema explorer + ER diagram placeholders — Codex.
+- [ ] Regression suite covering CRUD operations per provider — Gemini Productivity Agent.
+- [ ] Run release readiness checklist (PRD §8 Launch Readiness) — Product Lead.
+- [ ] Stand up CI matrix (`pnpm lint`, `pnpm typecheck`, `pnpm --filter @agiworkforce/desktop exec vitest run`, cargo checks, Playwright smoke placeholder).
+- [ ] Stand up Tailwind design tokens + base Radix components + theme toggle — Codex & Gemini UI.
+- [ ] Support task creation/update workflows via chat — Codex.
