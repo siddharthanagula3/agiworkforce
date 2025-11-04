@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo \"Browser extension dev server not yet implemented\"",
-    "build": "echo \"Browser extension build not yet implemented\""
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^5.2.11",
+    "vite-plugin-static-copy": "^1.0.3"
   }
 }

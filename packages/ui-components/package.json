@@ -15,5 +15,9 @@
     "tailwind-merge": "^2.3.0",
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-tooltip": "^1.0.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.2",
+    "@types/react-dom": "^18.3.0"
   }
 }

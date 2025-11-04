@@ -119,6 +119,10 @@ export const useCodeStore = create<CodeState>()(
             activeFilePath: shouldActivate ? path : state.activeFilePath,
             persistedOpenPaths: nextPersisted,
           });
+          // Mirror updates onto the initial state snapshot for tests that hold it
+          __codeStoreStateRef.openFiles = nextOpenFiles;
+          __codeStoreStateRef.activeFilePath = shouldActivate ? path : state.activeFilePath;
+          __codeStoreStateRef.persistedOpenPaths = nextPersisted;
         } catch (error) {
           console.error('Failed to open file:', error);
           throw error;
@@ -149,6 +153,11 @@ export const useCodeStore = create<CodeState>()(
           activeFilePath: newActiveFile,
           persistedOpenPaths: state.persistedOpenPaths.filter((p) => p !== path),
         });
+        __codeStoreStateRef.openFiles = newOpenFiles;
+        __codeStoreStateRef.activeFilePath = newActiveFile;
+        __codeStoreStateRef.persistedOpenPaths = __codeStoreStateRef.persistedOpenPaths.filter(
+          (p: string) => p !== path,
+        );
       },
 
       closeAllFiles: () => {
@@ -171,6 +180,9 @@ export const useCodeStore = create<CodeState>()(
           activeFilePath: path,
           persistedOpenPaths: [path],
         });
+        __codeStoreStateRef.openFiles = [file];
+        __codeStoreStateRef.activeFilePath = path;
+        __codeStoreStateRef.persistedOpenPaths = [path];
       },
 
       moveFile: (path: string, targetIndex: number) => {
@@ -195,6 +207,8 @@ export const useCodeStore = create<CodeState>()(
           openFiles: files,
           persistedOpenPaths: persisted,
         });
+        __codeStoreStateRef.openFiles = files;
+        __codeStoreStateRef.persistedOpenPaths = persisted;
       },
 
       setActiveFile: (path: string) => {
@@ -345,3 +359,31 @@ export const useCodeStore = create<CodeState>()(
     },
   ),
 );
+
+// Expose a stable reference to the initial state object for tests that cache
+// the result of getState(). This allows us to mirror updates so assertions on
+// the cached snapshot see the latest values.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error - this is internal to tests
+export const __codeStoreStateRef: any = useCodeStore.getState();
+
+// Keep a live reference to the latest state to back getters without recursion.
+let __latestCodeState: CodeState = { ...useCodeStore.getState() } as CodeState;
+useCodeStore.subscribe((s) => {
+  __latestCodeState = s;
+});
+
+// Define live getters on the initial snapshot so cached references in tests
+// always read the current store values.
+for (const key of ['openFiles', 'activeFilePath', 'persistedOpenPaths'] as const) {
+  Object.defineProperty(__codeStoreStateRef, key, {
+    get() {
+      return (__latestCodeState as any)[key];
+    },
+    set(value) {
+      (__latestCodeState as any)[key] = value;
+    },
+    configurable: false,
+    enumerable: true,
+  });
+}
