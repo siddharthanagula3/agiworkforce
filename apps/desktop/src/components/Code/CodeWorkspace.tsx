@@ -198,16 +198,10 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
     closeFile(path);
   };
 
-  const handleSaveActive = async () => {
-    if (!activeFilePath) return;
-    try {
-      await persistFile(activeFilePath);
-    } catch {
-      // handled in persistFile
-    }
-  };
-
-  const handleEditorSave = async (_content: string, { auto, path: targetPath }: { auto: boolean; path?: string }) => {
+  const handleEditorSave = async (
+    _content: string,
+    { auto, path: targetPath }: { auto: boolean; path?: string },
+  ) => {
     const resolvedPath = targetPath ?? activeFile?.path;
     if (!resolvedPath) {
       return;
@@ -395,7 +389,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           <button
             className={cn(
               'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted',
-              !canMoveLeft && 'cursor-not-allowed text-muted-foreground hover:bg-transparent'
+              !canMoveLeft && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
             )}
             onClick={moveLeft}
             disabled={!canMoveLeft}
@@ -406,7 +400,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           <button
             className={cn(
               'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted',
-              !canMoveRight && 'cursor-not-allowed text-muted-foreground hover:bg-transparent'
+              !canMoveRight && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
             )}
             onClick={moveRight}
             disabled={!canMoveRight}
@@ -435,23 +429,28 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
   };
 
   return (
-    <div className={cn('flex h-full overflow-hidden border border-border rounded-lg bg-background', className)}>
+    <div
+      className={cn(
+        'flex h-full overflow-hidden border border-border rounded-lg bg-background',
+        className,
+      )}
+    >
       {/* Sidebar */}
       <div
         className={cn(
           'flex shrink-0 flex-col border-r border-border bg-muted/10 transition-all duration-200',
-          sidebarVisible ? 'opacity-100' : 'w-0 opacity-0'
+          sidebarVisible ? 'opacity-100' : 'w-0 opacity-0',
         )}
         style={{ width: sidebarVisible ? sidebarWidth : 0 }}
       >
-        {sidebarVisible && rootPath && (
+        {sidebarVisible && rootPath ? (
           <FileTree
             rootPath={rootPath}
             onFileSelect={handleFileSelect}
-            selectedFile={activeFilePath ?? undefined}
+            {...(activeFilePath ? { selectedFile: activeFilePath } : {})}
             className="flex-1"
           />
-        )}
+        ) : null}
       </div>
 
       {/* Main area */}
@@ -463,10 +462,16 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
               className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-muted"
               onClick={() => setSidebarVisible((value) => !value)}
             >
-              {sidebarVisible ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {sidebarVisible ? (
+                <ChevronLeft className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
             </button>
             <span className="text-sm font-medium">
-              {activeFilePath ? activeFilePath.split(/[/\\]/).slice(-2).join('/') : 'No file selected'}
+              {activeFilePath
+                ? activeFilePath.split(/[/\\]/).slice(-2).join('/')
+                : 'No file selected'}
             </span>
           </div>
 
@@ -478,12 +483,22 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
 
             {openFiles.length > 0 && (
               <>
-                <Button variant="outline" size="sm" onClick={handleSaveAll} disabled={dirtyCount === 0}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveAll}
+                  disabled={dirtyCount === 0}
+                >
                   <Save className="h-4 w-4 mr-1" />
                   Save All ({dirtyCount})
                 </Button>
                 {activeFile?.isDirty && (
-                  <Button variant="ghost" size="sm" onClick={handleCompareWithSaved} title="Compare with saved version">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCompareWithSaved}
+                    title="Compare with saved version"
+                  >
                     <GitCompare className="h-4 w-4 mr-1" />
                     Compare
                   </Button>
@@ -513,14 +528,14 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer',
                     'transition-colors group whitespace-nowrap select-none',
-                    isActive ? 'bg-background border border-border shadow-sm' : 'hover:bg-muted/50'
+                    isActive ? 'bg-background border border-border shadow-sm' : 'hover:bg-muted/50',
                   )}
                 >
                   <span
                     className={cn(
                       'text-sm font-mono',
                       isActive && 'font-medium',
-                      file.isDirty && 'text-amber-500'
+                      file.isDirty && 'text-amber-500',
                     )}
                   >
                     {fileName}
@@ -532,7 +547,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                     className={cn(
                       'text-muted-foreground hover:text-foreground',
                       'transition-colors opacity-0 group-hover:opacity-100',
-                      isActive && 'opacity-100'
+                      isActive && 'opacity-100',
                     )}
                     title="Close tab"
                   >
@@ -570,7 +585,9 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                 <div>
                   <p className="text-lg font-medium mb-2">No File Open</p>
                   <p className="text-sm">
-                    {rootPath ? 'Select a file from the explorer to start editing' : 'Open a folder to get started'}
+                    {rootPath
+                      ? 'Select a file from the explorer to start editing'
+                      : 'Open a folder to get started'}
                   </p>
                 </div>
                 {!rootPath && (
@@ -605,7 +622,10 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!pendingCloseFile} onOpenChange={(open) => !open && !pendingCloseSaving && setPendingCloseFile(null)}>
+      <Dialog
+        open={!!pendingCloseFile}
+        onOpenChange={(open) => !open && !pendingCloseSaving && setPendingCloseFile(null)}
+      >
         <DialogContent className="sm:max-w-lg space-y-4">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Unsaved changes</h2>
@@ -616,7 +636,11 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             </p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={handleKeepEditingPending} disabled={pendingCloseSaving}>
+            <Button
+              variant="ghost"
+              onClick={handleKeepEditingPending}
+              disabled={pendingCloseSaving}
+            >
               Keep editing
             </Button>
             <Button variant="outline" onClick={handleDiscardPending} disabled={pendingCloseSaving}>

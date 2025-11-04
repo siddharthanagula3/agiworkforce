@@ -53,7 +53,8 @@ export function CodeEditor({
 
     try {
       if (onSave) {
-        await onSave(nextValue, { auto, path });
+        const context = path ? { auto, path } : { auto };
+        await onSave(nextValue, context);
       } else if (path) {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('file_write', { path, content: nextValue });
@@ -167,12 +168,20 @@ export function CodeEditor({
   const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light';
 
   return (
-    <div className={cn('flex h-full flex-col border border-border rounded-lg bg-background', className)}>
+    <div
+      className={cn(
+        'flex h-full flex-col border border-border rounded-lg bg-background',
+        className,
+      )}
+    >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/20">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-foreground">Code Editor</span>
           {path && (
-            <span className="text-sm font-mono text-muted-foreground truncate max-w-md" title={path}>
+            <span
+              className="text-sm font-mono text-muted-foreground truncate max-w-md"
+              title={path}
+            >
               {path}
             </span>
           )}
@@ -180,7 +189,13 @@ export function CodeEditor({
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={handleFormat} disabled={readOnly} title="Format code (Shift+Alt+F)">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleFormat}
+            disabled={readOnly}
+            title="Format code (Shift+Alt+F)"
+          >
             Format
           </Button>
 

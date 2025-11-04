@@ -6,7 +6,7 @@ interface SyncState {
   records: SyncRecord[];
   lastPulledAt: number;
   syncing: boolean;
-  error?: string;
+  error: string | null;
   appendRecord: (record: SyncRecord) => void;
   push: (type: string, data: Record<string, unknown>) => Promise<void>;
   pull: () => Promise<void>;
@@ -17,6 +17,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   records: [],
   lastPulledAt: 0,
   syncing: false,
+  error: null,
   appendRecord(record) {
     set((state) => ({
       records: [...state.records, record].sort((a, b) => a.timestamp - b.timestamp),
@@ -36,7 +37,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     if (!token) {
       return;
     }
-    set({ syncing: true, error: undefined });
+    set({ syncing: true, error: null });
     try {
       const { data, timestamp } = await syncService.pull(token, get().lastPulledAt, deviceId);
       if (data.length > 0) {
@@ -44,9 +45,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
           records: [...state.records, ...data].sort((a, b) => a.timestamp - b.timestamp),
           lastPulledAt: timestamp,
           syncing: false,
+          error: null,
         }));
       } else {
-        set({ lastPulledAt: timestamp, syncing: false });
+        set({ lastPulledAt: timestamp, syncing: false, error: null });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync data';
@@ -59,6 +61,6 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       return;
     }
     await syncService.clear(token);
-    set({ records: [], lastPulledAt: 0 });
+    set({ records: [], lastPulledAt: 0, error: null });
   },
 }));

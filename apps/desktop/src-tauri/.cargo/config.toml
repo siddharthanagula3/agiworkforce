@@ -1,0 +1,9 @@
+﻿[build]
+incremental = false
+
+[profile.dev]
+debug = false  # Disable debug info completely to avoid PDB issues
+strip = true
+
+[target.x86_64-pc-windows-msvc]
+linker = "link.exe"
