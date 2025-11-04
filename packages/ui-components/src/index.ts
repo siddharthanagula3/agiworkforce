@@ -1,4 +1,4 @@
-// Placeholder export surface for UI components package.
-// Replace with concrete component exports when implemented.
-
-export {};
+export * from './primitives/Button';
+export * from './primitives/Input';
+export * from './primitives/Separator';
+export * from './primitives/Tooltip';

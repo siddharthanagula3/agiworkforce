@@ -73,20 +73,18 @@ export function Message({ message }: MessageProps) {
       className={cn(
         'group relative flex gap-3 px-4 py-4',
         'hover:bg-accent/50 transition-colors',
-        isUser && 'bg-muted/30'
+        isUser && 'bg-muted/30',
       )}
     >
       {avatar}
 
       <div className="flex-1 space-y-3 overflow-hidden">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">
-            {isUser ? 'You' : 'Assistant'}
-          </span>
+          <span className="text-sm font-semibold">{isUser ? 'You' : 'Assistant'}</span>
           <span className="text-xs text-muted-foreground">
             {message.timestamp.toLocaleTimeString([], {
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
             })}
           </span>
         </div>
@@ -113,7 +111,7 @@ export function Message({ message }: MessageProps) {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                code(props) {
+                code(props: any) {
                   const { children, className, ...rest } = props;
                   const match = /language-(\w+)/.exec(className || '');
                   return match ? (
@@ -167,11 +165,7 @@ export function Message({ message }: MessageProps) {
               onClick={handleCopy}
               aria-label="Copy message"
             >
-              {copied ? (
-                <Check className="h-4 w-4 text-green-500" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
+              {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
