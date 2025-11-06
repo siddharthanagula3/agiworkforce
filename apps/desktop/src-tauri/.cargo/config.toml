@@ -1,14 +1,8 @@
-﻿[build]
-incremental = false
-
-[profile.dev]
-debug = false  # Disable debug info completely to avoid PDB issues
-strip = true
-
-# Force disable debug info for all dependencies
-[profile.dev.package."*"]
-debug = false
-strip = true
-
+# Compiler-level settings to prevent PDB generation
+# Note: Profile settings are controlled in workspace root Cargo.toml
 [target.x86_64-pc-windows-msvc]
+rustflags = [
+    "-C", "debuginfo=0",    # Force zero debug info
+    "-C", "strip=symbols",  # Strip all symbols
+]
 linker = "link.exe"

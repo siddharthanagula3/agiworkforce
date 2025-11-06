@@ -171,6 +171,9 @@ serial_test = "3.0"
 criterion = "0.5"
 proptest = "1.4"
 
+# NOTE: Profile settings are controlled at workspace root (../../../Cargo.toml)
+# Package-level profile settings are ignored by Cargo in workspace members
+
 [[bench]]
 name = "automation_benchmarks"
 harness = false
