@@ -3,17 +3,8 @@
   "name": "AGI Workforce Browser Automation",
   "version": "1.0.0",
   "description": "Browser automation extension for AGI Workforce desktop application",
-  "permissions": [
-    "activeTab",
-    "tabs",
-    "storage",
-    "webNavigation",
-    "cookies",
-    "scripting"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["activeTab", "tabs", "storage", "webNavigation", "cookies", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "src/background.js"
   },

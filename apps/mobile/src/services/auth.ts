@@ -22,6 +22,9 @@ export const authService = {
     return apiClient.post<AuthResponse, Credentials>('/api/auth/login', credentials);
   },
   verify(token: string) {
-    return apiClient.get<{ valid: boolean; userId: string; email: string }>('/api/auth/verify', token);
+    return apiClient.get<{ valid: boolean; userId: string; email: string }>(
+      '/api/auth/verify',
+      token,
+    );
   },
 };

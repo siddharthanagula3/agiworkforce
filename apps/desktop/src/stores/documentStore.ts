@@ -105,10 +105,11 @@ export const useDocumentStore = create<DocumentState>((set) => ({
 
   clearError: () => set({ error: null }),
 
-  reset: () => set({
-    currentDocument: null,
-    searchResults: [],
-    loading: false,
-    error: null,
-  }),
+  reset: () =>
+    set({
+      currentDocument: null,
+      searchResults: [],
+      loading: false,
+      error: null,
+    }),
 }));

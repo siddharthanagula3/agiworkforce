@@ -19,7 +19,10 @@ export function ScreenshotOverlay({ region, flash }: ScreenshotOverlayProps) {
   return (
     <div className="pointer-events-none fixed inset-0 z-[998]">
       {flash && (
-        <div className="absolute inset-0 bg-white/80" style={{ animation: 'overlay-flash 180ms ease-out forwards' }} />
+        <div
+          className="absolute inset-0 bg-white/80"
+          style={{ animation: 'overlay-flash 180ms ease-out forwards' }}
+        />
       )}
       {region && (
         <div

@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { ClipboardCopy, Download, FolderPlus, Link, RefreshCcw, Trash2, Upload } from 'lucide-react';
+import {
+  ClipboardCopy,
+  Download,
+  FolderPlus,
+  Link,
+  RefreshCcw,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Separator } from '../ui/Separator';
 import { useCloudStore } from '../../stores/cloudStore';
@@ -230,7 +232,11 @@ export function CloudStoragePanel() {
 
         <div className="flex flex-1 flex-col gap-2">
           <label className="text-xs font-medium text-muted-foreground">Client ID</label>
-          <Input value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="OAuth client ID" />
+          <Input
+            value={clientId}
+            onChange={(event) => setClientId(event.target.value)}
+            placeholder="OAuth client ID"
+          />
         </div>
 
         <div className="flex flex-1 flex-col gap-2">
@@ -270,11 +276,15 @@ export function CloudStoragePanel() {
           </div>
           <div className="mt-2 grid gap-2 md:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wide text-muted-foreground">State</label>
+              <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                State
+              </label>
               <Input value={oauthState} onChange={(event) => setOauthState(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Authorization Code</label>
+              <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Authorization Code
+              </label>
               <Input
                 value={oauthCode}
                 onChange={(event) => setOauthCode(event.target.value)}
@@ -283,7 +293,11 @@ export function CloudStoragePanel() {
             </div>
           </div>
           <div className="mt-3 flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => navigator.clipboard.writeText(pendingAuth.authUrl)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigator.clipboard.writeText(pendingAuth.authUrl)}
+            >
               Copy Auth URL
             </Button>
             <Button size="sm" onClick={handleCompleteConnect}>
@@ -328,12 +342,14 @@ export function CloudStoragePanel() {
                     'w-full rounded-md px-3 py-2 text-left text-sm transition-colors',
                     account.accountId === activeAccountId
                       ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-muted/70 hover:text-foreground'
+                      : 'hover:bg-muted/70 hover:text-foreground',
                   )}
                 >
                   <div className="flex flex-col">
                     <span className="font-medium">{account.label || account.accountId}</span>
-                    <span className="text-xs text-muted-foreground">{PROVIDER_LABELS[account.provider]}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {PROVIDER_LABELS[account.provider]}
+                    </span>
                   </div>
                 </button>
               ))}
@@ -353,7 +369,9 @@ export function CloudStoragePanel() {
                   >
                     {crumb.name || 'Root'}
                   </button>
-                  {index < breadcrumb.length - 1 && <span className="mx-1 text-muted-foreground">/</span>}
+                  {index < breadcrumb.length - 1 && (
+                    <span className="mx-1 text-muted-foreground">/</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -398,7 +416,9 @@ export function CloudStoragePanel() {
                         <button
                           type="button"
                           className="text-primary hover:underline"
-                          onClick={() => (isFolder ? handleOpenFolder(file.path) : handleShare(file.path))}
+                          onClick={() =>
+                            isFolder ? handleOpenFolder(file.path) : handleShare(file.path)
+                          }
                         >
                           {file.name}
                         </button>
@@ -461,8 +481,8 @@ export function CloudStoragePanel() {
       <Separator />
 
       <div className="text-xs text-muted-foreground">
-        Tip: OAuth requires redirect handling. Use a localhost endpoint that captures the `code` parameter and paste it
-        above to complete setup.
+        Tip: OAuth requires redirect handling. Use a localhost endpoint that captures the `code`
+        parameter and paste it above to complete setup.
       </div>
     </div>
   );

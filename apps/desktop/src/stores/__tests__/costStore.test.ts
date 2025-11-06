@@ -5,7 +5,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-type TauriInvoke = typeof import('@tauri-apps/api/core')['invoke'];
+type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
 type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
 
 let invokeMock: InvokeMock;

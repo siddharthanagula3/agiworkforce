@@ -45,7 +45,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
         'backdrop-blur-md',
         'select-none',
         'cursor-move',
-        'relative'
+        'relative',
       )}
       data-tauri-drag-region
       onContextMenu={handleContextMenu}
@@ -72,7 +72,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
             'flex items-center justify-center',
             'w-7 h-7 rounded-lg',
             'bg-primary/20 border border-primary/40',
-            'text-xs font-bold tracking-wider text-primary'
+            'text-xs font-bold tracking-wider text-primary',
           )}
         >
           AGI
@@ -92,7 +92,8 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18 }}
           >
-            {state.focused ? 'Ready' : 'Inactive'} · {state.dock ? `Docked ${state.dock}` : 'Floating'}
+            {state.focused ? 'Ready' : 'Inactive'} ·{' '}
+            {state.dock ? `Docked ${state.dock}` : 'Floating'}
           </motion.p>
         </div>
       </motion.div>
@@ -123,12 +124,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onOpenCommandPalette}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenCommandPalette}>
               <Search className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
@@ -175,19 +171,13 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
               {state.alwaysOnTop ? 'Disable always on top' : 'Enable always on top'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void actions.dock('left')}>
-              Dock left
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void actions.dock('left')}>Dock left</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void actions.dock('right')}>
               Dock right
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void actions.dock(null)}>
-              Undock
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void actions.dock(null)}>Undock</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void actions.hide()}>
-              Hide to tray
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void actions.hide()}>Hide to tray</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

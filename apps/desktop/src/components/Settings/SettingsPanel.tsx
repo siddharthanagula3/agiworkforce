@@ -1,23 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Check, X, Loader2, Key, Settings2, Monitor } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Label } from '../ui/Label';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 
@@ -96,7 +84,9 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
           variant="outline"
           size="sm"
           onClick={handleSave}
-          disabled={loading || !localKey.trim() || localKey === apiKeys[provider as keyof typeof apiKeys]}
+          disabled={
+            loading || !localKey.trim() || localKey === apiKeys[provider as keyof typeof apiKeys]
+          }
         >
           Save
         </Button>
@@ -106,17 +96,17 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
           onClick={handleTest}
           disabled={testing || !localKey.trim()}
         >
-          {testing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            'Test'
-          )}
+          {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Test'}
         </Button>
         {testResult && (
-          <div className={cn(
-            'flex items-center justify-center w-8 h-8 rounded-md',
-            testResult === 'success' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
-          )}>
+          <div
+            className={cn(
+              'flex items-center justify-center w-8 h-8 rounded-md',
+              testResult === 'success'
+                ? 'bg-green-500/20 text-green-500'
+                : 'bg-red-500/20 text-red-500',
+            )}
+          >
             {testResult === 'success' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
           </div>
         )}
@@ -188,15 +178,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <div>
               <h3 className="text-lg font-semibold mb-4">API Keys</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Configure your API keys for different LLM providers. Keys are stored securely in your system keyring.
+                Configure your API keys for different LLM providers. Keys are stored securely in
+                your system keyring.
               </p>
 
               <div className="space-y-6">
-                <APIKeyField
-                  provider="openai"
-                  label="OpenAI API Key"
-                  placeholder="sk-..."
-                />
+                <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />
 
                 <APIKeyField
                   provider="anthropic"
@@ -204,11 +191,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   placeholder="sk-ant-..."
                 />
 
-                <APIKeyField
-                  provider="google"
-                  label="Google AI API Key"
-                  placeholder="AIza..."
-                />
+                <APIKeyField provider="google" label="Google AI API Key" placeholder="AIza..." />
 
                 <div className="rounded-lg border border-border bg-muted/50 p-4">
                   <div className="flex items-start gap-3">
@@ -218,7 +201,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="flex-1">
                       <h4 className="font-medium">Ollama (Local)</h4>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Ollama runs locally and doesn&apos;t require an API key. Make sure Ollama is running on http://localhost:11434
+                        Ollama runs locally and doesn&apos;t require an API key. Make sure Ollama is
+                        running on http://localhost:11434
                       </p>
                     </div>
                   </div>
@@ -285,7 +269,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
+                        <SelectItem value="claude-3-5-sonnet-20241022">
+                          Claude 3.5 Sonnet
+                        </SelectItem>
                         <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
                         <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
                       </SelectContent>
@@ -342,7 +328,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     className="w-full"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Lower values are more focused and deterministic. Higher values are more creative.
+                    Lower values are more focused and deterministic. Higher values are more
+                    creative.
                   </p>
                 </div>
 
@@ -410,7 +397,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <Label htmlFor="dockOnStartup">Dock on Startup</Label>
                   <Select
                     value={windowPreferences.dockOnStartup || 'none'}
-                    onValueChange={(value) => setDockOnStartup(value === 'none' ? null : value as 'left' | 'right')}
+                    onValueChange={(value) =>
+                      setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
+                    }
                   >
                     <SelectTrigger id="dockOnStartup">
                       <SelectValue />
@@ -431,9 +420,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSaveSettings}>
-            Save Changes
-          </Button>
+          <Button onClick={handleSaveSettings}>Save Changes</Button>
         </div>
       </DialogContent>
     </Dialog>

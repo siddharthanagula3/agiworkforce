@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useChatStore } from '../chatStore';
-import type { Conversation, ConversationStats, Message, ConversationUI, MessageUI } from '../../types/chat';
+import type {
+  Conversation,
+  ConversationStats,
+  Message,
+  ConversationUI,
+  MessageUI,
+} from '../../types/chat';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-type TauriInvoke = typeof import('@tauri-apps/api/core')['invoke'];
+type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
 type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
 
 let invokeMock: InvokeMock;
@@ -25,7 +31,7 @@ function buildConversationUI(
   title: string,
   updatedAtIso: string,
   lastMessage: string,
-  pinned = false
+  pinned = false,
 ): ConversationUI {
   return {
     id,
@@ -149,14 +155,21 @@ describe('useChatStore pinned conversations', () => {
     expect(firstConversationAfterUnpin!.id).toBe(2);
     expect(state.conversations.find((conversation) => conversation.id === 1)?.pinned).toBeFalsy();
 
-    const persistedAfterUnpin = JSON.parse(window.localStorage.getItem('agiworkforce-chat') ?? '{}');
+    const persistedAfterUnpin = JSON.parse(
+      window.localStorage.getItem('agiworkforce-chat') ?? '{}',
+    );
     expect(persistedAfterUnpin?.state?.pinnedConversations).toEqual([]);
   });
 });
 
 describe('useChatStore conversation management', () => {
   it('renames conversations with trimmed titles and updates state', async () => {
-    const conversation = buildConversationUI(5, 'Old name', iso('2024-01-05T09:00:00Z'), 'Last message');
+    const conversation = buildConversationUI(
+      5,
+      'Old name',
+      iso('2024-01-05T09:00:00Z'),
+      'Last message',
+    );
     useChatStore.setState({ conversations: [conversation] });
 
     invokeMock.mockImplementation((command, args) => {
@@ -181,7 +194,7 @@ describe('useChatStore conversation management', () => {
 
   it('rejects rename when trimmed title is empty', async () => {
     await expect(useChatStore.getState().renameConversation(1, '   ')).rejects.toThrow(
-      'Title cannot be empty'
+      'Title cannot be empty',
     );
     expect(invokeMock).not.toHaveBeenCalled();
   });

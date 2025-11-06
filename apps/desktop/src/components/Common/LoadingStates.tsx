@@ -17,7 +17,7 @@ export function LoadingOverlay({ message, className }: LoadingOverlayProps) {
     <div
       className={cn(
         'fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm',
-        className
+        className,
       )}
     >
       <div className="flex flex-col items-center gap-4">

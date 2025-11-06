@@ -232,7 +232,7 @@ export function Message({ message, onRegenerate, onEdit, onDelete }: MessageProp
       className={cn(
         'group relative flex gap-3 px-4 py-4 transition-colors',
         'hover:bg-accent/50',
-        isUser && 'bg-muted/30'
+        isUser && 'bg-muted/30',
       )}
     >
       {avatar}
@@ -246,9 +246,7 @@ export function Message({ message, onRegenerate, onEdit, onDelete }: MessageProp
               minute: '2-digit',
             })}
           </span>
-          {isStreaming && (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          )}
+          {isStreaming && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </div>
 
         {isEditing ? (
@@ -266,12 +264,7 @@ export function Message({ message, onRegenerate, onEdit, onDelete }: MessageProp
                 {isSavingEdit && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                 Save changes
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleCancelEdit}
-                disabled={isSavingEdit}
-              >
+              <Button size="sm" variant="ghost" onClick={handleCancelEdit} disabled={isSavingEdit}>
                 Cancel
               </Button>
             </div>
@@ -290,9 +283,7 @@ export function Message({ message, onRegenerate, onEdit, onDelete }: MessageProp
           </div>
         )}
 
-        {actionError && (
-          <p className="text-xs font-medium text-destructive">{actionError}</p>
-        )}
+        {actionError && <p className="text-xs font-medium text-destructive">{actionError}</p>}
 
         {(message.tokens || message.cost) && (
           <div className="flex gap-3 text-xs text-muted-foreground">

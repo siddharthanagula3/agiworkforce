@@ -108,7 +108,7 @@ const StepIndicator = ({
       'w-full rounded-lg border px-4 py-3 text-left transition-colors',
       status === 'current' && 'border-primary bg-primary/5',
       status === 'complete' && 'border-emerald-500/60 bg-emerald-50 text-emerald-900',
-      status === 'upcoming' && 'border-border/70 bg-muted/40 hover:bg-muted'
+      status === 'upcoming' && 'border-border/70 bg-muted/40 hover:bg-muted',
     )}
   >
     <div className="flex items-center gap-2">
@@ -125,10 +125,7 @@ const StepIndicator = ({
   </button>
 );
 
-const STATUS_BADGES: Record<
-  LovableWorkflowStatus,
-  { label: string; className: string }
-> = {
+const STATUS_BADGES: Record<LovableWorkflowStatus, { label: string; className: string }> = {
   healthy: { label: 'Healthy', className: 'bg-emerald-100 text-emerald-900 border-emerald-200' },
   broken: { label: 'Needs Attention', className: 'bg-amber-100 text-amber-900 border-amber-200' },
   deprecated: { label: 'Deprecated', className: 'bg-slate-200 text-slate-700 border-slate-300' },
@@ -138,13 +135,17 @@ export function LovableMigrationWizard() {
   const [activeStep, setActiveStep] = useState<WizardStep>('connect');
   const [apiKey, setApiKey] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'passed' | 'failed'>('idle');
+  const [connectionStatus, setConnectionStatus] = useState<
+    'idle' | 'testing' | 'passed' | 'failed'
+  >('idle');
   const [connectionInfo, setConnectionInfo] = useState<LovableConnectionResponse | null>(null);
   const [workflows, setWorkflows] = useState<LovableWorkflow[]>(DEFAULT_WORKFLOWS);
   const [workflowsSource, setWorkflowsSource] = useState<'fallback' | 'api'>('fallback');
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>(
-    DEFAULT_WORKFLOWS.filter((workflow) => workflow.status === 'healthy').map((workflow) => workflow.id)
+    DEFAULT_WORKFLOWS.filter((workflow) => workflow.status === 'healthy').map(
+      (workflow) => workflow.id,
+    ),
   );
   const [targetWorkspace, setTargetWorkspace] = useState('Finance Automation Hub');
   const [namingPrefix, setNamingPrefix] = useState('Lovable → AGI');
@@ -155,7 +156,9 @@ export function LovableMigrationWizard() {
   const [importResult, setImportResult] = useState<LovableMigrationLaunchResponse | null>(null);
 
   const stepStatuses = useMemo(() => {
-    return STEP_ORDER.map<['connect' | 'select' | 'configure' | 'review', 'complete' | 'current' | 'upcoming']>((step) => {
+    return STEP_ORDER.map<
+      ['connect' | 'select' | 'configure' | 'review', 'complete' | 'current' | 'upcoming']
+    >((step) => {
       if (STEP_ORDER.indexOf(step) < STEP_ORDER.indexOf(activeStep)) {
         return [step, 'complete'];
       }
@@ -168,11 +171,13 @@ export function LovableMigrationWizard() {
 
   const selectedWorkflowDetails = useMemo(
     () => workflows.filter((workflow) => selectedWorkflows.includes(workflow.id)),
-    [workflows, selectedWorkflows]
+    [workflows, selectedWorkflows],
   );
 
   const updateSelectedWorkflows = (list: LovableWorkflow[]) => {
-    const healthy = list.filter((workflow) => workflow.status === 'healthy').map((workflow) => workflow.id);
+    const healthy = list
+      .filter((workflow) => workflow.status === 'healthy')
+      .map((workflow) => workflow.id);
     if (healthy.length > 0) {
       setSelectedWorkflows(healthy);
     } else {
@@ -207,7 +212,9 @@ export function LovableMigrationWizard() {
         setWorkflows(DEFAULT_WORKFLOWS);
         setWorkflowsSource('fallback');
         updateSelectedWorkflows(DEFAULT_WORKFLOWS);
-        toast.info('No workflows returned from Lovable. Loaded sample workflows to continue planning.');
+        toast.info(
+          'No workflows returned from Lovable. Loaded sample workflows to continue planning.',
+        );
       }
     } catch (error) {
       console.error('[LovableMigrationWizard] connection failed', error);
@@ -223,12 +230,14 @@ export function LovableMigrationWizard() {
 
   const toggleWorkflow = (id: string) => {
     setSelectedWorkflows((current) =>
-      current.includes(id) ? current.filter((workflowId) => workflowId !== id) : [...current, id]
+      current.includes(id) ? current.filter((workflowId) => workflowId !== id) : [...current, id],
     );
   };
 
   const selectHealthyWorkflows = () => {
-    const healthy = workflows.filter((workflow) => workflow.status === 'healthy').map((workflow) => workflow.id);
+    const healthy = workflows
+      .filter((workflow) => workflow.status === 'healthy')
+      .map((workflow) => workflow.id);
     setSelectedWorkflows(healthy);
   };
 
@@ -265,7 +274,7 @@ export function LovableMigrationWizard() {
       setImportResult(response);
       setImportComplete(true);
       toast.success(
-        `Queued ${response.queued} workflow${response.queued === 1 ? '' : 's'} for migration. ETA ≈ ${response.estimateMinutes} mins.`
+        `Queued ${response.queued} workflow${response.queued === 1 ? '' : 's'} for migration. ETA ≈ ${response.estimateMinutes} mins.`,
       );
     } catch (error) {
       console.error('[LovableMigrationWizard] failed to launch migration', error);
@@ -282,8 +291,8 @@ export function LovableMigrationWizard() {
           <div>
             <h1 className="text-lg font-semibold text-foreground">Lovable Migration Wizard</h1>
             <p className="text-sm text-muted-foreground">
-              Import Lovable workflows, map automation primitives, and launch migrations that feed the $100M ARR
-              displacement program.
+              Import Lovable workflows, map automation primitives, and launch migrations that feed
+              the $100M ARR displacement program.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -303,19 +312,19 @@ export function LovableMigrationWizard() {
                   step === 'connect'
                     ? '1. Connect Lovable'
                     : step === 'select'
-                    ? '2. Select Workflows'
-                    : step === 'configure'
-                    ? '3. Configure Mapping'
-                    : '4. Review & Import'
+                      ? '2. Select Workflows'
+                      : step === 'configure'
+                        ? '3. Configure Mapping'
+                        : '4. Review & Import'
                 }
                 description={
                   step === 'connect'
                     ? 'Authorize Lovable workspace, test API access.'
                     : step === 'select'
-                    ? 'Choose workflows to migrate and assess health.'
-                    : step === 'configure'
-                    ? 'Map owners, prefixes, and scheduling rules.'
-                    : 'Finalize migration batch and launch imports.'
+                      ? 'Choose workflows to migrate and assess health.'
+                      : step === 'configure'
+                        ? 'Map owners, prefixes, and scheduling rules.'
+                        : 'Finalize migration batch and launch imports.'
                 }
                 status={status}
                 onSelect={() => setActiveStep(step)}
@@ -327,7 +336,9 @@ export function LovableMigrationWizard() {
 
           <div className="space-y-4">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hypergrowth Roadmap</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Hypergrowth Roadmap
+              </h2>
               <div className="mt-3 space-y-3">
                 {LOVABLE_MILESTONES.map((milestone) => (
                   <Card key={milestone.label} className="border-border/70 bg-background">
@@ -362,8 +373,8 @@ export function LovableMigrationWizard() {
                 <CardHeader>
                   <CardTitle>Step 1 · Connect Lovable Workspace</CardTitle>
                   <CardDescription>
-                    Provide a Lovable API key with workflow read access and specify the workspace slug. We only use this
-                    connection for migration and auditing.
+                    Provide a Lovable API key with workflow read access and specify the workspace
+                    slug. We only use this connection for migration and auditing.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -379,7 +390,8 @@ export function LovableMigrationWizard() {
                         onChange={(event) => setApiKey(event.target.value)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Generate in Lovable → Settings → API Keys. The key never leaves your encrypted device vault.
+                        Generate in Lovable → Settings → API Keys. The key never leaves your
+                        encrypted device vault.
                       </p>
                     </div>
 
@@ -392,20 +404,28 @@ export function LovableMigrationWizard() {
                         value={workspaceSlug}
                         onChange={(event) => setWorkspaceSlug(event.target.value)}
                       />
-                      <p className="text-xs text-muted-foreground">Find this in the Lovable URL: lovable.so/w/acme-ops</p>
+                      <p className="text-xs text-muted-foreground">
+                        Find this in the Lovable URL: lovable.so/w/acme-ops
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
                     <div>
                       <p className="font-medium text-foreground">Security snapshot</p>
-                      <p>Scopes: workflow.read, workspace.read. Keys stored with AES-256 + OS keychain.</p>
+                      <p>
+                        Scopes: workflow.read, workspace.read. Keys stored with AES-256 + OS
+                        keychain.
+                      </p>
                     </div>
                     <ShieldCheck className="h-5 w-5 text-primary" />
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Button onClick={handleTestConnection} disabled={connectionStatus === 'testing'}>
+                    <Button
+                      onClick={handleTestConnection}
+                      disabled={connectionStatus === 'testing'}
+                    >
                       {connectionStatus === 'testing' ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -421,7 +441,8 @@ export function LovableMigrationWizard() {
                     {connectionStatus === 'passed' && (
                       <div className="flex items-center gap-2 text-sm text-emerald-600">
                         <Check className="h-4 w-4" />
-                        Connection verified{connectionInfo ? ` • ${connectionInfo.workspaceName}` : ''}
+                        Connection verified
+                        {connectionInfo ? ` • ${connectionInfo.workspaceName}` : ''}
                       </div>
                     )}
                     {connectionStatus === 'failed' && (
@@ -440,8 +461,8 @@ export function LovableMigrationWizard() {
                 <CardHeader>
                   <CardTitle>Step 2 · Select Workflows for Migration</CardTitle>
                   <CardDescription>
-                    Choose the Lovable flows you want to migrate. We’ll analyze differences, suggest MCP mappings, and
-                    flag risky automations.
+                    Choose the Lovable flows you want to migrate. We’ll analyze differences, suggest
+                    MCP mappings, and flag risky automations.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -459,7 +480,8 @@ export function LovableMigrationWizard() {
                       Select healthy workflows
                     </Button>
                     <span className="text-xs text-muted-foreground">
-                      {selectedWorkflows.length} workflow{selectedWorkflows.length === 1 ? '' : 's'} selected
+                      {selectedWorkflows.length} workflow{selectedWorkflows.length === 1 ? '' : 's'}{' '}
+                      selected
                       {workflowsSource === 'fallback' && ' • sample data'}
                     </span>
                   </div>
@@ -473,7 +495,8 @@ export function LovableMigrationWizard() {
                     )}
                     {!loadingWorkflows && workflows.length === 0 && (
                       <div className="col-span-full rounded-xl border border-dashed border-border/60 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-                        No workflows found for this Lovable workspace yet. Run a migration audit or try again later.
+                        No workflows found for this Lovable workspace yet. Run a migration audit or
+                        try again later.
                       </div>
                     )}
                     {workflows.map((workflow) => {
@@ -489,13 +512,17 @@ export function LovableMigrationWizard() {
                             'flex h-full flex-col rounded-xl border p-4 text-left transition-all',
                             isSelected
                               ? 'border-primary bg-primary/5 shadow-sm'
-                              : 'border-border/70 bg-muted/20 hover:border-primary/40'
+                              : 'border-border/70 bg-muted/20 hover:border-primary/40',
                           )}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-foreground">{workflow.name}</p>
-                              <p className="text-xs text-muted-foreground">Owner: {workflow.owner}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {workflow.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Owner: {workflow.owner}
+                              </p>
                             </div>
                             <Badge className={cn('border', badge.className)} variant="outline">
                               {badge.label}
@@ -515,7 +542,10 @@ export function LovableMigrationWizard() {
                     <Button variant="ghost" onClick={() => setActiveStep('connect')}>
                       Back
                     </Button>
-                    <Button onClick={() => setActiveStep('configure')} disabled={selectedWorkflows.length === 0}>
+                    <Button
+                      onClick={() => setActiveStep('configure')}
+                      disabled={selectedWorkflows.length === 0}
+                    >
                       Continue
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -529,8 +559,8 @@ export function LovableMigrationWizard() {
                 <CardHeader>
                   <CardTitle>Step 3 · Configure Target Workspace</CardTitle>
                   <CardDescription>
-                    Map owners, naming conventions, and automation policies. We’ll apply these rules when generating the
-                    new MCP-backed workflows.
+                    Map owners, naming conventions, and automation policies. We’ll apply these rules
+                    when generating the new MCP-backed workflows.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -539,18 +569,26 @@ export function LovableMigrationWizard() {
                       <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Target Workspace
                       </label>
-                      <Input value={targetWorkspace} onChange={(event) => setTargetWorkspace(event.target.value)} />
+                      <Input
+                        value={targetWorkspace}
+                        onChange={(event) => setTargetWorkspace(event.target.value)}
+                      />
                       <p className="text-xs text-muted-foreground">
-                        Choose an existing workspace or type a new name—we’ll create it automatically.
+                        Choose an existing workspace or type a new name—we’ll create it
+                        automatically.
                       </p>
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Naming Prefix
                       </label>
-                      <Input value={namingPrefix} onChange={(event) => setNamingPrefix(event.target.value)} />
+                      <Input
+                        value={namingPrefix}
+                        onChange={(event) => setNamingPrefix(event.target.value)}
+                      />
                       <p className="text-xs text-muted-foreground">
-                        Helpful for tracking migrations (e.g., “Lovable → AGI” or “Legacy Automation”).
+                        Helpful for tracking migrations (e.g., “Lovable → AGI” or “Legacy
+                        Automation”).
                       </p>
                     </div>
                   </div>
@@ -558,16 +596,23 @@ export function LovableMigrationWizard() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-foreground">Enable schedules after import</p>
+                        <p className="text-sm font-medium text-foreground">
+                          Enable schedules after import
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           Switch off to run dry-runs first. Recommended for high-risk workflows.
                         </p>
                       </div>
-                      <Switch checked={autoEnableSchedules} onCheckedChange={setAutoEnableSchedules} />
+                      <Switch
+                        checked={autoEnableSchedules}
+                        onCheckedChange={setAutoEnableSchedules}
+                      />
                     </div>
                     <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-foreground">Include Lovable audit logs</p>
+                        <p className="text-sm font-medium text-foreground">
+                          Include Lovable audit logs
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           Import historic run metadata for root-cause analysis and compliance.
                         </p>
@@ -604,32 +649,43 @@ export function LovableMigrationWizard() {
                 <CardHeader>
                   <CardTitle>Step 4 · Review & Launch Migration</CardTitle>
                   <CardDescription>
-                    Confirm the workflows, mappings, and automation policies. We’ll queue the migration and notify you
-                    when the new AGI workflows are ready.
+                    Confirm the workflows, mappings, and automation policies. We’ll queue the
+                    migration and notify you when the new AGI workflows are ready.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">
-                      Summary • {selectedWorkflows.length} workflow{selectedWorkflows.length === 1 ? '' : 's'} selected
+                      Summary • {selectedWorkflows.length} workflow
+                      {selectedWorkflows.length === 1 ? '' : 's'} selected
                     </p>
                     <ul className="mt-2 space-y-1.5 text-xs">
                       <li>• Target workspace: {targetWorkspace || 'Not set'}</li>
                       <li>• Naming prefix: {namingPrefix || 'Not set'}</li>
-                      <li>• Auto-enable schedules: {autoEnableSchedules ? 'Yes' : 'No (dry-run only)'}</li>
+                      <li>
+                        • Auto-enable schedules: {autoEnableSchedules ? 'Yes' : 'No (dry-run only)'}
+                      </li>
                       <li>• Include audit logs: {includeAuditLogs ? 'Yes' : 'Skipped'}</li>
                       <li>• Lovable workspace slug: {workspaceSlug || 'Not set'}</li>
-                      <li>• Connection: {connectionInfo ? connectionInfo.workspaceName : 'Not verified'}</li>
+                      <li>
+                        • Connection:{' '}
+                        {connectionInfo ? connectionInfo.workspaceName : 'Not verified'}
+                      </li>
                     </ul>
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-foreground">Workflows ready to migrate</h3>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Workflows ready to migrate
+                    </h3>
                     <div className="grid gap-3 md:grid-cols-2">
                       {selectedWorkflowDetails.map((workflow) => {
                         const badge = STATUS_BADGES[workflow.status];
                         return (
-                          <div key={workflow.id} className="rounded-lg border border-border/70 bg-muted/10 p-3 text-xs">
+                          <div
+                            key={workflow.id}
+                            className="rounded-lg border border-border/70 bg-muted/10 p-3 text-xs"
+                          >
                             <div className="flex items-center justify-between gap-2">
                               <p className="font-medium text-foreground">{workflow.name}</p>
                               <Badge className={cn('border', badge.className)} variant="outline">
@@ -650,12 +706,23 @@ export function LovableMigrationWizard() {
                   <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
                     <p className="font-medium text-foreground">Next steps</p>
                     <ul className="mt-2 space-y-1.5">
-                      <li>• Migration queue runs in order of submission. You will receive status updates in the activity feed.</li>
-                      <li>• Concierge team reviews high-risk workflows (<span className="font-medium">broken</span> or <span className="font-medium">deprecated</span>) before enabling schedules.</li>
-                      <li>• SLA: All Lovable takeovers completed within 24 hours (faster for <Badge variant="outline">Priority</Badge> accounts).</li>
+                      <li>
+                        • Migration queue runs in order of submission. You will receive status
+                        updates in the activity feed.
+                      </li>
+                      <li>
+                        • Concierge team reviews high-risk workflows (
+                        <span className="font-medium">broken</span> or{' '}
+                        <span className="font-medium">deprecated</span>) before enabling schedules.
+                      </li>
+                      <li>
+                        • SLA: All Lovable takeovers completed within 24 hours (faster for{' '}
+                        <Badge variant="outline">Priority</Badge> accounts).
+                      </li>
                       {importResult && (
                         <li>
-                          • Latest batch queued {importResult.queued} workflow{importResult.queued === 1 ? '' : 's'} • ETA ~
+                          • Latest batch queued {importResult.queued} workflow
+                          {importResult.queued === 1 ? '' : 's'} • ETA ~
                           {importResult.estimateMinutes} minutes.
                         </li>
                       )}

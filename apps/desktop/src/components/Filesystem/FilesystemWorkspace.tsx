@@ -132,7 +132,7 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     event.stopPropagation();
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete ${entry.name}?${entry.is_dir ? ' This will delete all contents.' : ''}`
+      `Are you sure you want to delete ${entry.name}?${entry.is_dir ? ' This will delete all contents.' : ''}`,
     );
     if (!confirmed) return;
 
@@ -243,7 +243,12 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
           <Button variant="ghost" size="sm" onClick={goUp} disabled={loading}>
             <ArrowUp className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleNavigate('C:\\')} disabled={loading}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleNavigate('C:\\')}
+            disabled={loading}
+          >
             <Home className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleNavigate()} disabled={loading}>
@@ -317,7 +322,7 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
                     className={cn(
                       'flex items-center justify-between p-2 rounded-md cursor-pointer',
                       'hover:bg-muted/50 transition-colors group',
-                      selectedPath === entry.path && 'bg-muted'
+                      selectedPath === entry.path && 'bg-muted',
                     )}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -407,7 +412,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
           <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground bg-muted/10 border-t border-border">
             <span>{entries.length} items</span>
             <span>
-              {entries.filter((e) => e.is_dir).length} folders, {entries.filter((e) => e.is_file).length} files
+              {entries.filter((e) => e.is_dir).length} folders,{' '}
+              {entries.filter((e) => e.is_file).length} files
             </span>
           </div>
         </TabsContent>
@@ -419,12 +425,19 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
               <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/5">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  <span className="text-sm font-medium truncate">{selectedPath.split('\\').pop()}</span>
+                  <span className="text-sm font-medium truncate">
+                    {selectedPath.split('\\').pop()}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {editingFile ? (
                     <>
-                      <Button variant="default" size="sm" onClick={handleSaveFile} disabled={loading}>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleSaveFile}
+                        disabled={loading}
+                      >
                         <Save className="h-4 w-4 mr-1" />
                         Save
                       </Button>
@@ -450,7 +463,7 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
                     'w-full h-full p-3 border border-border rounded-md',
                     'font-mono text-sm resize-none',
                     'focus:outline-none focus:ring-2 focus:ring-primary',
-                    !editingFile && 'bg-muted/20 cursor-not-allowed'
+                    !editingFile && 'bg-muted/20 cursor-not-allowed',
                   )}
                   placeholder="File content..."
                 />
@@ -488,7 +501,9 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
                 {searchResults.map((result) => (
                   <div
                     key={result}
-                    onClick={() => readFile(result).catch((err) => toast.error(`Failed to read: ${err}`))}
+                    onClick={() =>
+                      readFile(result).catch((err) => toast.error(`Failed to read: ${err}`))
+                    }
                     className="p-2 rounded-md hover:bg-muted cursor-pointer text-sm font-mono"
                   >
                     {result}
@@ -533,7 +548,11 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
                 <span>{selectedMetadata.readonly ? 'Yes' : 'No'}</span>
               </div>
             </div>
-            <Button variant="outline" className="w-full mt-4" onClick={() => setSelectedMetadata(null)}>
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={() => setSelectedMetadata(null)}
+            >
               Close
             </Button>
           </div>

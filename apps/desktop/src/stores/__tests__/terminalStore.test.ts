@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
-import { useTerminalStore } from "../terminalStore";
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { useTerminalStore } from '../terminalStore';
 
-vi.mock("@tauri-apps/api/core", () => ({
+vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
 const listeners: Record<string, (event: { payload: string }) => void> = {};
 const unlistenSpies: Mock[] = [];
 
-vi.mock("@tauri-apps/api/event", () => ({
+vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn((event: string, handler: (event: { payload: string }) => void) => {
     listeners[event] = handler;
     const unlisten = vi.fn(() => {
@@ -19,7 +19,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-const sessionId = "session-123";
+const sessionId = 'session-123';
 
 beforeEach(() => {
   useTerminalStore.getState().reset();
@@ -27,15 +27,15 @@ beforeEach(() => {
   unlistenSpies.splice(0, unlistenSpies.length);
 });
 
-describe("useTerminalStore setupOutputListener", () => {
-  it("registers output & exit listeners and removes session on exit", async () => {
+describe('useTerminalStore setupOutputListener', () => {
+  it('registers output & exit listeners and removes session on exit', async () => {
     useTerminalStore.setState((state) => ({
       ...state,
       sessions: [
         {
           id: sessionId,
-          shellType: "PowerShell",
-          title: "PowerShell",
+          shellType: 'PowerShell',
+          title: 'PowerShell',
           active: true,
           createdAt: Date.now(),
         },
@@ -48,15 +48,15 @@ describe("useTerminalStore setupOutputListener", () => {
 
     await useTerminalStore.getState().setupOutputListener(sessionId, outputSpy, exitSpy);
 
-    const { listen } = await import("@tauri-apps/api/event");
+    const { listen } = await import('@tauri-apps/api/event');
     const listenMock = listen as unknown as Mock;
     expect(listenMock).toHaveBeenCalledWith(`terminal-output-${sessionId}`, expect.any(Function));
     expect(listenMock).toHaveBeenCalledWith(`terminal-exit-${sessionId}`, expect.any(Function));
 
-    listeners[`terminal-output-${sessionId}`]?.({ payload: "hello" });
-    expect(outputSpy).toHaveBeenCalledWith("hello");
+    listeners[`terminal-output-${sessionId}`]?.({ payload: 'hello' });
+    expect(outputSpy).toHaveBeenCalledWith('hello');
 
-    listeners[`terminal-exit-${sessionId}`]?.({ payload: "" });
+    listeners[`terminal-exit-${sessionId}`]?.({ payload: '' });
     unlistenSpies.forEach((fn) => expect(fn).toHaveBeenCalled());
     expect(exitSpy).toHaveBeenCalled();
 

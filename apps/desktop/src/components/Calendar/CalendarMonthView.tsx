@@ -57,7 +57,8 @@ export function CalendarMonthView({
         <div>
           <p className="text-sm font-semibold">{format(currentMonth, 'MMMM yyyy')}</p>
           <p className="text-xs text-muted-foreground">
-            {format(startOfMonth(currentMonth), 'MMM d')} – {format(endOfMonth(currentMonth), 'MMM d, yyyy')}
+            {format(startOfMonth(currentMonth), 'MMM d')} –{' '}
+            {format(endOfMonth(currentMonth), 'MMM d, yyyy')}
           </p>
         </div>
         <div className="flex items-center gap-2">

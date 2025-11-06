@@ -44,10 +44,7 @@ describe('codeStore', () => {
 
     expect(store.openFiles.length).toBe(2);
     expect(store.openFiles[0].path).toBe('C:/project/src/main.ts');
-    expect(store.persistedOpenPaths).toEqual([
-      'C:/project/src/main.ts',
-      'C:/project/src/utils.ts',
-    ]);
+    expect(store.persistedOpenPaths).toEqual(['C:/project/src/main.ts', 'C:/project/src/utils.ts']);
     expect(store.activeFilePath).toBe('C:/project/src/utils.ts');
   });
 
@@ -80,9 +77,6 @@ describe('codeStore', () => {
     await store.hydrateOpenFiles();
 
     expect(store.openFiles.length).toBe(2);
-    expect(store.openFiles.map((f) => f.path)).toEqual([
-      'hydrate-a.ts',
-      'hydrate-b.ts',
-    ]);
+    expect(store.openFiles.map((f) => f.path)).toEqual(['hydrate-a.ts', 'hydrate-b.ts']);
   });
 });

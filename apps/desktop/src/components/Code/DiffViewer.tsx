@@ -111,7 +111,12 @@ export function DiffViewer({
   const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light';
 
   return (
-    <div className={cn('flex flex-col h-full border border-border rounded-lg overflow-hidden', className)}>
+    <div
+      className={cn(
+        'flex flex-col h-full border border-border rounded-lg overflow-hidden',
+        className,
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/20 border-b border-border">
         <div className="flex items-center gap-4">
@@ -134,36 +139,21 @@ export function DiffViewer({
 
         <div className="flex items-center gap-1">
           {onAccept && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleAccept}
-              title="Accept changes"
-            >
+            <Button variant="default" size="sm" onClick={handleAccept} title="Accept changes">
               <Check className="h-4 w-4 mr-1" />
               Accept
             </Button>
           )}
 
           {onReject && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleReject}
-              title="Reject changes"
-            >
+            <Button variant="ghost" size="sm" onClick={handleReject} title="Reject changes">
               <X className="h-4 w-4 mr-1" />
               Reject
             </Button>
           )}
 
           {onClose && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              title="Close diff viewer"
-            >
+            <Button variant="ghost" size="sm" onClick={onClose} title="Close diff viewer">
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -202,12 +192,8 @@ export function DiffViewer({
       <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground bg-muted/10 border-t border-border">
         <div className="flex items-center gap-3">
           <span>Language: {language}</span>
-          <span>
-            Original: {originalValue.split('\n').length} lines
-          </span>
-          <span>
-            Modified: {modifiedValue.split('\n').length} lines
-          </span>
+          <span>Original: {originalValue.split('\n').length} lines</span>
+          <span>Modified: {modifiedValue.split('\n').length} lines</span>
         </div>
         <div className="flex items-center gap-3">
           {readOnly && <span className="text-amber-500">Read-only</span>}

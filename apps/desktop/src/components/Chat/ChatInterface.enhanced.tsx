@@ -34,7 +34,7 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     content: string,
     attachments?: FileAttachment[],
     _captures?: unknown,
-    _routing?: ChatRoutingPreferences
+    _routing?: ChatRoutingPreferences,
   ) => {
     try {
       setUploading(true);

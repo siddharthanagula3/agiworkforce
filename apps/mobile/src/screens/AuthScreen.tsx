@@ -1,6 +1,12 @@
-
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
 import { useAuthStore } from '../store/authStore';
 
 interface AuthScreenProps {
@@ -35,9 +41,7 @@ export function AuthScreen({ mode, onModeChange }: AuthScreenProps) {
       <Text style={styles.title}>
         {mode === 'login' ? 'Welcome back' : 'Create your companion account'}
       </Text>
-      <Text style={styles.subtitle}>
-        Stay connected to AGI Workforce from your mobile device.
-      </Text>
+      <Text style={styles.subtitle}>Stay connected to AGI Workforce from your mobile device.</Text>
 
       <View style={styles.form}>
         <TextInput

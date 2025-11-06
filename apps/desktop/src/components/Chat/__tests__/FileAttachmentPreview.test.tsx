@@ -35,7 +35,7 @@ describe('FileAttachmentPreview', () => {
 
   it('renders image attachment with preview', () => {
     const { container } = renderWithTooltipProvider(
-      <FileAttachmentPreview attachment={mockImageAttachment} />
+      <FileAttachmentPreview attachment={mockImageAttachment} />,
     );
 
     const img = container.querySelector('img[alt="test-image.png"]');
@@ -77,7 +77,7 @@ describe('FileAttachmentPreview', () => {
         attachment={mockImageAttachment}
         onRemove={onRemove}
         removable={true}
-      />
+      />,
     );
 
     const removeButton = screen.getByLabelText(/remove/i);
@@ -88,10 +88,7 @@ describe('FileAttachmentPreview', () => {
 
   it('does not show remove button when not removable', () => {
     renderWithTooltipProvider(
-      <FileAttachmentPreview
-        attachment={mockImageAttachment}
-        removable={false}
-      />
+      <FileAttachmentPreview attachment={mockImageAttachment} removable={false} />,
     );
 
     const removeButton = screen.queryByLabelText(/remove/i);
@@ -105,7 +102,7 @@ describe('FileAttachmentPreview', () => {
           ...mockImageAttachment,
           data: 'invalid-data-url',
         }}
-      />
+      />,
     );
 
     const img = container.querySelector('img');

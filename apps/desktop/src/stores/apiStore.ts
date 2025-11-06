@@ -92,7 +92,10 @@ interface ApiState {
   clientCredentials: (clientId: string) => Promise<TokenResponse>;
 
   // Actions - Templates
-  renderTemplate: (template: RequestTemplate, variables: Record<string, string>) => Promise<ApiRequest>;
+  renderTemplate: (
+    template: RequestTemplate,
+    variables: Record<string, string>,
+  ) => Promise<ApiRequest>;
   extractVariables: (templateStr: string) => Promise<string[]>;
   validateTemplate: (templateStr: string) => Promise<boolean>;
 

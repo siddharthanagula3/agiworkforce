@@ -8,7 +8,14 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../ui/Dialog';
 import { ScrollArea } from '../ui/ScrollArea';
 import { useCalendarStore, type CalendarConnectConfig } from '../../stores/calendarStore';
 import type { CalendarEvent, EventDateTime, CalendarProvider } from '../../types/calendar';
@@ -333,11 +340,16 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground">Provider</label>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Provider
+                  </label>
                   <select
                     value={connectConfig.provider}
                     onChange={(event) =>
-                      setConnectConfig((prev) => ({ ...prev, provider: event.target.value as CalendarProvider }))
+                      setConnectConfig((prev) => ({
+                        ...prev,
+                        provider: event.target.value as CalendarProvider,
+                      }))
                     }
                     className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   >
@@ -350,7 +362,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                 </div>
                 <div className="grid grid-cols-1 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Client ID</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Client ID
+                    </label>
                     <Input
                       value={connectConfig.clientId}
                       onChange={(event) =>
@@ -360,7 +374,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Client Secret</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Client Secret
+                    </label>
                     <Input
                       type="password"
                       value={connectConfig.clientSecret}
@@ -371,7 +387,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Redirect URI</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Redirect URI
+                    </label>
                     <Input
                       value={connectConfig.redirectUri}
                       onChange={(event) =>
@@ -382,8 +400,8 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  After clicking connect we will open the authorization page in your browser. Complete the prompt and
-                  copy the verification code to finish connecting.
+                  After clicking connect we will open the authorization page in your browser.
+                  Complete the prompt and copy the verification code to finish connecting.
                 </p>
               </div>
               <DialogFooter>
@@ -417,7 +435,8 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                   onClick={() => selectAccount(account.account_id)}
                   className={cn(
                     'w-full rounded-md border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/40',
-                    account.account_id === selectedAccountId && 'border-primary/70 bg-primary/10 text-primary',
+                    account.account_id === selectedAccountId &&
+                      'border-primary/70 bg-primary/10 text-primary',
                   )}
                 >
                   <p className="text-sm font-semibold leading-tight">
@@ -431,7 +450,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
         </div>
         {pendingAuth && (
           <div className="border-t border-border/80 px-3 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Complete Connection</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Complete Connection
+            </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Paste the authorization code from the provider to finish connecting.
             </p>
@@ -464,7 +485,12 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                   Viewing {selectedCalendar.name}
                 </div>
               )}
-              <Button variant="outline" size="sm" onClick={handleOpenCreate} disabled={!selectedCalendarId}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenCreate}
+                disabled={!selectedCalendarId}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 New Event
               </Button>
@@ -491,7 +517,8 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                       onClick={() => selectCalendar(calendar.id)}
                       className={cn(
                         'w-full rounded-md border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/40',
-                        calendar.id === selectedCalendarId && 'border-primary/70 bg-primary/10 text-primary',
+                        calendar.id === selectedCalendarId &&
+                          'border-primary/70 bg-primary/10 text-primary',
                       )}
                     >
                       <p className="text-sm font-semibold">{calendar.name}</p>
@@ -564,10 +591,14 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                           {renderEventTime(event.start)} - {renderEventTime(event.end)}
                         </p>
                         {event.location && (
-                          <p className="mt-1 text-xs text-muted-foreground">Location: {event.location}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Location: {event.location}
+                          </p>
                         )}
                         {event.description && (
-                          <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">{event.description}</p>
+                          <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
+                            {event.description}
+                          </p>
                         )}
                       </div>
                     ))}
@@ -577,7 +608,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                 <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
                   <Calendar className="h-12 w-12 opacity-30" />
                   <p className="mt-2 text-sm">
-                    {selectedDateLabel ? `No events on ${selectedDateLabel}.` : 'Select a date to view events.'}
+                    {selectedDateLabel
+                      ? `No events on ${selectedDateLabel}.`
+                      : 'Select a date to view events.'}
                   </p>
                 </div>
               )}
@@ -603,7 +636,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
               <label className="text-xs font-semibold text-muted-foreground">Title</label>
               <Input
                 value={eventForm.title}
-                onChange={(event) => setEventForm((prev) => ({ ...prev, title: event.target.value }))}
+                onChange={(event) =>
+                  setEventForm((prev) => ({ ...prev, title: event.target.value }))
+                }
                 placeholder="Event title"
               />
             </div>
@@ -613,7 +648,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                 <Input
                   type="datetime-local"
                   value={eventForm.start}
-                  onChange={(event) => setEventForm((prev) => ({ ...prev, start: event.target.value }))}
+                  onChange={(event) =>
+                    setEventForm((prev) => ({ ...prev, start: event.target.value }))
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -621,7 +658,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
                 <Input
                   type="datetime-local"
                   value={eventForm.end}
-                  onChange={(event) => setEventForm((prev) => ({ ...prev, end: event.target.value }))}
+                  onChange={(event) =>
+                    setEventForm((prev) => ({ ...prev, end: event.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -629,7 +668,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
               <label className="text-xs font-semibold text-muted-foreground">Location</label>
               <Input
                 value={eventForm.location}
-                onChange={(event) => setEventForm((prev) => ({ ...prev, location: event.target.value }))}
+                onChange={(event) =>
+                  setEventForm((prev) => ({ ...prev, location: event.target.value }))
+                }
                 placeholder="Optional location"
               />
             </div>
@@ -637,7 +678,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
               <label className="text-xs font-semibold text-muted-foreground">Description</label>
               <Textarea
                 value={eventForm.description}
-                onChange={(event) => setEventForm((prev) => ({ ...prev, description: event.target.value }))}
+                onChange={(event) =>
+                  setEventForm((prev) => ({ ...prev, description: event.target.value }))
+                }
                 placeholder="Details, agenda, notes..."
                 rows={4}
               />
@@ -653,7 +696,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
             >
               Cancel
             </Button>
-            <Button onClick={handleEventSubmit}>{editingEvent ? 'Save Changes' : 'Create Event'}</Button>
+            <Button onClick={handleEventSubmit}>
+              {editingEvent ? 'Save Changes' : 'Create Event'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

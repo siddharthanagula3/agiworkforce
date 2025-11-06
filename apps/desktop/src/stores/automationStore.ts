@@ -39,7 +39,7 @@ interface AutomationState {
   click: (request: AutomationClickRequest) => Promise<void>;
   typeText: (
     text: string,
-    options?: { elementId?: string; x?: number; y?: number; focus?: boolean }
+    options?: { elementId?: string; x?: number; y?: number; focus?: boolean },
   ) => Promise<void>;
   hotkey: (key: number, modifiers: string[]) => Promise<void>;
   screenshot: (options?: AutomationScreenshotOptions) => Promise<CaptureResult>;

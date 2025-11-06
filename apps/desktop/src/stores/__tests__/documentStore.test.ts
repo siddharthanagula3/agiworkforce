@@ -87,9 +87,9 @@ describe('useDocumentStore', () => {
   it('surfaces detectType errors for unknown values', async () => {
     invokeMock.mockResolvedValue('Unsupported');
 
-    await expect(
-      useDocumentStore.getState().detectType('/tmp/example.xyz'),
-    ).rejects.toThrow('Unsupported document type: Unsupported');
+    await expect(useDocumentStore.getState().detectType('/tmp/example.xyz')).rejects.toThrow(
+      'Unsupported document type: Unsupported',
+    );
 
     const state = useDocumentStore.getState();
     expect(state.error).toBe('Unsupported document type: Unsupported');

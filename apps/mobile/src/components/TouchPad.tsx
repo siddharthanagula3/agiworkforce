@@ -1,6 +1,11 @@
-
 import { useRef } from 'react';
-import { View, StyleSheet, PanResponder, GestureResponderEvent, PanResponderGestureState } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  PanResponder,
+  GestureResponderEvent,
+  PanResponderGestureState,
+} from 'react-native';
 
 export interface TouchPadEvent {
   type: 'move' | 'tap' | 'doubleTap';

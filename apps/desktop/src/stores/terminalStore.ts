@@ -41,7 +41,7 @@ interface TerminalState {
   setupOutputListener: (
     sessionId: string,
     callback: (data: string) => void,
-    onExit?: () => void
+    onExit?: () => void,
   ) => Promise<void>;
   removeOutputListener: (sessionId: string) => void;
   getSessionById: (sessionId: string) => TerminalSession | undefined;
@@ -165,7 +165,7 @@ export const useTerminalStore = create<TerminalState>()(
       setupOutputListener: async (
         sessionId: string,
         callback: (data: string) => void,
-        onExit?: () => void
+        onExit?: () => void,
       ) => {
         const outputEvent = `terminal-output-${sessionId}`;
         const exitEvent = `terminal-exit-${sessionId}`;
@@ -252,6 +252,6 @@ export const useTerminalStore = create<TerminalState>()(
         // Only persist shell preferences if needed
         availableShells: state.availableShells,
       }),
-    }
-  )
+    },
+  ),
 );

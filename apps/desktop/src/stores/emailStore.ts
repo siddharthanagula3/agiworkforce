@@ -52,7 +52,11 @@ interface EmailState {
   removeAccount: (accountId: number) => Promise<void>;
   selectAccount: (accountId: number | null) => Promise<void>;
   refreshFolders: (accountId?: number) => Promise<void>;
-  refreshEmails: (options?: { accountId?: number; folder?: string; filter?: Partial<EmailFilter> }) => Promise<void>;
+  refreshEmails: (options?: {
+    accountId?: number;
+    folder?: string;
+    filter?: Partial<EmailFilter>;
+  }) => Promise<void>;
   selectEmail: (emailId: string | null) => void;
   markRead: (uid: number, read: boolean) => Promise<void>;
   deleteEmail: (uid: number) => Promise<void>;
@@ -180,7 +184,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       set({ folders });
 
       if (!folders.includes(get().selectedFolder)) {
-        const fallback = folders.includes('INBOX') ? 'INBOX' : folders[0] ?? 'INBOX';
+        const fallback = folders.includes('INBOX') ? 'INBOX' : (folders[0] ?? 'INBOX');
         set({ selectedFolder: fallback });
       }
     } catch (error) {
@@ -248,11 +252,13 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       });
       set((state) => {
         const updatedEmails = state.emails.map((message) =>
-          message.uid === uid ? { ...message, is_read: read } : message
+          message.uid === uid ? { ...message, is_read: read } : message,
         );
         const currentSelected = state.selectedEmail;
         const nextSelected =
-          currentSelected && currentSelected.uid === uid ? { ...currentSelected, is_read: read } : currentSelected;
+          currentSelected && currentSelected.uid === uid
+            ? { ...currentSelected, is_read: read }
+            : currentSelected;
 
         return {
           emails: updatedEmails,
@@ -425,4 +431,3 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     }
   },
 }));
-

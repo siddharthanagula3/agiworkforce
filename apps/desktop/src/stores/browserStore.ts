@@ -119,10 +119,7 @@ export const useBrowserStore = create<BrowserState>((set) => ({
           if (session.id === activeId) {
             return {
               ...session,
-              tabs: [
-                ...session.tabs,
-                { id: tabId, url, title: url, active: true },
-              ],
+              tabs: [...session.tabs, { id: tabId, url, title: url, active: true }],
             };
           }
           return session;
@@ -163,9 +160,7 @@ export const useBrowserStore = create<BrowserState>((set) => ({
       set((state) => {
         const newSessions = state.sessions.map((session) => ({
           ...session,
-          tabs: session.tabs.map((tab) =>
-            tab.id === tabId ? { ...tab, url, title: url } : tab
-          ),
+          tabs: session.tabs.map((tab) => (tab.id === tabId ? { ...tab, url, title: url } : tab)),
         }));
 
         return { sessions: newSessions };

@@ -1,9 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import type {
-  CostAnalyticsResponse,
-  CostOverviewResponse,
-} from '../types/chat';
+import type { CostAnalyticsResponse, CostOverviewResponse } from '../types/chat';
 
 interface CostFilters {
   days: number;

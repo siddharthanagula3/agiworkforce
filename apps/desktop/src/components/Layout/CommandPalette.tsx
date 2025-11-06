@@ -51,7 +51,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
             <Search className="mr-2 h-4 w-4 text-muted-foreground" />
             <Command.Input
               autoFocus
-              placeholder="Type a command or search…"
+              placeholder="Type a command or searchï¿½"
               className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
@@ -75,13 +75,16 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
                     }}
                     className={cn(
                       'flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                      'data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary data-[selected=true]:shadow-sm'
+                      'data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary data-[selected=true]:shadow-sm',
                     )}
                   >
                     <div className="flex items-center gap-2">
                       {item.icon && (
                         <item.icon
-                          className={cn('h-4 w-4 text-muted-foreground', item.active && 'text-primary')}
+                          className={cn(
+                            'h-4 w-4 text-muted-foreground',
+                            item.active && 'text-primary',
+                          )}
                         />
                       )}
                       <div className="flex flex-col">
@@ -110,4 +113,3 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
 };
 
 export default CommandPalette;
-

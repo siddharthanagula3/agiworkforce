@@ -31,13 +31,7 @@ export const SUPPORTED_FILE_TYPES: SupportedFileType[] = [
 export const FILE_TYPE_CATEGORIES = {
   images: ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'],
   documents: ['application/pdf', 'text/plain', 'text/markdown'],
-  code: [
-    'text/javascript',
-    'text/typescript',
-    'text/html',
-    'text/css',
-    'application/json',
-  ],
+  code: ['text/javascript', 'text/typescript', 'text/html', 'text/css', 'application/json'],
   data: ['text/csv', 'application/json'],
 } as const satisfies Record<string, readonly SupportedFileType[]>;
 

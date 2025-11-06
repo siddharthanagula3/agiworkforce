@@ -103,11 +103,7 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
           ))}
         </Select>
 
-        <Button
-          onClick={handleProcess}
-          disabled={isProcessing || hasProcessed}
-          className="gap-2"
-        >
+        <Button onClick={handleProcess} disabled={isProcessing || hasProcessed} className="gap-2">
           {isProcessing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -210,8 +206,7 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
 
           {/* Word Count */}
           <div className="mt-4 text-sm text-muted-foreground">
-            {result.text.split(/\s+/).filter(Boolean).length} words,{' '}
-            {result.text.length} characters
+            {result.text.split(/\s+/).filter(Boolean).length} words, {result.text.length} characters
           </div>
         </>
       )}

@@ -16,7 +16,11 @@ declare global {
   }
 }
 
-export function authenticateToken(req: Request, res: Response, next: NextFunction): Response | void {
+export function authenticateToken(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Response | void {
   const authHeader = req.headers['authorization'];
   const token = authHeader?.replace('Bearer ', '');
 
