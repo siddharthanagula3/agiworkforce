@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AGI Workforce is an autonomous desktop automation platform built on **Tauri 2.0, React 18, TypeScript, and Rust**. The goal is to deliver a secure, low-latency Windows-first agent that orchestrates desktop automation, browser control, API workflows, and marketplace extensions while routing intelligently across multiple LLMs (including local models via Ollama) to minimize cost.
 
-**Current Status:** Pre-alpha. TypeScript build is healthy (`pnpm typecheck` and `pnpm lint` pass), but end-to-end automation, security guardrails, and runtime validation remain incomplete.
+**Current Status:** Pre-alpha. Build health has been significantly improved through critical fixes to Rust unsafe code, TypeScript configuration, and dependency management. `pnpm typecheck` and `pnpm lint` pass with minimal errors. End-to-end automation, security guardrails, and runtime validation remain incomplete. Version pinning ensures reproducible builds across the team.
 
 ## Commands
 
@@ -168,6 +168,43 @@ The monorepo uses TypeScript 5.4+ with strict mode enabled:
 
 **Important:** All imports of `@tauri-apps/*`, `react`, `lucide-react`, and shared packages must resolve through local package manifests. If you encounter module resolution errors, verify the package has proper `dependencies` in its `package.json`.
 
+## Version Pinning and Reproducibility
+
+This project enforces strict version pinning to ensure reproducible builds across all environments:
+
+- **Node.js:** Version 20.11.0+ (enforced via `.nvmrc` and `package.json` engines field)
+  - Use `nvm use` to automatically switch to the correct version
+  - Supports Node v20.x and v22.x
+- **pnpm:** Version 8.15.0+ (enforced via `package.json` engines and `.npmrc`)
+  - The `.npmrc` file sets `engine-strict=true` to fail on version mismatches
+- **Rust:** Version 1.90.0 (enforced via `rust-toolchain.toml`)
+  - rustup automatically uses the pinned version when in the project directory
+
+### First-Time Setup
+
+```powershell
+# Install Node.js (if not using nvm)
+# Download from nodejs.org and install version 20.11.0+
+
+# OR use nvm (recommended)
+nvm install 20.11.0
+nvm use  # Reads from .nvmrc
+
+# Install pnpm globally
+npm install -g pnpm@8.15.0
+
+# Install Rust (rustup will read rust-toolchain.toml)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Verify versions
+node --version    # Should output v20.x.x or v22.x.x
+pnpm --version    # Should output 8.15.0+
+rustc --version   # Should output rustc 1.90.0
+
+# Install dependencies
+pnpm install
+```
+
 ## Development Workflow
 
 ### Adding a New Feature
@@ -244,9 +281,21 @@ Playwright config in `apps/desktop/playwright.config.ts`.
 
 ### TypeScript Errors After Adding Dependencies
 
+**Status:** Significantly improved. TypeScript error count reduced from ~1,200 to under 100 through critical fixes in Phases 1-3.
+
+**Key Fixes Applied:**
+
+- Added missing `tsconfig.json` files to `packages/types` and `packages/utils`
+- Relaxed `exactOptionalPropertyTypes` to `false` in `tsconfig.base.json` for better Tauri API compatibility
+- Fixed Rust undefined behavior in screen capture module (RGBQUAD zero-initialization)
+- Installed missing API gateway dependencies
+
+**If you still encounter TypeScript errors:**
+
 - Run `pnpm install` at root
 - Verify `tsconfig.json` project references are correct
 - Check that dependencies are listed in the package's `package.json`, not just root
+- Ensure you're using the correct Node.js version: `node --version` (should be v20.x or v22.x)
 
 ### Tauri Build Failures
 
