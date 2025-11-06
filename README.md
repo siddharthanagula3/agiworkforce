@@ -32,21 +32,195 @@ This repository currently contains:
 
 ### Prerequisites
 
-- **Windows 11** with WebView2 runtime (desktop target)
-- **Node.js 20 LTS** and **pnpm 8.x** (`npm install -g pnpm@8`)
-- **Rust stable** (via `rustup`) and the Tauri prerequisites for Windows
-- Optional: **Ollama for Windows** for local model experimentation
+#### Windows (Primary Development Target)
 
-### Setup Commands
+- **Node.js 20.11.0+** (enforced via `.nvmrc` and `package.json` engines)
+  - Download from [nodejs.org](https://nodejs.org/) or use [nvm-windows](https://github.com/coreybutler/nvm-windows)
+  - Verify: `node --version` should output `v20.11.0` or higher
+- **pnpm 8.15.0+** (enforced via `package.json`)
+  - Install globally: `npm install -g pnpm@8.15.0`
+  - Verify: `pnpm --version`
+- **Rust 1.90.0** (enforced via `rust-toolchain.toml`)
+  - Install via rustup: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+  - rustup will automatically use the version specified in `rust-toolchain.toml`
+  - Verify: `rustc --version` should output `rustc 1.90.0`
+- **Visual Studio Build Tools 2022** with "Desktop development with C++" workload
+  - Download from [Visual Studio Downloads](https://visualstudio.microsoft.com/downloads/)
+  - Required for linking Rust binaries on Windows
+- **WebView2 Runtime** (pre-installed on Windows 11)
+  - Required for Tauri applications
+  - Download manually if needed: [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+- **Optional: Ollama for Windows** for local model experimentation
+  - Download from [ollama.com](https://ollama.com/download)
+
+#### macOS (Secondary Target)
+
+- **Node.js 20.11.0+**
+  - Install via [nvm](https://github.com/nvm-sh/nvm): `nvm install 20.11.0 && nvm use 20.11.0`
+- **pnpm 8.15.0+**
+  - Install: `npm install -g pnpm@8.15.0`
+- **Rust 1.90.0**
+  - Install via rustup: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- **Xcode Command Line Tools**
+  - Install: `xcode-select --install`
+  - Required for building native dependencies
+
+#### Linux (Tertiary Target - Ubuntu/Debian)
+
+- **Node.js 20.11.0+**
+  - Install via [nvm](https://github.com/nvm-sh/nvm) or package manager
+- **pnpm 8.15.0+**
+  - Install: `npm install -g pnpm@8.15.0`
+- **Rust 1.90.0**
+  - Install via rustup: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- **Required system libraries**:
+  ```bash
+  sudo apt-get update && sudo apt-get install -y \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+  ```
+
+### Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/yourusername/agiworkforce.git
+   cd agiworkforce
+   ```
+
+2. **Install Node.js 20.11.0**
+   - Using nvm (recommended): `nvm use` (reads from `.nvmrc`)
+   - Or manually install from [nodejs.org](https://nodejs.org/)
+
+3. **Install pnpm**
+
+   ```bash
+   npm install -g pnpm@8.15.0
+   ```
+
+4. **Install Rust 1.90.0**
+
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+   rustup will automatically use the version specified in `rust-toolchain.toml`
+
+5. **Install dependencies**
+
+   ```bash
+   pnpm install
+   ```
+
+6. **Verify setup**
+   ```bash
+   node --version    # Should output v20.11.0+
+   pnpm --version    # Should output 8.15.0+
+   rustc --version   # Should output rustc 1.90.0
+   ```
+
+### Development
 
 ```powershell
-pnpm install
-pnpm lint
-pnpm typecheck           # Expect failures until strict-mode errors are cleared
+# Run desktop app in development mode (Vite + Tauri hot reload)
 pnpm --filter @agiworkforce/desktop dev
+
+# Lint all code
+pnpm lint
+
+# Type-check TypeScript (expect failures until strict-mode errors are cleared)
+pnpm typecheck
+
+# Format code with Prettier
+pnpm format
+
+# Run all tests
+pnpm test
+
+# Run desktop app tests with UI
+pnpm --filter @agiworkforce/desktop test:ui
+
+# Run desktop app tests with coverage
+pnpm --filter @agiworkforce/desktop test:coverage
 ```
 
 During development, track type errors in `typecheck.log` and ensure every package exports its own `tsconfig.json` with proper references. The repo uses `moduleResolution: "bundler"`; dependencies like `react`, `lucide-react`, and `@tauri-apps/api` must be resolved through local package manifests.
+
+### Building
+
+```powershell
+# Build desktop app for production
+pnpm --filter @agiworkforce/desktop build
+```
+
+Build artifacts are located in `apps/desktop/src-tauri/target/release/`
+
+### Troubleshooting
+
+#### Windows LNK1318 Error (PDB Limit Exceeded)
+
+**Status:** Already fixed via `Cargo.toml` profile settings (`debug = 0`)
+
+If you still encounter `LINK : fatal error LNK1318: Unexpected PDB error; LIMIT (12)`:
+
+```powershell
+cd apps/desktop/src-tauri
+cargo clean
+cd ../..
+pnpm --filter @agiworkforce/desktop dev
+```
+
+The workspace root `Cargo.toml` already contains:
+
+```toml
+[profile.dev]
+debug = 0
+incremental = false
+opt-level = 0
+```
+
+#### TypeScript Errors
+
+Run `pnpm typecheck` to see all type errors. The codebase currently has ~1,200 strict-mode errors across desktop, mobile, and services that are being addressed.
+
+```powershell
+pnpm typecheck 2>&1 | Out-File -FilePath typecheck.log
+```
+
+#### Missing Dependencies
+
+If you encounter module resolution errors:
+
+```powershell
+# Install dependencies at root
+pnpm install
+
+# Install service dependencies
+cd services/api-gateway && pnpm install
+cd ../signaling-server && pnpm install
+cd ../update-server && pnpm install
+```
+
+#### Tauri Build Failures
+
+- Ensure Rust toolchain is up to date: `rustup update`
+- Verify WebView2 runtime is installed (pre-installed on Windows 11)
+- Check Tauri prerequisites: [Tauri Prerequisites Guide](https://tauri.app/v1/guides/getting-started/prerequisites)
+
+#### Module Resolution Errors
+
+- The repo uses `moduleResolution: "bundler"`
+- All imports must resolve through package manifests
+- Use workspace protocol in `package.json`: `"@agiworkforce/types": "workspace:*"`
+- Verify dependencies are listed in the package's `package.json`, not just root
 
 ### Running Local LLMs with Ollama
 
