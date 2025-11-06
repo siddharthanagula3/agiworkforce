@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/Users/**)"
+      "Read(//c/Users/**)",
+      "Bash(dir:*)",
+      "Bash(cat:*)",
+      "Bash(rustc:*)",
+      "Bash(cargo --version:*)",
+      "Bash(node --version)",
+      "Bash(pnpm --version:*)"
     ],
     "deny": [],
     "ask": []
