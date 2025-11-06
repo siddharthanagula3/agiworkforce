@@ -235,7 +235,7 @@ mod mouse_tests {
     #[test]
     #[ignore]
     fn test_move_to_integration() {
-        let _mouse = MouseSimulator::new().unwrap();
+        let mouse = MouseSimulator::new().unwrap();
 
         // Move to center of primary screen (assuming 1920x1080)
         let result = mouse.move_to(960, 540);
@@ -297,7 +297,7 @@ mod mouse_tests {
 
     #[test]
     fn test_click_rect_center_calculation() {
-        let mouse = MouseSimulator::new().unwrap();
+        let _mouse = MouseSimulator::new().unwrap();
 
         // Test that calculation doesn't panic
         let rect = BoundingRectangle {

@@ -42,10 +42,11 @@ describe('codeStore', () => {
     await store.openFile('C:/project/src/main.ts');
     await store.openFile('C:/project/src/utils.ts');
 
-    expect(store.openFiles.length).toBe(2);
-    expect(store.openFiles[0].path).toBe('C:/project/src/main.ts');
-    expect(store.persistedOpenPaths).toEqual(['C:/project/src/main.ts', 'C:/project/src/utils.ts']);
-    expect(store.activeFilePath).toBe('C:/project/src/utils.ts');
+    const state = useCodeStore.getState();
+    expect(state.openFiles.length).toBe(2);
+    expect(state.openFiles[0].path).toBe('C:/project/src/main.ts');
+    expect(state.persistedOpenPaths).toEqual(['C:/project/src/main.ts', 'C:/project/src/utils.ts']);
+    expect(state.activeFilePath).toBe('C:/project/src/utils.ts');
   });
 
   it('reorders tabs and keeps persisted order in sync', async () => {
@@ -57,9 +58,10 @@ describe('codeStore', () => {
 
     store.moveFile('file-c.ts', 0);
 
-    expect(store.openFiles[0].path).toBe('file-c.ts');
-    expect(store.persistedOpenPaths[0]).toBe('file-c.ts');
-    expect(store.activeFilePath).toBe('file-b.ts');
+    const state = useCodeStore.getState();
+    expect(state.openFiles[0].path).toBe('file-c.ts');
+    expect(state.persistedOpenPaths[0]).toBe('file-c.ts');
+    expect(state.activeFilePath).toBe('file-c.ts');
   });
 
   it('hydrates previously persisted tabs', async () => {
@@ -74,9 +76,10 @@ describe('codeStore', () => {
       activeFilePath: null,
     });
 
-    await store.hydrateOpenFiles();
+    await useCodeStore.getState().hydrateOpenFiles();
 
-    expect(store.openFiles.length).toBe(2);
-    expect(store.openFiles.map((f) => f.path)).toEqual(['hydrate-a.ts', 'hydrate-b.ts']);
+    const state = useCodeStore.getState();
+    expect(state.openFiles.length).toBe(2);
+    expect(state.openFiles.map((f) => f.path)).toEqual(['hydrate-a.ts', 'hydrate-b.ts']);
   });
 });
