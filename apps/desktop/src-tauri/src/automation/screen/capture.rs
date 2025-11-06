@@ -311,7 +311,12 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
                 biClrUsed: 0,
                 biClrImportant: 0,
             },
-            bmiColors: [std::mem::zeroed(); 1],
+            bmiColors: [RGBQUAD {
+                rgbBlue: 0,
+                rgbRed: 0,
+                rgbGreen: 0,
+                rgbReserved: 0
+            }; 1],
         };
 
         let mut buffer = vec![0u8; (width * height * 4) as usize];
@@ -418,7 +423,12 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
                 biClrUsed: 0,
                 biClrImportant: 0,
             },
-            bmiColors: [std::mem::zeroed(); 1],
+            bmiColors: [RGBQUAD {
+                rgbBlue: 0,
+                rgbRed: 0,
+                rgbGreen: 0,
+                rgbReserved: 0
+            }; 1],
         };
 
         // Get bitmap dimensions
