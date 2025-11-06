@@ -6,18 +6,13 @@ use crate::router::cost_calculator::CostCalculator;
 use crate::router::token_counter::TokenCounter;
 use crate::router::{LLMProvider, LLMRequest, LLMResponse, Provider};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RoutingStrategy {
+    #[default]
     Auto,
     CostOptimized,
     LatencyOptimized,
     LocalFirst,
-}
-
-impl Default for RoutingStrategy {
-    fn default() -> Self {
-        RoutingStrategy::Auto
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -48,6 +43,12 @@ pub struct LLMRouter {
     providers: HashMap<Provider, Box<dyn LLMProvider>>,
     default_provider: Provider,
     cost_calculator: CostCalculator,
+}
+
+impl Default for LLMRouter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LLMRouter {

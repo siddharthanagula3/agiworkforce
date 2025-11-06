@@ -418,7 +418,9 @@ impl CalendarManager {
         };
 
         client.ensure_valid_token().await?;
-        let result = client.update_event(calendar_id, event_id, request.clone()).await?;
+        let result = client
+            .update_event(calendar_id, event_id, request.clone())
+            .await?;
 
         if let Some(token) = client.token() {
             if let Some(mut entry) = self.clients.get_mut(account_id) {

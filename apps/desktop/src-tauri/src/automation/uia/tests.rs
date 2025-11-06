@@ -455,9 +455,7 @@ mod integration_tests {
         }
 
         // Close Notepad without saving
-        notepad_process
-            .kill()
-            .expect("Failed to close Notepad");
+        notepad_process.kill().expect("Failed to close Notepad");
     }
 
     #[test]

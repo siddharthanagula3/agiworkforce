@@ -4,8 +4,8 @@ use std::path::Path;
 use lopdf::{Dictionary, Document as LopdfDocument, Object};
 use pdf_extract;
 
-use crate::error::{Error, Result};
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
+use crate::error::{Error, Result};
 
 pub struct PdfHandler;
 

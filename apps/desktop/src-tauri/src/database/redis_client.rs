@@ -299,7 +299,7 @@ impl RedisClient {
     }
 
     /// List operations
-
+    ///
     /// Push value to list (left)
     pub async fn lpush(&self, connection_id: &str, key: &str, value: &str) -> Result<u64> {
         tracing::debug!("Redis LPUSH: {}", key);
@@ -421,7 +421,7 @@ impl RedisClient {
     }
 
     /// Hash operations
-
+    ///
     /// Set hash field
     pub async fn hset(
         &self,
@@ -529,7 +529,7 @@ impl RedisClient {
     }
 
     /// Set operations
-
+    ///
     /// Add member to set
     pub async fn sadd(&self, connection_id: &str, key: &str, member: &str) -> Result<bool> {
         tracing::debug!("Redis SADD: {} {}", key, member);

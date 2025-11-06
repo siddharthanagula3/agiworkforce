@@ -21,6 +21,12 @@ pub struct CostCalculator {
     provider_defaults: HashMap<Provider, Pricing>,
 }
 
+impl Default for CostCalculator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CostCalculator {
     pub fn new() -> Self {
         let mut pricing = HashMap::new();

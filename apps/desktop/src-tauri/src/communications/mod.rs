@@ -75,7 +75,7 @@ pub struct EmailAttachment {
 }
 
 /// Email filter for fetching emails
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EmailFilter {
     pub unread_only: bool,
     pub date_from: Option<i64>,
@@ -111,21 +111,6 @@ impl EmailAddress {
         match &self.name {
             Some(name) => format!("{} <{}>", name, self.email),
             None => self.email.clone(),
-        }
-    }
-}
-
-impl Default for EmailFilter {
-    fn default() -> Self {
-        Self {
-            unread_only: false,
-            date_from: None,
-            date_to: None,
-            from: None,
-            to: None,
-            subject_contains: None,
-            body_contains: None,
-            has_attachments: None,
         }
     }
 }

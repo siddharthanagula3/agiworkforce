@@ -5,12 +5,14 @@ use std::path::Path;
 use roxmltree::Document as XmlDocument;
 use zip::read::ZipArchive;
 
-use crate::error::{Error, Result};
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
+use crate::error::{Error, Result};
 
-const CORE_PROPS_NS: &str = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+const CORE_PROPS_NS: &str =
+    "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
 const DC_NS: &str = "http://purl.org/dc/elements/1.1/";
-const EXT_PROPS_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+const EXT_PROPS_NS: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
 
 pub struct WordHandler;
 
@@ -36,8 +38,8 @@ impl WordHandler {
             return Err(Error::Generic(format!("File not found: {}", file_path)));
         }
 
-        let file = File::open(path)
-            .map_err(|e| Error::Generic(format!("Failed to open DOCX: {}", e)))?;
+        let file =
+            File::open(path).map_err(|e| Error::Generic(format!("Failed to open DOCX: {}", e)))?;
         let mut archive = ZipArchive::new(file)
             .map_err(|e| Error::Generic(format!("Invalid DOCX archive: {}", e)))?;
 
@@ -51,13 +53,16 @@ impl WordHandler {
                 .map_err(|e| Error::Generic(format!("Failed to load document.xml: {}", e)))?;
         }
 
-        let xml =
-            XmlDocument::parse(&document_xml).map_err(|e| Error::Generic(format!("Invalid DOCX XML: {}", e)))?;
+        let xml = XmlDocument::parse(&document_xml)
+            .map_err(|e| Error::Generic(format!("Invalid DOCX XML: {}", e)))?;
         let mut output = String::new();
         let mut last_was_newline = true;
 
         for node in xml.descendants() {
-            if node.has_tag_name(("http://schemas.openxmlformats.org/wordprocessingml/2006/main", "t")) {
+            if node.has_tag_name((
+                "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                "t",
+            )) {
                 if let Some(text) = node.text() {
                     if !last_was_newline && !output.ends_with([' ', '\n']) {
                         output.push(' ');
@@ -65,9 +70,13 @@ impl WordHandler {
                     output.push_str(text.trim_end_matches('\u{a0}'));
                     last_was_newline = false;
                 }
-            } else if node.has_tag_name(("http://schemas.openxmlformats.org/wordprocessingml/2006/main", "p"))
-                || node.has_tag_name(("http://schemas.openxmlformats.org/wordprocessingml/2006/main", "br"))
-            {
+            } else if node.has_tag_name((
+                "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                "p",
+            )) || node.has_tag_name((
+                "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                "br",
+            )) {
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
@@ -110,10 +119,9 @@ impl WordHandler {
 
         if !core_props_xml.is_empty() {
             if let Ok(doc) = XmlDocument::parse(&core_props_xml) {
-                if let Some(node) = doc
-                    .descendants()
-                    .find(|n| n.has_tag_name((DC_NS, "title")) || n.has_tag_name((CORE_PROPS_NS, "title")))
-                {
+                if let Some(node) = doc.descendants().find(|n| {
+                    n.has_tag_name((DC_NS, "title")) || n.has_tag_name((CORE_PROPS_NS, "title"))
+                }) {
                     if let Some(value) = node.text() {
                         let value = value.trim();
                         if !value.is_empty() {
@@ -122,10 +130,9 @@ impl WordHandler {
                     }
                 }
 
-                if let Some(node) = doc
-                    .descendants()
-                    .find(|n| n.has_tag_name((DC_NS, "creator")) || n.has_tag_name((CORE_PROPS_NS, "creator")))
-                {
+                if let Some(node) = doc.descendants().find(|n| {
+                    n.has_tag_name((DC_NS, "creator")) || n.has_tag_name((CORE_PROPS_NS, "creator"))
+                }) {
                     if let Some(value) = node.text() {
                         let value = value.trim();
                         if !value.is_empty() {

@@ -93,11 +93,10 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaUser> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+            let data: AsanaResponse<AsanaUser> = response.json().await.map_err(Error::Http)?;
             Ok(data.data.gid)
         } else {
             let status = response.status();
@@ -117,11 +116,11 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
             let data: AsanaListResponse<AsanaWorkspace> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+                response.json().await.map_err(Error::Http)?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -142,11 +141,11 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
             let data: AsanaListResponse<AsanaProject> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+                response.json().await.map_err(Error::Http)?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -167,11 +166,10 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
-            let data: AsanaListResponse<AsanaTask> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+            let data: AsanaListResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -209,11 +207,10 @@ impl AsanaClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaTask> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+            let data: AsanaResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
             Ok(data.data.gid)
         } else {
             let status = response.status();
@@ -240,7 +237,7 @@ impl AsanaClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
             Ok(())
@@ -267,7 +264,7 @@ impl AsanaClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
             Ok(())
@@ -290,11 +287,10 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaTask> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+            let data: AsanaResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -424,7 +420,7 @@ impl UnifiedTaskProvider for AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         if response.status().is_success() {
             Ok(())

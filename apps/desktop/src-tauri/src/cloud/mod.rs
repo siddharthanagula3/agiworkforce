@@ -90,6 +90,12 @@ pub struct CloudStorageManager {
     pending: DashMap<String, PendingAuth>,
 }
 
+impl Default for CloudStorageManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CloudStorageManager {
     pub fn new() -> Self {
         Self {

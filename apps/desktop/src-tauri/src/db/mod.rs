@@ -111,7 +111,7 @@ impl Database {
     }
 
     pub fn list_settings(&self) -> Result<Vec<Setting>> {
-        self.with_connection(|conn| repository::list_settings(conn))
+        self.with_connection(repository::list_settings)
     }
 
     pub fn delete_setting(&self, key: &str) -> Result<()> {
@@ -136,7 +136,7 @@ impl Database {
     }
 
     pub fn get_automation_stats(&self) -> Result<(i64, i64, f64, f64)> {
-        self.with_connection(|conn| repository::get_automation_stats(conn))
+        self.with_connection(repository::get_automation_stats)
     }
 
     // Overlay events methods

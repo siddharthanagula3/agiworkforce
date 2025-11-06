@@ -52,7 +52,7 @@ impl CacheManager {
 
     pub fn compute_cache_key(provider: Provider, model: &str, messages: &[ChatMessage]) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(provider.as_ref().as_bytes());
+        hasher.update(provider.as_string().as_bytes());
         hasher.update(b"::");
         hasher.update(model.as_bytes());
         hasher.update(b"::");
@@ -129,7 +129,7 @@ impl CacheManager {
                 expires_at = excluded.expires_at",
             params![
                 record.cache_key,
-                record.provider.as_ref(),
+                record.provider.as_string(),
                 record.model,
                 record.prompt_hash,
                 record.response,

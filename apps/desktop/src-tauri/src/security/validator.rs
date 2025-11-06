@@ -250,16 +250,7 @@ impl CommandValidator {
         args.iter()
             .map(|arg| {
                 // Remove shell metacharacters
-                let sanitized = arg
-                    .replace('|', "")
-                    .replace('&', "")
-                    .replace(';', "")
-                    .replace('>', "")
-                    .replace('<', "")
-                    .replace('`', "")
-                    .replace('$', "")
-                    .replace('(', "")
-                    .replace(')', "");
+                let sanitized = arg.replace(['|', '&', ';', '>', '<', '`', '$', '(', ')'], "");
 
                 if sanitized != *arg {
                     warn!("Sanitized argument: {} -> {}", arg, sanitized);

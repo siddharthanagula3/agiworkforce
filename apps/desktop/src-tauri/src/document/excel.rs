@@ -4,8 +4,8 @@ use std::path::Path;
 use calamine::{open_workbook_auto, DataType, Reader};
 use chrono::{Duration as ChronoDuration, NaiveDate, NaiveDateTime};
 
-use crate::error::{Error, Result};
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
+use crate::error::{Error, Result};
 
 struct ExcelExtraction {
     text: String,

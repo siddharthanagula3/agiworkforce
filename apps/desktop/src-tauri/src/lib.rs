@@ -1,3 +1,5 @@
+#![allow(clippy::should_implement_trait)]
+
 // Core application modules
 pub mod commands;
 pub mod state;

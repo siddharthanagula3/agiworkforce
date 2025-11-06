@@ -52,6 +52,7 @@ impl AuditLogger {
     }
 
     /// Log an automation operation
+    #[allow(clippy::too_many_arguments)]
     pub fn log_operation(
         &self,
         operation_type: String,

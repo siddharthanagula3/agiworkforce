@@ -1,6 +1,4 @@
-use mysql_async::{
-    prelude::*, Opts, OptsBuilder, Pool, PoolConstraints, PoolOpts, Row, Value,
-};
+use mysql_async::{prelude::*, Opts, OptsBuilder, Pool, PoolConstraints, PoolOpts, Row, Value};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;

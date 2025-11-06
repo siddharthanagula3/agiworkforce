@@ -1,8 +1,5 @@
 use crate::settings::{
-    models::{
-        AppSettings, Setting, SettingCategory,
-        SettingValue,
-    },
+    models::{AppSettings, Setting, SettingCategory, SettingValue},
     repository,
     validation::{self, ValidationError},
 };

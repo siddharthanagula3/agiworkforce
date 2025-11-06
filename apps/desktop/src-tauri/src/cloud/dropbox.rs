@@ -50,8 +50,8 @@ impl DropboxClient {
         let url = format!(
             "{}?client_id={}&response_type=code&redirect_uri={}&state={}",
             DROPBOX_AUTH_URL,
-            urlencoding::encode(&self.oauth_client.client_id()),
-            urlencoding::encode(&self.oauth_client.redirect_uri()),
+            urlencoding::encode(self.oauth_client.client_id()),
+            urlencoding::encode(self.oauth_client.redirect_uri()),
             urlencoding::encode(state),
         );
         (url, None)
@@ -94,7 +94,7 @@ impl DropboxClient {
     pub async fn list(&mut self, options: ListOptions) -> Result<Vec<CloudFile>> {
         let token = self.ensure_token().await?;
         let mut entries = Vec::new();
-        let path = options.folder_path.unwrap_or_else(|| "".to_string());
+        let path = options.folder_path.unwrap_or_default();
         let mut has_more = true;
         let mut cursor: Option<String> = None;
 
