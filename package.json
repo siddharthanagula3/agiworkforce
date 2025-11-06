@@ -4,10 +4,10 @@
   "private": true,
   "description": "AGI Workforce monorepo (Tauri + React + Rust)",
   "license": "MIT",
-  "packageManager": "pnpm@8.15.0",
+  "packageManager": "pnpm@9.15.3",
   "engines": {
     "node": ">=20.11.0 <23",
-    "pnpm": ">=8.15.0"
+    "pnpm": ">=9.15.0"
   },
   "scripts": {
     "prepare": "husky install",
@@ -16,7 +16,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "clean": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
+    "clean:build": "pnpm -r exec rm -rf dist",
+    "build:all": "pnpm -r --filter='!@agiworkforce/desktop' build",
+    "build:desktop": "pnpm --filter @agiworkforce/desktop build",
+    "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",
+    "typecheck:all": "pnpm -r typecheck"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.2.2",
