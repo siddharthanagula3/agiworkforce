@@ -3,7 +3,18 @@ import { useBrowserStore, type BrowserType } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Globe, Plus, ArrowLeft, ArrowRight, RotateCw, Camera, Code, Mouse, Keyboard, Eye } from 'lucide-react';
+import {
+  Globe,
+  Plus,
+  ArrowLeft,
+  ArrowRight,
+  RotateCw,
+  Camera,
+  Code,
+  Mouse,
+  Keyboard,
+  Eye,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DropdownMenu,

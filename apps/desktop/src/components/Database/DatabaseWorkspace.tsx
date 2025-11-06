@@ -11,7 +11,11 @@ interface DatabaseWorkspaceProps {
   className?: string;
 }
 
-const SQL_DATABASE_OPTIONS: Array<'Postgres' | 'MySql' | 'Sqlite'> = ['Postgres', 'MySql', 'Sqlite'];
+const SQL_DATABASE_OPTIONS: Array<'Postgres' | 'MySql' | 'Sqlite'> = [
+  'Postgres',
+  'MySql',
+  'Sqlite',
+];
 
 export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
   const {
@@ -213,7 +217,11 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
           )}
         </div>
 
-        <Button variant="default" size="sm" onClick={() => setShowConnectionForm(!showConnectionForm)}>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => setShowConnectionForm(!showConnectionForm)}
+        >
           <Plus className="h-4 w-4 mr-1" />
           New Connection
         </Button>
@@ -275,12 +283,20 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
           </div>
 
           {connectionType !== 'Redis' && (
-            <Input value={database} onChange={(e) => setDatabase(e.target.value)} placeholder="Database name" />
+            <Input
+              value={database}
+              onChange={(e) => setDatabase(e.target.value)}
+              placeholder="Database name"
+            />
           )}
 
           {connectionType === 'SQL' && (
             <>
-              <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
+              <Input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Username"
+              />
               <Input
                 type="password"
                 value={password}
@@ -315,10 +331,12 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                 className={cn(
                   'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer',
                   'transition-colors group whitespace-nowrap',
-                  isActive ? 'bg-background border border-border shadow-sm' : 'hover:bg-muted/50'
+                  isActive ? 'bg-background border border-border shadow-sm' : 'hover:bg-muted/50',
                 )}
               >
-                <Database className={cn('h-3 w-3', isActive ? 'text-primary' : 'text-muted-foreground')} />
+                <Database
+                  className={cn('h-3 w-3', isActive ? 'text-primary' : 'text-muted-foreground')}
+                />
                 <span className={cn('text-sm', isActive && 'font-medium')}>{conn.name}</span>
                 <span className="text-xs text-muted-foreground">({conn.type})</span>
 
@@ -327,7 +345,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                   className={cn(
                     'text-muted-foreground hover:text-destructive',
                     'transition-colors opacity-0 group-hover:opacity-100',
-                    isActive && 'opacity-100'
+                    isActive && 'opacity-100',
                   )}
                 >
                   <Link2Off className="h-3 w-3" />
@@ -395,8 +413,16 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
               </div>
             ) : (
               <div className="flex-1 overflow-auto p-4 space-y-4">
-                <Input value={redisKey} onChange={(e) => setRedisKey(e.target.value)} placeholder="Key" />
-                <Input value={redisValue} onChange={(e) => setRedisValue(e.target.value)} placeholder="Value" />
+                <Input
+                  value={redisKey}
+                  onChange={(e) => setRedisKey(e.target.value)}
+                  placeholder="Key"
+                />
+                <Input
+                  value={redisValue}
+                  onChange={(e) => setRedisValue(e.target.value)}
+                  placeholder="Value"
+                />
                 <div className="flex gap-2">
                   <Button onClick={handleRedisGet} disabled={loading}>
                     GET
@@ -455,15 +481,18 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
           <TabsContent value="history" className="flex-1 overflow-auto p-4">
             {queryHistory.length > 0 ? (
               <div className="space-y-2">
-                {queryHistory.slice().reverse().map((query, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setCurrentQuery(query)}
-                    className="p-3 border border-border rounded-md hover:bg-muted/50 cursor-pointer"
-                  >
-                    <pre className="text-xs font-mono whitespace-pre-wrap">{query}</pre>
-                  </div>
-                ))}
+                {queryHistory
+                  .slice()
+                  .reverse()
+                  .map((query, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setCurrentQuery(query)}
+                      className="p-3 border border-border rounded-md hover:bg-muted/50 cursor-pointer"
+                    >
+                      <pre className="text-xs font-mono whitespace-pre-wrap">{query}</pre>
+                    </div>
+                  ))}
               </div>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">

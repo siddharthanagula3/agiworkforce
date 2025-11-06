@@ -132,33 +132,27 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [dock]);
 
-  const setPinned = useCallback(
-    async (value: boolean) => {
-      try {
-        await invoke('window_set_pinned', { pinned: value });
-        setState((current) => ({ ...current, pinned: value }));
-      } catch (error) {
-        console.error('Failed to update pinned state', error);
-      }
-    },
-    []
-  );
+  const setPinned = useCallback(async (value: boolean) => {
+    try {
+      await invoke('window_set_pinned', { pinned: value });
+      setState((current) => ({ ...current, pinned: value }));
+    } catch (error) {
+      console.error('Failed to update pinned state', error);
+    }
+  }, []);
 
   const togglePinned = useCallback(async () => {
     await setPinned(!state.pinned);
   }, [setPinned, state.pinned]);
 
-  const setAlwaysOnTop = useCallback(
-    async (value: boolean) => {
-      try {
-        await invoke('window_set_always_on_top', { value });
-        setState((current) => ({ ...current, alwaysOnTop: value }));
-      } catch (error) {
-        console.error('Failed to update always-on-top state', error);
-      }
-    },
-    []
-  );
+  const setAlwaysOnTop = useCallback(async (value: boolean) => {
+    try {
+      await invoke('window_set_always_on_top', { value });
+      setState((current) => ({ ...current, alwaysOnTop: value }));
+    } catch (error) {
+      console.error('Failed to update always-on-top state', error);
+    }
+  }, []);
 
   const toggleAlwaysOnTop = useCallback(async () => {
     await setAlwaysOnTop(!state.alwaysOnTop);
@@ -211,7 +205,18 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
       hide,
       show,
     }),
-    [dock, hide, minimize, refresh, setAlwaysOnTop, setPinned, show, toggleAlwaysOnTop, toggleMaximize, togglePinned]
+    [
+      dock,
+      hide,
+      minimize,
+      refresh,
+      setAlwaysOnTop,
+      setPinned,
+      show,
+      toggleAlwaysOnTop,
+      toggleMaximize,
+      togglePinned,
+    ],
   );
 
   return { state, actions };

@@ -1,40 +1,39 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     open-pull-requests-limit: 10
-  - package-ecosystem: "npm"
-    directory: "/apps/desktop"
+  - package-ecosystem: 'npm'
+    directory: '/apps/desktop'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm"
-    directory: "/apps/extension"
+      interval: 'weekly'
+  - package-ecosystem: 'npm'
+    directory: '/apps/extension'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm"
-    directory: "/apps/mobile"
+      interval: 'weekly'
+  - package-ecosystem: 'npm'
+    directory: '/apps/mobile'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm"
-    directory: "/packages/utils"
+      interval: 'weekly'
+  - package-ecosystem: 'npm'
+    directory: '/packages/utils'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm"
-    directory: "/packages/types"
+      interval: 'weekly'
+  - package-ecosystem: 'npm'
+    directory: '/packages/types'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "cargo"
-    directory: "/apps/desktop/src-tauri"
+      interval: 'weekly'
+  - package-ecosystem: 'cargo'
+    directory: '/apps/desktop/src-tauri'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "cargo"
-    directory: "/services/api-gateway"
+      interval: 'weekly'
+  - package-ecosystem: 'cargo'
+    directory: '/services/api-gateway'
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "cargo"
-    directory: "/services/update-server"
+      interval: 'weekly'
+  - package-ecosystem: 'cargo'
+    directory: '/services/update-server'
     schedule:
-      interval: "weekly"
-
+      interval: 'weekly'

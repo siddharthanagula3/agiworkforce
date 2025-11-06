@@ -41,7 +41,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
     <div
       className={cn(
         'rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm transition hover:border-primary/60',
-        'backdrop-blur supports-[backdrop-filter]:bg-background/60'
+        'backdrop-blur supports-[backdrop-filter]:bg-background/60',
       )}
     >
       <div className="mb-2 flex items-center justify-between">
@@ -73,14 +73,18 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
               <TrendingUp className="h-3.5 w-3.5" />
               Today
             </span>
-            <span className="font-medium text-foreground">{formatCurrency(overview?.today_total)}</span>
+            <span className="font-medium text-foreground">
+              {formatCurrency(overview?.today_total)}
+            </span>
           </div>
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
               <PieChart className="h-3.5 w-3.5" />
               Month
             </span>
-            <span className="font-medium text-foreground">{formatCurrency(overview?.month_total)}</span>
+            <span className="font-medium text-foreground">
+              {formatCurrency(overview?.month_total)}
+            </span>
           </div>
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">

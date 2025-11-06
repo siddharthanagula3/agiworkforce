@@ -28,7 +28,10 @@ interface CloudState {
 
   refreshAccounts: () => Promise<void>;
   selectAccount: (accountId: string | null) => Promise<void>;
-  listFiles: (path?: string, options?: { search?: string; includeFolders?: boolean }) => Promise<void>;
+  listFiles: (
+    path?: string,
+    options?: { search?: string; includeFolders?: boolean },
+  ) => Promise<void>;
   beginConnect: (provider: CloudProvider, credentials: OAuthCredentials) => Promise<void>;
   completeConnect: (state: string, code: string) => Promise<void>;
   uploadFile: (localPath: string, remotePath: string) => Promise<void>;
@@ -109,11 +112,16 @@ export const useCloudStore = create<CloudState>((set, get) => {
       await ensureListeners();
 
       try {
-        const response = (await invoke<RawAccountResponse[]>('cloud_list_accounts')).map(mapAccount);
+        const response = (await invoke<RawAccountResponse[]>('cloud_list_accounts')).map(
+          mapAccount,
+        );
         set({ accounts: response });
 
         const { activeAccountId } = get();
-        if (response.length > 0 && (!activeAccountId || !response.some((acc) => acc.accountId === activeAccountId))) {
+        if (
+          response.length > 0 &&
+          (!activeAccountId || !response.some((acc) => acc.accountId === activeAccountId))
+        ) {
           const firstAccount = response[0];
           if (firstAccount) {
             await get().selectAccount(firstAccount.accountId);

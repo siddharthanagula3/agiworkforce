@@ -40,7 +40,7 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
       content: string,
       attachments?: File[],
       _captures?: unknown,
-      _routing?: ChatRoutingPreferences
+      _routing?: ChatRoutingPreferences,
     ) => {
       if (attachments?.length) {
         // Attachments handling will be implemented when backend wiring is ready
@@ -66,7 +66,8 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: 'This is a simulated response. Connect to your AI backend to get real responses.',
+          content:
+            'This is a simulated response. Connect to your AI backend to get real responses.',
           timestamp: new Date(),
           tokens: 42,
           cost: 0.0001,
@@ -86,28 +87,31 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
                   messageCount: conv.messageCount + 2,
                   title: conv.title === 'New Conversation' ? content.slice(0, 50) : conv.title,
                 }
-              : conv
-          )
+              : conv,
+          ),
         );
       }, 1000);
     },
-    [activeConversationId, handleNewConversation]
+    [activeConversationId, handleNewConversation],
   );
 
-  const handleDeleteConversation = useCallback((id: string) => {
-    setConversations((prev) => prev.filter((conv) => conv.id !== id));
-    if (activeConversationId === id) {
-      setActiveConversationId(undefined);
-      setMessages([]);
-    }
-  }, [activeConversationId]);
+  const handleDeleteConversation = useCallback(
+    (id: string) => {
+      setConversations((prev) => prev.filter((conv) => conv.id !== id));
+      if (activeConversationId === id) {
+        setActiveConversationId(undefined);
+        setMessages([]);
+      }
+    },
+    [activeConversationId],
+  );
 
   const handleRenameConversation = useCallback((id: string) => {
     // TODO: Implement rename dialog
     const newTitle = prompt('Enter new title:');
     if (newTitle) {
       setConversations((prev) =>
-        prev.map((conv) => (conv.id === id ? { ...conv, title: newTitle } : conv))
+        prev.map((conv) => (conv.id === id ? { ...conv, title: newTitle } : conv)),
       );
     }
   }, []);

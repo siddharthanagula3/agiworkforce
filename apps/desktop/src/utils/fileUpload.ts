@@ -14,10 +14,7 @@ export interface UploadConfig {
  * This is a placeholder implementation that simulates file upload
  * In production, this would integrate with your actual backend API
  */
-export async function uploadFile(
-  file: File,
-  config?: UploadConfig
-): Promise<FileAttachment> {
+export async function uploadFile(file: File, config?: UploadConfig): Promise<FileAttachment> {
   const { onProgress } = config || {};
 
   try {
@@ -71,7 +68,7 @@ export async function uploadFile(
  */
 export async function uploadFiles(
   files: File[],
-  onProgress?: (fileIndex: number, progress: number) => void
+  onProgress?: (fileIndex: number, progress: number) => void,
 ): Promise<FileAttachment[]> {
   const attachments: FileAttachment[] = [];
 
@@ -164,9 +161,7 @@ export interface AttachmentData {
   url?: string;
 }
 
-export function prepareAttachmentsForApi(
-  attachments: FileAttachment[]
-): AttachmentData[] {
+export function prepareAttachmentsForApi(attachments: FileAttachment[]): AttachmentData[] {
   return attachments.map((attachment) => {
     const data: AttachmentData = {
       id: attachment.id,

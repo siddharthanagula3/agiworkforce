@@ -58,11 +58,7 @@ export function FileAttachmentPreview({
 
   return (
     <Card
-      className={cn(
-        'overflow-hidden transition-all',
-        hasError && 'border-destructive',
-        className
-      )}
+      className={cn('overflow-hidden transition-all', hasError && 'border-destructive', className)}
     >
       <CardContent className="p-0">
         {canDisplay && !imageError ? (
@@ -126,29 +122,25 @@ export function FileAttachmentPreview({
         ) : (
           <div className="p-4">
             <div className="flex items-start gap-3">
-              <div className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-md',
-                hasError ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'
-              )}>
+              <div
+                className={cn(
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-md',
+                  hasError
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-muted text-muted-foreground',
+                )}
+              >
                 {hasError ? <AlertCircle className="h-5 w-5" /> : getFileIcon()}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="text-sm font-medium truncate">
-                    {attachment.name}
-                  </p>
+                  <p className="text-sm font-medium truncate">{attachment.name}</p>
                   <Badge variant="outline" className="text-xs shrink-0">
                     {getFileTypeDescription(attachment.type)}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatFileSize(attachment.size)}
-                </p>
-                {hasError && (
-                  <p className="text-xs text-destructive mt-1">
-                    {attachment.error}
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">{formatFileSize(attachment.size)}</p>
+                {hasError && <p className="text-xs text-destructive mt-1">{attachment.error}</p>}
                 {isUploading && (
                   <div className="mt-2">
                     <div className="h-1 bg-muted rounded-full overflow-hidden">

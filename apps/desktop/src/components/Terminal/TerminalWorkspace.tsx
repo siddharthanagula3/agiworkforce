@@ -96,7 +96,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
         setIsHistoryLoading(false);
       }
     },
-    [getHistory]
+    [getHistory],
   );
 
   useEffect(() => {
@@ -236,9 +236,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                 onClick={() => setActiveSession(session.id)}
                 className={cn(
                   'group flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 transition-colors',
-                  isActive
-                    ? 'border border-border bg-background shadow-sm'
-                    : 'hover:bg-muted/50'
+                  isActive ? 'border border-border bg-background shadow-sm' : 'hover:bg-muted/50',
                 )}
               >
                 <TerminalIcon className="h-3 w-3 text-muted-foreground" />
@@ -251,7 +249,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                   className={cn(
                     'text-muted-foreground transition-colors hover:text-foreground',
                     'opacity-0 group-hover:opacity-100',
-                    isActive && 'opacity-100'
+                    isActive && 'opacity-100',
                   )}
                 >
                   <X className="h-3 w-3" />
@@ -367,9 +365,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
           </div>
           <div className="flex items-center gap-3">
             <span>Session: {activeSession.id.slice(0, 8)}</span>
-            {isHistoryOpen && (
-              <span className="text-muted-foreground/80">History visible</span>
-            )}
+            {isHistoryOpen && <span className="text-muted-foreground/80">History visible</span>}
           </div>
         </div>
       )}

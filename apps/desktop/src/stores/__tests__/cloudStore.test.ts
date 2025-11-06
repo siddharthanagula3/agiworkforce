@@ -12,4 +12,3 @@ describe('cloudStore', () => {
     expect(state.loading).toBe(false);
   });
 });
-

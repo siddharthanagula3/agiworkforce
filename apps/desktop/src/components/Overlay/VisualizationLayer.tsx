@@ -43,7 +43,10 @@ export function VisualizationLayer() {
         switch (payload.type) {
           case 'click': {
             const id = makeId();
-            setClicks((prev) => [...prev, { id, x: payload.x, y: payload.y, button: payload.button ?? 'left' }]);
+            setClicks((prev) => [
+              ...prev,
+              { id, x: payload.x, y: payload.y, button: payload.button ?? 'left' },
+            ]);
             setTimeout(() => {
               setClicks((prev) => prev.filter((effect) => effect.id !== id));
             }, CLICK_DURATION);
@@ -120,6 +123,6 @@ export function VisualizationLayer() {
       <ActionOverlay clicks={clicks} typing={typing} />
       <ScreenshotOverlay region={region} flash={flash} />
     </>,
-    document.body
+    document.body,
   );
 }

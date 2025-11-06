@@ -3,16 +3,7 @@ import { useApiStore, type ApiRequest } from '../../stores/apiStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import {
-  Send,
-  Plus,
-  Save,
-  Trash2,
-  History,
-  Key,
-  FileJson,
-  Globe,
-} from 'lucide-react';
+import { Send, Plus, Save, Trash2, History, Key, FileJson, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 
@@ -20,7 +11,15 @@ interface APIWorkspaceProps {
   className?: string;
 }
 
-const METHOD_OPTIONS: ApiRequest['method'][] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+const METHOD_OPTIONS: ApiRequest['method'][] = [
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'HEAD',
+  'OPTIONS',
+];
 
 export function APIWorkspace({ className }: APIWorkspaceProps) {
   const {
@@ -392,21 +391,26 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
             <TabsContent value="history" className="flex-1 overflow-auto p-3">
               {history.length > 0 ? (
                 <div className="space-y-2">
-                  {history.slice().reverse().map((resp, i) => (
-                    <div key={i} className="p-3 border border-border rounded-md">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={cn('font-medium text-sm', formatStatusColor(resp.status))}>
-                          {resp.status}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDuration(resp.duration_ms)}
-                        </span>
+                  {history
+                    .slice()
+                    .reverse()
+                    .map((resp, i) => (
+                      <div key={i} className="p-3 border border-border rounded-md">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className={cn('font-medium text-sm', formatStatusColor(resp.status))}
+                          >
+                            {resp.status}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDuration(resp.duration_ms)}
+                          </span>
+                        </div>
+                        <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
+                          {resp.body}
+                        </pre>
                       </div>
-                      <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
-                        {resp.body}
-                      </pre>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">

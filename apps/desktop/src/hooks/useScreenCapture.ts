@@ -1,11 +1,6 @@
 import { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type {
-  CaptureRecord,
-  CaptureResult,
-  Region,
-  WindowInfo,
-} from '../types/capture';
+import type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
 
 // Re-export types for external use
 export type { CaptureResult, CaptureRecord, Region, WindowInfo } from '../types/capture';
@@ -76,7 +71,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         setIsCapturing(false);
       }
     },
-    []
+    [],
   );
 
   const getAvailableWindows = useCallback(async (): Promise<WindowInfo[]> => {
@@ -108,7 +103,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         return [];
       }
     },
-    []
+    [],
   );
 
   const deleteCapture = useCallback(async (captureId: string): Promise<void> => {

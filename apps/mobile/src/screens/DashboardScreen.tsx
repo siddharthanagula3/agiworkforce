@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { useDeviceStore } from '../store/deviceStore';
@@ -34,7 +33,11 @@ export function DashboardScreen() {
           </View>
         )}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={() => fetchDevices()} tintColor="#38bdf8" />
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={() => fetchDevices()}
+            tintColor="#38bdf8"
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>

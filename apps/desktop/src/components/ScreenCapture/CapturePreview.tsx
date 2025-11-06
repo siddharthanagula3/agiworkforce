@@ -17,7 +17,12 @@ interface CapturePreviewProps {
   showOCR?: boolean;
 }
 
-export function CapturePreview({ capture, onClose, onDelete, showOCR = true }: CapturePreviewProps) {
+export function CapturePreview({
+  capture,
+  onClose,
+  onDelete,
+  showOCR = true,
+}: CapturePreviewProps) {
   const [showFullView, setShowFullView] = useState(false);
   const [showOCRViewer, setShowOCRViewer] = useState(false);
   const { saveToClipboard, deleteCapture } = useScreenCapture();

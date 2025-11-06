@@ -53,7 +53,7 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
         });
       }
     },
-    [isSelecting, startPos]
+    [isSelecting, startPos],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -74,7 +74,7 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
         handleConfirm();
       }
     },
-    [onCancel, handleConfirm, region]
+    [onCancel, handleConfirm, region],
   );
 
   useEffect(() => {
@@ -113,12 +113,7 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
       {/* Control buttons */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 transform">
         <div className="flex gap-2 rounded-lg bg-background p-2 shadow-lg">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onCancel}
-            className="gap-2"
-          >
+          <Button size="sm" variant="outline" onClick={onCancel} className="gap-2">
             <X className="h-4 w-4" />
             Cancel (Esc)
           </Button>

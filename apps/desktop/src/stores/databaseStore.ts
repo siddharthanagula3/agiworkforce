@@ -46,7 +46,12 @@ interface DatabaseState {
   error: string | null;
 
   // Actions - Connection Management
-  createSqlConnection: (id: string, name: string, config: ConnectionConfig, poolConfig: PoolConfig) => Promise<void>;
+  createSqlConnection: (
+    id: string,
+    name: string,
+    config: ConnectionConfig,
+    poolConfig: PoolConfig,
+  ) => Promise<void>;
   createMongoConnection: (id: string, name: string, config: ConnectionConfig) => Promise<void>;
   createRedisConnection: (id: string, name: string, config: ConnectionConfig) => Promise<void>;
   closeConnection: (connectionId: string) => Promise<void>;
@@ -69,7 +74,11 @@ interface DatabaseState {
   mongoFindOne: (collection: string, filter: Record<string, any>) => Promise<any>;
   mongoInsertOne: (collection: string, document: Record<string, any>) => Promise<string>;
   mongoInsertMany: (collection: string, documents: Record<string, any>[]) => Promise<string[]>;
-  mongoUpdateMany: (collection: string, filter: Record<string, any>, update: Record<string, any>) => Promise<any>;
+  mongoUpdateMany: (
+    collection: string,
+    filter: Record<string, any>,
+    update: Record<string, any>,
+  ) => Promise<any>;
   mongoDeleteMany: (collection: string, filter: Record<string, any>) => Promise<number>;
 
   // Actions - Redis Operations
@@ -125,7 +134,12 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   error: null,
 
   // Connection Management
-  createSqlConnection: async (id: string, name: string, config: ConnectionConfig, poolConfig: PoolConfig) => {
+  createSqlConnection: async (
+    id: string,
+    name: string,
+    config: ConnectionConfig,
+    poolConfig: PoolConfig,
+  ) => {
     set({ loading: true, error: null });
     try {
       await invoke('db_create_pool', {
@@ -223,7 +237,8 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
       set((state) => ({
         connections: state.connections.filter((c) => c.id !== connectionId),
-        activeConnectionId: state.activeConnectionId === connectionId ? null : state.activeConnectionId,
+        activeConnectionId:
+          state.activeConnectionId === connectionId ? null : state.activeConnectionId,
         loading: false,
       }));
     } catch (error) {
@@ -461,7 +476,11 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  mongoUpdateMany: async (collection: string, filter: Record<string, any>, update: Record<string, any>) => {
+  mongoUpdateMany: async (
+    collection: string,
+    filter: Record<string, any>,
+    update: Record<string, any>,
+  ) => {
     const { activeConnectionId } = get();
     if (!activeConnectionId) {
       throw new Error('No active connection');

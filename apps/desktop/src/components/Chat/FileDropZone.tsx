@@ -62,7 +62,7 @@ export function FileDropZone({
         onError(invalid);
       }
     },
-    [maxFiles, onFilesSelected, onError]
+    [maxFiles, onFilesSelected, onError],
   );
 
   if (children) {
@@ -100,26 +100,22 @@ export function FileDropZone({
         isDragging
           ? 'border-primary bg-primary/10'
           : 'border-muted-foreground/25 hover:border-muted-foreground/50',
-        className
+        className,
       )}
       role="button"
       tabIndex={0}
       aria-label="Drop files here to upload"
     >
-      <div className={cn(
-        'flex h-12 w-12 items-center justify-center rounded-full transition-colors',
-        isDragging ? 'bg-primary/20' : 'bg-muted'
-      )}>
-        <Upload className={cn(
-          'h-6 w-6',
-          isDragging ? 'text-primary' : 'text-muted-foreground'
-        )} />
+      <div
+        className={cn(
+          'flex h-12 w-12 items-center justify-center rounded-full transition-colors',
+          isDragging ? 'bg-primary/20' : 'bg-muted',
+        )}
+      >
+        <Upload className={cn('h-6 w-6', isDragging ? 'text-primary' : 'text-muted-foreground')} />
       </div>
       <div className="text-center">
-        <p className={cn(
-          'text-sm font-medium',
-          isDragging ? 'text-primary' : 'text-foreground'
-        )}>
+        <p className={cn('text-sm font-medium', isDragging ? 'text-primary' : 'text-foreground')}>
           {isDragging ? 'Drop files here' : 'Drag and drop files here'}
         </p>
         <p className="text-xs text-muted-foreground mt-1">

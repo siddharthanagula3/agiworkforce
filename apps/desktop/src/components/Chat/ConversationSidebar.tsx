@@ -67,7 +67,7 @@ export function ConversationSidebar({
                 className={cn(
                   'group relative flex items-start gap-3 rounded-lg p-3 cursor-pointer',
                   'hover:bg-accent transition-colors',
-                  activeConversationId === conversation.id && 'bg-accent'
+                  activeConversationId === conversation.id && 'bg-accent',
                 )}
                 onClick={() => onSelectConversation(conversation.id)}
               >

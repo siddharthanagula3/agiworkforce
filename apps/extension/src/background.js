@@ -12,7 +12,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set default settings
   chrome.storage.local.set({
     enabled: true,
-    connectedToDesktop: false
+    connectedToDesktop: false,
   });
 });
 
@@ -77,7 +77,7 @@ async function handleSetCookie(message, sendResponse) {
       domain,
       path: path || '/',
       secure: secure !== false,
-      httpOnly: httpOnly !== false
+      httpOnly: httpOnly !== false,
     });
     sendResponse({ success: true });
   } catch (error) {
@@ -95,7 +95,7 @@ async function handleClearCookies(message, sendResponse) {
     for (const cookie of cookies) {
       await chrome.cookies.remove({
         url: `${cookie.secure ? 'https' : 'http'}://${cookie.domain}${cookie.path}`,
-        name: cookie.name
+        name: cookie.name,
       });
     }
 
@@ -116,7 +116,7 @@ async function handleExecuteScript(message, sender, sendResponse) {
 
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      func: new Function(message.script)
+      func: new Function(message.script),
     });
 
     sendResponse({ success: true, data: results[0]?.result });
@@ -139,7 +139,7 @@ async function handleCaptureScreenshot(message, sender, sendResponse) {
 
     const dataUrl = await chrome.tabs.captureVisibleTab(null, {
       format: format,
-      quality: format === 'jpeg' ? quality : undefined
+      quality: format === 'jpeg' ? quality : undefined,
     });
 
     sendResponse({ success: true, data: dataUrl });
@@ -167,8 +167,8 @@ async function handleGetTabInfo(sender, sendResponse) {
         title: tab.title,
         favIconUrl: tab.favIconUrl,
         active: tab.active,
-        windowId: tab.windowId
-      }
+        windowId: tab.windowId,
+      },
     });
   } catch (error) {
     console.error('Failed to get tab info:', error);
@@ -182,12 +182,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     console.log('Tab loaded:', tab.url);
 
     // Notify content script that tab is ready
-    chrome.tabs.sendMessage(tabId, {
-      type: 'TAB_READY',
-      url: tab.url
-    }).catch(() => {
-      // Content script might not be ready yet
-    });
+    chrome.tabs
+      .sendMessage(tabId, {
+        type: 'TAB_READY',
+        url: tab.url,
+      })
+      .catch(() => {
+        // Content script might not be ready yet
+      });
   }
 });
 

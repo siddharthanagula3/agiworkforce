@@ -7,6 +7,7 @@ labels: bug
 ## Describe the bug
 
 ## To Reproduce
+
 Steps to reproduce the behavior:
 
 ## Expected behavior
@@ -14,8 +15,8 @@ Steps to reproduce the behavior:
 ## Screenshots / Logs
 
 ## Environment
-- OS: 
-- App version: 
+
+- OS:
+- App version:
 
 ## Additional context
-
