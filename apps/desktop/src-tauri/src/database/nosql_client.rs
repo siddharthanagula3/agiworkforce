@@ -1,7 +1,5 @@
 use bson::{doc, Bson, Document as BsonDocument};
-use mongodb::options::{
-    ClientOptions, FindOptions,
-};
+use mongodb::options::{ClientOptions, FindOptions};
 use mongodb::{Client, Collection, Database};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;

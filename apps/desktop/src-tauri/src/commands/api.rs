@@ -14,6 +14,12 @@ pub struct ApiState {
     pkce_challenges: Mutex<HashMap<String, PkceChallenge>>,
 }
 
+impl Default for ApiState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ApiState {
     pub fn new() -> Self {
         Self {

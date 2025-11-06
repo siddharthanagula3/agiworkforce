@@ -511,10 +511,10 @@ pub fn list_overlay_events(
 }
 
 pub fn delete_overlay_events_before(conn: &Connection, before: DateTime<Utc>) -> Result<usize> {
-    Ok(conn.execute(
+    conn.execute(
         "DELETE FROM overlay_events WHERE timestamp < ?1",
         params![before.to_rfc3339()],
-    )?)
+    )
 }
 
 fn map_overlay_event(row: &Row) -> Result<OverlayEvent> {

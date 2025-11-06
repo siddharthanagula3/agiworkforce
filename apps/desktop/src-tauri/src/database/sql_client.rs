@@ -84,11 +84,9 @@ impl SqlClient {
 
         // Check database type for specialized clients
         let pools = self.pools.read().await;
-        let db_type = if let Some(pool) = pools.get(connection_id) {
-            Some(pool.get_config().db_type.clone())
-        } else {
-            None
-        };
+        let db_type = pools
+            .get(connection_id)
+            .map(|pool| pool.get_config().db_type.clone());
         drop(pools);
 
         // Check if it's in PostgreSQL client

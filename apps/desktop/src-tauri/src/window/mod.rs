@@ -134,7 +134,7 @@ pub fn apply_dock(
 
 pub fn undock(window: &WebviewWindow, app_state: &AppState) -> Result<()> {
     let previous = app_state.snapshot().previous_geometry;
-    let geometry = previous.unwrap_or_else(WindowGeometry::default);
+    let geometry = previous.unwrap_or_default();
 
     app_state.update(|state| {
         state.dock = None;

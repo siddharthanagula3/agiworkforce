@@ -160,9 +160,9 @@ impl KeyboardSimulator {
 
     pub fn modifier_key(name: &str) -> Option<u16> {
         match name.to_lowercase().as_str() {
-            "ctrl" | "control" => Some(VK_CONTROL.0 as u16),
-            "alt" => Some(VK_MENU.0 as u16),
-            "shift" => Some(VK_SHIFT.0 as u16),
+            "ctrl" | "control" => Some(VK_CONTROL.0),
+            "alt" => Some(VK_MENU.0),
+            "shift" => Some(VK_SHIFT.0),
             _ => None,
         }
     }

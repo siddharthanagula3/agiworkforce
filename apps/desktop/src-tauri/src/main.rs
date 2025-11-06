@@ -91,7 +91,9 @@ fn main() {
                     Ok(accounts) => {
                         let mut restored = 0usize;
                         for (account_id, info, _) in accounts {
-                            calendar_state.manager.upsert_account(account_id, info, None);
+                            calendar_state
+                                .manager
+                                .upsert_account(account_id, info, None);
                             restored += 1;
                         }
                         tracing::info!("Calendar manager restored {restored} account(s)");
@@ -124,7 +126,7 @@ fn main() {
             tracing::info!("Document state initialized");
 
             // Initialize window state
-            let state = AppState::load(&app.handle())?;
+            let state = AppState::load(app.handle())?;
             app.manage(state);
 
             // Build system tray

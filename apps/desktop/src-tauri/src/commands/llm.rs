@@ -28,6 +28,12 @@ pub struct LLMState {
     pub cache_manager: CacheManager,
 }
 
+impl Default for LLMState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LLMState {
     pub fn new() -> Self {
         Self {
@@ -43,17 +49,13 @@ pub async fn llm_send_message(
     state: State<'_, LLMState>,
 ) -> Result<LLMResponse, String> {
     // Parse provider
-    let provider = request
-        .provider
-        .as_deref()
-        .map(|p| match p {
-            "openai" => Some(Provider::OpenAI),
-            "anthropic" => Some(Provider::Anthropic),
-            "google" => Some(Provider::Google),
-            "ollama" => Some(Provider::Ollama),
-            _ => None,
-        })
-        .flatten();
+    let provider = request.provider.as_deref().and_then(|p| match p {
+        "openai" => Some(Provider::OpenAI),
+        "anthropic" => Some(Provider::Anthropic),
+        "google" => Some(Provider::Google),
+        "ollama" => Some(Provider::Ollama),
+        _ => None,
+    });
 
     let model = request
         .model
@@ -86,10 +88,11 @@ pub async fn llm_send_message(
     let mut last_error: Option<anyhow::Error> = None;
 
     for candidate in candidates {
-        match {
+        let res = {
             let router = state.router.lock().await;
             router.invoke_candidate(&candidate, &llm_request).await
-        } {
+        };
+        match res {
             Ok(mut outcome) => {
                 outcome.response.cached = false;
                 return Ok(outcome.response);

@@ -1,11 +1,17 @@
-use tauri::{command, State};
 use std::sync::Arc;
+use tauri::{command, State};
 
 use crate::document::{DocumentContent, DocumentManager, DocumentMetadata, SearchResult};
 use crate::error::Result;
 
 pub struct DocumentState {
     pub manager: Arc<DocumentManager>,
+}
+
+impl Default for DocumentState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DocumentState {

@@ -122,7 +122,7 @@ impl PlaywrightBridge {
         // In production, this would launch a proper Playwright server
         // For now, we'll use Chrome DevTools Protocol directly
         let child = Command::new("cmd")
-            .args(&[
+            .args([
                 "/C",
                 "echo",
                 "Playwright server stub - integrate with real Playwright in production",
@@ -244,7 +244,7 @@ impl PlaywrightBridge {
                 #[cfg(windows)]
                 {
                     // Check common Chrome installation paths on Windows
-                    let possible_paths = vec![
+                    let possible_paths = [
                         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
                         r"C:\Users\%USERNAME%\AppData\Local\Google\Chrome\Application\chrome.exe",

@@ -2,13 +2,13 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 
-pub mod word;
 pub mod excel;
 pub mod pdf;
+pub mod word;
 
-pub use word::WordHandler;
 pub use excel::ExcelHandler;
 pub use pdf::PdfHandler;
+pub use word::WordHandler;
 
 use serde::{Deserialize, Serialize};
 

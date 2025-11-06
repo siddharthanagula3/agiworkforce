@@ -114,12 +114,12 @@ impl NotionClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
-            let user: NotionUser = response.json().await.map_err(|e| Error::Http(e))?;
+            let user: NotionUser = response.json().await.map_err(Error::Http)?;
             Ok(user.id)
         } else {
             let status = response.status();
@@ -148,13 +148,13 @@ impl NotionClient {
             }))
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
             let data: NotionListResponse<NotionPage> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+                response.json().await.map_err(Error::Http)?;
             Ok(data.results)
         } else {
             Err(Error::Provider(format!(
@@ -174,12 +174,12 @@ impl NotionClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
-            let data = response.json().await.map_err(|e| Error::Http(e))?;
+            let data = response.json().await.map_err(Error::Http)?;
             Ok(data)
         } else {
             Err(Error::Provider(format!(
@@ -230,12 +230,12 @@ impl NotionClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
-            let page: NotionPage = response.json().await.map_err(|e| Error::Http(e))?;
+            let page: NotionPage = response.json().await.map_err(Error::Http)?;
             Ok(page.id)
         } else {
             let status = response.status();
@@ -268,13 +268,13 @@ impl NotionClient {
             .json(&query)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
             let data: NotionListResponse<serde_json::Value> =
-                response.json().await.map_err(|e| Error::Http(e))?;
+                response.json().await.map_err(Error::Http)?;
             Ok(data.results)
         } else {
             Err(Error::Provider(format!(
@@ -304,12 +304,12 @@ impl NotionClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
-            let page: NotionPage = response.json().await.map_err(|e| Error::Http(e))?;
+            let page: NotionPage = response.json().await.map_err(Error::Http)?;
             Ok(page.id)
         } else {
             let status = response.status();
@@ -350,7 +350,7 @@ impl NotionClient {
                     .and_then(|status| status.get("name"))
                     .and_then(|name| name.as_str())
             })
-            .map(|name| TaskStatus::from_notion_status(name))
+            .map(TaskStatus::from_notion_status)
             .unwrap_or(TaskStatus::Todo)
     }
 
@@ -431,12 +431,12 @@ impl UnifiedTaskProvider for NotionClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(|e| Error::Http(e))?;
+            .map_err(Error::Http)?;
 
         self.rate_limiter.wait_for_rate_limit().await;
 
         if response.status().is_success() {
-            let page: serde_json::Value = response.json().await.map_err(|e| Error::Http(e))?;
+            let page: serde_json::Value = response.json().await.map_err(Error::Http)?;
             self.page_to_task(&page)
                 .ok_or_else(|| Error::Provider("Failed to parse Notion page".to_string()))
         } else {
