@@ -35,7 +35,7 @@ interface ChatState {
     content: string,
     attachments?: File[],
     captures?: CaptureResult[],
-    routing?: ChatRoutingPreferences
+    routing?: ChatRoutingPreferences,
   ) => Promise<void>;
   getStats: (conversationId: number) => Promise<ConversationStats>;
   togglePinnedConversation: (id: number) => Promise<void>;
@@ -56,7 +56,7 @@ function toMessageUI(message: Message): MessageUI {
 function toConversationUI(
   conversation: Conversation,
   messageCount: number = 0,
-  lastMessage?: string
+  lastMessage?: string,
 ): ConversationUI {
   return {
     ...conversation,
@@ -68,25 +68,23 @@ function toConversationUI(
 }
 
 function sortConversations(conversations: ConversationUI[]): ConversationUI[] {
-  return conversations
-    .slice()
-    .sort((a, b) => {
-      if (Boolean(b.pinned) !== Boolean(a.pinned)) {
-        return Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
-      }
-      return b.updatedAt.getTime() - a.updatedAt.getTime();
-    });
+  return conversations.slice().sort((a, b) => {
+    if (Boolean(b.pinned) !== Boolean(a.pinned)) {
+      return Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
+    }
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  });
 }
 
 function applyPinnedState(
   conversations: ConversationUI[],
-  pinnedSet: Set<number>
+  pinnedSet: Set<number>,
 ): ConversationUI[] {
   return sortConversations(
     conversations.map((conv) => ({
       ...conv,
       pinned: pinnedSet.has(conv.id),
-    }))
+    })),
   );
 }
 
@@ -104,9 +102,7 @@ const storageFallback: Storage = {
 const chatStorage = createJSONStorage<{
   activeConversationId: number | null;
   pinnedConversations: number[];
-}>(
-  () => (typeof window === 'undefined' ? storageFallback : window.localStorage)
-);
+}>(() => (typeof window === 'undefined' ? storageFallback : window.localStorage));
 
 interface ChatSendMessageResponse {
   conversation: Conversation;
@@ -121,422 +117,422 @@ let streamListenersInitialized = false;
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
-  conversations: [],
-  activeConversationId: null,
-  messages: [],
-  loading: false,
-  error: null,
-  pinnedConversations: [],
-
-  loadConversations: async () => {
-    set({ loading: true, error: null });
-    try {
-      const conversations = await invoke<Conversation[]>('chat_get_conversations');
-
-      const conversationsWithStats = await Promise.all(
-        conversations.map(async (conv) => {
-          const stats = await invoke<ConversationStats>('chat_get_conversation_stats', {
-            conversationId: conv.id,
-          });
-
-          const messages = await invoke<Message[]>('chat_get_messages', {
-            conversationId: conv.id,
-          });
-
-          const lastMessage: string | undefined = messages.length > 0 ? messages[messages.length - 1]?.content : undefined;
-
-          return toConversationUI(conv, stats.message_count, lastMessage);
-        })
-      );
-
-      set((state) => {
-        const incomingPinned = state.pinnedConversations.filter((id) =>
-          conversationsWithStats.some((conv) => conv.id === id)
-        );
-        const pinnedSet = new Set(incomingPinned);
-        return {
-          conversations: applyPinnedState(conversationsWithStats, pinnedSet),
-          pinnedConversations: incomingPinned,
-          loading: false,
-        };
-      });
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-      set({ error: String(error), loading: false });
-    }
-  },
-
-  loadMessages: async (conversationId: number) => {
-    set({ loading: true, error: null });
-    try {
-      const messages = await invoke<Message[]>('chat_get_messages', { conversationId });
-      set({
-        messages: messages.map(toMessageUI),
-        loading: false,
-      });
-    } catch (error) {
-      console.error('Failed to load messages:', error);
-      set({ error: String(error), loading: false });
-    }
-  },
-
-  createConversation: async (title: string) => {
-    set({ loading: true, error: null });
-    try {
-      const request: CreateConversationRequest = { title };
-      const conversation = await invoke<Conversation>('chat_create_conversation', { request });
-
-      const conversationUI = toConversationUI(conversation, 0);
-      set((state) => {
-        const pinnedSet = new Set(state.pinnedConversations);
-        const conversations = applyPinnedState(
-          [conversationUI, ...state.conversations],
-          pinnedSet
-        );
-
-        return {
-          conversations,
-          activeConversationId: conversation.id,
-          messages: [],
-          loading: false,
-        };
-      });
-
-      return conversation.id;
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-      set({ error: String(error), loading: false });
-      throw error;
-    }
-  },
-
-  updateConversation: async (id: number, title: string) => {
-    try {
-      const request: UpdateConversationRequest = { title };
-      await invoke('chat_update_conversation', { id, request });
-
-      set((state) => {
-        const pinnedSet = new Set(state.pinnedConversations);
-        const updated = state.conversations.map((conv) =>
-          conv.id === id ? { ...conv, title } : conv
-        );
-        return {
-          conversations: applyPinnedState(updated, pinnedSet),
-        };
-      });
-    } catch (error) {
-      console.error('Failed to update conversation:', error);
-      set({ error: String(error) });
-      throw error;
-    }
-  },
-
-  deleteConversation: async (id: number) => {
-    try {
-      await invoke('chat_delete_conversation', { id });
-
-      set((state) => {
-        const pinned = state.pinnedConversations.filter((pid) => pid !== id);
-        const pinnedSet = new Set(pinned);
-        const remaining = state.conversations.filter((conv) => conv.id !== id);
-        const activeConversationId =
-          state.activeConversationId === id ? null : state.activeConversationId;
-        const messages = state.activeConversationId === id ? [] : state.messages;
-
-        return {
-          conversations: applyPinnedState(remaining, pinnedSet),
-          activeConversationId,
-          messages,
-          pinnedConversations: pinned,
-        };
-      });
-    } catch (error) {
-      console.error('Failed to delete conversation:', error);
-      set({ error: String(error) });
-      throw error;
-    }
-  },
-
-  selectConversation: async (id: number) => {
-    set({ activeConversationId: id });
-    await get().loadMessages(id);
-  },
-
-  sendMessage: async (
-    content: string,
-    attachments?: File[],
-    captures?: CaptureResult[],
-    routing?: ChatRoutingPreferences
-  ) => {
-    if (!content.trim()) {
-      return;
-    }
-
-    const pendingAttachments = attachments ?? [];
-    const pendingCaptures = captures ?? [];
-
-    if (pendingAttachments.length > 0 || pendingCaptures.length > 0) {
-      console.info(
-        `[chatStore] attachment handling pending. Files: ${pendingAttachments.length}, captures: ${pendingCaptures.length}`
-      );
-    }
-
-    const conversationId = get().activeConversationId;
-
-    set({ loading: true, error: null });
-
-    try {
-      const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
-        request: {
-          conversationId,
-          content,
-          provider: routing?.provider,
-          model: routing?.model,
-          strategy: routing?.strategy,
-          stream: true,
-        },
-      });
-
-      const conversationUI = toConversationUI(
-        response.conversation,
-        response.stats.message_count,
-        response.last_message ?? response.assistant_message.content
-      );
-
-      set((state) => {
-        const isSameConversation =
-          state.activeConversationId === response.conversation.id;
-        const userMessageUI = toMessageUI(response.user_message);
-        const assistantMessageUI = toMessageUI(response.assistant_message);
-        assistantMessageUI.streaming = false;
-
-        let updatedMessages: MessageUI[];
-        if (isSameConversation) {
-          const filtered = state.messages.filter(
-            (msg) =>
-              msg.id !== userMessageUI.id && msg.id !== assistantMessageUI.id
-          );
-          updatedMessages = [...filtered, userMessageUI, assistantMessageUI].sort(
-            (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-          );
-        } else {
-          updatedMessages = [userMessageUI, assistantMessageUI];
-        }
-
-        const otherConversations = state.conversations.filter(
-          (conv) => conv.id !== response.conversation.id
-        );
-        const pinnedSet = new Set(state.pinnedConversations);
-        const conversations = applyPinnedState(
-          [conversationUI, ...otherConversations],
-          pinnedSet
-        );
-
-        return {
-          conversations,
-          activeConversationId: response.conversation.id,
-          messages: updatedMessages,
-          loading: false,
-        };
-      });
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      set({ error: String(error), loading: false });
-      throw error;
-    }
-  },
-
-  getStats: async (conversationId: number) => {
-    try {
-      return await invoke<ConversationStats>('chat_get_conversation_stats', {
-        conversationId,
-      });
-    } catch (error) {
-      console.error('Failed to get stats:', error);
-      throw error;
-    }
-  },
-
-  togglePinnedConversation: async (id: number) => {
-    set((state) => {
-      const pinnedSet = new Set(state.pinnedConversations);
-      if (pinnedSet.has(id)) {
-        pinnedSet.delete(id);
-      } else {
-        pinnedSet.add(id);
-      }
-
-      return {
-        pinnedConversations: Array.from(pinnedSet),
-        conversations: applyPinnedState(state.conversations, pinnedSet),
-      };
-    });
-  },
-
-  renameConversation: async (id: number, title: string) => {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      throw new Error('Title cannot be empty');
-    }
-    await get().updateConversation(id, trimmed);
-  },
-
-  editMessage: async (id: number, content: string) => {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      throw new Error('Message cannot be empty');
-    }
-
-    const stateSnapshot = get();
-    const targetMessage = stateSnapshot.messages.find((message) => message.id === id);
-    const previousContent = targetMessage?.content;
-
-    try {
-      const updated = await invoke<Message>('chat_update_message', { id, content: trimmed });
-
-      set((state) => {
-        const updatedMessages = state.messages.map((message) =>
-          message.id === updated.id
-            ? ({
-                ...message,
-                content: updated.content,
-                created_at: updated.created_at,
-                timestamp: new Date(updated.created_at),
-                tokens: updated.tokens !== undefined ? updated.tokens : message.tokens,
-                cost: updated.cost !== undefined ? updated.cost : message.cost,
-              } as MessageUI)
-            : message
-        );
-
-        const pinnedSet = new Set(state.pinnedConversations);
-        const conversations = applyPinnedState(
-          state.conversations.map((conversation) => {
-            if (conversation.id !== updated.conversation_id) {
-              return conversation;
-            }
-
-            const isActiveConversation = state.activeConversationId === updated.conversation_id;
-            const lastMessageInActiveConversation =
-              isActiveConversation && updatedMessages.length > 0
-                ? updatedMessages[updatedMessages.length - 1]
-                : undefined;
-
-            const isLastMessageActive = lastMessageInActiveConversation?.id === updated.id;
-            const matchesPreviousLast =
-              previousContent !== undefined && conversation.lastMessage === previousContent;
-
-            if (!isLastMessageActive && !matchesPreviousLast) {
-              return conversation;
-            }
-
-            return {
-              ...conversation,
-              lastMessage: updated.content,
-            };
-          }),
-          pinnedSet
-        );
-
-        return {
-          messages: updatedMessages,
-          conversations,
-        };
-      });
-    } catch (error) {
-      console.error('Failed to edit message:', error);
-      set({ error: String(error) });
-      throw error;
-    }
-  },
-
-  deleteMessage: async (id: number) => {
-    const stateSnapshot = get();
-    const targetMessage = stateSnapshot.messages.find((message) => message.id === id);
-    const conversationId = targetMessage?.conversation_id ?? stateSnapshot.activeConversationId;
-    const messageWasTracked = Boolean(targetMessage);
-
-    try {
-      await invoke('chat_delete_message', { id });
-
-      set((state) => {
-        const remainingMessages = state.messages.filter((message) => message.id !== id);
-
-        if (conversationId == null) {
-          return { messages: remainingMessages };
-        }
-
-        const pinnedSet = new Set(state.pinnedConversations);
-        const conversations = applyPinnedState(
-          state.conversations.map((conversation) => {
-            if (conversation.id !== conversationId) {
-              return conversation;
-            }
-
-            const nextMessageCount = messageWasTracked
-              ? Math.max(0, conversation.messageCount - 1)
-              : conversation.messageCount;
-            const isActiveConversation = state.activeConversationId === conversationId;
-            const lastMessageInActiveConversation =
-              isActiveConversation && remainingMessages.length > 0
-                ? remainingMessages[remainingMessages.length - 1]
-                : undefined;
-
-            let nextLastMessage = conversation.lastMessage;
-            if (isActiveConversation) {
-              nextLastMessage = lastMessageInActiveConversation?.content;
-            } else if (messageWasTracked && nextMessageCount === 0) {
-              nextLastMessage = undefined;
-            } else if (
-              messageWasTracked &&
-              targetMessage &&
-              conversation.lastMessage !== undefined &&
-              conversation.lastMessage === targetMessage.content
-            ) {
-              nextLastMessage = lastMessageInActiveConversation?.content ?? conversation.lastMessage;
-            }
-
-            return {
-              ...conversation,
-              messageCount: nextMessageCount,
-              lastMessage: nextLastMessage,
-            };
-          }),
-          pinnedSet
-        );
-
-        return {
-          messages: remainingMessages,
-          conversations,
-        };
-      });
-    } catch (error) {
-      console.error('Failed to delete message:', error);
-      set({ error: String(error) });
-      throw error;
-    }
-  },
-
-  reset: () => {
-    set({
       conversations: [],
       activeConversationId: null,
       messages: [],
       loading: false,
       error: null,
       pinnedConversations: [],
-    });
-  },
+
+      loadConversations: async () => {
+        set({ loading: true, error: null });
+        try {
+          const conversations = await invoke<Conversation[]>('chat_get_conversations');
+
+          const conversationsWithStats = await Promise.all(
+            conversations.map(async (conv) => {
+              const stats = await invoke<ConversationStats>('chat_get_conversation_stats', {
+                conversationId: conv.id,
+              });
+
+              const messages = await invoke<Message[]>('chat_get_messages', {
+                conversationId: conv.id,
+              });
+
+              const lastMessage: string | undefined =
+                messages.length > 0 ? messages[messages.length - 1]?.content : undefined;
+
+              return toConversationUI(conv, stats.message_count, lastMessage);
+            }),
+          );
+
+          set((state) => {
+            const incomingPinned = state.pinnedConversations.filter((id) =>
+              conversationsWithStats.some((conv) => conv.id === id),
+            );
+            const pinnedSet = new Set(incomingPinned);
+            return {
+              conversations: applyPinnedState(conversationsWithStats, pinnedSet),
+              pinnedConversations: incomingPinned,
+              loading: false,
+            };
+          });
+        } catch (error) {
+          console.error('Failed to load conversations:', error);
+          set({ error: String(error), loading: false });
+        }
+      },
+
+      loadMessages: async (conversationId: number) => {
+        set({ loading: true, error: null });
+        try {
+          const messages = await invoke<Message[]>('chat_get_messages', { conversationId });
+          set({
+            messages: messages.map(toMessageUI),
+            loading: false,
+          });
+        } catch (error) {
+          console.error('Failed to load messages:', error);
+          set({ error: String(error), loading: false });
+        }
+      },
+
+      createConversation: async (title: string) => {
+        set({ loading: true, error: null });
+        try {
+          const request: CreateConversationRequest = { title };
+          const conversation = await invoke<Conversation>('chat_create_conversation', { request });
+
+          const conversationUI = toConversationUI(conversation, 0);
+          set((state) => {
+            const pinnedSet = new Set(state.pinnedConversations);
+            const conversations = applyPinnedState(
+              [conversationUI, ...state.conversations],
+              pinnedSet,
+            );
+
+            return {
+              conversations,
+              activeConversationId: conversation.id,
+              messages: [],
+              loading: false,
+            };
+          });
+
+          return conversation.id;
+        } catch (error) {
+          console.error('Failed to create conversation:', error);
+          set({ error: String(error), loading: false });
+          throw error;
+        }
+      },
+
+      updateConversation: async (id: number, title: string) => {
+        try {
+          const request: UpdateConversationRequest = { title };
+          await invoke('chat_update_conversation', { id, request });
+
+          set((state) => {
+            const pinnedSet = new Set(state.pinnedConversations);
+            const updated = state.conversations.map((conv) =>
+              conv.id === id ? { ...conv, title } : conv,
+            );
+            return {
+              conversations: applyPinnedState(updated, pinnedSet),
+            };
+          });
+        } catch (error) {
+          console.error('Failed to update conversation:', error);
+          set({ error: String(error) });
+          throw error;
+        }
+      },
+
+      deleteConversation: async (id: number) => {
+        try {
+          await invoke('chat_delete_conversation', { id });
+
+          set((state) => {
+            const pinned = state.pinnedConversations.filter((pid) => pid !== id);
+            const pinnedSet = new Set(pinned);
+            const remaining = state.conversations.filter((conv) => conv.id !== id);
+            const activeConversationId =
+              state.activeConversationId === id ? null : state.activeConversationId;
+            const messages = state.activeConversationId === id ? [] : state.messages;
+
+            return {
+              conversations: applyPinnedState(remaining, pinnedSet),
+              activeConversationId,
+              messages,
+              pinnedConversations: pinned,
+            };
+          });
+        } catch (error) {
+          console.error('Failed to delete conversation:', error);
+          set({ error: String(error) });
+          throw error;
+        }
+      },
+
+      selectConversation: async (id: number) => {
+        set({ activeConversationId: id });
+        await get().loadMessages(id);
+      },
+
+      sendMessage: async (
+        content: string,
+        attachments?: File[],
+        captures?: CaptureResult[],
+        routing?: ChatRoutingPreferences,
+      ) => {
+        if (!content.trim()) {
+          return;
+        }
+
+        const pendingAttachments = attachments ?? [];
+        const pendingCaptures = captures ?? [];
+
+        if (pendingAttachments.length > 0 || pendingCaptures.length > 0) {
+          console.info(
+            `[chatStore] attachment handling pending. Files: ${pendingAttachments.length}, captures: ${pendingCaptures.length}`,
+          );
+        }
+
+        const conversationId = get().activeConversationId;
+
+        set({ loading: true, error: null });
+
+        try {
+          const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
+            request: {
+              conversationId,
+              content,
+              provider: routing?.provider,
+              model: routing?.model,
+              strategy: routing?.strategy,
+              stream: true,
+            },
+          });
+
+          const conversationUI = toConversationUI(
+            response.conversation,
+            response.stats.message_count,
+            response.last_message ?? response.assistant_message.content,
+          );
+
+          set((state) => {
+            const isSameConversation = state.activeConversationId === response.conversation.id;
+            const userMessageUI = toMessageUI(response.user_message);
+            const assistantMessageUI = toMessageUI(response.assistant_message);
+            assistantMessageUI.streaming = false;
+
+            let updatedMessages: MessageUI[];
+            if (isSameConversation) {
+              const filtered = state.messages.filter(
+                (msg) => msg.id !== userMessageUI.id && msg.id !== assistantMessageUI.id,
+              );
+              updatedMessages = [...filtered, userMessageUI, assistantMessageUI].sort(
+                (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+              );
+            } else {
+              updatedMessages = [userMessageUI, assistantMessageUI];
+            }
+
+            const otherConversations = state.conversations.filter(
+              (conv) => conv.id !== response.conversation.id,
+            );
+            const pinnedSet = new Set(state.pinnedConversations);
+            const conversations = applyPinnedState(
+              [conversationUI, ...otherConversations],
+              pinnedSet,
+            );
+
+            return {
+              conversations,
+              activeConversationId: response.conversation.id,
+              messages: updatedMessages,
+              loading: false,
+            };
+          });
+        } catch (error) {
+          console.error('Failed to send message:', error);
+          set({ error: String(error), loading: false });
+          throw error;
+        }
+      },
+
+      getStats: async (conversationId: number) => {
+        try {
+          return await invoke<ConversationStats>('chat_get_conversation_stats', {
+            conversationId,
+          });
+        } catch (error) {
+          console.error('Failed to get stats:', error);
+          throw error;
+        }
+      },
+
+      togglePinnedConversation: async (id: number) => {
+        set((state) => {
+          const pinnedSet = new Set(state.pinnedConversations);
+          if (pinnedSet.has(id)) {
+            pinnedSet.delete(id);
+          } else {
+            pinnedSet.add(id);
+          }
+
+          return {
+            pinnedConversations: Array.from(pinnedSet),
+            conversations: applyPinnedState(state.conversations, pinnedSet),
+          };
+        });
+      },
+
+      renameConversation: async (id: number, title: string) => {
+        const trimmed = title.trim();
+        if (!trimmed) {
+          throw new Error('Title cannot be empty');
+        }
+        await get().updateConversation(id, trimmed);
+      },
+
+      editMessage: async (id: number, content: string) => {
+        const trimmed = content.trim();
+        if (!trimmed) {
+          throw new Error('Message cannot be empty');
+        }
+
+        const stateSnapshot = get();
+        const targetMessage = stateSnapshot.messages.find((message) => message.id === id);
+        const previousContent = targetMessage?.content;
+
+        try {
+          const updated = await invoke<Message>('chat_update_message', { id, content: trimmed });
+
+          set((state) => {
+            const updatedMessages = state.messages.map((message) =>
+              message.id === updated.id
+                ? ({
+                    ...message,
+                    content: updated.content,
+                    created_at: updated.created_at,
+                    timestamp: new Date(updated.created_at),
+                    tokens: updated.tokens !== undefined ? updated.tokens : message.tokens,
+                    cost: updated.cost !== undefined ? updated.cost : message.cost,
+                  } as MessageUI)
+                : message,
+            );
+
+            const pinnedSet = new Set(state.pinnedConversations);
+            const conversations = applyPinnedState(
+              state.conversations.map((conversation) => {
+                if (conversation.id !== updated.conversation_id) {
+                  return conversation;
+                }
+
+                const isActiveConversation = state.activeConversationId === updated.conversation_id;
+                const lastMessageInActiveConversation =
+                  isActiveConversation && updatedMessages.length > 0
+                    ? updatedMessages[updatedMessages.length - 1]
+                    : undefined;
+
+                const isLastMessageActive = lastMessageInActiveConversation?.id === updated.id;
+                const matchesPreviousLast =
+                  previousContent !== undefined && conversation.lastMessage === previousContent;
+
+                if (!isLastMessageActive && !matchesPreviousLast) {
+                  return conversation;
+                }
+
+                return {
+                  ...conversation,
+                  lastMessage: updated.content,
+                };
+              }),
+              pinnedSet,
+            );
+
+            return {
+              messages: updatedMessages,
+              conversations,
+            };
+          });
+        } catch (error) {
+          console.error('Failed to edit message:', error);
+          set({ error: String(error) });
+          throw error;
+        }
+      },
+
+      deleteMessage: async (id: number) => {
+        const stateSnapshot = get();
+        const targetMessage = stateSnapshot.messages.find((message) => message.id === id);
+        const conversationId = targetMessage?.conversation_id ?? stateSnapshot.activeConversationId;
+        const messageWasTracked = Boolean(targetMessage);
+
+        try {
+          await invoke('chat_delete_message', { id });
+
+          set((state) => {
+            const remainingMessages = state.messages.filter((message) => message.id !== id);
+
+            if (conversationId == null) {
+              return { messages: remainingMessages };
+            }
+
+            const pinnedSet = new Set(state.pinnedConversations);
+            const conversations = applyPinnedState(
+              state.conversations.map((conversation) => {
+                if (conversation.id !== conversationId) {
+                  return conversation;
+                }
+
+                const nextMessageCount = messageWasTracked
+                  ? Math.max(0, conversation.messageCount - 1)
+                  : conversation.messageCount;
+                const isActiveConversation = state.activeConversationId === conversationId;
+                const lastMessageInActiveConversation =
+                  isActiveConversation && remainingMessages.length > 0
+                    ? remainingMessages[remainingMessages.length - 1]
+                    : undefined;
+
+                let nextLastMessage = conversation.lastMessage;
+                if (isActiveConversation) {
+                  nextLastMessage = lastMessageInActiveConversation?.content;
+                } else if (messageWasTracked && nextMessageCount === 0) {
+                  nextLastMessage = undefined;
+                } else if (
+                  messageWasTracked &&
+                  targetMessage &&
+                  conversation.lastMessage !== undefined &&
+                  conversation.lastMessage === targetMessage.content
+                ) {
+                  nextLastMessage =
+                    lastMessageInActiveConversation?.content ?? conversation.lastMessage;
+                }
+
+                return {
+                  ...conversation,
+                  messageCount: nextMessageCount,
+                  lastMessage: nextLastMessage,
+                };
+              }),
+              pinnedSet,
+            );
+
+            return {
+              messages: remainingMessages,
+              conversations,
+            };
+          });
+        } catch (error) {
+          console.error('Failed to delete message:', error);
+          set({ error: String(error) });
+          throw error;
+        }
+      },
+
+      reset: () => {
+        set({
+          conversations: [],
+          activeConversationId: null,
+          messages: [],
+          loading: false,
+          error: null,
+          pinnedConversations: [],
+        });
+      },
     }),
-      {
-        name: 'agiworkforce-chat',
-        storage: chatStorage,
-        partialize: (state) => ({
+    {
+      name: 'agiworkforce-chat',
+      storage: chatStorage,
+      partialize: (state) => ({
         activeConversationId: state.activeConversationId,
         pinnedConversations: state.pinnedConversations,
-        }),
-      }
-    )
-  );
+      }),
+    },
+  ),
+);
 
 if (typeof window !== 'undefined') {
   void initializeStreamListeners();
@@ -593,9 +589,7 @@ function handleStreamStart(payload: ChatStreamStartPayload) {
 
       if (hasExisting) {
         messages = state.messages.map((message) =>
-          message.id === payload.messageId
-            ? { ...message, timestamp, streaming: true }
-            : message
+          message.id === payload.messageId ? { ...message, timestamp, streaming: true } : message,
         );
       } else {
         const placeholder: MessageUI = {
@@ -654,7 +648,7 @@ function handleStreamChunk(payload: ChatStreamChunkPayload) {
         messages = state.messages.map((message) =>
           message.id === payload.messageId
             ? { ...message, content: payload.content, streaming: true }
-            : message
+            : message,
         );
       } else {
         const timestamp = new Date();
@@ -696,7 +690,7 @@ function handleStreamEnd(payload: ChatStreamEndPayload) {
     }
 
     const messages = state.messages.map((message) =>
-      message.id === payload.messageId ? { ...message, streaming: false } : message
+      message.id === payload.messageId ? { ...message, streaming: false } : message,
     );
 
     return { messages };

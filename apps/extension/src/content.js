@@ -5,7 +5,7 @@ console.log('AGI Workforce content script loaded on:', window.location.href);
 // Automation state
 const automationState = {
   isControlled: false,
-  highlightedElement: null
+  highlightedElement: null,
 };
 
 // Initialize content script
@@ -244,7 +244,7 @@ async function handleWaitForSelector(message, sendResponse) {
         clearInterval(checkInterval);
         sendResponse({
           success: false,
-          error: `Timeout waiting for selector: ${message.selector}`
+          error: `Timeout waiting for selector: ${message.selector}`,
         });
       }
     }, 100);
@@ -336,7 +336,7 @@ function handleHover(message, sendResponse) {
     const event = new MouseEvent('mouseover', {
       view: window,
       bubbles: true,
-      cancelable: true
+      cancelable: true,
     });
 
     element.dispatchEvent(event);
@@ -402,14 +402,14 @@ function handleEvaluate(message, sendResponse) {
 function handleQueryAll(message, sendResponse) {
   try {
     const elements = document.querySelectorAll(message.selector);
-    const elementsData = Array.from(elements).map(el => ({
+    const elementsData = Array.from(elements).map((el) => ({
       tagName: el.tagName,
       text: el.textContent?.trim() || '',
       attributes: Array.from(el.attributes).reduce((acc, attr) => {
         acc[attr.name] = attr.value;
         return acc;
       }, {}),
-      bounds: el.getBoundingClientRect()
+      bounds: el.getBoundingClientRect(),
     }));
 
     sendResponse({ success: true, data: elementsData });

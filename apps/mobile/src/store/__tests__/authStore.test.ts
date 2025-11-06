@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../authStore';

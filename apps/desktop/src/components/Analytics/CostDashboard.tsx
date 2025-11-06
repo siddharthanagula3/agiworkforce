@@ -87,7 +87,7 @@ export function CostDashboard() {
     const current = overview?.monthly_budget ?? undefined;
     const input = window.prompt(
       'Set monthly budget (USD). Leave empty to clear.',
-      current != null ? String(current) : ''
+      current != null ? String(current) : '',
     );
     if (input === null) {
       return;
@@ -213,7 +213,9 @@ export function CostDashboard() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">This month</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  This month
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {loadingOverview && !overview ? (
@@ -332,10 +334,7 @@ export function CostDashboard() {
                         paddingAngle={4}
                       >
                         {analytics.providers.map((entry, index) => (
-                          <Cell
-                            key={entry.provider}
-                            fill={palette[index % palette.length]}
-                          />
+                          <Cell key={entry.provider} fill={palette[index % palette.length]} />
                         ))}
                       </Pie>
                       <Legend />
@@ -394,7 +393,8 @@ export function CostDashboard() {
                           <td className="px-4 py-2">
                             <div className="flex flex-col">
                               <span className="font-medium text-foreground">
-                                {conversation.title || `Conversation ${conversation.conversation_id}`}
+                                {conversation.title ||
+                                  `Conversation ${conversation.conversation_id}`}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 ID: {conversation.conversation_id}

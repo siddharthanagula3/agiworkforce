@@ -66,7 +66,7 @@ type EventDateTimeLike =
   | undefined;
 
 function hasDateTime(
-  value: EventDateTimeLike
+  value: EventDateTimeLike,
 ): value is { date_time: string; timezone?: string | null } {
   if (!value || typeof value !== 'object') {
     return false;
@@ -185,7 +185,9 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       });
 
       await open(response.auth_url);
-      toast.info('Authorize access in the opened browser window, then paste the code to complete connection.');
+      toast.info(
+        'Authorize access in the opened browser window, then paste the code to complete connection.',
+      );
     } catch (error) {
       console.error('[calendar] failed to start OAuth', error);
       set({ error: (error as Error).message });

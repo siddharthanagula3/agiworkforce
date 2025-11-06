@@ -8,7 +8,7 @@ import type {
 } from '../types/migration';
 
 export async function testLovableConnection(
-  request: LovableConnectionRequest
+  request: LovableConnectionRequest,
 ): Promise<LovableConnectionResponse> {
   return invoke<LovableConnectionResponse>('migration_test_lovable_connection', {
     request: {
@@ -19,7 +19,7 @@ export async function testLovableConnection(
 }
 
 export async function listLovableWorkflows(
-  workspaceSlug: string
+  workspaceSlug: string,
 ): Promise<LovableWorkflowListResponse> {
   return invoke<LovableWorkflowListResponse>('migration_list_lovable_workflows', {
     workspaceSlug,
@@ -27,7 +27,7 @@ export async function listLovableWorkflows(
 }
 
 export async function launchLovableMigration(
-  request: LovableMigrationLaunchRequest
+  request: LovableMigrationLaunchRequest,
 ): Promise<LovableMigrationLaunchResponse> {
   return invoke<LovableMigrationLaunchResponse>('migration_launch_lovable', {
     request: {

@@ -70,9 +70,7 @@ describe('ArtifactRenderer', () => {
     fireEvent.click(copyButton);
 
     await waitFor(() => {
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-        mockCodeArtifact.content
-      );
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(mockCodeArtifact.content);
     });
 
     expect(screen.getByText(/copied!/i)).toBeInTheDocument();
@@ -148,7 +146,9 @@ describe('ArtifactRenderer', () => {
 
     renderWithTooltipProvider(<ArtifactRenderer artifact={mermaidArtifact} />);
 
-    expect(screen.getByText(/mermaid diagram rendering requires additional setup/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/mermaid diagram rendering requires additional setup/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/graph TD/)).toBeInTheDocument();
   });
 });

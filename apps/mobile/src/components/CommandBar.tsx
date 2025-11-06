@@ -1,4 +1,3 @@
-
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 export interface CommandBarAction {

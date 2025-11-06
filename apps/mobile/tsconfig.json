@@ -5,7 +5,7 @@
     "rootDir": "./src",
     "jsx": "react-native",
     "types": ["react-native", "expo"]
-    },
+  },
   "include": ["src/**/*", "vite.config.ts", "metro.config.js"],
   "exclude": ["node_modules", "dist"]
 }

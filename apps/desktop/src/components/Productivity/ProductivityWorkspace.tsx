@@ -7,7 +7,14 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../ui/Dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Badge } from '../ui/Badge';
@@ -201,7 +208,7 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
     await setAsanaWorkspace(trimmed);
   };
 
-    const renderTaskList = (taskList: Task[]) => {
+  const renderTaskList = (taskList: Task[]) => {
     if (taskList.length === 0) {
       return (
         <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
@@ -214,12 +221,12 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
       <Badge
         variant="outline"
         className={cn(
-          "border-transparent",
-          status === "completed" && "bg-green-500/10 text-green-500",
-          status === "in_progress" && "bg-blue-500/10 text-blue-500",
-          status === "todo" && "bg-gray-500/10 text-gray-500",
-          status === "blocked" && "bg-red-500/10 text-red-500",
-          status === "cancelled" && "bg-gray-500/10 text-gray-500",
+          'border-transparent',
+          status === 'completed' && 'bg-green-500/10 text-green-500',
+          status === 'in_progress' && 'bg-blue-500/10 text-blue-500',
+          status === 'todo' && 'bg-gray-500/10 text-gray-500',
+          status === 'blocked' && 'bg-red-500/10 text-red-500',
+          status === 'cancelled' && 'bg-gray-500/10 text-gray-500',
         )}
       >
         {TASK_STATUS_LABELS[status] ?? status}
@@ -317,7 +324,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground">Provider</label>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Provider
+                  </label>
                   <select
                     value={connectProvider}
                     onChange={(e) => setConnectProvider(e.target.value as ProductivityProvider)}
@@ -333,10 +342,14 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
 
                 {connectProvider === 'trello' && (
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">API Key</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      API Key
+                    </label>
                     <Input
                       value={credentialsForm.apiKey}
-                      onChange={(e) => setCredentialsForm((prev) => ({ ...prev, apiKey: e.target.value }))}
+                      onChange={(e) =>
+                        setCredentialsForm((prev) => ({ ...prev, apiKey: e.target.value }))
+                      }
                       placeholder="Trello API key"
                     />
                   </div>
@@ -349,7 +362,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                   <Input
                     type="password"
                     value={credentialsForm.token}
-                    onChange={(e) => setCredentialsForm((prev) => ({ ...prev, token: e.target.value }))}
+                    onChange={(e) =>
+                      setCredentialsForm((prev) => ({ ...prev, token: e.target.value }))
+                    }
                     placeholder={`${connectProvider === 'notion' ? 'Notion' : connectProvider === 'trello' ? 'Trello' : 'Asana'} token`}
                   />
                 </div>
@@ -388,7 +403,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                   )}
                 >
                   <span>{provider.label}</span>
-                  {isConnected && <span className="h-2 w-2 rounded-full bg-green-500" title="Connected" />}
+                  {isConnected && (
+                    <span className="h-2 w-2 rounded-full bg-green-500" title="Connected" />
+                  )}
                 </button>
               );
             })}
@@ -429,18 +446,26 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Title</label>
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        Title
+                      </label>
                       <Input
                         value={taskForm.title}
-                        onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                        onChange={(e) =>
+                          setTaskForm((prev) => ({ ...prev, title: e.target.value }))
+                        }
                         placeholder="Task title"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Description</label>
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        Description
+                      </label>
                       <Textarea
                         value={taskForm.description || ''}
-                        onChange={(e) => setTaskForm((prev) => ({ ...prev, description: e.target.value }))}
+                        onChange={(e) =>
+                          setTaskForm((prev) => ({ ...prev, description: e.target.value }))
+                        }
                         placeholder="Task description"
                         rows={3}
                       />
@@ -481,7 +506,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                 <TabsTrigger value="tasks">Tasks</TabsTrigger>
                 {selectedProvider === 'notion' && <TabsTrigger value="pages">Pages</TabsTrigger>}
                 {selectedProvider === 'trello' && <TabsTrigger value="boards">Boards</TabsTrigger>}
-                {selectedProvider === 'asana' && <TabsTrigger value="projects">Projects</TabsTrigger>}
+                {selectedProvider === 'asana' && (
+                  <TabsTrigger value="projects">Projects</TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="tasks" className="mt-4">
@@ -505,11 +532,7 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                             <span className="text-sm font-medium">
                               {extractNotionTitle(page) ?? `Page ${page.id}`}
                             </span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => void open(page.url)}
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => void open(page.url)}>
                               <ExternalLink className="h-4 w-4" />
                             </Button>
                           </div>
@@ -558,11 +581,7 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                                   <p className="mt-1 text-xs text-muted-foreground">{card.desc}</p>
                                 )}
                               </div>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void open(card.url)}
-                              >
+                              <Button size="sm" variant="ghost" onClick={() => void open(card.url)}>
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </div>
@@ -598,7 +617,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
 
                     {asanaProjects.length === 0 ? (
                       <div className="flex h-64 items-center justify-center text-center text-sm text-muted-foreground">
-                        <p>Projects will appear here after loading them for the selected workspace.</p>
+                        <p>
+                          Projects will appear here after loading them for the selected workspace.
+                        </p>
                       </div>
                     ) : (
                       <>
@@ -631,7 +652,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
                                     <div className="flex-1">
                                       <h4 className="text-sm font-medium">{task.name}</h4>
                                       {task.notes && (
-                                        <p className="mt-1 text-xs text-muted-foreground">{task.notes}</p>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          {task.notes}
+                                        </p>
                                       )}
                                       <div className="mt-2 flex items-center gap-2">
                                         <Badge

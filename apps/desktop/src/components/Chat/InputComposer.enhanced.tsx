@@ -15,7 +15,7 @@ interface InputComposerProps {
     content: string,
     attachments?: FileAttachment[],
     captures?: unknown,
-    routing?: ChatRoutingPreferences
+    routing?: ChatRoutingPreferences,
   ) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -41,7 +41,7 @@ export function InputComposer({
     if (isProcessing) return;
 
     // Filter out attachments with errors
-    const validAttachments = attachments.filter(a => !a.error);
+    const validAttachments = attachments.filter((a) => !a.error);
 
     onSend(content, validAttachments.length > 0 ? validAttachments : undefined);
     setContent('');
@@ -127,17 +127,17 @@ export function InputComposer({
 
   const charCount = content.length;
   const isOverLimit = charCount > maxLength;
-  const hasErrors = attachments.some(a => a.error);
-  const canSend = !disabled && !isProcessing && !isOverLimit && !hasErrors &&
+  const hasErrors = attachments.some((a) => a.error);
+  const canSend =
+    !disabled &&
+    !isProcessing &&
+    !isOverLimit &&
+    !hasErrors &&
     (content.trim() || attachments.length > 0);
 
   return (
     <div className={cn('border-t border-border bg-background', className)}>
-      <FileDropZone
-        onFilesSelected={handleFileDrop}
-        onError={handleFileError}
-        maxFiles={5}
-      >
+      <FileDropZone onFilesSelected={handleFileDrop} onError={handleFileError} maxFiles={5}>
         <div className="p-4">
           {/* Attachments preview */}
           {attachments.length > 0 && (
@@ -206,7 +206,7 @@ export function InputComposer({
                 disabled={disabled || isProcessing}
                 className={cn(
                   'min-h-[44px] max-h-[200px] resize-none pr-16',
-                  isOverLimit && 'border-destructive focus-visible:ring-destructive'
+                  isOverLimit && 'border-destructive focus-visible:ring-destructive',
                 )}
                 rows={1}
                 aria-label="Message input"
@@ -216,7 +216,7 @@ export function InputComposer({
               <div
                 className={cn(
                   'absolute right-3 bottom-3 text-xs text-muted-foreground',
-                  isOverLimit && 'text-destructive'
+                  isOverLimit && 'text-destructive',
                 )}
               >
                 {charCount}/{maxLength}
@@ -245,11 +245,7 @@ export function InputComposer({
             <p className="text-xs text-muted-foreground">
               Press Enter to send, Shift+Enter for new line
             </p>
-            {isProcessing && (
-              <p className="text-xs text-muted-foreground">
-                Processing files...
-              </p>
-            )}
+            {isProcessing && <p className="text-xs text-muted-foreground">Processing files...</p>}
           </div>
         </div>
       </FileDropZone>

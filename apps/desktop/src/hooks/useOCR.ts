@@ -38,7 +38,7 @@ export interface UseOCRReturn {
     y: number,
     width: number,
     height: number,
-    language?: string
+    language?: string,
   ) => Promise<OCRResult>;
   getLanguages: () => Promise<Language[]>;
   getResult: (captureId: string) => Promise<OCRResult | null>;
@@ -72,7 +72,7 @@ export function useOCR(): UseOCRReturn {
         setIsProcessing(false);
       }
     },
-    []
+    [],
   );
 
   const processRegion = useCallback(
@@ -82,7 +82,7 @@ export function useOCR(): UseOCRReturn {
       y: number,
       width: number,
       height: number,
-      language = 'eng'
+      language = 'eng',
     ): Promise<OCRResult> => {
       setIsProcessing(true);
       setError(null);
@@ -106,7 +106,7 @@ export function useOCR(): UseOCRReturn {
         setIsProcessing(false);
       }
     },
-    []
+    [],
   );
 
   const getLanguages = useCallback(async (): Promise<Language[]> => {

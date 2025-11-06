@@ -38,18 +38,18 @@ describe('useTrayQuickActions', () => {
         onNewConversation,
         onOpenSettings,
         unreadCount: 3,
-      })
+      }),
     );
 
     await waitFor(() =>
-      expect(listenMock).toHaveBeenCalledWith('tray://new-conversation', expect.any(Function))
+      expect(listenMock).toHaveBeenCalledWith('tray://new-conversation', expect.any(Function)),
     );
     await waitFor(() =>
-      expect(listenMock).toHaveBeenCalledWith('tray://open-settings', expect.any(Function))
+      expect(listenMock).toHaveBeenCalledWith('tray://open-settings', expect.any(Function)),
     );
 
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('tray_set_unread_badge', { count: 3 })
+      expect(invokeMock).toHaveBeenCalledWith('tray_set_unread_badge', { count: 3 }),
     );
 
     await act(async () => {
@@ -67,11 +67,11 @@ describe('useTrayQuickActions', () => {
         onNewConversation: vi.fn(),
         onOpenSettings: vi.fn(),
         unreadCount: 120,
-      })
+      }),
     );
 
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('tray_set_unread_badge', { count: 99 })
+      expect(invokeMock).toHaveBeenCalledWith('tray_set_unread_badge', { count: 99 }),
     );
   });
 });

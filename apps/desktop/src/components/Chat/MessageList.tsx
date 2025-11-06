@@ -51,7 +51,7 @@ const MessageRow = ({ index, style, data }: RowProps) => {
         registerSize(index, height);
       }
     },
-    [index, registerSize]
+    [index, registerSize],
   );
 
   if (!item) {
@@ -94,9 +94,7 @@ const MessageRow = ({ index, style, data }: RowProps) => {
       <div ref={setRef} className="px-2">
         <MessageComponent
           message={item.message}
-          {...(onRegenerateMessage
-            ? { onRegenerate: onRegenerateMessage }
-            : {})}
+          {...(onRegenerateMessage ? { onRegenerate: onRegenerateMessage } : {})}
           {...(onEditMessage ? { onEdit: onEditMessage } : {})}
           {...(onDeleteMessage ? { onDelete: onDeleteMessage } : {})}
         />
@@ -133,7 +131,7 @@ export function MessageList({
 
   const getItemSize = useCallback(
     (index: number) => sizeMap.current.get(index) ?? ESTIMATED_ROW_HEIGHT,
-    []
+    [],
   );
 
   const items = useMemo(() => {

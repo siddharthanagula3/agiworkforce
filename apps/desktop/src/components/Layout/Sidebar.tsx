@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeftRight,
@@ -40,12 +47,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/DropdownMenu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '../ui/Tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/Tooltip';
 import type { ConversationUI } from '../../types/chat';
 import { cn } from '../../lib/utils';
 import { useChatStore } from '../../stores/chatStore';
@@ -104,7 +106,7 @@ function SidebarNavItem({
         'w-full justify-start gap-3 text-sm font-medium transition-colors',
         'hover:bg-primary/10 hover:text-primary',
         active && 'bg-primary/10 text-primary shadow-inner',
-        collapsed ? 'px-2 py-2 h-10 justify-center' : 'px-3 py-2 h-10'
+        collapsed ? 'px-2 py-2 h-10 justify-center' : 'px-3 py-2 h-10',
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -208,7 +210,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
 
   const unreadCount = useMemo(
     () => conversations.reduce((count, conversation) => count + (conversation.unreadCount ?? 0), 0),
-    [conversations]
+    [conversations],
   );
 
   const handleTrayNewConversation = useCallback(async () => {
@@ -249,7 +251,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
 
   const compactList = useMemo(
     () => [...filteredConversations.pinned, ...filteredConversations.others].slice(0, 5),
-    [filteredConversations]
+    [filteredConversations],
   );
   const { pinned: pinnedConversations, others: otherConversations } = filteredConversations;
   const hasFilteredResults = pinnedConversations.length > 0 || otherConversations.length > 0;
@@ -349,7 +351,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
         className={cn(
           'group flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition-colors',
           isActive ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
-          isEditing && 'bg-background'
+          isEditing && 'bg-background',
         )}
         onClick={handleConversationClick}
       >
@@ -387,14 +389,20 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                     aria-label={conversation.pinned ? 'Unpin conversation' : 'Pin conversation'}
                     className={cn(
                       'h-7 w-7 text-muted-foreground transition-opacity hover:text-primary focus-visible:opacity-100',
-                      conversation.pinned ? 'opacity-100 text-primary' : 'opacity-0 group-hover:opacity-100'
+                      conversation.pinned
+                        ? 'opacity-100 text-primary'
+                        : 'opacity-0 group-hover:opacity-100',
                     )}
                     onClick={(event) => {
                       event.stopPropagation();
                       handleTogglePin(conversation.id);
                     }}
                   >
-                    {conversation.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                    {conversation.pinned ? (
+                      <PinOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Pin className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -415,7 +423,11 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                   <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48" onClick={(event) => event.stopPropagation()}>
+              <DropdownMenuContent
+                align="end"
+                className="w-48"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <DropdownMenuItem
                   onClick={(event) => {
                     event.stopPropagation();
@@ -446,7 +458,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                   onClick={(event) => {
                     event.stopPropagation();
                     const confirmDelete = window.confirm(
-                      'Delete this conversation? This action cannot be undone.'
+                      'Delete this conversation? This action cannot be undone.',
                     );
                     if (!confirmDelete) {
                       return;
@@ -471,7 +483,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
       className={cn(
         'flex h-full flex-col border-r border-border/60 bg-muted/20 text-sm text-muted-foreground backdrop-blur-sm',
         widthClass,
-        className
+        className,
       )}
     >
       <div className="flex items-center gap-2 px-3 py-3">
@@ -484,7 +496,11 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                 className="h-9 w-9"
                 onClick={() => setCollapsed((prev) => !prev)}
               >
-                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                {collapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">Toggle sidebar Ctrl+\</TooltipContent>
@@ -505,49 +521,49 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
           className={cn(
             'w-full justify-start gap-3 font-medium transition-colors',
             collapsed ? 'h-10 justify-center px-0' : 'h-10 px-3',
-            'bg-primary/90 text-primary-foreground hover:bg-primary'
+            'bg-primary/90 text-primary-foreground hover:bg-primary',
           )}
         >
-      <Plus className="h-4 w-4" />
-      {!collapsed && <span>New chat</span>}
-    </Button>
-  </div>
-
-  <div className="px-3 pb-2">
-    {!collapsed ? (
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          ref={searchInputRef}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search conversations..."
-          className="pl-9 pr-3 text-sm"
-        />
+          <Plus className="h-4 w-4" />
+          {!collapsed && <span>New chat</span>}
+        </Button>
       </div>
-    ) : (
-      <TooltipProvider delayDuration={0}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-10 w-full justify-center"
-              onClick={() => {
-                setPendingSearchFocus(true);
-                setCollapsed(false);
-              }}
-              aria-label="Expand sidebar to search conversations"
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Expand to search conversations</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    )}
-  </div>
+
+      <div className="px-3 pb-2">
+        {!collapsed ? (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search conversations..."
+              className="pl-9 pr-3 text-sm"
+            />
+          </div>
+        ) : (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-full justify-center"
+                  onClick={() => {
+                    setPendingSearchFocus(true);
+                    setCollapsed(false);
+                  }}
+                  aria-label="Expand sidebar to search conversations"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand to search conversations</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
 
       <nav className="px-2 space-y-1">
         <SidebarNavItem
@@ -684,7 +700,11 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                       <div className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Pinned
                       </div>
-                      <div className="space-y-1">{pinnedConversations.map((conversation) => renderConversation(conversation))}</div>
+                      <div className="space-y-1">
+                        {pinnedConversations.map((conversation) =>
+                          renderConversation(conversation),
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -693,7 +713,9 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                       <div className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {pinnedConversations.length > 0 ? 'Recent' : 'Conversations'}
                       </div>
-                      <div className="space-y-1">{otherConversations.map((conversation) => renderConversation(conversation))}</div>
+                      <div className="space-y-1">
+                        {otherConversations.map((conversation) => renderConversation(conversation))}
+                      </div>
                     </div>
                   )}
                 </>
@@ -726,21 +748,21 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                           activeConversationId === conversation.id
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'hover:bg-accent',
-                          conversation.pinned && 'border-primary/70'
+                          conversation.pinned && 'border-primary/70',
                         )}
                         onClick={() => handleSelectConversation(conversation.id)}
                       >
                         <MessageCircle className="h-4 w-4" />
                       </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p className="font-medium">{conversation.title || 'Untitled conversation'}</p>
-                    <p className="max-w-[200px] truncate text-xs text-muted-foreground">
-                      {conversation.lastMessage || 'No messages yet'}
-                    </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p className="font-medium">{conversation.title || 'Untitled conversation'}</p>
+                      <p className="max-w-[200px] truncate text-xs text-muted-foreground">
+                        {conversation.lastMessage || 'No messages yet'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))
             )}
           </div>
@@ -754,7 +776,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
               type="button"
               className={cn(
                 'flex w-full items-center gap-3 rounded-lg border border-transparent bg-background/70 px-3 py-2 text-left transition-colors hover:border-border hover:bg-background',
-                collapsed && 'justify-center px-0'
+                collapsed && 'justify-center px-0',
               )}
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -762,7 +784,9 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
               </div>
               {!collapsed && (
                 <div className="flex flex-1 flex-col overflow-hidden text-xs">
-                  <span className="truncate text-sm font-medium text-foreground">Siddhartha Nagula</span>
+                  <span className="truncate text-sm font-medium text-foreground">
+                    Siddhartha Nagula
+                  </span>
                   <span className="truncate text-muted-foreground">Pro plan</span>
                 </div>
               )}
@@ -785,18 +809,25 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
                 <DropdownMenuItem>Japanese</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem onClick={() => window.open('https://docs.agiworkforce.com', '_blank')}>
+            <DropdownMenuItem
+              onClick={() => window.open('https://docs.agiworkforce.com', '_blank')}
+            >
               Get help
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => window.open('https://agiworkforce.com/pricing', '_blank')}>
+            <DropdownMenuItem
+              onClick={() => window.open('https://agiworkforce.com/pricing', '_blank')}
+            >
               Upgrade plan
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => window.open('https://agiworkforce.com', '_blank')}>
               Learn more
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={() => console.log('Log out clicked - auth integration pending')}>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => console.log('Log out clicked - auth integration pending')}
+            >
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -809,4 +840,3 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
 }
 
 export default Sidebar;
-

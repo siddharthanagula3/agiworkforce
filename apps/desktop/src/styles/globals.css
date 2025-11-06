@@ -5,7 +5,13 @@
 @layer base {
   :root {
     color-scheme: light;
-    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family:
+      'Segoe UI',
+      'Inter',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
     background-color: transparent;
 
     /* Design System Colors - Light Theme */
@@ -81,7 +87,9 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
   }
 }
 
@@ -159,7 +167,9 @@ button {
   border-radius: 16px;
   backdrop-filter: blur(20px);
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .app-shell.is-focused {
@@ -228,7 +238,10 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: rgba(245, 247, 251, 0.85);
   background: rgba(255, 255, 255, 0.04);
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .title-bar__button:hover {

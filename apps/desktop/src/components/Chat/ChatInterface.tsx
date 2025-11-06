@@ -31,7 +31,7 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     content: string,
     attachments?: File[],
     captures?: CaptureResult[],
-    routing?: ChatRoutingPreferences
+    routing?: ChatRoutingPreferences,
   ) => {
     await sendMessage(content, attachments, captures, routing);
   };

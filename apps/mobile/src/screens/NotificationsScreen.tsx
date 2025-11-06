@@ -1,11 +1,11 @@
-
 import { useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useNotificationStore } from '../store/notificationStore';
 import { formatRelativeTime } from '../utils/time';
 
 export function NotificationsScreen() {
-  const { items, registerPush, registering, permissionGranted, markAsRead } = useNotificationStore();
+  const { items, registerPush, registering, permissionGranted, markAsRead } =
+    useNotificationStore();
 
   useEffect(() => {
     if (!permissionGranted && !registering) {
@@ -26,10 +26,7 @@ export function NotificationsScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => markAsRead(item.id)}
-          >
+          <TouchableOpacity style={styles.card} onPress={() => markAsRead(item.id)}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardMeta}>{formatRelativeTime(item.timestamp)}</Text>

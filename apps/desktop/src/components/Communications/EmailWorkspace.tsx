@@ -1,29 +1,36 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { open } from '@tauri-apps/plugin-shell';
-import {
-  Inbox,
-  Mail,
-  Plus,
-  RefreshCcw,
-  Send,
-  Trash2,
-  Check,
-  Circle,
-  Search,
-} from 'lucide-react';
+import { Inbox, Mail, Plus, RefreshCcw, Send, Trash2, Check, Circle, Search } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../ui/Dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Badge } from '../ui/Badge';
 import { Separator } from '../ui/Separator';
-import { useEmailStore, type ConnectAccountPayload, type SendEmailPayload } from '../../stores/emailStore';
-import type { EmailAddress, EmailMessage, EmailFilter, Contact, EmailProviderConfig } from '../../types/email';
+import {
+  useEmailStore,
+  type ConnectAccountPayload,
+  type SendEmailPayload,
+} from '../../stores/emailStore';
+import type {
+  EmailAddress,
+  EmailMessage,
+  EmailFilter,
+  Contact,
+  EmailProviderConfig,
+} from '../../types/email';
 
 const PROVIDER_OPTIONS = [
   { value: 'gmail', label: 'Gmail' },
@@ -283,7 +290,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground">Provider</label>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Provider
+                  </label>
                   <select
                     value={provider}
                     onChange={(event) => setProvider(event.target.value)}
@@ -303,12 +312,16 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                       type="email"
                       autoComplete="email"
                       value={credentials.email}
-                      onChange={(event) => setCredentials((prev) => ({ ...prev, email: event.target.value }))}
+                      onChange={(event) =>
+                        setCredentials((prev) => ({ ...prev, email: event.target.value }))
+                      }
                       placeholder="me@example.com"
                     />
                   </div>
                   <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs font-medium text-muted-foreground">Display Name</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Display Name
+                    </label>
                     <Input
                       value={credentials.display_name}
                       onChange={(event) =>
@@ -318,12 +331,16 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                     />
                   </div>
                   <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs font-medium text-muted-foreground">App Password</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      App Password
+                    </label>
                     <Input
                       type="password"
                       autoComplete="current-password"
                       value={credentials.password}
-                      onChange={(event) => setCredentials((prev) => ({ ...prev, password: event.target.value }))}
+                      onChange={(event) =>
+                        setCredentials((prev) => ({ ...prev, password: event.target.value }))
+                      }
                       placeholder="••••••••"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -339,7 +356,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                     </p>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground">IMAP Host</label>
+                        <label className="block text-xs font-medium text-muted-foreground">
+                          IMAP Host
+                        </label>
                         <Input
                           value={customConfig.imap_host}
                           onChange={(event) =>
@@ -349,7 +368,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground">IMAP Port</label>
+                        <label className="block text-xs font-medium text-muted-foreground">
+                          IMAP Port
+                        </label>
                         <Input
                           type="number"
                           value={customConfig.imap_port}
@@ -362,7 +383,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                         />
                       </div>
                       <div className="col-span-1 md:col-span-2">
-                        <label className="block text-xs font-medium text-muted-foreground">SMTP Host</label>
+                        <label className="block text-xs font-medium text-muted-foreground">
+                          SMTP Host
+                        </label>
                         <Input
                           value={customConfig.smtp_host}
                           onChange={(event) =>
@@ -372,7 +395,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground">SMTP Port</label>
+                        <label className="block text-xs font-medium text-muted-foreground">
+                          SMTP Port
+                        </label>
                         <Input
                           type="number"
                           value={customConfig.smtp_port}
@@ -419,7 +444,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
               )}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">{account.display_name ?? account.email}</span>
+                <span className="text-sm font-semibold">
+                  {account.display_name ?? account.email}
+                </span>
                 {account.id === selectedAccountId && (
                   <Badge variant="outline" className="text-[10px] uppercase">
                     Active
@@ -458,7 +485,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
         </div>
         <Separator />
         <div className="px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Folders</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Folders
+          </p>
           <div className="mt-2 space-y-1">
             {folders.map((folder) => (
               <button
@@ -480,16 +509,16 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-border/80 px-4 py-2">
-        <div className="flex items-center gap-2">
-          {currentAccount && (
-            <div className="hidden text-xs text-muted-foreground sm:block">
-              Viewing {currentAccount.display_name ?? currentAccount.email}
-            </div>
-          )}
-          <Button variant="outline" size="sm" onClick={() => refreshEmails()}>
-            <RefreshCcw className="mr-1 h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {currentAccount && (
+              <div className="hidden text-xs text-muted-foreground sm:block">
+                Viewing {currentAccount.display_name ?? currentAccount.email}
+              </div>
+            )}
+            <Button variant="outline" size="sm" onClick={() => refreshEmails()}>
+              <RefreshCcw className="mr-1 h-4 w-4" />
+              Refresh
+            </Button>
             <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
@@ -506,7 +535,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                     <label className="block text-xs font-medium text-muted-foreground">To</label>
                     <Input
                       value={composeDraft.to}
-                      onChange={(event) => setComposeDraft((prev) => ({ ...prev, to: event.target.value }))}
+                      onChange={(event) =>
+                        setComposeDraft((prev) => ({ ...prev, to: event.target.value }))
+                      }
                       placeholder="recipient@example.com"
                     />
                   </div>
@@ -515,29 +546,41 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                       <label className="block text-xs font-medium text-muted-foreground">CC</label>
                       <Input
                         value={composeDraft.cc}
-                        onChange={(event) => setComposeDraft((prev) => ({ ...prev, cc: event.target.value }))}
+                        onChange={(event) =>
+                          setComposeDraft((prev) => ({ ...prev, cc: event.target.value }))
+                        }
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground">BCC</label>
                       <Input
                         value={composeDraft.bcc}
-                        onChange={(event) => setComposeDraft((prev) => ({ ...prev, bcc: event.target.value }))}
+                        onChange={(event) =>
+                          setComposeDraft((prev) => ({ ...prev, bcc: event.target.value }))
+                        }
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Subject</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Subject
+                    </label>
                     <Input
                       value={composeDraft.subject}
-                      onChange={(event) => setComposeDraft((prev) => ({ ...prev, subject: event.target.value }))}
+                      onChange={(event) =>
+                        setComposeDraft((prev) => ({ ...prev, subject: event.target.value }))
+                      }
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Message</label>
+                    <label className="block text-xs font-medium text-muted-foreground">
+                      Message
+                    </label>
                     <Textarea
                       value={composeDraft.body_text}
-                      onChange={(event) => setComposeDraft((prev) => ({ ...prev, body_text: event.target.value }))}
+                      onChange={(event) =>
+                        setComposeDraft((prev) => ({ ...prev, body_text: event.target.value }))
+                      }
                       rows={10}
                       placeholder="Write your message..."
                     />
@@ -555,28 +598,33 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
               </DialogContent>
             </Dialog>
           </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search messages..."
-              className="pl-9 pr-3 text-sm"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search messages..."
+                className="pl-9 pr-3 text-sm"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant={filter.has_attachments ? 'default' : 'outline'}
+              onClick={() =>
+                onFilterChange({ has_attachments: filter.has_attachments ? null : true })
+              }
+            >
+              Attachments
+            </Button>
           </div>
-          <Button
-            size="sm"
-            variant={filter.has_attachments ? 'default' : 'outline'}
-            onClick={() => onFilterChange({ has_attachments: filter.has_attachments ? null : true })}
-          >
-            Attachments
-          </Button>
-        </div>
         </div>
         <div className="grid flex-1 grid-cols-[320px_minmax(0,1fr)]">
           <div className="border-r border-border/80">
-            <Tabs value={tabValue} onValueChange={(value) => handleTabChange(value as 'all' | 'unread')}>
+            <Tabs
+              value={tabValue}
+              onValueChange={(value) => handleTabChange(value as 'all' | 'unread')}
+            >
               <TabsList className="grid grid-cols-2 px-2 py-2">
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="unread">Unread</TabsTrigger>
@@ -656,8 +704,14 @@ function EmailList({
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold leading-tight">{message.from.name ?? message.from.email}</span>
-                {!message.is_read ? <Circle className="h-3 w-3 text-primary" /> : <Check className="h-3 w-3 text-muted-foreground" />}
+                <span className="text-sm font-semibold leading-tight">
+                  {message.from.name ?? message.from.email}
+                </span>
+                {!message.is_read ? (
+                  <Circle className="h-3 w-3 text-primary" />
+                ) : (
+                  <Check className="h-3 w-3 text-muted-foreground" />
+                )}
               </div>
               <Button
                 variant="ghost"
@@ -670,8 +724,12 @@ function EmailList({
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
-            <p className={cn('text-sm', !message.is_read && 'font-semibold')}>{message.subject || '(No subject)'}</p>
-            <p className="line-clamp-2 text-xs text-muted-foreground">{message.body_text ?? '(no preview available)'}</p>
+            <p className={cn('text-sm', !message.is_read && 'font-semibold')}>
+              {message.subject || '(No subject)'}
+            </p>
+            <p className="line-clamp-2 text-xs text-muted-foreground">
+              {message.body_text ?? '(no preview available)'}
+            </p>
             <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
               <Button
                 variant="ghost"
@@ -709,7 +767,8 @@ function EmailDetail({
 }) {
   const senderContact = contacts.find((contact) => contact.email === message.from.email);
   const savedContactName = senderContact
-    ? senderContact.display_name ?? `${senderContact.first_name ?? ''} ${senderContact.last_name ?? ''}`.trim()
+    ? (senderContact.display_name ??
+      `${senderContact.first_name ?? ''} ${senderContact.last_name ?? ''}`.trim())
     : null;
   return (
     <div className="flex h-full flex-col">
@@ -718,7 +777,10 @@ function EmailDetail({
           <div>
             <h2 className="text-lg font-semibold">{message.subject || '(No subject)'}</h2>
             <p className="text-sm text-muted-foreground">
-              From {message.from.name ? `${message.from.name} <${message.from.email}>` : message.from.email}
+              From{' '}
+              {message.from.name
+                ? `${message.from.name} <${message.from.email}>`
+                : message.from.email}
             </p>
             <p className="text-xs text-muted-foreground">
               Sent {new Date(message.date * 1000).toLocaleString()}
@@ -769,7 +831,11 @@ function EmailDetail({
                 </div>
                 <div className="flex items-center gap-2">
                   {attachment.file_path ? (
-                    <Button size="sm" variant="outline" onClick={() => void onOpenAttachment(attachment.file_path!)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void onOpenAttachment(attachment.file_path!)}
+                    >
                       Open
                     </Button>
                   ) : (
@@ -792,8 +858,7 @@ function EmailDetail({
       <div className="border-t border-border/80 px-6 py-3">
         {senderContact ? (
           <p className="text-xs text-muted-foreground">
-            Saved contact:{' '}
-            <span className="font-semibold">{savedContactName}</span>
+            Saved contact: <span className="font-semibold">{savedContactName}</span>
           </p>
         ) : (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -840,6 +905,3 @@ function toastError(message: string) {
 }
 
 export default EmailWorkspace;
-
-
-

@@ -117,7 +117,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         <div className="flex items-center gap-2">
           {icon}
           <CardTitle className="text-sm font-semibold">
-            {artifact.title || `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
+            {artifact.title ||
+              `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
           </CardTitle>
           {artifact.language && (
             <Badge variant="outline" className="text-xs">
@@ -195,9 +196,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         ) : artifact.type === 'mermaid' ? (
           <MermaidArtifact artifact={artifact} />
         ) : (
-          <div className="p-4 text-sm text-muted-foreground">
-            Unsupported artifact type
-          </div>
+          <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
         )}
       </CardContent>
     </Card>
@@ -256,7 +255,8 @@ function ChartArtifact({ artifact }: { artifact: Artifact }) {
   if (!chartData) {
     return (
       <div className="p-8 text-center text-sm text-muted-foreground">
-        Invalid chart data. Expected format: {'{'}type: &quot;bar&quot;|&quot;line&quot;|&quot;pie&quot;, data: [...]{'}'}
+        Invalid chart data. Expected format: {'{'}type:
+        &quot;bar&quot;|&quot;line&quot;|&quot;pie&quot;, data: [...]{'}'}
       </div>
     );
   }
@@ -356,10 +356,7 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
         <thead className="bg-muted">
           <tr>
             {tableData.columns.map((col) => (
-              <th
-                key={col}
-                className="px-4 py-2 text-left font-semibold border-b"
-              >
+              <th key={col} className="px-4 py-2 text-left font-semibold border-b">
                 {col}
               </th>
             ))}

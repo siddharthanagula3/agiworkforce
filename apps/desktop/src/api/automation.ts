@@ -10,10 +10,7 @@ import type {
   OverlayRegionPayload,
   OverlayTypePayload,
 } from '../types/automation';
-import {
-  normalizeCaptureResult,
-  type RawCaptureResult,
-} from '../utils/captureTransforms';
+import { normalizeCaptureResult, type RawCaptureResult } from '../utils/captureTransforms';
 
 interface RawBoundingRect {
   left: number;
@@ -88,7 +85,7 @@ export async function listAutomationWindows(): Promise<AutomationElementInfo[]> 
 }
 
 export async function findAutomationElements(
-  query: AutomationQuery
+  query: AutomationQuery,
 ): Promise<AutomationElementInfo[]> {
   const raw = await invoke<RawAutomationElementInfo[]>('automation_find_elements', {
     request: buildAutomationQuery(query),
@@ -103,7 +100,7 @@ export async function invokeElement(elementId: string): Promise<void> {
 export async function setElementValue(
   elementId: string,
   value: string,
-  focus = false
+  focus = false,
 ): Promise<void> {
   await invoke('automation_set_value', {
     request: {
@@ -128,7 +125,7 @@ export async function focusWindow(elementId: string): Promise<void> {
 
 export async function sendKeys(
   text: string,
-  options: { elementId?: string; x?: number; y?: number; focus?: boolean } = {}
+  options: { elementId?: string; x?: number; y?: number; focus?: boolean } = {},
 ): Promise<void> {
   await invoke('automation_send_keys', {
     request: {
@@ -150,7 +147,7 @@ export async function clickAutomation(request: AutomationClickRequest): Promise<
 }
 
 export async function automationScreenshot(
-  options: AutomationScreenshotOptions = {}
+  options: AutomationScreenshotOptions = {},
 ): Promise<CaptureResult> {
   const raw = await invoke<RawCaptureResult>('automation_screenshot', {
     request: buildScreenshotRequest(options),

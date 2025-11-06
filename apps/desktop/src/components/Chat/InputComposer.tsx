@@ -11,13 +11,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { FileDropZone } from './FileDropZone';
 import { validateFiles, formatFileSize, generateId } from '../../utils/fileUtils';
 import { toast } from 'sonner';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import type { ChatRoutingPreferences } from '../../types/chat';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
@@ -27,7 +21,7 @@ interface InputComposerProps {
     content: string,
     attachments?: File[],
     captures?: CaptureResult[],
-    routing?: ChatRoutingPreferences
+    routing?: ChatRoutingPreferences,
   ) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -79,7 +73,7 @@ export function InputComposer({
 
   const [selectedProvider, setSelectedProvider] = useState<Provider>(llmConfig.defaultProvider);
   const [selectedModel, setSelectedModel] = useState(
-    llmConfig.defaultModels[llmConfig.defaultProvider] ?? ''
+    llmConfig.defaultModels[llmConfig.defaultProvider] ?? '',
   );
 
   const controlsDisabled = disabled || isSending;
@@ -115,7 +109,7 @@ export function InputComposer({
     () => () => {
       attachmentsRef.current.forEach(cleanupAttachmentPreview);
     },
-    []
+    [],
   );
 
   const modelOptions = useMemo(() => {
@@ -142,7 +136,7 @@ export function InputComposer({
       {
         provider: selectedProvider,
         model: selectedModel || undefined,
-      }
+      },
     );
     setContent('');
     attachments.forEach(cleanupAttachmentPreview);
@@ -348,12 +342,13 @@ export function InputComposer({
               <div className="text-xs font-medium text-muted-foreground">Screen captures</div>
               <div className="flex flex-wrap gap-2">
                 {captures.map((capture, index) => (
-                  <div
-                    key={capture.id}
-                    className="relative group rounded-lg border bg-muted/60"
-                  >
+                  <div key={capture.id} className="relative group rounded-lg border bg-muted/60">
                     <img
-                      src={capture.thumbnailPath ? convertFileSrc(capture.thumbnailPath) : convertFileSrc(capture.path)}
+                      src={
+                        capture.thumbnailPath
+                          ? convertFileSrc(capture.thumbnailPath)
+                          : convertFileSrc(capture.path)
+                      }
                       alt="Screen capture"
                       className="h-20 w-auto rounded-lg object-cover"
                       onClick={() => setSelectedCapture(capture)}
@@ -420,7 +415,7 @@ export function InputComposer({
                 disabled={controlsDisabled}
                 className={cn(
                   'min-h-[44px] max-h-[240px] resize-none pr-20',
-                  isOverLimit && 'border-destructive focus-visible:ring-destructive'
+                  isOverLimit && 'border-destructive focus-visible:ring-destructive',
                 )}
                 rows={1}
               />
@@ -428,10 +423,12 @@ export function InputComposer({
               <div
                 className={cn(
                   'pointer-events-none absolute right-3 bottom-3 flex items-center gap-1 rounded bg-background/80 px-2 py-0.5 text-xs text-muted-foreground',
-                  isOverLimit && 'text-destructive'
+                  isOverLimit && 'text-destructive',
                 )}
               >
-                <span>{charCount}/{maxLength}</span>
+                <span>
+                  {charCount}/{maxLength}
+                </span>
                 <span>~{tokenEstimate} tok</span>
               </div>
             </div>

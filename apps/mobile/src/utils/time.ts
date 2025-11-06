@@ -1,4 +1,3 @@
-
 export function formatRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
   if (diff < 0) {

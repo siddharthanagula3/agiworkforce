@@ -1,9 +1,4 @@
-import type {
-  CaptureMetadata,
-  CaptureRecord,
-  CaptureResult,
-  Region,
-} from '../types/capture';
+import type { CaptureMetadata, CaptureRecord, CaptureResult, Region } from '../types/capture';
 
 interface RawRegion {
   x: number;
