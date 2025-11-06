@@ -1,5 +1,9 @@
 # AGI Workforce – Monorepo Overview
 
+[![CI](https://github.com/siddharthanagula3/agiworkforce-desktop-app/actions/workflows/ci.yml/badge.svg)](https://github.com/siddharthanagula3/agiworkforce-desktop-app/actions/workflows/ci.yml)
+[![Build Desktop](https://github.com/siddharthanagula3/agiworkforce-desktop-app/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/siddharthanagula3/agiworkforce-desktop-app/actions/workflows/build-desktop.yml)
+[![Test](https://github.com/siddharthanagula3/agiworkforce-desktop-app/actions/workflows/test.yml/badge.svg)](https://github.com/siddharthanagula3/agiworkforce-desktop-app/actions/workflows/test.yml)
+
 AGI Workforce is an autonomous desktop automation platform built on **Tauri 2.0, React 18, TypeScript, and a Rust command layer**. The goal is to ship a secure, low-latency assistant that can orchestrate Windows automation, browser control, API workflows, and marketplace extensions while routing intelligently across multiple LLMs (including local models such as **Ollama**) to minimize cost.
 
 This repository currently contains:
