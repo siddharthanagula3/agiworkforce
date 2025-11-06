@@ -71,7 +71,7 @@ pub struct DangerousOpEvent {
 /// Check if a path is blacklisted (sensitive system directories)
 fn is_blacklisted_path(path: &str) -> bool {
     let path_lower = path.to_lowercase();
-    let blacklist = vec![
+    let blacklist = [
         "c:\\windows\\system32",
         "c:\\windows\\syswow64",
         "c:\\program files",

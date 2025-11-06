@@ -227,7 +227,7 @@ impl PostgresClient {
 
             for (idx, column) in row.columns().iter().enumerate() {
                 let column_name = column.name().to_string();
-                let value = Self::row_value_to_json(&row, idx)?;
+                let value = Self::row_value_to_json(row, idx)?;
                 result_row.insert(column_name, value);
             }
 

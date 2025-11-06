@@ -22,7 +22,7 @@ pub struct ChatMessage {
     pub content: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LLMResponse {
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,20 +38,6 @@ pub struct LLMResponse {
     pub cached: bool,
 }
 
-impl Default for LLMResponse {
-    fn default() -> Self {
-        Self {
-            content: String::new(),
-            tokens: None,
-            prompt_tokens: None,
-            completion_tokens: None,
-            cost: None,
-            model: String::new(),
-            cached: false,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Provider {
     OpenAI,
@@ -61,7 +47,8 @@ pub enum Provider {
 }
 
 impl Provider {
-    pub fn as_ref(&self) -> &'static str {
+    #[allow(clippy::should_implement_trait)]
+    pub fn as_string(&self) -> &'static str {
         match self {
             Provider::OpenAI => "openai",
             Provider::Anthropic => "anthropic",
@@ -70,7 +57,8 @@ impl Provider {
         }
     }
 
-    pub fn from_str(value: &str) -> Option<Self> {
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_string(value: &str) -> Option<Self> {
         match value.to_lowercase().as_str() {
             "openai" => Some(Provider::OpenAI),
             "anthropic" => Some(Provider::Anthropic),

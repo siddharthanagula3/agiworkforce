@@ -258,7 +258,7 @@ pub fn automation_click(
     if let Ok(conn) = db.0.lock() {
         if let Err(err) = dispatch_overlay_animation(
             &app,
-            &*conn,
+            &conn,
             OverlayAnimation::Click {
                 x,
                 y,
@@ -304,7 +304,7 @@ pub fn automation_drag_drop(
     if let Ok(conn) = db.0.lock() {
         if let Err(err) = dispatch_overlay_animation(
             &app,
-            &*conn,
+            &conn,
             OverlayAnimation::RegionHighlight {
                 x: request.from_x.min(request.to_x),
                 y: request.from_y.min(request.to_y),
@@ -410,7 +410,7 @@ fn execute_text_input(
     if let Ok(conn) = db.0.lock() {
         if let Err(err) = dispatch_overlay_animation(
             app,
-            &*conn,
+            &conn,
             OverlayAnimation::Type {
                 x: location.map(|(x, _)| x).unwrap_or(0),
                 y: location.map(|(_, y)| y).unwrap_or(0),
@@ -434,7 +434,7 @@ pub fn overlay_emit_click(
     if let Ok(conn) = db.0.lock() {
         dispatch_overlay_animation_normalized(
             &app,
-            &*conn,
+            &conn,
             OverlayAnimation::Click {
                 x: payload.x,
                 y: payload.y,
@@ -456,7 +456,7 @@ pub fn overlay_emit_type(
     if let Ok(conn) = db.0.lock() {
         dispatch_overlay_animation_normalized(
             &app,
-            &*conn,
+            &conn,
             OverlayAnimation::Type {
                 x: payload.x,
                 y: payload.y,
@@ -478,7 +478,7 @@ pub fn overlay_emit_region(
     if let Ok(conn) = db.0.lock() {
         dispatch_overlay_animation_normalized(
             &app,
-            &*conn,
+            &conn,
             OverlayAnimation::RegionHighlight {
                 x: payload.x,
                 y: payload.y,

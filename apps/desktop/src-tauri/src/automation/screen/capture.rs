@@ -13,7 +13,7 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
     ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
-    HGDIOBJ, SRCCOPY,
+    HGDIOBJ, RGBQUAD, SRCCOPY,
 };
 #[cfg(windows)]
 use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
@@ -46,14 +46,14 @@ pub struct CapturedRegion {
 pub fn capture_primary_screen() -> Result<CapturedImage> {
     let screens = Screen::all().context("Failed to enumerate displays")?;
     let screen = screens
-        .get(0)
+        .first()
         .ok_or_else(|| anyhow!("No displays detected for capture"))?;
     let pixels = screen
         .capture()
         .context("Failed to capture primary screen")?;
     let displays = list_displays()?;
     let display = displays
-        .get(0)
+        .first()
         .cloned()
         .ok_or_else(|| anyhow!("Display metadata unavailable"))?;
 
@@ -132,7 +132,7 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
             let windows = &*(lparam.0 as *const Mutex<Vec<WindowInfo>>);
 
             // Skip invisible windows
-            if IsWindowVisible(hwnd).as_bool() == false {
+            if !IsWindowVisible(hwnd).as_bool() {
                 return BOOL(1);
             }
 
@@ -188,7 +188,10 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
                             Ok(_) => {
                                 let path = String::from_utf16_lossy(&buffer[..size as usize]);
                                 // Extract just the filename from the full path
-                                path.split('\\').last().unwrap_or("Unknown").to_string()
+                                path.split('\\')
+                                    .next_back()
+                                    .unwrap_or("Unknown")
+                                    .to_string()
                             }
                             Err(_) => "Unknown".to_string(),
                         }
@@ -202,7 +205,7 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
             // Add window to list
             if let Ok(mut windows_guard) = windows.lock() {
                 windows_guard.push(WindowInfo {
-                    hwnd: hwnd.0 as isize,
+                    hwnd: hwnd.0,
                     title,
                     process_name,
                     rect: WindowRect {
@@ -315,7 +318,7 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
                 rgbBlue: 0,
                 rgbRed: 0,
                 rgbGreen: 0,
-                rgbReserved: 0
+                rgbReserved: 0,
             }; 1],
         };
 
@@ -351,7 +354,7 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
 
         let displays = list_displays()?;
         let display = displays
-            .get(0)
+            .first()
             .cloned()
             .ok_or_else(|| anyhow!("No display found"))?;
 
@@ -427,7 +430,7 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
                 rgbBlue: 0,
                 rgbRed: 0,
                 rgbGreen: 0,
-                rgbReserved: 0
+                rgbReserved: 0,
             }; 1],
         };
 
@@ -441,7 +444,7 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
         }
 
         let width = bmi.bmiHeader.biWidth as u32;
-        let height = bmi.bmiHeader.biHeight.abs() as u32;
+        let height = bmi.bmiHeader.biHeight.unsigned_abs();
 
         if width == 0 || height == 0 {
             SelectObject(mem_dc, old_bitmap);
@@ -490,7 +493,7 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
 
         let displays = list_displays()?;
         let display = displays
-            .get(0)
+            .first()
             .cloned()
             .ok_or_else(|| anyhow!("No display found"))?;
 

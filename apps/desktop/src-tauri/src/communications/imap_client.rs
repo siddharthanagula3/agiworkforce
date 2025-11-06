@@ -1,7 +1,4 @@
-use async_imap::{
-    types::Flag,
-    Session,
-};
+use async_imap::{types::Flag, Session};
 use futures::{pin_mut, StreamExt};
 use std::cmp::Reverse;
 use tokio::net::TcpStream;
@@ -131,7 +128,7 @@ impl ImapClient {
         uids.sort();
         uids.reverse();
 
-        let fetch_count = limit.max(1).min(200);
+        let fetch_count = limit.clamp(1, 200);
         let target: Vec<u32> = uids.into_iter().take(fetch_count).collect();
 
         if target.is_empty() {

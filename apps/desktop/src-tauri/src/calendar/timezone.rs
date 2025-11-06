@@ -34,7 +34,7 @@ fn windows_timezone_to_iana() -> Result<String> {
     use std::process::Command;
 
     let output = Command::new("powershell")
-        .args(&[
+        .args([
             "-Command",
             "Get-TimeZone | Select-Object -ExpandProperty Id",
         ])

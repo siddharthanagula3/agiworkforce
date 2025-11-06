@@ -73,7 +73,7 @@ impl PtySession {
             .take_writer()
             .map_err(|e| Error::Other(format!("Failed to get writer: {}", e)))?
             .write_all(data.as_bytes())
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
         Ok(())
     }
 
@@ -170,11 +170,8 @@ fn get_shell_command(shell_type: &ShellType) -> Result<CommandBuilder> {
     let mut cmd = CommandBuilder::new(shell_path);
 
     // Add arguments for better interactive experience
-    match shell_type {
-        ShellType::PowerShell => {
-            cmd.arg("-NoLogo");
-        }
-        _ => {}
+    if shell_type == &ShellType::PowerShell {
+        cmd.arg("-NoLogo");
     }
 
     Ok(cmd)

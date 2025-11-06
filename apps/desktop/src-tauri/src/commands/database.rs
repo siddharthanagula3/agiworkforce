@@ -3,8 +3,8 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::database::{
-    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig,
-    QueryBuilder, RedisClient, SelectQuery, SqlClient, UpdateQuery,
+    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder, RedisClient,
+    SelectQuery, SqlClient, UpdateQuery,
 };
 
 /// State for managing database clients
@@ -12,6 +12,12 @@ pub struct DatabaseState {
     pub sql_client: SqlClient,
     pub mongo_client: MongoClient,
     pub redis_client: RedisClient,
+}
+
+impl Default for DatabaseState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DatabaseState {

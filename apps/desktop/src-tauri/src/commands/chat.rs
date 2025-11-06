@@ -275,7 +275,7 @@ pub async fn chat_send_message(
     };
 
     let preferences = RouterPreferences {
-        provider: request.provider.as_deref().and_then(Provider::from_str),
+        provider: request.provider.as_deref().and_then(Provider::from_string),
         model: request.model.clone(),
         strategy: parse_routing_strategy(request.strategy.as_deref()),
     };
@@ -307,7 +307,7 @@ pub async fn chat_send_message(
                 .fetch(&conn, &cache_key)
                 .map_err(|e| format!("Failed to read cache: {}", e))?
         } {
-            if let Some(provider) = Provider::from_str(&entry.provider) {
+            if let Some(provider) = Provider::from_string(&entry.provider) {
                 let tokens = entry.tokens.map(|t| t as u32);
                 let response = LLMResponse {
                     content: entry.response.clone(),
@@ -330,10 +330,11 @@ pub async fn chat_send_message(
             }
         }
 
-        match {
+        let res = {
             let router = llm_state.router.lock().await;
             router.invoke_candidate(&candidate, &llm_request).await
-        } {
+        };
+        match res {
             Ok(mut route_outcome) => {
                 route_outcome.response.cached = false;
                 {
@@ -380,7 +381,7 @@ pub async fn chat_send_message(
             outcome.response.content.clone(),
         )
         .with_source(
-            Some(outcome.provider.as_ref().to_string()),
+            Some(outcome.provider.as_string().to_string()),
             Some(outcome.model.clone()),
         );
 

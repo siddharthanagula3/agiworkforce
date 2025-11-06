@@ -6,6 +6,12 @@ use tracing::{debug, info};
 /// File watcher state wrapper for Tauri
 pub struct FileWatcherState(pub Mutex<Option<FileWatcher>>);
 
+impl Default for FileWatcherState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileWatcherState {
     pub fn new() -> Self {
         Self(Mutex::new(None))

@@ -5,8 +5,8 @@ use crate::automation::uia::patterns::{
     PatternCapabilities,
 };
 use windows::Win32::UI::Accessibility::{
-    ExpandCollapseState_Collapsed, ExpandCollapseState_Expanded,
-    ScrollAmount_LargeIncrement, ScrollAmount_NoAmount,
+    ExpandCollapseState_Collapsed, ExpandCollapseState_Expanded, ScrollAmount_LargeIncrement,
+    ScrollAmount_NoAmount,
 };
 use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
 

@@ -12,6 +12,12 @@ pub struct CloudState {
     pub manager: Arc<CloudStorageManager>,
 }
 
+impl Default for CloudState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CloudState {
     pub fn new() -> Self {
         Self {

@@ -11,6 +11,12 @@ use crate::browser::{
 /// Browser state wrapper for Tauri
 pub struct BrowserStateWrapper(pub Arc<Mutex<BrowserState>>);
 
+impl Default for BrowserStateWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BrowserStateWrapper {
     pub fn new() -> Self {
         let initial_state =

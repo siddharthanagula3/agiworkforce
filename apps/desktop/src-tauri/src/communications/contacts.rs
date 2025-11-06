@@ -59,7 +59,9 @@ impl ContactManager {
             Err(e) => {
                 // tokio_rusqlite wraps rusqlite errors, check if it's QueryReturnedNoRows
                 let err_str = format!("{}", e);
-                if err_str.contains("Query returned no rows") || err_str.contains("QueryReturnedNoRows") {
+                if err_str.contains("Query returned no rows")
+                    || err_str.contains("QueryReturnedNoRows")
+                {
                     Ok(None)
                 } else {
                     Err(Error::Generic(format!("Database error: {}", e)))
@@ -279,13 +281,7 @@ fn map_contact_row(row: &rusqlite::Row<'_>) -> SqliteResult<Contact> {
 fn split_vcards(content: &str) -> Vec<&str> {
     content
         .split("BEGIN:VCARD")
-        .filter_map(|chunk| {
-            if chunk.trim().is_empty() {
-                None
-            } else {
-                Some(chunk)
-            }
-        })
+        .filter(|chunk| !chunk.trim().is_empty())
         .collect()
 }
 
@@ -302,15 +298,15 @@ fn parse_vcard(chunk: &str) -> Option<Contact> {
         let trimmed = line.trim();
         if trimmed.starts_with("EMAIL") {
             email = trimmed
-                .splitn(2, ':')
-                .nth(1)
+                .split_once(':')
+                .map(|x| x.1)
                 .map(|value| value.trim().to_string());
-        } else if trimmed.starts_with("FN:") {
-            display_name = Some(trimmed[3..].trim().to_string());
-        } else if trimmed.starts_with("N:") {
-            let parts: Vec<&str> = trimmed[2..].split(';').collect();
+        } else if let Some(stripped) = trimmed.strip_prefix("FN:") {
+            display_name = Some(stripped.trim().to_string());
+        } else if let Some(stripped) = trimmed.strip_prefix("N:") {
+            let parts: Vec<&str> = stripped.split(';').collect();
             last_name = parts
-                .get(0)
+                .first()
                 .map(|v| v.trim().to_string())
                 .filter(|s| !s.is_empty());
             first_name = parts
@@ -319,13 +315,13 @@ fn parse_vcard(chunk: &str) -> Option<Contact> {
                 .filter(|s| !s.is_empty());
         } else if trimmed.starts_with("TEL") {
             phone = trimmed
-                .splitn(2, ':')
-                .nth(1)
+                .split_once(':')
+                .map(|x| x.1)
                 .map(|value| value.trim().to_string());
-        } else if trimmed.starts_with("ORG:") {
-            company = Some(trimmed[4..].trim().to_string());
-        } else if trimmed.starts_with("NOTE:") {
-            notes = Some(trimmed[5..].trim().to_string());
+        } else if let Some(stripped) = trimmed.strip_prefix("ORG:") {
+            company = Some(stripped.trim().to_string());
+        } else if let Some(stripped) = trimmed.strip_prefix("NOTE:") {
+            notes = Some(stripped.trim().to_string());
         }
     }
 

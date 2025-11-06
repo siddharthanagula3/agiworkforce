@@ -434,7 +434,7 @@ impl GoogleCalendarClient {
     fn convert_from_google_datetime(&self, dt: &GoogleDateTime) -> EventDateTime {
         if let Some(date_time) = &dt.date_time {
             EventDateTime::DateTime {
-                date_time: date_time.clone(),
+                date_time: *date_time,
                 timezone: dt.time_zone.clone().unwrap_or_else(|| "UTC".to_string()),
             }
         } else if let Some(date) = &dt.date {
@@ -453,7 +453,7 @@ impl GoogleCalendarClient {
                 date_time,
                 timezone,
             } => GoogleDateTime {
-                date_time: Some(date_time.clone()),
+                date_time: Some(*date_time),
                 date: None,
                 time_zone: Some(timezone.clone()),
             },

@@ -1,6 +1,6 @@
 use image::{DynamicImage, RgbaImage};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, State};
 use uuid::Uuid;
@@ -13,7 +13,6 @@ use crate::{
     commands::AppDatabase,
     overlay::{dispatch_overlay_animation, ensure_overlay_ready, OverlayAnimation},
 };
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -119,7 +118,7 @@ pub async fn capture_screen_full(
     )?;
 
     if let Ok(conn) = db.0.lock() {
-        let _ = dispatch_overlay_animation(&app_handle, &*conn, OverlayAnimation::ScreenshotFlash);
+        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
     tracing::info!("Screen captured successfully: {}", capture_id);
@@ -184,8 +183,8 @@ pub async fn capture_screen_region(
             width: actual_width as i32,
             height: actual_height as i32,
         };
-        let _ = dispatch_overlay_animation(&app_handle, &*conn, region_animation);
-        let _ = dispatch_overlay_animation(&app_handle, &*conn, OverlayAnimation::ScreenshotFlash);
+        let _ = dispatch_overlay_animation(&app_handle, &conn, region_animation);
+        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
     tracing::info!("Region captured successfully: {}", capture_id);
@@ -407,7 +406,7 @@ pub async fn capture_screen_window(
     )?;
 
     if let Ok(conn) = db.0.lock() {
-        let _ = dispatch_overlay_animation(&app_handle, &*conn, OverlayAnimation::ScreenshotFlash);
+        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
     tracing::info!("Window captured successfully: {}", capture_id);
@@ -454,7 +453,7 @@ pub async fn capture_from_clipboard(
     )?;
 
     if let Ok(conn) = db.0.lock() {
-        let _ = dispatch_overlay_animation(&app_handle, &*conn, OverlayAnimation::ScreenshotFlash);
+        let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
     tracing::info!("Clipboard captured successfully: {}", capture_id);
@@ -463,6 +462,7 @@ pub async fn capture_from_clipboard(
 }
 
 /// Helper function to generate thumbnail
+#[allow(clippy::too_many_arguments)]
 fn persist_capture(
     app_handle: &tauri::AppHandle,
     db: &State<'_, AppDatabase>,
@@ -523,7 +523,7 @@ fn persist_capture(
 /// Helper function to generate thumbnail
 fn generate_thumbnail(
     image: &image::RgbaImage,
-    output_dir: &PathBuf,
+    output_dir: &Path,
     capture_id: &str,
 ) -> Result<Option<PathBuf>, String> {
     const THUMB_WIDTH: u32 = 200;

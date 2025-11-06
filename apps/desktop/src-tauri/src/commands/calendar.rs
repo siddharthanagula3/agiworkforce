@@ -21,6 +21,12 @@ pub struct CalendarState {
     pub manager: Arc<CalendarManager>,
 }
 
+impl Default for CalendarState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CalendarState {
     pub fn new() -> Self {
         Self {
@@ -162,7 +168,9 @@ pub async fn calendar_list_calendars(
 ) -> Result<Vec<Calendar>> {
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state.manager.upsert_account(account_id.clone(), info.clone(), None);
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None);
 
     let calendars = state.manager.list_calendars(&account_id).await?;
 
@@ -181,7 +189,9 @@ pub async fn calendar_list_events(
 ) -> Result<EventListResponse> {
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state.manager.upsert_account(account_id.clone(), info.clone(), None);
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None);
 
     let response = state.manager.list_events(&account_id, &request).await?;
 
@@ -206,7 +216,9 @@ pub async fn calendar_create_event(
 
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state.manager.upsert_account(account_id.clone(), info.clone(), None);
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None);
 
     let event = state.manager.create_event(&account_id, &request).await?;
 
@@ -232,7 +244,9 @@ pub async fn calendar_update_event(
 
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state.manager.upsert_account(account_id.clone(), info.clone(), None);
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None);
 
     let event = state
         .manager
@@ -264,7 +278,9 @@ pub async fn calendar_delete_event(
 
     let conn = open_connection(&app)?;
     let (info, _) = fetch_calendar_account(&conn, &account_id)?;
-    state.manager.upsert_account(account_id.clone(), info.clone(), None);
+    state
+        .manager
+        .upsert_account(account_id.clone(), info.clone(), None);
 
     state
         .manager
@@ -301,7 +317,9 @@ pub async fn calendar_list_accounts(
     let records = list_calendar_accounts(&conn)?;
 
     for (account_id, info, _) in &records {
-        state.manager.upsert_account(account_id.clone(), info.clone(), None);
+        state
+            .manager
+            .upsert_account(account_id.clone(), info.clone(), None);
     }
 
     let accounts = records
@@ -417,7 +435,7 @@ fn fetch_calendar_account(
             let connected_at = Utc
                 .timestamp_opt(created_at, 0)
                 .single()
-                .unwrap_or_else(|| Utc::now());
+                .unwrap_or_else(Utc::now);
 
             Ok((
                 CalendarAccountInfo {
@@ -480,7 +498,7 @@ fn list_calendar_accounts(
             let connected_at = Utc
                 .timestamp_opt(created_at, 0)
                 .single()
-                .unwrap_or_else(|| Utc::now());
+                .unwrap_or_else(Utc::now);
 
             Ok((
                 id,
