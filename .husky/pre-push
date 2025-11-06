@@ -1,0 +1,7 @@
+# Run type check before push
+echo "Running type check..."
+pnpm typecheck
+
+# Run Rust fmt check
+echo "Checking Rust formatting..."
+cd apps/desktop/src-tauri && cargo fmt --check
