@@ -10,3 +10,19 @@ lto = true
 opt-level = "z"
 strip = true
 panic = "abort"
+
+# Fix for Windows linker PDB limit error (LNK1318)
+# With 1,040+ crates, debug info exceeds Windows PDB file limits
+# Windows PDB files have a hard limit of 4,096 streams - we exceed this with 1,040 crates
+[profile.dev]
+debug = 0            # Disable ALL debug info (prevents PDB generation)
+incremental = false  # Disable incremental compilation (reduces PDB complexity)
+opt-level = 0        # Keep fast compile times
+strip = "symbols"    # Strip all symbols from output binary
+split-debuginfo = "off"  # Disable split debug info (Windows-specific)
+
+# Apply same settings to ALL dependencies to ensure no debug info leaks through
+[profile.dev.package."*"]
+debug = 0
+opt-level = 0
+strip = "symbols"
