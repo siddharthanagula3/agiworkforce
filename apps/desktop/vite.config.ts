@@ -41,12 +41,14 @@ export default defineConfig(async () => {
       environment: 'jsdom',
       setupFiles: './src/test/setup.ts',
       css: true,
+      exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/*.e2e.{ts,tsx}'],
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
         exclude: [
           'node_modules/',
           'src/test/',
+          'e2e/',
           '**/*.test.{ts,tsx}',
           '**/*.spec.{ts,tsx}',
           '**/dist/**',
