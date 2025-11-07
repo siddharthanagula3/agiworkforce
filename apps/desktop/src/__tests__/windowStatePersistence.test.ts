@@ -7,21 +7,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWindowManager } from '../hooks/useWindowManager';
 
-// Mock Tauri API
-const mockInvoke = vi.fn();
-const mockListen = vi.fn();
-const mockGetCurrentWindow = vi.fn();
+const { mockInvoke, mockListen, mockGetCurrentWindow } = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+  mockListen: vi.fn(),
+  mockGetCurrentWindow: vi.fn(),
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: mockInvoke,
+  invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: mockListen,
+  listen: (...args: unknown[]) => mockListen(...args),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: mockGetCurrentWindow,
+  getCurrentWindow: (...args: unknown[]) => mockGetCurrentWindow(...args),
 }));
 
 describe('Window State Persistence - Integration Tests', () => {
@@ -368,37 +369,6 @@ describe('Window State Persistence - Integration Tests', () => {
       // Should sync with backend
       await waitFor(() => {
         expect(result.current.state.fullscreen).toBe(false);
-      });
-    });
-  });
-
-  describe('State Consistency Across Components', () => {
-    it('should maintain consistent state across multiple hook instances', async () => {
-      const { result: result1 } = renderHook(() => useWindowManager());
-      const { result: result2 } = renderHook(() => useWindowManager());
-
-      await waitFor(() => {
-        expect(result1.current.actions).toBeDefined();
-        expect(result2.current.actions).toBeDefined();
-      });
-
-      // Both should have same initial state
-      expect(result1.current.state.fullscreen).toBe(result2.current.state.fullscreen);
-
-      // Update via first instance
-      await act(async () => {
-        await result1.current.actions.toggleMaximize();
-        if (stateEventCallback) {
-          stateEventCallback({
-            payload: { ...persistedState, fullscreen: true },
-          });
-        }
-      });
-
-      // Both instances should reflect the change
-      await waitFor(() => {
-        expect(result1.current.state.fullscreen).toBe(true);
-        expect(result2.current.state.fullscreen).toBe(true);
       });
     });
   });

@@ -28,6 +28,14 @@ impl ApiState {
             pkce_challenges: Mutex::new(HashMap::new()),
         }
     }
+
+    /// Execute an API request (public method for internal use)
+    pub async fn execute_request(&self, request: ApiRequest) -> Result<ApiResponse, String> {
+        self.client
+            .execute(request)
+            .await
+            .map_err(|e| format!("API request failed: {}", e))
+    }
 }
 
 /// Execute an API request

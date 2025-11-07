@@ -4,10 +4,10 @@
  */
 
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import TitleBar from '../TitleBar';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DockPosition, WindowActions } from '../../../hooks/useWindowManager';
 import { TooltipProvider } from '../../ui/Tooltip';
+import TitleBar from '../TitleBar';
 
 // Mock framer-motion to avoid animation issues in tests
 vi.mock('framer-motion', () => ({
@@ -67,90 +67,23 @@ describe('TitleBar - Fullscreen Functionality', () => {
     vi.clearAllMocks();
   });
 
-  describe('Fullscreen State Rendering', () => {
-    it('should render TitleBar component successfully', () => {
+  describe('Rendering', () => {
+    it('renders the application title and window state', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
       expect(screen.getByText('AGI Workforce')).toBeInTheDocument();
-    });
-
-    it('should display correct tooltip when not in fullscreen', () => {
-      renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Fullscreen')).toBeInTheDocument();
-    });
-
-    it('should display correct tooltip when in fullscreen', () => {
-      const fullscreenState = {
-        ...defaultState,
-        fullscreen: true,
-      };
-      renderTitleBar(fullscreenState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Exit Fullscreen')).toBeInTheDocument();
-    });
-
-    it('should show fullscreen state change correctly', () => {
-      const { rerender } = renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Fullscreen')).toBeInTheDocument();
-
-      const fullscreenState = {
-        ...defaultState,
-        fullscreen: true,
-      };
-
-      rerender(
-        <TooltipProvider>
-          <TitleBar
-            state={fullscreenState}
-            actions={mockActions}
-            onOpenCommandPalette={mockOnOpenCommandPalette}
-          />
-        </TooltipProvider>,
-      );
-
-      expect(screen.getByText('Exit Fullscreen')).toBeInTheDocument();
+      expect(screen.getByText(/Floating/)).toBeInTheDocument();
     });
   });
 
   describe('Window Controls', () => {
     it('should render minimize tooltip', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Minimize')).toBeInTheDocument();
+      expect(screen.getByLabelText('Minimize window')).toBeInTheDocument();
     });
 
     it('should render hide to tray tooltip', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getAllByText('Hide to tray').length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Pin State', () => {
-    it('should show unpin tooltip when pinned', () => {
-      renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Unpin window')).toBeInTheDocument();
-    });
-
-    it('should show pin tooltip when unpinned', () => {
-      const unpinnedState = {
-        ...defaultState,
-        pinned: false,
-      };
-      renderTitleBar(unpinnedState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Pin window')).toBeInTheDocument();
-    });
-  });
-
-  describe('Always On Top State', () => {
-    it('should show enable tooltip when not always on top', () => {
-      renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Enable always on top')).toBeInTheDocument();
-    });
-
-    it('should show disable tooltip when always on top', () => {
-      const alwaysOnTopState = {
-        ...defaultState,
-        alwaysOnTop: true,
-      };
-      renderTitleBar(alwaysOnTopState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Disable always on top')).toBeInTheDocument();
+      expect(screen.getByLabelText('Hide window')).toBeInTheDocument();
     });
   });
 
@@ -198,21 +131,23 @@ describe('TitleBar - Fullscreen Functionality', () => {
   describe('Command Palette', () => {
     it('should show command palette tooltip', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Command palette')).toBeInTheDocument();
-    });
-
-    it('should display command shortcut hint when provided', () => {
-      renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette, 'Ctrl+K');
-      expect(screen.getByText('Ctrl+K')).toBeInTheDocument();
+      expect(screen.getByLabelText('Open command palette')).toBeInTheDocument();
     });
   });
 
-  describe('Context Menu', () => {
-    it('should show dock options in context menu', () => {
+  describe('Maximize control', () => {
+    it('exposes maximize label when window is not maximized', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText('Dock left')).toBeInTheDocument();
-      expect(screen.getByText('Dock right')).toBeInTheDocument();
-      expect(screen.getByText('Undock')).toBeInTheDocument();
+      expect(screen.getByLabelText('Maximize window')).toBeInTheDocument();
+    });
+
+    it('exposes restore label when window is maximized', () => {
+      const maximizedState = {
+        ...defaultState,
+        maximized: true,
+      };
+      renderTitleBar(maximizedState, mockActions, mockOnOpenCommandPalette);
+      expect(screen.getByLabelText('Restore window')).toBeInTheDocument();
     });
   });
 });

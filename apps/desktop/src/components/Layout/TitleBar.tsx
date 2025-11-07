@@ -1,17 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
-import { X, Minus, Square, Pin, PinOff, Eye, EyeOff, Search, Minimize2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { X, Minus, Square, Search, Minimize2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { DockPosition, WindowActions } from '../../hooks/useWindowManager';
 import { Button } from '../ui/Button';
-import { Separator } from '../ui/Separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '../ui/DropdownMenu';
 import { cn } from '../../lib/utils';
 
 interface TitleBarProps {
@@ -29,13 +21,6 @@ interface TitleBarProps {
 }
 
 const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }: TitleBarProps) => {
-  const [contextMenuOpen, setContextMenuOpen] = useState(false);
-
-  const handleContextMenu = useCallback((event: React.MouseEvent) => {
-    event.preventDefault();
-    setContextMenuOpen(true);
-  }, []);
-
   const docked = useMemo(() => state.dock !== null, [state.dock]);
 
   return (
@@ -50,7 +35,6 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
         'relative',
       )}
       data-tauri-drag-region
-      onContextMenu={handleContextMenu}
       initial={false}
       animate={{
         borderRadius: docked ? 0 : 16,
@@ -110,23 +94,12 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={state.pinned ? 'default' : 'ghost'}
+              variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => void actions.togglePinned()}
-              aria-pressed={state.pinned}
+              onClick={onOpenCommandPalette}
+              aria-label="Open command palette"
             >
-              {state.pinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{state.pinned ? 'Unpin window' : 'Pin window'}</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenCommandPalette}>
               <Search className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
@@ -143,55 +116,11 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={state.alwaysOnTop ? 'default' : 'ghost'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => void actions.toggleAlwaysOnTop()}
-              aria-pressed={state.alwaysOnTop}
-            >
-              {state.alwaysOnTop ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{state.alwaysOnTop ? 'Disable always on top' : 'Enable always on top'}</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
-        <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <span className="text-xs">···</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => void actions.togglePinned()}>
-              {state.pinned ? 'Unpin window' : 'Pin window'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void actions.toggleAlwaysOnTop()}>
-              {state.alwaysOnTop ? 'Disable always on top' : 'Enable always on top'}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void actions.dock('left')}>Dock left</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void actions.dock('right')}>
-              Dock right
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void actions.dock(null)}>Undock</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void actions.hide()}>Hide to tray</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8"
               onClick={() => void actions.minimize()}
+              aria-label="Minimize window"
             >
               <Minus className="h-4 w-4" />
             </Button>
@@ -226,6 +155,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
               size="icon"
               className="h-8 w-8 hover:bg-destructive/20 hover:text-destructive"
               onClick={() => void actions.hide()}
+              aria-label="Hide window"
             >
               <X className="h-4 w-4" />
             </Button>

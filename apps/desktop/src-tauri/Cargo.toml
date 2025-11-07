@@ -132,6 +132,7 @@ unicode-segmentation = "1.11"
 rayon = "1.10"
 dashmap = "5.5"
 parking_lot = "0.12"
+sysinfo = "0.30"
 
 # Compression
 flate2 = "1.0"

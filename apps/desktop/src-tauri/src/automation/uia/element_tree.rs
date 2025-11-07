@@ -25,7 +25,7 @@ pub struct UIElementInfo {
     pub bounding_rect: Option<BoundingRectangle>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ElementQuery {
     #[serde(default)]
     pub window: Option<String>,

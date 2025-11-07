@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 
 use crate::router::cost_calculator::CostCalculator;
 use crate::router::token_counter::TokenCounter;
-use crate::router::{LLMProvider, LLMRequest, LLMResponse, Provider};
+use crate::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, Provider};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RoutingStrategy {
@@ -383,4 +383,34 @@ fn classify_request(request: &LLMRequest) -> TaskCategory {
     }
 
     TaskCategory::Simple
+}
+
+impl LLMRouter {
+    /// Send a message using the router (simplified interface)
+    pub async fn send_message(
+        &self,
+        prompt: &str,
+        preferences: Option<RouterPreferences>,
+    ) -> Result<String> {
+        let prefs = preferences.unwrap_or_default();
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
+            model: "".to_string(), // Will be set by router
+            temperature: Some(0.7),
+            max_tokens: Some(4000),
+            stream: false,
+        };
+
+        let candidates = self.candidates(&request, &prefs);
+        if candidates.is_empty() {
+            return Err(anyhow!("No LLM providers configured"));
+        }
+
+        // Try first candidate
+        let outcome = self.invoke_candidate(&candidates[0], &request).await?;
+        Ok(outcome.response.content)
+    }
 }
