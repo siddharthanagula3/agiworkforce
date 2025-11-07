@@ -317,4 +317,3 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         usage: None,
     })
 }
-
