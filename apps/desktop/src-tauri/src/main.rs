@@ -149,6 +149,12 @@ fn main() {
             agiworkforce_desktop::commands::window_set_always_on_top,
             agiworkforce_desktop::commands::window_set_visibility,
             agiworkforce_desktop::commands::window_dock,
+            agiworkforce_desktop::commands::window_is_maximized,
+            agiworkforce_desktop::commands::window_maximize,
+            agiworkforce_desktop::commands::window_unmaximize,
+            agiworkforce_desktop::commands::window_toggle_maximize,
+            agiworkforce_desktop::commands::window_set_fullscreen,
+            agiworkforce_desktop::commands::window_is_fullscreen,
             agiworkforce_desktop::commands::tray_set_unread_badge,
             // Chat commands
             agiworkforce_desktop::commands::chat_create_conversation,

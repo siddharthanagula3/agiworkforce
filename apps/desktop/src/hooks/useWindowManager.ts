@@ -9,6 +9,8 @@ interface BackendWindowState {
   pinned: boolean;
   alwaysOnTop: boolean;
   dock: DockPosition | null;
+  maximized: boolean;
+  fullscreen: boolean;
 }
 
 interface DockPreviewPayload {
@@ -24,6 +26,8 @@ const defaultState: WindowState = {
   pinned: true,
   alwaysOnTop: false,
   dock: null,
+  maximized: false,
+  fullscreen: false,
   focused: true,
   dockPreview: null,
 };
@@ -52,6 +56,8 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
         pinned: payload.pinned,
         alwaysOnTop: payload.alwaysOnTop,
         dock: payload.dock ?? null,
+        maximized: payload.maximized,
+        fullscreen: payload.fullscreen,
       }));
     } catch (error) {
       console.error('Failed to refresh window state', error);
@@ -75,6 +81,8 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
           pinned: payload.pinned,
           alwaysOnTop: payload.alwaysOnTop,
           dock: payload.dock ?? null,
+          maximized: payload.maximized,
+          fullscreen: payload.fullscreen,
         }));
       });
 
@@ -109,28 +117,6 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
       console.error('Failed to dock window', error);
     }
   }, []);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || !event.altKey) {
-        return;
-      }
-
-      if (event.code === 'ArrowLeft') {
-        event.preventDefault();
-        void dock('left');
-      } else if (event.code === 'ArrowRight') {
-        event.preventDefault();
-        void dock('right');
-      } else if (event.code === 'ArrowDown' || event.code === 'ArrowUp') {
-        event.preventDefault();
-        void dock(null);
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dock]);
 
   const setPinned = useCallback(async (value: boolean) => {
     try {
@@ -169,8 +155,8 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
 
   const toggleMaximize = useCallback(async () => {
     try {
-      const window = getCurrentWindow();
-      await window.toggleMaximize();
+      await invoke('window_toggle_maximize');
+      // State will be updated via the window event listener
     } catch (error) {
       console.error('Failed to toggle maximize state', error);
     }
@@ -191,6 +177,30 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
       console.error('Failed to show window', error);
     }
   }, []);
+
+  // Keyboard shortcuts for docking
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Docking shortcuts (Ctrl+Alt+Arrow)
+      if (!event.ctrlKey || !event.altKey) {
+        return;
+      }
+
+      if (event.code === 'ArrowLeft') {
+        event.preventDefault();
+        void dock('left');
+      } else if (event.code === 'ArrowRight') {
+        event.preventDefault();
+        void dock('right');
+      } else if (event.code === 'ArrowDown' || event.code === 'ArrowUp') {
+        event.preventDefault();
+        void dock(null);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dock]);
 
   const actions: WindowActions = useMemo(
     () => ({

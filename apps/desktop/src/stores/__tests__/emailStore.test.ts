@@ -76,7 +76,7 @@ describe('emailStore downloadAttachment', () => {
     });
 
     const state = useEmailStore.getState();
-    expect(state.selectedEmail?.attachments[0].file_path).toBe('C:/tmp/report.pdf');
-    expect(state.emails[0].attachments[0].file_path).toBe('C:/tmp/report.pdf');
+    expect(state.selectedEmail?.attachments[0]!.file_path).toBe('C:/tmp/report.pdf');
+    expect(state.emails[0]!.attachments[0]!.file_path).toBe('C:/tmp/report.pdf');
   });
 });
