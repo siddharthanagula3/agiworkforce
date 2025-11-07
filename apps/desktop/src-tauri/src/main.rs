@@ -125,6 +125,13 @@ fn main() {
 
             tracing::info!("Document state initialized");
 
+            // Initialize automation service
+            let automation_service = agiworkforce_desktop::automation::AutomationService::new()
+                .expect("Failed to initialize automation service");
+            app.manage(std::sync::Arc::new(automation_service));
+
+            tracing::info!("Automation service initialized");
+
             // Initialize window state
             let state = AppState::load(app.handle())?;
             app.manage(state);
@@ -143,6 +150,18 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // AGI commands
+            agiworkforce_desktop::commands::agi_init,
+            agiworkforce_desktop::commands::agi_submit_goal,
+            agiworkforce_desktop::commands::agi_get_goal_status,
+            agiworkforce_desktop::commands::agi_list_goals,
+            agiworkforce_desktop::commands::agi_stop,
+            // Agent commands
+            agiworkforce_desktop::commands::agent_init,
+            agiworkforce_desktop::commands::agent_submit_task,
+            agiworkforce_desktop::commands::agent_get_task_status,
+            agiworkforce_desktop::commands::agent_list_tasks,
+            agiworkforce_desktop::commands::agent_stop,
             // Window commands
             agiworkforce_desktop::commands::window_get_state,
             agiworkforce_desktop::commands::window_set_pinned,

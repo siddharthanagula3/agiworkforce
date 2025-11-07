@@ -1,3 +1,5 @@
+pub mod agi;
+pub mod agent;
 pub mod api;
 pub mod automation;
 pub mod browser;
@@ -20,6 +22,8 @@ pub mod terminal;
 pub mod tray;
 pub mod window;
 
+pub use agi::*;
+pub use agent::*;
 pub use api::*;
 pub use automation::*;
 pub use browser::*;

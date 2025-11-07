@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AGI Workforce is an autonomous desktop automation platform built on **Tauri 2.0, React 18, TypeScript, and Rust**. The goal is to deliver a secure, low-latency Windows-first agent that orchestrates desktop automation, browser control, API workflows, and marketplace extensions while routing intelligently across multiple LLMs (including local models via Ollama) to minimize cost.
 
-**Current Status:** Pre-alpha. Build health has been significantly improved through critical fixes to Rust unsafe code, TypeScript configuration, and dependency management. `pnpm typecheck` and `pnpm lint` pass with minimal errors. End-to-end automation, security guardrails, and runtime validation remain incomplete. Version pinning ensures reproducible builds across the team.
+**Current Status:** Pre-alpha with AGI system fully implemented. Build health significantly improved through critical fixes to Rust unsafe code, TypeScript configuration, and dependency management. `pnpm typecheck` and `pnpm lint` pass with minimal errors. AGI Core system is complete with chat integration, resource monitoring, and 15+ tools. Tool connections for browser/API/database are partially complete. Error handling, testing, and security guardrails remain incomplete. Version pinning ensures reproducible builds across the team.
 
 ## Commands
 
@@ -397,8 +397,12 @@ $env:RUST_LOG="debug"
 
 Key documentation files in the repository:
 
-- `README.md` - Setup and getting started
+- `README.md` - Setup and getting started guide
+- `STATUS.md` - Current implementation status and recent improvements
+- `CLAUDE.md` (this file) - Development guide for AI assistants
 - `PROJECT_OVERVIEW.md` - Consolidated project status and architecture
-- Individual package READMEs for workspace details
+- `docs/` - Additional technical documentation
+
+**Note:** Many redundant status/implementation files have been consolidated into `STATUS.md`. Always update `STATUS.md` when making significant changes to the codebase.
 
 Update documentation in the same PR that changes functionality.

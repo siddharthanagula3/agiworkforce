@@ -282,6 +282,62 @@ export const useChatStore = create<ChatState>()(
 
         set({ loading: true, error: null });
 
+        // Detect goal-like messages and auto-submit to AGI
+        const goalKeywords = [
+          'create',
+          'build',
+          'make',
+          'automate',
+          'implement',
+          'develop',
+          'write',
+          'generate',
+          'set up',
+          'configure',
+          'install',
+          'deploy',
+          'run',
+          'execute',
+          'perform',
+          'do',
+          'complete',
+          'finish',
+          'accomplish',
+          'achieve',
+          'solve',
+          'fix',
+          'update',
+          'modify',
+        ];
+        const isGoalLike =
+          goalKeywords.some((keyword) => content.toLowerCase().includes(keyword.toLowerCase())) &&
+          (content.length > 20 || // Longer messages are more likely to be goals
+            content.includes('please') ||
+            content.includes('can you') ||
+            content.includes('I need') ||
+            content.includes('I want'));
+
+        if (isGoalLike) {
+          try {
+            // Submit to AGI in parallel with chat message
+            const agiPromise = invoke('agi_submit_goal', {
+              request: {
+                description: content,
+                priority: 'medium',
+                deadline: null,
+                success_criteria: null,
+              },
+            }).catch((error) => {
+              console.warn('[chatStore] Failed to submit goal to AGI:', error);
+            });
+
+            // Don't await AGI submission - let it run in background
+            void agiPromise;
+          } catch (error) {
+            console.warn('[chatStore] Error submitting goal to AGI:', error);
+          }
+        }
+
         try {
           const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
             request: {
@@ -536,6 +592,54 @@ export const useChatStore = create<ChatState>()(
 
 if (typeof window !== 'undefined') {
   void initializeStreamListeners();
+  void initializeAGIListeners();
+}
+
+async function initializeAGIListeners() {
+  try {
+    // Listen for AGI goal events
+    await listen(
+      'agi:goal:submitted',
+      ({ payload }: { payload: { goal_id: string; description: string } }) => {
+        console.log('[AGI] Goal submitted:', payload);
+        // Could add a notification or update UI here
+      },
+    );
+
+    await listen(
+      'agi:goal:progress',
+      ({
+        payload,
+      }: {
+        payload: {
+          goal_id: string;
+          progress_percent: number;
+          completed_steps: number;
+          total_steps: number;
+        };
+      }) => {
+        console.log(
+          `[AGI] Goal progress: ${payload.progress_percent}% (${payload.completed_steps}/${payload.total_steps})`,
+        );
+        // Could update UI with progress bar here
+      },
+    );
+
+    await listen('agi:goal:achieved', ({ payload }: { payload: { goal_id: string } }) => {
+      console.log('[AGI] Goal achieved:', payload.goal_id);
+      // Could show success notification here
+    });
+
+    await listen(
+      'agi:goal:error',
+      ({ payload }: { payload: { goal_id: string; error: string } }) => {
+        console.error('[AGI] Goal error:', payload);
+        // Could show error notification here
+      },
+    );
+  } catch (error) {
+    console.error('[chatStore] Failed to initialize AGI listeners:', error);
+  }
 }
 
 async function initializeStreamListeners() {
