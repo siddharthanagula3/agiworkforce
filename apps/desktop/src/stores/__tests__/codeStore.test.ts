@@ -8,12 +8,12 @@ vi.mock('@tauri-apps/api/core', () => {
     invoke: vi.fn(async (command: string, args: Record<string, unknown>) => {
       switch (command) {
         case 'file_read': {
-          const path = args.path as string;
+          const path = args['path'] as string;
           return savedFiles.get(path) ?? `contents:${path}`;
         }
         case 'file_write': {
-          const path = args.path as string;
-          const content = args.content as string;
+          const path = args['path'] as string;
+          const content = args['content'] as string;
           savedFiles.set(path, content);
           return;
         }
@@ -44,7 +44,7 @@ describe('codeStore', () => {
 
     const state = useCodeStore.getState();
     expect(state.openFiles.length).toBe(2);
-    expect(state.openFiles[0].path).toBe('C:/project/src/main.ts');
+    expect(state.openFiles[0]!.path).toBe('C:/project/src/main.ts');
     expect(state.persistedOpenPaths).toEqual(['C:/project/src/main.ts', 'C:/project/src/utils.ts']);
     expect(state.activeFilePath).toBe('C:/project/src/utils.ts');
   });
@@ -59,7 +59,7 @@ describe('codeStore', () => {
     store.moveFile('file-c.ts', 0);
 
     const state = useCodeStore.getState();
-    expect(state.openFiles[0].path).toBe('file-c.ts');
+    expect(state.openFiles[0]!.path).toBe('file-c.ts');
     expect(state.persistedOpenPaths[0]).toBe('file-c.ts');
     expect(state.activeFilePath).toBe('file-c.ts');
   });

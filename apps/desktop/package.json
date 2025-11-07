@@ -19,6 +19,9 @@
     "lint:fix": "eslint . --ext ts,tsx --fix"
   },
   "dependencies": {
+    "@agiworkforce/types": "workspace:*",
+    "@agiworkforce/ui-components": "workspace:*",
+    "@agiworkforce/utils": "workspace:*",
     "@hookform/resolvers": "^3.4.0",
     "@monaco-editor/react": "^4.6.0",
     "@radix-ui/react-alert-dialog": "^1.0.5",

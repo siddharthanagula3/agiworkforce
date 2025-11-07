@@ -7,7 +7,11 @@
       "Bash(rustc:*)",
       "Bash(cargo --version:*)",
       "Bash(node --version)",
-      "Bash(pnpm --version:*)"
+      "Bash(pnpm --version:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:v2.tauri.app)",
+      "Bash(cargo tree:*)"
     ],
     "deny": [],
     "ask": []

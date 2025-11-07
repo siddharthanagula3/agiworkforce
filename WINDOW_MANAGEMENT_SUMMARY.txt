@@ -1,0 +1,189 @@
+WINDOW MANAGEMENT AND WINDOW STATE - CODE SUMMARY
+====================================================
+
+OVERVIEW
+--------
+The AGI Workforce desktop application has a comprehensive window management system 
+built on Tauri 2.0 with both Rust backend state management and React/TypeScript 
+frontend controls.
+
+1. WINDOW CONFIGURATION (TAURI INIT)
+====================================
+File: apps/desktop/src-tauri/tauri.conf.json
+
+Initial Settings:
+- Window size: 420x680
+- Min width: 360px, Max width: 480px
+- Min height: 520px, Max height: 840px
+- Decorations: false (custom title bar)
+- Transparent: true
+- Always on top: false (default)
+- Shadow: true
+- Visible: true
+- Center: true
+
+2. RUST BACKEND STATE MANAGEMENT
+=================================
+File: apps/desktop/src-tauri/src/state.rs
+
+Core Structures:
+- DockPosition enum: Left | Right
+- WindowGeometry: x, y, width, height
+- PersistentWindowState:
+  * pinned: bool
+  * always_on_top: bool
+  * dock: Option<DockPosition>
+  * geometry: Option<WindowGeometry>
+  * previous_geometry: Option<WindowGeometry>
+
+Key Methods:
+- AppState::load() - Loads state from window_state.json
+- snapshot() - Returns current state
+- update() - Updates state with persistence
+- suppress_events() - Prevents feedback loops
+- persist_locked() - Writes to disk
+
+Persistence: {app_config_dir}/window_state.json
+
+3. RUST WINDOW MODULE
+======================
+File: apps/desktop/src-tauri/src/window/mod.rs
+
+Constants:
+- WINDOW_MIN_WIDTH: 360px
+- WINDOW_MAX_WIDTH: 480px
+- DOCK_THRESHOLD: 32px
+
+Core Functions:
+a) set_pinned() - Update pinned state, emit event
+b) set_always_on_top() - Set Tauri property, update state
+c) show_window() / hide_window() - Visibility control
+d) initialize_window() - App startup setup
+e) apply_dock() - Position window at screen edge
+f) undock() - Restore previous position
+g) apply_geometry() - Apply saved position/size
+
+Event Handlers:
+- Focused - Updates focus state
+- Moved - Detects dock, auto-docks at 32px threshold
+- Resized - Clamps width, updates state
+- CloseRequested - Prevents close, hides window instead
+
+4. TAURI COMMANDS (RPC)
+=======================
+File: apps/desktop/src-tauri/src/commands/window.rs
+
+Commands:
+- window_get_state() - Return current state
+- window_set_pinned() - Set pinned flag
+- window_set_always_on_top() - Set always-on-top flag
+- window_set_visibility() - Show/hide window
+- window_dock() - Dock/undock window
+
+Payload Structure:
+struct WindowStatePayload {
+    pinned: bool,
+    always_on_top: bool,
+    dock: Option<DockPosition>,
+}
+
+5. TYPESCRIPT FRONTEND
+======================
+File: apps/desktop/src/hooks/useWindowManager.ts
+
+Hook API:
+export interface WindowActions {
+  refresh() - Fetch current state
+  setPinned(value) - Update pinned state
+  togglePinned()
+  setAlwaysOnTop(value)
+  toggleAlwaysOnTop()
+  dock(position) - Dock/undock
+  minimize() - Use Tauri API
+  toggleMaximize() - Use Tauri API
+  hide() - Hide window
+  show() - Show window
+}
+
+Event Listeners:
+- window://state - Backend state changes
+- window://focus - Focus changes
+- window://dock-preview - Dock preview during drag
+
+Keyboard Shortcuts:
+- Ctrl+Alt+ArrowLeft - Dock left
+- Ctrl+Alt+ArrowRight - Dock right
+- Ctrl+Alt+ArrowUp/Down - Undock
+
+6. TITLE BAR COMPONENT
+======================
+File: apps/desktop/src/components/Layout/TitleBar.tsx
+
+Window Controls (left to right):
+1. Pin button - Toggle pinned state
+2. Search button - Open command palette
+3. Always-on-top button - Toggle flag
+4. Menu (···) - Dropdown with:
+   - Pin/unpin
+   - Always-on-top toggle
+   - Dock left/right
+   - Undock
+   - Hide to tray
+5. Minimize button (-) - Minimize window
+6. Maximize button (□) - Toggle maximize
+7. Close button (×) - Hide to tray
+
+Features:
+- Drag region for window dragging
+- Visual feedback (focus state, dock state)
+- Status display (Ready/Inactive, Docked/Floating)
+- Animated transitions with Framer Motion
+- Context menu support
+
+7. EXISTING MAXIMIZE/MINIMIZE
+==============================
+Both use Tauri API directly:
+- minimize(): window.minimize()
+- toggleMaximize(): window.toggleMaximize()
+
+Not persisted to app state (handled by Tauri/OS).
+Buttons available in TitleBar despite disabled decorations.
+
+8. EVENT FLOW
+=============
+User Action (TitleBar)
+    ↓
+React Hook (useWindowManager)
+    ↓
+Tauri Invoke Command
+    ↓
+Rust Backend (window module)
+    ↓
+Update AppState + Tauri Window API
+    ↓
+Event Emission (window://state, etc.)
+    ↓
+Frontend Listener Updates State
+    ↓
+React Re-render
+
+9. KEY DESIGN PATTERNS
+======================
+- Arc<RwLock<>> for thread-safe shared state
+- Event suppression to prevent feedback loops
+- Monitor-aware positioning (multi-monitor support)
+- Smart docking: auto snap-to-dock at 32px threshold
+- Bidirectional sync: Backend state + Tauri properties
+- Layered architecture: Commands → Window → AppState → Persistence
+
+10. FILE LOCATIONS
+===================
+Window Configuration: apps/desktop/src-tauri/tauri.conf.json
+Rust State: apps/desktop/src-tauri/src/state.rs
+Window Module: apps/desktop/src-tauri/src/window/mod.rs
+Window Commands: apps/desktop/src-tauri/src/commands/window.rs
+Main Setup: apps/desktop/src-tauri/src/main.rs
+TypeScript Hook: apps/desktop/src/hooks/useWindowManager.ts
+Title Bar UI: apps/desktop/src/components/Layout/TitleBar.tsx
+App Integration: apps/desktop/src/App.tsx
+

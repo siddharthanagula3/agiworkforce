@@ -8,7 +8,7 @@ use tauri::{
 use tracing::warn;
 
 const WINDOW_MIN_WIDTH: f64 = 360.0;
-const WINDOW_MAX_WIDTH: f64 = 480.0;
+const WINDOW_DEFAULT_MAX_WIDTH: f64 = 480.0; // Used for docking only
 const DOCK_THRESHOLD: f64 = 32.0;
 
 #[derive(Debug, Clone, Serialize)]
@@ -17,6 +17,8 @@ pub struct DockState {
     pub dock: Option<DockPosition>,
     pub pinned: bool,
     pub always_on_top: bool,
+    pub maximized: bool,
+    pub fullscreen: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -97,7 +99,7 @@ pub fn apply_dock(
     let monitor_size = monitor.size().to_logical(scale_factor);
     let monitor_position = monitor.position().to_logical(scale_factor);
 
-    let dock_width = WINDOW_MAX_WIDTH;
+    let dock_width = WINDOW_DEFAULT_MAX_WIDTH;
     let height = monitor_size.height;
     let x = match position {
         DockPosition::Left => monitor_position.x,
@@ -165,6 +167,9 @@ fn handle_move_event(
     let logical_position = position.to_logical(scale_factor);
     let outer_size = window.outer_size()?.to_logical(scale_factor);
 
+    // Check if window is maximized - don't allow docking when maximized
+    let is_maximized = window.is_maximized()?;
+
     app_state.update(|state| {
         let geometry = state.geometry.get_or_insert_with(WindowGeometry::default);
         geometry.x = logical_position.x;
@@ -174,23 +179,28 @@ fn handle_move_event(
         true
     })?;
 
-    let dock_candidate = detect_dock_candidate(&monitor, &logical_position, outer_size.width);
-    match dock_candidate {
-        Some(position) => {
-            emit_preview(window, Some(position.clone()))?;
-            if app_state.with_state(|state| state.dock.clone()) != Some(position.clone()) {
-                apply_dock(window, app_state, position)?;
+    // Skip dock detection if window is maximized
+    if !is_maximized {
+        let dock_candidate = detect_dock_candidate(&monitor, &logical_position, outer_size.width);
+        match dock_candidate {
+            Some(position) => {
+                emit_preview(window, Some(position.clone()))?;
+                if app_state.with_state(|state| state.dock.clone()) != Some(position.clone()) {
+                    apply_dock(window, app_state, position)?;
+                }
+            }
+            None => {
+                let already_docked = app_state.with_state(|state| state.dock.is_some());
+                if already_docked {
+                    undock(window, app_state)?;
+                } else {
+                    emit_state(window, app_state)?;
+                }
+                emit_preview(window, None)?;
             }
         }
-        None => {
-            let already_docked = app_state.with_state(|state| state.dock.is_some());
-            if already_docked {
-                undock(window, app_state)?;
-            } else {
-                emit_state(window, app_state)?;
-            }
-            emit_preview(window, None)?;
-        }
+    } else {
+        emit_preview(window, None)?;
     }
 
     Ok(())
@@ -203,14 +213,27 @@ fn handle_resize_event(
 ) -> Result<()> {
     let scale_factor = window.scale_factor()?;
     let mut logical: LogicalSize<f64> = size.to_logical(scale_factor);
-    let clamped_width = logical.width.clamp(WINDOW_MIN_WIDTH, WINDOW_MAX_WIDTH);
 
-    if (clamped_width - logical.width).abs() > f64::EPSILON {
-        logical.width = clamped_width;
-        app_state.suppress_events(|| window.set_size(tauri::Size::Logical(logical)))?;
+    // Check if window is maximized - if so, don't clamp width
+    let is_maximized = window.is_maximized()?;
+
+    if !is_maximized {
+        // Only clamp width when NOT maximized to allow fullscreen expand
+        let clamped_width = logical
+            .width
+            .clamp(WINDOW_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH);
+
+        if (clamped_width - logical.width).abs() > f64::EPSILON {
+            logical.width = clamped_width;
+            app_state.suppress_events(|| window.set_size(tauri::Size::Logical(logical)))?;
+        }
     }
 
+    // Update maximized state in AppState
     app_state.update(|state| {
+        if state.maximized != is_maximized {
+            state.maximized = is_maximized;
+        }
         let geometry = state.geometry.get_or_insert_with(WindowGeometry::default);
         geometry.width = logical.width;
         geometry.height = logical.height;
@@ -246,8 +269,18 @@ fn apply_geometry(
     app_state: &AppState,
     geometry: &WindowGeometry,
 ) -> Result<()> {
+    // Only clamp if not maximized
+    let is_maximized = app_state.with_state(|state| state.maximized);
+    let width = if is_maximized {
+        geometry.width
+    } else {
+        geometry
+            .width
+            .clamp(WINDOW_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH)
+    };
+
     let logical_size = LogicalSize::<f64> {
-        width: geometry.width.clamp(WINDOW_MIN_WIDTH, WINDOW_MAX_WIDTH),
+        width,
         height: geometry.height,
     };
     let logical_position = LogicalPosition::<f64> {
@@ -282,6 +315,8 @@ fn emit_state(window: &WebviewWindow, app_state: &AppState) -> Result<()> {
         dock: current.dock,
         always_on_top: current.always_on_top,
         pinned: current.pinned,
+        maximized: current.maximized,
+        fullscreen: current.fullscreen,
     };
     window.emit("window://state", &payload)?;
     Ok(())
