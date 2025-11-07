@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CoUninitialize, CLSCTX_INPROC_SERVER,
@@ -17,18 +18,27 @@ use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomat
 mod actions;
 mod element_tree;
 mod patterns;
+mod wait;
 
 #[cfg(test)]
 mod tests;
 
 pub use element_tree::{BoundingRectangle, ElementQuery, UIElementInfo};
 pub use patterns::PatternCapabilities;
+pub use wait::WaitConfig;
 
 static mut COM_INITIALIZED: bool = false;
 
+#[derive(Clone)]
+struct CachedElement {
+    element: IUIAutomationElement,
+    cached_at: Instant,
+}
+
 pub struct UIAutomationService {
     automation: IUIAutomation,
-    cache: Mutex<HashMap<String, IUIAutomationElement>>,
+    cache: Mutex<HashMap<String, CachedElement>>,
+    cache_ttl: Duration,
 }
 
 unsafe impl Send for UIAutomationService {}
@@ -65,6 +75,7 @@ impl UIAutomationService {
         Ok(Self {
             automation,
             cache: Mutex::new(HashMap::new()),
+            cache_ttl: Duration::from_secs(30), // 30 second TTL for cached elements
         })
     }
 
@@ -83,16 +94,38 @@ impl UIAutomationService {
         let id = safe_array_to_runtime_id(runtime_id)?;
 
         let mut cache = self.cache.lock().expect("automation cache poisoned");
-        cache.insert(id.clone(), element.clone());
+        cache.insert(
+            id.clone(),
+            CachedElement {
+                element: element.clone(),
+                cached_at: Instant::now(),
+            },
+        );
         Ok(id)
     }
 
     pub(super) fn get_element(&self, id: &str) -> Result<IUIAutomationElement> {
-        let cache = self.cache.lock().expect("automation cache poisoned");
+        let mut cache = self.cache.lock().expect("automation cache poisoned");
+        
+        // Clean expired entries
+        cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
+        
         cache
             .get(id)
-            .cloned()
+            .map(|cached| cached.element.clone())
             .ok_or_else(|| anyhow!("Unknown element id: {id}"))
+    }
+
+    /// Clear expired cache entries
+    pub fn clear_expired_cache(&self) {
+        let mut cache = self.cache.lock().expect("automation cache poisoned");
+        cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
+    }
+
+    /// Clear all cache entries
+    pub fn clear_cache(&self) {
+        let mut cache = self.cache.lock().expect("automation cache poisoned");
+        cache.clear();
     }
 }
 

@@ -24,6 +24,47 @@ impl MouseSimulator {
         unsafe { SetCursorPos(x, y) }.map_err(|err| anyhow!("SetCursorPos failed: {err:?}"))
     }
 
+    /// Move cursor smoothly to target position with animation
+    pub fn move_to_smooth(&self, x: i32, y: i32, duration_ms: u32) -> Result<()> {
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+        let mut current_pos = windows::Win32::Foundation::POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut current_pos) }
+            .map_err(|err| anyhow!("GetCursorPos failed: {err:?}"))?;
+
+        let from_x = current_pos.x;
+        let from_y = current_pos.y;
+        let dx = x - from_x;
+        let dy = y - from_y;
+
+        if dx == 0 && dy == 0 {
+            return Ok(());
+        }
+
+        let duration_ms = duration_ms.max(10);
+        let steps = ((duration_ms as f64 / 16.0).ceil() as usize).max(2); // ~60fps
+        let step_delay = duration_ms / steps as u32;
+
+        for i in 1..=steps {
+            let t = i as f64 / steps as f64;
+            // Ease-out cubic for natural deceleration
+            let ease_t = 1.0 - (1.0 - t).powi(3);
+            let current_x = from_x + (dx as f64 * ease_t) as i32;
+            let current_y = from_y + (dy as f64 * ease_t) as i32;
+            self.move_to(current_x, current_y)?;
+            if i < steps {
+                std::thread::sleep(std::time::Duration::from_millis(step_delay as u64));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn double_click(&self, x: i32, y: i32) -> Result<()> {
+        self.click(x, y, MouseButton::Left)?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        self.click(x, y, MouseButton::Left)
+    }
+
     pub fn click(&self, x: i32, y: i32, button: MouseButton) -> Result<()> {
         self.move_to(x, y)?;
         let (down_flag, up_flag) = match button {

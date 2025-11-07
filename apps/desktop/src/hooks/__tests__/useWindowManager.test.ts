@@ -7,21 +7,22 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useWindowManager } from '../useWindowManager';
 
-// Mock Tauri API
-const mockInvoke = vi.fn();
-const mockListen = vi.fn();
-const mockGetCurrentWindow = vi.fn();
+const { mockInvoke, mockListen, mockGetCurrentWindow } = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+  mockListen: vi.fn(),
+  mockGetCurrentWindow: vi.fn(),
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: mockInvoke,
+  invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: mockListen,
+  listen: (...args: unknown[]) => mockListen(...args),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: mockGetCurrentWindow,
+  getCurrentWindow: (...args: unknown[]) => mockGetCurrentWindow(...args),
 }));
 
 describe('useWindowManager - Fullscreen Functionality', () => {

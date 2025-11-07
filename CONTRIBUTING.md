@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to AGI Workforce! This document outlines our development workflow, code quality standards, and the process for submitting contributions.
 
+**Current Status:** See [STATUS.md](../STATUS.md) for the latest implementation status and recent improvements.
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)

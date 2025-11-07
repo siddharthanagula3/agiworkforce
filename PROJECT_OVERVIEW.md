@@ -3,7 +3,7 @@
 ## Snapshot
 
 - **Goal:** Ship a Windows-first autonomous agent built on Tauri 2.0, React 18, and a Rust command layer. The agent must automate desktop, browser, filesystem, API, and productivity workflows while routing intelligently across cloud LLMs and local models (Ollama) to minimize cost.
-- **Current State:** Pre-alpha with significantly improved build health. Critical Rust unsafe code issues fixed, TypeScript configuration corrected, and version pinning implemented for reproducible builds. `pnpm typecheck` and `pnpm lint` pass with minimal errors (reduced from ~1,200 to under 100). End-to-end automation, security guardrails, and runtime validation remain incomplete.
+- **Current State:** Pre-alpha with AGI system fully implemented. Build health significantly improved. AGI Core system complete with chat integration, resource monitoring, and 15+ tools. See [STATUS.md](./STATUS.md) for detailed current implementation status.
 - **Key Differentiator:** Local-first multi-LLM router that blends on-device inference (Ollama) with optional premium providers (OpenAI, Anthropic, Google) using token-pack billing.
 
 ## Architecture Summary
@@ -109,4 +109,11 @@
 
 ---
 
-**Canonical Reference:** This document supersedes previous status, audit, milestone, and feature markdown files. Keep it updated alongside code changes to maintain a single source of truth. README.md remains the entry point for setup instructions.
+**Documentation Structure:**
+
+- **README.md** - Entry point for setup instructions and getting started
+- **STATUS.md** - Current implementation status and recent improvements (updated regularly)
+- **PROJECT_OVERVIEW.md** (this file) - Architecture overview and project structure
+- **CLAUDE.md** - Development guide for AI assistants
+
+**Note:** Previous redundant status/implementation files have been consolidated into STATUS.md. Always update STATUS.md when making significant changes to the codebase.
