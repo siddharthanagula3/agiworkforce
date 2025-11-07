@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { X, Minus, Square, Pin, PinOff, Eye, EyeOff, Search } from 'lucide-react';
+import { X, Minus, Square, Pin, PinOff, Eye, EyeOff, Search, Minimize2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { DockPosition, WindowActions } from '../../hooks/useWindowManager';
 import { Button } from '../ui/Button';
@@ -20,6 +20,8 @@ interface TitleBarProps {
     alwaysOnTop: boolean;
     dock: DockPosition | null;
     focused: boolean;
+    maximized: boolean;
+    fullscreen: boolean;
   };
   actions: WindowActions;
   onOpenCommandPalette: () => void;
@@ -206,12 +208,14 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
               size="icon"
               className="h-8 w-8"
               onClick={() => void actions.toggleMaximize()}
+              aria-label={state.maximized ? 'Restore window' : 'Maximize window'}
+              aria-pressed={state.maximized}
             >
-              <Square className="h-4 w-4" />
+              {state.maximized ? <Minimize2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Toggle maximize</p>
+            <p>{state.maximized ? 'Restore' : 'Maximize'}</p>
           </TooltipContent>
         </Tooltip>
 

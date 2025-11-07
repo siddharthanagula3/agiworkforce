@@ -11,6 +11,8 @@ pub struct WindowStatePayload {
     pub pinned: bool,
     pub always_on_top: bool,
     pub dock: Option<DockPosition>,
+    pub maximized: bool,
+    pub fullscreen: bool,
 }
 
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -25,6 +27,8 @@ pub fn window_get_state(state: State<AppState>) -> Result<WindowStatePayload, St
         pinned: snapshot.pinned,
         always_on_top: snapshot.always_on_top,
         dock: snapshot.dock,
+        maximized: snapshot.maximized,
+        fullscreen: snapshot.fullscreen,
     })
 }
 
@@ -72,4 +76,66 @@ pub fn window_dock(
         }
         None => window::undock(&window, &state).map_err(|err| err.to_string()),
     }
+}
+
+#[tauri::command]
+pub fn window_is_maximized(app: AppHandle) -> Result<bool, String> {
+    let window = main_window(&app)?;
+    window.is_maximized().map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn window_maximize(app: AppHandle) -> Result<(), String> {
+    let window = main_window(&app)?;
+    window.maximize().map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn window_unmaximize(app: AppHandle) -> Result<(), String> {
+    let window = main_window(&app)?;
+    window.unmaximize().map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn window_toggle_maximize(app: AppHandle, _state: State<AppState>) -> Result<(), String> {
+    let window = main_window(&app)?;
+
+    // Use standard maximize/unmaximize (respects taskbar)
+    let is_maximized = window.is_maximized().map_err(|e| e.to_string())?;
+
+    if is_maximized {
+        window.unmaximize().map_err(|e| e.to_string())?;
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+    }
+
+    // State will be updated via resize event handler
+    Ok(())
+}
+
+#[tauri::command]
+pub fn window_set_fullscreen(
+    app: AppHandle,
+    state: State<AppState>,
+    fullscreen: bool,
+) -> Result<(), String> {
+    let window = main_window(&app)?;
+    window
+        .set_fullscreen(fullscreen)
+        .map_err(|e| e.to_string())?;
+
+    state
+        .update(|s| {
+            s.fullscreen = fullscreen;
+            true
+        })
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn window_is_fullscreen(app: AppHandle) -> Result<bool, String> {
+    let window = main_window(&app)?;
+    window.is_fullscreen().map_err(|e| e.to_string())
 }

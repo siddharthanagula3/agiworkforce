@@ -43,6 +43,10 @@ pub struct PersistentWindowState {
     pub dock: Option<DockPosition>,
     pub geometry: Option<WindowGeometry>,
     pub previous_geometry: Option<WindowGeometry>,
+    #[serde(default)]
+    pub maximized: bool,
+    #[serde(default)]
+    pub fullscreen: bool,
 }
 
 impl Default for PersistentWindowState {
@@ -53,6 +57,8 @@ impl Default for PersistentWindowState {
             dock: None,
             geometry: Some(WindowGeometry::default()),
             previous_geometry: None,
+            maximized: false,
+            fullscreen: false,
         }
     }
 }
