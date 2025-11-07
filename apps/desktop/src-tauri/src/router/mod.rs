@@ -2,10 +2,12 @@ pub mod cache_manager;
 pub mod cost_calculator;
 pub mod llm_router;
 pub mod providers;
+pub mod sse_parser;
 pub mod token_counter;
 
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::pin::Pin;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMRequest {
@@ -77,6 +79,30 @@ pub trait LLMProvider: Send + Sync {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>>;
+
+    /// Send a message with streaming support
+    /// Returns a stream of chunks
+    async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<
+        Pin<Box<dyn futures_util::Stream<Item = Result<sse_parser::StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        // Default implementation: fallback to non-streaming
+        let response = self.send_message(request).await?;
+        Ok(Box::pin(tokio_stream::iter(vec![Ok(sse_parser::StreamChunk {
+            content: response.content,
+            done: true,
+            finish_reason: None,
+            model: Some(response.model),
+            usage: Some(sse_parser::TokenUsage {
+                prompt_tokens: response.prompt_tokens,
+                completion_tokens: response.completion_tokens,
+                total_tokens: response.tokens,
+            }),
+        })])))
+    }
 
     /// Check if the provider is configured with valid API keys
     fn is_configured(&self) -> bool;
