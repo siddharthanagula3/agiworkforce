@@ -18,18 +18,22 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
   return (
     <header
       className={cn(
-        'flex items-center justify-between gap-2 px-4 py-2 h-12',
+        'flex items-center justify-between gap-2 px-4 py-2 h-12 shrink-0',
         'bg-background/95 backdrop-blur-sm',
         'border-b border-border',
         'select-none',
+        'min-w-[600px]', // Prevent overlap at small sizes
       )}
       data-tauri-drag-region
     >
       {/* Logo and Title */}
-      <div className="flex items-center gap-3 pointer-events-none" data-tauri-drag-region>
+      <div
+        className="flex items-center gap-3 pointer-events-none min-w-0 shrink"
+        data-tauri-drag-region
+      >
         <div
           className={cn(
-            'flex items-center justify-center',
+            'flex items-center justify-center shrink-0',
             'w-8 h-8 rounded-lg',
             'bg-primary text-primary-foreground',
             'text-xs font-bold tracking-wider',
@@ -37,16 +41,16 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
         >
           AGI
         </div>
-        <div className="flex flex-col" data-tauri-drag-region>
-          <h1 className="text-sm font-semibold leading-none">AGI Workforce</h1>
-          <p className="text-xs text-muted-foreground leading-none mt-0.5">
+        <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
+          <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
+          <p className="text-xs text-muted-foreground leading-none mt-0.5 truncate">
             {state.focused ? 'Ready' : 'Inactive'}
           </p>
         </div>
       </div>
 
       {/* Window Controls */}
-      <div className="flex items-center gap-1" data-tauri-drag-region="false">
+      <div className="flex items-center gap-1 shrink-0" data-tauri-drag-region="false">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

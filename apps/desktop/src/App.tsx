@@ -383,7 +383,10 @@ const DesktopShell = () => {
   ]);
 
   const shellClass = useMemo(() => {
-    return cn('flex flex-col h-screen w-screen bg-background', 'overflow-hidden');
+    return cn(
+      'flex flex-col h-screen w-screen bg-background',
+      'overflow-hidden min-w-[1000px] min-h-[700px]',
+    );
   }, []);
 
   return (
@@ -394,9 +397,9 @@ const DesktopShell = () => {
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         commandShortcutHint={commandShortcutHint}
       />
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex flex-1 overflow-hidden min-h-0">
         <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-auto min-w-0">
           {activeSection === 'dashboard' && <CostDashboard />}
           {activeSection === 'migration' && <LovableMigrationWizard />}
           {activeSection === 'chats' && <ChatInterface className="h-full" />}
