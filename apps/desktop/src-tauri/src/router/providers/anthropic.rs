@@ -83,6 +83,12 @@ impl LLMProvider for AnthropicProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        // TODO: Add tool use support for Anthropic
+        // - Convert tools to tool definitions with content blocks format
+        // - Parse tool_use blocks from response content array
+        // - Handle tool_result blocks in follow-up messages
+        // - Map stop_reason "tool_use" to finish_reason "tool_calls"
+        
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages: request

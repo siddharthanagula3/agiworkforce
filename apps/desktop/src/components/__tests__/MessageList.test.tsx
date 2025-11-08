@@ -13,13 +13,13 @@ describe('MessageList', () => {
   it('should display user messages', () => {
     const userMessages = [{ role: 'user', content: 'Question' }];
 
-    expect(userMessages[0].role).toBe('user');
+    expect(userMessages[0]?.role).toBe('user');
   });
 
   it('should display assistant messages', () => {
     const assistantMessages = [{ role: 'assistant', content: 'Answer' }];
 
-    expect(assistantMessages[0].role).toBe('assistant');
+    expect(assistantMessages[0]?.role).toBe('assistant');
   });
 
   it('should auto-scroll to bottom', () => {

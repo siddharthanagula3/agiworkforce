@@ -7,8 +7,8 @@ use crate::db::repository;
 use crate::router::{
     cache_manager::{CacheManager, CacheRecord},
     llm_router::{RouteOutcome, RouterPreferences, RoutingStrategy},
-    sse_parser::StreamChunk,
-    ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider,
+    tool_executor::ToolExecutor,
+    ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider, ToolCall,
 };
 use futures_util::StreamExt;
 use anyhow::anyhow;
@@ -308,7 +308,7 @@ async fn chat_send_message_streaming(
 
     // Process stream chunks
     let mut accumulated_content = String::new();
-    let mut total_tokens: Option<i32> = None;
+    let _total_tokens: Option<i32> = None;
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
@@ -329,9 +329,7 @@ async fn chat_send_message_streaming(
                 }
 
                 if chunk.done {
-                    if let Some(usage) = chunk.usage {
-                        total_tokens = usage.total_tokens.map(|t| t as i32);
-                    }
+                    // Token usage will be updated via database on message save
                     break;
                 }
             }
@@ -444,6 +442,10 @@ pub async fn chat_send_message(
         })
         .collect();
 
+    // TODO: Add tool definitions from AGI registry if tools are enabled
+    // let tool_executor = ToolExecutor::new(app_handle.state::<Arc<ToolRegistry>>().inner().clone());
+    // let tool_definitions = tool_executor.get_tool_definitions(None);
+    
     let llm_request = LLMRequest {
         messages: router_messages,
         model: request
@@ -453,8 +455,8 @@ pub async fn chat_send_message(
         temperature: None,
         max_tokens: None,
         stream: stream_mode, // Use real streaming based on request
-        tools: None,
-        tool_choice: None,
+        tools: None, // TODO: Enable tools: Some(tool_definitions)
+        tool_choice: None, // TODO: Add tool_choice: Some(ToolChoice::Auto)
     };
 
     let preferences = RouterPreferences {
@@ -542,6 +544,13 @@ pub async fn chat_send_message(
                         )
                         .map_err(|e| format!("Failed to store cache entry: {}", e))?;
                 }
+                // TODO: Handle tool calls in response
+                // if let Some(tool_calls) = &route_outcome.response.tool_calls {
+                //     // Execute tools
+                //     // Add tool results to messages
+                //     // Continue conversation
+                // }
+                
                 outcome = Some(route_outcome);
                 break;
             }
