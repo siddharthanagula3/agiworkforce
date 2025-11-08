@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use crate::agi::{AGICapabilities, AGIConfig, Goal, Priority, ResourceLimits};
-    use std::sync::Arc;
 
     #[test]
     fn test_agi_config_default() {

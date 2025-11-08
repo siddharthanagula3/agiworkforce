@@ -69,7 +69,7 @@ mod integration {
     #[tokio::test]
     async fn test_provider_fallback_on_failure() {
         // Test that router falls back to next provider on failure
-        let primary = "ollama";
+        let _primary = "ollama";
         let fallback = "openai";
         let used_provider = fallback;
 

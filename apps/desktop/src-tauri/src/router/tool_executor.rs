@@ -285,8 +285,6 @@ impl ToolExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_tool_definition_conversion() {
         // Test will be implemented when MCPs are connected
