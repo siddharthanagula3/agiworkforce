@@ -59,7 +59,7 @@ export default defineConfig(async () => {
     plugins: [
       react(),
       monacoEditorPlugin({
-        languageWorkers: ['typescript', 'javascript', 'json', 'css', 'html'],
+        languageWorkers: ['typescript', 'json', 'css', 'html'],
         customWorkers: [
           {
             label: 'editorWorkerService',
