@@ -2,10 +2,7 @@ import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'node:path';
 import net from 'node:net';
-// @ts-expect-error - Monaco editor plugin types
-import monacoEditorPluginModule from 'vite-plugin-monaco-editor';
-
-const monacoEditorPlugin = (monacoEditorPluginModule as any).default || monacoEditorPluginModule;
+import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 const DEFAULT_DEV_PORT = Number(process.env['VITE_DEV_PORT'] ?? 5173);
 const host = process.env['TAURI_DEV_HOST'];
