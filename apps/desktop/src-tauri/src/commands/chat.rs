@@ -7,8 +7,7 @@ use crate::db::repository;
 use crate::router::{
     cache_manager::{CacheManager, CacheRecord},
     llm_router::{RouteOutcome, RouterPreferences, RoutingStrategy},
-    tool_executor::ToolExecutor,
-    ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider, ToolCall,
+    ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider,
 };
 use futures_util::StreamExt;
 use anyhow::anyhow;
