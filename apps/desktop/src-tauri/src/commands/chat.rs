@@ -441,9 +441,19 @@ pub async fn chat_send_message(
         })
         .collect();
 
-    // TODO: Add tool definitions from AGI registry if tools are enabled
-    // let tool_executor = ToolExecutor::new(app_handle.state::<Arc<ToolRegistry>>().inner().clone());
-    // let tool_definitions = tool_executor.get_tool_definitions(None);
+    // ✅ Add tool definitions from AGI registry
+    let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
+        use crate::agi::tools::ToolRegistry;
+        use crate::router::tool_executor::ToolExecutor;
+        use std::sync::Arc;
+        
+        let tool_registry = Arc::new(ToolRegistry::new());
+        let tool_executor = ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
+        let tool_defs = tool_executor.get_tool_definitions(None);
+        (Some(tool_defs), Some(tool_executor))
+    } else {
+        (None, None)
+    };
     
     let llm_request = LLMRequest {
         messages: router_messages,
@@ -454,8 +464,12 @@ pub async fn chat_send_message(
         temperature: None,
         max_tokens: None,
         stream: stream_mode, // Use real streaming based on request
-        tools: None, // TODO: Enable tools: Some(tool_definitions)
-        tool_choice: None, // TODO: Add tool_choice: Some(ToolChoice::Auto)
+        tools: tool_definitions, // ✅ Enable tools
+        tool_choice: if tool_definitions.is_some() {
+            Some(crate::router::ToolChoice::Auto) // ✅ Let LLM decide when to use tools
+        } else {
+            None
+        },
     };
 
     let preferences = RouterPreferences {
