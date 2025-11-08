@@ -74,8 +74,7 @@ mod tests {
 
     #[test]
     fn test_shutdown_signal() {
-        let mut shutdown_flag = false;
-        shutdown_flag = true;
+        let shutdown_flag = true;
 
         assert!(shutdown_flag);
     }

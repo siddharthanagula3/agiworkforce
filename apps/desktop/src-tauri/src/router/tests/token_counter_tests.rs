@@ -26,7 +26,7 @@ mod tests {
 
     #[test]
     fn test_single_character() {
-        let text = "a";
+        let _text = "a";
         let estimated_tokens = 1u32;
         assert_eq!(estimated_tokens, 1);
     }
