@@ -1,3 +1,4 @@
+pub mod context_manager;
 pub mod core;
 pub mod tools;
 pub mod knowledge;
@@ -11,6 +12,7 @@ pub mod api_tools_impl;
 #[cfg(test)]
 mod tests;
 
+pub use context_manager::{CompactionResult, CompactionStats, ContextManager};
 pub use core::AGICore;
 pub use tools::{ToolRegistry, Tool, ToolCapability, ToolResult};
 pub use knowledge::KnowledgeBase;
