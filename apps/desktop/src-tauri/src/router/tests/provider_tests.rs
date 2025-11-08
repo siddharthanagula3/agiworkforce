@@ -12,6 +12,8 @@ mod tests {
             cost: Some(0.01),
             model: "gpt-4".to_string(),
             cached: false,
+            finish_reason: None,
+            tool_calls: None,
         };
 
         assert!(!response.content.is_empty());
@@ -30,6 +32,8 @@ mod tests {
             cost: Some(0.0),
             model: "gpt-3.5-turbo".to_string(),
             cached: true,
+            finish_reason: None,
+            tool_calls: None,
         };
 
         assert!(response.cached);
@@ -54,6 +58,8 @@ mod tests {
             cost: Some(0.001),
             model: "test-model".to_string(),
             cached: false,
+            finish_reason: None,
+            tool_calls: None,
         };
 
         let serialized = serde_json::to_string(&response).unwrap();
@@ -103,6 +109,8 @@ mod tests {
             cost: None,
             model: "unknown".to_string(),
             cached: false,
+            finish_reason: None,
+            tool_calls: None,
         };
 
         assert!(response.cost.is_none());
