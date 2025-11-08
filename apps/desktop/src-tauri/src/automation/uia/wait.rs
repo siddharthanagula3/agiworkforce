@@ -148,7 +148,7 @@ impl UIAutomationService {
                     last_error = Some(e);
                     if attempt < max_retries - 1 {
                         sleep(delay).await;
-                        delay = delay * 2; // Exponential backoff
+                        delay *= 2; // Exponential backoff
                     }
                 }
             }

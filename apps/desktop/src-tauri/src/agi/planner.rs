@@ -177,7 +177,7 @@ Return ONLY the JSON array."#,
         }
 
         // Fallback to basic plan
-        Ok(self.generate_basic_plan(goal, tools).await?)
+        self.generate_basic_plan(goal, tools).await
     }
 
     async fn generate_basic_plan(&self, goal: &Goal, tools: &[Tool]) -> Result<String> {

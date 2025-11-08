@@ -81,7 +81,7 @@ impl AutonomousAgent {
 
     /// Submit a new task for execution
     pub async fn submit_task(&self, description: String, auto_approve: Option<bool>) -> Result<String> {
-        let task_id = format!("task_{}", uuid::Uuid::new_v4().to_string()[..8].to_string());
+        let task_id = format!("task_{}", &uuid::Uuid::new_v4().to_string()[..8]);
         let auto_approve = auto_approve.unwrap_or(self.config.auto_approve);
 
         // Plan the task
@@ -191,7 +191,7 @@ impl AutonomousAgent {
                 }
             }
 
-            let step_result = self.executor.execute_step(&step, &self.vision).await;
+            let step_result = self.executor.execute_step(step, &self.vision).await;
 
             match step_result {
                 Ok(result) if result.success => {

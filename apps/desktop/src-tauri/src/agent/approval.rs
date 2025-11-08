@@ -119,8 +119,7 @@ impl ApprovalManager {
 
     fn has_dangerous_operations(&self, task: &Task) -> Result<bool> {
         // Check for potentially dangerous operations
-        let dangerous_patterns = vec![
-            "delete",
+        let dangerous_patterns = ["delete",
             "remove",
             "uninstall",
             "format",
@@ -128,8 +127,7 @@ impl ApprovalManager {
             "clear",
             "reset",
             "shutdown",
-            "restart",
-        ];
+            "restart"];
 
         let description_lower = task.description.to_lowercase();
         let has_dangerous_keyword = dangerous_patterns.iter().any(|pattern| {

@@ -94,7 +94,7 @@ impl AGIExecutor {
             "ui_screenshot" => {
                 use crate::automation::screen::capture_primary_screen;
                 let captured = capture_primary_screen()?;
-                let temp_path = std::env::temp_dir().join(format!("screenshot_{}.png", uuid::Uuid::new_v4().to_string()[..8].to_string()));
+                let temp_path = std::env::temp_dir().join(format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]));
                 captured.pixels.save(&temp_path)?;
                 Ok(json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }))
             }
@@ -646,8 +646,7 @@ impl AGIExecutor {
 
                 // Optional: Support parameterized queries
                 let params = parameters.get("params")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| arr.clone())
+                    .and_then(|v| v.as_array()).cloned()
                     .unwrap_or_default();
 
                 if let Some(ref app) = self.app_handle {
