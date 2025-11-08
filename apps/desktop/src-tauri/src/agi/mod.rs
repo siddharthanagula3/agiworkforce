@@ -6,6 +6,10 @@ pub mod planner;
 pub mod executor;
 pub mod memory;
 pub mod learning;
+pub mod api_tools_impl;
+
+#[cfg(test)]
+mod tests;
 
 pub use core::AGICore;
 pub use tools::{ToolRegistry, Tool, ToolCapability, ToolResult};

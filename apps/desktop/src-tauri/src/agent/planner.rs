@@ -102,11 +102,15 @@ Return ONLY the JSON array, no other text."#,
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: prompt.to_string(),
+                tool_calls: None,
+                tool_call_id: None,
             }],
             model: "".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(4000),
             stream: false,
+            tools: None,
+            tool_choice: None,
         };
 
         let preferences = RouterPreferences {

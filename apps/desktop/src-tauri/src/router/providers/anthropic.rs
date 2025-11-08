@@ -1,7 +1,10 @@
+use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::pin::Pin;
 
 #[derive(Debug, Clone, Serialize)]
 struct AnthropicMessage {
@@ -148,5 +151,60 @@ impl LLMProvider for AnthropicProvider {
 
     fn name(&self) -> &str {
         "Anthropic"
+    }
+
+    async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        let anthropic_request = AnthropicRequest {
+            model: request.model.clone(),
+            messages: request
+                .messages
+                .iter()
+                .map(|m| AnthropicMessage {
+                    role: m.role.clone(),
+                    content: m.content.clone(),
+                })
+                .collect(),
+            max_tokens: request.max_tokens.or(Some(4096)),
+            temperature: request.temperature,
+            stream: Some(true), // Enable streaming
+        };
+
+        tracing::debug!(
+            "Starting Anthropic streaming request for model: {}",
+            request.model
+        );
+
+        let response = self
+            .client
+            .post(format!("{}/messages", self.base_url))
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("Content-Type", "application/json")
+            .json(&anthropic_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Anthropic API error {}: {}", status, error_text).into());
+        }
+
+        tracing::debug!("Anthropic streaming response received, starting SSE parsing");
+
+        // Return the SSE stream parser
+        Ok(Box::pin(parse_sse_stream(
+            response,
+            crate::router::Provider::Anthropic,
+        )))
     }
 }
