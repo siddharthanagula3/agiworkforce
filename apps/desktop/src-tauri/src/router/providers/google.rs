@@ -1,8 +1,9 @@
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::error::Error;
 use std::pin::Pin;
 
@@ -13,8 +14,36 @@ struct GoogleContent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GooglePart {
-    text: String,
+#[serde(untagged)]
+enum GooglePart {
+    Text { text: String },
+    FunctionCall { #[serde(rename = "functionCall")] function_call: GoogleFunctionCall },
+    FunctionResponse { #[serde(rename = "functionResponse")] function_response: GoogleFunctionResponse },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GoogleFunctionCall {
+    name: String,
+    args: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GoogleFunctionResponse {
+    name: String,
+    response: Value,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct GoogleTool {
+    #[serde(rename = "function_declarations")]
+    function_declarations: Vec<GoogleFunctionDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct GoogleFunctionDeclaration {
+    name: String,
+    description: String,
+    parameters: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -22,6 +51,8 @@ struct GoogleRequest {
     contents: Vec<GoogleContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     generation_config: Option<GoogleGenerationConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<GoogleTool>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -98,13 +129,27 @@ impl LLMProvider for GoogleProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        // ✅ Convert ToolDefinition to Google format
+        let google_tools = request.tools.as_ref().map(|tools| {
+            vec![GoogleTool {
+                function_declarations: tools
+                    .iter()
+                    .map(|tool| GoogleFunctionDeclaration {
+                        name: tool.name.clone(),
+                        description: tool.description.clone(),
+                        parameters: tool.parameters.clone(),
+                    })
+                    .collect(),
+            }]
+        });
+        
         let google_request = GoogleRequest {
             contents: request
                 .messages
                 .iter()
                 .map(|m| GoogleContent {
                     role: Self::convert_role(&m.role),
-                    parts: vec![GooglePart {
+                    parts: vec![GooglePart::Text {
                         text: m.content.clone(),
                     }],
                 })
@@ -113,6 +158,7 @@ impl LLMProvider for GoogleProvider {
                 temperature: request.temperature,
                 max_output_tokens: request.max_tokens,
             }),
+            tools: google_tools,
         };
 
         let url = format!(
@@ -139,12 +185,31 @@ impl LLMProvider for GoogleProvider {
 
         let google_response: GoogleResponse = response.json().await?;
 
-        let content = google_response
-            .candidates
-            .first()
-            .and_then(|c| c.content.parts.first())
-            .map(|p| p.text.clone())
-            .unwrap_or_default();
+        // ✅ Parse parts (text and functionCall)
+        let mut text_content = String::new();
+        let mut tool_calls = Vec::new();
+
+        if let Some(candidate) = google_response.candidates.first() {
+            for part in &candidate.content.parts {
+                match part {
+                    GooglePart::Text { text } => {
+                        text_content.push_str(text);
+                    }
+                    GooglePart::FunctionCall { function_call } => {
+                        // Generate unique ID for function call
+                        let call_id = format!("call_{}", uuid::Uuid::new_v4().to_string()[..8].to_string());
+                        tool_calls.push(ToolCall {
+                            id: call_id,
+                            name: function_call.name.clone(),
+                            arguments: serde_json::to_string(&function_call.args).unwrap_or_default(),
+                        });
+                    }
+                    GooglePart::FunctionResponse { .. } => {
+                        // Skip function responses (used in follow-up messages)
+                    }
+                }
+            }
+        }
 
         let (tokens, prompt_tokens, completion_tokens, cost) =
             if let Some(usage) = google_response.usage_metadata {
@@ -164,13 +229,22 @@ impl LLMProvider for GoogleProvider {
                 (None, None, None, None)
             };
 
+        // ✅ Determine finish_reason based on presence of function calls
+        let finish_reason = if !tool_calls.is_empty() {
+            Some("tool_calls".to_string())
+        } else {
+            Some("stop".to_string())
+        };
+
         Ok(LLMResponse {
-            content,
+            content: text_content,
             tokens,
             prompt_tokens,
             completion_tokens,
             cost,
             model: request.model.clone(),
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            finish_reason,
             ..LLMResponse::default()
         })
     }
@@ -190,13 +264,27 @@ impl LLMProvider for GoogleProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
+        // ✅ Add tools support to streaming
+        let google_tools = request.tools.as_ref().map(|tools| {
+            vec![GoogleTool {
+                function_declarations: tools
+                    .iter()
+                    .map(|tool| GoogleFunctionDeclaration {
+                        name: tool.name.clone(),
+                        description: tool.description.clone(),
+                        parameters: tool.parameters.clone(),
+                    })
+                    .collect(),
+            }]
+        });
+        
         let google_request = GoogleRequest {
             contents: request
                 .messages
                 .iter()
                 .map(|m| GoogleContent {
                     role: Self::convert_role(&m.role),
-                    parts: vec![GooglePart {
+                    parts: vec![GooglePart::Text {
                         text: m.content.clone(),
                     }],
                 })
@@ -205,6 +293,7 @@ impl LLMProvider for GoogleProvider {
                 temperature: request.temperature,
                 max_output_tokens: request.max_tokens,
             }),
+            tools: google_tools,
         };
 
         tracing::debug!(
