@@ -1,8 +1,9 @@
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::error::Error;
 use std::pin::Pin;
 
@@ -10,6 +11,13 @@ use std::pin::Pin;
 struct AnthropicMessage {
     role: String,
     content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AnthropicTool {
+    name: String,
+    description: String,
+    input_schema: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -22,6 +30,8 @@ struct AnthropicRequest {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<AnthropicTool>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -30,13 +40,21 @@ struct AnthropicResponse {
     content: Vec<AnthropicContent>,
     usage: AnthropicUsage,
     model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct AnthropicContent {
-    #[serde(rename = "type")]
-    _content_type: String,
-    text: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+enum AnthropicContent {
+    Text {
+        text: String,
+    },
+    ToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -83,11 +101,17 @@ impl LLMProvider for AnthropicProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
-        // TODO: Add tool use support for Anthropic
-        // - Convert tools to tool definitions with content blocks format
-        // - Parse tool_use blocks from response content array
-        // - Handle tool_result blocks in follow-up messages
-        // - Map stop_reason "tool_use" to finish_reason "tool_calls"
+        // ✅ Convert ToolDefinition to Anthropic format
+        let anthropic_tools = request.tools.as_ref().map(|tools| {
+            tools
+                .iter()
+                .map(|tool| AnthropicTool {
+                    name: tool.name.clone(),
+                    description: tool.description.clone(),
+                    input_schema: tool.parameters.clone(),
+                })
+                .collect()
+        });
         
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
@@ -102,6 +126,7 @@ impl LLMProvider for AnthropicProvider {
             max_tokens: request.max_tokens.or(Some(4096)),
             temperature: request.temperature,
             stream: if request.stream { Some(false) } else { None },
+            tools: anthropic_tools,
         };
 
         let response = self
@@ -125,11 +150,24 @@ impl LLMProvider for AnthropicProvider {
 
         let anthropic_response: AnthropicResponse = response.json().await?;
 
-        let content = anthropic_response
-            .content
-            .first()
-            .map(|c| c.text.clone())
-            .unwrap_or_default();
+        // ✅ Parse content blocks (text and tool_use)
+        let mut text_content = String::new();
+        let mut tool_calls = Vec::new();
+
+        for content_block in &anthropic_response.content {
+            match content_block {
+                AnthropicContent::Text { text } => {
+                    text_content.push_str(text);
+                }
+                AnthropicContent::ToolUse { id, name, input } => {
+                    tool_calls.push(ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: serde_json::to_string(input).unwrap_or_default(),
+                    });
+                }
+            }
+        }
 
         let cost = Self::calculate_cost(
             &anthropic_response.model,
@@ -140,13 +178,25 @@ impl LLMProvider for AnthropicProvider {
         let total_tokens =
             anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens;
 
+        // ✅ Map stop_reason to finish_reason
+        let finish_reason = anthropic_response.stop_reason.as_ref().and_then(|reason| {
+            match reason.as_str() {
+                "tool_use" => Some("tool_calls".to_string()),
+                "end_turn" => Some("stop".to_string()),
+                "max_tokens" => Some("length".to_string()),
+                _ => Some(reason.clone()),
+            }
+        });
+
         Ok(LLMResponse {
-            content,
+            content: text_content,
             tokens: Some(total_tokens),
             prompt_tokens: Some(anthropic_response.usage.input_tokens),
             completion_tokens: Some(anthropic_response.usage.output_tokens),
             cost: Some(cost),
             model: anthropic_response.model,
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            finish_reason,
             ..LLMResponse::default()
         })
     }
@@ -166,6 +216,18 @@ impl LLMProvider for AnthropicProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
+        // ✅ Add tools support to streaming
+        let anthropic_tools = request.tools.as_ref().map(|tools| {
+            tools
+                .iter()
+                .map(|tool| AnthropicTool {
+                    name: tool.name.clone(),
+                    description: tool.description.clone(),
+                    input_schema: tool.parameters.clone(),
+                })
+                .collect()
+        });
+        
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages: request
@@ -179,6 +241,7 @@ impl LLMProvider for AnthropicProvider {
             max_tokens: request.max_tokens.or(Some(4096)),
             temperature: request.temperature,
             stream: Some(true), // Enable streaming
+            tools: anthropic_tools,
         };
 
         tracing::debug!(
