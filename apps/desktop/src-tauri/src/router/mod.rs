@@ -65,7 +65,9 @@ pub struct ToolDefinition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ToolChoice {
+    #[default]
     Auto,
     Required,
     #[serde(rename = "none")]
@@ -73,11 +75,6 @@ pub enum ToolChoice {
     Specific(String),
 }
 
-impl Default for ToolChoice {
-    fn default() -> Self {
-        ToolChoice::Auto
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {

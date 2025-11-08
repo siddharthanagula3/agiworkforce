@@ -23,7 +23,7 @@ impl VisionAutomation {
 
     /// Capture a screenshot (full screen or region)
     pub async fn capture_screenshot(&self, region: Option<ScreenRegion>) -> Result<String> {
-        let filename = format!("screenshot_{}.png", uuid::Uuid::new_v4().to_string()[..8].to_string());
+        let filename = format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
         let path = self.screenshot_dir.join(&filename);
         
         if let Some(region) = region {

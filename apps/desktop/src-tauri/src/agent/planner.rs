@@ -131,14 +131,14 @@ Return ONLY the JSON array, no other text."#,
         }
 
         // Fallback to basic plan
-        Ok(self.generate_basic_plan(prompt).await?)
+        self.generate_basic_plan(prompt).await
     }
 
     async fn plan_with_local_llm(&self, description: &str) -> Result<String> {
         tracing::info!("[Planner] Using local LLM (Ollama) for planning");
         // TODO: Integrate with Ollama
         // For now, use basic plan
-        Ok(self.generate_basic_plan(description).await?)
+        self.generate_basic_plan(description).await
     }
 
     async fn generate_basic_plan(&self, description: &str) -> Result<String> {

@@ -287,7 +287,7 @@ impl AGICore {
 
             // Learn from result
             if self.config.enable_learning {
-                self.learning.record_experience(&step, &tool_result).await?;
+                self.learning.record_experience(step, &tool_result).await?;
             }
 
             // Emit progress update

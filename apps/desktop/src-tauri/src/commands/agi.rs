@@ -92,7 +92,7 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
     };
 
     let goal = Goal {
-        id: format!("goal_{}", uuid::Uuid::new_v4().to_string()[..8].to_string()),
+        id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
         priority,
         deadline: request.deadline,

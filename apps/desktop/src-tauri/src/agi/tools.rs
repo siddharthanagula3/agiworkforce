@@ -991,7 +991,7 @@ impl ToolRegistry {
         for capability in &tool.capabilities {
             capabilities_index
                 .entry(capability.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(tool.id.clone());
         }
         drop(capabilities_index);
