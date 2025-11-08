@@ -8,11 +8,22 @@ use std::sync::Arc;
 /// Bridges between LLM function calling and AGI tool execution
 pub struct ToolExecutor {
     registry: Arc<ToolRegistry>,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl ToolExecutor {
     pub fn new(registry: Arc<ToolRegistry>) -> Self {
-        Self { registry }
+        Self { 
+            registry,
+            app_handle: None,
+        }
+    }
+    
+    pub fn with_app_handle(registry: Arc<ToolRegistry>, app_handle: tauri::AppHandle) -> Self {
+        Self { 
+            registry,
+            app_handle: Some(app_handle),
+        }
     }
 
     /// Convert AGI tools to LLM tool definitions
@@ -120,13 +131,21 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing path parameter"))?;
 
-                // TODO: Call actual filesystem MCP
-                Ok(ToolResult {
-                    success: false,
-                    data: json!(null),
-                    error: Some("File operations not yet implemented".to_string()),
-                    metadata: HashMap::from([("path".to_string(), json!(path))]),
-                })
+                // ✅ Actual filesystem implementation
+                match std::fs::read_to_string(path) {
+                    Ok(content) => Ok(ToolResult {
+                        success: true,
+                        data: json!({ "content": content, "path": path }),
+                        error: None,
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Failed to read file: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                }
             }
             "file_write" => {
                 let path = args
@@ -138,25 +157,77 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing content parameter"))?;
 
-                // TODO: Call actual filesystem MCP
-                Ok(ToolResult {
-                    success: false,
-                    data: json!(null),
-                    error: Some("File operations not yet implemented".to_string()),
-                    metadata: HashMap::from([
-                        ("path".to_string(), json!(path)),
-                        ("content_length".to_string(), json!(content.len())),
-                    ]),
-                })
+                // ✅ Actual filesystem implementation
+                match std::fs::write(path, content) {
+                    Ok(_) => Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "path": path }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("path".to_string(), json!(path)),
+                            ("content_length".to_string(), json!(content.len())),
+                        ]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Failed to write file: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                }
             }
-            "ui_click" | "ui_type" | "ui_screenshot" => {
-                // TODO: Call automation MCP
-                Ok(ToolResult {
-                    success: false,
-                    data: json!(null),
-                    error: Some("UI automation not yet implemented".to_string()),
-                    metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                })
+            "ui_screenshot" => {
+                // ✅ Actual screen capture implementation
+                use crate::automation::screen::capture_primary_screen;
+                match capture_primary_screen() {
+                    Ok(captured) => {
+                        let temp_path = std::env::temp_dir().join(format!(
+                            "screenshot_{}.png",
+                            uuid::Uuid::new_v4().to_string()[..8].to_string()
+                        ));
+                        match captured.pixels.save(&temp_path) {
+                            Ok(_) => Ok(ToolResult {
+                                success: true,
+                                data: json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }),
+                                error: None,
+                                metadata: HashMap::new(),
+                            }),
+                            Err(e) => Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Failed to save screenshot: {}", e)),
+                                metadata: HashMap::new(),
+                            }),
+                        }
+                    }
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Failed to capture screenshot: {}", e)),
+                        metadata: HashMap::new(),
+                    }),
+                }
+            }
+            "ui_click" | "ui_type" => {
+                // ✅ UI automation requires app_handle for AutomationService
+                if let Some(ref _app) = self.app_handle {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!(
+                            "Tool '{}' requires AutomationService via app_handle (to be connected)",
+                            tool.id
+                        )),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                    })
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for UI automation".to_string()),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                    })
+                }
             }
             "browser_navigate" => {
                 // TODO: Call browser MCP
@@ -195,13 +266,39 @@ impl ToolExecutor {
                 })
             }
             "image_ocr" => {
-                // TODO: Call image processing MCP
-                Ok(ToolResult {
-                    success: false,
-                    data: json!(null),
-                    error: Some("Image processing not yet implemented".to_string()),
-                    metadata: HashMap::new(),
-                })
+                // ✅ Actual OCR implementation
+                let image_path = args
+                    .get("image_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing image_path parameter"))?;
+
+                #[cfg(feature = "ocr")]
+                {
+                    use crate::automation::screen::perform_ocr;
+                    match perform_ocr(image_path) {
+                        Ok(text) => Ok(ToolResult {
+                            success: true,
+                            data: json!({ "text": text, "image_path": image_path }),
+                            error: None,
+                            metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("OCR failed: {}", e)),
+                            metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
+                        }),
+                    }
+                }
+                #[cfg(not(feature = "ocr"))]
+                {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("OCR feature not enabled in build".to_string()),
+                        metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
+                    })
+                }
             }
             "code_analyze" => {
                 // TODO: Call code analysis MCP
