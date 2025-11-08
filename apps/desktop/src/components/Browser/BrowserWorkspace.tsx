@@ -160,7 +160,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cn('flex flex-col h-full bg-background', className)}>
+    <div className={cn('flex flex-col h-full bg-background min-h-0 min-w-0', className)}>
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/10">
         <div className="flex items-center gap-2">

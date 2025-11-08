@@ -481,7 +481,7 @@ export function Sidebar({ className, activeSection, onSectionChange }: SidebarPr
   return (
     <aside
       className={cn(
-        'flex h-full flex-col border-r border-border/60 bg-muted/20 text-sm text-muted-foreground backdrop-blur-sm',
+        'flex h-full flex-col border-r border-border/60 bg-muted/20 text-sm text-muted-foreground backdrop-blur-sm shrink-0 overflow-hidden',
         widthClass,
         className,
       )}

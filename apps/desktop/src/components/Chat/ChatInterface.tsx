@@ -89,8 +89,8 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
   };
 
   return (
-    <div className={cn('flex h-full flex-col', className)}>
-      <div className="flex-1 overflow-hidden">
+    <div className={cn('flex h-full flex-col min-h-0 min-w-0', className)}>
+      <div className="flex-1 overflow-hidden min-h-0">
         <MessageList
           messages={messagesUI}
           loading={loading}
