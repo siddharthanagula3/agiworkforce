@@ -1,19 +1,13 @@
-import { useMemo } from 'react';
 import { X, Minus, Square, Search, Minimize2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { DockPosition, WindowActions } from '../../hooks/useWindowManager';
+import { WindowActions } from '../../hooks/useWindowManager';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { cn } from '../../lib/utils';
 
 interface TitleBarProps {
   state: {
-    pinned: boolean;
-    alwaysOnTop: boolean;
-    dock: DockPosition | null;
     focused: boolean;
     maximized: boolean;
-    fullscreen: boolean;
   };
   actions: WindowActions;
   onOpenCommandPalette: () => void;
@@ -21,82 +15,44 @@ interface TitleBarProps {
 }
 
 const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }: TitleBarProps) => {
-  const docked = useMemo(() => state.dock !== null, [state.dock]);
-
   return (
-    <motion.header
+    <header
       className={cn(
-        'flex items-center justify-between gap-2 px-3 py-2',
-        'bg-gradient-to-r from-muted/60 to-muted/20',
-        'border-b border-border/80',
-        'backdrop-blur-md',
+        'flex items-center justify-between gap-2 px-4 py-2 h-12',
+        'bg-background/95 backdrop-blur-sm',
+        'border-b border-border',
         'select-none',
-        'cursor-move',
-        'relative',
       )}
       data-tauri-drag-region
-      initial={false}
-      animate={{
-        borderRadius: docked ? 0 : 16,
-        boxShadow: state.focused
-          ? '0px 12px 28px rgba(79, 70, 229, 0.25)'
-          : '0px 6px 18px rgba(15, 23, 42, 0.12)',
-        opacity: state.focused ? 1 : 0.95,
-      }}
-      transition={{ type: 'spring', stiffness: 260, damping: 26, mass: 0.9 }}
-      style={{ borderBottomLeftRadius: docked ? 0 : 16, borderBottomRightRadius: docked ? 0 : 16 }}
     >
       {/* Logo and Title */}
-      <motion.div
-        className="flex items-center gap-2 pointer-events-none"
-        data-tauri-drag-region
-        layout
-        transition={{ type: 'spring', stiffness: 300, damping: 30, mass: 0.8 }}
-      >
+      <div className="flex items-center gap-3 pointer-events-none" data-tauri-drag-region>
         <div
           className={cn(
             'flex items-center justify-center',
-            'w-7 h-7 rounded-lg',
-            'bg-primary/20 border border-primary/40',
-            'text-xs font-bold tracking-wider text-primary',
+            'w-8 h-8 rounded-lg',
+            'bg-primary text-primary-foreground',
+            'text-xs font-bold tracking-wider',
           )}
         >
           AGI
         </div>
         <div className="flex flex-col" data-tauri-drag-region>
-          <motion.h1
-            className="text-sm font-semibold leading-none"
-            layout
-            transition={{ type: 'spring', stiffness: 320, damping: 26, mass: 0.7 }}
-          >
-            AGI Workforce
-          </motion.h1>
-          <motion.p
-            key={`${state.focused}-${state.dock ?? 'floating'}`}
-            className="text-xs text-muted-foreground leading-none mt-0.5"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            {state.focused ? 'Ready' : 'Inactive'} ·{' '}
-            {state.dock ? `Docked ${state.dock}` : 'Floating'}
-          </motion.p>
+          <h1 className="text-sm font-semibold leading-none">AGI Workforce</h1>
+          <p className="text-xs text-muted-foreground leading-none mt-0.5">
+            {state.focused ? 'Ready' : 'Inactive'}
+          </p>
         </div>
-      </motion.div>
+      </div>
 
       {/* Window Controls */}
-      <motion.div
-        className="flex items-center gap-1"
-        data-tauri-drag-region="false"
-        layout
-        transition={{ type: 'spring', stiffness: 280, damping: 24, mass: 0.8 }}
-      >
+      <div className="flex items-center gap-1" data-tauri-drag-region="false">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 hover:bg-accent"
               onClick={onOpenCommandPalette}
               aria-label="Open command palette"
             >
@@ -118,7 +74,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 hover:bg-accent"
               onClick={() => void actions.minimize()}
               aria-label="Minimize window"
             >
@@ -135,7 +91,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 hover:bg-accent"
               onClick={() => void actions.toggleMaximize()}
               aria-label={state.maximized ? 'Restore window' : 'Maximize window'}
               aria-pressed={state.maximized}
@@ -153,19 +109,19 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 hover:bg-destructive/20 hover:text-destructive"
+              className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground"
               onClick={() => void actions.hide()}
-              aria-label="Hide window"
+              aria-label="Close window"
             >
               <X className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Hide to tray</p>
+            <p>Close</p>
           </TooltipContent>
         </Tooltip>
-      </motion.div>
-    </motion.header>
+      </div>
+    </header>
   );
 };
 

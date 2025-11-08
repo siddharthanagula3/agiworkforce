@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import TitleBar from './components/Layout/TitleBar';
-import DockingSystem from './components/Layout/DockingSystem';
 import { Sidebar, type NavSection } from './components/Layout/Sidebar';
 import { CostDashboard } from './components/Analytics/CostDashboard';
 import { ChatInterface } from './components/Chat/ChatInterface';
@@ -384,20 +383,13 @@ const DesktopShell = () => {
   ]);
 
   const shellClass = useMemo(() => {
-    return cn(
-      'flex flex-col h-screen w-screen bg-background',
-      'border border-border rounded-2xl overflow-hidden',
-      'transition-all duration-200',
-      state.focused && 'border-primary/40 shadow-2xl',
-      !state.focused && 'border-border/40 shadow-lg',
-    );
-  }, [state.focused]);
+    return cn('flex flex-col h-screen w-screen bg-background', 'overflow-hidden');
+  }, []);
 
   return (
     <div className={shellClass}>
-      <DockingSystem docked={state.dock} preview={state.dockPreview} />
       <TitleBar
-        state={state}
+        state={{ focused: state.focused, maximized: state.maximized }}
         actions={actions}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         commandShortcutHint={commandShortcutHint}
