@@ -5,7 +5,7 @@ describe('ToolExecutionPanel', () => {
     const tools = [{ id: 'tool1', name: 'File Read', status: 'executing' }];
 
     expect(tools.length).toBe(1);
-    expect(tools[0].status).toBe('executing');
+    expect(tools[0]?.status).toBe('executing');
   });
 
   it('should show tool progress', () => {

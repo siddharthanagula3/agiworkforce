@@ -6,6 +6,7 @@
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { vi } from 'vitest';
 
 interface AllTheProvidersProps {
   children: React.ReactNode;
@@ -15,8 +16,10 @@ function AllTheProviders({ children }: AllTheProvidersProps) {
   return <BrowserRouter>{children}</BrowserRouter>;
 }
 
-const customRender = (ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) =>
-  render(ui, { wrapper: AllTheProviders, ...options });
+const customRender = (
+  ui: ReactElement,
+  options?: Omit<RenderOptions, 'wrapper'>,
+): ReturnType<typeof render> => render(ui, { wrapper: AllTheProviders, ...options });
 
 // Re-export everything except render from @testing-library/react
 export { screen, waitFor, within, fireEvent, cleanup } from '@testing-library/react';
