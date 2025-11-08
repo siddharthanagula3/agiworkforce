@@ -47,7 +47,7 @@ redis = { version = "0.32.7", features = ["aio", "tokio-comp", "connection-manag
 bson = "2.9"
 
 # HTTP Client
-reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls", "multipart"], default-features = false }
 reqwest-middleware = "0.3"
 reqwest-retry = "0.5"
 urlencoding = "2.1"

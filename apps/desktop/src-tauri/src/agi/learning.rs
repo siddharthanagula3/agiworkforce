@@ -14,21 +14,21 @@ pub struct LearningSystem {
 
 #[derive(Debug, Clone)]
 struct Experience {
-    goal_description: String,
+    _goal_description: String,
     tool_id: String,
     success: bool,
     execution_time_ms: u64,
     resources_used: ResourceUsage,
-    timestamp: u64,
+    _timestamp: u64,
 }
 
 #[derive(Debug, Clone)]
-struct Strategy {
-    tool_id: String,
-    success_rate: f64,
-    avg_execution_time_ms: u64,
-    avg_resources: ResourceUsage,
-    usage_count: u64,
+pub struct Strategy {
+    pub tool_id: String,
+    pub success_rate: f64,
+    pub avg_execution_time_ms: u64,
+    pub avg_resources: ResourceUsage,
+    pub usage_count: u64,
 }
 
 impl LearningSystem {
@@ -52,12 +52,12 @@ impl LearningSystem {
         }
 
         let experience = Experience {
-            goal_description: step.description.clone(),
+            _goal_description: step.description.clone(),
             tool_id: step.tool_id.clone(),
             success: result.success,
             execution_time_ms: result.execution_time_ms,
             resources_used: result.resources_used.clone(),
-            timestamp: std::time::SystemTime::now()
+            _timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
@@ -129,11 +129,13 @@ impl LearningSystem {
         }
 
         // Clean old experiences (keep last 10000)
-        let mut experiences = self.experiences.lock().unwrap();
-        if experiences.len() > 10000 {
-            let len = experiences.len();
-            experiences.drain(0..len - 10000);
-        }
+        {
+            let mut experiences = self.experiences.lock().unwrap();
+            if experiences.len() > 10000 {
+                let len = experiences.len();
+                experiences.drain(0..len - 10000);
+            }
+        } // Drop the lock before await
 
         // Self-improvement: optimize strategies
         if self.self_improvement_enabled {

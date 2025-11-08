@@ -9,7 +9,7 @@ pub struct ResourceManager {
     limits: ResourceLimits,
     current_usage: Arc<Mutex<ResourceState>>,
     reservations: Arc<Mutex<HashMap<String, ResourceUsage>>>,
-    last_update: Arc<Mutex<Instant>>,
+    _last_update: Arc<Mutex<Instant>>,
     system: Arc<Mutex<System>>,
 }
 
@@ -28,7 +28,7 @@ impl ResourceManager {
                 available_tools: vec![],
             })),
             reservations: Arc::new(Mutex::new(HashMap::new())),
-            last_update: Arc::new(Mutex::new(Instant::now())),
+            _last_update: Arc::new(Mutex::new(Instant::now())),
             system: Arc::new(Mutex::new(system)),
         })
     }
@@ -120,12 +120,14 @@ impl ResourceManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn estimate_cpu_usage(&self) -> f64 {
         // This is now handled in update_usage_internal
         let reservations = self.reservations.lock().unwrap();
         reservations.values().map(|r| r.cpu_percent).sum()
     }
 
+    #[allow(dead_code)]
     fn estimate_memory_usage(&self) -> u64 {
         // This is now handled in update_usage_internal
         let reservations = self.reservations.lock().unwrap();

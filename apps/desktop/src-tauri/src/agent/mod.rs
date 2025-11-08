@@ -4,6 +4,9 @@ pub mod executor;
 pub mod vision;
 pub mod approval;
 
+#[cfg(test)]
+mod tests;
+
 pub use autonomous::AutonomousAgent;
 pub use planner::TaskPlanner;
 pub use executor::TaskExecutor;

@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use anyhow::{anyhow, Result};
+use futures_util::Stream;
 
 use crate::router::cost_calculator::CostCalculator;
+use crate::router::sse_parser::StreamChunk;
 use crate::router::token_counter::TokenCounter;
 use crate::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, Provider};
 
@@ -397,11 +400,15 @@ impl LLMRouter {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: prompt.to_string(),
+                tool_calls: None,
+                tool_call_id: None,
             }],
             model: "".to_string(), // Will be set by router
             temperature: Some(0.7),
             max_tokens: Some(4000),
             stream: false,
+            tools: None,
+            tool_choice: None,
         };
 
         let candidates = self.candidates(&request, &prefs);
@@ -412,5 +419,42 @@ impl LLMRouter {
         // Try first candidate
         let outcome = self.invoke_candidate(&candidates[0], &request).await?;
         Ok(outcome.response.content)
+    }
+
+    /// Send a message with streaming support
+    /// Returns a stream of chunks from the LLM
+    pub async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+        preferences: &RouterPreferences,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
+    > {
+        let candidates = self.candidates(request, preferences);
+        if candidates.is_empty() {
+            return Err(anyhow!("No LLM providers configured"));
+        }
+
+        // Use first candidate for streaming
+        let candidate = &candidates[0];
+        let provider = self
+            .providers
+            .get(&candidate.provider)
+            .ok_or_else(|| anyhow!("Provider {:?} not configured", candidate.provider))?;
+
+        let mut routed_request = request.clone();
+        routed_request.model = candidate.model.clone();
+        routed_request.stream = true;
+
+        tracing::info!(
+            "Starting streaming request to {} with model {}",
+            provider.name(),
+            candidate.model
+        );
+
+        provider
+            .send_message_streaming(&routed_request)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))
     }
 }

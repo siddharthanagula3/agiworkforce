@@ -84,7 +84,7 @@ impl ToolRegistry {
     pub fn register_all_tools(
         &self,
         _automation: Arc<AutomationService>,
-        _router: Arc<LLMRouter>,
+        _router: Arc<tokio::sync::Mutex<LLMRouter>>,
     ) -> Result<()> {
         // File Operations
         self.register_tool(Tool {
@@ -236,6 +236,78 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        self.register_tool(Tool {
+            id: "browser_click".to_string(),
+            name: "Click Browser Element".to_string(),
+            description: "Click an element in the browser using a CSS selector".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "CSS selector for the element to click".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "browser_extract".to_string(),
+            name: "Extract Browser Content".to_string(),
+            description: "Extract text, attributes, or element data from the browser page using CSS selectors".to_string(),
+            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "selector".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "CSS selector for the element (defaults to 'body')".to_string(),
+                    default: Some(serde_json::json!("body")),
+                },
+                ToolParameter {
+                    name: "tab_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Tab ID (uses first tab if not provided)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "extract_type".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Type of extraction: 'text', 'attribute', or 'all' (defaults to 'text')".to_string(),
+                    default: Some(serde_json::json!("text")),
+                },
+                ToolParameter {
+                    name: "attribute".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Attribute name (required when extract_type is 'attribute')".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // Code Execution
         self.register_tool(Tool {
             id: "code_execute".to_string(),
@@ -296,18 +368,124 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Database Execute (INSERT/UPDATE/DELETE)
+        self.register_tool(Tool {
+            id: "db_execute".to_string(),
+            name: "Database Execute".to_string(),
+            description: "Execute database DML operations (INSERT, UPDATE, DELETE)".to_string(),
+            capabilities: vec![ToolCapability::DatabaseAccess, ToolCapability::DataAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "connection_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Database connection ID".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "sql".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "SQL statement (INSERT, UPDATE, DELETE)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "params".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "Optional parameterized query values".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 1.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // Database Transaction Begin
+        self.register_tool(Tool {
+            id: "db_transaction_begin".to_string(),
+            name: "Begin Database Transaction".to_string(),
+            description: "Start a database transaction".to_string(),
+            capabilities: vec![ToolCapability::DatabaseAccess],
+            parameters: vec![
+                ToolParameter {
+                    name: "connection_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Database connection ID".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.5,
+            },
+            dependencies: vec![],
+        })?;
+
+        // Database Transaction Commit
+        self.register_tool(Tool {
+            id: "db_transaction_commit".to_string(),
+            name: "Commit Database Transaction".to_string(),
+            description: "Commit a database transaction".to_string(),
+            capabilities: vec![ToolCapability::DatabaseAccess],
+            parameters: vec![
+                ToolParameter {
+                    name: "connection_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Database connection ID".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.5,
+            },
+            dependencies: vec!["db_transaction_begin".to_string()],
+        })?;
+
+        // Database Transaction Rollback
+        self.register_tool(Tool {
+            id: "db_transaction_rollback".to_string(),
+            name: "Rollback Database Transaction".to_string(),
+            description: "Rollback a database transaction".to_string(),
+            capabilities: vec![ToolCapability::DatabaseAccess],
+            parameters: vec![
+                ToolParameter {
+                    name: "connection_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Database connection ID".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.5,
+            },
+            dependencies: vec!["db_transaction_begin".to_string()],
+        })?;
+
         // API Calls
         self.register_tool(Tool {
             id: "api_call".to_string(),
             name: "API Call".to_string(),
-            description: "Make HTTP API call".to_string(),
+            description: "Make HTTP API call with full authentication support (bearer, basic, API key, OAuth2)".to_string(),
             capabilities: vec![ToolCapability::APICall, ToolCapability::NetworkOperation],
             parameters: vec![
                 ToolParameter {
                     name: "method".to_string(),
                     parameter_type: ParameterType::String,
                     required: true,
-                    description: "HTTP method (GET, POST, etc.)".to_string(),
+                    description: "HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)".to_string(),
                     default: Some(serde_json::Value::String("GET".to_string())),
                 },
                 ToolParameter {
@@ -321,21 +499,128 @@ impl ToolRegistry {
                     name: "headers".to_string(),
                     parameter_type: ParameterType::Object,
                     required: false,
-                    description: "HTTP headers".to_string(),
+                    description: "HTTP headers (key-value pairs)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "query_params".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: false,
+                    description: "URL query parameters (key-value pairs)".to_string(),
                     default: None,
                 },
                 ToolParameter {
                     name: "body".to_string(),
                     parameter_type: ParameterType::Object,
                     required: false,
-                    description: "Request body".to_string(),
+                    description: "Request body (JSON object or string)".to_string(),
                     default: None,
+                },
+                ToolParameter {
+                    name: "auth".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: false,
+                    description: "Authentication: {type: 'bearer'|'basic'|'apikey'|'oauth2', token/username/password/key/header}".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Request timeout in milliseconds".to_string(),
+                    default: Some(serde_json::Value::Number(serde_json::Number::from(30000))),
                 },
             ],
             estimated_resources: ResourceUsage {
                 cpu_percent: 3.0,
                 memory_mb: 30,
                 network_mb: 2.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "api_upload".to_string(),
+            name: "Upload File via API".to_string(),
+            description: "Upload a file using multipart/form-data with authentication support".to_string(),
+            capabilities: vec![ToolCapability::APICall, ToolCapability::NetworkOperation, ToolCapability::FileRead],
+            parameters: vec![
+                ToolParameter {
+                    name: "url".to_string(),
+                    parameter_type: ParameterType::URL,
+                    required: true,
+                    description: "Upload endpoint URL".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "file_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path to file to upload".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "field_name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Form field name for the file".to_string(),
+                    default: Some(serde_json::Value::String("file".to_string())),
+                },
+                ToolParameter {
+                    name: "fields".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: false,
+                    description: "Additional form fields (key-value pairs)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "auth".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: false,
+                    description: "Authentication: {type: 'bearer'|'basic'|'apikey', token/username/password/key/header}".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 100,
+                network_mb: 50.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "api_download".to_string(),
+            name: "Download File via API".to_string(),
+            description: "Download a file from a URL with authentication support".to_string(),
+            capabilities: vec![ToolCapability::APICall, ToolCapability::NetworkOperation, ToolCapability::FileWrite],
+            parameters: vec![
+                ToolParameter {
+                    name: "url".to_string(),
+                    parameter_type: ParameterType::URL,
+                    required: true,
+                    description: "File download URL".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "save_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Local path to save the downloaded file".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "auth".to_string(),
+                    parameter_type: ParameterType::Object,
+                    required: false,
+                    description: "Authentication: {type: 'bearer'|'basic'|'apikey', token/username/password/key/header}".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 100,
+                network_mb: 50.0,
             },
             dependencies: vec![],
         })?;

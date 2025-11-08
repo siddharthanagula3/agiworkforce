@@ -1,7 +1,10 @@
+use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::pin::Pin;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct GoogleContent {
@@ -178,5 +181,66 @@ impl LLMProvider for GoogleProvider {
 
     fn name(&self) -> &str {
         "Google"
+    }
+
+    async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        let google_request = GoogleRequest {
+            contents: request
+                .messages
+                .iter()
+                .map(|m| GoogleContent {
+                    role: Self::convert_role(&m.role),
+                    parts: vec![GooglePart {
+                        text: m.content.clone(),
+                    }],
+                })
+                .collect(),
+            generation_config: Some(GoogleGenerationConfig {
+                temperature: request.temperature,
+                max_output_tokens: request.max_tokens,
+            }),
+        };
+
+        tracing::debug!(
+            "Starting Google streaming request for model: {}",
+            request.model
+        );
+
+        // Google uses streamGenerateContent endpoint for streaming
+        let url = format!(
+            "{}/models/{}:streamGenerateContent?key={}&alt=sse",
+            self.base_url, request.model, self.api_key
+        );
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&google_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Google API error {}: {}", status, error_text).into());
+        }
+
+        tracing::debug!("Google streaming response received, starting SSE parsing");
+
+        // Return the SSE stream parser
+        Ok(Box::pin(parse_sse_stream(
+            response,
+            crate::router::Provider::Google,
+        )))
     }
 }

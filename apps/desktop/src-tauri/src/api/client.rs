@@ -3,7 +3,10 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::time::Duration;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 
 use crate::error::{Error, Result};
 
@@ -272,6 +275,190 @@ impl ApiClient {
             ..Default::default()
         };
         self.execute(request).await
+    }
+
+    /// Upload file using multipart/form-data
+    pub async fn upload_file(
+        &self,
+        url: &str,
+        file_path: &str,
+        field_name: &str,
+        additional_fields: Option<HashMap<String, String>>,
+        auth: AuthType,
+    ) -> Result<ApiResponse> {
+        let start = std::time::Instant::now();
+
+        tracing::info!("Uploading file {} to {}", file_path, url);
+
+        // Read file
+        let file_content = tokio::fs::read(file_path)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to read file: {}", e)))?;
+
+        let file_name = Path::new(file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("file")
+            .to_string();
+
+        // Build multipart form
+        let mut form = reqwest::multipart::Form::new();
+
+        // Add file part
+        let file_part = reqwest::multipart::Part::bytes(file_content)
+            .file_name(file_name);
+        form = form.part(field_name.to_string(), file_part);
+
+        // Add additional fields
+        if let Some(fields) = additional_fields {
+            for (key, value) in fields {
+                form = form.text(key, value);
+            }
+        }
+
+        // Create a raw reqwest client (not middleware) for multipart support
+        let raw_client = Client::builder()
+            .timeout(Duration::from_secs(300))
+            .build()
+            .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
+
+        // Build request with raw client
+        let mut req_builder = raw_client.post(url).multipart(form);
+
+        // Add authentication manually for raw client
+        req_builder = match &auth {
+            AuthType::None => req_builder,
+            AuthType::Bearer { token } => req_builder.bearer_auth(token),
+            AuthType::ApiKey { key, header } => req_builder.header(header, key),
+            AuthType::Basic { username, password } => req_builder.basic_auth(username, Some(password)),
+            AuthType::OAuth2 { token } => req_builder.bearer_auth(token),
+        };
+
+        // Execute request
+        let response = req_builder
+            .send()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to upload file: {}", e)))?;
+
+        let duration_ms = start.elapsed().as_millis();
+
+        // Parse response
+        let status = response.status();
+        let headers = self.extract_headers(&response);
+        let success = status.is_success();
+
+        let body = response
+            .text()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to read response body: {}", e)))?;
+
+        tracing::info!(
+            "Upload completed: status={}, duration={}ms, success={}",
+            status.as_u16(),
+            duration_ms,
+            success
+        );
+
+        Ok(ApiResponse {
+            status: status.as_u16(),
+            headers,
+            body,
+            duration_ms,
+            success,
+        })
+    }
+
+    /// Download file from URL
+    pub async fn download_file(
+        &self,
+        url: &str,
+        save_path: &str,
+        auth: AuthType,
+    ) -> Result<ApiResponse> {
+        let start = std::time::Instant::now();
+
+        tracing::info!("Downloading file from {} to {}", url, save_path);
+
+        // Create a raw reqwest client for downloads
+        let raw_client = Client::builder()
+            .timeout(Duration::from_secs(300))
+            .build()
+            .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
+
+        // Build request
+        let mut req_builder = raw_client.get(url);
+
+        // Add authentication manually for raw client
+        req_builder = match &auth {
+            AuthType::None => req_builder,
+            AuthType::Bearer { token } => req_builder.bearer_auth(token),
+            AuthType::ApiKey { key, header } => req_builder.header(header, key),
+            AuthType::Basic { username, password } => req_builder.basic_auth(username, Some(password)),
+            AuthType::OAuth2 { token } => req_builder.bearer_auth(token),
+        };
+
+        // Execute request
+        let response = req_builder
+            .send()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to download file: {}", e)))?;
+
+        let status = response.status();
+        let headers = self.extract_headers(&response);
+        let success = status.is_success();
+
+        if !success {
+            let body = response
+                .text()
+                .await
+                .map_err(|e| Error::Other(format!("Failed to read error response: {}", e)))?;
+
+            return Ok(ApiResponse {
+                status: status.as_u16(),
+                headers,
+                body,
+                duration_ms: start.elapsed().as_millis(),
+                success: false,
+            });
+        }
+
+        // Get file size from headers if available
+        let file_size = response.content_length().unwrap_or(0);
+
+        // Read response body as bytes
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to read response bytes: {}", e)))?;
+
+        // Write to file
+        let mut file = File::create(save_path)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to create file: {}", e)))?;
+
+        file.write_all(&bytes)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to write file: {}", e)))?;
+
+        file.flush()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to flush file: {}", e)))?;
+
+        let duration_ms = start.elapsed().as_millis();
+
+        tracing::info!(
+            "Download completed: size={} bytes, duration={}ms",
+            file_size,
+            duration_ms
+        );
+
+        Ok(ApiResponse {
+            status: status.as_u16(),
+            headers,
+            body: format!("File downloaded successfully to {}", save_path),
+            duration_ms,
+            success: true,
+        })
     }
 
     /// Add authentication to request (using reqwest_middleware's RequestBuilder)
