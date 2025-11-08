@@ -11,7 +11,7 @@ mod tests {
 
     #[test]
     fn test_risk_classification_high() {
-        let action = "delete_file";
+        let _action = "delete_file";
         let risk_level = "high";
 
         assert_eq!(risk_level, "high");
