@@ -183,7 +183,7 @@ impl ToolExecutor {
                     Ok(captured) => {
                         let temp_path = std::env::temp_dir().join(format!(
                             "screenshot_{}.png",
-                            uuid::Uuid::new_v4().to_string()[..8].to_string()
+                            &uuid::Uuid::new_v4().to_string()[..8]
                         ));
                         match captured.pixels.save(&temp_path) {
                             Ok(_) => Ok(ToolResult {

@@ -105,7 +105,7 @@ impl KnowledgeBase {
     /// Add an experience (tool execution result) to knowledge base
     pub async fn add_experience(&self, goal: &Goal, result: &ToolExecutionResult) -> Result<()> {
         let entry = KnowledgeEntry {
-            id: format!("exp_{}", uuid::Uuid::new_v4().to_string()[..8].to_string()),
+            id: format!("exp_{}", &uuid::Uuid::new_v4().to_string()[..8]),
             category: "experience".to_string(),
             content: format!(
                 "Tool {} executed with success={} for goal: {}",

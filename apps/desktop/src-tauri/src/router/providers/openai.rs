@@ -235,7 +235,7 @@ impl LLMProvider for OpenAIProvider {
             tool_choice: request
                 .tool_choice
                 .as_ref()
-                .and_then(|c| Self::convert_tool_choice(c)),
+                .and_then(Self::convert_tool_choice),
         };
 
         let response = self

@@ -197,7 +197,7 @@ impl LLMProvider for GoogleProvider {
                     }
                     GooglePart::FunctionCall { function_call } => {
                         // Generate unique ID for function call
-                        let call_id = format!("call_{}", uuid::Uuid::new_v4().to_string()[..8].to_string());
+                        let call_id = format!("call_{}", &uuid::Uuid::new_v4().to_string()[..8]);
                         tool_calls.push(ToolCall {
                             id: call_id,
                             name: function_call.name.clone(),

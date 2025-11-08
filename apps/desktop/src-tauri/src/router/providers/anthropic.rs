@@ -179,12 +179,12 @@ impl LLMProvider for AnthropicProvider {
             anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens;
 
         // ✅ Map stop_reason to finish_reason
-        let finish_reason = anthropic_response.stop_reason.as_ref().and_then(|reason| {
+        let finish_reason = anthropic_response.stop_reason.as_ref().map(|reason| {
             match reason.as_str() {
-                "tool_use" => Some("tool_calls".to_string()),
-                "end_turn" => Some("stop".to_string()),
-                "max_tokens" => Some("length".to_string()),
-                _ => Some(reason.clone()),
+                "tool_use" => "tool_calls".to_string(),
+                "end_turn" => "stop".to_string(),
+                "max_tokens" => "length".to_string(),
+                _ => reason.clone(),
             }
         });
 
