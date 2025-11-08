@@ -531,7 +531,7 @@ impl ToolExecutor {
                     use tauri::Manager;
                     
                     let database_state = app.state::<tokio::sync::Mutex<DatabaseState>>();
-                    let db_guard = database_state.lock().await;
+                    let _db_guard = database_state.lock().await;
                     
                     // Execute query (simplified - in production would handle connection pooling)
                     match connection_id {
@@ -703,7 +703,7 @@ impl ToolExecutor {
                     .ok_or_else(|| anyhow!("Missing prompt parameter"))?;
                 let model = args.get("model")
                     .and_then(|v| v.as_str());
-                let max_tokens = args.get("max_tokens")
+                let _max_tokens = args.get("max_tokens")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);
                 let depth = args.get("depth")

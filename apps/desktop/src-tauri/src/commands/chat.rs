@@ -54,6 +54,8 @@ pub struct ChatSendMessageRequest {
     pub strategy: Option<String>,
     #[serde(default)]
     pub stream: Option<bool>,
+    #[serde(default)]
+    pub enable_tools: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -447,14 +449,24 @@ pub async fn chat_send_message(
         use crate::router::tool_executor::ToolExecutor;
         use std::sync::Arc;
         
-        let tool_registry = Arc::new(ToolRegistry::new());
-        let tool_executor = ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
-        let tool_defs = tool_executor.get_tool_definitions(None);
-        (Some(tool_defs), Some(tool_executor))
+        match ToolRegistry::new() {
+            Ok(registry) => {
+                let tool_registry = Arc::new(registry);
+                let tool_executor = ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
+                let tool_defs = tool_executor.get_tool_definitions(None);
+                (Some(tool_defs), Some(tool_executor))
+            }
+            Err(e) => {
+                tracing::warn!("[Chat] Failed to initialize tool registry: {}", e);
+                (None, None)
+            }
+        }
     } else {
         (None, None)
     };
     
+    let has_tools = tool_definitions.is_some();
+    let tool_defs_for_follow_up = tool_definitions.clone(); // Clone for potential follow-up request
     let llm_request = LLMRequest {
         messages: router_messages,
         model: request
@@ -465,7 +477,7 @@ pub async fn chat_send_message(
         max_tokens: None,
         stream: stream_mode, // Use real streaming based on request
         tools: tool_definitions, // ✅ Enable tools
-        tool_choice: if tool_definitions.is_some() {
+        tool_choice: if has_tools {
             Some(crate::router::ToolChoice::Auto) // ✅ Let LLM decide when to use tools
         } else {
             None
@@ -557,12 +569,108 @@ pub async fn chat_send_message(
                         )
                         .map_err(|e| format!("Failed to store cache entry: {}", e))?;
                 }
-                // TODO: Handle tool calls in response
-                // if let Some(tool_calls) = &route_outcome.response.tool_calls {
-                //     // Execute tools
-                //     // Add tool results to messages
-                //     // Continue conversation
-                // }
+                
+                // ✅ Handle tool calls in response
+                if let Some(tool_calls) = &route_outcome.response.tool_calls {
+                    if let Some(ref executor) = _tool_executor {
+                        // Save assistant message with tool calls
+                        let _assistant_msg_with_tools = {
+                            let conn = db.0.lock().map_err(|e| e.to_string())?;
+                            let mut assistant = Message::new(
+                                conversation_id,
+                                MessageRole::Assistant,
+                                route_outcome.response.content.clone(),
+                            )
+                            .with_source(
+                                Some(route_outcome.provider.as_string().to_string()),
+                                Some(route_outcome.model.clone()),
+                            );
+                            
+                            if let Some(tokens) = route_outcome.response.tokens {
+                                assistant.tokens = Some(tokens as i32);
+                            }
+                            if let Some(cost) = route_outcome.response.cost {
+                                assistant.cost = Some(cost);
+                            }
+                            
+                            let msg_id = repository::create_message(&conn, &assistant)
+                                .map_err(|e| format!("Failed to create assistant message: {}", e))?;
+                            repository::get_message(&conn, msg_id)
+                                .map_err(|e| format!("Failed to retrieve assistant message: {}", e))?
+                        };
+                        
+                        // Execute all tool calls
+                        let mut tool_results = Vec::new();
+                        for tool_call in tool_calls {
+                            tracing::info!("[Chat] Executing tool: {} ({})", tool_call.name, tool_call.id);
+                            
+                            match executor.execute_tool_call(tool_call).await {
+                                Ok(result) => {
+                                    let formatted = executor.format_tool_result(tool_call, &result);
+                                    tool_results.push((tool_call.id.clone(), formatted));
+                                    tracing::info!("[Chat] Tool {} succeeded", tool_call.name);
+                                }
+                                Err(e) => {
+                                    let error_msg = format!("Tool execution failed: {}", e);
+                                    tool_results.push((tool_call.id.clone(), error_msg));
+                                    tracing::error!("[Chat] Tool {} failed: {}", tool_call.name, e);
+                                }
+                            }
+                        }
+                        
+                        // Add tool results to conversation
+                        for (tool_call_id, result_content) in tool_results {
+                            let conn = db.0.lock().map_err(|e| e.to_string())?;
+                            let tool_result_msg = Message::new(
+                                conversation_id,
+                                MessageRole::System, // Tool results as system messages
+                                format!("Tool result [{}]: {}", tool_call_id, result_content),
+                            );
+                            repository::create_message(&conn, &tool_result_msg)
+                                .map_err(|e| format!("Failed to save tool result: {}", e))?;
+                        }
+                        
+                        // Continue conversation with tool results (non-streaming for now)
+                        tracing::info!("[Chat] Continuing conversation with {} tool results", tool_calls.len());
+                        
+                        let updated_history = {
+                            let conn = db.0.lock().map_err(|e| e.to_string())?;
+                            repository::list_messages(&conn, conversation_id)
+                                .map_err(|e| format!("Failed to list messages: {}", e))?
+                        };
+                        
+                        let updated_messages: Vec<RouterChatMessage> = updated_history
+                            .iter()
+                            .map(|message| RouterChatMessage {
+                                role: message.role.as_str().to_string(),
+                                content: message.content.clone(),
+                                tool_calls: None,
+                                tool_call_id: None,
+                            })
+                            .collect();
+                        
+                        let follow_up_request = LLMRequest {
+                            messages: updated_messages,
+                            model: llm_request.model.clone(),
+                            temperature: None,
+                            max_tokens: None,
+                            stream: false,
+                            tools: tool_defs_for_follow_up.clone(),
+                            tool_choice: Some(crate::router::ToolChoice::Auto),
+                        };
+                        
+                        // Make follow-up request
+                        let follow_up_outcome = {
+                            let router = llm_state.router.lock().await;
+                            router.invoke_candidate(&candidate, &follow_up_request).await
+                                .map_err(|e| format!("Follow-up request failed: {}", e))?
+                        };
+                        
+                        // Update outcome with follow-up response
+                        outcome = Some(follow_up_outcome);
+                        break;
+                    }
+                }
                 
                 outcome = Some(route_outcome);
                 break;
