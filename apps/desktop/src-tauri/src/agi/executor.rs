@@ -1,5 +1,6 @@
 use super::*;
 use crate::agi::planner::PlanStep;
+use crate::agi::api_tools_impl;
 use crate::automation::AutomationService;
 use anyhow::{anyhow, Result};
 use serde_json::json;
@@ -9,7 +10,7 @@ use std::sync::Arc;
 /// AGI Executor - executes plan steps using tools
 pub struct AGIExecutor {
     tool_registry: Arc<ToolRegistry>,
-    resource_manager: Arc<ResourceManager>,
+    _resource_manager: Arc<ResourceManager>,
     automation: Arc<AutomationService>,
     app_handle: Option<tauri::AppHandle>,
 }
@@ -23,7 +24,7 @@ impl AGIExecutor {
     ) -> Result<Self> {
         Ok(Self {
             tool_registry,
-            resource_manager,
+            _resource_manager: resource_manager,
             automation,
             app_handle,
         })
@@ -173,15 +174,15 @@ impl AGIExecutor {
                 let url = parameters["url"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing url parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::BrowserStateWrapper;
                     use tauri::Manager;
-                    
+
                     let browser_state = app.state::<BrowserStateWrapper>();
                     let browser_guard = browser_state.0.lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
-                    
+
                     // Get or create a tab
                     let tabs = tab_manager.list_tabs().await.map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                     let tab_id = if tabs.is_empty() {
@@ -191,16 +192,157 @@ impl AGIExecutor {
                         // Use first tab
                         tabs[0].id.clone()
                     };
-                    
+
                     // Navigate the tab
                     use crate::browser::NavigationOptions;
                     tab_manager.navigate(&tab_id, url, NavigationOptions::default())
                         .await
                         .map_err(|e| anyhow!("Failed to navigate: {}", e))?;
-                    
+
                     Ok(json!({ "success": true, "url": url, "tab_id": tab_id }))
                 } else {
                     Err(anyhow!("App handle not available for browser navigation"))
+                }
+            }
+            "browser_click" => {
+                let selector = parameters.get("selector")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing selector parameter"))?;
+                let tab_id = parameters.get("tab_id")
+                    .and_then(|v| v.as_str());
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::BrowserStateWrapper;
+                    use crate::browser::{ClickOptions, DomOperations};
+                    use tauri::Manager;
+
+                    let browser_state = app.state::<BrowserStateWrapper>();
+                    let browser_guard = browser_state.0.lock().await;
+                    let tab_manager = browser_guard.tab_manager.lock().await;
+
+                    // Determine which tab to use
+                    let target_tab_id = if let Some(tid) = tab_id {
+                        tid.to_string()
+                    } else {
+                        // Use first available tab
+                        let tabs = tab_manager.list_tabs().await
+                            .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
+                        if tabs.is_empty() {
+                            return Err(anyhow!("No browser tabs available. Please navigate to a URL first using browser_navigate."));
+                        }
+                        tabs[0].id.clone()
+                    };
+
+                    // Get CDP client for the tab
+                    let cdp_client = browser_guard.get_cdp_client(&target_tab_id)
+                        .await
+                        .map_err(|e| anyhow!("Failed to get CDP client: {}", e))?;
+
+                    // Click the element
+                    let options = ClickOptions::default();
+                    DomOperations::click_with_cdp(cdp_client, selector, options)
+                        .await
+                        .map_err(|e| anyhow!("Failed to click element '{}': {}", selector, e))?;
+
+                    Ok(json!({
+                        "success": true,
+                        "action": "clicked",
+                        "selector": selector,
+                        "tab_id": target_tab_id
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for browser click"))
+                }
+            }
+            "browser_extract" => {
+                let selector = parameters.get("selector")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("body"); // Default to body if no selector provided
+                let tab_id = parameters.get("tab_id")
+                    .and_then(|v| v.as_str());
+                let extract_type = parameters.get("extract_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("text"); // Default to text extraction
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::BrowserStateWrapper;
+                    use crate::browser::DomOperations;
+                    use tauri::Manager;
+
+                    let browser_state = app.state::<BrowserStateWrapper>();
+                    let browser_guard = browser_state.0.lock().await;
+                    let tab_manager = browser_guard.tab_manager.lock().await;
+
+                    // Determine which tab to use
+                    let target_tab_id = if let Some(tid) = tab_id {
+                        tid.to_string()
+                    } else {
+                        // Use first available tab
+                        let tabs = tab_manager.list_tabs().await
+                            .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
+                        if tabs.is_empty() {
+                            return Err(anyhow!("No browser tabs available. Please navigate to a URL first using browser_navigate."));
+                        }
+                        tabs[0].id.clone()
+                    };
+
+                    // Extract data based on type
+                    let result = match extract_type {
+                        "text" => {
+                            // Extract text content
+                            let text = DomOperations::get_text(&target_tab_id, selector)
+                                .await
+                                .map_err(|e| anyhow!("Failed to extract text from '{}': {}", selector, e))?;
+                            json!({ "type": "text", "content": text })
+                        }
+                        "attribute" => {
+                            // Extract attribute value
+                            let attribute_name = parameters.get("attribute")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| anyhow!("Missing attribute parameter for attribute extraction"))?;
+
+                            let attr_value = DomOperations::get_attribute(&target_tab_id, selector, attribute_name)
+                                .await
+                                .map_err(|e| anyhow!("Failed to get attribute '{}' from '{}': {}", attribute_name, selector, e))?;
+
+                            json!({
+                                "type": "attribute",
+                                "attribute": attribute_name,
+                                "content": attr_value
+                            })
+                        }
+                        "all" => {
+                            // Extract all matching elements
+                            let elements = DomOperations::query_all(&target_tab_id, selector)
+                                .await
+                                .map_err(|e| anyhow!("Failed to query elements '{}': {}", selector, e))?;
+
+                            let elements_json = serde_json::to_value(&elements)
+                                .map_err(|e| anyhow!("Failed to serialize elements: {}", e))?;
+
+                            json!({
+                                "type": "all_elements",
+                                "count": elements.len(),
+                                "elements": elements_json
+                            })
+                        }
+                        _ => {
+                            // Default to text extraction
+                            let text = DomOperations::get_text(&target_tab_id, selector)
+                                .await
+                                .map_err(|e| anyhow!("Failed to extract text from '{}': {}", selector, e))?;
+                            json!({ "type": "text", "content": text })
+                        }
+                    };
+
+                    Ok(json!({
+                        "success": true,
+                        "selector": selector,
+                        "tab_id": target_tab_id,
+                        "data": result
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for browser extraction"))
                 }
             }
             "code_execute" => {
@@ -287,69 +429,24 @@ impl AGIExecutor {
                 }
             }
             "api_call" => {
-                let method = parameters.get("method")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing method parameter"))?;
-                let url = parameters.get("url")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing url parameter"))?;
-                
                 if let Some(ref app) = self.app_handle {
-                    use crate::api::{ApiRequest, HttpMethod, AuthType};
-                    use tauri::Manager;
-                    use std::collections::HashMap;
-                    
-                    // Parse method
-                    let http_method = match method.to_uppercase().as_str() {
-                        "GET" => HttpMethod::Get,
-                        "POST" => HttpMethod::Post,
-                        "PUT" => HttpMethod::Put,
-                        "DELETE" => HttpMethod::Delete,
-                        "PATCH" => HttpMethod::Patch,
-                        _ => HttpMethod::Get,
-                    };
-                    
-                    // Get body if provided
-                    let body = parameters.get("body")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    
-                    // Get headers if provided
-                    let mut headers = HashMap::new();
-                    if let Some(headers_obj) = parameters.get("headers").and_then(|v| v.as_object()) {
-                        for (k, v) in headers_obj {
-                            if let Some(v_str) = v.as_str() {
-                                headers.insert(k.clone(), v_str.to_string());
-                            }
-                        }
-                    }
-                    
-                    // Create API request
-                    let request = ApiRequest {
-                        method: http_method,
-                        url: url.to_string(),
-                        headers,
-                        query_params: HashMap::new(),
-                        body,
-                        auth: AuthType::None,
-                        timeout_ms: Some(30000),
-                    };
-                    
-                    // Execute the request using ApiState's public method
-                    let api_state = app.state::<crate::commands::ApiState>();
-                    let response = api_state.execute_request(request)
-                        .await
-                        .map_err(|e| anyhow!("API call failed: {}", e))?;
-                    
-                    Ok(json!({ 
-                        "success": response.success,
-                        "status": response.status,
-                        "body": response.body,
-                        "duration_ms": response.duration_ms,
-                        "headers": response.headers
-                    }))
+                    api_tools_impl::execute_api_call(app, parameters).await
                 } else {
                     Err(anyhow!("App handle not available for API call"))
+                }
+            }
+            "api_upload" => {
+                if let Some(ref app) = self.app_handle {
+                    api_tools_impl::execute_api_upload(app, parameters).await
+                } else {
+                    Err(anyhow!("App handle not available for API upload"))
+                }
+            }
+            "api_download" => {
+                if let Some(ref app) = self.app_handle {
+                    api_tools_impl::execute_api_download(app, parameters).await
+                } else {
+                    Err(anyhow!("App handle not available for API download"))
                 }
             }
             "image_ocr" => {
@@ -395,7 +492,7 @@ impl AGIExecutor {
                 let subject = parameters.get("subject")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'subject' parameter"))?;
-                let body = parameters.get("body")
+                let _body = parameters.get("body")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'body' parameter"))?;
                 
@@ -424,7 +521,7 @@ impl AGIExecutor {
                 let title = parameters.get("title")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'title' parameter"))?;
-                let start_time = parameters.get("start_time")
+                let _start_time = parameters.get("start_time")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'start_time' parameter"))?;
                 
@@ -537,6 +634,136 @@ impl AGIExecutor {
                     }))
                 } else {
                     Err(anyhow!("App handle not available for document operations"))
+                }
+            }
+            "db_execute" => {
+                let connection_id = parameters.get("connection_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
+                let sql = parameters.get("sql")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing sql parameter"))?;
+
+                // Optional: Support parameterized queries
+                let params = parameters.get("params")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.clone())
+                    .unwrap_or_default();
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::DatabaseState;
+                    use tauri::Manager;
+                    use tokio::sync::Mutex;
+
+                    let db_state = app.state::<Mutex<DatabaseState>>();
+                    let db_guard = db_state.lock().await;
+
+                    // Execute with or without parameters
+                    let result = if params.is_empty() {
+                        db_guard.sql_client.execute_query(connection_id, sql).await
+                    } else {
+                        db_guard.sql_client.execute_prepared(connection_id, sql, &params).await
+                    }
+                    .map_err(|e| anyhow!("Database execute failed: {}", e))?;
+
+                    Ok(json!({
+                        "success": true,
+                        "connection_id": connection_id,
+                        "rows_affected": result.rows_affected,
+                        "execution_time_ms": result.execution_time_ms
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for database execute"))
+                }
+            }
+            "db_transaction_begin" => {
+                let connection_id = parameters.get("connection_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::DatabaseState;
+                    use tauri::Manager;
+                    use tokio::sync::Mutex;
+
+                    let db_state = app.state::<Mutex<DatabaseState>>();
+                    let db_guard = db_state.lock().await;
+
+                    // Execute BEGIN TRANSACTION
+                    let result = db_guard.sql_client.execute_query(connection_id, "BEGIN TRANSACTION")
+                        .await
+                        .map_err(|e| anyhow!("Failed to begin transaction: {}", e))?;
+
+                    tracing::info!("[Executor] Transaction started on connection: {}", connection_id);
+
+                    Ok(json!({
+                        "success": true,
+                        "connection_id": connection_id,
+                        "transaction_started": true,
+                        "execution_time_ms": result.execution_time_ms
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for transaction begin"))
+                }
+            }
+            "db_transaction_commit" => {
+                let connection_id = parameters.get("connection_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::DatabaseState;
+                    use tauri::Manager;
+                    use tokio::sync::Mutex;
+
+                    let db_state = app.state::<Mutex<DatabaseState>>();
+                    let db_guard = db_state.lock().await;
+
+                    // Execute COMMIT
+                    let result = db_guard.sql_client.execute_query(connection_id, "COMMIT")
+                        .await
+                        .map_err(|e| anyhow!("Failed to commit transaction: {}", e))?;
+
+                    tracing::info!("[Executor] Transaction committed on connection: {}", connection_id);
+
+                    Ok(json!({
+                        "success": true,
+                        "connection_id": connection_id,
+                        "transaction_committed": true,
+                        "execution_time_ms": result.execution_time_ms
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for transaction commit"))
+                }
+            }
+            "db_transaction_rollback" => {
+                let connection_id = parameters.get("connection_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::DatabaseState;
+                    use tauri::Manager;
+                    use tokio::sync::Mutex;
+
+                    let db_state = app.state::<Mutex<DatabaseState>>();
+                    let db_guard = db_state.lock().await;
+
+                    // Execute ROLLBACK
+                    let result = db_guard.sql_client.execute_query(connection_id, "ROLLBACK")
+                        .await
+                        .map_err(|e| anyhow!("Failed to rollback transaction: {}", e))?;
+
+                    tracing::info!("[Executor] Transaction rolled back on connection: {}", connection_id);
+
+                    Ok(json!({
+                        "success": true,
+                        "connection_id": connection_id,
+                        "transaction_rolled_back": true,
+                        "execution_time_ms": result.execution_time_ms
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for transaction rollback"))
                 }
             }
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),

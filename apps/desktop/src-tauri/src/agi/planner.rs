@@ -34,14 +34,12 @@ pub struct PlanStep {
 
 impl AGIPlanner {
     pub fn new(
-        _router: Arc<LLMRouter>,
+        router: Arc<Mutex<LLMRouter>>,
         tool_registry: Arc<ToolRegistry>,
         knowledge_base: Arc<KnowledgeBase>,
     ) -> Result<Self> {
-        // Wrap router in Mutex for async access
-        // TODO: Properly wrap the router from the source
         Ok(Self {
-            router: Arc::new(Mutex::new(LLMRouter::new())), // Placeholder - needs proper initialization
+            router,
             tool_registry,
             knowledge_base,
         })
@@ -156,11 +154,15 @@ Return ONLY the JSON array."#,
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: prompt.clone(),
+                tool_calls: None,
+                tool_call_id: None,
             }],
             model: "".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(4000),
             stream: false,
+            tools: None,
+            tool_choice: None,
         };
 
         let router = self.router.lock().await;

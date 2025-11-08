@@ -7,8 +7,10 @@ use crate::db::repository;
 use crate::router::{
     cache_manager::{CacheManager, CacheRecord},
     llm_router::{RouteOutcome, RouterPreferences, RoutingStrategy},
+    sse_parser::StreamChunk,
     ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider,
 };
+use futures_util::StreamExt;
 use anyhow::anyhow;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
@@ -214,6 +216,178 @@ pub fn chat_get_conversation_stats(
     })
 }
 
+/// Handle streaming chat messages with real SSE streaming
+async fn chat_send_message_streaming(
+    db: State<'_, AppDatabase>,
+    llm_state: State<'_, LLMState>,
+    app_handle: tauri::AppHandle,
+    request: ChatSendMessageRequest,
+) -> Result<ChatSendMessageResponse, String> {
+    let trimmed_content = request.content.trim().to_string();
+    if trimmed_content.is_empty() {
+        return Err("Message cannot be empty".to_string());
+    }
+
+    // Create conversation and user message
+    let (conversation_id, _user_message_id, assistant_message_id) = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+        let conversation_id = match request.conversation_id {
+            Some(id) => {
+                repository::get_conversation(&conn, id)
+                    .map_err(|e| format!("Conversation not found: {}", e))?;
+                id
+            }
+            None => repository::create_conversation(&conn, "New Conversation".to_string())
+                .map_err(|e| format!("Failed to create conversation: {}", e))?,
+        };
+
+        let user_msg = Message::new(conversation_id, MessageRole::User, trimmed_content.clone());
+        let user_msg_id = repository::create_message(&conn, &user_msg)
+            .map_err(|e| format!("Failed to create user message: {}", e))?;
+
+        // Create placeholder assistant message
+        let assistant_msg = Message::new(conversation_id, MessageRole::Assistant, String::new());
+        let assistant_msg_id = repository::create_message(&conn, &assistant_msg)
+            .map_err(|e| format!("Failed to create assistant message: {}", e))?;
+
+        (conversation_id, user_msg_id, assistant_msg_id)
+    };
+
+    // Get conversation history
+    let history = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        repository::list_messages(&conn, conversation_id)
+            .map_err(|e| format!("Failed to list messages: {}", e))?
+    };
+
+    let router_messages: Vec<RouterChatMessage> = history
+        .iter()
+        .filter(|m| m.id != assistant_message_id) // Exclude placeholder
+        .map(|message| RouterChatMessage {
+            role: message.role.as_str().to_string(),
+            content: message.content.clone(),
+            tool_calls: None,
+            tool_call_id: None,
+        })
+        .collect();
+
+    let llm_request = LLMRequest {
+        messages: router_messages,
+        model: request.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string()),
+        temperature: None,
+        max_tokens: None,
+        stream: true,
+        tools: None,
+        tool_choice: None,
+    };
+
+    let preferences = RouterPreferences {
+        provider: request.provider.as_deref().and_then(Provider::from_string),
+        model: request.model.clone(),
+        strategy: parse_routing_strategy(request.strategy.as_deref()),
+    };
+
+    // Emit stream start
+    let start_payload = StreamStartPayload {
+        conversation_id,
+        message_id: assistant_message_id,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    if let Err(error) = app_handle.emit("chat:stream-start", start_payload) {
+        warn!("Failed to emit stream start event: {}", error);
+    }
+
+    // Get streaming response
+    let mut stream = {
+        let router = llm_state.router.lock().await;
+        router.send_message_streaming(&llm_request, &preferences)
+            .await
+            .map_err(|e| format!("Streaming failed: {}", e))?
+    };
+
+    // Process stream chunks
+    let mut accumulated_content = String::new();
+    let mut total_tokens: Option<i32> = None;
+
+    while let Some(chunk_result) = stream.next().await {
+        match chunk_result {
+            Ok(chunk) => {
+                if !chunk.content.is_empty() {
+                    accumulated_content.push_str(&chunk.content);
+                    
+                    let payload = StreamChunkPayload {
+                        conversation_id,
+                        message_id: assistant_message_id,
+                        delta: chunk.content.clone(),
+                        content: accumulated_content.clone(),
+                    };
+                    
+                    if let Err(error) = app_handle.emit("chat:stream-chunk", payload) {
+                        warn!("Failed to emit stream chunk: {}", error);
+                    }
+                }
+
+                if chunk.done {
+                    if let Some(usage) = chunk.usage {
+                        total_tokens = usage.total_tokens.map(|t| t as i32);
+                    }
+                    break;
+                }
+            }
+            Err(e) => {
+                warn!("Stream chunk error: {}", e);
+                break;
+            }
+        }
+    }
+
+    // Emit stream end
+    if let Err(error) = app_handle.emit(
+        "chat:stream-end",
+        StreamEndPayload {
+            conversation_id,
+            message_id: assistant_message_id,
+        },
+    ) {
+        warn!("Failed to emit stream end event: {}", error);
+    }
+
+    // Update assistant message with final content
+    let assistant_msg = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        repository::update_message_content(&conn, assistant_message_id, accumulated_content.clone())
+            .map_err(|e| format!("Failed to update assistant message: {}", e))?
+    };
+
+    // Fetch final conversation state
+    let (conversation, user_msg, messages) = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conversation = repository::get_conversation(&conn, conversation_id)
+            .map_err(|e| format!("Failed to get conversation: {}", e))?;
+        let user_msg = repository::get_message(&conn, _user_message_id)
+            .map_err(|e| format!("Failed to get user message: {}", e))?;
+        let messages = repository::list_messages(&conn, conversation_id)
+            .map_err(|e| format!("Failed to list messages: {}", e))?;
+        (conversation, user_msg, messages)
+    };
+
+    let total_tokens_sum: i32 = messages.iter().filter_map(|m| m.tokens).sum();
+    let total_cost: f64 = messages.iter().filter_map(|m| m.cost).sum();
+
+    Ok(ChatSendMessageResponse {
+        conversation,
+        user_message: user_msg,
+        assistant_message: assistant_msg,
+        stats: ConversationStats {
+            message_count: messages.len(),
+            total_tokens: total_tokens_sum,
+            total_cost,
+        },
+        last_message: Some(accumulated_content),
+    })
+}
+
 #[tauri::command]
 pub async fn chat_send_message(
     db: State<'_, AppDatabase>,
@@ -222,6 +396,11 @@ pub async fn chat_send_message(
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
     let stream_mode = request.stream.unwrap_or(false);
+    
+    // Use separate streaming path if requested
+    if stream_mode {
+        return chat_send_message_streaming(db, llm_state, app_handle, request).await;
+    }
     let trimmed_content = request.content.trim().to_string();
     if trimmed_content.is_empty() {
         return Err("Message cannot be empty".to_string());
@@ -260,6 +439,8 @@ pub async fn chat_send_message(
         .map(|message| RouterChatMessage {
             role: message.role.as_str().to_string(),
             content: message.content.clone(),
+            tool_calls: None,
+            tool_call_id: None,
         })
         .collect();
 
@@ -271,7 +452,9 @@ pub async fn chat_send_message(
             .unwrap_or_else(|| "gpt-4o-mini".to_string()),
         temperature: None,
         max_tokens: None,
-        stream: false,
+        stream: stream_mode, // Use real streaming based on request
+        tools: None,
+        tool_choice: None,
     };
 
     let preferences = RouterPreferences {
@@ -317,6 +500,8 @@ pub async fn chat_send_message(
                     cost: entry.cost,
                     model: entry.model.clone(),
                     cached: true,
+                    tool_calls: None,
+                    finish_reason: None,
                 };
                 outcome = Some(RouteOutcome {
                     provider,

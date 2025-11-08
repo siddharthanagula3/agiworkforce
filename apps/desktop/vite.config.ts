@@ -2,6 +2,7 @@ import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'node:path';
 import net from 'node:net';
+import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 const DEFAULT_DEV_PORT = Number(process.env['VITE_DEV_PORT'] ?? 5173);
 const host = process.env['TAURI_DEV_HOST'];
@@ -55,7 +56,18 @@ export default defineConfig(async () => {
         ],
       },
     },
-    plugins: [react()],
+    plugins: [
+      react(),
+      monacoEditorPlugin({
+        languageWorkers: ['typescript', 'javascript', 'json', 'css', 'html'],
+        customWorkers: [
+          {
+            label: 'editorWorkerService',
+            entry: 'monaco-editor/esm/vs/editor/editor.worker',
+          },
+        ],
+      }),
+    ],
     clearScreen: false,
     server: {
       port: resolvedPort,
@@ -95,13 +107,13 @@ export default defineConfig(async () => {
               '@radix-ui/react-tabs',
               '@radix-ui/react-toast',
             ],
-            'editor-vendor': ['@monaco-editor/react', 'monaco-editor'],
+            // Monaco Editor handled by vite-plugin-monaco-editor
             'terminal-vendor': ['@xterm/xterm'],
             zustand: ['zustand'],
           },
         },
       },
-      chunkSizeWarningLimit: 3000,
+      chunkSizeWarningLimit: 500, // Reduced from 3000 to catch bundle bloat early
     },
     resolve: {
       alias: {

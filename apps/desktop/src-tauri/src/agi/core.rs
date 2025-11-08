@@ -19,7 +19,7 @@ pub struct AGICore {
     executor: Arc<AGIExecutor>,
     memory: Arc<AGIMemory>,
     learning: Arc<LearningSystem>,
-    router: Arc<LLMRouter>,
+    router: Arc<tokio::sync::Mutex<LLMRouter>>,
     automation: Arc<AutomationService>,
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
@@ -30,13 +30,14 @@ pub struct AGICore {
 impl AGICore {
     pub fn new(
         config: AGIConfig,
-        router: Arc<LLMRouter>,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
         automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         let tool_registry = Arc::new(ToolRegistry::new()?);
         let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
         let resource_manager = Arc::new(ResourceManager::new(config.resource_limits.clone())?);
+
         let planner = Arc::new(AGIPlanner::new(
             router.clone(),
             tool_registry.clone(),
@@ -153,14 +154,15 @@ impl AGICore {
 
         // Start planning and execution in background
         let goal_id = goal.id.clone();
-        let mut core_clone = self.clone_for_execution();
+        let core_clone = self.clone_for_execution();
         // Restore app handle for event emission (clone separately to avoid Send issues)
         let app_handle_clone = self.app_handle.clone();
-        core_clone.app_handle = app_handle_clone;
+        let mut core_with_app = core_clone;
+        core_with_app.app_handle = app_handle_clone;
         let goal_id_for_spawn = goal_id.clone();
-        // Use Tauri's async runtime which handles AppHandle correctly
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = core_clone.achieve_goal(goal_id_for_spawn).await {
+        // Use tokio::spawn instead of tauri::async_runtime::spawn to avoid Send issues
+        tokio::spawn(async move {
+            if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn).await {
                 tracing::error!("[AGI] Goal execution failed: {}", e);
             }
         });

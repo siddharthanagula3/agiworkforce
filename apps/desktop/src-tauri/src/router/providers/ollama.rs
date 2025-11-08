@@ -1,7 +1,10 @@
+use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::pin::Pin;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OllamaMessage {
@@ -122,5 +125,60 @@ impl LLMProvider for OllamaProvider {
 
     fn name(&self) -> &str {
         "Ollama"
+    }
+
+    async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        let ollama_request = OllamaRequest {
+            model: request.model.clone(),
+            messages: request
+                .messages
+                .iter()
+                .map(|m| OllamaMessage {
+                    role: m.role.clone(),
+                    content: m.content.clone(),
+                })
+                .collect(),
+            stream: Some(true), // Enable streaming
+            options: Some(OllamaOptions {
+                temperature: request.temperature,
+                num_predict: request.max_tokens,
+            }),
+        };
+
+        tracing::debug!(
+            "Starting Ollama streaming request for model: {}",
+            request.model
+        );
+
+        let response = self
+            .client
+            .post(format!("{}/api/chat", self.base_url))
+            .header("Content-Type", "application/json")
+            .json(&ollama_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Ollama API error {}: {}", status, error_text).into());
+        }
+
+        tracing::debug!("Ollama streaming response received, starting JSON line parsing");
+
+        // Ollama uses JSON lines (newline-delimited JSON), which our parser handles
+        Ok(Box::pin(parse_sse_stream(
+            response,
+            crate::router::Provider::Ollama,
+        )))
     }
 }

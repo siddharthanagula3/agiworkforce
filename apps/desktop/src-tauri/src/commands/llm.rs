@@ -68,6 +68,8 @@ pub async fn llm_send_message(
         temperature: request.temperature,
         max_tokens: request.max_tokens,
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let preferences = RouterPreferences {

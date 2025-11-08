@@ -8,7 +8,7 @@ use std::sync::Mutex;
 /// Knowledge Base - stores and retrieves knowledge for the AGI
 pub struct KnowledgeBase {
     db: Mutex<Connection>,
-    memory_limit_mb: u64,
+    _memory_limit_mb: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -29,7 +29,7 @@ impl KnowledgeBase {
         let conn = Connection::open(&db_path)?;
         let kb = Self {
             db: Mutex::new(conn),
-            memory_limit_mb,
+            _memory_limit_mb: memory_limit_mb,
         };
 
         kb.init_schema()?;
@@ -129,21 +129,23 @@ impl KnowledgeBase {
 
     /// Add a knowledge entry
     pub async fn add_entry(&self, entry: KnowledgeEntry) -> Result<()> {
-        let conn = self.db.lock().unwrap();
-        let metadata_json = serde_json::to_string(&entry.metadata)?;
+        {
+            let conn = self.db.lock().unwrap();
+            let metadata_json = serde_json::to_string(&entry.metadata)?;
 
-        conn.execute(
-            "INSERT OR REPLACE INTO knowledge (id, category, content, metadata, timestamp, importance)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                entry.id,
-                entry.category,
-                entry.content,
-                metadata_json,
-                entry.timestamp,
-                entry.importance
-            ],
-        )?;
+            conn.execute(
+                "INSERT OR REPLACE INTO knowledge (id, category, content, metadata, timestamp, importance)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    entry.id,
+                    entry.category,
+                    entry.content,
+                    metadata_json,
+                    entry.timestamp,
+                    entry.importance
+                ],
+            )?;
+        } // Drop the lock before await
 
         // Enforce memory limit
         self.enforce_memory_limit().await?;

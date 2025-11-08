@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AGI Workforce is an autonomous desktop automation platform built on **Tauri 2.0, React 18, TypeScript, and Rust**. The goal is to deliver a secure, low-latency Windows-first agent that orchestrates desktop automation, browser control, API workflows, and marketplace extensions while routing intelligently across multiple LLMs (including local models via Ollama) to minimize cost.
 
-**Current Status:** Pre-alpha with AGI system fully implemented. Build health significantly improved through critical fixes to Rust unsafe code, TypeScript configuration, and dependency management. `pnpm typecheck` and `pnpm lint` pass with minimal errors. AGI Core system is complete with chat integration, resource monitoring, and 15+ tools. Tool connections for browser/API/database are partially complete. Error handling, testing, and security guardrails remain incomplete. Version pinning ensures reproducible builds across the team.
+**Current Status:** Pre-alpha with AGI system fully implemented. Build health significantly improved through critical fixes to Rust unsafe code, TypeScript configuration, and dependency management. `pnpm typecheck` and `pnpm lint` pass with minimal errors. AGI Core system is complete with chat integration, resource monitoring, and 15+ tools. SSE streaming implementation is in progress (`router/sse_parser.rs`). Tool connections for browser/API/database are partially complete. Error handling, testing, and security guardrails remain incomplete. Version pinning ensures reproducible builds across the team.
 
 ## Commands
 
@@ -52,6 +52,12 @@ cargo test
 
 # Build release binary
 cargo build --release
+
+# View dependency tree
+cargo tree --depth 1
+
+# Clean build artifacts
+cargo clean
 ```
 
 ### Individual Package Commands
@@ -121,9 +127,63 @@ The repository uses pnpm workspaces with the following structure:
 **Command Registration:**
 All Tauri commands are registered in `apps/desktop/src-tauri/src/main.rs` via `invoke_handler!` macro. When adding new commands:
 
-1. Implement the command function in the appropriate module
+1. Implement the command function in the appropriate module with `#[tauri::command]` attribute
 2. Re-export it from `commands/mod.rs`
 3. Add it to the `invoke_handler!` list in `main.rs`
+4. Ensure proper state management - use `app.manage()` in setup for global state
+
+**State Management:**
+The application uses Tauri's managed state pattern. Common state objects initialized in `main.rs` setup:
+
+- `AppDatabase` - SQLite connection for persistence
+- `LLMState` - LLM router state
+- `BrowserStateWrapper` - Browser automation state
+- `SettingsServiceState` - Settings service with database
+- `FileWatcherState` - File watching service
+- `ApiState` - HTTP client state
+- `DatabaseState` - Database connection state
+- `CloudState` - Cloud storage state
+- `CalendarState` - Calendar integration state
+
+### AGI System Architecture
+
+**Location:** `apps/desktop/src-tauri/src/agi/` and `apps/desktop/src-tauri/src/agent/`
+
+The AGI system is a three-layer autonomous agent architecture:
+
+**1. AGI Core Layer** (`agi/`):
+
+- `core.rs` - Central orchestrator managing all AGI systems
+- `tools.rs` - Tool registry with 15+ tools (file operations, UI automation, browser, database, API)
+- `knowledge.rs` - SQLite-backed knowledge base storing goals, plans, and experiences
+- `resources.rs` - Real-time resource monitoring (CPU, memory, network, storage) using sysinfo
+- `planner.rs` - LLM-powered planning with knowledge integration
+- `executor.rs` - Step execution engine with dependency resolution
+- `memory.rs` - Working memory for context management
+- `learning.rs` - Self-improvement system learning from execution history
+
+**2. Autonomous Agent Layer** (`agent/`):
+
+- `autonomous.rs` - 24/7 execution loop for background task processing
+- `planner.rs` - LLM-powered task breakdown into executable steps
+- `executor.rs` - Step-by-step execution with retry logic
+- `vision.rs` - Vision-based automation (screenshot capture, OCR, image matching)
+- `approval.rs` - Auto-approval system for safe operations
+
+**3. Enhanced Automation Layer** (`automation/`):
+
+- `uia/` - UI Automation with element caching (30s TTL), waiting strategies, retry logic
+- `input/mouse.rs` - Smooth mouse movements, drag-and-drop simulation
+- `input/keyboard.rs` - Typing speed control, keyboard macros
+- `screen/` - Screen capture (full screen, region, window)
+
+**Chat Integration:**
+The AGI system integrates with the chat interface via automatic goal detection. When users type goal-like messages, they are automatically submitted to the AGI planner. Progress updates emit via Tauri events (`agi:goal_progress`, `agi:step_completed`, `agi:goal_completed`).
+
+**Tool Connection Status:**
+
+- ✅ Fully connected: `file_read`, `file_write`, `ui_screenshot`, `ui_click`, `ui_type`, `browser_navigate`, `code_execute`, `db_query`, `api_call`, `image_ocr`
+- ⏳ Pending: `llm_reason` (needs router access from AGICore context)
 
 ### Multi-LLM Router
 
@@ -136,12 +196,27 @@ The router intelligently selects between multiple LLM providers:
 - **Cost Tracking:** All requests log tokens, cost, and provider to SQLite for analytics
 - **Configuration:** Provider credentials stored via Windows Credential Manager (DPAPI), not in SQLite
 
-**Key Concepts:**
+**Key Modules:**
 
 - `Provider` enum defines available providers
 - `LLMProvider` trait must be implemented by all providers
 - `LLMRouter` handles provider selection and fallback logic
 - `RouterPreferences` and `RoutingStrategy` control routing behavior
+- `sse_parser.rs` - Real SSE streaming implementation (in progress)
+- `cache_manager.rs` - Response caching system
+- `cost_calculator.rs` - Token cost calculation
+- `token_counter.rs` - Accurate token counting per provider
+
+**Streaming Implementation:**
+
+SSE (Server-Sent Events) streaming is currently being implemented to replace fake streaming. The `sse_parser.rs` module provides:
+
+- `StreamChunk` type for streaming content
+- `SseStreamParser` that buffers incomplete events
+- Provider-specific SSE format handling (OpenAI, Anthropic, Google, Ollama)
+- Token usage tracking in streaming responses
+
+See `LLM_ENHANCEMENT_PLAN.md` for the complete roadmap including function calling, vision support, and code completion.
 
 ### Database Schema
 
@@ -175,8 +250,9 @@ This project enforces strict version pinning to ensure reproducible builds acros
 - **Node.js:** Version 20.11.0+ (enforced via `.nvmrc` and `package.json` engines field)
   - Use `nvm use` to automatically switch to the correct version
   - Supports Node v20.x and v22.x
-- **pnpm:** Version 8.15.0+ (enforced via `package.json` engines and `.npmrc`)
+- **pnpm:** Version 9.15.0+ (enforced via `package.json` engines and `.npmrc`)
   - The `.npmrc` file sets `engine-strict=true` to fail on version mismatches
+  - Package manager is pinned to 9.15.3 via packageManager field
 - **Rust:** Version 1.90.0 (enforced via `rust-toolchain.toml`)
   - rustup automatically uses the pinned version when in the project directory
 
@@ -191,14 +267,14 @@ nvm install 20.11.0
 nvm use  # Reads from .nvmrc
 
 # Install pnpm globally
-npm install -g pnpm@8.15.0
+npm install -g pnpm@9.15.3
 
 # Install Rust (rustup will read rust-toolchain.toml)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Verify versions
 node --version    # Should output v20.x.x or v22.x.x
-pnpm --version    # Should output 8.15.0+
+pnpm --version    # Should output 9.15.0+
 rustc --version   # Should output rustc 1.90.0
 
 # Install dependencies
@@ -296,6 +372,7 @@ Playwright config in `apps/desktop/playwright.config.ts`.
 - Verify `tsconfig.json` project references are correct
 - Check that dependencies are listed in the package's `package.json`, not just root
 - Ensure you're using the correct Node.js version: `node --version` (should be v20.x or v22.x)
+- Verify pnpm version matches: `pnpm --version` (should be 9.15.0+)
 
 ### Tauri Build Failures
 
@@ -401,6 +478,8 @@ Key documentation files in the repository:
 - `STATUS.md` - Current implementation status and recent improvements
 - `CLAUDE.md` (this file) - Development guide for AI assistants
 - `PROJECT_OVERVIEW.md` - Consolidated project status and architecture
+- `LLM_ENHANCEMENT_PLAN.md` - Roadmap for LLM feature parity with Cursor (streaming, function calling, vision)
+- `CHANGELOG.md` - Version history (Phases 1-8 documented)
 - `docs/` - Additional technical documentation
 
 **Note:** Many redundant status/implementation files have been consolidated into `STATUS.md`. Always update `STATUS.md` when making significant changes to the codebase.

@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::error::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio_stream::StreamExt;
 
 /// SSE (Server-Sent Events) chunk from LLM providers
 #[derive(Debug, Clone)]
@@ -21,6 +20,9 @@ pub struct TokenUsage {
     pub completion_tokens: Option<u32>,
     pub total_tokens: Option<u32>,
 }
+
+/// Maximum buffer size (1MB) to prevent memory exhaustion
+const MAX_BUFFER_SIZE: usize = 1024 * 1024;
 
 /// SSE Stream Parser that buffers incomplete events
 struct SseStreamParser {
@@ -60,6 +62,15 @@ impl Stream for SseStreamParser {
         match self.inner.as_mut().poll_next(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
                 let text = String::from_utf8_lossy(&bytes);
+
+                // Enforce buffer size limit to prevent memory exhaustion
+                if self.buffer.len() + text.len() > MAX_BUFFER_SIZE {
+                    tracing::error!("SSE buffer exceeded max size of {}MB", MAX_BUFFER_SIZE / 1024 / 1024);
+                    return Poll::Ready(Some(Err(
+                        "SSE buffer size exceeded maximum limit".into()
+                    )));
+                }
+
                 self.buffer.push_str(&text);
 
                 // Process complete SSE events (ending with \n\n)
@@ -84,7 +95,8 @@ impl Stream for SseStreamParser {
                     }
                 }
 
-                // More data might be coming
+                // More data might be coming, wake to check again
+                cx.waker().wake_by_ref();
                 Poll::Pending
             }
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Box::new(e)))),
@@ -252,7 +264,7 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut content = String::new();
     let mut done = false;
     let mut finish_reason = None;
-    let mut model = None;
+    let model = None;
 
     for line in event.lines() {
         if let Some(data) = line.strip_prefix("data: ") {

@@ -9,7 +9,7 @@ use crate::api::{
 
 /// State for managing API clients
 pub struct ApiState {
-    client: ApiClient,
+    pub client: ApiClient,
     oauth_clients: Mutex<HashMap<String, OAuth2Client>>,
     pkce_challenges: Mutex<HashMap<String, PkceChallenge>>,
 }
