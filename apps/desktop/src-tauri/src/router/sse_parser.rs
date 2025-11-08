@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 /// SSE (Server-Sent Events) chunk from LLM providers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StreamChunk {
     pub content: String,
     pub done: bool,
@@ -14,7 +14,7 @@ pub struct StreamChunk {
     pub usage: Option<TokenUsage>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TokenUsage {
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
