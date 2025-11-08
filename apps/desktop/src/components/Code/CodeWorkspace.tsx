@@ -431,7 +431,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
   return (
     <div
       className={cn(
-        'flex h-full overflow-hidden border border-border rounded-lg bg-background',
+        'flex h-full overflow-hidden border border-border rounded-lg bg-background min-h-0 min-w-0',
         className,
       )}
     >
