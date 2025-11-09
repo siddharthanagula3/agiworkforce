@@ -11,6 +11,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { FileDropZone } from './FileDropZone';
 import { validateFiles, formatFileSize, generateId } from '../../utils/fileUtils';
 import { toast } from 'sonner';
+import { estimateContextItemTokens, formatTokens } from '../../utils/tokenCount';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import type { ChatRoutingPreferences } from '../../types/chat';
@@ -505,7 +506,11 @@ function InputComposerComponent({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">
-                  Context items ({contextItems.length})
+                  Context items ({contextItems.length}) ~
+                  {formatTokens(
+                    contextItems.reduce((sum, item) => sum + estimateContextItemTokens(item), 0),
+                  )}{' '}
+                  tokens
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -518,6 +523,8 @@ function InputComposerComponent({
                         : item.type === 'url'
                           ? Link
                           : Globe;
+
+                  const tokens = estimateContextItemTokens(item);
 
                   return (
                     <div
@@ -532,6 +539,9 @@ function InputComposerComponent({
                             {item.description}
                           </p>
                         )}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          ~{formatTokens(tokens)} tokens
+                        </p>
                       </div>
                       <button
                         type="button"
