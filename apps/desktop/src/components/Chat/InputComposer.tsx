@@ -7,7 +7,7 @@ import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
 import { CapturePreview } from '../ScreenCapture/CapturePreview';
 import type { CaptureResult } from '../../hooks/useScreenCapture';
 import { cn } from '../../lib/utils';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { FileDropZone } from './FileDropZone';
 import { validateFiles, formatFileSize, generateId } from '../../utils/fileUtils';
 import { toast } from 'sonner';
@@ -83,19 +83,46 @@ function InputComposerComponent({
     selectSuggestion,
     isActive: isAutocompleteActive,
   } = useCommandAutocomplete({
-    onSelect: (suggestion: ContextSuggestion) => {
+    onSelect: async (suggestion: ContextSuggestion) => {
       // Create a type-specific context item
       let contextItem: ContextItem;
 
       if (suggestion.type === 'file') {
-        contextItem = {
-          id: suggestion.id,
-          type: 'file',
-          name: suggestion.label,
-          description: suggestion.description,
-          path: suggestion.value,
-          timestamp: new Date(),
-        } as FileContextItem;
+        // Fetch file content from backend
+        try {
+          const fileContent = await invoke<{
+            content: string;
+            size: number;
+            line_count: number;
+            language: string | null;
+            excerpt: string;
+          }>('fs_read_file_content', { filePath: suggestion.value });
+
+          contextItem = {
+            id: suggestion.id,
+            type: 'file',
+            name: suggestion.label,
+            description: suggestion.description,
+            path: suggestion.value,
+            content: fileContent.content,
+            language: fileContent.language ?? undefined,
+            size: fileContent.size,
+            lineCount: fileContent.line_count,
+            excerpt: fileContent.excerpt,
+            timestamp: new Date(),
+          } as FileContextItem;
+        } catch (error) {
+          console.error('Failed to read file content:', error);
+          // Fallback without content
+          contextItem = {
+            id: suggestion.id,
+            type: 'file',
+            name: suggestion.label,
+            description: suggestion.description,
+            path: suggestion.value,
+            timestamp: new Date(),
+          } as FileContextItem;
+        }
       } else if (suggestion.type === 'folder') {
         contextItem = {
           id: suggestion.id,
