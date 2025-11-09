@@ -16,7 +16,7 @@ describe('databaseStore', () => {
     });
 
     expect(connections.length).toBe(1);
-    expect(connections[0].type).toBe('postgres');
+    expect(connections[0]!.type).toBe('postgres');
   });
 
   it('should execute query', () => {
