@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo, type KeyboardEvent } from 'react';
-import { Send, Paperclip, X, Loader2 } from 'lucide-react';
+import { Send, Paperclip, X, Loader2, File, Folder, Link, Globe } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
@@ -15,6 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import type { ChatRoutingPreferences } from '../../types/chat';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
+import { useCommandAutocomplete } from '../../hooks/useCommandAutocomplete';
+import { CommandAutocomplete } from './CommandAutocomplete';
+import type { ContextSuggestion, ContextItem, FileContextItem } from '@agiworkforce/types';
 
 interface InputComposerProps {
   onSend: (
@@ -61,6 +64,7 @@ function InputComposerComponent({
   const [attachments, setAttachments] = useState<AttachmentEntry[]>([]);
   const [captures, setCaptures] = useState<CaptureResult[]>([]);
   const [selectedCapture, setSelectedCapture] = useState<CaptureResult | null>(null);
+  const [contextItems, setContextItems] = useState<ContextItem[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<AttachmentEntry[]>([]);
@@ -70,6 +74,95 @@ function InputComposerComponent({
     setDefaultProvider: state.setDefaultProvider,
     setDefaultModel: state.setDefaultModel,
   }));
+
+  // Command autocomplete for @file, @folder, @url, @web
+  const {
+    autocompleteState,
+    handleInputChange: handleAutocompleteInput,
+    handleKeyDown: handleAutocompleteKeyDown,
+    selectSuggestion,
+    isActive: isAutocompleteActive,
+  } = useCommandAutocomplete({
+    onSelect: (suggestion: ContextSuggestion) => {
+      // Create a type-specific context item
+      let contextItem: ContextItem;
+
+      if (suggestion.type === 'file') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'file',
+          name: suggestion.label,
+          description: suggestion.description,
+          path: suggestion.value,
+          timestamp: new Date(),
+        } as FileContextItem;
+      } else if (suggestion.type === 'folder') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'folder',
+          name: suggestion.label,
+          description: suggestion.description,
+          path: suggestion.value,
+          timestamp: new Date(),
+        } as any;
+      } else if (suggestion.type === 'url') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'url',
+          name: suggestion.label,
+          description: suggestion.description,
+          url: suggestion.value,
+          timestamp: new Date(),
+        } as any;
+      } else if (suggestion.type === 'web') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'web',
+          name: suggestion.label,
+          description: suggestion.description,
+          query: suggestion.value,
+          timestamp: new Date(),
+        } as any;
+      } else {
+        // Fallback for other types
+        contextItem = {
+          id: suggestion.id,
+          type: suggestion.type,
+          name: suggestion.label,
+          description: suggestion.description,
+          timestamp: new Date(),
+        } as any;
+      }
+
+      // Add to context items
+      setContextItems((prev) => [...prev, contextItem]);
+
+      // Remove the @command from the input
+      if (textareaRef.current) {
+        const cursorPos = textareaRef.current.selectionStart;
+        const beforeCursor = content.slice(0, cursorPos);
+        const afterCursor = content.slice(cursorPos);
+        const match = beforeCursor.match(/(@file|@folder|@url|@web)([^\s]*)$/);
+
+        if (match) {
+          const startPos = beforeCursor.length - match[0].length;
+          const newContent = content.slice(0, startPos) + afterCursor;
+          setContent(newContent);
+
+          // Set cursor position after the removed @command
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = startPos;
+              textareaRef.current.selectionEnd = startPos;
+              textareaRef.current.focus();
+            }
+          }, 0);
+        }
+      }
+    },
+    maxSuggestions: 10,
+    debounceMs: 150,
+  });
 
   const [selectedProvider, setSelectedProvider] = useState<Provider>(llmConfig.defaultProvider);
   const [selectedModel, setSelectedModel] = useState(
@@ -143,6 +236,7 @@ function InputComposerComponent({
     setAttachments([]);
     setCaptures([]);
     setSelectedCapture(null);
+    setContextItems([]);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -150,6 +244,12 @@ function InputComposerComponent({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Check autocomplete first
+    if (isAutocompleteActive && handleAutocompleteKeyDown(event)) {
+      return; // Autocomplete handled it
+    }
+
+    // Original Enter handling
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       if (canSend) {
@@ -232,6 +332,10 @@ function InputComposerComponent({
 
   const removeCapture = (index: number) => {
     setCaptures((previous) => previous.filter((_, idx) => idx !== index));
+  };
+
+  const removeContextItem = (id: string) => {
+    setContextItems((previous) => previous.filter((item) => item.id !== id));
   };
 
   const handleProviderChange = (value: string) => {
@@ -370,6 +474,53 @@ function InputComposerComponent({
             </div>
           )}
 
+          {contextItems.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Context items ({contextItems.length})
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {contextItems.map((item) => {
+                  const Icon =
+                    item.type === 'file'
+                      ? File
+                      : item.type === 'folder'
+                        ? Folder
+                        : item.type === 'url'
+                          ? Link
+                          : Globe;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="group flex items-center gap-2 rounded-lg border border-border/60 bg-primary/10 px-3 py-2"
+                    >
+                      <Icon className="h-4 w-4 text-primary flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
+                        {item.description && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeContextItem(item.id)}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label="Remove context item"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <input
               ref={fileInputRef}
@@ -406,10 +557,17 @@ function InputComposerComponent({
             />
 
             <div className="relative flex-1">
+              <CommandAutocomplete state={autocompleteState} onSelect={selectSuggestion} />
+
               <Textarea
                 ref={textareaRef}
                 value={content}
-                onChange={(event) => setContent(event.target.value)}
+                onChange={(event) => {
+                  setContent(event.target.value);
+                  if (textareaRef.current) {
+                    handleAutocompleteInput(event.target.value, textareaRef.current.selectionStart);
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 disabled={controlsDisabled}
