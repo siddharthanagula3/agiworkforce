@@ -10,7 +10,7 @@ use crate::automation::screen::{perform_ocr, OcrResult as ScreenOcrResult};
 use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 /// Result of intelligent file access attempt
