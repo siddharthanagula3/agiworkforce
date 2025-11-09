@@ -155,7 +155,9 @@ const DesktopShell = () => {
         commandShortcutHint={commandShortcutHint}
       />
       <main className="flex flex-1 overflow-hidden min-h-0 min-w-0">
-        {!sidebarCollapsed && <Sidebar className="shrink-0" />}
+        {!sidebarCollapsed && (
+          <Sidebar className="shrink-0" onOpenSettings={() => setSettingsPanelOpen(true)} />
+        )}
         <div className="flex flex-1 overflow-hidden min-w-0">
           {/* Agent Chat (Left) */}
           {agentChatVisible && agentChatPosition === 'left' && (
