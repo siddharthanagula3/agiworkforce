@@ -71,7 +71,7 @@ pub enum TaskStatus {
 
 /// AI Orchestrator for coordinating multiple agents
 pub struct AIOrchestrator {
-    context_manager: ContextManager,
+    _context_manager: ContextManager,
     rag_system: RAGSystem,
     prompt_engineer: PromptEngineer,
     code_generator: CodeGenerator,
