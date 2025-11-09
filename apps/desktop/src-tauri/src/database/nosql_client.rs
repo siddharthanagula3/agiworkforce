@@ -28,9 +28,9 @@ pub struct MongoClient {
 }
 
 struct MongoConnection {
-    client: Client,
+    _client: Client,
     database: Database,
-    database_name: String,
+    _database_name: String,
 }
 
 impl MongoClient {
