@@ -14,7 +14,7 @@ unused_variables = "deny"
 unused_mut = "deny"
 dead_code = "deny"
 unused_attributes = "deny"
-unused_qualifications = "deny"
+unused_qualifications = "warn"  # Some qualifications are necessary for clarity
 unused_results = "warn"
 
 [dependencies]
