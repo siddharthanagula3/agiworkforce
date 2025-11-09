@@ -291,13 +291,16 @@ pub async fn automation_drag_drop(
 
     // Create mouse simulator outside the service to avoid async closure issues
     let mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
-    mouse.drag_and_drop(
-        request.from_x,
-        request.from_y,
-        request.to_x,
-        request.to_y,
-        request.duration_ms,
-    ).await.map_err(|err| err.to_string())?;
+    mouse
+        .drag_and_drop(
+            request.from_x,
+            request.from_y,
+            request.to_x,
+            request.to_y,
+            request.duration_ms,
+        )
+        .await
+        .map_err(|err| err.to_string())?;
 
     // Emit overlay animation for drag-drop
     if let Ok(conn) = db.0.lock() {
@@ -330,7 +333,9 @@ pub fn automation_clipboard_set(text: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
-    perform_ocr(&image_path).await.map_err(|err| err.to_string())
+    perform_ocr(&image_path)
+        .await
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]

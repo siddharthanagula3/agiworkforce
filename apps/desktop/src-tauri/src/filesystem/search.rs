@@ -3,7 +3,6 @@
  *
  * Provides fast file and folder search for autocomplete suggestions.
  */
-
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
