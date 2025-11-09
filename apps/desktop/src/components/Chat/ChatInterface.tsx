@@ -32,8 +32,9 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     attachments?: File[],
     captures?: CaptureResult[],
     routing?: ChatRoutingPreferences,
+    contextItems?: unknown[],
   ) => {
-    await sendMessage(content, attachments, captures, routing);
+    await sendMessage(content, attachments, captures, routing, contextItems);
   };
 
   // Convert backend data to UI format for components
