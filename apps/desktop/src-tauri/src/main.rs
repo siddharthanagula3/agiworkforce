@@ -413,6 +413,7 @@ fn main() {
             // File search commands
             agiworkforce_desktop::filesystem::fs_search_files,
             agiworkforce_desktop::filesystem::fs_search_folders,
+            agiworkforce_desktop::filesystem::fs_read_file_content,
             // File watcher commands
             agiworkforce_desktop::commands::file_watch_start,
             agiworkforce_desktop::commands::file_watch_stop,

@@ -3,6 +3,7 @@
  *
  * Provides fast file and folder search for autocomplete suggestions.
  */
+use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -195,6 +196,80 @@ fn is_ignored(path: &Path) -> bool {
             .map(|s| ignore_patterns.contains(&s))
             .unwrap_or(false)
     })
+}
+
+/// Read file content for context items
+///
+/// Reads the content of a file with size limit for performance.
+/// Returns truncated content if file exceeds 100KB.
+#[tauri::command]
+pub async fn fs_read_file_content(file_path: String) -> Result<FileContentResponse, String> {
+    let path = PathBuf::from(&file_path);
+
+    // Run file reading in background thread
+    tokio::task::spawn_blocking(move || {
+        // Verify file exists
+        if !path.exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+
+        if !path.is_file() {
+            return Err(format!("Path is not a file: {}", file_path));
+        }
+
+        // Get file metadata
+        let metadata =
+            fs::metadata(&path).map_err(|e| format!("Failed to read metadata: {}", e))?;
+        let size = metadata.len();
+
+        // Read file content (limit to 100KB for performance)
+        const MAX_SIZE: u64 = 100 * 1024; // 100KB
+        let content = if size > MAX_SIZE {
+            // Read first 100KB
+            let file_content =
+                fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+            let truncated: Vec<u8> = file_content
+                .into_iter()
+                .take(MAX_SIZE as usize)
+                .collect();
+
+            String::from_utf8_lossy(&truncated).to_string()
+                + "\n\n[... content truncated, file too large]"
+        } else {
+            fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?
+        };
+
+        // Count lines
+        let line_count = content.lines().count();
+
+        // Detect language from extension
+        let language = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_string());
+
+        // Create excerpt (first 5 lines)
+        let excerpt = content.lines().take(5).collect::<Vec<_>>().join("\n");
+
+        Ok(FileContentResponse {
+            content,
+            size,
+            line_count,
+            language,
+            excerpt,
+        })
+    })
+    .await
+    .map_err(|e| format!("File read task failed: {}", e))?
+}
+
+#[derive(serde::Serialize)]
+pub struct FileContentResponse {
+    pub content: String,
+    pub size: u64,
+    pub line_count: usize,
+    pub language: Option<String>,
+    pub excerpt: String,
 }
 
 #[cfg(test)]
