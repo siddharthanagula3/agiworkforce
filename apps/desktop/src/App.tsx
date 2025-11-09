@@ -147,14 +147,14 @@ const DesktopShell = () => {
   ]);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-background overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       <TitleBar
         state={{ focused: state.focused, maximized: state.maximized }}
         actions={actions}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         commandShortcutHint={commandShortcutHint}
       />
-      <main className="flex flex-1 overflow-hidden min-h-0">
+      <main className="flex flex-1 overflow-hidden min-h-0 min-w-0">
         {!sidebarCollapsed && <Sidebar className="shrink-0" />}
         <div className="flex flex-1 overflow-hidden min-w-0">
           {/* Agent Chat (Left) */}
