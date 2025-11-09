@@ -18,6 +18,47 @@ import type {
 } from '../types/chat';
 import type { CaptureResult } from '../types/capture';
 
+/**
+ * Format context items as markdown for LLM consumption
+ */
+function formatContextItems(contextItems: unknown[]): string {
+  const parts: string[] = ['**Context:**\n'];
+
+  for (const item of contextItems) {
+    const ctx = item as Record<string, unknown>;
+
+    if (ctx['type'] === 'file' && ctx['content']) {
+      const name = ctx['name'] as string;
+      const path = ctx['path'] as string;
+      const language = ctx['language'] as string | undefined;
+      const content = ctx['content'] as string;
+
+      parts.push(`\n### File: ${name}`);
+      parts.push(`Path: \`${path}\``);
+      if (language) {
+        parts.push(`\n\`\`\`${language}\n${content}\n\`\`\``);
+      } else {
+        parts.push(`\n\`\`\`\n${content}\n\`\`\``);
+      }
+    } else if (ctx['type'] === 'folder') {
+      const name = ctx['name'] as string;
+      const path = ctx['path'] as string;
+      parts.push(`\n### Folder: ${name}`);
+      parts.push(`Path: \`${path}\``);
+    } else if (ctx['type'] === 'url') {
+      const name = ctx['name'] as string;
+      const url = ctx['url'] as string;
+      parts.push(`\n### URL: ${name}`);
+      parts.push(`Link: ${url}`);
+    } else if (ctx['type'] === 'web') {
+      const query = ctx['query'] as string;
+      parts.push(`\n### Web Search: ${query}`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
 interface ChatState {
   conversations: ConversationUI[];
   activeConversationId: number | null;
@@ -37,6 +78,7 @@ interface ChatState {
     attachments?: File[],
     captures?: CaptureResult[],
     routing?: ChatRoutingPreferences,
+    contextItems?: unknown[],
   ) => Promise<void>;
   getStats: (conversationId: number) => Promise<ConversationStats>;
   togglePinnedConversation: (id: number) => Promise<void>;
@@ -251,6 +293,7 @@ export const useChatStore = create<ChatState>()(
         attachments?: File[],
         captures?: CaptureResult[],
         routing?: ChatRoutingPreferences,
+        contextItems?: unknown[],
       ) => {
         if (!content.trim()) {
           return;
@@ -258,11 +301,20 @@ export const useChatStore = create<ChatState>()(
 
         const pendingAttachments = attachments ?? [];
         const pendingCaptures = captures ?? [];
+        const pendingContextItems = contextItems ?? [];
 
         if (pendingAttachments.length > 0 || pendingCaptures.length > 0) {
           console.info(
             `[chatStore] attachment handling pending. Files: ${pendingAttachments.length}, captures: ${pendingCaptures.length}`,
           );
+        }
+
+        // Format context items as markdown prefix
+        let messageContent = content;
+        if (pendingContextItems.length > 0) {
+          const contextPrefix = formatContextItems(pendingContextItems);
+          messageContent = `${contextPrefix}\n\n---\n\n${content}`;
+          console.info(`[chatStore] Added ${pendingContextItems.length} context items to message`);
         }
 
         const conversationId = get().activeConversationId;
@@ -329,7 +381,7 @@ export const useChatStore = create<ChatState>()(
           const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
             request: {
               conversationId,
-              content,
+              content: messageContent,
               provider: routing?.provider,
               model: routing?.model,
               strategy: routing?.strategy,
