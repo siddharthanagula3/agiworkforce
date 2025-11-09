@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::router::{ChatMessage, LLMRequest, Provider, RouteCandidate, RouterPreferences, RoutingStrategy};
+    use crate::router::{
+        ChatMessage, LLMRequest, Provider, RouteCandidate, RouterPreferences, RoutingStrategy,
+    };
 
     #[test]
     fn test_provider_enum_values() {
@@ -25,7 +27,10 @@ mod tests {
     #[test]
     fn test_provider_from_string() {
         assert_eq!(Provider::from_string("openai"), Some(Provider::OpenAI));
-        assert_eq!(Provider::from_string("anthropic"), Some(Provider::Anthropic));
+        assert_eq!(
+            Provider::from_string("anthropic"),
+            Some(Provider::Anthropic)
+        );
         assert_eq!(Provider::from_string("google"), Some(Provider::Google));
         assert_eq!(Provider::from_string("ollama"), Some(Provider::Ollama));
         assert_eq!(Provider::from_string("invalid"), None);
@@ -34,21 +39,22 @@ mod tests {
     #[test]
     fn test_provider_from_string_case_insensitive() {
         assert_eq!(Provider::from_string("OpenAI"), Some(Provider::OpenAI));
-        assert_eq!(Provider::from_string("ANTHROPIC"), Some(Provider::Anthropic));
+        assert_eq!(
+            Provider::from_string("ANTHROPIC"),
+            Some(Provider::Anthropic)
+        );
         assert_eq!(Provider::from_string("GoOgLe"), Some(Provider::Google));
     }
 
     #[test]
     fn test_llm_request_creation() {
         let request = LLMRequest {
-            messages: vec![
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: "Hello".to_string(),
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-            ],
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+            }],
             model: "gpt-4".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1000),

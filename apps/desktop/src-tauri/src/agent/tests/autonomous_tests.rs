@@ -23,12 +23,7 @@ mod tests {
 
     #[test]
     fn test_task_priority_ordering() {
-        let mut tasks = vec![
-            (1, "low"),
-            (3, "high"),
-            (2, "medium"),
-            (4, "critical"),
-        ];
+        let mut tasks = vec![(1, "low"), (3, "high"), (2, "medium"), (4, "critical")];
 
         tasks.sort_by(|a, b| b.0.cmp(&a.0));
 

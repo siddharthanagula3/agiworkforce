@@ -56,11 +56,8 @@ impl AGIMemory {
         let memory = self.working_memory.lock().unwrap();
         memory
             .iter()
-            .filter(|entry| {
-                entry.event.contains(query) || entry.data.to_string().contains(query)
-            })
+            .filter(|entry| entry.event.contains(query) || entry.data.to_string().contains(query))
             .cloned()
             .collect()
     }
 }
-

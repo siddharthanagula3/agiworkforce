@@ -1,4 +1,6 @@
-use crate::mcp::{McpClient, McpServersConfig, McpToolRegistry, McpHealthMonitor, emit_mcp_event, McpEvent};
+use crate::mcp::{
+    emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServersConfig, McpToolRegistry,
+};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,7 +30,7 @@ impl McpState {
             health_monitor,
         }
     }
-    
+
     /// Start health monitoring with app handle
     pub fn start_health_monitoring(&self, app_handle: tauri::AppHandle) {
         let monitor = self.health_monitor.clone();
@@ -99,41 +101,53 @@ pub async fn mcp_initialize(
                 Ok(_) => {
                     connected_count += 1;
                     tracing::info!("Connected to MCP server: {}", name);
-                    
+
                     // Emit connection event
-                    emit_mcp_event(&app, McpEvent::ServerConnectionChanged {
-                        server_name: name.clone(),
-                        connected: true,
-                        error: None,
-                    });
-                    
+                    emit_mcp_event(
+                        &app,
+                        McpEvent::ServerConnectionChanged {
+                            server_name: name.clone(),
+                            connected: true,
+                            error: None,
+                        },
+                    );
+
                     // Count tools
                     if let Ok(tools) = state.client.list_server_tools(name) {
                         total_tools += tools.len();
-                        emit_mcp_event(&app, McpEvent::ToolsUpdated {
-                            server_name: name.clone(),
-                            tool_count: tools.len(),
-                        });
+                        emit_mcp_event(
+                            &app,
+                            McpEvent::ToolsUpdated {
+                                server_name: name.clone(),
+                                tool_count: tools.len(),
+                            },
+                        );
                     }
                 }
                 Err(e) => {
                     tracing::warn!("Failed to connect to MCP server '{}': {}", name, e);
-                    emit_mcp_event(&app, McpEvent::ServerConnectionChanged {
-                        server_name: name.clone(),
-                        connected: false,
-                        error: Some(e.to_string()),
-                    });
+                    emit_mcp_event(
+                        &app,
+                        McpEvent::ServerConnectionChanged {
+                            server_name: name.clone(),
+                            connected: false,
+                            error: Some(e.to_string()),
+                        },
+                    );
                 }
             }
         }
     }
-    
+
     // Emit system initialized event
-    emit_mcp_event(&app, McpEvent::SystemInitialized {
-        server_count: connected_count,
-        tool_count: total_tools,
-    });
-    
+    emit_mcp_event(
+        &app,
+        McpEvent::SystemInitialized {
+            server_count: connected_count,
+            tool_count: total_tools,
+        },
+    );
+
     // Start health monitoring
     state.start_health_monitoring(app);
 
@@ -331,10 +345,7 @@ pub async fn mcp_store_credential(
         .set_password(&value)
         .map_err(|e| format!("Failed to store credential: {}", e))?;
 
-    Ok(format!(
-        "Credential stored for {} / {}",
-        server_name, key
-    ))
+    Ok(format!("Credential stored for {} / {}", server_name, key))
 }
 
 /// Get MCP tool schemas for LLM function calling (OpenAI format)
@@ -345,7 +356,9 @@ pub async fn mcp_get_tool_schemas(state: State<'_, McpState>) -> Result<Vec<Valu
 
 /// Get health status for all MCP servers
 #[tauri::command]
-pub async fn mcp_get_health(state: State<'_, McpState>) -> Result<Vec<crate::mcp::ServerHealth>, String> {
+pub async fn mcp_get_health(
+    state: State<'_, McpState>,
+) -> Result<Vec<crate::mcp::ServerHealth>, String> {
     Ok(state.health_monitor.get_all_health())
 }
 
@@ -355,10 +368,6 @@ pub async fn mcp_check_server_health(
     state: State<'_, McpState>,
     server_name: String,
 ) -> Result<crate::mcp::ServerHealth, String> {
-    let health = state
-        .health_monitor
-        .check_server_health(&server_name)
-        .await;
+    let health = state.health_monitor.check_server_health(&server_name).await;
     Ok(health)
 }
-

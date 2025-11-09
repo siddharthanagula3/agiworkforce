@@ -1,6 +1,6 @@
 use super::*;
 use anyhow::Result;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -84,9 +84,7 @@ impl KnowledgeBase {
             id: goal.id.clone(),
             category: "goal".to_string(),
             content: goal.description.clone(),
-            metadata: HashMap::from([
-                ("priority".to_string(), format!("{:?}", goal.priority)),
-            ]),
+            metadata: HashMap::from([("priority".to_string(), format!("{:?}", goal.priority))]),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -115,7 +113,10 @@ impl KnowledgeBase {
                 ("goal_id".to_string(), goal.id.clone()),
                 ("tool_id".to_string(), result.tool_id.clone()),
                 ("success".to_string(), result.success.to_string()),
-                ("execution_time_ms".to_string(), result.execution_time_ms.to_string()),
+                (
+                    "execution_time_ms".to_string(),
+                    result.execution_time_ms.to_string(),
+                ),
             ]),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -161,7 +162,7 @@ impl KnowledgeBase {
              FROM knowledge
              WHERE content LIKE ?1 OR category LIKE ?1
              ORDER BY importance DESC, timestamp DESC
-             LIMIT ?2"
+             LIMIT ?2",
         )?;
 
         let search_term = format!("%{}%", query);
@@ -170,7 +171,8 @@ impl KnowledgeBase {
                 id: row.get(0)?,
                 category: row.get(1)?,
                 content: row.get(2)?,
-                metadata: serde_json::from_str(row.get::<_, String>(3)?.as_str()).unwrap_or_default(),
+                metadata: serde_json::from_str(row.get::<_, String>(3)?.as_str())
+                    .unwrap_or_default(),
                 timestamp: row.get(4)?,
                 importance: row.get(5)?,
             })
@@ -185,7 +187,11 @@ impl KnowledgeBase {
     }
 
     /// Get relevant knowledge for a goal
-    pub async fn get_relevant_knowledge(&self, goal: &Goal, limit: usize) -> Result<Vec<KnowledgeEntry>> {
+    pub async fn get_relevant_knowledge(
+        &self,
+        goal: &Goal,
+        limit: usize,
+    ) -> Result<Vec<KnowledgeEntry>> {
         // Search by goal description keywords
         let keywords: Vec<&str> = goal.description.split_whitespace().collect();
         let mut all_results = Vec::new();
@@ -213,11 +219,7 @@ impl KnowledgeBase {
         // TODO: Implement actual memory size checking
         // For now, limit by count
         let conn = self.db.lock().unwrap();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM knowledge",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
 
         // Keep only top 10000 entries by importance
         if count > 10000 {
@@ -235,4 +237,3 @@ impl KnowledgeBase {
         Ok(())
     }
 }
-

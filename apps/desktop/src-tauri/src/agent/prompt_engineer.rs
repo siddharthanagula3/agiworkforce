@@ -1,8 +1,7 @@
 /// Prompt Engineering System
-/// 
+///
 /// Helps engineers craft effective prompts for AI code generation,
 /// with templates, best practices, and prompt optimization.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -50,10 +49,10 @@ impl PromptEngineer {
         let mut engineer = Self {
             templates: HashMap::new(),
         };
-        
+
         // Initialize with built-in templates
         engineer.initialize_templates();
-        
+
         engineer
     }
 
@@ -110,11 +109,13 @@ Follow best practices and maintain consistency with existing codebase."#.to_stri
         });
 
         // Code Refactoring Template
-        self.templates.insert("refactoring".to_string(), PromptTemplate {
-            id: "refactoring".to_string(),
-            name: "Code Refactoring".to_string(),
-            category: PromptCategory::CodeRefactoring,
-            template: r#"Refactor the following code to {{refactoring_goal}}:
+        self.templates.insert(
+            "refactoring".to_string(),
+            PromptTemplate {
+                id: "refactoring".to_string(),
+                name: "Code Refactoring".to_string(),
+                category: PromptCategory::CodeRefactoring,
+                template: r#"Refactor the following code to {{refactoring_goal}}:
 
 **Current Code:**
 ```{{language}}
@@ -135,31 +136,35 @@ Follow best practices and maintain consistency with existing codebase."#.to_stri
 **Expected Output:**
 - Refactored code
 - Updated tests
-- Migration guide (if needed)"#.to_string(),
-            variables: vec![
-                "refactoring_goal".to_string(),
-                "language".to_string(),
-                "current_code".to_string(),
-                "issues".to_string(),
-                "goals".to_string(),
-                "backward_compatible".to_string(),
-                "performance".to_string(),
-                "test_coverage".to_string(),
-            ],
-            examples: vec![],
-            best_practices: vec![
-                "Clearly identify what needs refactoring".to_string(),
-                "Specify goals and constraints".to_string(),
-                "Include existing code for context".to_string(),
-            ],
-        });
+- Migration guide (if needed)"#
+                    .to_string(),
+                variables: vec![
+                    "refactoring_goal".to_string(),
+                    "language".to_string(),
+                    "current_code".to_string(),
+                    "issues".to_string(),
+                    "goals".to_string(),
+                    "backward_compatible".to_string(),
+                    "performance".to_string(),
+                    "test_coverage".to_string(),
+                ],
+                examples: vec![],
+                best_practices: vec![
+                    "Clearly identify what needs refactoring".to_string(),
+                    "Specify goals and constraints".to_string(),
+                    "Include existing code for context".to_string(),
+                ],
+            },
+        );
 
         // Bug Fixing Template
-        self.templates.insert("bug_fixing".to_string(), PromptTemplate {
-            id: "bug_fixing".to_string(),
-            name: "Bug Fixing".to_string(),
-            category: PromptCategory::BugFixing,
-            template: r#"Fix the following bug:
+        self.templates.insert(
+            "bug_fixing".to_string(),
+            PromptTemplate {
+                id: "bug_fixing".to_string(),
+                name: "Bug Fixing".to_string(),
+                category: PromptCategory::BugFixing,
+                template: r#"Fix the following bug:
 
 **Bug Description:**
 {{bug_description}}
@@ -193,36 +198,40 @@ Follow best practices and maintain consistency with existing codebase."#.to_stri
 **Fix Requirements:**
 - {{fix_requirements}}
 
-Provide a fix that addresses the root cause and includes tests to prevent regression."#.to_string(),
-            variables: vec![
-                "bug_description".to_string(),
-                "error_message".to_string(),
-                "language".to_string(),
-                "code".to_string(),
-                "step1".to_string(),
-                "step2".to_string(),
-                "step3".to_string(),
-                "expected_behavior".to_string(),
-                "actual_behavior".to_string(),
-                "framework".to_string(),
-                "dependencies".to_string(),
-                "fix_requirements".to_string(),
-            ],
-            examples: vec![],
-            best_practices: vec![
-                "Include error messages and stack traces".to_string(),
-                "Provide steps to reproduce".to_string(),
-                "Describe expected vs actual behavior".to_string(),
-                "Include relevant code context".to_string(),
-            ],
-        });
+Provide a fix that addresses the root cause and includes tests to prevent regression."#
+                    .to_string(),
+                variables: vec![
+                    "bug_description".to_string(),
+                    "error_message".to_string(),
+                    "language".to_string(),
+                    "code".to_string(),
+                    "step1".to_string(),
+                    "step2".to_string(),
+                    "step3".to_string(),
+                    "expected_behavior".to_string(),
+                    "actual_behavior".to_string(),
+                    "framework".to_string(),
+                    "dependencies".to_string(),
+                    "fix_requirements".to_string(),
+                ],
+                examples: vec![],
+                best_practices: vec![
+                    "Include error messages and stack traces".to_string(),
+                    "Provide steps to reproduce".to_string(),
+                    "Describe expected vs actual behavior".to_string(),
+                    "Include relevant code context".to_string(),
+                ],
+            },
+        );
 
         // Test Generation Template
-        self.templates.insert("test_generation".to_string(), PromptTemplate {
-            id: "test_generation".to_string(),
-            name: "Test Generation".to_string(),
-            category: PromptCategory::TestGeneration,
-            template: r#"Generate comprehensive tests for the following code:
+        self.templates.insert(
+            "test_generation".to_string(),
+            PromptTemplate {
+                id: "test_generation".to_string(),
+                name: "Test Generation".to_string(),
+                category: PromptCategory::TestGeneration,
+                template: r#"Generate comprehensive tests for the following code:
 
 **Code to Test:**
 ```{{language}}
@@ -242,25 +251,27 @@ Provide a fix that addresses the root cause and includes tests to prevent regres
 - Test edge cases: {{test_edge_cases}}
 - Performance tests: {{performance_tests}}
 
-Generate unit tests, integration tests, and edge case tests."#.to_string(),
-            variables: vec![
-                "language".to_string(),
-                "code".to_string(),
-                "coverage_percentage".to_string(),
-                "test_framework".to_string(),
-                "test_types".to_string(),
-                "test_cases".to_string(),
-                "mock_dependencies".to_string(),
-                "test_edge_cases".to_string(),
-                "performance_tests".to_string(),
-            ],
-            examples: vec![],
-            best_practices: vec![
-                "Specify test coverage requirements".to_string(),
-                "List test cases to cover".to_string(),
-                "Include edge cases and error scenarios".to_string(),
-            ],
-        });
+Generate unit tests, integration tests, and edge case tests."#
+                    .to_string(),
+                variables: vec![
+                    "language".to_string(),
+                    "code".to_string(),
+                    "coverage_percentage".to_string(),
+                    "test_framework".to_string(),
+                    "test_types".to_string(),
+                    "test_cases".to_string(),
+                    "mock_dependencies".to_string(),
+                    "test_edge_cases".to_string(),
+                    "performance_tests".to_string(),
+                ],
+                examples: vec![],
+                best_practices: vec![
+                    "Specify test coverage requirements".to_string(),
+                    "List test cases to cover".to_string(),
+                    "Include edge cases and error scenarios".to_string(),
+                ],
+            },
+        );
     }
 
     /// Get a template by ID
@@ -277,31 +288,36 @@ Generate unit tests, integration tests, and edge case tests."#.to_string(),
     }
 
     /// Fill a template with variables
-    pub fn fill_template(&self, template_id: &str, variables: HashMap<String, String>) -> Result<String, String> {
-        let template = self.templates
+    pub fn fill_template(
+        &self,
+        template_id: &str,
+        variables: HashMap<String, String>,
+    ) -> Result<String, String> {
+        let template = self
+            .templates
             .get(template_id)
             .ok_or_else(|| format!("Template not found: {}", template_id))?;
-        
+
         let mut prompt = template.template.clone();
-        
+
         // Replace all variables
         for (key, value) in variables {
             let placeholder = format!("{{{{{}}}}}", key);
             prompt = prompt.replace(&placeholder, &value);
         }
-        
+
         // Remove any remaining unfilled variables
         // In production, would validate all variables are filled
         let re = regex::Regex::new(r"\{\{(\w+)\}\}").unwrap();
         prompt = re.replace_all(&prompt, "[MISSING: $1]").to_string();
-        
+
         Ok(prompt)
     }
 
     /// Optimize a prompt using best practices
     pub fn optimize_prompt(&self, prompt: &str, category: PromptCategory) -> String {
         let mut optimized = prompt.to_string();
-        
+
         // Add category-specific optimizations
         match category {
             PromptCategory::CodeGeneration => {
@@ -322,13 +338,16 @@ Generate unit tests, integration tests, and edge case tests."#.to_string(),
             }
             _ => {}
         }
-        
+
         // General optimizations
         if !optimized.contains("**") {
             // Add structure if missing
-            optimized = format!("**Task:**\n{}\n\n**Context:**\n[Add relevant context]", optimized);
+            optimized = format!(
+                "**Task:**\n{}\n\n**Context:**\n[Add relevant context]",
+                optimized
+            );
         }
-        
+
         optimized
     }
 
@@ -346,18 +365,24 @@ Generate unit tests, integration tests, and edge case tests."#.to_string(),
             PromptCategory::TestGeneration => "test_generation",
             _ => "code_generation", // Default
         };
-        
+
         if self.get_template(template_id).is_some() {
             // Try to extract variables from description
             let mut variables = HashMap::new();
             variables.insert("requirements".to_string(), description.to_string());
-            variables.insert("feature_name".to_string(), self.extract_feature_name(description));
+            variables.insert(
+                "feature_name".to_string(),
+                self.extract_feature_name(description),
+            );
             variables.insert("language".to_string(), "TypeScript".to_string()); // Default, would detect
             variables.insert("framework".to_string(), "React".to_string()); // Default, would detect
             variables.insert("patterns".to_string(), "Standard patterns".to_string());
-            variables.insert("dependencies".to_string(), "Standard dependencies".to_string());
+            variables.insert(
+                "dependencies".to_string(),
+                "Standard dependencies".to_string(),
+            );
             variables.insert("context".to_string(), "See codebase".to_string());
-            
+
             self.fill_template(template_id, variables)
                 .unwrap_or_else(|_| description.to_string())
         } else {
@@ -368,10 +393,16 @@ Generate unit tests, integration tests, and edge case tests."#.to_string(),
     /// Detect category from description
     pub fn detect_category(&self, description: &str) -> PromptCategory {
         let desc_lower = description.to_lowercase();
-        
-        if desc_lower.contains("refactor") || desc_lower.contains("improve") || desc_lower.contains("optimize") {
+
+        if desc_lower.contains("refactor")
+            || desc_lower.contains("improve")
+            || desc_lower.contains("optimize")
+        {
             PromptCategory::CodeRefactoring
-        } else if desc_lower.contains("fix") || desc_lower.contains("bug") || desc_lower.contains("error") {
+        } else if desc_lower.contains("fix")
+            || desc_lower.contains("bug")
+            || desc_lower.contains("error")
+        {
             PromptCategory::BugFixing
         } else if desc_lower.contains("test") || desc_lower.contains("spec") {
             PromptCategory::TestGeneration
@@ -402,4 +433,3 @@ impl Default for PromptEngineer {
         Self::new()
     }
 }
-

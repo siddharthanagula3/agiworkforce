@@ -1,6 +1,6 @@
 use super::*;
-use crate::agi::planner::PlanStep;
 use crate::agi::api_tools_impl;
+use crate::agi::planner::PlanStep;
 use crate::automation::AutomationService;
 use anyhow::{anyhow, Result};
 use serde_json::json;
@@ -47,10 +47,7 @@ impl AGIExecutor {
         // Check dependencies
         for dep_id in &step.dependencies {
             // Verify dependency was executed successfully
-            let dep_result = context
-                .tool_results
-                .iter()
-                .find(|r| r.tool_id == *dep_id);
+            let dep_result = context.tool_results.iter().find(|r| r.tool_id == *dep_id);
 
             if let Some(result) = dep_result {
                 if !result.success {
@@ -94,14 +91,18 @@ impl AGIExecutor {
             "ui_screenshot" => {
                 use crate::automation::screen::capture_primary_screen;
                 let captured = capture_primary_screen()?;
-                let temp_path = std::env::temp_dir().join(format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]));
+                let temp_path = std::env::temp_dir().join(format!(
+                    "screenshot_{}.png",
+                    &uuid::Uuid::new_v4().to_string()[..8]
+                ));
                 captured.pixels.save(&temp_path)?;
                 Ok(json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }))
             }
             "ui_click" => {
-                let target = parameters.get("target")
+                let target = parameters
+                    .get("target")
                     .ok_or_else(|| anyhow!("Missing target parameter"))?;
-                
+
                 // Parse target (coordinates, UIA element, or text)
                 if let Some(coords) = target.get("coordinates") {
                     let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -128,7 +129,9 @@ impl AGIExecutor {
                     let elements = self.automation.uia.find_elements(None, &query)?;
                     if let Some(element) = elements.first() {
                         self.automation.uia.invoke(&element.id)?;
-                        Ok(json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }))
+                        Ok(
+                            json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }),
+                        )
                     } else {
                         Err(anyhow!("Element with text '{}' not found", text))
                     }
@@ -137,12 +140,14 @@ impl AGIExecutor {
                 }
             }
             "ui_type" => {
-                let target = parameters.get("target")
+                let target = parameters
+                    .get("target")
                     .ok_or_else(|| anyhow!("Missing target parameter"))?;
-                let text = parameters.get("text")
+                let text = parameters
+                    .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing text parameter"))?;
-                
+
                 // If element_id provided, focus and type
                 if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                     self.automation.uia.set_focus(element_id)?;
@@ -165,7 +170,7 @@ impl AGIExecutor {
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }
                 }
-                
+
                 // Type the text
                 self.automation.keyboard.send_text(text)?;
                 Ok(json!({ "success": true, "action": "typed", "text": text }))
@@ -184,10 +189,16 @@ impl AGIExecutor {
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Get or create a tab
-                    let tabs = tab_manager.list_tabs().await.map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
+                    let tabs = tab_manager
+                        .list_tabs()
+                        .await
+                        .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                     let tab_id = if tabs.is_empty() {
                         // Create a new tab
-                        tab_manager.open_tab(url).await.map_err(|e| anyhow!("Failed to open tab: {}", e))?
+                        tab_manager
+                            .open_tab(url)
+                            .await
+                            .map_err(|e| anyhow!("Failed to open tab: {}", e))?
                     } else {
                         // Use first tab
                         tabs[0].id.clone()
@@ -195,7 +206,8 @@ impl AGIExecutor {
 
                     // Navigate the tab
                     use crate::browser::NavigationOptions;
-                    tab_manager.navigate(&tab_id, url, NavigationOptions::default())
+                    tab_manager
+                        .navigate(&tab_id, url, NavigationOptions::default())
                         .await
                         .map_err(|e| anyhow!("Failed to navigate: {}", e))?;
 
@@ -205,15 +217,15 @@ impl AGIExecutor {
                 }
             }
             "browser_click" => {
-                let selector = parameters.get("selector")
+                let selector = parameters
+                    .get("selector")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
-                let tab_id = parameters.get("tab_id")
-                    .and_then(|v| v.as_str());
+                let tab_id = parameters.get("tab_id").and_then(|v| v.as_str());
 
                 if let Some(ref app) = self.app_handle {
-                    use crate::commands::BrowserStateWrapper;
                     use crate::browser::{ClickOptions, DomOperations};
+                    use crate::commands::BrowserStateWrapper;
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
@@ -225,7 +237,9 @@ impl AGIExecutor {
                         tid.to_string()
                     } else {
                         // Use first available tab
-                        let tabs = tab_manager.list_tabs().await
+                        let tabs = tab_manager
+                            .list_tabs()
+                            .await
                             .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                         if tabs.is_empty() {
                             return Err(anyhow!("No browser tabs available. Please navigate to a URL first using browser_navigate."));
@@ -234,7 +248,8 @@ impl AGIExecutor {
                     };
 
                     // Get CDP client for the tab
-                    let cdp_client = browser_guard.get_cdp_client(&target_tab_id)
+                    let cdp_client = browser_guard
+                        .get_cdp_client(&target_tab_id)
                         .await
                         .map_err(|e| anyhow!("Failed to get CDP client: {}", e))?;
 
@@ -255,18 +270,19 @@ impl AGIExecutor {
                 }
             }
             "browser_extract" => {
-                let selector = parameters.get("selector")
+                let selector = parameters
+                    .get("selector")
                     .and_then(|v| v.as_str())
                     .unwrap_or("body"); // Default to body if no selector provided
-                let tab_id = parameters.get("tab_id")
-                    .and_then(|v| v.as_str());
-                let extract_type = parameters.get("extract_type")
+                let tab_id = parameters.get("tab_id").and_then(|v| v.as_str());
+                let extract_type = parameters
+                    .get("extract_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("text"); // Default to text extraction
 
                 if let Some(ref app) = self.app_handle {
-                    use crate::commands::BrowserStateWrapper;
                     use crate::browser::DomOperations;
+                    use crate::commands::BrowserStateWrapper;
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
@@ -278,7 +294,9 @@ impl AGIExecutor {
                         tid.to_string()
                     } else {
                         // Use first available tab
-                        let tabs = tab_manager.list_tabs().await
+                        let tabs = tab_manager
+                            .list_tabs()
+                            .await
                             .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                         if tabs.is_empty() {
                             return Err(anyhow!("No browser tabs available. Please navigate to a URL first using browser_navigate."));
@@ -292,18 +310,34 @@ impl AGIExecutor {
                             // Extract text content
                             let text = DomOperations::get_text(&target_tab_id, selector)
                                 .await
-                                .map_err(|e| anyhow!("Failed to extract text from '{}': {}", selector, e))?;
+                                .map_err(|e| {
+                                    anyhow!("Failed to extract text from '{}': {}", selector, e)
+                                })?;
                             json!({ "type": "text", "content": text })
                         }
                         "attribute" => {
                             // Extract attribute value
-                            let attribute_name = parameters.get("attribute")
+                            let attribute_name = parameters
+                                .get("attribute")
                                 .and_then(|v| v.as_str())
-                                .ok_or_else(|| anyhow!("Missing attribute parameter for attribute extraction"))?;
+                                .ok_or_else(|| {
+                                    anyhow!("Missing attribute parameter for attribute extraction")
+                                })?;
 
-                            let attr_value = DomOperations::get_attribute(&target_tab_id, selector, attribute_name)
-                                .await
-                                .map_err(|e| anyhow!("Failed to get attribute '{}' from '{}': {}", attribute_name, selector, e))?;
+                            let attr_value = DomOperations::get_attribute(
+                                &target_tab_id,
+                                selector,
+                                attribute_name,
+                            )
+                            .await
+                            .map_err(|e| {
+                                anyhow!(
+                                    "Failed to get attribute '{}' from '{}': {}",
+                                    attribute_name,
+                                    selector,
+                                    e
+                                )
+                            })?;
 
                             json!({
                                 "type": "attribute",
@@ -315,7 +349,9 @@ impl AGIExecutor {
                             // Extract all matching elements
                             let elements = DomOperations::query_all(&target_tab_id, selector)
                                 .await
-                                .map_err(|e| anyhow!("Failed to query elements '{}': {}", selector, e))?;
+                                .map_err(|e| {
+                                    anyhow!("Failed to query elements '{}': {}", selector, e)
+                                })?;
 
                             let elements_json = serde_json::to_value(&elements)
                                 .map_err(|e| anyhow!("Failed to serialize elements: {}", e))?;
@@ -330,7 +366,9 @@ impl AGIExecutor {
                             // Default to text extraction
                             let text = DomOperations::get_text(&target_tab_id, selector)
                                 .await
-                                .map_err(|e| anyhow!("Failed to extract text from '{}': {}", selector, e))?;
+                                .map_err(|e| {
+                                    anyhow!("Failed to extract text from '{}': {}", selector, e)
+                                })?;
                             json!({ "type": "text", "content": text })
                         }
                     };
@@ -346,20 +384,22 @@ impl AGIExecutor {
                 }
             }
             "code_execute" => {
-                let language = parameters.get("language")
+                let language = parameters
+                    .get("language")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing language parameter"))?;
-                let code = parameters.get("code")
+                let code = parameters
+                    .get("code")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing code parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::terminal::SessionManager;
                     use crate::terminal::ShellType;
                     use tauri::Manager;
-                    
+
                     let session_manager = app.state::<SessionManager>();
-                    
+
                     // Determine shell type based on language
                     let shell_type = match language.to_lowercase().as_str() {
                         "powershell" | "ps1" => ShellType::PowerShell,
@@ -367,57 +407,65 @@ impl AGIExecutor {
                         "cmd" | "batch" => ShellType::Cmd,
                         _ => ShellType::PowerShell, // Default to PowerShell
                     };
-                    
+
                     // Get or create a session
                     let sessions = session_manager.list_sessions().await;
                     let session_id = if sessions.is_empty() {
-                        session_manager.create_session(shell_type, None)
+                        session_manager
+                            .create_session(shell_type, None)
                             .await
                             .map_err(|e| anyhow!("Failed to create session: {}", e))?
                     } else {
                         sessions[0].clone()
                     };
-                    
+
                     // Execute the code
                     let command = format!("{}\r\n", code);
-                    session_manager.send_input(&session_id, &command)
+                    session_manager
+                        .send_input(&session_id, &command)
                         .await
                         .map_err(|e| anyhow!("Failed to execute code: {}", e))?;
-                    
+
                     // Wait a bit for execution
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    
-                    Ok(json!({ "success": true, "language": language, "session_id": session_id, "code": &code[..code.len().min(100)] }))
+
+                    Ok(
+                        json!({ "success": true, "language": language, "session_id": session_id, "code": &code[..code.len().min(100)] }),
+                    )
                 } else {
                     Err(anyhow!("App handle not available for code execution"))
                 }
             }
             "db_query" => {
-                let database_id = parameters.get("database_id")
+                let database_id = parameters
+                    .get("database_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing database_id parameter"))?;
-                let query = parameters.get("query")
+                let query = parameters
+                    .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing query parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::DatabaseState;
                     use tauri::Manager;
                     use tokio::sync::Mutex;
-                    
+
                     let db_state = app.state::<Mutex<DatabaseState>>();
                     let db_guard = db_state.lock().await;
-                    
+
                     // Execute the query
-                    let result = db_guard.sql_client.execute_query(database_id, query)
+                    let result = db_guard
+                        .sql_client
+                        .execute_query(database_id, query)
                         .await
                         .map_err(|e| anyhow!("Database query failed: {}", e))?;
-                    
+
                     let result_json = serde_json::to_value(&result)
                         .map_err(|e| anyhow!("Failed to serialize result: {}", e))?;
-                    
-                    Ok(json!({ 
-                        "success": true, 
+
+                    Ok(json!({
+                        "success": true,
                         "database_id": database_id,
                         "rows": result.rows.len(),
                         "rows_affected": result.rows_affected,
@@ -450,157 +498,223 @@ impl AGIExecutor {
                 }
             }
             "image_ocr" => {
-                let image_path = parameters.get("image_path")
+                let image_path = parameters
+                    .get("image_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing image_path parameter"))?;
-                
+
                 // Use automation OCR function directly
                 use crate::automation::screen::perform_ocr;
-                
-                let ocr_result = perform_ocr(image_path)
-                    .map_err(|e| anyhow!("OCR failed: {}", e))?;
-                
-                Ok(json!({ 
-                    "success": true, 
+
+                let ocr_result =
+                    perform_ocr(image_path).map_err(|e| anyhow!("OCR failed: {}", e))?;
+
+                Ok(json!({
+                    "success": true,
                     "image_path": image_path,
                     "text": ocr_result.text,
                     "confidence": ocr_result.confidence
                 }))
             }
             "code_analyze" => {
-                let code = parameters.get("code")
+                let code = parameters
+                    .get("code")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing code parameter"))?;
                 // Code analysis requires LLM or static analysis
                 // For now, return success - will be connected via LLM router
-                tracing::info!("[Executor] Code analysis requested: {}", &code[..code.len().min(50)]);
-                Ok(json!({ "success": true, "note": "Requires LLM router access for code analysis" }))
+                tracing::info!(
+                    "[Executor] Code analysis requested: {}",
+                    &code[..code.len().min(50)]
+                );
+                Ok(
+                    json!({ "success": true, "note": "Requires LLM router access for code analysis" }),
+                )
             }
             "llm_reason" => {
-                let prompt = parameters.get("prompt")
+                let prompt = parameters
+                    .get("prompt")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing prompt parameter"))?;
                 // LLM reasoning requires router access
                 // For now, return success - will be connected via LLM router
-                tracing::info!("[Executor] LLM reasoning requested: {}", &prompt[..prompt.len().min(50)]);
-                Ok(json!({ "success": true, "reasoning": "Requires LLM router access", "note": "Will be connected via router" }))
+                tracing::info!(
+                    "[Executor] LLM reasoning requested: {}",
+                    &prompt[..prompt.len().min(50)]
+                );
+                Ok(
+                    json!({ "success": true, "reasoning": "Requires LLM router access", "note": "Will be connected via router" }),
+                )
             }
             "email_send" => {
-                let to = parameters.get("to")
+                let to = parameters
+                    .get("to")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'to' parameter"))?;
-                let subject = parameters.get("subject")
+                let subject = parameters
+                    .get("subject")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'subject' parameter"))?;
-                let _body = parameters.get("body")
+                let _body = parameters
+                    .get("body")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'body' parameter"))?;
-                
+
                 // Note: Email sending requires account setup via email_connect command
                 // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Email send requested: to={}, subject={}", to, subject);
-                Ok(json!({ "success": true, "note": "Email sending requires account configuration via email_connect command. Use Tauri command 'email_send' directly." }))
+                tracing::info!(
+                    "[Executor] Email send requested: to={}, subject={}",
+                    to,
+                    subject
+                );
+                Ok(
+                    json!({ "success": true, "note": "Email sending requires account configuration via email_connect command. Use Tauri command 'email_send' directly." }),
+                )
             }
             "email_fetch" => {
-                let account_id = parameters.get("account_id")
+                let account_id = parameters
+                    .get("account_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
-                let limit = parameters.get("limit")
+                let limit = parameters
+                    .get("limit")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(10);
-                
+
                 // Note: Email fetching requires account setup via email_connect command
                 // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Email fetch requested: account_id={}, limit={}", account_id, limit);
-                Ok(json!({ "success": true, "note": "Email fetching requires account configuration via email_connect command. Use Tauri command 'email_fetch_inbox' directly." }))
+                tracing::info!(
+                    "[Executor] Email fetch requested: account_id={}, limit={}",
+                    account_id,
+                    limit
+                );
+                Ok(
+                    json!({ "success": true, "note": "Email fetching requires account configuration via email_connect command. Use Tauri command 'email_fetch_inbox' directly." }),
+                )
             }
             "calendar_create_event" => {
-                let account_id = parameters.get("account_id")
+                let account_id = parameters
+                    .get("account_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
-                let title = parameters.get("title")
+                let title = parameters
+                    .get("title")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'title' parameter"))?;
-                let _start_time = parameters.get("start_time")
+                let _start_time = parameters
+                    .get("start_time")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'start_time' parameter"))?;
-                
+
                 // Note: Calendar event creation requires account setup via calendar_connect command
                 // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Calendar event creation requested: account_id={}, title={}", account_id, title);
-                Ok(json!({ "success": true, "note": "Calendar event creation requires account configuration via calendar_connect command. Use Tauri command 'calendar_create_event' directly." }))
+                tracing::info!(
+                    "[Executor] Calendar event creation requested: account_id={}, title={}",
+                    account_id,
+                    title
+                );
+                Ok(
+                    json!({ "success": true, "note": "Calendar event creation requires account configuration via calendar_connect command. Use Tauri command 'calendar_create_event' directly." }),
+                )
             }
             "calendar_list_events" => {
-                let account_id = parameters.get("account_id")
+                let account_id = parameters
+                    .get("account_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
-                
+
                 // Note: Calendar listing requires account setup via calendar_connect command
                 // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Calendar list events requested: account_id={}", account_id);
-                Ok(json!({ "success": true, "note": "Calendar listing requires account configuration via calendar_connect command. Use Tauri command 'calendar_list_events' directly." }))
+                tracing::info!(
+                    "[Executor] Calendar list events requested: account_id={}",
+                    account_id
+                );
+                Ok(
+                    json!({ "success": true, "note": "Calendar listing requires account configuration via calendar_connect command. Use Tauri command 'calendar_list_events' directly." }),
+                )
             }
             "cloud_upload" => {
-                let account_id = parameters.get("account_id")
+                let account_id = parameters
+                    .get("account_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
-                let local_path = parameters.get("local_path")
+                let local_path = parameters
+                    .get("local_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'local_path' parameter"))?;
-                let remote_path = parameters.get("remote_path")
+                let remote_path = parameters
+                    .get("remote_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'remote_path' parameter"))?;
-                
+
                 // Note: Cloud upload requires account setup via cloud_connect command
                 // This tool is registered but requires Tauri command invocation
                 tracing::info!("[Executor] Cloud upload requested: account_id={}, local_path={}, remote_path={}", account_id, local_path, remote_path);
-                Ok(json!({ "success": true, "note": "Cloud upload requires account configuration via cloud_connect command. Use Tauri command 'cloud_upload' directly." }))
+                Ok(
+                    json!({ "success": true, "note": "Cloud upload requires account configuration via cloud_connect command. Use Tauri command 'cloud_upload' directly." }),
+                )
             }
             "cloud_download" => {
-                let account_id = parameters.get("account_id")
+                let account_id = parameters
+                    .get("account_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
-                let remote_path = parameters.get("remote_path")
+                let remote_path = parameters
+                    .get("remote_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'remote_path' parameter"))?;
-                let local_path = parameters.get("local_path")
+                let local_path = parameters
+                    .get("local_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'local_path' parameter"))?;
-                
+
                 // Note: Cloud download requires account setup via cloud_connect command
                 // This tool is registered but requires Tauri command invocation
                 tracing::info!("[Executor] Cloud download requested: account_id={}, remote_path={}, local_path={}", account_id, remote_path, local_path);
-                Ok(json!({ "success": true, "note": "Cloud download requires account configuration via cloud_connect command. Use Tauri command 'cloud_download' directly." }))
+                Ok(
+                    json!({ "success": true, "note": "Cloud download requires account configuration via cloud_connect command. Use Tauri command 'cloud_download' directly." }),
+                )
             }
             "productivity_create_task" => {
-                let provider = parameters.get("provider")
+                let provider = parameters
+                    .get("provider")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'provider' parameter"))?;
-                let title = parameters.get("title")
+                let title = parameters
+                    .get("title")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'title' parameter"))?;
-                
+
                 // Note: Productivity task creation requires account setup via productivity_connect command
                 // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Productivity task creation requested: provider={}, title={}", provider, title);
-                Ok(json!({ "success": true, "note": "Productivity task creation requires account configuration via productivity_connect command. Use Tauri command 'productivity_create_task' directly." }))
+                tracing::info!(
+                    "[Executor] Productivity task creation requested: provider={}, title={}",
+                    provider,
+                    title
+                );
+                Ok(
+                    json!({ "success": true, "note": "Productivity task creation requires account configuration via productivity_connect command. Use Tauri command 'productivity_create_task' directly." }),
+                )
             }
             "document_read" => {
-                let file_path = parameters.get("file_path")
+                let file_path = parameters
+                    .get("file_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'file_path' parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::DocumentState;
                     use tauri::Manager;
-                    
+
                     let doc_state = app.state::<DocumentState>();
-                    let content = doc_state.manager.read_document(file_path)
+                    let content = doc_state
+                        .manager
+                        .read_document(file_path)
                         .await
                         .map_err(|e| anyhow!("Document read failed: {}", e))?;
-                    
-                    Ok(json!({ 
-                        "success": true, 
+
+                    Ok(json!({
+                        "success": true,
                         "file_path": file_path,
                         "content": serde_json::to_value(&content).map_err(|e| anyhow!("Serialization failed: {}", e))?
                     }))
@@ -609,24 +723,28 @@ impl AGIExecutor {
                 }
             }
             "document_search" => {
-                let file_path = parameters.get("file_path")
+                let file_path = parameters
+                    .get("file_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'file_path' parameter"))?;
-                let query = parameters.get("query")
+                let query = parameters
+                    .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'query' parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::DocumentState;
                     use tauri::Manager;
-                    
+
                     let doc_state = app.state::<DocumentState>();
-                    let results = doc_state.manager.search(file_path, query)
+                    let results = doc_state
+                        .manager
+                        .search(file_path, query)
                         .await
                         .map_err(|e| anyhow!("Document search failed: {}", e))?;
-                    
-                    Ok(json!({ 
-                        "success": true, 
+
+                    Ok(json!({
+                        "success": true,
                         "file_path": file_path,
                         "query": query,
                         "results": serde_json::to_value(&results).map_err(|e| anyhow!("Serialization failed: {}", e))?,
@@ -637,16 +755,20 @@ impl AGIExecutor {
                 }
             }
             "db_execute" => {
-                let connection_id = parameters.get("connection_id")
+                let connection_id = parameters
+                    .get("connection_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
-                let sql = parameters.get("sql")
+                let sql = parameters
+                    .get("sql")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing sql parameter"))?;
 
                 // Optional: Support parameterized queries
-                let params = parameters.get("params")
-                    .and_then(|v| v.as_array()).cloned()
+                let params = parameters
+                    .get("params")
+                    .and_then(|v| v.as_array())
+                    .cloned()
                     .unwrap_or_default();
 
                 if let Some(ref app) = self.app_handle {
@@ -661,7 +783,10 @@ impl AGIExecutor {
                     let result = if params.is_empty() {
                         db_guard.sql_client.execute_query(connection_id, sql).await
                     } else {
-                        db_guard.sql_client.execute_prepared(connection_id, sql, &params).await
+                        db_guard
+                            .sql_client
+                            .execute_prepared(connection_id, sql, &params)
+                            .await
                     }
                     .map_err(|e| anyhow!("Database execute failed: {}", e))?;
 
@@ -676,7 +801,8 @@ impl AGIExecutor {
                 }
             }
             "db_transaction_begin" => {
-                let connection_id = parameters.get("connection_id")
+                let connection_id = parameters
+                    .get("connection_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
 
@@ -689,11 +815,16 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     // Execute BEGIN TRANSACTION
-                    let result = db_guard.sql_client.execute_query(connection_id, "BEGIN TRANSACTION")
+                    let result = db_guard
+                        .sql_client
+                        .execute_query(connection_id, "BEGIN TRANSACTION")
                         .await
                         .map_err(|e| anyhow!("Failed to begin transaction: {}", e))?;
 
-                    tracing::info!("[Executor] Transaction started on connection: {}", connection_id);
+                    tracing::info!(
+                        "[Executor] Transaction started on connection: {}",
+                        connection_id
+                    );
 
                     Ok(json!({
                         "success": true,
@@ -706,7 +837,8 @@ impl AGIExecutor {
                 }
             }
             "db_transaction_commit" => {
-                let connection_id = parameters.get("connection_id")
+                let connection_id = parameters
+                    .get("connection_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
 
@@ -719,11 +851,16 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     // Execute COMMIT
-                    let result = db_guard.sql_client.execute_query(connection_id, "COMMIT")
+                    let result = db_guard
+                        .sql_client
+                        .execute_query(connection_id, "COMMIT")
                         .await
                         .map_err(|e| anyhow!("Failed to commit transaction: {}", e))?;
 
-                    tracing::info!("[Executor] Transaction committed on connection: {}", connection_id);
+                    tracing::info!(
+                        "[Executor] Transaction committed on connection: {}",
+                        connection_id
+                    );
 
                     Ok(json!({
                         "success": true,
@@ -736,7 +873,8 @@ impl AGIExecutor {
                 }
             }
             "db_transaction_rollback" => {
-                let connection_id = parameters.get("connection_id")
+                let connection_id = parameters
+                    .get("connection_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing connection_id parameter"))?;
 
@@ -749,11 +887,16 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     // Execute ROLLBACK
-                    let result = db_guard.sql_client.execute_query(connection_id, "ROLLBACK")
+                    let result = db_guard
+                        .sql_client
+                        .execute_query(connection_id, "ROLLBACK")
                         .await
                         .map_err(|e| anyhow!("Failed to rollback transaction: {}", e))?;
 
-                    tracing::info!("[Executor] Transaction rolled back on connection: {}", connection_id);
+                    tracing::info!(
+                        "[Executor] Transaction rolled back on connection: {}",
+                        connection_id
+                    );
 
                     Ok(json!({
                         "success": true,
@@ -769,4 +912,3 @@ impl AGIExecutor {
         }
     }
 }
-

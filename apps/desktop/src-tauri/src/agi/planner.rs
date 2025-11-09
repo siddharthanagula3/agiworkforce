@@ -56,7 +56,9 @@ impl AGIPlanner {
         let suggested_tools: Vec<_> = self.tool_registry.suggest_tools(&goal.description);
 
         // Use LLM to create plan
-        let plan_json = self.plan_with_llm(goal, context, &knowledge, &suggested_tools).await?;
+        let plan_json = self
+            .plan_with_llm(goal, context, &knowledge, &suggested_tools)
+            .await?;
 
         // Parse plan
         self.parse_plan(goal, &plan_json)
@@ -69,12 +71,14 @@ impl AGIPlanner {
         knowledge: &[KnowledgeEntry],
         tools: &[Tool],
     ) -> Result<String> {
-        let knowledge_summary: Vec<String> = knowledge.iter()
+        let knowledge_summary: Vec<String> = knowledge
+            .iter()
             .map(|k| format!("- {}: {}", k.category, k.content))
             .take(5)
             .collect();
 
-        let tools_summary: Vec<String> = tools.iter()
+        let tools_summary: Vec<String> = tools
+            .iter()
             .map(|t| format!("- {}: {}", t.id, t.description))
             .take(10)
             .collect();
@@ -276,11 +280,7 @@ Return ONLY the JSON array."#,
 
         let parameters = step_json["parameters"]
             .as_object()
-            .map(|obj| {
-                obj.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            })
+            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default();
 
         let estimated_resources = if let Some(res) = step_json["estimated_resources"].as_object() {
@@ -317,11 +317,14 @@ Return ONLY the JSON array."#,
     }
 
     /// Evaluate if a success criterion is met
-    pub async fn evaluate_criterion(&self, _criterion: &str, _context: &ExecutionContext) -> Result<bool> {
+    pub async fn evaluate_criterion(
+        &self,
+        _criterion: &str,
+        _context: &ExecutionContext,
+    ) -> Result<bool> {
         // Use LLM to evaluate criterion
         // TODO: Implement actual evaluation
         // For now, return true (assume met)
         Ok(true)
     }
 }
-

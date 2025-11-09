@@ -28,4 +28,3 @@ pub enum McpError {
 }
 
 pub type McpResult<T> = Result<T, McpError>;
-

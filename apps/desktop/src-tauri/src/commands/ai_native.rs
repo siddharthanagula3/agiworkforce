@@ -1,11 +1,10 @@
+use crate::agent::code_generator::{CodeGenRequest, CodeGenResult, CodeGenerator};
 /// Tauri commands for AI-native software engineering features
-
-use crate::agent::context_manager::{ContextManager, Constraint, ConstraintType};
-use crate::agent::code_generator::{CodeGenerator, CodeGenRequest, CodeGenResult};
+use crate::agent::context_manager::{Constraint, ConstraintType, ContextManager};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tauri::State;
+use tokio::sync::Mutex;
 
 /// ContextManager state
 pub struct ContextManagerState(pub Arc<Mutex<ContextManager>>);
@@ -25,7 +24,7 @@ pub async fn ai_analyze_project(
         .analyze_project()
         .await
         .map_err(|e| format!("Failed to analyze project: {}", e))?;
-    
+
     let context = manager.get_project_context();
     Ok(format!(
         "Project analyzed: {} ({})",
@@ -131,7 +130,7 @@ pub async fn ai_add_constraint(
         }
         _ => return Err(format!("Unknown constraint type: {}", constraint_type)),
     };
-    
+
     let constraint = Constraint {
         id: uuid::Uuid::new_v4().to_string(),
         constraint_type,
@@ -139,10 +138,10 @@ pub async fn ai_add_constraint(
         description,
         enforced,
     };
-    
+
     let mut manager = state.0.lock().await;
     manager.add_constraint(constraint.clone());
-    
+
     Ok(format!("Constraint added: {}", constraint.description))
 }
 
@@ -156,10 +155,10 @@ pub async fn ai_generate_code(
     context: Option<String>,
 ) -> Result<CodeGenResult, String> {
     let generator = state.0.lock().await;
-    
+
     // Get constraints from context manager
     let constraints = Vec::new(); // TODO: Get from context manager
-    
+
     let request = CodeGenRequest {
         task_id,
         description,
@@ -167,7 +166,7 @@ pub async fn ai_generate_code(
         constraints,
         context: context.unwrap_or_default(),
     };
-    
+
     generator
         .generate_code(request)
         .await
@@ -182,7 +181,7 @@ pub async fn ai_refactor_code(
     description: String,
 ) -> Result<CodeGenResult, String> {
     let generator = state.0.lock().await;
-    
+
     generator
         .refactor_code(
             files.into_iter().map(PathBuf::from).collect(),
@@ -201,7 +200,7 @@ pub async fn ai_generate_tests(
     test_framework: Option<String>,
 ) -> Result<Vec<crate::agent::code_generator::GeneratedFile>, String> {
     let generator = state.0.lock().await;
-    
+
     generator
         .generate_tests(
             source_files.into_iter().map(PathBuf::from).collect(),
@@ -218,7 +217,7 @@ pub async fn ai_get_project_context(
 ) -> Result<serde_json::Value, String> {
     let manager = state.0.lock().await;
     let context = manager.get_project_context();
-    
+
     serde_json::to_value(context).map_err(|e| format!("Serialization failed: {}", e))
 }
 
@@ -239,13 +238,12 @@ pub async fn ai_access_file(
     context: Option<String>,
 ) -> Result<crate::agent::intelligent_file_access::FileAccessResult, String> {
     use crate::agent::intelligent_file_access::IntelligentFileAccess;
-    
+
     let file_access = IntelligentFileAccess::new()
         .map_err(|e| format!("Failed to initialize file access: {}", e))?;
-    
+
     file_access
         .access_file(PathBuf::from(file_path).as_path(), context.as_deref())
         .await
         .map_err(|e| format!("File access failed: {}", e))
 }
-

@@ -112,7 +112,7 @@ impl LLMProvider for AnthropicProvider {
                 })
                 .collect()
         });
-        
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages: request
@@ -179,14 +179,16 @@ impl LLMProvider for AnthropicProvider {
             anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens;
 
         // ✅ Map stop_reason to finish_reason
-        let finish_reason = anthropic_response.stop_reason.as_ref().map(|reason| {
-            match reason.as_str() {
-                "tool_use" => "tool_calls".to_string(),
-                "end_turn" => "stop".to_string(),
-                "max_tokens" => "length".to_string(),
-                _ => reason.clone(),
-            }
-        });
+        let finish_reason =
+            anthropic_response
+                .stop_reason
+                .as_ref()
+                .map(|reason| match reason.as_str() {
+                    "tool_use" => "tool_calls".to_string(),
+                    "end_turn" => "stop".to_string(),
+                    "max_tokens" => "length".to_string(),
+                    _ => reason.clone(),
+                });
 
         Ok(LLMResponse {
             content: text_content,
@@ -195,7 +197,11 @@ impl LLMProvider for AnthropicProvider {
             completion_tokens: Some(anthropic_response.usage.output_tokens),
             cost: Some(cost),
             model: anthropic_response.model,
-            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
             finish_reason,
             ..LLMResponse::default()
         })
@@ -227,7 +233,7 @@ impl LLMProvider for AnthropicProvider {
                 })
                 .collect()
         });
-        
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages: request

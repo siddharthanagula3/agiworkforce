@@ -56,10 +56,7 @@ mod tests {
 
     #[test]
     fn test_text_region_extraction() {
-        let regions = vec![
-            (0, 0, 100, 50),
-            (100, 0, 200, 50),
-        ];
+        let regions = vec![(0, 0, 100, 50), (100, 0, 200, 50)];
 
         assert_eq!(regions.len(), 2);
     }

@@ -305,8 +305,7 @@ impl ApiClient {
         let mut form = reqwest::multipart::Form::new();
 
         // Add file part
-        let file_part = reqwest::multipart::Part::bytes(file_content)
-            .file_name(file_name);
+        let file_part = reqwest::multipart::Part::bytes(file_content).file_name(file_name);
         form = form.part(field_name.to_string(), file_part);
 
         // Add additional fields
@@ -330,7 +329,9 @@ impl ApiClient {
             AuthType::None => req_builder,
             AuthType::Bearer { token } => req_builder.bearer_auth(token),
             AuthType::ApiKey { key, header } => req_builder.header(header, key),
-            AuthType::Basic { username, password } => req_builder.basic_auth(username, Some(password)),
+            AuthType::Basic { username, password } => {
+                req_builder.basic_auth(username, Some(password))
+            }
             AuthType::OAuth2 { token } => req_builder.bearer_auth(token),
         };
 
@@ -393,7 +394,9 @@ impl ApiClient {
             AuthType::None => req_builder,
             AuthType::Bearer { token } => req_builder.bearer_auth(token),
             AuthType::ApiKey { key, header } => req_builder.header(header, key),
-            AuthType::Basic { username, password } => req_builder.basic_auth(username, Some(password)),
+            AuthType::Basic { username, password } => {
+                req_builder.basic_auth(username, Some(password))
+            }
             AuthType::OAuth2 { token } => req_builder.bearer_auth(token),
         };
 

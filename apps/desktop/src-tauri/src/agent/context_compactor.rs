@@ -1,9 +1,8 @@
 /// Automatic Context Compaction System
-/// 
+///
 /// Automatically compacts conversation history when approaching token limits,
 /// similar to Cursor and Claude Code. Keeps recent messages intact and summarizes
 /// older messages to maintain context while staying within limits.
-
 use crate::db::models::{Message, MessageRole};
 use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
@@ -26,10 +25,10 @@ pub struct CompactionConfig {
 impl Default for CompactionConfig {
     fn default() -> Self {
         Self {
-            max_tokens: 100_000,      // ~75k tokens for GPT-4, ~200k for Claude
-            target_tokens: 50_000,    // Target ~50% reduction
-            keep_recent: 10,          // Keep last 10 messages intact
-            min_messages: 20,         // Only compact if 20+ messages
+            max_tokens: 100_000,   // ~75k tokens for GPT-4, ~200k for Claude
+            target_tokens: 50_000, // Target ~50% reduction
+            keep_recent: 10,       // Keep last 10 messages intact
+            min_messages: 20,      // Only compact if 20+ messages
         }
     }
 }
@@ -170,7 +169,7 @@ impl ContextCompactor {
     /// Generate heuristic-based summary (fallback)
     fn generate_summary_heuristic(&self, messages: &[Message]) -> String {
         let mut summary = String::from("**Conversation Summary**\n\n");
-        
+
         // Extract key information
         let mut user_requests = Vec::new();
         let mut assistant_responses = Vec::new();
@@ -227,11 +226,7 @@ impl ContextCompactor {
     }
 
     /// Get compacted message list (recent + summary)
-    pub fn get_compacted_messages(
-        &self,
-        messages: &[Message],
-        summary: &str,
-    ) -> Vec<Message> {
+    pub fn get_compacted_messages(&self, messages: &[Message], summary: &str) -> Vec<Message> {
         let keep_count = self.config.keep_recent.min(messages.len());
         let (recent_messages, _old_messages) = messages.split_at(messages.len() - keep_count);
 
@@ -283,4 +278,3 @@ impl Default for ContextCompactor {
         Self::with_default_config()
     }
 }
-

@@ -34,9 +34,7 @@ pub enum McpEvent {
         tool_count: usize,
     },
     /// Configuration updated
-    ConfigurationUpdated {
-        servers_enabled: Vec<String>,
-    },
+    ConfigurationUpdated { servers_enabled: Vec<String> },
 }
 
 impl McpEvent {
@@ -62,4 +60,3 @@ pub fn emit_mcp_event(app_handle: &tauri::AppHandle, event: McpEvent) {
         tracing::debug!("[MCP] Emitted event: {}", event_name);
     }
 }
-

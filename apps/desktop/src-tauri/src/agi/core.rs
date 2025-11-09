@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::time::sleep;
 use tauri::Emitter;
+use tokio::time::sleep;
 
 /// AGI Core - The central intelligence that coordinates all systems
 pub struct AGICore {
@@ -126,11 +126,14 @@ impl AGICore {
         tracing::info!("[AGI] New goal submitted: {}", goal.description);
 
         // Emit goal submitted event
-        self.emit_event("agi:goal:submitted", json!({
-            "goal_id": goal.id,
-            "description": goal.description,
-            "priority": goal.priority,
-        }));
+        self.emit_event(
+            "agi:goal:submitted",
+            json!({
+                "goal_id": goal.id,
+                "description": goal.description,
+                "priority": goal.priority,
+            }),
+        );
 
         // Store in knowledge base
         self.knowledge_base.add_goal(&goal).await?;
@@ -209,35 +212,47 @@ impl AGICore {
         tracing::info!("[AGI] Achieving goal: {}", context.goal.description);
 
         // Plan the approach
-        let plan = self
-            .planner
-            .create_plan(&context.goal, &context)
-            .await?;
+        let plan = self.planner.create_plan(&context.goal, &context).await?;
 
         tracing::info!("[AGI] Plan created with {} steps", plan.steps.len());
 
         // Emit plan created event
-        self.emit_event("agi:goal:plan_created", json!({
-            "goal_id": goal_id,
-            "total_steps": plan.steps.len(),
-            "estimated_duration_ms": plan.estimated_duration.as_millis(),
-        }));
+        self.emit_event(
+            "agi:goal:plan_created",
+            json!({
+                "goal_id": goal_id,
+                "total_steps": plan.steps.len(),
+                "estimated_duration_ms": plan.estimated_duration.as_millis(),
+            }),
+        );
 
         // Execute the plan
         for (index, step) in plan.steps.iter().enumerate() {
-            tracing::info!("[AGI] Executing step {}/{}: {}", index + 1, plan.steps.len(), step.description);
+            tracing::info!(
+                "[AGI] Executing step {}/{}: {}",
+                index + 1,
+                plan.steps.len(),
+                step.description
+            );
 
             // Emit step started event
-            self.emit_event("agi:goal:step_started", json!({
-                "goal_id": goal_id,
-                "step_id": step.id,
-                "step_index": index,
-                "total_steps": plan.steps.len(),
-                "description": step.description,
-            }));
+            self.emit_event(
+                "agi:goal:step_started",
+                json!({
+                    "goal_id": goal_id,
+                    "step_id": step.id,
+                    "step_index": index,
+                    "total_steps": plan.steps.len(),
+                    "description": step.description,
+                }),
+            );
 
             // Check resources before execution
-            if !self.resource_manager.reserve_resources(&step.estimated_resources).await? {
+            if !self
+                .resource_manager
+                .reserve_resources(&step.estimated_resources)
+                .await?
+            {
                 tracing::warn!("[AGI] Insufficient resources for step, waiting...");
                 sleep(Duration::from_secs(1)).await;
                 continue;
@@ -249,28 +264,37 @@ impl AGICore {
             let execution_time = start.elapsed();
 
             // Release resources
-            self.resource_manager.release_resources(&step.estimated_resources).await?;
+            self.resource_manager
+                .release_resources(&step.estimated_resources)
+                .await?;
 
             // Record result
             let tool_result = ToolExecutionResult {
                 tool_id: step.tool_id.clone(),
                 success: result.is_ok(),
-                result: result.as_ref().ok().cloned().unwrap_or(serde_json::Value::Null),
+                result: result
+                    .as_ref()
+                    .ok()
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null),
                 error: result.err().map(|e| e.to_string()),
                 execution_time_ms: execution_time.as_millis() as u64,
                 resources_used: step.estimated_resources.clone(),
             };
 
             // Emit step completed event
-            self.emit_event("agi:goal:step_completed", json!({
-                "goal_id": goal_id,
-                "step_id": step.id,
-                "step_index": index,
-                "total_steps": plan.steps.len(),
-                "success": tool_result.success,
-                "execution_time_ms": tool_result.execution_time_ms,
-                "error": tool_result.error,
-            }));
+            self.emit_event(
+                "agi:goal:step_completed",
+                json!({
+                    "goal_id": goal_id,
+                    "step_id": step.id,
+                    "step_index": index,
+                    "total_steps": plan.steps.len(),
+                    "success": tool_result.success,
+                    "execution_time_ms": tool_result.execution_time_ms,
+                    "error": tool_result.error,
+                }),
+            );
 
             context.tool_results.push(tool_result.clone());
             context.context_memory.push(ContextEntry {
@@ -283,7 +307,9 @@ impl AGICore {
             });
 
             // Update knowledge base with result
-            self.knowledge_base.add_experience(&context.goal, &tool_result).await?;
+            self.knowledge_base
+                .add_experience(&context.goal, &tool_result)
+                .await?;
 
             // Learn from result
             if self.config.enable_learning {
@@ -301,14 +327,17 @@ impl AGICore {
             // Check if goal is achieved
             if self.check_goal_achieved(&context).await? {
                 tracing::info!("[AGI] Goal {} achieved!", goal_id);
-                
+
                 // Emit goal achieved event
-                self.emit_event("agi:goal:achieved", json!({
-                    "goal_id": goal_id,
-                    "total_steps": plan.steps.len(),
-                    "completed_steps": index + 1,
-                }));
-                
+                self.emit_event(
+                    "agi:goal:achieved",
+                    json!({
+                        "goal_id": goal_id,
+                        "total_steps": plan.steps.len(),
+                        "completed_steps": index + 1,
+                    }),
+                );
+
                 break;
             }
 
@@ -327,10 +356,7 @@ impl AGICore {
         // Check success criteria
         for criterion in &context.goal.success_criteria {
             // Use LLM to evaluate if criterion is met
-            let evaluation = self
-                .planner
-                .evaluate_criterion(criterion, context)
-                .await?;
+            let evaluation = self.planner.evaluate_criterion(criterion, context).await?;
 
             if !evaluation {
                 return Ok(false);
@@ -381,7 +407,11 @@ impl AGICore {
 
     /// Get goal status
     pub fn get_goal_status(&self, goal_id: &str) -> Option<ExecutionContext> {
-        self.execution_contexts.lock().unwrap().get(goal_id).cloned()
+        self.execution_contexts
+            .lock()
+            .unwrap()
+            .get(goal_id)
+            .cloned()
     }
 
     /// List all active goals
@@ -389,4 +419,3 @@ impl AGICore {
         self.active_goals.lock().unwrap().clone()
     }
 }
-

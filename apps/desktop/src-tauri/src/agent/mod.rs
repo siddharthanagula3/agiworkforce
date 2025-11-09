@@ -1,30 +1,30 @@
-pub mod autonomous;
-pub mod planner;
-pub mod executor;
-pub mod vision;
-pub mod approval;
-pub mod runtime;
-pub mod change_tracker;
-pub mod context_manager;
-pub mod code_generator;
-pub mod rag_system;
-pub mod prompt_engineer;
 pub mod ai_orchestrator;
-pub mod intelligent_file_access;
+pub mod approval;
+pub mod autonomous;
+pub mod change_tracker;
+pub mod code_generator;
 pub mod context_compactor;
+pub mod context_manager;
+pub mod executor;
+pub mod intelligent_file_access;
+pub mod planner;
+pub mod prompt_engineer;
+pub mod rag_system;
+pub mod runtime;
+pub mod vision;
 
 #[cfg(test)]
 mod tests;
 
-pub use autonomous::AutonomousAgent;
-pub use planner::TaskPlanner;
-pub use executor::TaskExecutor;
-pub use vision::VisionAutomation;
 pub use approval::ApprovalManager;
+pub use autonomous::AutonomousAgent;
+pub use executor::TaskExecutor;
+pub use planner::TaskPlanner;
 pub use runtime::AgentRuntime;
+pub use vision::VisionAutomation;
 
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
 use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
 
 /// Task status during execution
@@ -87,7 +87,9 @@ impl<'de> Deserialize<'de> for Task {
         let _updated_at = std::time::Instant::now();
         // ... rest of fields would be deserialized normally
         // This is a simplified version
-        Err(serde::de::Error::custom("Task deserialization not fully implemented"))
+        Err(serde::de::Error::custom(
+            "Task deserialization not fully implemented",
+        ))
     }
 }
 
@@ -114,7 +116,10 @@ pub enum Action {
     /// Navigate to a URL in browser
     Navigate { url: String },
     /// Wait for an element to appear
-    WaitForElement { target: ClickTarget, timeout: Duration },
+    WaitForElement {
+        target: ClickTarget,
+        timeout: Duration,
+    },
     /// Execute a command in terminal
     ExecuteCommand { command: String, args: Vec<String> },
     /// Read file content
@@ -124,7 +129,10 @@ pub enum Action {
     /// Search for text in UI (using OCR or UIA)
     SearchText { query: String },
     /// Scroll in a direction
-    Scroll { direction: ScrollDirection, amount: i32 },
+    Scroll {
+        direction: ScrollDirection,
+        amount: i32,
+    },
     /// Press a key combination
     PressKey { keys: Vec<String> },
 }
@@ -182,15 +190,15 @@ pub struct AgentConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ScreenshotQuality {
     Low,    // Faster, lower quality
-    Medium,  // Balanced
+    Medium, // Balanced
     High,   // Slower, higher quality
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VisionModel {
-    LocalOCR,      // Use local OCR (faster, no API calls)
-    CloudVision,   // Use cloud vision API (more accurate)
-    Hybrid,        // Try local first, fallback to cloud
+    LocalOCR,    // Use local OCR (faster, no API calls)
+    CloudVision, // Use cloud vision API (more accurate)
+    Hybrid,      // Try local first, fallback to cloud
 }
 
 impl Default for AgentConfig {
@@ -209,4 +217,3 @@ impl Default for AgentConfig {
         }
     }
 }
-

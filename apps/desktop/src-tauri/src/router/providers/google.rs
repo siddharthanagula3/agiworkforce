@@ -16,9 +16,17 @@ struct GoogleContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 enum GooglePart {
-    Text { text: String },
-    FunctionCall { #[serde(rename = "functionCall")] function_call: GoogleFunctionCall },
-    FunctionResponse { #[serde(rename = "functionResponse")] function_response: GoogleFunctionResponse },
+    Text {
+        text: String,
+    },
+    FunctionCall {
+        #[serde(rename = "functionCall")]
+        function_call: GoogleFunctionCall,
+    },
+    FunctionResponse {
+        #[serde(rename = "functionResponse")]
+        function_response: GoogleFunctionResponse,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,7 +150,7 @@ impl LLMProvider for GoogleProvider {
                     .collect(),
             }]
         });
-        
+
         let google_request = GoogleRequest {
             contents: request
                 .messages
@@ -201,7 +209,8 @@ impl LLMProvider for GoogleProvider {
                         tool_calls.push(ToolCall {
                             id: call_id,
                             name: function_call.name.clone(),
-                            arguments: serde_json::to_string(&function_call.args).unwrap_or_default(),
+                            arguments: serde_json::to_string(&function_call.args)
+                                .unwrap_or_default(),
                         });
                     }
                     GooglePart::FunctionResponse { .. } => {
@@ -243,7 +252,11 @@ impl LLMProvider for GoogleProvider {
             completion_tokens,
             cost,
             model: request.model.clone(),
-            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
             finish_reason,
             ..LLMResponse::default()
         })
@@ -277,7 +290,7 @@ impl LLMProvider for GoogleProvider {
                     .collect(),
             }]
         });
-        
+
         let google_request = GoogleRequest {
             contents: request
                 .messages

@@ -1,5 +1,5 @@
 use super::llm::LLMState;
-use crate::agent::context_compactor::{ContextCompactor, CompactionConfig};
+use crate::agent::context_compactor::{CompactionConfig, ContextCompactor};
 use crate::db::models::{
     Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, MessageRole,
     ProviderCostBreakdown,
@@ -10,9 +10,9 @@ use crate::router::{
     llm_router::{RouteOutcome, RouterPreferences, RoutingStrategy},
     ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider,
 };
-use futures_util::StreamExt;
 use anyhow::anyhow;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
+use futures_util::StreamExt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -24,10 +24,7 @@ use tracing::{info, warn};
 pub struct AppDatabase(pub Mutex<Connection>);
 
 /// Auto-compact conversation history if needed (like Cursor/Claude Code)
-async fn auto_compact_conversation(
-    db: &AppDatabase,
-    conversation_id: i64,
-) -> Result<(), String> {
+async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Result<(), String> {
     let mut messages = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
@@ -38,21 +35,29 @@ async fn auto_compact_conversation(
     let compactor = ContextCompactor::with_default_config();
 
     if compactor.should_compact(&messages) {
-        info!("Auto-compacting conversation {} ({} messages, {} tokens)", 
-            conversation_id, messages.len(), 
-            ContextCompactor::calculate_tokens(&messages));
+        info!(
+            "Auto-compacting conversation {} ({} messages, {} tokens)",
+            conversation_id,
+            messages.len(),
+            ContextCompactor::calculate_tokens(&messages)
+        );
 
         match compactor.compact_if_needed(&messages).await {
             Ok(Some(compaction_result)) => {
-                info!("Compaction result: {} messages compacted, {} -> {} tokens",
+                info!(
+                    "Compaction result: {} messages compacted, {} -> {} tokens",
                     compaction_result.messages_compacted,
                     compaction_result.tokens_before,
-                    compaction_result.tokens_after);
+                    compaction_result.tokens_after
+                );
 
                 // Generate summary
-                let summary = compactor.generate_summary(
-                    &messages[..messages.len() - compaction_result.messages_compacted]
-                ).await.unwrap_or_else(|_| "Context was compacted".to_string());
+                let summary = compactor
+                    .generate_summary(
+                        &messages[..messages.len() - compaction_result.messages_compacted],
+                    )
+                    .await
+                    .unwrap_or_else(|_| "Context was compacted".to_string());
 
                 // Replace old messages with summary in database
                 let keep_count = compactor.config.keep_recent.min(messages.len());
@@ -60,12 +65,10 @@ async fn auto_compact_conversation(
 
                 if old_count > 0 {
                     let conn = db.0.lock().map_err(|e| e.to_string())?;
-                    
+
                     // Delete old messages (except recent ones)
-                    let old_messages: Vec<i64> = messages[..old_count]
-                        .iter()
-                        .map(|m| m.id)
-                        .collect();
+                    let old_messages: Vec<i64> =
+                        messages[..old_count].iter().map(|m| m.id).collect();
 
                     for msg_id in old_messages {
                         let _ = repository::delete_message(&conn, msg_id);
@@ -333,7 +336,8 @@ async fn chat_send_message_streaming(
     };
 
     // Auto-compact conversation history if needed (like Cursor/Claude Code)
-    auto_compact_conversation(&db, conversation_id).await
+    auto_compact_conversation(&db, conversation_id)
+        .await
         .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
     // Get conversation history (after compaction)
@@ -356,7 +360,10 @@ async fn chat_send_message_streaming(
 
     let llm_request = LLMRequest {
         messages: router_messages,
-        model: request.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string()),
+        model: request
+            .model
+            .clone()
+            .unwrap_or_else(|| "gpt-4o-mini".to_string()),
         temperature: None,
         max_tokens: None,
         stream: true,
@@ -383,7 +390,8 @@ async fn chat_send_message_streaming(
     // Get streaming response
     let mut stream = {
         let router = llm_state.router.lock().await;
-        router.send_message_streaming(&llm_request, &preferences)
+        router
+            .send_message_streaming(&llm_request, &preferences)
             .await
             .map_err(|e| format!("Streaming failed: {}", e))?
     };
@@ -397,14 +405,14 @@ async fn chat_send_message_streaming(
             Ok(chunk) => {
                 if !chunk.content.is_empty() {
                     accumulated_content.push_str(&chunk.content);
-                    
+
                     let payload = StreamChunkPayload {
                         conversation_id,
                         message_id: assistant_message_id,
                         delta: chunk.content.clone(),
                         content: accumulated_content.clone(),
                     };
-                    
+
                     if let Err(error) = app_handle.emit("chat:stream-chunk", payload) {
                         warn!("Failed to emit stream chunk: {}", error);
                     }
@@ -476,7 +484,7 @@ pub async fn chat_send_message(
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
     let stream_mode = request.stream.unwrap_or(false);
-    
+
     // Use separate streaming path if requested
     if stream_mode {
         return chat_send_message_streaming(db, llm_state, app_handle, request).await;
@@ -509,7 +517,8 @@ pub async fn chat_send_message(
     };
 
     // Auto-compact conversation history if needed (like Cursor/Claude Code)
-    auto_compact_conversation(&db, conversation_id).await
+    auto_compact_conversation(&db, conversation_id)
+        .await
         .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
     // Get conversation history (after compaction)
@@ -532,25 +541,29 @@ pub async fn chat_send_message(
     // ✅ Add tool definitions from AGI registry + MCP tools
     let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
-        use crate::router::tool_executor::ToolExecutor;
         use crate::commands::McpState;
+        use crate::router::tool_executor::ToolExecutor;
         use std::sync::Arc;
-        
+
         match ToolRegistry::new() {
             Ok(registry) => {
                 let tool_registry = Arc::new(registry);
-                let tool_executor = ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
+                let tool_executor =
+                    ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
                 let mut tool_defs = tool_executor.get_tool_definitions(None);
-                
+
                 // ✅ Add MCP tools if available
                 if let Some(mcp_state) = app_handle.try_state::<McpState>() {
                     let mcp_tools = mcp_state.registry.get_all_tool_definitions();
                     if !mcp_tools.is_empty() {
-                        tracing::info!("[Chat] Adding {} MCP tools to function definitions", mcp_tools.len());
+                        tracing::info!(
+                            "[Chat] Adding {} MCP tools to function definitions",
+                            mcp_tools.len()
+                        );
                         tool_defs.extend(mcp_tools);
                     }
                 }
-                
+
                 (Some(tool_defs), Some(tool_executor))
             }
             Err(e) => {
@@ -561,7 +574,7 @@ pub async fn chat_send_message(
     } else {
         (None, None)
     };
-    
+
     let has_tools = tool_definitions.is_some();
     let tool_defs_for_follow_up = tool_definitions.clone(); // Clone for potential follow-up request
     let llm_request = LLMRequest {
@@ -572,7 +585,7 @@ pub async fn chat_send_message(
             .unwrap_or_else(|| "gpt-4o-mini".to_string()),
         temperature: None,
         max_tokens: None,
-        stream: stream_mode, // Use real streaming based on request
+        stream: stream_mode,     // Use real streaming based on request
         tools: tool_definitions, // ✅ Enable tools
         tool_choice: if has_tools {
             Some(crate::router::ToolChoice::Auto) // ✅ Let LLM decide when to use tools
@@ -666,7 +679,7 @@ pub async fn chat_send_message(
                         )
                         .map_err(|e| format!("Failed to store cache entry: {}", e))?;
                 }
-                
+
                 // ✅ Handle tool calls in response
                 if let Some(tool_calls) = &route_outcome.response.tool_calls {
                     if let Some(ref executor) = _tool_executor {
@@ -682,25 +695,32 @@ pub async fn chat_send_message(
                                 Some(route_outcome.provider.as_string().to_string()),
                                 Some(route_outcome.model.clone()),
                             );
-                            
+
                             if let Some(tokens) = route_outcome.response.tokens {
                                 assistant.tokens = Some(tokens as i32);
                             }
                             if let Some(cost) = route_outcome.response.cost {
                                 assistant.cost = Some(cost);
                             }
-                            
-                            let msg_id = repository::create_message(&conn, &assistant)
-                                .map_err(|e| format!("Failed to create assistant message: {}", e))?;
-                            repository::get_message(&conn, msg_id)
-                                .map_err(|e| format!("Failed to retrieve assistant message: {}", e))?
+
+                            let msg_id =
+                                repository::create_message(&conn, &assistant).map_err(|e| {
+                                    format!("Failed to create assistant message: {}", e)
+                                })?;
+                            repository::get_message(&conn, msg_id).map_err(|e| {
+                                format!("Failed to retrieve assistant message: {}", e)
+                            })?
                         };
-                        
+
                         // Execute all tool calls
                         let mut tool_results = Vec::new();
                         for tool_call in tool_calls {
-                            tracing::info!("[Chat] Executing tool: {} ({})", tool_call.name, tool_call.id);
-                            
+                            tracing::info!(
+                                "[Chat] Executing tool: {} ({})",
+                                tool_call.name,
+                                tool_call.id
+                            );
+
                             match executor.execute_tool_call(tool_call).await {
                                 Ok(result) => {
                                     let formatted = executor.format_tool_result(tool_call, &result);
@@ -714,7 +734,7 @@ pub async fn chat_send_message(
                                 }
                             }
                         }
-                        
+
                         // Add tool results to conversation
                         for (tool_call_id, result_content) in tool_results {
                             let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -726,16 +746,19 @@ pub async fn chat_send_message(
                             repository::create_message(&conn, &tool_result_msg)
                                 .map_err(|e| format!("Failed to save tool result: {}", e))?;
                         }
-                        
+
                         // Continue conversation with tool results (non-streaming for now)
-                        tracing::info!("[Chat] Continuing conversation with {} tool results", tool_calls.len());
-                        
+                        tracing::info!(
+                            "[Chat] Continuing conversation with {} tool results",
+                            tool_calls.len()
+                        );
+
                         let updated_history = {
                             let conn = db.0.lock().map_err(|e| e.to_string())?;
                             repository::list_messages(&conn, conversation_id)
                                 .map_err(|e| format!("Failed to list messages: {}", e))?
                         };
-                        
+
                         let updated_messages: Vec<RouterChatMessage> = updated_history
                             .iter()
                             .map(|message| RouterChatMessage {
@@ -745,7 +768,7 @@ pub async fn chat_send_message(
                                 tool_call_id: None,
                             })
                             .collect();
-                        
+
                         let follow_up_request = LLMRequest {
                             messages: updated_messages,
                             model: llm_request.model.clone(),
@@ -755,20 +778,22 @@ pub async fn chat_send_message(
                             tools: tool_defs_for_follow_up.clone(),
                             tool_choice: Some(crate::router::ToolChoice::Auto),
                         };
-                        
+
                         // Make follow-up request
                         let follow_up_outcome = {
                             let router = llm_state.router.lock().await;
-                            router.invoke_candidate(&candidate, &follow_up_request).await
+                            router
+                                .invoke_candidate(&candidate, &follow_up_request)
+                                .await
                                 .map_err(|e| format!("Follow-up request failed: {}", e))?
                         };
-                        
+
                         // Update outcome with follow-up response
                         outcome = Some(follow_up_outcome);
                         break;
                     }
                 }
-                
+
                 outcome = Some(route_outcome);
                 break;
             }

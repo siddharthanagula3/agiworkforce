@@ -1,11 +1,10 @@
 /// ChangeTracker - Tracks all changes made by the agent for revert capability
-/// 
+///
 /// Similar to Cursor's change tracking, this system:
 /// - Records all file modifications (with before/after diffs)
 /// - Tracks terminal commands executed
 /// - Stores git snapshots before major changes
 /// - Provides revert functionality
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,10 +18,20 @@ pub enum ChangeType {
     FileCreated,
     FileModified,
     FileDeleted,
-    FileRenamed { old_path: String },
-    CommandExecuted { command: String, working_dir: String },
-    GitCommit { hash: String, message: String },
-    GitCheckout { branch: String },
+    FileRenamed {
+        old_path: String,
+    },
+    CommandExecuted {
+        command: String,
+        working_dir: String,
+    },
+    GitCommit {
+        hash: String,
+        message: String,
+    },
+    GitCheckout {
+        branch: String,
+    },
     DirectoryCreated,
     DirectoryDeleted,
 }
@@ -166,7 +175,9 @@ impl ChangeTracker {
             None,
             output,
         );
-        change.metadata.insert("command".to_string(), serde_json::json!(command));
+        change
+            .metadata
+            .insert("command".to_string(), serde_json::json!(command));
         let id = change.id.clone();
         self.changes.push(change);
         id
@@ -179,9 +190,15 @@ impl ChangeTracker {
         working_dir: PathBuf,
     ) -> Result<GitSnapshot, String> {
         // Try to get current git status
-        let branch = self.get_git_branch(&working_dir).await.unwrap_or_else(|| "unknown".to_string());
+        let branch = self
+            .get_git_branch(&working_dir)
+            .await
+            .unwrap_or_else(|| "unknown".to_string());
         let commit_hash = self.get_git_head(&working_dir).await.ok();
-        let changed_files = self.get_git_changed_files(&working_dir).await.unwrap_or_default();
+        let changed_files = self
+            .get_git_changed_files(&working_dir)
+            .await
+            .unwrap_or_default();
 
         let snapshot = GitSnapshot {
             task_id: task_id.clone(),
@@ -213,11 +230,7 @@ impl ChangeTracker {
     pub fn get_revertible_changes(&self, task_id: Option<&str>) -> Vec<&Change> {
         self.changes
             .iter()
-            .filter(|c| {
-                c.can_revert
-                    && !c.reverted
-                    && task_id.map_or(true, |tid| c.task_id == tid)
-            })
+            .filter(|c| c.can_revert && !c.reverted && task_id.map_or(true, |tid| c.task_id == tid))
             .collect()
     }
 
@@ -332,4 +345,3 @@ trait Pipe: Sized {
 }
 
 impl<T> Pipe for T {}
-

@@ -21,7 +21,11 @@ impl TaskExecutor {
         vision: &VisionAutomation,
     ) -> Result<StepResult> {
         let start = Instant::now();
-        tracing::info!("[Executor] Executing step {}: {}", step.id, step.description);
+        tracing::info!(
+            "[Executor] Executing step {}: {}",
+            step.id,
+            step.description
+        );
 
         let result = timeout(step.timeout, self.execute_action(&step.action, vision)).await;
 
@@ -62,11 +66,7 @@ impl TaskExecutor {
         }
     }
 
-    async fn execute_action(
-        &self,
-        action: &Action,
-        vision: &VisionAutomation,
-    ) -> Result<String> {
+    async fn execute_action(&self, action: &Action, vision: &VisionAutomation) -> Result<String> {
         match action {
             Action::Screenshot { region } => {
                 let path = vision.capture_screenshot(region.clone()).await?;
@@ -85,7 +85,10 @@ impl TaskExecutor {
                 // TODO: Integrate with browser automation
                 Ok(format!("Navigated to {}", url))
             }
-            Action::WaitForElement { target, timeout: wait_timeout } => {
+            Action::WaitForElement {
+                target,
+                timeout: wait_timeout,
+            } => {
                 vision.wait_for_element(target, *wait_timeout).await?;
                 Ok("Element appeared".to_string())
             }
@@ -103,7 +106,11 @@ impl TaskExecutor {
             }
             Action::SearchText { query } => {
                 let elements = vision.search_text(query).await?;
-                Ok(format!("Found {} elements matching '{}'", elements.len(), query))
+                Ok(format!(
+                    "Found {} elements matching '{}'",
+                    elements.len(),
+                    query
+                ))
             }
             Action::Scroll { direction, amount } => {
                 self.automation.mouse.scroll(*amount)?;
@@ -116,15 +123,13 @@ impl TaskExecutor {
         }
     }
 
-    async fn click_target(
-        &self,
-        target: &ClickTarget,
-        vision: &VisionAutomation,
-    ) -> Result<()> {
+    async fn click_target(&self, target: &ClickTarget, vision: &VisionAutomation) -> Result<()> {
         match target {
             ClickTarget::Coordinates { x, y } => {
                 self.automation.mouse.move_to_smooth(*x, *y, 200)?;
-                self.automation.mouse.click(*x, *y, crate::automation::input::MouseButton::Left)?;
+                self.automation
+                    .mouse
+                    .click(*x, *y, crate::automation::input::MouseButton::Left)?;
                 Ok(())
             }
             ClickTarget::UIAElement { element_id } => {
@@ -134,17 +139,26 @@ impl TaskExecutor {
                 self.automation.uia.invoke(element_id)?;
                 Ok(())
             }
-            ClickTarget::ImageMatch { image_path, threshold } => {
+            ClickTarget::ImageMatch {
+                image_path,
+                threshold,
+            } => {
                 let (x, y) = vision.find_image(image_path, *threshold).await?;
                 self.automation.mouse.move_to_smooth(x, y, 200)?;
-                self.automation.mouse.click(x, y, crate::automation::input::MouseButton::Left)?;
+                self.automation
+                    .mouse
+                    .click(x, y, crate::automation::input::MouseButton::Left)?;
                 Ok(())
             }
             ClickTarget::TextMatch { text, fuzzy } => {
                 let matches = vision.find_text(text, *fuzzy).await?;
                 if let Some((x, y, _)) = matches.first() {
                     self.automation.mouse.move_to_smooth(*x, *y, 200)?;
-                    self.automation.mouse.click(*x, *y, crate::automation::input::MouseButton::Left)?;
+                    self.automation.mouse.click(
+                        *x,
+                        *y,
+                        crate::automation::input::MouseButton::Left,
+                    )?;
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!("Text '{}' not found", text))
@@ -153,4 +167,3 @@ impl TaskExecutor {
         }
     }
 }
-

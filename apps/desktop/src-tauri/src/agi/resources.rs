@@ -17,7 +17,7 @@ impl ResourceManager {
     pub fn new(limits: ResourceLimits) -> Result<Self> {
         let mut system = System::new_all();
         system.refresh_all();
-        
+
         Ok(Self {
             limits,
             current_usage: Arc::new(Mutex::new(ResourceState {
@@ -44,12 +44,10 @@ impl ResourceManager {
         self.update_usage().await?;
         let usage = self.current_usage.lock().unwrap();
 
-        Ok(
-            usage.cpu_usage_percent < self.limits.cpu_percent
-                && usage.memory_usage_mb < self.limits.memory_mb
-                && usage.network_usage_mbps < self.limits.network_mbps
-                && usage.storage_usage_mb < self.limits.storage_mb
-        )
+        Ok(usage.cpu_usage_percent < self.limits.cpu_percent
+            && usage.memory_usage_mb < self.limits.memory_mb
+            && usage.network_usage_mbps < self.limits.network_mbps
+            && usage.storage_usage_mb < self.limits.storage_mb)
     }
 
     /// Reserve resources for a task
@@ -58,8 +56,8 @@ impl ResourceManager {
         self.update_usage_internal(&mut usage)?;
 
         // Check if we can reserve
-        let can_reserve = 
-            (usage.cpu_usage_percent + resources.cpu_percent) <= self.limits.cpu_percent
+        let can_reserve = (usage.cpu_usage_percent + resources.cpu_percent)
+            <= self.limits.cpu_percent
             && (usage.memory_usage_mb + resources.memory_mb) <= self.limits.memory_mb
             && (usage.network_usage_mbps + resources.network_mb) <= self.limits.network_mbps;
 
@@ -91,7 +89,7 @@ impl ResourceManager {
         let mut system = self.system.lock().unwrap();
         system.refresh_cpu();
         system.refresh_memory();
-        
+
         // Update CPU usage using sysinfo
         let cpu_usage = system.global_cpu_info().cpu_usage() as f64;
         let reservations = self.reservations.lock().unwrap();
@@ -134,4 +132,3 @@ impl ResourceManager {
         reservations.values().map(|r| r.memory_mb).sum()
     }
 }
-

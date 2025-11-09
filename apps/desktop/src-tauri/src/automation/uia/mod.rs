@@ -106,10 +106,10 @@ impl UIAutomationService {
 
     pub(super) fn get_element(&self, id: &str) -> Result<IUIAutomationElement> {
         let mut cache = self.cache.lock().expect("automation cache poisoned");
-        
+
         // Clean expired entries
         cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
-        
+
         cache
             .get(id)
             .map(|cached| cached.element.clone())

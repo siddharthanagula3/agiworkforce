@@ -1,9 +1,8 @@
 /// Tauri commands for AgentRuntime
-
 use crate::agent::runtime::{AgentRuntime, Task, TaskPriority};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tauri::State;
+use tokio::sync::Mutex;
 
 /// AgentRuntime state managed by Tauri
 pub struct AgentRuntimeState(pub Arc<Mutex<AgentRuntime>>);
@@ -23,13 +22,13 @@ pub async fn runtime_queue_task(
         Some("critical") => TaskPriority::Critical,
         _ => TaskPriority::Normal,
     };
-    
+
     let mut task = Task::new(description, goal, priority);
-    
+
     if let Some(deps) = dependencies {
         task.dependencies = deps;
     }
-    
+
     let runtime = state.0.lock().await;
     runtime
         .queue_task(task)
@@ -53,14 +52,15 @@ pub async fn runtime_execute_task(
 ) -> Result<serde_json::Value, String> {
     // Clone the Arc to avoid holding the lock across await
     let runtime_arc = state.0.clone();
-    
+
     // Spawn the execution in a separate task to avoid Send issues
     let handle = tokio::spawn(async move {
         let runtime = runtime_arc.lock().await;
         runtime.execute_task(task).await
     });
-    
-    handle.await
+
+    handle
+        .await
         .map_err(|e| format!("Task execution panicked: {}", e))?
         .map_err(|e| format!("Task execution failed: {}", e))
 }
@@ -74,7 +74,10 @@ pub async fn runtime_cancel_task(
 ) -> Result<(), String> {
     let runtime = state.0.lock().await;
     runtime
-        .cancel_task(&task_id, reason.unwrap_or_else(|| "User cancellation".to_string()))
+        .cancel_task(
+            &task_id,
+            reason.unwrap_or_else(|| "User cancellation".to_string()),
+        )
         .map_err(|e| format!("Failed to cancel task: {}", e))
 }
 
@@ -148,4 +151,3 @@ pub async fn runtime_get_all_changes(
     let runtime = state.0.lock().await;
     Ok(runtime.get_all_change_history())
 }
-

@@ -263,11 +263,7 @@ impl LLMProvider for OpenAIProvider {
             .first()
             .ok_or("No choices in response")?;
 
-        let content = choice
-            .message
-            .content
-            .clone()
-            .unwrap_or_default();
+        let content = choice.message.content.clone().unwrap_or_default();
 
         let tool_calls = choice
             .message

@@ -1,15 +1,14 @@
+use crate::agent::code_generator::CodeGenerator;
 /// AI Orchestrator - Coordinates multiple AI agents and tools
-/// 
+///
 /// Handles 80% of software engineering tasks automatically by:
 /// - Breaking down complex tasks into subtasks
 /// - Coordinating multiple AI agents
 /// - Managing tool execution
 /// - Handling dependencies and sequencing
-
 use crate::agent::context_manager::ContextManager;
-use crate::agent::rag_system::{RAGSystem, RAGContext};
-use crate::agent::prompt_engineer::{PromptEngineer, PromptCategory};
-use crate::agent::code_generator::CodeGenerator;
+use crate::agent::prompt_engineer::{PromptCategory, PromptEngineer};
+use crate::agent::rag_system::{RAGContext, RAGSystem};
 use crate::mcp::McpToolRegistry;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -109,31 +108,36 @@ impl AIOrchestrator {
     pub async fn orchestrate_task(&mut self, description: String) -> Result<OrchestrationResult> {
         // Step 1: Analyze task and retrieve context
         let rag_context = self.rag_system.retrieve_context(&description, 10);
-        
+
         // Step 2: Generate optimized prompt (for future use in LLM calls)
         let category = self.prompt_engineer.detect_category(&description);
-        let _optimized_prompt = self.prompt_engineer.generate_prompt_from_description(&description, Some(category.clone()));
-        
+        let _optimized_prompt = self
+            .prompt_engineer
+            .generate_prompt_from_description(&description, Some(category.clone()));
+
         // Step 3: Break down into subtasks
-        let subtasks = self.break_down_task(&description, &rag_context, &category).await?;
-        
+        let subtasks = self
+            .break_down_task(&description, &rag_context, &category)
+            .await?;
+
         // Step 4: Add subtasks to queue
         for subtask in subtasks {
             self.task_queue.push_back(subtask);
         }
-        
+
         // Step 5: Execute tasks in dependency order
         let mut results = Vec::new();
         while let Some(task) = self.get_next_executable_task() {
             let task_id = task.id.clone();
             self.active_tasks.insert(task_id.clone(), task.clone());
-            
+
             match self.execute_task(task.clone()).await {
                 Ok(result) => {
                     let mut completed_task = task;
                     completed_task.status = TaskStatus::Completed;
                     completed_task.result = Some(result.clone());
-                    self.completed_tasks.insert(completed_task.id.clone(), completed_task);
+                    self.completed_tasks
+                        .insert(completed_task.id.clone(), completed_task);
                     self.active_tasks.remove(&task_id);
                     results.push(result);
                 }
@@ -141,13 +145,14 @@ impl AIOrchestrator {
                     let mut failed_task = task;
                     failed_task.status = TaskStatus::Failed;
                     failed_task.error = Some(e.to_string());
-                    self.completed_tasks.insert(failed_task.id.clone(), failed_task);
+                    self.completed_tasks
+                        .insert(failed_task.id.clone(), failed_task);
                     self.active_tasks.remove(&task_id);
                     return Err(anyhow!("Task execution failed: {}", e));
                 }
             }
         }
-        
+
         // Step 6: Combine results
         let results_clone = results.clone();
         Ok(OrchestrationResult {
@@ -167,7 +172,7 @@ impl AIOrchestrator {
         category: &PromptCategory,
     ) -> Result<Vec<OrchestrationTask>> {
         let mut subtasks = Vec::new();
-        
+
         // Analyze task and create subtasks based on category
         match category {
             PromptCategory::CodeGeneration => {
@@ -185,7 +190,7 @@ impl AIOrchestrator {
                     result: None,
                     error: None,
                 });
-                
+
                 subtasks.push(OrchestrationTask {
                     id: Uuid::new_v4().to_string(),
                     description: format!("Generate code for: {}", description),
@@ -193,13 +198,16 @@ impl AIOrchestrator {
                     priority: 9,
                     dependencies: vec![subtasks[0].id.clone()],
                     agent_type: AgentType::CodeGenerator,
-                    tools_needed: vec!["code_generation".to_string(), "file_operations".to_string()],
+                    tools_needed: vec![
+                        "code_generation".to_string(),
+                        "file_operations".to_string(),
+                    ],
                     estimated_duration_sec: 30,
                     status: TaskStatus::Pending,
                     result: None,
                     error: None,
                 });
-                
+
                 subtasks.push(OrchestrationTask {
                     id: Uuid::new_v4().to_string(),
                     description: format!("Generate tests for: {}", description),
@@ -213,7 +221,7 @@ impl AIOrchestrator {
                     result: None,
                     error: None,
                 });
-                
+
                 subtasks.push(OrchestrationTask {
                     id: Uuid::new_v4().to_string(),
                     description: format!("Generate documentation for: {}", description),
@@ -228,7 +236,7 @@ impl AIOrchestrator {
                     error: None,
                 });
             }
-            
+
             PromptCategory::BugFixing => {
                 subtasks.push(OrchestrationTask {
                     id: Uuid::new_v4().to_string(),
@@ -243,7 +251,7 @@ impl AIOrchestrator {
                     result: None,
                     error: None,
                 });
-                
+
                 subtasks.push(OrchestrationTask {
                     id: Uuid::new_v4().to_string(),
                     description: format!("Fix bug: {}", description),
@@ -257,7 +265,7 @@ impl AIOrchestrator {
                     result: None,
                     error: None,
                 });
-                
+
                 subtasks.push(OrchestrationTask {
                     id: Uuid::new_v4().to_string(),
                     description: format!("Add regression tests for: {}", description),
@@ -272,7 +280,7 @@ impl AIOrchestrator {
                     error: None,
                 });
             }
-            
+
             _ => {
                 // Default: single task
                 subtasks.push(OrchestrationTask {
@@ -290,26 +298,27 @@ impl AIOrchestrator {
                 });
             }
         }
-        
+
         Ok(subtasks)
     }
 
     /// Get next executable task (dependencies satisfied)
     fn get_next_executable_task(&mut self) -> Option<OrchestrationTask> {
         let mut executable_index = None;
-        
+
         for (i, task) in self.task_queue.iter().enumerate() {
             // Check if all dependencies are completed
-            let deps_satisfied = task.dependencies.iter().all(|dep_id| {
-                self.completed_tasks.contains_key(dep_id)
-            });
-            
+            let deps_satisfied = task
+                .dependencies
+                .iter()
+                .all(|dep_id| self.completed_tasks.contains_key(dep_id));
+
             if deps_satisfied && task.status == TaskStatus::Pending {
                 executable_index = Some(i);
                 break;
             }
         }
-        
+
         executable_index.and_then(|i| self.task_queue.remove(i))
     }
 
@@ -325,18 +334,18 @@ impl AIOrchestrator {
                     constraints: vec![],
                     context: "".to_string(),
                 };
-                
+
                 let result = self.code_generator.generate_code(request).await?;
                 Ok(serde_json::to_value(result)?)
             }
-            
+
             AgentType::TestAgent => {
                 // Generate tests
                 let files = vec![]; // Would get from previous task
                 let result = self.code_generator.generate_tests(files, None).await?;
                 Ok(serde_json::to_value(result)?)
             }
-            
+
             AgentType::GeneralPurpose => {
                 // Use MCP tools
                 if let Some(ref registry) = self.mcp_registry {
@@ -354,7 +363,7 @@ impl AIOrchestrator {
                     }))
                 }
             }
-            
+
             _ => {
                 // Default handling
                 Ok(serde_json::json!({
@@ -383,4 +392,3 @@ pub struct OrchestrationResult {
     pub results: Vec<serde_json::Value>,
     pub summary: String,
 }
-
