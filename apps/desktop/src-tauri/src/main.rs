@@ -1,11 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![deny(warnings)] // Deny ALL warnings - zero tolerance
 #![allow(unsafe_code)] // Required for Windows API calls
 #![allow(unused_qualifications)] // Some qualifications improve code clarity
-#![deny(unused)]
-#![deny(unused_imports)]
-#![deny(unused_variables)]
-#![deny(unused_mut)]
-#![deny(dead_code)]
 
 use agiworkforce_desktop::agent::code_generator::CodeGenerator;
 use agiworkforce_desktop::agent::context_manager::ContextManager;
