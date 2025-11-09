@@ -2,9 +2,11 @@ import { useEffect, useMemo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
 import { TokenCounter } from './TokenCounter';
+import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { StatusBar } from '../Layout/StatusBar';
 import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useTokenBudgetStore, selectBudget } from '../../stores/tokenBudgetStore';
 import { estimateTokens } from '../../utils/tokenCount';
 import { getModelContextWindow } from '../../constants/llm';
 import { cn } from '../../lib/utils';
@@ -28,11 +30,23 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
   } = useChatStore();
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
+  const budget = useTokenBudgetStore(selectBudget);
+  const addTokenUsage = useTokenBudgetStore((state) => state.addTokenUsage);
 
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Track token usage in budget system when messages change
+  useEffect(() => {
+    if (budget.enabled && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.tokens) {
+        addTokenUsage(lastMessage.tokens);
+      }
+    }
+  }, [messages, budget.enabled, addTokenUsage]);
 
   // Get model-specific context window size
   const maxContextTokens = useMemo(() => {
@@ -120,6 +134,9 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
 
   return (
     <div className={cn('flex h-full flex-col min-h-0 min-w-0', className)}>
+      {/* Budget Alerts - show at top */}
+      <BudgetAlertsPanel />
+
       <div className="flex-1 overflow-hidden min-h-0">
         <MessageList
           messages={messagesUI}
@@ -137,6 +154,7 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
           <TokenCounter
             currentTokens={currentTokenCount}
             maxTokens={maxContextTokens}
+            budgetLimit={budget.enabled ? budget.limit : undefined}
             compact={true}
             showDetails={true}
           />
