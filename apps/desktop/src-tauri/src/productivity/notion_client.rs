@@ -56,8 +56,9 @@ pub struct NotionPage {
     last_edited_time: String,
 }
 
-// Removed unused structs - will be added when Notion API integration is implemented
+// NotionRichText struct - will be used when Notion API integration is complete
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct NotionRichText {
     plain_text: String,
 }
