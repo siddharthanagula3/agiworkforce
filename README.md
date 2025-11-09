@@ -15,7 +15,9 @@ _Built with Tauri 2.0, Rust, React 18, and TypeScript_
 
 ## 🎯 **What is AGI Workforce?**
 
-**AGI Workforce** is an **AI-powered desktop automation platform** that acts as your intelligent software engineer, capable of automating virtually any task on your computer. Think of it as **Cursor + Claude Desktop + a full automation suite** - all in one lightning-fast application.
+**AGI Workforce** is an **AI-powered desktop automation platform** that acts as your intelligent software engineer, capable of automating virtually any task on your computer. Think of it as **cursor-agent (for coding) + Claude's computer use (for GUI) + a full automation suite** - all in one lightning-fast application.
+
+**Key Difference:** Unlike tools that require examples or demonstrations, AGI Workforce works **fully autonomously** - you just describe what you want, and it figures out how to do it automatically.
 
 ### **Core Concept**
 
@@ -71,38 +73,54 @@ AGI Workforce uses **Artificial General Intelligence (AGI)** principles to under
 - **"Generate documentation for this codebase"** → Analyzes code, creates comprehensive docs
 - **"Translate all markdown files to Spanish"** → Reads files, translates content, saves translations
 
-### **How It Works**
+### **How It Works - Fully Autonomous**
+
+**No examples needed. No demonstrations required. Just describe what you want.**
+
+AGI Workforce works autonomously like **cursor-agent** (for coding) and **Claude's computer use** (for GUI automation). You simply tell it what you need, and it automatically:
+
+1. **Understands** your goal (using LLM reasoning)
+2. **Plans** the steps needed (breaks down complex tasks)
+3. **Executes** using available tools (file operations, code execution, GUI automation, browser control)
+4. **Learns** from each execution (improves automatically over time)
+5. **Adapts** when things go wrong (retries, finds alternatives)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    YOU: "Build a todo app"                  │
+│              (That's all you need to say!)                  │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  AGI Brain (LLM) analyzes your request                     │
-│  - Understands the goal                                     │
-│  - Breaks it into steps                                     │
-│  - Plans execution order                                    │
+│  AGI Brain automatically:                                  │
+│  ✓ Understands what "todo app" means                      │
+│  ✓ Plans: React + TypeScript + Tailwind + Vercel deploy     │
+│  ✓ Breaks into executable steps                            │
+│  ✓ Identifies dependencies between steps                   │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Execution Engine uses available tools:                     │
+│  Execution Engine automatically uses tools:                 │
 │  ✓ file_write → Creates project structure                   │
 │  ✓ code_execute → Runs npm install                         │
 │  ✓ file_write → Writes React components                     │
 │  ✓ browser_navigate → Opens app in browser                  │
 │  ✓ ui_screenshot → Verifies it works                       │
+│  ✓ api_call → Deploys to Vercel                            │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              ✅ Task Complete!                              │
+│              ✅ Task Complete Automatically!                │
 │  - Project created                                          │
 │  - Dependencies installed                                   │
 │  - Code written                                             │
-│  - App running                                              │
+│  - App deployed                                             │
+│  - Verified working                                         │
+│                                                             │
+│  All done without you showing anything!                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -376,10 +394,10 @@ The AGI system is what makes AGI Workforce truly intelligent - it doesn't just e
 
 #### **Knowledge Base**
 
-- **What it is:** SQLite database that stores everything the system learns
-- **What it stores:** Successful task patterns, common solutions, user preferences, error resolutions
-- **Why it matters:** The system remembers what worked before and uses that knowledge
-- **Example:** After fixing a TypeScript error once, it remembers the solution for future similar errors
+- **What it is:** SQLite database that automatically stores everything the system learns
+- **What it stores:** Successful task patterns, common solutions, error resolutions - **all learned automatically**
+- **Why it matters:** The system remembers what worked before and uses that knowledge - **no manual training needed**
+- **How it works:** Like cursor-agent, it learns from code patterns automatically. Like Claude's computer use, it learns GUI interactions automatically
 
 #### **Resource Monitoring**
 
@@ -411,9 +429,9 @@ The AGI system is what makes AGI Workforce truly intelligent - it doesn't just e
 
 #### **Learning System**
 
-- **What it does:** Learns from every execution to improve future performance
-- **How it works:** Analyzes what worked, what didn't, stores patterns
-- **Example:** Learns that you prefer TypeScript over JavaScript, uses that preference automatically
+- **What it does:** Automatically learns from every execution to improve future performance - **no training or examples needed**
+- **How it works:** Analyzes what worked, what didn't, stores patterns automatically
+- **Key point:** Works autonomously like cursor-agent (coding) and Claude's computer use (GUI) - you just describe what you want, it figures out how to do it
 
 #### **Context Management**
 
@@ -1070,11 +1088,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### **Best Practices**
 
-1. **Be Specific:** Instead of "fix this", say "fix the TypeScript error in Button.tsx line 42"
-2. **Break Down Complex Tasks:** "Build a todo app" → "Create React project, add components, add styling, deploy"
-3. **Use Context:** Reference previous messages - the system remembers!
-4. **Review Before Approving:** Check what the system plans to do before auto-approving
-5. **Learn from Results:** The system learns - the more you use it, the better it gets
+1. **Just Describe What You Want:** No need to show examples or teach - just say "Build a todo app" or "Fix the TypeScript error"
+2. **Be Natural:** Talk to it like you would to a human developer - "Create a React component for user authentication"
+3. **Trust the Automation:** Like cursor-agent and Claude's computer use, it figures out the details automatically
+4. **Let It Learn:** The system learns automatically from every execution - no training needed
+5. **Use Context:** Reference previous messages - the system remembers your conversation history
 
 ## 🚀 **Join the Revolution!**
 
