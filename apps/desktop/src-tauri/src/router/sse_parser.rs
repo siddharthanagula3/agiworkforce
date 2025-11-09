@@ -36,10 +36,7 @@ struct SseStreamParser {
 impl Unpin for SseStreamParser {}
 
 impl SseStreamParser {
-    fn new(
-        response: reqwest::Response,
-        provider: crate::router::Provider,
-    ) -> Self {
+    fn new(response: reqwest::Response, provider: crate::router::Provider) -> Self {
         Self {
             inner: Box::pin(response.bytes_stream()),
             buffer: String::new(),
@@ -65,10 +62,11 @@ impl Stream for SseStreamParser {
 
                 // Enforce buffer size limit to prevent memory exhaustion
                 if self.buffer.len() + text.len() > MAX_BUFFER_SIZE {
-                    tracing::error!("SSE buffer exceeded max size of {}MB", MAX_BUFFER_SIZE / 1024 / 1024);
-                    return Poll::Ready(Some(Err(
-                        "SSE buffer size exceeded maximum limit".into()
-                    )));
+                    tracing::error!(
+                        "SSE buffer exceeded max size of {}MB",
+                        MAX_BUFFER_SIZE / 1024 / 1024
+                    );
+                    return Poll::Ready(Some(Err("SSE buffer size exceeded maximum limit".into())));
                 }
 
                 self.buffer.push_str(&text);
@@ -155,7 +153,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
             }
 
             let json: Value = serde_json::from_str(data)?;
-            
+
             if let Some(choices) = json.get("choices").and_then(|c| c.as_array()) {
                 if let Some(choice) = choices.first() {
                     if let Some(delta) = choice.get("delta") {
@@ -176,9 +174,18 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
 
             if let Some(u) = json.get("usage") {
                 usage = Some(TokenUsage {
-                    prompt_tokens: u.get("prompt_tokens").and_then(|t| t.as_u64()).map(|t| t as u32),
-                    completion_tokens: u.get("completion_tokens").and_then(|t| t.as_u64()).map(|t| t as u32),
-                    total_tokens: u.get("total_tokens").and_then(|t| t.as_u64()).map(|t| t as u32),
+                    prompt_tokens: u
+                        .get("prompt_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    completion_tokens: u
+                        .get("completion_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    total_tokens: u
+                        .get("total_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
                 });
             }
         }
@@ -232,8 +239,14 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                 }
                 if let Some(usage_data) = json.get("usage") {
                     usage = Some(TokenUsage {
-                        prompt_tokens: usage_data.get("input_tokens").and_then(|t| t.as_u64()).map(|t| t as u32),
-                        completion_tokens: usage_data.get("output_tokens").and_then(|t| t.as_u64()).map(|t| t as u32),
+                        prompt_tokens: usage_data
+                            .get("input_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        completion_tokens: usage_data
+                            .get("output_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
                         total_tokens: None,
                     });
                 }
@@ -242,7 +255,11 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                 done = true;
             }
             Some("message_start") => {
-                if let Some(m) = json.get("message").and_then(|m| m.get("model")).and_then(|m| m.as_str()) {
+                if let Some(m) = json
+                    .get("message")
+                    .and_then(|m| m.get("model"))
+                    .and_then(|m| m.as_str())
+                {
                     model = Some(m.to_string());
                 }
             }

@@ -428,7 +428,12 @@ impl LLMRouter {
         request: &LLMRequest,
         preferences: &RouterPreferences,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
+        Pin<
+            Box<
+                dyn Stream<Item = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>>
+                    + Send,
+            >,
+        >,
     > {
         let candidates = self.candidates(request, preferences);
         if candidates.is_empty() {

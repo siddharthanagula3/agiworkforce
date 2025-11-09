@@ -55,7 +55,9 @@ impl ConnectedServer {
                 },
                 McpTool {
                     name: "write_file".to_string(),
-                    description: Some("Write contents to a file. Creates the file if missing.".to_string()),
+                    description: Some(
+                        "Write contents to a file. Creates the file if missing.".to_string(),
+                    ),
                     input_schema: serde_json::json!({
                         "type": "object",
                         "properties": {
@@ -201,16 +203,12 @@ impl McpClient {
     }
 
     /// Connect to an MCP server (stub implementation)
-    pub async fn connect_server(
-        &self,
-        name: String,
-        config: McpServerConfig,
-    ) -> McpResult<()> {
+    pub async fn connect_server(&self, name: String, config: McpServerConfig) -> McpResult<()> {
         tracing::info!("Connecting to MCP server: {}", name);
 
         // TODO: Implement actual connection using rmcp SDK
         // For now, just store the config and create empty tools list
-        
+
         let connected = ConnectedServer::new(&name, config);
 
         self.servers.write().insert(name.clone(), connected);
@@ -337,7 +335,7 @@ impl McpClient {
             })
             .collect()
     }
-    
+
     /// Get list of connected server names
     pub fn get_connected_servers(&self) -> Vec<String> {
         let servers = self.servers.read();

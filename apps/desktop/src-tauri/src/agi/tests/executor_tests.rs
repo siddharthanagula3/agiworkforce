@@ -100,8 +100,12 @@ mod tests {
             context_memory: vec![],
         };
 
-        context.current_state.insert("step_1".to_string(), json!({"status": "completed"}));
-        context.current_state.insert("step_2".to_string(), json!({"status": "in_progress"}));
+        context
+            .current_state
+            .insert("step_1".to_string(), json!({"status": "completed"}));
+        context
+            .current_state
+            .insert("step_2".to_string(), json!({"status": "in_progress"}));
 
         assert_eq!(context.current_state.len(), 2);
         assert!(context.current_state.contains_key("step_1"));

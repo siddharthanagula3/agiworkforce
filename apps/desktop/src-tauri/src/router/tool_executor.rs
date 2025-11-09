@@ -14,14 +14,14 @@ pub struct ToolExecutor {
 
 impl ToolExecutor {
     pub fn new(registry: Arc<ToolRegistry>) -> Self {
-        Self { 
+        Self {
             registry,
             app_handle: None,
         }
     }
-    
+
     pub fn with_app_handle(registry: Arc<ToolRegistry>, app_handle: tauri::AppHandle) -> Self {
-        Self { 
+        Self {
             registry,
             app_handle: Some(app_handle),
         }
@@ -138,11 +138,7 @@ impl ToolExecutor {
                 .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
 
         // Execute the MCP tool
-        match mcp_state
-            .registry
-            .execute_tool(&tool_call.name, args)
-            .await
-        {
+        match mcp_state.registry.execute_tool(&tool_call.name, args).await {
             Ok(result_value) => Ok(ToolResult {
                 success: true,
                 data: result_value,
@@ -254,13 +250,16 @@ impl ToolExecutor {
             "ui_click" => {
                 // ✅ UI automation with AutomationService
                 if let Some(ref app) = self.app_handle {
-                    use crate::automation::{AutomationService, input::MouseButton, uia::ElementQuery};
+                    use crate::automation::{
+                        input::MouseButton, uia::ElementQuery, AutomationService,
+                    };
                     use tauri::Manager;
-                    
+
                     let automation = app.state::<std::sync::Arc<AutomationService>>();
-                    let target = args.get("target")
+                    let target = args
+                        .get("target")
                         .ok_or_else(|| anyhow!("Missing target parameter"))?;
-                    
+
                     // Parse target (coordinates, UIA element, or text)
                     if let Some(coords) = target.get("coordinates") {
                         let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -279,7 +278,9 @@ impl ToolExecutor {
                                 metadata: HashMap::new(),
                             }),
                         }
-                    } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
+                    } else if let Some(element_id) =
+                        target.get("element_id").and_then(|v| v.as_str())
+                    {
                         match automation.uia.invoke(element_id) {
                             Ok(_) => Ok(ToolResult {
                                 success: true,
@@ -325,7 +326,10 @@ impl ToolExecutor {
                                     Ok(ToolResult {
                                         success: false,
                                         data: json!(null),
-                                        error: Some(format!("Element with text '{}' not found", text)),
+                                        error: Some(format!(
+                                            "Element with text '{}' not found",
+                                            text
+                                        )),
                                         metadata: HashMap::new(),
                                     })
                                 }
@@ -357,16 +361,18 @@ impl ToolExecutor {
             "ui_type" => {
                 // ✅ UI automation with AutomationService
                 if let Some(ref app) = self.app_handle {
-                    use crate::automation::{AutomationService, uia::ElementQuery};
+                    use crate::automation::{uia::ElementQuery, AutomationService};
                     use tauri::Manager;
-                    
+
                     let automation = app.state::<std::sync::Arc<AutomationService>>();
-                    let target = args.get("target")
+                    let target = args
+                        .get("target")
                         .ok_or_else(|| anyhow!("Missing target parameter"))?;
-                    let text = args.get("text")
+                    let text = args
+                        .get("text")
                         .and_then(|v| v.as_str())
                         .ok_or_else(|| anyhow!("Missing text parameter"))?;
-                    
+
                     // If element_id provided, focus and type
                     if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                         if let Err(e) = automation.uia.set_focus(element_id) {
@@ -412,7 +418,7 @@ impl ToolExecutor {
                             }
                         }
                     }
-                    
+
                     // Type the text
                     match automation.keyboard.send_text(text) {
                         Ok(_) => Ok(ToolResult {
@@ -439,36 +445,42 @@ impl ToolExecutor {
             }
             "browser_navigate" => {
                 // ✅ Browser automation implementation
-                let url = args.get("url")
+                let url = args
+                    .get("url")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
-                    use crate::commands::BrowserStateWrapper;
                     use crate::browser::NavigationOptions;
+                    use crate::commands::BrowserStateWrapper;
                     use tauri::Manager;
-                    
+
                     let browser_state = app.state::<BrowserStateWrapper>();
                     let browser_guard = browser_state.0.lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
-                    
+
                     match tab_manager.list_tabs().await {
                         Ok(tabs) => {
                             let tab_id = if tabs.is_empty() {
                                 match tab_manager.open_tab(url).await {
                                     Ok(tid) => tid,
-                                    Err(e) => return Ok(ToolResult {
-                                        success: false,
-                                        data: json!(null),
-                                        error: Some(format!("Failed to open tab: {}", e)),
-                                        metadata: HashMap::new(),
-                                    }),
+                                    Err(e) => {
+                                        return Ok(ToolResult {
+                                            success: false,
+                                            data: json!(null),
+                                            error: Some(format!("Failed to open tab: {}", e)),
+                                            metadata: HashMap::new(),
+                                        })
+                                    }
                                 }
                             } else {
                                 tabs[0].id.clone()
                             };
-                            
-                            match tab_manager.navigate(&tab_id, url, NavigationOptions::default()).await {
+
+                            match tab_manager
+                                .navigate(&tab_id, url, NavigationOptions::default())
+                                .await
+                            {
                                 Ok(_) => Ok(ToolResult {
                                     success: true,
                                     data: json!({ "success": true, "url": url, "tab_id": tab_id }),
@@ -501,19 +513,21 @@ impl ToolExecutor {
             }
             "code_execute" => {
                 // ✅ Terminal code execution implementation
-                let language = args.get("language")
+                let language = args
+                    .get("language")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing language parameter"))?;
-                let code = args.get("code")
+                let code = args
+                    .get("code")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing code parameter"))?;
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::terminal::{SessionManager, ShellType};
                     use tauri::Manager;
-                    
+
                     let session_manager = app.state::<SessionManager>();
-                    
+
                     // Determine shell type based on language
                     let shell_type = match language.to_lowercase().as_str() {
                         "powershell" | "ps1" => ShellType::PowerShell,
@@ -521,20 +535,25 @@ impl ToolExecutor {
                         "cmd" | "batch" => ShellType::Cmd,
                         _ => ShellType::PowerShell, // Default to PowerShell
                     };
-                    
+
                     // Create new session for this shell type
                     let session_id = match session_manager.create_session(shell_type, None).await {
                         Ok(sid) => sid,
-                        Err(e) => return Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to create session: {}", e)),
-                            metadata: HashMap::new(),
-                        }),
+                        Err(e) => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!("Failed to create session: {}", e)),
+                                metadata: HashMap::new(),
+                            })
+                        }
                     };
-                    
+
                     // Send code to terminal
-                    match session_manager.send_input(&session_id, &format!("{}\n", code)).await {
+                    match session_manager
+                        .send_input(&session_id, &format!("{}\n", code))
+                        .await
+                    {
                         Ok(_) => {
                             // Wait a bit for output
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -542,7 +561,10 @@ impl ToolExecutor {
                                 success: true,
                                 data: json!({ "success": true, "session_id": session_id, "code": code }),
                                 error: None,
-                                metadata: HashMap::from([("session_id".to_string(), json!(session_id))]),
+                                metadata: HashMap::from([(
+                                    "session_id".to_string(),
+                                    json!(session_id),
+                                )]),
                             })
                         }
                         Err(e) => Ok(ToolResult {
@@ -563,19 +585,19 @@ impl ToolExecutor {
             }
             "db_query" => {
                 // ✅ Database query implementation
-                let query = args.get("query")
+                let query = args
+                    .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing query parameter"))?;
-                let connection_id = args.get("connection_id")
-                    .and_then(|v| v.as_str());
-                
+                let connection_id = args.get("connection_id").and_then(|v| v.as_str());
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::DatabaseState;
                     use tauri::Manager;
-                    
+
                     let database_state = app.state::<tokio::sync::Mutex<DatabaseState>>();
                     let _db_guard = database_state.lock().await;
-                    
+
                     // Execute query (simplified - in production would handle connection pooling)
                     match connection_id {
                         Some(conn_id) => {
@@ -588,7 +610,10 @@ impl ToolExecutor {
                                     "connection_id": conn_id
                                 }),
                                 error: None,
-                                metadata: HashMap::from([("connection_id".to_string(), json!(conn_id))]),
+                                metadata: HashMap::from([(
+                                    "connection_id".to_string(),
+                                    json!(conn_id),
+                                )]),
                             })
                         }
                         None => {
@@ -615,22 +640,21 @@ impl ToolExecutor {
             }
             "api_call" => {
                 // ✅ API call implementation
-                let url = args.get("url")
+                let url = args
+                    .get("url")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing url parameter"))?;
-                let method = args.get("method")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("GET");
+                let method = args.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
                 let body = args.get("body");
                 let headers = args.get("headers");
-                
+
                 if let Some(ref app) = self.app_handle {
-                    use crate::commands::ApiState;
                     use crate::api::client::{ApiRequest, HttpMethod};
+                    use crate::commands::ApiState;
                     use tauri::Manager;
-                    
+
                     let api_state = app.state::<ApiState>();
-                    
+
                     let http_method = match method.to_uppercase().as_str() {
                         "GET" => HttpMethod::Get,
                         "POST" => HttpMethod::Post,
@@ -639,17 +663,19 @@ impl ToolExecutor {
                         "DELETE" => HttpMethod::Delete,
                         _ => HttpMethod::Get,
                     };
-                    
+
                     let request = ApiRequest {
                         url: url.to_string(),
                         method: http_method,
-                        headers: headers.and_then(|h| serde_json::from_value(h.clone()).ok()).unwrap_or_default(),
+                        headers: headers
+                            .and_then(|h| serde_json::from_value(h.clone()).ok())
+                            .unwrap_or_default(),
                         body: body.and_then(|b| b.as_str().map(|s| s.to_string())),
                         query_params: HashMap::new(),
                         auth: crate::api::client::AuthType::None,
                         timeout_ms: Some(30000),
                     };
-                    
+
                     match api_state.execute_request(request).await {
                         Ok(response) => Ok(ToolResult {
                             success: true,
@@ -692,13 +718,19 @@ impl ToolExecutor {
                             success: true,
                             data: json!({ "text": text, "image_path": image_path }),
                             error: None,
-                            metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
+                            metadata: HashMap::from([(
+                                "image_path".to_string(),
+                                json!(image_path),
+                            )]),
                         }),
                         Err(e) => Ok(ToolResult {
                             success: false,
                             data: json!(null),
                             error: Some(format!("OCR failed: {}", e)),
-                            metadata: HashMap::from([("image_path".to_string(), json!(image_path))]),
+                            metadata: HashMap::from([(
+                                "image_path".to_string(),
+                                json!(image_path),
+                            )]),
                         }),
                     }
                 }
@@ -714,18 +746,20 @@ impl ToolExecutor {
             }
             "code_analyze" => {
                 // ✅ Basic code analysis (can be enhanced with LLM)
-                let code = args.get("code")
+                let code = args
+                    .get("code")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing code parameter"))?;
-                let language = args.get("language")
+                let language = args
+                    .get("language")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
-                
+
                 // Simple analysis (line count, character count, basic metrics)
                 let line_count = code.lines().count();
                 let char_count = code.len();
                 let non_whitespace = code.chars().filter(|c| !c.is_whitespace()).count();
-                
+
                 Ok(ToolResult {
                     success: true,
                     data: json!({
@@ -741,18 +775,17 @@ impl ToolExecutor {
             }
             "llm_reason" => {
                 // ✅ LLM sub-reasoning implementation
-                let prompt = args.get("prompt")
+                let prompt = args
+                    .get("prompt")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing prompt parameter"))?;
-                let model = args.get("model")
-                    .and_then(|v| v.as_str());
-                let _max_tokens = args.get("max_tokens")
+                let model = args.get("model").and_then(|v| v.as_str());
+                let _max_tokens = args
+                    .get("max_tokens")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);
-                let depth = args.get("depth")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0);
-                
+                let depth = args.get("depth").and_then(|v| v.as_u64()).unwrap_or(0);
+
                 // Prevent infinite recursion
                 const MAX_DEPTH: u64 = 3;
                 if depth >= MAX_DEPTH {
@@ -763,21 +796,21 @@ impl ToolExecutor {
                         metadata: HashMap::from([("depth".to_string(), json!(depth))]),
                     });
                 }
-                
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::LLMState;
                     use crate::router::RouterPreferences;
                     use tauri::Manager;
-                    
+
                     let llm_state = app.state::<LLMState>();
-                    
+
                     let model_str = model.unwrap_or("gpt-4o-mini");
                     let preferences = Some(RouterPreferences {
                         provider: None,
                         model: Some(model_str.to_string()),
                         strategy: crate::router::RoutingStrategy::Auto,
                     });
-                    
+
                     let router = llm_state.router.lock().await;
                     match router.send_message(prompt, preferences).await {
                         Ok(response) => Ok(ToolResult {
@@ -811,7 +844,10 @@ impl ToolExecutor {
                 Ok(ToolResult {
                     success: false,
                     data: json!(null),
-                    error: Some("Email operations require SMTP/IMAP configuration (low priority feature)".to_string()),
+                    error: Some(
+                        "Email operations require SMTP/IMAP configuration (low priority feature)"
+                            .to_string(),
+                    ),
                     metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                 })
             }
@@ -821,7 +857,10 @@ impl ToolExecutor {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some("Calendar operations require OAuth setup (low priority feature)".to_string()),
+                        error: Some(
+                            "Calendar operations require OAuth setup (low priority feature)"
+                                .to_string(),
+                        ),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
                 } else {
@@ -839,7 +878,10 @@ impl ToolExecutor {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some("Cloud storage operations require OAuth setup (low priority feature)".to_string()),
+                        error: Some(
+                            "Cloud storage operations require OAuth setup (low priority feature)"
+                                .to_string(),
+                        ),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
                 } else {
@@ -857,7 +899,10 @@ impl ToolExecutor {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some("Productivity tools require API configuration (low priority feature)".to_string()),
+                        error: Some(
+                            "Productivity tools require API configuration (low priority feature)"
+                                .to_string(),
+                        ),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
                 } else {
@@ -875,7 +920,9 @@ impl ToolExecutor {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some("Document operations require setup (low priority feature)".to_string()),
+                        error: Some(
+                            "Document operations require setup (low priority feature)".to_string(),
+                        ),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
                 } else {
@@ -898,7 +945,10 @@ impl ToolExecutor {
         } else {
             format!(
                 "Error: {}",
-                result.error.as_ref().unwrap_or(&"Unknown error".to_string())
+                result
+                    .error
+                    .as_ref()
+                    .unwrap_or(&"Unknown error".to_string())
             )
         }
     }

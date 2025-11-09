@@ -21,10 +21,7 @@ mod tests {
         let step2 = "Process data";
         let step3 = "Write output";
 
-        let dependencies = vec![
-            (step2, vec![step1]),
-            (step3, vec![step2]),
-        ];
+        let dependencies = vec![(step2, vec![step1]), (step3, vec![step2])];
 
         assert_eq!(dependencies.len(), 2);
     }

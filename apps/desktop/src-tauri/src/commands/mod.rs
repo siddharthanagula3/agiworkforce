@@ -1,6 +1,6 @@
-pub mod agi;
 pub mod agent;
 pub mod agent_runtime;
+pub mod agi;
 pub mod ai_native;
 pub mod api;
 pub mod automation;
@@ -25,9 +25,9 @@ pub mod terminal;
 pub mod tray;
 pub mod window;
 
-pub use agi::*;
 pub use agent::*;
 pub use agent_runtime::*;
+pub use agi::*;
 pub use ai_native::*;
 pub use api::*;
 pub use automation::*;

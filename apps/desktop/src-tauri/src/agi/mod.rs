@@ -1,26 +1,26 @@
+pub mod api_tools_impl;
 pub mod context_manager;
 pub mod core;
-pub mod tools;
-pub mod knowledge;
-pub mod resources;
-pub mod planner;
 pub mod executor;
-pub mod memory;
+pub mod knowledge;
 pub mod learning;
-pub mod api_tools_impl;
+pub mod memory;
+pub mod planner;
+pub mod resources;
+pub mod tools;
 
 #[cfg(test)]
 mod tests;
 
 pub use context_manager::{CompactionResult, CompactionStats, ContextManager};
 pub use core::AGICore;
-pub use tools::{ToolRegistry, Tool, ToolCapability, ToolResult};
-pub use knowledge::KnowledgeBase;
-pub use resources::ResourceManager;
-pub use planner::AGIPlanner;
 pub use executor::AGIExecutor;
-pub use memory::AGIMemory;
+pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
+pub use memory::AGIMemory;
+pub use planner::AGIPlanner;
+pub use resources::ResourceManager;
+pub use tools::{Tool, ToolCapability, ToolRegistry, ToolResult};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -184,4 +184,3 @@ impl Default for AGICapabilities {
         }
     }
 }
-

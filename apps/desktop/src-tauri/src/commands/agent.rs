@@ -3,11 +3,11 @@ use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
 use crate::router::LLMRouter;
 use anyhow::Result;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex as TokioMutex;
-use parking_lot::Mutex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitTaskRequest {
@@ -46,7 +46,7 @@ pub async fn agent_init(
     // TODO: Refactor to share router properly
     let router_for_agent = Arc::new(LLMRouter::new());
     drop(router);
-    
+
     let agent = AutonomousAgent::new(config, automation.inner().clone(), router_for_agent)
         .map_err(|e| format!("Failed to create agent: {}", e))?;
 
@@ -71,9 +71,7 @@ pub async fn agent_init(
 
 /// Submit a task to the autonomous agent
 #[tauri::command]
-pub async fn agent_submit_task(
-    request: SubmitTaskRequest,
-) -> Result<SubmitTaskResponse, String> {
+pub async fn agent_submit_task(request: SubmitTaskRequest) -> Result<SubmitTaskResponse, String> {
     let agent_arc = {
         let agent_guard = AGENT.lock();
         agent_guard
@@ -142,4 +140,3 @@ pub async fn agent_stop() -> Result<(), String> {
     }
     Ok(())
 }
-

@@ -199,7 +199,10 @@ impl ToolRegistry {
             id: "ui_screenshot".to_string(),
             name: "Take Screenshot".to_string(),
             description: "Capture screenshot of screen or region".to_string(),
-            capabilities: vec![ToolCapability::UIAutomation, ToolCapability::ImageProcessing],
+            capabilities: vec![
+                ToolCapability::UIAutomation,
+                ToolCapability::ImageProcessing,
+            ],
             parameters: vec![ToolParameter {
                 name: "region".to_string(),
                 parameter_type: ParameterType::Object,
@@ -220,7 +223,10 @@ impl ToolRegistry {
             id: "browser_navigate".to_string(),
             name: "Navigate Browser".to_string(),
             description: "Navigate browser to a URL".to_string(),
-            capabilities: vec![ToolCapability::BrowserAutomation, ToolCapability::NetworkOperation],
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::NetworkOperation,
+            ],
             parameters: vec![ToolParameter {
                 name: "url".to_string(),
                 parameter_type: ParameterType::URL,
@@ -313,7 +319,10 @@ impl ToolRegistry {
             id: "code_execute".to_string(),
             name: "Execute Code".to_string(),
             description: "Execute code in various languages".to_string(),
-            capabilities: vec![ToolCapability::CodeExecution, ToolCapability::SystemOperation],
+            capabilities: vec![
+                ToolCapability::CodeExecution,
+                ToolCapability::SystemOperation,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "language".to_string(),
@@ -411,15 +420,13 @@ impl ToolRegistry {
             name: "Begin Database Transaction".to_string(),
             description: "Start a database transaction".to_string(),
             capabilities: vec![ToolCapability::DatabaseAccess],
-            parameters: vec![
-                ToolParameter {
-                    name: "connection_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Database connection ID".to_string(),
-                    default: None,
-                },
-            ],
+            parameters: vec![ToolParameter {
+                name: "connection_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Database connection ID".to_string(),
+                default: None,
+            }],
             estimated_resources: ResourceUsage {
                 cpu_percent: 2.0,
                 memory_mb: 10,
@@ -434,15 +441,13 @@ impl ToolRegistry {
             name: "Commit Database Transaction".to_string(),
             description: "Commit a database transaction".to_string(),
             capabilities: vec![ToolCapability::DatabaseAccess],
-            parameters: vec![
-                ToolParameter {
-                    name: "connection_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Database connection ID".to_string(),
-                    default: None,
-                },
-            ],
+            parameters: vec![ToolParameter {
+                name: "connection_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Database connection ID".to_string(),
+                default: None,
+            }],
             estimated_resources: ResourceUsage {
                 cpu_percent: 2.0,
                 memory_mb: 10,
@@ -457,15 +462,13 @@ impl ToolRegistry {
             name: "Rollback Database Transaction".to_string(),
             description: "Rollback a database transaction".to_string(),
             capabilities: vec![ToolCapability::DatabaseAccess],
-            parameters: vec![
-                ToolParameter {
-                    name: "connection_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Database connection ID".to_string(),
-                    default: None,
-                },
-            ],
+            parameters: vec![ToolParameter {
+                name: "connection_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Database connection ID".to_string(),
+                default: None,
+            }],
             estimated_resources: ResourceUsage {
                 cpu_percent: 2.0,
                 memory_mb: 10,
@@ -630,7 +633,10 @@ impl ToolRegistry {
             id: "image_ocr".to_string(),
             name: "OCR Image".to_string(),
             description: "Extract text from image using OCR".to_string(),
-            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::ImageProcessing,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![ToolParameter {
                 name: "image_path".to_string(),
                 parameter_type: ParameterType::FilePath,
@@ -711,7 +717,10 @@ impl ToolRegistry {
             id: "email_send".to_string(),
             name: "Send Email".to_string(),
             description: "Send an email via SMTP".to_string(),
-            capabilities: vec![ToolCapability::NetworkOperation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::NetworkOperation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "to".to_string(),
@@ -747,7 +756,10 @@ impl ToolRegistry {
             id: "email_fetch".to_string(),
             name: "Fetch Emails".to_string(),
             description: "Fetch emails from inbox".to_string(),
-            capabilities: vec![ToolCapability::NetworkOperation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::NetworkOperation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "account_id".to_string(),
@@ -777,7 +789,10 @@ impl ToolRegistry {
             id: "calendar_create_event".to_string(),
             name: "Create Calendar Event".to_string(),
             description: "Create a calendar event".to_string(),
-            capabilities: vec![ToolCapability::NetworkOperation, ToolCapability::SystemOperation],
+            capabilities: vec![
+                ToolCapability::NetworkOperation,
+                ToolCapability::SystemOperation,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "account_id".to_string(),
@@ -813,7 +828,10 @@ impl ToolRegistry {
             id: "calendar_list_events".to_string(),
             name: "List Calendar Events".to_string(),
             description: "List calendar events".to_string(),
-            capabilities: vec![ToolCapability::NetworkOperation, ToolCapability::DataAnalysis],
+            capabilities: vec![
+                ToolCapability::NetworkOperation,
+                ToolCapability::DataAnalysis,
+            ],
             parameters: vec![ToolParameter {
                 name: "account_id".to_string(),
                 parameter_type: ParameterType::String,
@@ -907,7 +925,10 @@ impl ToolRegistry {
             id: "productivity_create_task".to_string(),
             name: "Create Task".to_string(),
             description: "Create a task in productivity tool".to_string(),
-            capabilities: vec![ToolCapability::SystemOperation, ToolCapability::TextProcessing],
+            capabilities: vec![
+                ToolCapability::SystemOperation,
+                ToolCapability::TextProcessing,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "provider".to_string(),
@@ -1005,14 +1026,10 @@ impl ToolRegistry {
     pub fn find_tools_by_capability(&self, capability: &ToolCapability) -> Vec<Tool> {
         let capabilities_index = self.capabilities_index.lock().unwrap();
         let tools = self.tools.lock().unwrap();
-        
+
         capabilities_index
             .get(capability)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| tools.get(id).cloned())
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| tools.get(id).cloned()).collect())
             .unwrap_or_default()
     }
 
@@ -1034,28 +1051,46 @@ impl ToolRegistry {
 
         let description_lower = goal_description.to_lowercase();
 
-        if description_lower.contains("file") || description_lower.contains("read") || description_lower.contains("write") {
+        if description_lower.contains("file")
+            || description_lower.contains("read")
+            || description_lower.contains("write")
+        {
             suggested.extend(self.find_tools_by_capability(&ToolCapability::FileRead));
             suggested.extend(self.find_tools_by_capability(&ToolCapability::FileWrite));
         }
 
-        if description_lower.contains("click") || description_lower.contains("ui") || description_lower.contains("automate") {
+        if description_lower.contains("click")
+            || description_lower.contains("ui")
+            || description_lower.contains("automate")
+        {
             suggested.extend(self.find_tools_by_capability(&ToolCapability::UIAutomation));
         }
 
-        if description_lower.contains("browser") || description_lower.contains("web") || description_lower.contains("url") {
+        if description_lower.contains("browser")
+            || description_lower.contains("web")
+            || description_lower.contains("url")
+        {
             suggested.extend(self.find_tools_by_capability(&ToolCapability::BrowserAutomation));
         }
 
-        if description_lower.contains("code") || description_lower.contains("execute") || description_lower.contains("run") {
+        if description_lower.contains("code")
+            || description_lower.contains("execute")
+            || description_lower.contains("run")
+        {
             suggested.extend(self.find_tools_by_capability(&ToolCapability::CodeExecution));
         }
 
-        if description_lower.contains("database") || description_lower.contains("query") || description_lower.contains("sql") {
+        if description_lower.contains("database")
+            || description_lower.contains("query")
+            || description_lower.contains("sql")
+        {
             suggested.extend(self.find_tools_by_capability(&ToolCapability::DatabaseAccess));
         }
 
-        if description_lower.contains("api") || description_lower.contains("http") || description_lower.contains("request") {
+        if description_lower.contains("api")
+            || description_lower.contains("http")
+            || description_lower.contains("request")
+        {
             suggested.extend(self.find_tools_by_capability(&ToolCapability::APICall));
         }
 
@@ -1071,4 +1106,3 @@ impl ToolRegistry {
         suggested
     }
 }
-

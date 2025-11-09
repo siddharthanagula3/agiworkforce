@@ -7,14 +7,14 @@ use std::path::PathBuf;
 pub struct McpServerConfig {
     /// Command to run the server (e.g., "npx", "python", "node")
     pub command: String,
-    
+
     /// Arguments to pass to the command
     pub args: Vec<String>,
-    
+
     /// Environment variables for the server
     #[serde(default)]
     pub env: HashMap<String, String>,
-    
+
     /// Whether the server is enabled
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -170,11 +170,7 @@ impl McpServersConfig {
                         if let Ok(password) = entry.get_password() {
                             *value = password;
                         } else {
-                            tracing::warn!(
-                                "Credential not found for {} / {}",
-                                server_name,
-                                key
-                            );
+                            tracing::warn!("Credential not found for {} / {}", server_name, key);
                         }
                     }
                 }
@@ -205,4 +201,3 @@ mod tests {
         assert_eq!(config.mcp_servers.len(), deserialized.mcp_servers.len());
     }
 }
-

@@ -70,7 +70,10 @@ pub async fn execute_api_call(
     let auth = parse_auth_from_parameters(parameters)?;
 
     // Get timeout if provided
-    let timeout_ms = parameters.get("timeout_ms").and_then(|v| v.as_u64()).or(Some(30000));
+    let timeout_ms = parameters
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .or(Some(30000));
 
     // Create API request
     let request = ApiRequest {
@@ -131,17 +134,18 @@ pub async fn execute_api_upload(
     let auth = parse_auth_from_parameters(parameters)?;
 
     // Get additional form fields if provided
-    let additional_fields = if let Some(fields_obj) = parameters.get("fields").and_then(|v| v.as_object()) {
-        let mut fields = HashMap::new();
-        for (k, v) in fields_obj {
-            if let Some(v_str) = v.as_str() {
-                fields.insert(k.clone(), v_str.to_string());
+    let additional_fields =
+        if let Some(fields_obj) = parameters.get("fields").and_then(|v| v.as_object()) {
+            let mut fields = HashMap::new();
+            for (k, v) in fields_obj {
+                if let Some(v_str) = v.as_str() {
+                    fields.insert(k.clone(), v_str.to_string());
+                }
             }
-        }
-        Some(fields)
-    } else {
-        None
-    };
+            Some(fields)
+        } else {
+            None
+        };
 
     // Execute the upload using ApiState
     let api_state = app_handle.state::<crate::commands::ApiState>();

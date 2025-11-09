@@ -1,11 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use agiworkforce_desktop::agent::code_generator::CodeGenerator;
+use agiworkforce_desktop::agent::context_manager::ContextManager;
+use agiworkforce_desktop::agent::runtime::AgentRuntime;
+use agiworkforce_desktop::mcp::{McpClient, McpToolRegistry};
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        load_persisted_calendar_accounts, AgentRuntimeState, ApiState, AppDatabase, BrowserStateWrapper,
-        CalendarState, CloudState, CodeGeneratorState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState, LLMState,
-        McpState, ProductivityState, SettingsServiceState, SettingsState,
+        load_persisted_calendar_accounts, AgentRuntimeState, ApiState, AppDatabase,
+        BrowserStateWrapper, CalendarState, CloudState, CodeGeneratorState, ContextManagerState,
+        DatabaseState, DocumentState, FileWatcherState, LLMState, McpState, ProductivityState,
+        SettingsServiceState, SettingsState,
     },
     db::migrations,
     initialize_window,
@@ -13,10 +18,6 @@ use agiworkforce_desktop::{
     state::AppState,
     telemetry,
 };
-use agiworkforce_desktop::agent::runtime::AgentRuntime;
-use agiworkforce_desktop::agent::context_manager::ContextManager;
-use agiworkforce_desktop::agent::code_generator::CodeGenerator;
-use agiworkforce_desktop::mcp::{McpClient, McpToolRegistry};
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
@@ -156,18 +157,23 @@ fn main() {
             tracing::info!("AgentRuntime initialized");
 
             // Initialize ContextManager for AI-native development
-            let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let project_root =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             let context_manager = ContextManager::new(project_root);
-            app.manage(ContextManagerState(Arc::new(TokioMutex::new(context_manager))));
+            app.manage(ContextManagerState(Arc::new(TokioMutex::new(
+                context_manager,
+            ))));
 
             tracing::info!("ContextManager initialized");
 
             // Initialize CodeGenerator
             let context_manager_for_gen = ContextManager::new(
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             );
             let code_generator = CodeGenerator::new(context_manager_for_gen);
-            app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(code_generator))));
+            app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(
+                code_generator,
+            ))));
 
             tracing::info!("CodeGenerator initialized");
 
