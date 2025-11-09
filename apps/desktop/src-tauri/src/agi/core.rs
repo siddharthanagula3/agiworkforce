@@ -89,10 +89,17 @@ impl AGICore {
     /// Start the AGI core loop (runs continuously)
     pub async fn start(&self) -> Result<()> {
         tracing::info!("[AGI] Starting AGI Core");
-        *self.stop_signal.lock().unwrap() = false;
+        *self
+            .stop_signal
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire stop signal lock"))? = false;
 
         loop {
-            if *self.stop_signal.lock().unwrap() {
+            if *self
+                .stop_signal
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire stop signal lock"))?
+            {
                 tracing::info!("[AGI] Stop signal received");
                 break;
             }
@@ -139,7 +146,10 @@ impl AGICore {
         self.knowledge_base.add_goal(&goal).await?;
 
         // Add to active goals
-        self.active_goals.lock().unwrap().push(goal.clone());
+        self.active_goals
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire active goals lock"))?
+            .push(goal.clone());
 
         // Create execution context
         let context = ExecutionContext {
@@ -152,7 +162,7 @@ impl AGICore {
 
         self.execution_contexts
             .lock()
-            .unwrap()
+            .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
             .insert(goal.id.clone(), context);
 
         // Start planning and execution in background
@@ -175,14 +185,18 @@ impl AGICore {
 
     /// Process all active goals
     async fn process_goals(&self) -> Result<()> {
-        let goals = self.active_goals.lock().unwrap().clone();
+        let goals = self
+            .active_goals
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire active goals lock"))?
+            .clone();
 
         for goal in goals {
             // Check if goal is still active
             let context = self
                 .execution_contexts
                 .lock()
-                .unwrap()
+                .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
                 .get(&goal.id)
                 .cloned();
 
@@ -191,7 +205,7 @@ impl AGICore {
                 ctx.available_resources = self.resource_manager.get_state().await?;
                 self.execution_contexts
                     .lock()
-                    .unwrap()
+                    .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
                     .insert(goal.id.clone(), ctx);
             }
         }
@@ -397,7 +411,9 @@ impl AGICore {
 
     /// Stop the AGI core
     pub fn stop(&self) {
-        *self.stop_signal.lock().unwrap() = true;
+        if let Ok(mut stop) = self.stop_signal.lock() {
+            *stop = true;
+        }
     }
 
     /// Get current capabilities
@@ -409,13 +425,13 @@ impl AGICore {
     pub fn get_goal_status(&self, goal_id: &str) -> Option<ExecutionContext> {
         self.execution_contexts
             .lock()
-            .unwrap()
+            .ok()?
             .get(goal_id)
             .cloned()
     }
 
     /// List all active goals
     pub fn list_goals(&self) -> Vec<Goal> {
-        self.active_goals.lock().unwrap().clone()
+        self.active_goals.lock().ok().map_or(Vec::new(), |g| g.clone())
     }
 }

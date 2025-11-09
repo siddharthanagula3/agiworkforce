@@ -5,7 +5,7 @@ use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
 };
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
 
 pub struct ClipboardManager;
@@ -66,6 +66,18 @@ impl ClipboardManager {
                 if buffer.is_null() {
                     let _ = GlobalFree(handle);
                     return Err(anyhow!("GlobalLock failed"));
+                }
+
+                // Verify the allocation size before copying
+                let allocated_size = GlobalSize(handle);
+                if allocated_size < bytes {
+                    GlobalUnlock(handle).ok();
+                    let _ = GlobalFree(handle);
+                    return Err(anyhow!(
+                        "GlobalAlloc allocated insufficient memory: {} bytes requested, {} bytes allocated",
+                        bytes,
+                        allocated_size
+                    ));
                 }
 
                 std::ptr::copy_nonoverlapping(encoded.as_ptr(), buffer, encoded.len());
