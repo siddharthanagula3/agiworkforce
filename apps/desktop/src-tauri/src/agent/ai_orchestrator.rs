@@ -89,7 +89,7 @@ impl AIOrchestrator {
         code_generator: CodeGenerator,
     ) -> Self {
         Self {
-            context_manager,
+            context_manager: _context_manager,
             rag_system,
             prompt_engineer,
             code_generator,

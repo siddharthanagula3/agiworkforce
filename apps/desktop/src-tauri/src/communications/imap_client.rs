@@ -220,7 +220,7 @@ impl ImapClient {
         };
 
         debug!("Setting \\Seen={} for UID {}", read, uid);
-        let mut responses = self
+        let responses = self
             .session
             .uid_store(sequence, command)
             .await
@@ -236,18 +236,20 @@ impl ImapClient {
     pub async fn delete_email(&mut self, uid: u32) -> Result<()> {
         let sequence = uid.to_string();
         {
-            let mut delete_responses = self
+            let delete_responses = self
                 .session
                 .uid_store(&sequence, "+FLAGS (\\Deleted)")
                 .await
                 .map_err(map_imap_error)?;
+            // pin_mut! macro handles mutability internally
             pin_mut!(delete_responses);
             while let Some(response) = delete_responses.next().await {
                 response.map_err(map_imap_error)?;
             }
         }
 
-        let mut expunge_stream = self.session.expunge().await.map_err(map_imap_error)?;
+        let expunge_stream = self.session.expunge().await.map_err(map_imap_error)?;
+        // pin_mut! macro handles mutability internally
         pin_mut!(expunge_stream);
         while let Some(response) = expunge_stream.next().await {
             response.map_err(map_imap_error)?;
