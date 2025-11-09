@@ -43,6 +43,7 @@ export interface WindowActions {
   toggleMaximize: () => Promise<void>;
   hide: () => Promise<void>;
   show: () => Promise<void>;
+  close: () => Promise<void>;
 }
 
 export function useWindowManager(): { state: WindowState; actions: WindowActions } {
@@ -178,6 +179,15 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     }
   }, []);
 
+  const close = useCallback(async () => {
+    try {
+      const window = getCurrentWindow();
+      await window.close();
+    } catch (error) {
+      console.error('Failed to close window', error);
+    }
+  }, []);
+
   // Keyboard shortcuts for docking
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -214,8 +224,10 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
       toggleMaximize,
       hide,
       show,
+      close,
     }),
     [
+      close,
       dock,
       hide,
       minimize,

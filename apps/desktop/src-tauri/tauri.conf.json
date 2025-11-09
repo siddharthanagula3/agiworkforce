@@ -4,7 +4,7 @@
   "version": "5.0.0",
   "identifier": "com.agiworkforce.desktop",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm run dev:vite",
     "beforeBuildCommand": "pnpm run build:web",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "AGI Workforce",
-        "width": 1400,
-        "height": 900,
-        "minWidth": 1000,
-        "minHeight": 700,
+        "width": 1920,
+        "height": 1040,
+        "minWidth": 1200,
+        "minHeight": 800,
         "resizable": true,
         "decorations": false,
         "transparent": false,

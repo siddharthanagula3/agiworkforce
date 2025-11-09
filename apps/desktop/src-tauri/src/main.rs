@@ -3,9 +3,9 @@
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        load_persisted_calendar_accounts, ApiState, AppDatabase, BrowserStateWrapper,
-        CalendarState, CloudState, DatabaseState, DocumentState, FileWatcherState, LLMState,
-        ProductivityState, SettingsServiceState, SettingsState,
+        load_persisted_calendar_accounts, AgentRuntimeState, ApiState, AppDatabase, BrowserStateWrapper,
+        CalendarState, CloudState, CodeGeneratorState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState, LLMState,
+        McpState, ProductivityState, SettingsServiceState, SettingsState,
     },
     db::migrations,
     initialize_window,
@@ -13,9 +13,14 @@ use agiworkforce_desktop::{
     state::AppState,
     telemetry,
 };
+use agiworkforce_desktop::agent::runtime::AgentRuntime;
+use agiworkforce_desktop::agent::context_manager::ContextManager;
+use agiworkforce_desktop::agent::code_generator::CodeGenerator;
+use agiworkforce_desktop::mcp::{McpClient, McpToolRegistry};
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use tokio::sync::Mutex as TokioMutex;
 
 fn main() {
     // Initialize telemetry (logging, tracing, metrics)
@@ -132,6 +137,40 @@ fn main() {
 
             tracing::info!("Automation service initialized");
 
+            // Initialize MCP state
+            let mcp_state = McpState::new();
+            let mcp_client = mcp_state.client.clone();
+            let mcp_registry = mcp_state.registry.clone();
+            app.manage(mcp_state);
+
+            tracing::info!("MCP state initialized");
+
+            // Initialize AgentRuntime
+            let agent_runtime = AgentRuntime::new(
+                mcp_client.clone(),
+                mcp_registry.clone(),
+                app.handle().clone(),
+            );
+            app.manage(AgentRuntimeState(Arc::new(TokioMutex::new(agent_runtime))));
+
+            tracing::info!("AgentRuntime initialized");
+
+            // Initialize ContextManager for AI-native development
+            let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let context_manager = ContextManager::new(project_root);
+            app.manage(ContextManagerState(Arc::new(TokioMutex::new(context_manager))));
+
+            tracing::info!("ContextManager initialized");
+
+            // Initialize CodeGenerator
+            let context_manager_for_gen = ContextManager::new(
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            );
+            let code_generator = CodeGenerator::new(context_manager_for_gen);
+            app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(code_generator))));
+
+            tracing::info!("CodeGenerator initialized");
+
             // Initialize window state
             let state = AppState::load(app.handle())?;
             app.manage(state);
@@ -162,6 +201,27 @@ fn main() {
             agiworkforce_desktop::commands::agent_get_task_status,
             agiworkforce_desktop::commands::agent_list_tasks,
             agiworkforce_desktop::commands::agent_stop,
+            // AgentRuntime commands
+            agiworkforce_desktop::commands::runtime_queue_task,
+            agiworkforce_desktop::commands::runtime_get_next_task,
+            agiworkforce_desktop::commands::runtime_execute_task,
+            agiworkforce_desktop::commands::runtime_cancel_task,
+            agiworkforce_desktop::commands::runtime_get_task_status,
+            agiworkforce_desktop::commands::runtime_get_all_tasks,
+            agiworkforce_desktop::commands::runtime_set_auto_approve,
+            agiworkforce_desktop::commands::runtime_is_auto_approve_enabled,
+            agiworkforce_desktop::commands::runtime_revert_task,
+            agiworkforce_desktop::commands::runtime_get_task_changes,
+            agiworkforce_desktop::commands::runtime_get_all_changes,
+            // AI-native software engineering commands
+            agiworkforce_desktop::commands::ai_analyze_project,
+            agiworkforce_desktop::commands::ai_add_constraint,
+            agiworkforce_desktop::commands::ai_generate_code,
+            agiworkforce_desktop::commands::ai_refactor_code,
+            agiworkforce_desktop::commands::ai_generate_tests,
+            agiworkforce_desktop::commands::ai_get_project_context,
+            agiworkforce_desktop::commands::ai_generate_context_prompt,
+            agiworkforce_desktop::commands::ai_access_file,
             // Window commands
             agiworkforce_desktop::commands::window_get_state,
             agiworkforce_desktop::commands::window_set_pinned,
@@ -406,7 +466,22 @@ fn main() {
             agiworkforce_desktop::commands::document_extract_text,
             agiworkforce_desktop::commands::document_get_metadata,
             agiworkforce_desktop::commands::document_search,
-            agiworkforce_desktop::commands::document_detect_type
+            agiworkforce_desktop::commands::document_detect_type,
+            // MCP commands
+            agiworkforce_desktop::commands::mcp_initialize,
+            agiworkforce_desktop::commands::mcp_list_servers,
+            agiworkforce_desktop::commands::mcp_connect_server,
+            agiworkforce_desktop::commands::mcp_disconnect_server,
+            agiworkforce_desktop::commands::mcp_list_tools,
+            agiworkforce_desktop::commands::mcp_search_tools,
+            agiworkforce_desktop::commands::mcp_call_tool,
+            agiworkforce_desktop::commands::mcp_get_config,
+            agiworkforce_desktop::commands::mcp_update_config,
+            agiworkforce_desktop::commands::mcp_get_stats,
+            agiworkforce_desktop::commands::mcp_store_credential,
+            agiworkforce_desktop::commands::mcp_get_tool_schemas,
+            agiworkforce_desktop::commands::mcp_get_health,
+            agiworkforce_desktop::commands::mcp_check_server_health
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

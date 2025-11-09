@@ -4,5 +4,6 @@
 rustflags = [
     "-C", "debuginfo=0",    # Force zero debug info
     "-C", "strip=symbols",  # Strip all symbols
+    "-C", "link-arg=/DEBUG:NONE", # Tell MSVC linker to skip generating PDB entirely
 ]
 linker = "link.exe"
