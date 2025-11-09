@@ -738,3 +738,103 @@ function handleStreamEnd(payload: ChatStreamEndPayload) {
     );
   });
 }
+
+// ========================================
+// SELECTORS - Use these in components for optimized subscriptions
+// ========================================
+
+/**
+ * Selector: Get all conversations
+ * Usage: const conversations = useChatStore(selectConversations);
+ */
+export const selectConversations = (state: ChatState) => state.conversations;
+
+/**
+ * Selector: Get active conversation ID
+ * Usage: const activeId = useChatStore(selectActiveConversationId);
+ */
+export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
+
+/**
+ * Selector: Get active conversation object
+ * Usage: const activeConv = useChatStore(selectActiveConversation);
+ */
+export const selectActiveConversation = (state: ChatState) =>
+  state.conversations.find((conv) => conv.id === state.activeConversationId) ?? null;
+
+/**
+ * Selector: Get all messages for active conversation
+ * Usage: const messages = useChatStore(selectMessages);
+ */
+export const selectMessages = (state: ChatState) => state.messages;
+
+/**
+ * Selector: Get loading state
+ * Usage: const loading = useChatStore(selectLoading);
+ */
+export const selectLoading = (state: ChatState) => state.loading;
+
+/**
+ * Selector: Get error state
+ * Usage: const error = useChatStore(selectError);
+ */
+export const selectError = (state: ChatState) => state.error;
+
+/**
+ * Selector: Get pinned conversation IDs
+ * Usage: const pinnedIds = useChatStore(selectPinnedConversations);
+ */
+export const selectPinnedConversations = (state: ChatState) => state.pinnedConversations;
+
+/**
+ * Selector: Get pinned conversations (full objects)
+ * Usage: const pinnedConvs = useChatStore(selectPinnedConversationObjects);
+ */
+export const selectPinnedConversationObjects = (state: ChatState) =>
+  state.conversations.filter((conv) => conv.pinned);
+
+/**
+ * Selector: Get unpinned conversations
+ * Usage: const unpinnedConvs = useChatStore(selectUnpinnedConversations);
+ */
+export const selectUnpinnedConversations = (state: ChatState) =>
+  state.conversations.filter((conv) => !conv.pinned);
+
+/**
+ * Selector: Check if a conversation is pinned
+ * Usage: const isPinned = useChatStore(selectIsConversationPinned(conversationId));
+ */
+export const selectIsConversationPinned = (conversationId: number) => (state: ChatState) =>
+  state.pinnedConversations.includes(conversationId);
+
+/**
+ * Selector: Get conversation by ID
+ * Usage: const conv = useChatStore(selectConversationById(id));
+ */
+export const selectConversationById = (id: number) => (state: ChatState) =>
+  state.conversations.find((conv) => conv.id === id) ?? null;
+
+/**
+ * Selector: Get message count for active conversation
+ * Usage: const count = useChatStore(selectMessageCount);
+ */
+export const selectMessageCount = (state: ChatState) => state.messages.length;
+
+/**
+ * Selector: Check if currently sending
+ * Usage: const isSending = useChatStore(selectIsSending);
+ */
+export const selectIsSending = (state: ChatState) => state.loading;
+
+/**
+ * Selector: Check if any message is streaming
+ * Usage: const isStreaming = useChatStore(selectIsStreaming);
+ */
+export const selectIsStreaming = (state: ChatState) => state.messages.some((msg) => msg.streaming);
+
+/**
+ * Selector: Get last message in active conversation
+ * Usage: const lastMsg = useChatStore(selectLastMessage);
+ */
+export const selectLastMessage = (state: ChatState) =>
+  state.messages.length > 0 ? state.messages[state.messages.length - 1] : null;
