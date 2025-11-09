@@ -10,7 +10,6 @@
 use agiworkforce_desktop::agent::code_generator::CodeGenerator;
 use agiworkforce_desktop::agent::context_manager::ContextManager;
 use agiworkforce_desktop::agent::runtime::AgentRuntime;
-use agiworkforce_desktop::mcp::{McpClient, McpToolRegistry};
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
