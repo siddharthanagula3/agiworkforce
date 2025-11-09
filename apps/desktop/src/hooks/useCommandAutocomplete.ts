@@ -22,7 +22,7 @@ type CommandTrigger = (typeof COMMAND_TRIGGERS)[number];
 function parseCommand(
   text: string,
   cursorPosition: number,
-): { trigger: CommandTrigger | null; query: string; startPos: number; endPos: number } | null {
+): { trigger: CommandTrigger; query: string; startPos: number; endPos: number } | null {
   // Find the word at cursor position
   const beforeCursor = text.slice(0, cursorPosition);
 
@@ -33,7 +33,7 @@ function parseCommand(
   }
 
   const trigger = match[1] as CommandTrigger;
-  const query = match[2];
+  const query = match[2] || '';
   const startPos = beforeCursor.length - match[0].length;
   const endPos = cursorPosition;
 
@@ -219,6 +219,30 @@ export function useCommandAutocomplete(
   );
 
   /**
+   * Clear autocomplete state
+   */
+  const clearAutocomplete = useCallback(() => {
+    setAutocompleteState({
+      active: false,
+      trigger: '',
+      query: '',
+      suggestions: [],
+      selectedIndex: 0,
+    });
+  }, []);
+
+  /**
+   * Select a suggestion
+   */
+  const selectSuggestion = useCallback(
+    (suggestion: ContextSuggestion) => {
+      onSelect?.(suggestion);
+      clearAutocomplete();
+    },
+    [onSelect, clearAutocomplete],
+  );
+
+  /**
    * Handle keyboard navigation
    */
   const handleKeyDown = useCallback(
@@ -264,30 +288,6 @@ export function useCommandAutocomplete(
       }
     },
     [autocompleteState, selectSuggestion, clearAutocomplete],
-  );
-
-  /**
-   * Clear autocomplete state
-   */
-  const clearAutocomplete = useCallback(() => {
-    setAutocompleteState({
-      active: false,
-      trigger: '',
-      query: '',
-      suggestions: [],
-      selectedIndex: 0,
-    });
-  }, []);
-
-  /**
-   * Select a suggestion
-   */
-  const selectSuggestion = useCallback(
-    (suggestion: ContextSuggestion) => {
-      onSelect?.(suggestion);
-      clearAutocomplete();
-    },
-    [onSelect, clearAutocomplete],
   );
 
   /**
