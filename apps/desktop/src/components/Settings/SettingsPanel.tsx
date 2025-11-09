@@ -131,11 +131,15 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     setDockOnStartup,
     loadSettings,
     saveSettings,
+    loading,
+    error,
   } = useSettingsStore();
 
   useEffect(() => {
     if (open) {
-      loadSettings();
+      loadSettings().catch((err) => {
+        console.error('Failed to load settings:', err);
+      });
     }
   }, [open, loadSettings]);
 
@@ -158,263 +162,275 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="api-keys" className="mt-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="api-keys" className="flex items-center gap-2">
-              <Key className="h-4 w-4" />
-              API Keys
-            </TabsTrigger>
-            <TabsTrigger value="llm-config" className="flex items-center gap-2">
-              <Settings2 className="h-4 w-4" />
-              LLM Configuration
-            </TabsTrigger>
-            <TabsTrigger value="window" className="flex items-center gap-2">
-              <Monitor className="h-4 w-4" />
-              Window
-            </TabsTrigger>
-          </TabsList>
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
-          <TabsContent value="api-keys" className="space-y-6 pt-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4">API Keys</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Configure your API keys for different LLM providers. Keys are stored securely in
-                your system keyring.
-              </p>
+        {loading && !llmConfig ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <Tabs defaultValue="api-keys" className="mt-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="api-keys" className="flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                API Keys
+              </TabsTrigger>
+              <TabsTrigger value="llm-config" className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4" />
+                LLM Configuration
+              </TabsTrigger>
+              <TabsTrigger value="window" className="flex items-center gap-2">
+                <Monitor className="h-4 w-4" />
+                Window
+              </TabsTrigger>
+            </TabsList>
 
-              <div className="space-y-6">
-                <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />
+            <TabsContent value="api-keys" className="space-y-6 pt-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">API Keys</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Configure your API keys for different LLM providers. Keys are stored securely in
+                  your system keyring.
+                </p>
 
-                <APIKeyField
-                  provider="anthropic"
-                  label="Anthropic API Key"
-                  placeholder="sk-ant-..."
-                />
+                <div className="space-y-6">
+                  <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />
 
-                <APIKeyField provider="google" label="Google AI API Key" placeholder="AIza..." />
-
-                <div className="rounded-lg border border-border bg-muted/50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-md bg-primary/10 p-2">
-                      <Key className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium">Ollama (Local)</h4>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Ollama runs locally and doesn&apos;t require an API key. Make sure Ollama is
-                        running on http://localhost:11434
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="llm-config" className="space-y-6 pt-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4">LLM Configuration</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Configure default settings for language model interactions
-              </p>
-
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="defaultProvider">Default Provider</Label>
-                  <Select
-                    value={llmConfig.defaultProvider}
-                    onValueChange={(value) => setDefaultProvider(value as Provider)}
-                  >
-                    <SelectTrigger id="defaultProvider">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
-                      <SelectItem value="google">Google AI</SelectItem>
-                      <SelectItem value="ollama">Ollama (Local)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    The system will automatically fall back to other providers if this one fails
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="openaiModel">OpenAI Model</Label>
-                    <Select
-                      value={llmConfig.defaultModels.openai}
-                      onValueChange={(value) => setDefaultModel('openai', value)}
-                    >
-                      <SelectTrigger id="openaiModel">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                        <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                        <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="anthropicModel">Anthropic Model</Label>
-                    <Select
-                      value={llmConfig.defaultModels.anthropic}
-                      onValueChange={(value) => setDefaultModel('anthropic', value)}
-                    >
-                      <SelectTrigger id="anthropicModel">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="claude-3-5-sonnet-20241022">
-                          Claude 3.5 Sonnet
-                        </SelectItem>
-                        <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
-                        <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="googleModel">Google AI Model</Label>
-                    <Select
-                      value={llmConfig.defaultModels.google}
-                      onValueChange={(value) => setDefaultModel('google', value)}
-                    >
-                      <SelectTrigger id="googleModel">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ollamaModel">Ollama Model</Label>
-                    <Select
-                      value={llmConfig.defaultModels.ollama}
-                      onValueChange={(value) => setDefaultModel('ollama', value)}
-                    >
-                      <SelectTrigger id="ollamaModel">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="llama3">Llama 3</SelectItem>
-                        <SelectItem value="llama2">Llama 2</SelectItem>
-                        <SelectItem value="mistral">Mistral</SelectItem>
-                        <SelectItem value="codellama">Code Llama</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="temperature">
-                    Temperature: {llmConfig.temperature.toFixed(1)}
-                  </Label>
-                  <input
-                    id="temperature"
-                    type="range"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={llmConfig.temperature}
-                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    className="w-full"
+                  <APIKeyField
+                    provider="anthropic"
+                    label="Anthropic API Key"
+                    placeholder="sk-ant-..."
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Lower values are more focused and deterministic. Higher values are more
-                    creative.
-                  </p>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="maxTokens">Max Tokens</Label>
-                  <Input
-                    id="maxTokens"
-                    type="number"
-                    min="256"
-                    max="32768"
-                    step="256"
-                    value={llmConfig.maxTokens}
-                    onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum number of tokens to generate in responses
-                  </p>
+                  <APIKeyField provider="google" label="Google AI API Key" placeholder="AIza..." />
+
+                  <div className="rounded-lg border border-border bg-muted/50 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-md bg-primary/10 p-2">
+                        <Key className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium">Ollama (Local)</h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Ollama runs locally and doesn&apos;t require an API key. Make sure Ollama
+                          is running on http://localhost:11434
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="window" className="space-y-6 pt-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Customize window behavior and appearance
-              </p>
+            <TabsContent value="llm-config" className="space-y-6 pt-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">LLM Configuration</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Configure default settings for language model interactions
+                </p>
 
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="theme">Theme</Label>
-                  <Select
-                    value={windowPreferences.theme}
-                    onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
-                  >
-                    <SelectTrigger id="theme">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="defaultProvider">Default Provider</Label>
+                    <Select
+                      value={llmConfig.defaultProvider}
+                      onValueChange={(value) => setDefaultProvider(value as Provider)}
+                    >
+                      <SelectTrigger id="defaultProvider">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                        <SelectItem value="google">Google AI</SelectItem>
+                        <SelectItem value="ollama">Ollama (Local)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      The system will automatically fall back to other providers if this one fails
+                    </p>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="startupPosition">Startup Position</Label>
-                  <Select
-                    value={windowPreferences.startupPosition}
-                    onValueChange={(value) => setStartupPosition(value as 'center' | 'remember')}
-                  >
-                    <SelectTrigger id="startupPosition">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="center">Center Screen</SelectItem>
-                      <SelectItem value="remember">Remember Last Position</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="openaiModel">OpenAI Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.openai}
+                        onValueChange={(value) => setDefaultModel('openai', value)}
+                      >
+                        <SelectTrigger id="openaiModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                          <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                          <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                          <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dockOnStartup">Dock on Startup</Label>
-                  <Select
-                    value={windowPreferences.dockOnStartup || 'none'}
-                    onValueChange={(value) =>
-                      setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
-                    }
-                  >
-                    <SelectTrigger id="dockOnStartup">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Don&apos;t Dock</SelectItem>
-                      <SelectItem value="left">Dock Left</SelectItem>
-                      <SelectItem value="right">Dock Right</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <div className="space-y-2">
+                      <Label htmlFor="anthropicModel">Anthropic Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.anthropic}
+                        onValueChange={(value) => setDefaultModel('anthropic', value)}
+                      >
+                        <SelectTrigger id="anthropicModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="claude-3-5-sonnet-20241022">
+                            Claude 3.5 Sonnet
+                          </SelectItem>
+                          <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
+                          <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="googleModel">Google AI Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.google}
+                        onValueChange={(value) => setDefaultModel('google', value)}
+                      >
+                        <SelectTrigger id="googleModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                          <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ollamaModel">Ollama Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.ollama}
+                        onValueChange={(value) => setDefaultModel('ollama', value)}
+                      >
+                        <SelectTrigger id="ollamaModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="llama3">Llama 3</SelectItem>
+                          <SelectItem value="llama2">Llama 2</SelectItem>
+                          <SelectItem value="mistral">Mistral</SelectItem>
+                          <SelectItem value="codellama">Code Llama</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="temperature">
+                      Temperature: {llmConfig.temperature.toFixed(1)}
+                    </Label>
+                    <input
+                      id="temperature"
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={llmConfig.temperature}
+                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Lower values are more focused and deterministic. Higher values are more
+                      creative.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="maxTokens">Max Tokens</Label>
+                    <Input
+                      id="maxTokens"
+                      type="number"
+                      min="256"
+                      max="32768"
+                      step="256"
+                      value={llmConfig.maxTokens}
+                      onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum number of tokens to generate in responses
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+
+            <TabsContent value="window" className="space-y-6 pt-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Customize window behavior and appearance
+                </p>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="theme">Theme</Label>
+                    <Select
+                      value={windowPreferences.theme}
+                      onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+                    >
+                      <SelectTrigger id="theme">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="startupPosition">Startup Position</Label>
+                    <Select
+                      value={windowPreferences.startupPosition}
+                      onValueChange={(value) => setStartupPosition(value as 'center' | 'remember')}
+                    >
+                      <SelectTrigger id="startupPosition">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="center">Center Screen</SelectItem>
+                        <SelectItem value="remember">Remember Last Position</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dockOnStartup">Dock on Startup</Label>
+                    <Select
+                      value={windowPreferences.dockOnStartup || 'none'}
+                      onValueChange={(value) =>
+                        setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
+                      }
+                    >
+                      <SelectTrigger id="dockOnStartup">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Don&apos;t Dock</SelectItem>
+                        <SelectItem value="left">Dock Left</SelectItem>
+                        <SelectItem value="right">Dock Right</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
 
         <div className="flex justify-end gap-3 mt-6 pt-6 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
