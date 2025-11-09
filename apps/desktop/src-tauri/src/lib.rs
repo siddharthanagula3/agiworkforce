@@ -1,4 +1,9 @@
-#![deny(warnings)]
+#![allow(unsafe_code)] // Required for Windows API calls
+#![deny(unused)]
+#![deny(unused_imports)]
+#![deny(unused_variables)]
+#![deny(unused_mut)]
+#![deny(dead_code)]
 #![allow(clippy::should_implement_trait)]
 
 // Core application modules
