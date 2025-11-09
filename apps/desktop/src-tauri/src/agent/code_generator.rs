@@ -182,7 +182,7 @@ impl CodeGenerator {
     /// Generate code using LLM router
     async fn generate_with_llm(
         &self,
-        router: &Arc<LLMRouter>,
+        _router: &Arc<LLMRouter>,
         request: &CodeGenRequest,
         context_prompt: &str,
         existing_code: &HashMap<PathBuf, String>,

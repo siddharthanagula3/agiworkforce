@@ -283,12 +283,12 @@ impl AgentRuntime {
 
         // Create snapshot before execution (for revert capability)
         let working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        if let Ok(_snapshot) = self
-            .change_tracker
-            .write()
-            .create_snapshot(task_id.clone(), working_dir.clone())
-            .await
-        {
+        // Drop the write guard before await to avoid Send issues
+        let snapshot_future = {
+            let mut tracker = self.change_tracker.write();
+            tracker.create_snapshot(task_id.clone(), working_dir.clone())
+        };
+        if let Ok(_snapshot) = snapshot_future.await {
             tracing::info!("[AgentRuntime] Created snapshot for task: {}", task_id);
         }
 
