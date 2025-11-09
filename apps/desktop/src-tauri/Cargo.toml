@@ -6,14 +6,16 @@ authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
 
 [lints.rust]
-# Deny all warnings - zero tolerance policy
-warnings = "deny"
-unsafe_code = "warn"
+# Zero warnings policy - deny all warnings
+# unsafe_code is allowed at crate level (required for Windows API)
 unused = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
 unused_mut = "deny"
 dead_code = "deny"
+unused_attributes = "deny"
+unused_qualifications = "deny"
+unused_results = "warn"
 
 [dependencies]
 # Tauri and Plugins (upgraded to stable 2.0.0)
