@@ -188,7 +188,7 @@ importers:
         specifier: ^11.9.0
         version: 11.11.1
       immer:
-        specifier: ^10.1.1
+        specifier: ^10.2.0
         version: 10.2.0
       katex:
         specifier: ^0.16.9
