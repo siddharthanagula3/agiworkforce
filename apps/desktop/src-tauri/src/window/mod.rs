@@ -94,8 +94,10 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
                 && saved_geometry.height >= WINDOW_MIN_HEIGHT
                 && saved_geometry.x >= monitor_position.x
                 && saved_geometry.y >= monitor_position.y
-                && saved_geometry.x + saved_geometry.width <= monitor_position.x + monitor_size.width
-                && saved_geometry.y + saved_geometry.height <= monitor_position.y + monitor_size.height
+                && saved_geometry.x + saved_geometry.width
+                    <= monitor_position.x + monitor_size.width
+                && saved_geometry.y + saved_geometry.height
+                    <= monitor_position.y + monitor_size.height
             {
                 saved_geometry
             } else {
@@ -265,7 +267,9 @@ fn handle_resize_event(
         }
     } else if is_docked && !is_maximized {
         // When docked, clamp width to dock width (use dock-specific minimum)
-        let clamped_width = logical.width.clamp(WINDOW_DOCK_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH);
+        let clamped_width = logical
+            .width
+            .clamp(WINDOW_DOCK_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH);
         if (clamped_width - logical.width).abs() > f64::EPSILON {
             logical.width = clamped_width;
             app_state.suppress_events(|| window.set_size(tauri::Size::Logical(logical)))?;
@@ -317,7 +321,9 @@ fn apply_geometry(
 
     let width = if is_docked {
         // When docked, clamp to dock width (use dock-specific minimum)
-        geometry.width.clamp(WINDOW_DOCK_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH)
+        geometry
+            .width
+            .clamp(WINDOW_DOCK_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH)
     } else if is_maximized {
         // When maximized, use geometry width as-is
         geometry.width
