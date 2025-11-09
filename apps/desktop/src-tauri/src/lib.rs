@@ -1,3 +1,4 @@
+#![deny(warnings)]
 #![allow(clippy::should_implement_trait)]
 
 // Core application modules

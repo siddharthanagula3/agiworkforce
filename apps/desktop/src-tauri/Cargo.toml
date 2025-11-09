@@ -5,6 +5,16 @@ edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
 
+[lints.rust]
+# Deny all warnings - zero tolerance policy
+warnings = "deny"
+unsafe_code = "warn"
+unused = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+dead_code = "deny"
+
 [dependencies]
 # Tauri and Plugins (upgraded to stable 2.0.0)
 tauri = { version = "2.0.0", features = ["tray-icon", "devtools"] }

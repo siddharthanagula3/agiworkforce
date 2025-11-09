@@ -182,8 +182,7 @@ async fn log_file_operation(
 }
 
 /// Check if operation is dangerous and requires confirmation
-#[allow(dead_code)]
-async fn confirm_dangerous_operation(
+async fn _confirm_dangerous_operation(
     operation: &str,
     paths: &[String],
     app_handle: &AppHandle,

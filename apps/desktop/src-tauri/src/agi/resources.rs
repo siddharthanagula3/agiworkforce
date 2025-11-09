@@ -118,17 +118,5 @@ impl ResourceManager {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn estimate_cpu_usage(&self) -> f64 {
-        // This is now handled in update_usage_internal
-        let reservations = self.reservations.lock().unwrap();
-        reservations.values().map(|r| r.cpu_percent).sum()
-    }
-
-    #[allow(dead_code)]
-    fn estimate_memory_usage(&self) -> u64 {
-        // This is now handled in update_usage_internal
-        let reservations = self.reservations.lock().unwrap();
-        reservations.values().map(|r| r.memory_mb).sum()
-    }
+    // Removed unused methods - functionality moved to update_usage_internal
 }
