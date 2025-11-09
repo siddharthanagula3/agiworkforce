@@ -2,7 +2,7 @@
 
 ## AGI Workforce Desktop - Critical Fixes
 
-**Date:** January 2025  
+**Date:** November 2025  
 **Based On:** COMPREHENSIVE_AUDIT_REPORT.md  
 **Goal:** Make application **production-ready** with working function calling and tool execution
 
@@ -529,7 +529,7 @@ mod tests {
    ```
 
 2. **Remove duplicate tool implementations from AGI Executor** (2 hours)
-   - Delete tool match arms (file*read, file_write, ui*_, browser\__, etc.)
+   - Delete tool match arms (file*read, file_write, ui*\_, browser\_\_, etc.)
    - Keep only delegation to Router Tool Executor
 
 3. **Update AGI Executor tests** (2-3 hours)
