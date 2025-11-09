@@ -228,10 +228,7 @@ pub async fn fs_read_file_content(file_path: String) -> Result<FileContentRespon
             // Read first 100KB
             let file_content =
                 fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
-            let truncated: Vec<u8> = file_content
-                .into_iter()
-                .take(MAX_SIZE as usize)
-                .collect();
+            let truncated: Vec<u8> = file_content.into_iter().take(MAX_SIZE as usize).collect();
 
             String::from_utf8_lossy(&truncated).to_string()
                 + "\n\n[... content truncated, file too large]"
