@@ -16,7 +16,7 @@ describe('browserStore', () => {
     tabs.push({ id: 'tab1', url: 'https://example.com' });
 
     expect(tabs.length).toBe(1);
-    expect(tabs[0].url).toBe('https://example.com');
+    expect(tabs[0]!.url).toBe('https://example.com');
   });
 
   it('should close tab', () => {
@@ -28,7 +28,7 @@ describe('browserStore', () => {
     const filtered = tabs.filter((tab) => tab.id !== 'tab1');
 
     expect(filtered.length).toBe(1);
-    expect(filtered[0].id).toBe('tab2');
+    expect(filtered[0]!.id).toBe('tab2');
   });
 
   it('should switch active tab', () => {
