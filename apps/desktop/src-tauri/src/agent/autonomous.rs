@@ -47,11 +47,18 @@ impl AutonomousAgent {
     /// Start the autonomous agent loop (runs 24/7)
     pub async fn start(&self) -> Result<()> {
         tracing::info!("[Agent] Starting autonomous agent loop");
-        *self.stop_signal.lock().unwrap() = false;
+        *self
+            .stop_signal
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire stop signal lock"))? = false;
 
         loop {
             // Check if we should stop
-            if *self.stop_signal.lock().unwrap() {
+            if *self
+                .stop_signal
+                .lock()
+                .map_err(|_| anyhow!("Failed to acquire stop signal lock"))?
+            {
                 tracing::info!("[Agent] Stop signal received, shutting down");
                 break;
             }
@@ -76,7 +83,9 @@ impl AutonomousAgent {
     /// Stop the autonomous agent
     pub fn stop(&self) {
         tracing::info!("[Agent] Stopping autonomous agent");
-        *self.stop_signal.lock().unwrap() = true;
+        if let Ok(mut stop) = self.stop_signal.lock() {
+            *stop = true;
+        }
     }
 
     /// Submit a new task for execution

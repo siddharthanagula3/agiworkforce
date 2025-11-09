@@ -53,11 +53,16 @@ impl McpServersConfig {
     }
 
     /// Get the default configuration path
-    pub fn default_config_path() -> PathBuf {
-        let app_data = dirs::data_dir().expect("Failed to get app data directory");
-        app_data
+    pub fn default_config_path() -> crate::mcp::McpResult<PathBuf> {
+        let app_data = dirs::data_dir().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Failed to get app data directory",
+            )
+        })?;
+        Ok(app_data
             .join("agiworkforce")
-            .join("mcp-servers-config.json")
+            .join("mcp-servers-config.json"))
     }
 
     /// Create a default configuration
