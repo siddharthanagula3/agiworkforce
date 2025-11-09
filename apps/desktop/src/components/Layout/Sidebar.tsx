@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MessageCircle, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, HelpCircle, MessageCircle, Plus, Settings } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useChatStore } from '../../stores/chatStore';
@@ -9,9 +9,10 @@ import { ScrollArea } from '../ui/ScrollArea';
 
 interface SidebarProps {
   className?: string;
+  onOpenSettings?: () => void;
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, onOpenSettings }: SidebarProps) {
   const {
     conversations,
     activeConversationId,
@@ -144,6 +145,7 @@ export function Sidebar({ className }: SidebarProps) {
         <Button
           variant="ghost"
           size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           onClick={() => setCollapsed((prev) => !prev)}
         >
@@ -182,16 +184,93 @@ export function Sidebar({ className }: SidebarProps) {
         )}
       </ScrollArea>
 
-      <div className="border-t border-border/60 bg-background/80 px-3 py-2">
-        {!collapsed && (
-          <p className="text-xs text-muted-foreground text-center">
-            Press{' '}
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-              Cmd+K
-            </kbd>{' '}
-            for more options
-          </p>
-        )}
+      {/* Bottom Actions - Similar to Claude Desktop/OpenAI */}
+      <div className="border-t border-border/60 bg-background/80">
+        <div className="px-3 py-2 space-y-1">
+          {!collapsed ? (
+            <>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+                onClick={() => onOpenSettings?.()}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  // TODO: Implement help/feedback
+                  window.open(
+                    'https://github.com/siddharthanagula3/agiworkforce-desktop-app',
+                    '_blank',
+                  );
+                }}
+              >
+                <HelpCircle className="mr-2 h-4 w-4" />
+                Help & Feedback
+              </Button>
+            </>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => onOpenSettings?.()}
+                title="Settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  window.open(
+                    'https://github.com/siddharthanagula3/agiworkforce-desktop-app',
+                    '_blank',
+                  );
+                }}
+                title="Help"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* User Profile Section - Similar to Claude Desktop */}
+        <div className="px-3 py-2 border-t border-border/60">
+          {!collapsed ? (
+            <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/50 transition-colors cursor-pointer group">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                SN
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">Siddhartha Nagula</p>
+                <p className="text-xs text-muted-foreground truncate">Pro plan</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => {
+                  // TODO: Implement user menu
+                }}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                SN
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );
