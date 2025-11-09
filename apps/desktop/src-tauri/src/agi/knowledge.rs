@@ -1,9 +1,9 @@
 use super::*;
 use anyhow::Result;
+use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 /// Knowledge Base - stores and retrieves knowledge for the AGI
 pub struct KnowledgeBase {
