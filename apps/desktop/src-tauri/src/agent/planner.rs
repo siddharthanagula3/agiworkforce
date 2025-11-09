@@ -83,7 +83,7 @@ Return ONLY the JSON array, no other text."#,
 
         // Check token usage and use local LLM if needed
         let use_local = self.should_use_local_llm().await?;
-        
+
         let response = if use_local {
             self.plan_with_local_llm(description).await?
         } else {
@@ -97,7 +97,7 @@ Return ONLY the JSON array, no other text."#,
     async fn plan_with_cloud_llm(&self, prompt: &str) -> Result<String> {
         // Use router to get LLM response
         use crate::router::{ChatMessage, LLMRequest, RouterPreferences, RoutingStrategy};
-        
+
         let request = LLMRequest {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
@@ -122,7 +122,7 @@ Return ONLY the JSON array, no other text."#,
         let router = self.router.lock().await;
         let candidates = router.candidates(&request, &preferences);
         drop(router);
-        
+
         if !candidates.is_empty() {
             let router = self.router.lock().await;
             if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
@@ -186,7 +186,7 @@ Return ONLY the JSON array, no other text."#,
         };
 
         let steps_json: Vec<serde_json::Value> = serde_json::from_str(&json_str)?;
-        
+
         let mut steps = Vec::new();
         for step_json in steps_json {
             let step = self.parse_step(step_json)?;
@@ -201,22 +201,18 @@ Return ONLY the JSON array, no other text."#,
             .as_str()
             .ok_or_else(|| anyhow!("Missing step id"))?
             .to_string();
-        
+
         let description = step_json["description"]
             .as_str()
             .ok_or_else(|| anyhow!("Missing step description"))?
             .to_string();
-        
+
         let expected_result = step_json["expected_result"].as_str().map(|s| s.to_string());
-        
-        let timeout_secs = step_json["timeout"]
-            .as_u64()
-            .unwrap_or(30);
+
+        let timeout_secs = step_json["timeout"].as_u64().unwrap_or(30);
         let timeout = Duration::from_secs(timeout_secs);
-        
-        let retry_on_failure = step_json["retry_on_failure"]
-            .as_bool()
-            .unwrap_or(true);
+
+        let retry_on_failure = step_json["retry_on_failure"].as_bool().unwrap_or(true);
 
         let action = self.parse_action(&step_json["action"])?;
 
@@ -270,9 +266,7 @@ Return ONLY the JSON array, no other text."#,
             }
             "WaitForElement" => {
                 let target = self.parse_click_target(&action_json["target"])?;
-                let timeout_secs = action_json["timeout"]
-                    .as_u64()
-                    .unwrap_or(10);
+                let timeout_secs = action_json["timeout"].as_u64().unwrap_or(10);
                 Ok(Action::WaitForElement {
                     target,
                     timeout: Duration::from_secs(timeout_secs),
@@ -319,9 +313,7 @@ Return ONLY the JSON array, no other text."#,
                 Ok(Action::SearchText { query })
             }
             "Scroll" => {
-                let direction_str = action_json["direction"]
-                    .as_str()
-                    .unwrap_or("down");
+                let direction_str = action_json["direction"].as_str().unwrap_or("down");
                 let direction = match direction_str {
                     "up" => ScrollDirection::Up,
                     "down" => ScrollDirection::Down,
@@ -387,4 +379,3 @@ Return ONLY the JSON array, no other text."#,
         Ok(true)
     }
 }
-

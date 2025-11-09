@@ -1,12 +1,11 @@
+use chrono::{DateTime, Utc};
 /// ContextManager - Manages project context and constraints for AI-native software engineering
 ///
 /// This enables engineers to provide high-level context and constraints,
 /// while the AI handles all code generation and implementation details.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use chrono::{DateTime, Utc};
 
 /// Constraint types for guiding AI behavior
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -21,7 +20,10 @@ pub enum ConstraintType {
     /// Architecture constraints (e.g., "use MVC pattern", "separate concerns")
     Architecture { patterns: Vec<String> },
     /// Dependency constraints (e.g., "use only these libraries", "avoid these patterns")
-    Dependencies { allowed: Vec<String>, forbidden: Vec<String> },
+    Dependencies {
+        allowed: Vec<String>,
+        forbidden: Vec<String>,
+    },
     /// Testing constraints (e.g., "must have 80% coverage", "write unit tests")
     Testing { requirements: Vec<String> },
     /// Documentation constraints (e.g., "add JSDoc comments", "document public APIs")
@@ -31,8 +33,8 @@ pub enum ConstraintType {
 /// Project context information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContext {
-    pub project_type: String, // "web", "desktop", "api", "library", etc.
-    pub language: String,      // "typescript", "rust", "python", etc.
+    pub project_type: String,      // "web", "desktop", "api", "library", etc.
+    pub language: String,          // "typescript", "rust", "python", etc.
     pub framework: Option<String>, // "react", "tauri", "express", etc.
     pub dependencies: Vec<String>,
     pub patterns: Vec<String>, // Common patterns used in the project
@@ -114,28 +116,28 @@ impl ContextManager {
     pub async fn analyze_project(&mut self) -> Result<(), String> {
         // Analyze package.json / Cargo.toml / etc.
         self.detect_language_and_framework().await?;
-        
+
         // Analyze directory structure
         self.analyze_structure().await?;
-        
+
         // Detect patterns and conventions
         self.detect_patterns().await?;
-        
+
         // Load dependencies
         self.load_dependencies().await?;
-        
+
         Ok(())
     }
 
     /// Detect programming language and framework
     async fn detect_language_and_framework(&mut self) -> Result<(), String> {
         let root = &self.project_context.project_structure.root;
-        
+
         // Check for package.json (Node.js/TypeScript)
         if root.join("package.json").exists() {
             self.project_context.language = "typescript".to_string();
             self.project_context.project_type = "web".to_string();
-            
+
             // Try to read package.json to detect framework
             if let Ok(content) = tokio::fs::read_to_string(root.join("package.json")).await {
                 if content.contains("\"react\"") {
@@ -151,7 +153,7 @@ impl ContextManager {
         else if root.join("Cargo.toml").exists() {
             self.project_context.language = "rust".to_string();
             self.project_context.project_type = "library".to_string();
-            
+
             // Check if it's a Tauri project
             if root.join("src-tauri").exists() {
                 self.project_context.project_type = "desktop".to_string();
@@ -163,23 +165,26 @@ impl ContextManager {
             self.project_context.language = "python".to_string();
             self.project_context.project_type = "api".to_string();
         }
-        
+
         Ok(())
     }
 
     /// Analyze project directory structure
     async fn analyze_structure(&mut self) -> Result<(), String> {
         let root = &self.project_context.project_structure.root;
-        
+
         // Common source directories
         let source_patterns = vec!["src", "lib", "app", "apps", "packages"];
         for pattern in source_patterns {
             let path = root.join(pattern);
             if path.exists() && path.is_dir() {
-                self.project_context.project_structure.source_dirs.push(path);
+                self.project_context
+                    .project_structure
+                    .source_dirs
+                    .push(path);
             }
         }
-        
+
         // Common test directories
         let test_patterns = vec!["tests", "test", "__tests__", "spec"];
         for pattern in test_patterns {
@@ -188,16 +193,25 @@ impl ContextManager {
                 self.project_context.project_structure.test_dirs.push(path);
             }
         }
-        
+
         // Config files
-        let config_files = vec!["package.json", "tsconfig.json", "Cargo.toml", "pyproject.toml", ".gitignore"];
+        let config_files = vec![
+            "package.json",
+            "tsconfig.json",
+            "Cargo.toml",
+            "pyproject.toml",
+            ".gitignore",
+        ];
         for file in config_files {
             let path = root.join(file);
             if path.exists() {
-                self.project_context.project_structure.config_files.push(path);
+                self.project_context
+                    .project_structure
+                    .config_files
+                    .push(path);
             }
         }
-        
+
         Ok(())
     }
 
@@ -205,7 +219,7 @@ impl ContextManager {
     async fn detect_patterns(&mut self) -> Result<(), String> {
         // Analyze existing code to detect patterns
         // This is a simplified version - in production, would use AST parsing
-        
+
         let source_dirs = &self.project_context.project_structure.source_dirs;
         for dir in source_dirs {
             if let Ok(mut entries) = tokio::fs::read_dir(dir).await {
@@ -216,32 +230,38 @@ impl ContextManager {
                         // In production, would use proper AST analysis
                         if let Ok(content) = tokio::fs::read_to_string(&path).await {
                             // Detect common patterns
-                            if content.contains("export const") || content.contains("export function") {
-                                self.project_context.patterns.push("ES6 modules".to_string());
+                            if content.contains("export const")
+                                || content.contains("export function")
+                            {
+                                self.project_context
+                                    .patterns
+                                    .push("ES6 modules".to_string());
                             }
                             if content.contains("class ") {
                                 self.project_context.patterns.push("Classes".to_string());
                             }
                             if content.contains("async ") || content.contains(".then(") {
-                                self.project_context.patterns.push("Async/await".to_string());
+                                self.project_context
+                                    .patterns
+                                    .push("Async/await".to_string());
                             }
                         }
                     }
                 }
             }
         }
-        
+
         // Remove duplicates
         self.project_context.patterns.sort();
         self.project_context.patterns.dedup();
-        
+
         Ok(())
     }
 
     /// Load project dependencies
     async fn load_dependencies(&mut self) -> Result<(), String> {
         let root = &self.project_context.project_structure.root;
-        
+
         // Load from package.json
         if let Ok(content) = tokio::fs::read_to_string(root.join("package.json")).await {
             if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
@@ -252,7 +272,7 @@ impl ContextManager {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -265,16 +285,16 @@ impl ContextManager {
     pub fn get_constraints_for_task(&self, task_id: &str) -> Vec<&Constraint> {
         // Find constraints from recent changes related to this task
         let mut constraints = Vec::new();
-        
+
         for change in &self.context_history {
             if change.task_id == task_id {
                 constraints.extend(change.constraints.iter());
             }
         }
-        
+
         // Add active global constraints
         constraints.extend(self.active_constraints.iter());
-        
+
         constraints
     }
 
@@ -287,7 +307,7 @@ impl ContextManager {
     ) -> ChangeContext {
         // Find related files (files that import/use affected files)
         let related_files = self.find_related_files(&affected_files);
-        
+
         let context = ChangeContext {
             task_id: task_id.clone(),
             description,
@@ -296,10 +316,10 @@ impl ContextManager {
             constraints: self.active_constraints.clone(),
             timestamp: Utc::now(),
         };
-        
+
         self.context_history.push(context.clone());
         self.project_context.recent_changes.push(context.clone());
-        
+
         // Keep only last 100 changes
         if self.context_history.len() > 100 {
             self.context_history.remove(0);
@@ -307,7 +327,7 @@ impl ContextManager {
         if self.project_context.recent_changes.len() > 100 {
             self.project_context.recent_changes.remove(0);
         }
-        
+
         context
     }
 
@@ -315,13 +335,14 @@ impl ContextManager {
     fn find_related_files(&self, files: &[PathBuf]) -> Vec<PathBuf> {
         // Simplified version - in production, would use AST to find imports/exports
         let mut related = Vec::new();
-        
+
         for file in files {
             // Check if file exists and read it
             if let Ok(content) = std::fs::read_to_string(file) {
                 // Find import/require statements (simplified regex)
                 for line in content.lines() {
-                    if line.contains("import") || line.contains("require") || line.contains("from") {
+                    if line.contains("import") || line.contains("require") || line.contains("from")
+                    {
                         // Extract module path (simplified)
                         // In production, would use proper AST parsing
                         // For now, just add files from source dirs that might be related
@@ -340,7 +361,7 @@ impl ContextManager {
                 }
             }
         }
-        
+
         related
     }
 
@@ -352,37 +373,56 @@ impl ContextManager {
     /// Generate context prompt for LLM
     pub fn generate_context_prompt(&self, task_description: &str) -> String {
         let mut prompt = String::new();
-        
+
         prompt.push_str("## Project Context\n\n");
-        prompt.push_str(&format!("**Language:** {}\n", self.project_context.language));
+        prompt.push_str(&format!(
+            "**Language:** {}\n",
+            self.project_context.language
+        ));
         if let Some(ref framework) = self.project_context.framework {
             prompt.push_str(&format!("**Framework:** {}\n", framework));
         }
-        prompt.push_str(&format!("**Project Type:** {}\n", self.project_context.project_type));
-        
+        prompt.push_str(&format!(
+            "**Project Type:** {}\n",
+            self.project_context.project_type
+        ));
+
         if !self.project_context.patterns.is_empty() {
-            prompt.push_str(&format!("**Patterns:** {}\n", self.project_context.patterns.join(", ")));
+            prompt.push_str(&format!(
+                "**Patterns:** {}\n",
+                self.project_context.patterns.join(", ")
+            ));
         }
-        
+
         prompt.push_str("\n## Active Constraints\n\n");
         for constraint in &self.active_constraints {
-            prompt.push_str(&format!("- **{}** (Priority: {}): {}\n", 
-                constraint.description, 
+            prompt.push_str(&format!(
+                "- **{}** (Priority: {}): {}\n",
+                constraint.description,
                 constraint.priority,
                 match &constraint.constraint_type {
                     ConstraintType::CodeStyle { rules } => format!("Rules: {}", rules.join(", ")),
-                    ConstraintType::Performance { requirements } => format!("Requirements: {}", requirements.join(", ")),
-                    ConstraintType::Security { requirements } => format!("Requirements: {}", requirements.join(", ")),
-                    ConstraintType::Architecture { patterns } => format!("Patterns: {}", patterns.join(", ")),
+                    ConstraintType::Performance { requirements } =>
+                        format!("Requirements: {}", requirements.join(", ")),
+                    ConstraintType::Security { requirements } =>
+                        format!("Requirements: {}", requirements.join(", ")),
+                    ConstraintType::Architecture { patterns } =>
+                        format!("Patterns: {}", patterns.join(", ")),
                     ConstraintType::Dependencies { allowed, forbidden } => {
-                        format!("Allowed: {}, Forbidden: {}", allowed.join(", "), forbidden.join(", "))
-                    },
-                    ConstraintType::Testing { requirements } => format!("Requirements: {}", requirements.join(", ")),
-                    ConstraintType::Documentation { requirements } => format!("Requirements: {}", requirements.join(", ")),
+                        format!(
+                            "Allowed: {}, Forbidden: {}",
+                            allowed.join(", "),
+                            forbidden.join(", ")
+                        )
+                    }
+                    ConstraintType::Testing { requirements } =>
+                        format!("Requirements: {}", requirements.join(", ")),
+                    ConstraintType::Documentation { requirements } =>
+                        format!("Requirements: {}", requirements.join(", ")),
                 }
             ));
         }
-        
+
         prompt.push_str("\n## Task\n\n");
         prompt.push_str(task_description);
         prompt.push_str("\n\n## Instructions\n\n");
@@ -391,8 +431,7 @@ impl ContextManager {
         prompt.push_str("2. Adheres to all active constraints\n");
         prompt.push_str("3. Maintains consistency with existing codebase\n");
         prompt.push_str("4. Includes appropriate tests and documentation\n");
-        
+
         prompt
     }
 }
-

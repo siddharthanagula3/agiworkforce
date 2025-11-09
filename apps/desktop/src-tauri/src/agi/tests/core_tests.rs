@@ -137,7 +137,10 @@ mod tests {
         let serialized = serde_json::to_string(&config).unwrap();
         let deserialized: AGIConfig = serde_json::from_str(&serialized).unwrap();
 
-        assert_eq!(config.max_concurrent_tools, deserialized.max_concurrent_tools);
+        assert_eq!(
+            config.max_concurrent_tools,
+            deserialized.max_concurrent_tools
+        );
         assert_eq!(config.knowledge_memory_mb, deserialized.knowledge_memory_mb);
         assert_eq!(config.enable_learning, deserialized.enable_learning);
     }
@@ -150,7 +153,10 @@ mod tests {
 
         assert_eq!(capabilities.can_read_files, deserialized.can_read_files);
         assert_eq!(capabilities.can_use_browser, deserialized.can_use_browser);
-        assert_eq!(capabilities.can_process_audio, deserialized.can_process_audio);
+        assert_eq!(
+            capabilities.can_process_audio,
+            deserialized.can_process_audio
+        );
     }
 
     #[test]

@@ -16,18 +16,21 @@ impl VisionAutomation {
         let screenshot_dir = std::env::temp_dir().join("agiworkforce_screenshots");
         std::fs::create_dir_all(&screenshot_dir)?;
 
-        Ok(Self {
-            screenshot_dir,
-        })
+        Ok(Self { screenshot_dir })
     }
 
     /// Capture a screenshot (full screen or region)
     pub async fn capture_screenshot(&self, region: Option<ScreenRegion>) -> Result<String> {
         let filename = format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
         let path = self.screenshot_dir.join(&filename);
-        
+
         if let Some(region) = region {
-            let captured = capture_region(region.x, region.y, region.width as u32, region.height as u32)?;
+            let captured = capture_region(
+                region.x,
+                region.y,
+                region.width as u32,
+                region.height as u32,
+            )?;
             captured.pixels.save(&path)?;
         } else {
             let captured = capture_primary_screen()?;
@@ -41,18 +44,22 @@ impl VisionAutomation {
     pub async fn find_text(&self, _query: &str, _fuzzy: bool) -> Result<Vec<(i32, i32, String)>> {
         // Capture current screen
         let _screenshot_path = self.capture_screenshot(None).await?;
-        
+
         // Perform OCR using the OCR command
         #[cfg(feature = "ocr")]
         {
             use crate::automation::screen::perform_ocr;
             let ocr_result = perform_ocr(&screenshot_path)?;
-            
+
             // For now, simple text matching
             // In production, use the full OCR result with bounding boxes
             let mut matches = Vec::new();
             if fuzzy {
-                if ocr_result.text.to_lowercase().contains(&query.to_lowercase()) {
+                if ocr_result
+                    .text
+                    .to_lowercase()
+                    .contains(&query.to_lowercase())
+                {
                     // Approximate center of screen
                     matches.push((960, 540, ocr_result.text.clone()));
                 }
@@ -63,7 +70,7 @@ impl VisionAutomation {
             }
             Ok(matches)
         }
-        
+
         #[cfg(not(feature = "ocr"))]
         {
             // Fallback: use UIA to find text
@@ -80,7 +87,8 @@ impl VisionAutomation {
     /// Find text and return first match (for clicking)
     pub async fn find_text_single(&self, query: &str, fuzzy: bool) -> Result<(i32, i32)> {
         let matches = self.find_text(query, fuzzy).await?;
-        matches.first()
+        matches
+            .first()
             .map(|(x, y, _)| (*x, *y))
             .ok_or_else(|| anyhow!("Text '{}' not found on screen", query))
     }
@@ -89,7 +97,7 @@ impl VisionAutomation {
     pub async fn find_image(&self, template_path: &str, threshold: f64) -> Result<(i32, i32)> {
         // Capture current screen
         let screenshot_path = self.capture_screenshot(None).await?;
-        
+
         // Load template and screenshot
         let template = image::open(template_path)?;
         let screenshot = image::open(&screenshot_path)?;
@@ -100,16 +108,12 @@ impl VisionAutomation {
 
         // Template matching (simplified - use proper image matching library in production)
         let best_match = self.template_match(&screenshot_gray, &template_gray, threshold)?;
-        
+
         Ok(best_match)
     }
 
     /// Wait for an element to appear (by text or image)
-    pub async fn wait_for_element(
-        &self,
-        target: &ClickTarget,
-        timeout: Duration,
-    ) -> Result<()> {
+    pub async fn wait_for_element(&self, target: &ClickTarget, timeout: Duration) -> Result<()> {
         let start = std::time::Instant::now();
         let check_interval = Duration::from_millis(500);
 
@@ -126,7 +130,10 @@ impl VisionAutomation {
                         }
                     }
                 }
-                ClickTarget::ImageMatch { image_path, threshold } => {
+                ClickTarget::ImageMatch {
+                    image_path,
+                    threshold,
+                } => {
                     if self.find_image(image_path, *threshold).await.is_ok() {
                         return Ok(());
                     }
@@ -150,7 +157,7 @@ impl VisionAutomation {
     ) -> Result<(i32, i32)> {
         // This is a simplified template matching
         // In production, use a proper image processing library like opencv-rust
-        
+
         let img_width = image.width();
         let img_height = image.height();
         let tmpl_width = template.width();
@@ -173,7 +180,7 @@ impl VisionAutomation {
                     for tx in 0..tmpl_width {
                         let img_pixel = image.get_pixel(x + tx, y + ty)[0] as f64;
                         let tmpl_pixel = template.get_pixel(tx, ty)[0] as f64;
-                        
+
                         // Normalized correlation
                         score += (img_pixel - tmpl_pixel).abs();
                         count += 1;
@@ -183,10 +190,7 @@ impl VisionAutomation {
                 let normalized_score = 1.0 - (score / (count as f64 * 255.0));
                 if normalized_score > best_score && normalized_score >= threshold {
                     best_score = normalized_score;
-                    best_match = (
-                        (x + tmpl_width / 2) as i32,
-                        (y + tmpl_height / 2) as i32,
-                    );
+                    best_match = ((x + tmpl_width / 2) as i32, (y + tmpl_height / 2) as i32);
                 }
             }
         }
@@ -198,4 +202,3 @@ impl VisionAutomation {
         Ok(best_match)
     }
 }
-

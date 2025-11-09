@@ -154,7 +154,11 @@ impl McpToolRegistry {
     }
 
     /// Convert MCP tool to router ToolDefinition format
-    pub fn to_tool_definition(&self, server_name: &str, mcp_tool: &McpTool) -> crate::router::ToolDefinition {
+    pub fn to_tool_definition(
+        &self,
+        server_name: &str,
+        mcp_tool: &McpTool,
+    ) -> crate::router::ToolDefinition {
         crate::router::ToolDefinition {
             name: format!("mcp_{}_{}", server_name, mcp_tool.name),
             description: mcp_tool.description.clone().unwrap_or_default(),

@@ -47,17 +47,25 @@ impl McpHealthMonitor {
     /// Perform health check on a server
     pub async fn check_server_health(&self, server_name: &str) -> ServerHealth {
         let start = std::time::Instant::now();
-        
+
         let (status, error_message, tool_count) = match self.client.list_server_tools(server_name) {
             Ok(tools) => {
                 if tools.is_empty() {
-                    (HealthStatus::Degraded, Some("No tools available".to_string()), 0)
+                    (
+                        HealthStatus::Degraded,
+                        Some("No tools available".to_string()),
+                        0,
+                    )
                 } else {
                     (HealthStatus::Healthy, None, tools.len())
                 }
             }
             Err(e) => {
-                tracing::warn!("[MCP Health] Server {} health check failed: {}", server_name, e);
+                tracing::warn!(
+                    "[MCP Health] Server {} health check failed: {}",
+                    server_name,
+                    e
+                );
                 (HealthStatus::Unhealthy, Some(e.to_string()), 0)
             }
         };
@@ -114,7 +122,7 @@ impl McpHealthMonitor {
                 let servers = self.client.get_connected_servers();
                 for server_name in servers.iter() {
                     let health = self.check_server_health(server_name).await;
-                    
+
                     // Emit event if unhealthy
                     if health.status == HealthStatus::Unhealthy {
                         tracing::warn!(
@@ -122,7 +130,7 @@ impl McpHealthMonitor {
                             server_name,
                             health.error_message
                         );
-                        
+
                         if let Err(e) = app_handle.emit("mcp://server-unhealthy", &health) {
                             tracing::error!("[MCP Health] Failed to emit unhealthy event: {}", e);
                         }
@@ -149,4 +157,3 @@ mod tests {
         assert_eq!(json, "\"healthy\"");
     }
 }
-

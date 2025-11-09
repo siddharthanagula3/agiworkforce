@@ -80,7 +80,11 @@ impl AutonomousAgent {
     }
 
     /// Submit a new task for execution
-    pub async fn submit_task(&self, description: String, auto_approve: Option<bool>) -> Result<String> {
+    pub async fn submit_task(
+        &self,
+        description: String,
+        auto_approve: Option<bool>,
+    ) -> Result<String> {
         let task_id = format!("task_{}", &uuid::Uuid::new_v4().to_string()[..8]);
         let auto_approve = auto_approve.unwrap_or(self.config.auto_approve);
 
@@ -138,7 +142,7 @@ impl AutonomousAgent {
                 let queue = self.task_queue.lock().unwrap();
                 queue.iter().find(|t| t.id == task_id).cloned()
             };
-            
+
             if let Some(task) = task_clone {
                 if !self.approval.should_approve(&task).await? {
                     tracing::info!("[Agent] Task {} requires approval", task_id);
@@ -169,7 +173,8 @@ impl AutonomousAgent {
     async fn execute_task(&self, task_id: String) -> Result<()> {
         let mut task = {
             let mut queue = self.task_queue.lock().unwrap();
-            queue.iter_mut()
+            queue
+                .iter_mut()
                 .find(|t| t.id == task_id)
                 .ok_or_else(|| anyhow!("Task {} not found", task_id))?
                 .clone()
@@ -195,17 +200,34 @@ impl AutonomousAgent {
 
             match step_result {
                 Ok(result) if result.success => {
-                    tracing::info!("[Agent] Step {} completed: {}", step.id, result.result.as_deref().unwrap_or("OK"));
+                    tracing::info!(
+                        "[Agent] Step {} completed: {}",
+                        step.id,
+                        result.result.as_deref().unwrap_or("OK")
+                    );
                 }
                 Ok(result) => {
-                    tracing::warn!("[Agent] Step {} failed: {}", step.id, result.error.as_deref().unwrap_or("Unknown error"));
+                    tracing::warn!(
+                        "[Agent] Step {} failed: {}",
+                        step.id,
+                        result.error.as_deref().unwrap_or("Unknown error")
+                    );
                     if step.retry_on_failure && task.retry_count < task.max_retries {
                         task.retry_count += 1;
-                        tracing::info!("[Agent] Retrying step {} (attempt {}/{})", step.id, task.retry_count, task.max_retries);
+                        tracing::info!(
+                            "[Agent] Retrying step {} (attempt {}/{})",
+                            step.id,
+                            task.retry_count,
+                            task.max_retries
+                        );
                         // Retry the step
                         continue;
                     } else {
-                        task.status = TaskStatus::Failed(format!("Step {} failed: {}", step.id, result.error.as_deref().unwrap_or("Unknown")));
+                        task.status = TaskStatus::Failed(format!(
+                            "Step {} failed: {}",
+                            step.id,
+                            result.error.as_deref().unwrap_or("Unknown")
+                        ));
                         break;
                     }
                 }
@@ -238,9 +260,16 @@ impl AutonomousAgent {
         }
 
         // Remove from running tasks
-        self.running_tasks.lock().unwrap().retain(|id| id != &task_id);
+        self.running_tasks
+            .lock()
+            .unwrap()
+            .retain(|id| id != &task_id);
 
-        tracing::info!("[Agent] Task {} completed with status: {:?}", task_id, task.status);
+        tracing::info!(
+            "[Agent] Task {} completed with status: {:?}",
+            task_id,
+            task.status
+        );
         Ok(())
     }
 
@@ -269,7 +298,9 @@ impl AutonomousAgent {
 
     /// Get task status
     pub fn get_task_status(&self, task_id: &str) -> Option<Task> {
-        self.task_queue.lock().unwrap()
+        self.task_queue
+            .lock()
+            .unwrap()
             .iter()
             .find(|t| t.id == task_id)
             .cloned()
@@ -280,4 +311,3 @@ impl AutonomousAgent {
         self.task_queue.lock().unwrap().clone()
     }
 }
-

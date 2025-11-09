@@ -221,4 +221,3 @@ impl UIAutomationService {
         Err(anyhow!("Element not found with any strategy"))
     }
 }
-

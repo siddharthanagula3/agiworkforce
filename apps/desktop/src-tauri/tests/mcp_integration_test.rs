@@ -1,11 +1,10 @@
 /// MCP Integration Tests
-/// 
+///
 /// Tests the Model Context Protocol integration including:
 /// - Client initialization
 /// - Server connection management
 /// - Tool discovery and execution
 /// - Configuration management
-
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -33,13 +32,19 @@ mod mcp_integration_tests {
             "filesystem".to_string(),
             McpServerConfig {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string(), ".".to_string()],
+                args: vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-filesystem".to_string(),
+                    ".".to_string(),
+                ],
                 env: HashMap::new(),
                 enabled: true,
             },
         );
 
-        let config = McpServersConfig { mcp_servers: servers };
+        let config = McpServersConfig {
+            mcp_servers: servers,
+        };
 
         assert!(config.mcp_servers.contains_key("filesystem"));
         assert_eq!(config.mcp_servers.get("filesystem").unwrap().command, "npx");
@@ -71,13 +76,18 @@ mod mcp_integration_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
             env: HashMap::new(),
             enabled: true,
         };
 
         // In stub implementation, this should succeed
-        let result = client.connect_server("test_server".to_string(), config).await;
+        let result = client
+            .connect_server("test_server".to_string(), config)
+            .await;
         assert!(result.is_ok());
 
         // Server should now appear in list
@@ -96,7 +106,10 @@ mod mcp_integration_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
             env: HashMap::new(),
             enabled: true,
         };
@@ -128,7 +141,10 @@ mod mcp_integration_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
             env: HashMap::new(),
             enabled: true,
         };
@@ -148,7 +164,10 @@ mod mcp_integration_tests {
         assert!(result.is_ok());
 
         let response = result.unwrap();
-        assert!(response.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+        assert!(response
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false));
     }
 
     /// Test tool search
@@ -162,7 +181,10 @@ mod mcp_integration_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
             env: HashMap::new(),
             enabled: true,
         };
@@ -193,7 +215,10 @@ mod mcp_integration_tests {
 
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
             env: HashMap::new(),
             enabled: true,
         };
@@ -277,7 +302,9 @@ mod mcp_integration_tests {
             },
         );
 
-        let config = McpServersConfig { mcp_servers: servers };
+        let config = McpServersConfig {
+            mcp_servers: servers,
+        };
 
         // Serialize to JSON
         let json_str = serde_json::to_string(&config).unwrap();
@@ -289,4 +316,3 @@ mod mcp_integration_tests {
         assert!(parsed.mcp_servers.contains_key("filesystem"));
     }
 }
-

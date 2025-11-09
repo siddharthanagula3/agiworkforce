@@ -1,11 +1,10 @@
 /// Intelligent File Access System
-/// 
+///
 /// When file access fails, automatically:
 /// 1. Takes screenshots of the relevant area
 /// 2. Performs OCR to extract text
 /// 3. Uses vision/LLM to understand the context
 /// 4. Generates solutions based on visual understanding
-
 use crate::agent::vision::VisionAutomation;
 use crate::automation::screen::{perform_ocr, OcrResult as ScreenOcrResult};
 use crate::router::LLMRouter;
@@ -71,7 +70,11 @@ impl IntelligentFileAccess {
     }
 
     /// Intelligently access a file - tries direct access first, falls back to screenshot+OCR+vision
-    pub async fn access_file(&self, file_path: &Path, context: Option<&str>) -> Result<FileAccessResult> {
+    pub async fn access_file(
+        &self,
+        file_path: &Path,
+        context: Option<&str>,
+    ) -> Result<FileAccessResult> {
         // Step 1: Try direct file access first
         match self.try_direct_access(file_path).await {
             Ok(content) => {
@@ -88,9 +91,11 @@ impl IntelligentFileAccess {
             }
             Err(e) => {
                 tracing::warn!("Direct file access failed for {:?}: {}", file_path, e);
-                
+
                 // Step 2: File access failed - take screenshot and analyze
-                return self.fallback_to_vision(file_path, context, &e.to_string()).await;
+                return self
+                    .fallback_to_vision(file_path, context, &e.to_string())
+                    .await;
             }
         }
     }
@@ -131,7 +136,9 @@ impl IntelligentFileAccess {
         let ocr_result = self.perform_ocr_on_screenshot(&screenshot_path).await?;
 
         // Step 3: Analyze screenshot with vision/LLM
-        let analysis = self.analyze_screenshot(&screenshot_path, &ocr_result, context, error).await?;
+        let analysis = self
+            .analyze_screenshot(&screenshot_path, &ocr_result, context, error)
+            .await?;
 
         // Step 4: Generate solution based on analysis
         let solution = self.generate_solution(file_path, &analysis, error).await?;
@@ -153,7 +160,7 @@ impl IntelligentFileAccess {
         // For now, capture full screen
         // In production, could try to focus on specific windows/regions
         // based on file path or error message
-        
+
         // Try to find the file path or error in current windows
         // For now, capture primary screen
         self.vision.capture_screenshot(None).await
@@ -161,8 +168,7 @@ impl IntelligentFileAccess {
 
     /// Perform OCR on screenshot
     async fn perform_ocr_on_screenshot(&self, screenshot_path: &str) -> Result<ScreenOcrResult> {
-        perform_ocr(screenshot_path)
-            .map_err(|e| anyhow!("OCR failed: {}", e))
+        perform_ocr(screenshot_path).map_err(|e| anyhow!("OCR failed: {}", e))
     }
 
     /// Analyze screenshot using vision/LLM
@@ -174,20 +180,20 @@ impl IntelligentFileAccess {
         error: &str,
     ) -> Result<VisualAnalysis> {
         // Build analysis prompt
-        let mut prompt = format!(
-            "Analyze this screenshot to understand why file access failed.\n\n"
-        );
-        
+        let mut prompt =
+            format!("Analyze this screenshot to understand why file access failed.\n\n");
+
         prompt.push_str(&format!("**File Path:** {:?}\n", screenshot_path));
         prompt.push_str(&format!("**Error:** {}\n", error));
-        
+
         if let Some(ctx) = context {
             prompt.push_str(&format!("**Context:** {}\n", ctx));
         }
-        
+
         prompt.push_str(&format!("\n**OCR Text Extracted:**\n{}\n", ocr_result.text));
         prompt.push_str("\n**Analysis Request:**\n");
-        prompt.push_str("1. What UI elements are visible (buttons, inputs, error messages, etc.)?\n");
+        prompt
+            .push_str("1. What UI elements are visible (buttons, inputs, error messages, etc.)?\n");
         prompt.push_str("2. What is the context of the error?\n");
         prompt.push_str("3. What actions could resolve this issue?\n");
         prompt.push_str("4. What information can be extracted from the screenshot?\n");
@@ -196,8 +202,10 @@ impl IntelligentFileAccess {
         if let Some(ref router) = self.llm_router {
             // TODO: Use vision-capable LLM to analyze screenshot
             // For now, use text-based analysis with OCR text
-            let analysis_text = self.analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text).await?;
-            
+            let analysis_text = self
+                .analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text)
+                .await?;
+
             return Ok(self.parse_analysis(&analysis_text, ocr_result));
         }
 
@@ -214,7 +222,10 @@ impl IntelligentFileAccess {
     ) -> Result<String> {
         // TODO: Implement LLM call with vision support
         // For now, return simple analysis
-        Ok(format!("Based on OCR text: {}\n\nPrompt: {}", ocr_text, prompt))
+        Ok(format!(
+            "Based on OCR text: {}\n\nPrompt: {}",
+            ocr_text, prompt
+        ))
     }
 
     /// Parse LLM analysis into structured format
@@ -238,7 +249,7 @@ impl IntelligentFileAccess {
 
         // Detect common UI elements from OCR text
         let text_lower = ocr_result.text.to_lowercase();
-        
+
         if text_lower.contains("error") || text_lower.contains("failed") {
             ui_elements.push(UIElement {
                 element_type: "error".to_string(),
@@ -277,10 +288,14 @@ impl IntelligentFileAccess {
     }
 
     /// Extract UI elements from analysis text
-    fn extract_ui_elements(&self, analysis_text: &str, _ocr_result: &ScreenOcrResult) -> Vec<UIElement> {
+    fn extract_ui_elements(
+        &self,
+        analysis_text: &str,
+        _ocr_result: &ScreenOcrResult,
+    ) -> Vec<UIElement> {
         // Simple extraction - in production, would use structured LLM output
         let mut elements = Vec::new();
-        
+
         // Look for common patterns
         if analysis_text.contains("button") {
             elements.push(UIElement {
@@ -290,7 +305,7 @@ impl IntelligentFileAccess {
                 confidence: 0.7,
             });
         }
-        
+
         if analysis_text.contains("input") || analysis_text.contains("field") {
             elements.push(UIElement {
                 element_type: "input".to_string(),
@@ -307,7 +322,7 @@ impl IntelligentFileAccess {
     fn extract_suggested_actions(&self, analysis_text: &str) -> Vec<String> {
         // Simple extraction - in production, would parse structured LLM output
         let mut actions = Vec::new();
-        
+
         let lines: Vec<&str> = analysis_text.lines().collect();
         for line in lines {
             if line.contains("action") || line.contains("suggest") || line.contains("should") {
@@ -331,15 +346,15 @@ impl IntelligentFileAccess {
         error: &str,
     ) -> Result<String> {
         let mut solution = String::new();
-        
+
         solution.push_str("## Solution Based on Visual Analysis\n\n");
         solution.push_str(&format!("**File:** {:?}\n", file_path));
         solution.push_str(&format!("**Error:** {}\n\n", error));
-        
+
         solution.push_str("### Detected Context\n");
         solution.push_str(&analysis.context);
         solution.push_str("\n\n");
-        
+
         if !analysis.ui_elements.is_empty() {
             solution.push_str("### UI Elements Detected\n");
             for element in &analysis.ui_elements {
@@ -351,7 +366,7 @@ impl IntelligentFileAccess {
             }
             solution.push_str("\n");
         }
-        
+
         if !analysis.suggested_actions.is_empty() {
             solution.push_str("### Suggested Actions\n");
             for (i, action) in analysis.suggested_actions.iter().enumerate() {
@@ -359,9 +374,12 @@ impl IntelligentFileAccess {
             }
             solution.push_str("\n");
         }
-        
+
         // Generate code solution if applicable
-        if let Some(code_solution) = self.generate_code_solution(file_path, analysis, error).await? {
+        if let Some(code_solution) = self
+            .generate_code_solution(file_path, analysis, error)
+            .await?
+        {
             solution.push_str("### Code Solution\n");
             solution.push_str("```\n");
             solution.push_str(&code_solution);
@@ -380,7 +398,7 @@ impl IntelligentFileAccess {
     ) -> Result<Option<String>> {
         // Analyze error and generate appropriate code solution
         let error_lower = error.to_lowercase();
-        
+
         if error_lower.contains("permission") || error_lower.contains("denied") {
             return Ok(Some(format!(
                 "// Solution: Handle permission error\n\
@@ -397,7 +415,7 @@ impl IntelligentFileAccess {
                 file_path, file_path
             )));
         }
-        
+
         if error_lower.contains("not found") || error_lower.contains("does not exist") {
             return Ok(Some(format!(
                 "// Solution: File not found\n\
@@ -426,4 +444,3 @@ impl Default for IntelligentFileAccess {
         Self::new().expect("Failed to create IntelligentFileAccess")
     }
 }
-

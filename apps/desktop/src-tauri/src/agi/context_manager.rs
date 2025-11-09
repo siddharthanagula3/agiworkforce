@@ -51,11 +51,7 @@ impl ContextManager {
             .filter_map(|m| m.tokens)
             .map(|t| t as usize)
             .sum::<usize>()
-            + self
-                .summaries
-                .iter()
-                .map(|s| s.token_count)
-                .sum::<usize>()
+            + self.summaries.iter().map(|s| s.token_count).sum::<usize>()
     }
 
     /// Check if compaction is needed
@@ -210,11 +206,7 @@ impl ContextManager {
 
         Ok(Some(Summary {
             id: uuid::Uuid::new_v4().to_string(),
-            original_message_ids: segment
-                .messages
-                .iter()
-                .map(|m| m.id.to_string())
-                .collect(),
+            original_message_ids: segment.messages.iter().map(|m| m.id.to_string()).collect(),
             content: summary_response,
             token_count,
             created_at: chrono::Utc::now(),
@@ -332,4 +324,3 @@ mod tests {
         assert_eq!(segments.len(), 3); // 12 messages / 5 per segment = 2.4 → 3 segments
     }
 }
-

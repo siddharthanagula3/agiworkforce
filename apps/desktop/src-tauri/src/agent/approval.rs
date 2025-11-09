@@ -72,21 +72,14 @@ impl ApprovalManager {
 
     fn matches_rule(&self, rule: &ApprovalRule, task: &Task) -> Result<bool> {
         match rule {
-            ApprovalRule::PatternMatch { pattern } => {
-                Ok(task.description.to_lowercase().contains(&pattern.to_lowercase()))
-            }
-            ApprovalRule::NoFileSystemOps => {
-                Ok(!self.has_file_operations(task))
-            }
-            ApprovalRule::NoNetworkOps => {
-                Ok(!self.has_network_operations(task))
-            }
-            ApprovalRule::ReadOnly => {
-                Ok(self.is_read_only(task))
-            }
-            ApprovalRule::AlwaysRequire => {
-                Ok(false)
-            }
+            ApprovalRule::PatternMatch { pattern } => Ok(task
+                .description
+                .to_lowercase()
+                .contains(&pattern.to_lowercase())),
+            ApprovalRule::NoFileSystemOps => Ok(!self.has_file_operations(task)),
+            ApprovalRule::NoNetworkOps => Ok(!self.has_network_operations(task)),
+            ApprovalRule::ReadOnly => Ok(self.is_read_only(task)),
+            ApprovalRule::AlwaysRequire => Ok(false),
         }
     }
 
@@ -100,9 +93,9 @@ impl ApprovalManager {
     }
 
     fn has_network_operations(&self, task: &Task) -> bool {
-        task.steps.iter().any(|step| {
-            matches!(step.action, Action::Navigate { .. })
-        })
+        task.steps
+            .iter()
+            .any(|step| matches!(step.action, Action::Navigate { .. }))
     }
 
     fn is_read_only(&self, task: &Task) -> bool {
@@ -119,7 +112,8 @@ impl ApprovalManager {
 
     fn has_dangerous_operations(&self, task: &Task) -> Result<bool> {
         // Check for potentially dangerous operations
-        let dangerous_patterns = ["delete",
+        let dangerous_patterns = [
+            "delete",
             "remove",
             "uninstall",
             "format",
@@ -127,12 +121,13 @@ impl ApprovalManager {
             "clear",
             "reset",
             "shutdown",
-            "restart"];
+            "restart",
+        ];
 
         let description_lower = task.description.to_lowercase();
-        let has_dangerous_keyword = dangerous_patterns.iter().any(|pattern| {
-            description_lower.contains(pattern)
-        });
+        let has_dangerous_keyword = dangerous_patterns
+            .iter()
+            .any(|pattern| description_lower.contains(pattern));
 
         // Also check for file deletion operations
         let has_file_deletion = task.steps.iter().any(|step| {
@@ -156,4 +151,3 @@ impl ApprovalManager {
         self.auto_approved_tasks.insert(task_id.to_string(), false);
     }
 }
-

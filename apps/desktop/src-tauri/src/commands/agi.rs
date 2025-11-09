@@ -1,13 +1,13 @@
-use crate::agi::{AGIConfig, AGICore, Goal, Priority, ExecutionContext};
+use crate::agi::{AGIConfig, AGICore, ExecutionContext, Goal, Priority};
 use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
 use crate::router::LLMRouter;
 use anyhow::Result;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex as TokioMutex;
-use parking_lot::Mutex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitGoalRequest {
@@ -45,8 +45,13 @@ pub async fn agi_init(
     let router_for_agi = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
     drop(router);
 
-    let agi = AGICore::new(config, router_for_agi, automation.inner().clone(), Some(app.clone()))
-        .map_err(|e| format!("Failed to create AGI: {}", e))?;
+    let agi = AGICore::new(
+        config,
+        router_for_agi,
+        automation.inner().clone(),
+        Some(app.clone()),
+    )
+    .map_err(|e| format!("Failed to create AGI: {}", e))?;
 
     let agi_arc = Arc::new(TokioMutex::new(agi));
 
@@ -161,4 +166,3 @@ pub async fn agi_stop() -> Result<(), String> {
     }
     Ok(())
 }
-

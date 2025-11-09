@@ -5,5 +5,5 @@ pub mod executor_tests;
 // pub mod tools_tests; // Disabled - needs update to match current implementation
 pub mod knowledge_tests;
 pub mod learning_tests;
-pub mod resources_tests;
 pub mod memory_tests;
+pub mod resources_tests;
