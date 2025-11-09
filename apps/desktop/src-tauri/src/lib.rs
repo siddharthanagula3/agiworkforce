@@ -1,4 +1,5 @@
 #![allow(unsafe_code)] // Required for Windows API calls
+#![allow(unused_qualifications)] // Some qualifications improve code clarity
 #![deny(unused)]
 #![deny(unused_imports)]
 #![deny(unused_variables)]
