@@ -6,16 +6,19 @@ authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
 
 [lints.rust]
-# Zero warnings policy - deny all warnings
-# unsafe_code is allowed at crate level (required for Windows API)
+# Zero warnings policy - deny warnings except for legitimate cases
+# unused_results is allowed because many methods return values we intentionally ignore
+# (e.g., HashMap::insert returns Option<T>, Vec::drain returns iterator, etc.)
+warnings = "deny"
+unsafe_code = "warn"  # Allow unsafe_code warnings (required for Windows API)
 unused = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
 unused_mut = "deny"
 dead_code = "deny"
 unused_attributes = "deny"
-unused_qualifications = "warn"  # Some qualifications are necessary for clarity
-unused_results = "allow"  # Some results are intentionally ignored
+unused_qualifications = "allow"  # Allow unused qualifications (improve code clarity)
+unused_results = "allow"  # Allow unused results (many are intentional)
 
 [dependencies]
 # Tauri and Plugins (upgraded to stable 2.0.0)
