@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "AGI Workforce",
-        "width": 1920,
-        "height": 1040,
-        "minWidth": 1200,
-        "minHeight": 800,
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 700,
         "resizable": true,
         "decorations": false,
         "transparent": false,
@@ -25,7 +25,8 @@
         "shadow": true,
         "visible": true,
         "center": true,
-        "dragDropEnabled": true
+        "dragDropEnabled": true,
+        "fullscreen": false
       }
     ],
     "security": {
