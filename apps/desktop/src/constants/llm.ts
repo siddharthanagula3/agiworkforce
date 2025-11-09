@@ -28,3 +28,46 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
 };
 
 export const PROVIDERS_IN_ORDER: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
+
+/**
+ * Model-specific context window sizes (in tokens)
+ * These are the maximum context windows for each model
+ */
+export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  // OpenAI models
+  'gpt-4o-mini': 128_000,
+  'gpt-4.1-mini': 128_000,
+  'gpt-4.1': 128_000,
+  'gpt-4o': 128_000,
+  'gpt-4-turbo': 128_000,
+  'gpt-4': 8_192,
+  'gpt-3.5-turbo': 16_384,
+
+  // Anthropic models
+  'claude-3-5-sonnet-20241022': 200_000,
+  'claude-3-5-haiku-20241022': 200_000,
+  'claude-3-opus-20240229': 200_000,
+  'claude-3-sonnet-20240229': 200_000,
+  'claude-3-haiku-20240307': 200_000,
+
+  // Google models
+  'gemini-1.5-flash': 1_000_000,
+  'gemini-1.5-pro': 2_000_000,
+  'gemini-1.0-pro': 32_768,
+
+  // Ollama (local models) - varies by model
+  llama3: 8_192,
+  'llama3:70b': 8_192,
+  mistral: 32_768,
+  'mistral:7b': 32_768,
+  codellama: 16_384,
+  'deepseek-coder': 16_384,
+};
+
+/**
+ * Get context window size for a model
+ * Falls back to 4096 if model not found
+ */
+export function getModelContextWindow(modelId: string): number {
+  return MODEL_CONTEXT_WINDOWS[modelId] ?? 4096;
+}
