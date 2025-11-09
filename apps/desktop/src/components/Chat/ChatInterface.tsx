@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
 import { TokenCounter } from './TokenCounter';
+import { StatusBar } from '../Layout/StatusBar';
 import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { estimateTokens } from '../../utils/tokenCount';
@@ -147,6 +148,15 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
         disabled={loading}
         isSending={loading}
         {...(activeConversationId != null ? { conversationId: activeConversationId } : {})}
+      />
+
+      {/* Status Bar */}
+      <StatusBar
+        provider={llmConfig.defaultProvider}
+        model={llmConfig.defaultModels[llmConfig.defaultProvider]}
+        currentTokens={currentTokenCount}
+        maxTokens={maxContextTokens}
+        isSending={loading}
       />
     </div>
   );
