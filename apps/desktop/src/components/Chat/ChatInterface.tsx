@@ -4,6 +4,7 @@ import { InputComposer } from './InputComposer';
 import { TokenCounter } from './TokenCounter';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { StatusBar } from '../Layout/StatusBar';
+import { ProgressIndicator } from '../AGI/ProgressIndicator';
 import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTokenBudgetStore, selectBudget } from '../../stores/tokenBudgetStore';
@@ -136,6 +137,11 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     <div className={cn('flex h-full flex-col min-h-0 min-w-0', className)}>
       {/* Budget Alerts - show at top */}
       <BudgetAlertsPanel />
+
+      {/* AGI Progress Indicator */}
+      <div className="px-4 pt-2">
+        <ProgressIndicator compact={false} autoHide={true} autoHideDelay={5000} />
+      </div>
 
       <div className="flex-1 overflow-hidden min-h-0">
         <MessageList
