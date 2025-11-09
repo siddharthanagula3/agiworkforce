@@ -376,6 +376,7 @@ const csvPath = await exportSheetToCsv('abc123');
    ```
 
 2. **Search Tools Function**
+
    ```typescript
    async function searchTools(query: string, detail: 'name' | 'brief' | 'full') {
      const results = [];
@@ -607,5 +608,5 @@ By implementing this in AGI Workforce, we gain:
 
 ---
 
-_Last Updated: January 8, 2025_  
+_Last Updated: November 8, 2025_  
 _Built with ❤️ for maximum efficiency and scalability_
