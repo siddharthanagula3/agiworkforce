@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, memo, useCallback, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, memo, type KeyboardEvent } from 'react';
 import { Send, Paperclip, X, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
@@ -500,5 +500,4 @@ export const InputComposer = memo(InputComposerComponent, (prevProps, nextProps)
   );
 });
 
-InputComposer.displayName = "InputComposer";
-
+InputComposer.displayName = 'InputComposer';
