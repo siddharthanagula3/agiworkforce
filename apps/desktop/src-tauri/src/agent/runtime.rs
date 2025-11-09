@@ -284,11 +284,15 @@ impl AgentRuntime {
         // Create snapshot before execution (for revert capability)
         // Note: Snapshot creation is skipped in spawned tasks due to Send issues with parking_lot::RwLock
         // TODO: Refactor ChangeTracker to use tokio::sync::RwLock instead of parking_lot for async compatibility
-        let _working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let _working_dir =
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let _change_tracker_clone = self.change_tracker.clone();
         let _task_id_clone = task_id.clone();
         // Snapshot creation will be implemented after refactoring ChangeTracker
-        tracing::debug!("[AgentRuntime] Snapshot creation deferred for task: {}", task_id);
+        tracing::debug!(
+            "[AgentRuntime] Snapshot creation deferred for task: {}",
+            task_id
+        );
 
         // Add to active tasks
         self.active_tasks
