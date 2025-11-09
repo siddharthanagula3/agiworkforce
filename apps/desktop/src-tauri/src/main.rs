@@ -258,6 +258,11 @@ fn main() {
             agiworkforce_desktop::commands::chat_get_cost_overview,
             agiworkforce_desktop::commands::chat_get_cost_analytics,
             agiworkforce_desktop::commands::chat_set_monthly_budget,
+            // Checkpoint commands
+            agiworkforce_desktop::commands::checkpoint_create,
+            agiworkforce_desktop::commands::checkpoint_restore,
+            agiworkforce_desktop::commands::checkpoint_list,
+            agiworkforce_desktop::commands::checkpoint_delete,
             // Cloud storage commands
             agiworkforce_desktop::commands::cloud_connect,
             agiworkforce_desktop::commands::cloud_complete_oauth,
