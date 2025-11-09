@@ -56,14 +56,7 @@ pub struct NotionPage {
     last_edited_time: String,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-struct NotionDatabase {
-    id: String,
-    title: Vec<NotionRichText>,
-}
-
-#[allow(dead_code)]
+// Removed unused structs - will be added when Notion API integration is implemented
 #[derive(Debug, Serialize, Deserialize)]
 struct NotionRichText {
     plain_text: String,

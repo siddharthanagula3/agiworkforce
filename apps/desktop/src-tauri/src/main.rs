@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![deny(warnings)]
 
 use agiworkforce_desktop::agent::code_generator::CodeGenerator;
 use agiworkforce_desktop::agent::context_manager::ContextManager;
