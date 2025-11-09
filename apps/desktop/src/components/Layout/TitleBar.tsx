@@ -19,10 +19,11 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
     <header
       className={cn(
         'flex items-center justify-between gap-2 px-4 py-2 h-12 shrink-0',
-        'bg-background/95 backdrop-blur-sm',
-        'border-b border-border',
+        'bg-background/90 backdrop-blur-xl',
+        'border-b border-border/60 rounded-t-2xl',
+        'shadow-[0_2px_12px_rgba(8,12,20,0.22)]',
         'select-none',
-        'min-w-[600px]', // Prevent overlap at small sizes
+        'min-w-[640px]',
       )}
       data-tauri-drag-region
     >
@@ -114,7 +115,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
               variant="ghost"
               size="icon"
               className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() => void actions.hide()}
+              onClick={() => void actions.close()}
               aria-label="Close window"
             >
               <X className="h-4 w-4" />

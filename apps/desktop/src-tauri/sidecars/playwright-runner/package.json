@@ -1,0 +1,16 @@
+{
+  "name": "playwright-runner",
+  "version": "1.0.0",
+  "description": "Playwright automation runner sidecar for AGI Workforce",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  },
+  "author": "AGI Workforce",
+  "license": "MIT"
+}
+

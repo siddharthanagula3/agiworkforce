@@ -2,7 +2,7 @@ import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'node:path';
 import net from 'node:net';
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
+// import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 const DEFAULT_DEV_PORT = Number(process.env['VITE_DEV_PORT'] ?? 5173);
 const host = process.env['TAURI_DEV_HOST'];
@@ -58,15 +58,16 @@ export default defineConfig(async () => {
     },
     plugins: [
       react(),
-      monacoEditorPlugin({
-        languageWorkers: ['typescript', 'json', 'css', 'html'],
-        customWorkers: [
-          {
-            label: 'editorWorkerService',
-            entry: 'monaco-editor/esm/vs/editor/editor.worker',
-          },
-        ],
-      }),
+      // Monaco editor plugin temporarily disabled for initial testing
+      // monacoEditorPlugin({
+      //   languageWorkers: ['typescript', 'json', 'css', 'html'],
+      //   customWorkers: [
+      //     {
+      //       label: 'editorWorkerService',
+      //       entry: 'monaco-editor/esm/vs/editor/editor.worker',
+      //     },
+      //   ],
+      // }),
     ],
     clearScreen: false,
     server: {

@@ -75,6 +75,9 @@ pub mod agent;
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 
+// Model Context Protocol (MCP) integration
+pub mod mcp;
+
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use tray::build_system_tray;
