@@ -30,7 +30,7 @@ impl Default for WindowGeometry {
             x: 120.0,
             y: 120.0,
             width: 1400.0, // Match tauri.conf.json width
-            height: 850.0,  // Match tauri.conf.json height
+            height: 850.0, // Match tauri.conf.json height
         }
     }
 }
