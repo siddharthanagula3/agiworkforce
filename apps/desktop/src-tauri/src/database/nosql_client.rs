@@ -79,9 +79,9 @@ impl MongoClient {
             .map_err(|e| Error::Other(format!("Failed to connect to MongoDB: {}", e)))?;
 
         let connection = MongoConnection {
-            client,
+            _client: client,
             database,
-            database_name,
+            _database_name: database_name,
         };
 
         let mut connections = self.connections.write().await;
