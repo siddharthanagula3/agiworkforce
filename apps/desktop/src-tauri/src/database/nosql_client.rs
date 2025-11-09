@@ -27,7 +27,6 @@ pub struct MongoClient {
     connections: Arc<RwLock<HashMap<String, MongoConnection>>>,
 }
 
-#[allow(dead_code)]
 struct MongoConnection {
     client: Client,
     database: Database,
