@@ -44,7 +44,7 @@ function parseCommand(
  * Options for useCommandAutocomplete
  */
 export interface UseCommandAutocompleteOptions {
-  onSelect?: (suggestion: ContextSuggestion) => void;
+  onSelect?: (suggestion: ContextSuggestion) => void | Promise<void>;
   maxSuggestions?: number;
   debounceMs?: number;
 }
@@ -236,8 +236,13 @@ export function useCommandAutocomplete(
    */
   const selectSuggestion = useCallback(
     (suggestion: ContextSuggestion) => {
-      onSelect?.(suggestion);
-      clearAutocomplete();
+      const result = onSelect?.(suggestion);
+      // If onSelect returns a Promise, wait for it before clearing
+      if (result instanceof Promise) {
+        void result.finally(() => clearAutocomplete());
+      } else {
+        clearAutocomplete();
+      }
     },
     [onSelect, clearAutocomplete],
   );
