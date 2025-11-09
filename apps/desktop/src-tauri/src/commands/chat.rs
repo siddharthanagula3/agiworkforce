@@ -1,5 +1,5 @@
 use super::llm::LLMState;
-use crate::agent::context_compactor::{CompactionConfig, ContextCompactor};
+use crate::agent::context_compactor::ContextCompactor;
 use crate::db::models::{
     Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, MessageRole,
     ProviderCostBreakdown,
@@ -15,7 +15,7 @@ use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use futures_util::StreamExt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use tokio::time::{sleep, Duration as TokioDuration};
 use tracing::{info, warn};
@@ -25,7 +25,7 @@ pub struct AppDatabase(pub Mutex<Connection>);
 
 /// Auto-compact conversation history if needed (like Cursor/Claude Code)
 async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Result<(), String> {
-    let mut messages = {
+    let messages = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?

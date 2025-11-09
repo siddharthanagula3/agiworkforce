@@ -5,7 +5,7 @@
 /// older messages to maintain context while staying within limits.
 use crate::db::models::{Message, MessageRole};
 use crate::router::LLMRouter;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -144,7 +144,7 @@ impl ContextCompactor {
     /// Generate summary using LLM
     async fn generate_summary_with_llm(
         &self,
-        router: &Arc<LLMRouter>,
+        _router: &Arc<LLMRouter>,
         messages: &[Message],
     ) -> Result<String> {
         // Build conversation context
