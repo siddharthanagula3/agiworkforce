@@ -44,6 +44,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<string[]>([]);
+  const [initialSessionSpawned, setInitialSessionSpawned] = useState(false);
 
   useEffect(() => {
     // Load available shells on mount
@@ -53,20 +54,25 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     });
   }, [loadAvailableShells]);
 
-  const handleCreateSession = async (shellType: ShellTypeLiteral) => {
-    if (isCreating) return;
+  const handleCreateSession = useCallback(
+    async (shellType: ShellTypeLiteral) => {
+      if (isCreating) return false;
 
-    setIsCreating(true);
-    try {
-      await createSession(shellType);
-      toast.success(`Created ${shellType} session`);
-    } catch (error) {
-      console.error('Failed to create terminal session:', error);
-      toast.error(`Failed to create ${shellType} session`);
-    } finally {
-      setIsCreating(false);
-    }
-  };
+      setIsCreating(true);
+      try {
+        await createSession(shellType);
+        toast.success(`Created ${shellType} session`);
+        return true;
+      } catch (error) {
+        console.error('Failed to create terminal session:', error);
+        toast.error(`Failed to create ${shellType} session`);
+        return false;
+      } finally {
+        setIsCreating(false);
+      }
+    },
+    [createSession, isCreating],
+  );
 
   const handleCloseSession = async (sessionId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -112,6 +118,39 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
       setHistoryEntries([]);
     }
   }, [activeSessionId]);
+
+  useEffect(() => {
+    if (initialSessionSpawned || sessions.length > 0) {
+      if (sessions.length > 0 && !initialSessionSpawned) {
+        setInitialSessionSpawned(true);
+      }
+      return;
+    }
+
+    const preferredShell =
+      availableShells.find((shell) => shell.available && shell.shell_type === 'PowerShell') ??
+      availableShells.find((shell) => shell.available);
+
+    if (!preferredShell || isCreating) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const success = await handleCreateSession(preferredShell.shell_type);
+      if (cancelled) return;
+
+      if (success) {
+        setInitialSessionSpawned(true);
+      } else {
+        setInitialSessionSpawned(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [availableShells, handleCreateSession, initialSessionSpawned, isCreating, sessions.length]);
 
   const handleToggleHistory = () => {
     if (!activeSessionId) {
@@ -204,7 +243,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                 .map((shell) => (
                   <DropdownMenuItem
                     key={shell.shell_type}
-                    onClick={() => handleCreateSession(shell.shell_type)}
+                    onClick={() => void handleCreateSession(shell.shell_type)}
                   >
                     <TerminalIcon className="mr-2 h-4 w-4" />
                     {shell.name}
@@ -343,7 +382,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                     .map((shell) => (
                       <DropdownMenuItem
                         key={shell.shell_type}
-                        onClick={() => handleCreateSession(shell.shell_type)}
+                        onClick={() => void handleCreateSession(shell.shell_type)}
                       >
                         <TerminalIcon className="mr-2 h-4 w-4" />
                         {shell.name}

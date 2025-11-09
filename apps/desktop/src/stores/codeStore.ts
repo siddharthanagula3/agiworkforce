@@ -363,8 +363,8 @@ export const useCodeStore = create<CodeState>()(
 // Expose a stable reference to the initial state object for tests that cache
 // the result of getState(). This allows us to mirror updates so assertions on
 // the cached snapshot see the latest values.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const __codeStoreStateRef: any = useCodeStore.getState();
+const __initialCodeState = useCodeStore.getState();
+export const __codeStoreStateRef = __initialCodeState as CodeState & Record<string, unknown>;
 
 // Keep a live reference to the latest state to back getters without recursion.
 let __latestCodeState: CodeState = { ...useCodeStore.getState() } as CodeState;

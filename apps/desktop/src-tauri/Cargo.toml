@@ -159,6 +159,9 @@ tokio-native-tls = "0.3"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
 mailparse = "0.15"
 
+# Model Context Protocol (MCP)
+rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
+
 [features]
 default = []
 ocr = ["tesseract"]

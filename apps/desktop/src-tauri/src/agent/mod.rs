@@ -3,6 +3,15 @@ pub mod planner;
 pub mod executor;
 pub mod vision;
 pub mod approval;
+pub mod runtime;
+pub mod change_tracker;
+pub mod context_manager;
+pub mod code_generator;
+pub mod rag_system;
+pub mod prompt_engineer;
+pub mod ai_orchestrator;
+pub mod intelligent_file_access;
+pub mod context_compactor;
 
 #[cfg(test)]
 mod tests;
@@ -12,6 +21,7 @@ pub use planner::TaskPlanner;
 pub use executor::TaskExecutor;
 pub use vision::VisionAutomation;
 pub use approval::ApprovalManager;
+pub use runtime::AgentRuntime;
 
 use serde::{Deserialize, Serialize, Serializer, Deserializer};
 use serde::ser::SerializeStruct;

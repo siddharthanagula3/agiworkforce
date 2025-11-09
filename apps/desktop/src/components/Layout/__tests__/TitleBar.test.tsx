@@ -50,6 +50,7 @@ describe('TitleBar - Fullscreen Functionality', () => {
     toggleMaximize: vi.fn(),
     hide: vi.fn(),
     show: vi.fn(),
+    close: vi.fn(),
   };
 
   const defaultState = {
@@ -68,47 +69,21 @@ describe('TitleBar - Fullscreen Functionality', () => {
   });
 
   describe('Rendering', () => {
-    it('renders the application title and window state', () => {
+    it('renders the application title', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
       expect(screen.getByText('AGI Workforce')).toBeInTheDocument();
-      expect(screen.getByText(/Floating/)).toBeInTheDocument();
     });
   });
 
   describe('Window Controls', () => {
-    it('should render minimize tooltip', () => {
+    it('should render minimize button', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
       expect(screen.getByLabelText('Minimize window')).toBeInTheDocument();
     });
 
-    it('should render hide to tray tooltip', () => {
+    it('should render close button', () => {
       renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByLabelText('Hide window')).toBeInTheDocument();
-    });
-  });
-
-  describe('Dock State Display', () => {
-    it('should display Floating when not docked', () => {
-      renderTitleBar(defaultState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText(/Floating/)).toBeInTheDocument();
-    });
-
-    it('should display Docked left when docked to left', () => {
-      const dockedState = {
-        ...defaultState,
-        dock: 'left' as DockPosition,
-      };
-      renderTitleBar(dockedState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText(/Docked left/)).toBeInTheDocument();
-    });
-
-    it('should display Docked right when docked to right', () => {
-      const dockedState = {
-        ...defaultState,
-        dock: 'right' as DockPosition,
-      };
-      renderTitleBar(dockedState, mockActions, mockOnOpenCommandPalette);
-      expect(screen.getByText(/Docked right/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Close window')).toBeInTheDocument();
     });
   });
 

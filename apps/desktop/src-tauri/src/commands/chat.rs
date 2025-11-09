@@ -1,4 +1,5 @@
 use super::llm::LLMState;
+use crate::agent::context_compactor::{ContextCompactor, CompactionConfig};
 use crate::db::models::{
     Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, MessageRole,
     ProviderCostBreakdown,
@@ -14,13 +15,89 @@ use anyhow::anyhow;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use tauri::{Emitter, State};
+use std::sync::{Arc, Mutex};
+use tauri::{Emitter, Manager, State};
 use tokio::time::{sleep, Duration as TokioDuration};
-use tracing::warn;
+use tracing::{info, warn};
 
 /// Shared database connection wrapper exposed to Tauri commands.
 pub struct AppDatabase(pub Mutex<Connection>);
+
+/// Auto-compact conversation history if needed (like Cursor/Claude Code)
+async fn auto_compact_conversation(
+    db: &AppDatabase,
+    conversation_id: i64,
+) -> Result<(), String> {
+    let mut messages = {
+        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        repository::list_messages(&conn, conversation_id)
+            .map_err(|e| format!("Failed to list messages: {}", e))?
+    };
+
+    // Auto-compact context if needed
+    let compactor = ContextCompactor::with_default_config();
+
+    if compactor.should_compact(&messages) {
+        info!("Auto-compacting conversation {} ({} messages, {} tokens)", 
+            conversation_id, messages.len(), 
+            ContextCompactor::calculate_tokens(&messages));
+
+        match compactor.compact_if_needed(&messages).await {
+            Ok(Some(compaction_result)) => {
+                info!("Compaction result: {} messages compacted, {} -> {} tokens",
+                    compaction_result.messages_compacted,
+                    compaction_result.tokens_before,
+                    compaction_result.tokens_after);
+
+                // Generate summary
+                let summary = compactor.generate_summary(
+                    &messages[..messages.len() - compaction_result.messages_compacted]
+                ).await.unwrap_or_else(|_| "Context was compacted".to_string());
+
+                // Replace old messages with summary in database
+                let keep_count = compactor.config.keep_recent.min(messages.len());
+                let old_count = messages.len() - keep_count;
+
+                if old_count > 0 {
+                    let conn = db.0.lock().map_err(|e| e.to_string())?;
+                    
+                    // Delete old messages (except recent ones)
+                    let old_messages: Vec<i64> = messages[..old_count]
+                        .iter()
+                        .map(|m| m.id)
+                        .collect();
+
+                    for msg_id in old_messages {
+                        let _ = repository::delete_message(&conn, msg_id);
+                    }
+
+                    // Insert summary message
+                    let summary_msg = Message {
+                        id: 0,
+                        conversation_id,
+                        role: MessageRole::System,
+                        content: format!("[Compacted Context]\n\n{}", summary),
+                        tokens: Some(compaction_result.tokens_after as i32),
+                        cost: None,
+                        provider: None,
+                        model: None,
+                        created_at: Utc::now(),
+                    };
+                    let _summary_id = repository::create_message(&conn, &summary_msg)
+                        .map_err(|e| format!("Failed to create summary message: {}", e))?;
+                }
+            }
+            Ok(None) => {
+                // No compaction needed
+            }
+            Err(e) => {
+                warn!("Compaction failed: {}, continuing with full history", e);
+            }
+        }
+    }
+
+    Ok(())
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
@@ -255,7 +332,11 @@ async fn chat_send_message_streaming(
         (conversation_id, user_msg_id, assistant_msg_id)
     };
 
-    // Get conversation history
+    // Auto-compact conversation history if needed (like Cursor/Claude Code)
+    auto_compact_conversation(&db, conversation_id).await
+        .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
+
+    // Get conversation history (after compaction)
     let history = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
@@ -427,6 +508,11 @@ pub async fn chat_send_message(
         (conversation_id, message)
     };
 
+    // Auto-compact conversation history if needed (like Cursor/Claude Code)
+    auto_compact_conversation(&db, conversation_id).await
+        .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
+
+    // Get conversation history (after compaction)
     let history = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
@@ -443,17 +529,28 @@ pub async fn chat_send_message(
         })
         .collect();
 
-    // ✅ Add tool definitions from AGI registry
+    // ✅ Add tool definitions from AGI registry + MCP tools
     let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
         use crate::router::tool_executor::ToolExecutor;
+        use crate::commands::McpState;
         use std::sync::Arc;
         
         match ToolRegistry::new() {
             Ok(registry) => {
                 let tool_registry = Arc::new(registry);
                 let tool_executor = ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
-                let tool_defs = tool_executor.get_tool_definitions(None);
+                let mut tool_defs = tool_executor.get_tool_definitions(None);
+                
+                // ✅ Add MCP tools if available
+                if let Some(mcp_state) = app_handle.try_state::<McpState>() {
+                    let mcp_tools = mcp_state.registry.get_all_tool_definitions();
+                    if !mcp_tools.is_empty() {
+                        tracing::info!("[Chat] Adding {} MCP tools to function definitions", mcp_tools.len());
+                        tool_defs.extend(mcp_tools);
+                    }
+                }
+                
                 (Some(tool_defs), Some(tool_executor))
             }
             Err(e) => {

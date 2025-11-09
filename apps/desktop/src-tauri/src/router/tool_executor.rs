@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::Manager;
 
 /// Bridges between LLM function calling and AGI tool execution
 pub struct ToolExecutor {
@@ -88,7 +89,12 @@ impl ToolExecutor {
 
     /// Execute a tool call from the LLM
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
-        // Get the tool from registry
+        // ✅ Check if this is an MCP tool (prefix: mcp_)
+        if tool_call.name.starts_with("mcp_") {
+            return self.execute_mcp_tool(tool_call).await;
+        }
+
+        // Get the tool from AGI registry
         let tool = self
             .registry
             .get_tool(&tool_call.name)
@@ -113,6 +119,43 @@ impl ToolExecutor {
 
         // Execute the tool based on its ID
         self.execute_tool_impl(&tool, args).await
+    }
+
+    /// Execute an MCP tool
+    async fn execute_mcp_tool(&self, tool_call: &ToolCall) -> Result<ToolResult> {
+        use crate::commands::McpState;
+
+        // Get MCP state from app handle
+        let mcp_state = self
+            .app_handle
+            .as_ref()
+            .and_then(|h| h.try_state::<McpState>())
+            .ok_or_else(|| anyhow!("MCP state not available"))?;
+
+        // Parse arguments
+        let args: HashMap<String, serde_json::Value> =
+            serde_json::from_str(&tool_call.arguments)
+                .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
+
+        // Execute the MCP tool
+        match mcp_state
+            .registry
+            .execute_tool(&tool_call.name, args)
+            .await
+        {
+            Ok(result_value) => Ok(ToolResult {
+                success: true,
+                data: result_value,
+                error: None,
+                metadata: HashMap::new(),
+            }),
+            Err(e) => Ok(ToolResult {
+                success: false,
+                data: json!(null),
+                error: Some(format!("MCP tool execution failed: {}", e)),
+                metadata: HashMap::new(),
+            }),
+        }
     }
 
     /// Implementation of tool execution
