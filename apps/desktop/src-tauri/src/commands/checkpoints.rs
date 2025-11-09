@@ -4,7 +4,6 @@
  * Provides safe AI editing with Git-like checkpoint system.
  * Users can create snapshots of conversation state and restore to any point.
  */
-
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -19,9 +18,9 @@ pub struct Checkpoint {
     pub checkpoint_name: String,
     pub description: Option<String>,
     pub message_count: usize,
-    pub messages_snapshot: String, // JSON
+    pub messages_snapshot: String,        // JSON
     pub context_snapshot: Option<String>, // JSON
-    pub metadata: Option<String>, // JSON
+    pub metadata: Option<String>,         // JSON
     pub parent_checkpoint_id: Option<String>,
     pub branch_name: Option<String>,
     pub created_at: i64,
@@ -52,8 +51,8 @@ pub async fn checkpoint_create(request: CreateCheckpointRequest) -> Result<Check
         .map_err(|e| format!("Failed to get messages: {}", e))?;
 
     let message_count = messages.len();
-    let messages_snapshot =
-        serde_json::to_string(&messages).map_err(|e| format!("Failed to serialize messages: {}", e))?;
+    let messages_snapshot = serde_json::to_string(&messages)
+        .map_err(|e| format!("Failed to serialize messages: {}", e))?;
 
     // Create checkpoint
     let checkpoint_id = Uuid::new_v4().to_string();
