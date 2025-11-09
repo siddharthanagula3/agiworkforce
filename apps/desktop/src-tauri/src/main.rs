@@ -410,6 +410,9 @@ fn main() {
             agiworkforce_desktop::commands::dir_list,
             agiworkforce_desktop::commands::dir_delete,
             agiworkforce_desktop::commands::dir_traverse,
+            // File search commands
+            agiworkforce_desktop::filesystem::fs_search_files,
+            agiworkforce_desktop::filesystem::fs_search_folders,
             // File watcher commands
             agiworkforce_desktop::commands::file_watch_start,
             agiworkforce_desktop::commands::file_watch_stop,
