@@ -282,23 +282,22 @@ pub async fn automation_type(
 }
 
 #[tauri::command]
-pub fn automation_drag_drop(
+pub async fn automation_drag_drop(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: DragDropRequest,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
 
-    with_service(|service| {
-        service.mouse.drag_and_drop(
-            request.from_x,
-            request.from_y,
-            request.to_x,
-            request.to_y,
-            request.duration_ms,
-        )
-    })
-    .map_err(|err| err.to_string())?;
+    // Create mouse simulator outside the service to avoid async closure issues
+    let mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
+    mouse.drag_and_drop(
+        request.from_x,
+        request.from_y,
+        request.to_x,
+        request.to_y,
+        request.duration_ms,
+    ).await.map_err(|err| err.to_string())?;
 
     // Emit overlay animation for drag-drop
     if let Ok(conn) = db.0.lock() {
