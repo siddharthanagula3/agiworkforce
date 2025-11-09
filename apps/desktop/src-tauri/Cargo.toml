@@ -15,7 +15,7 @@ unused_mut = "deny"
 dead_code = "deny"
 unused_attributes = "deny"
 unused_qualifications = "warn"  # Some qualifications are necessary for clarity
-unused_results = "warn"
+unused_results = "allow"  # Some results are intentionally ignored
 
 [dependencies]
 # Tauri and Plugins (upgraded to stable 2.0.0)
