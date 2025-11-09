@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 12;
+const CURRENT_VERSION: i32 = 13;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -88,6 +88,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 12 {
         apply_migration_v12(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [12])?;
+    }
+
+    if current_version < 13 {
+        apply_migration_v13(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [13])?;
     }
 
     Ok(())
@@ -1062,6 +1067,77 @@ fn apply_migration_v12(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_clipboard_history_type
          ON clipboard_history(content_type, created_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v13: Conversation checkpoints for safe AI editing
+fn apply_migration_v13(conn: &Connection) -> Result<()> {
+    // Checkpoints table - stores conversation state snapshots
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS conversation_checkpoints (
+            id TEXT PRIMARY KEY,
+            conversation_id INTEGER NOT NULL,
+            checkpoint_name TEXT NOT NULL,
+            description TEXT,
+            message_count INTEGER NOT NULL,
+            messages_snapshot TEXT NOT NULL,
+            context_snapshot TEXT,
+            metadata TEXT,
+            parent_checkpoint_id TEXT,
+            branch_name TEXT,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_checkpoint_id) REFERENCES conversation_checkpoints(id) ON DELETE SET NULL
+        )",
+        [],
+    )?;
+
+    // Index for checkpoint queries by conversation
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_conversation
+         ON conversation_checkpoints(conversation_id, created_at DESC)",
+        [],
+    )?;
+
+    // Index for checkpoint branches
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_branch
+         ON conversation_checkpoints(branch_name, created_at DESC)
+         WHERE branch_name IS NOT NULL",
+        [],
+    )?;
+
+    // Index for checkpoint hierarchy (parent-child relationships)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_parent
+         ON conversation_checkpoints(parent_checkpoint_id)
+         WHERE parent_checkpoint_id IS NOT NULL",
+        [],
+    )?;
+
+    // Checkpoint restore history - track when checkpoints are restored
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS checkpoint_restore_history (
+            id TEXT PRIMARY KEY,
+            checkpoint_id TEXT NOT NULL,
+            conversation_id INTEGER NOT NULL,
+            restored_at INTEGER NOT NULL,
+            restored_message_count INTEGER NOT NULL,
+            success INTEGER NOT NULL DEFAULT 1,
+            error_message TEXT,
+            FOREIGN KEY (checkpoint_id) REFERENCES conversation_checkpoints(id) ON DELETE CASCADE,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Index for restore history queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoint_restore_history
+         ON checkpoint_restore_history(conversation_id, restored_at DESC)",
         [],
     )?;
 
