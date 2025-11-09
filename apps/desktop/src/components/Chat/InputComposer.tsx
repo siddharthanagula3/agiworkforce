@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, memo, useCallback, type KeyboardEvent } from 'react';
 import { Send, Paperclip, X, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
@@ -48,7 +48,7 @@ function cleanupAttachmentPreview(attachment: AttachmentEntry) {
   }
 }
 
-export function InputComposer({
+function InputComposerComponent({
   onSend,
   disabled = false,
   placeholder = 'Type a message...',
@@ -484,3 +484,21 @@ export function InputComposer({
     </div>
   );
 }
+
+// Export memoized component to prevent unnecessary re-renders
+export const InputComposer = memo(InputComposerComponent, (prevProps, nextProps) => {
+  // Only re-render if disabled state, placeholder, conversationId, or isSending changes
+  // onSend is expected to be stable (useCallback in parent)
+  return (
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.placeholder === nextProps.placeholder &&
+    prevProps.maxLength === nextProps.maxLength &&
+    prevProps.className === nextProps.className &&
+    prevProps.conversationId === nextProps.conversationId &&
+    prevProps.isSending === nextProps.isSending &&
+    prevProps.onSend === nextProps.onSend
+  );
+});
+
+InputComposer.displayName = "InputComposer";
+
