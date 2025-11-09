@@ -26,6 +26,7 @@ interface InputComposerProps {
     attachments?: File[],
     captures?: CaptureResult[],
     routing?: ChatRoutingPreferences,
+    contextItems?: ContextItem[],
   ) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -258,6 +259,7 @@ function InputComposerComponent({
         provider: selectedProvider,
         model: selectedModel || undefined,
       },
+      contextItems,
     );
     setContent('');
     attachments.forEach(cleanupAttachmentPreview);
