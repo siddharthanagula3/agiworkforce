@@ -81,17 +81,17 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
     let scale_factor = monitor.scale_factor();
     let monitor_size = monitor.size().to_logical(scale_factor);
     let monitor_position = monitor.position().to_logical(scale_factor);
-    
+
     // Get the actual work area (excluding taskbar) using Tauri's available_monitors
     // This provides the actual usable screen area
     let work_area = if let Ok(monitors) = window.available_monitors() {
         if let Some(current_monitor) = monitors.into_iter().find(|m| {
             let pos = m.position();
             let size = m.size();
-            pos.x <= monitor_position.x as i32 && 
-            pos.y <= monitor_position.y as i32 &&
-            (pos.x + size.width as i32) >= (monitor_position.x + monitor_size.width) as i32 &&
-            (pos.y + size.height as i32) >= (monitor_position.y + monitor_size.height) as i32
+            pos.x <= monitor_position.x as i32
+                && pos.y <= monitor_position.y as i32
+                && (pos.x + size.width as i32) >= (monitor_position.x + monitor_size.width) as i32
+                && (pos.y + size.height as i32) >= (monitor_position.y + monitor_size.height) as i32
         }) {
             // Use monitor's actual work area
             let work_size = current_monitor.size().to_logical(scale_factor);
@@ -107,7 +107,7 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
             (monitor_position, available_size)
         }
     } else {
-        // Fallback with taskbar estimation  
+        // Fallback with taskbar estimation
         let taskbar_height = 48.0; // Standard Windows 11 taskbar
         let available_size = LogicalSize::<f64> {
             width: monitor_size.width,
@@ -115,7 +115,7 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
         };
         (monitor_position, available_size)
     };
-    
+
     let available_position = work_area.0;
     let available_size = work_area.1;
 
@@ -185,7 +185,7 @@ pub fn apply_dock(
     let work_area = get_work_area(window, &monitor)?;
     let available_position = work_area.0;
     let available_size = work_area.1;
-    
+
     let dock_width = WINDOW_DEFAULT_MAX_WIDTH;
     let height = available_size.height;
     let x = match position {
@@ -385,12 +385,14 @@ fn apply_geometry(
     // Only clamp width if docked or if window is too small
     let is_maximized = app_state.with_state(|state| state.maximized);
     let is_docked = app_state.with_state(|state| state.dock.is_some());
-    
+
     let width = if is_maximized {
         geometry.width
     } else if is_docked {
         // When docked, use dock width
-        geometry.width.clamp(WINDOW_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH)
+        geometry
+            .width
+            .clamp(WINDOW_MIN_WIDTH, WINDOW_DEFAULT_MAX_WIDTH)
     } else {
         // When not docked, allow full width but enforce minimum
         geometry.width.max(WINDOW_MIN_WIDTH)
@@ -426,11 +428,14 @@ fn resolve_monitor(window: &WebviewWindow) -> Result<Monitor> {
     monitors.pop().context("no monitor information available")
 }
 
-fn get_work_area(window: &WebviewWindow, monitor: &Monitor) -> Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
+fn get_work_area(
+    window: &WebviewWindow,
+    monitor: &Monitor,
+) -> Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
     let scale_factor = monitor.scale_factor();
     let monitor_size = monitor.size().to_logical(scale_factor);
     let monitor_position = monitor.position().to_logical(scale_factor);
-    
+
     // Windows typically has taskbar at bottom, but could be at any edge
     // We'll use conservative estimates for work area
     #[cfg(target_os = "windows")]
@@ -444,7 +449,7 @@ fn get_work_area(window: &WebviewWindow, monitor: &Monitor) -> Result<(LogicalPo
         };
         Ok((monitor_position, available_size))
     }
-    
+
     #[cfg(not(target_os = "windows"))]
     {
         // On other platforms, use the full monitor size
