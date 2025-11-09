@@ -1,7 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
+import { TokenCounter } from './TokenCounter';
 import { useChatStore } from '../../stores/chatStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { estimateTokens } from '../../utils/tokenCount';
+import { getModelContextWindow } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import type { CaptureResult } from '../../hooks/useScreenCapture';
 import type { ChatRoutingPreferences } from '../../types/chat';
@@ -22,10 +26,34 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     deleteMessage,
   } = useChatStore();
 
+  const llmConfig = useSettingsStore((state) => state.llmConfig);
+
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Get model-specific context window size
+  const maxContextTokens = useMemo(() => {
+    const selectedModel = llmConfig.defaultModels[llmConfig.defaultProvider];
+    if (selectedModel) {
+      return getModelContextWindow(selectedModel);
+    }
+    return llmConfig.maxTokens; // Fallback to settings
+  }, [llmConfig.defaultProvider, llmConfig.defaultModels, llmConfig.maxTokens]);
+
+  // Calculate current token count from conversation messages
+  const currentTokenCount = useMemo(() => {
+    return messages.reduce((total, msg) => {
+      // Use stored token count if available, otherwise estimate
+      if (msg.tokens !== undefined && msg.tokens !== null) {
+        return total + msg.tokens;
+      }
+      // Estimate based on content length
+      const isCode = msg.role === 'assistant'; // Assistant often includes code
+      return total + estimateTokens(msg.content, isCode);
+    }, 0);
+  }, [messages]);
 
   const handleSendMessage = async (
     content: string,
@@ -101,6 +129,19 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
           onDeleteMessage={handleDeleteMessage}
         />
       </div>
+
+      {/* Token Counter - show when there are messages */}
+      {messages.length > 0 && (
+        <div className="border-t border-border px-4 py-3">
+          <TokenCounter
+            currentTokens={currentTokenCount}
+            maxTokens={maxContextTokens}
+            compact={true}
+            showDetails={true}
+          />
+        </div>
+      )}
+
       <InputComposer
         onSend={handleSendMessage}
         disabled={loading}
