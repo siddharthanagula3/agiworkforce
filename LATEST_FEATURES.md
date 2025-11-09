@@ -1,4 +1,4 @@
-# 🚀 Latest Features (January 2025)
+# 🚀 Latest Features (November 2025)
 
 ## ✨ New Features
 
@@ -158,4 +158,4 @@ Continue with Compacted Context
 
 ---
 
-_Last Updated: January 2025_
+_Last Updated: November 8, 2025_

@@ -363,5 +363,5 @@ Tool Execution:
 
 ---
 
-_Last Updated: January 8, 2025_  
+_Last Updated: November 8, 2025_  
 _Built with ❤️ using Tauri, Rust, React, and AI_
