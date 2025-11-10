@@ -28,9 +28,9 @@ pub struct VoiceSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum VoiceProvider {
-    OpenAI,      // Whisper API
-    WebSpeech,   // Browser Web Speech API
-    Local,       // Local Whisper model (future)
+    OpenAI,    // Whisper API
+    WebSpeech, // Browser Web Speech API
+    Local,     // Local Whisper model (future)
 }
 
 pub struct VoiceState {
@@ -76,9 +76,7 @@ pub async fn voice_transcribe_file(
         VoiceProvider::WebSpeech => {
             Err("Web Speech API transcription must be done from frontend".to_string())
         }
-        VoiceProvider::Local => {
-            Err("Local Whisper model not yet implemented".to_string())
-        }
+        VoiceProvider::Local => Err("Local Whisper model not yet implemented".to_string()),
     }
 }
 
@@ -89,7 +87,11 @@ pub async fn voice_transcribe_blob(
     format: String,
     state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<VoiceTranscription, String> {
-    tracing::info!("Transcribing audio blob ({} bytes, format: {})", audio_data.len(), format);
+    tracing::info!(
+        "Transcribing audio blob ({} bytes, format: {})",
+        audio_data.len(),
+        format
+    );
 
     // Save blob to temporary file
     let temp_dir = std::env::temp_dir();
@@ -180,8 +182,8 @@ async fn transcribe_with_openai(
         .ok_or("OpenAI API key not configured")?;
 
     // Read audio file
-    let audio_data = std::fs::read(audio_path)
-        .map_err(|e| format!("Failed to read audio file: {}", e))?;
+    let audio_data =
+        std::fs::read(audio_path).map_err(|e| format!("Failed to read audio file: {}", e))?;
 
     // Get file extension
     let extension = audio_path
@@ -213,7 +215,10 @@ async fn transcribe_with_openai(
         .map_err(|e| format!("Failed to send request: {}", e))?;
 
     if !response.status().is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(format!("Whisper API error: {}", error_text));
     }
 
