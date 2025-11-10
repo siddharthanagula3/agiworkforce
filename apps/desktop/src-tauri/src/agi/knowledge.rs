@@ -218,6 +218,55 @@ impl KnowledgeBase {
     async fn enforce_memory_limit(&self) -> Result<()> {
         // Check actual database file size
         let db_path = Self::get_db_path()?;
+        let file_size_mb = if let Ok(metadata) = std::fs::metadata(&db_path) {
+            metadata.len() / (1024 * 1024) // Convert bytes to MB
+        } else {
+            0 // If file doesn't exist or can't be read, assume 0
+        };
+
+        tracing::debug!(
+            "Knowledge base size: {} MB (limit: {} MB)",
+            file_size_mb,
+            self._memory_limit_mb
+        );
+
+        // If we're over the limit, trigger compaction and pruning
+        if file_size_mb > self._memory_limit_mb {
+            tracing::warn!(
+                "Knowledge base size ({} MB) exceeds limit ({} MB), pruning entries",
+                file_size_mb,
+                self._memory_limit_mb
+            );
+
+            let conn = self.db.lock().unwrap();
+
+            // First, VACUUM to reclaim space
+            conn.execute("VACUUM", [])?;
+
+            // Then remove oldest and least important entries (keep top 80% by importance)
+            let count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+            let keep_count = (count as f64 * 0.8) as i64;
+
+            conn.execute(
+                "DELETE FROM knowledge
+                 WHERE id NOT IN (
+                     SELECT id FROM knowledge
+                     ORDER BY importance DESC, timestamp DESC
+                     LIMIT ?
+                 )",
+                params![keep_count],
+            )?;
+
+            // VACUUM again to actually free the space
+            conn.execute("VACUUM", [])?;
+
+            tracing::info!("Knowledge base pruned to {} entries", keep_count);
+        }
+
+        // Also enforce a reasonable count limit to prevent unbounded growth
+        let conn = self.db.lock().unwrap();
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
 
         if let Ok(metadata) = std::fs::metadata(&db_path) {
             let file_size_mb = metadata.len() / 1024 / 1024; // Convert bytes to MB

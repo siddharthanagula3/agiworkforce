@@ -91,10 +91,12 @@ windows = { version = "0.56", features = [
     "Win32_System_Memory",
     "Win32_System_SystemServices"
 ] }
+# Input monitoring and screen capture (Windows-specific, GTK on Linux causes build issues)
+rdev = "0.5"
+screenshots = "0.8"
 
 # Input Simulation (cross-platform fallback)
 enigo = { version = "0.2", features = ["serde"] }
-rdev = "0.5"
 
 # Terminal/PTY
 portable-pty = "0.8"
@@ -110,7 +112,6 @@ rand = "0.8"
 
 # Image Processing
 image = { version = "0.24.9", features = ["png", "jpeg", "webp"] }
-screenshots = "0.8"
 imageproc = "0.24"
 
 # Logging and Tracing
@@ -119,8 +120,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 sentry = { version = "0.33", optional = true }
 
-# WebRTC (P2P)
-webrtc = "0.9"
+# WebRTC (P2P) - Optional, pulls GTK on Linux
+webrtc = { version = "0.9", optional = true }
 tokio-tungstenite = "0.21"
 
 # WebSocket
@@ -181,7 +182,9 @@ rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
 default = []
 ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
+webrtc-support = ["webrtc"]
 sentry = ["dep:sentry"]
+# Windows builds typically enable webrtc-support, Linux builds may skip it to avoid GTK dependencies
 
 [build-dependencies]
 tauri-build = { version = "2.0.0", features = [] }

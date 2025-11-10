@@ -182,20 +182,51 @@ impl CodeGenerator {
     /// Generate code using LLM router
     async fn generate_with_llm(
         &self,
-        _router: &Arc<LLMRouter>,
+        router: &Arc<LLMRouter>,
         request: &CodeGenRequest,
         context_prompt: &str,
         existing_code: &HashMap<PathBuf, String>,
     ) -> Result<Vec<GeneratedFile>> {
-        // Build comprehensive prompt
-        let mut _prompt = context_prompt.to_string();
-        _prompt.push_str("\n\n## Existing Code\n\n");
+        tracing::info!(
+            "[CodeGenerator] Generating code with LLM for task: {}",
+            request.task_id
+        );
 
-        for (path, content) in existing_code {
-            _prompt.push_str(&format!(
+        // Build comprehensive prompt
+        let mut prompt = context_prompt.to_string();
+        prompt.push_str("\n\n## Task Description\n\n");
+        prompt.push_str(&request.description);
+        prompt.push_str("\n\n## Target Files\n\n");
+        for file in &request.target_files {
+            prompt.push_str(&format!("- {}\n", file.display()));
+        }
+
+        // Add constraints
+        if !request.constraints.is_empty() {
+            prompt.push_str("\n## Constraints\n\n");
+            for constraint in &request.constraints {
+                prompt.push_str(&format!("- {}\n", constraint.description));
+            }
+        }
+
+        // Add existing code context (limit to avoid token overflow)
+        prompt.push_str("\n\n## Existing Code Context\n\n");
+        for (i, (path, content)) in existing_code.iter().enumerate() {
+            if i >= 5 {
+                // Limit to 5 files to avoid token limits
+                prompt.push_str(&format!("... and {} more files\n", existing_code.len() - 5));
+                break;
+            }
+            // Truncate large files
+            let truncated_content = if content.len() > 2000 {
+                format!("{}...\n[truncated {} chars]", &content[..2000], content.len() - 2000)
+            } else {
+                content.clone()
+            };
+            prompt.push_str(&format!(
                 "### {}\n\n```\n{}\n```\n\n",
                 path.display(),
-                content
+                truncated_content
             ));
         }
 
@@ -243,6 +274,148 @@ impl CodeGenerator {
         };
 
         Ok(files)
+        // Add generation instructions
+        prompt.push_str("\n## Generation Instructions\n\n");
+        prompt.push_str("Generate production-grade code that:\n");
+        prompt.push_str("1. Implements the requested functionality completely\n");
+        prompt.push_str("2. Follows all specified constraints and patterns\n");
+        prompt.push_str("3. Integrates seamlessly with existing code\n");
+        prompt.push_str("4. Includes error handling and validation\n");
+        prompt.push_str("5. Has clear documentation\n\n");
+
+        prompt.push_str("Return your response as a JSON object with this structure:\n");
+        prompt.push_str(r#"{
+  "files": [
+    {
+      "path": "path/to/file.rs",
+      "content": "// Complete file content here...",
+      "file_type": "source",
+      "dependencies": ["std::collections::HashMap"],
+      "exports": ["MyStruct", "my_function"],
+      "documentation": "Brief description of what this file does"
+    }
+  ]
+}
+"#);
+
+        // Create LLM request
+        let llm_request = crate::router::LLMRequest {
+            messages: vec![crate::router::ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+                tool_calls: None,
+                tool_call_id: None,
+            }],
+            model: "".to_string(),
+            temperature: Some(0.3), // Lower temperature for more deterministic code generation
+            max_tokens: Some(8000), // Allow long code responses
+            stream: false,
+            tools: None,
+            tool_choice: None,
+        };
+
+        let preferences = crate::router::RouterPreferences {
+            provider: None,
+            model: None,
+            strategy: crate::router::RoutingStrategy::Auto,
+        };
+
+        // Lock router and get candidates
+        let router = router.lock().await;
+        let candidates = router.candidates(&llm_request, &preferences);
+        drop(router);
+
+        if candidates.is_empty() {
+            tracing::warn!("[CodeGenerator] No LLM providers available");
+            return Ok(Vec::new());
+        }
+
+        // Invoke LLM
+        let router = router.lock().await;
+        let outcome = router.invoke_candidate(&candidates[0], &llm_request).await?;
+        drop(router);
+
+        let response = outcome.response.content;
+        tracing::debug!("[CodeGenerator] LLM response received ({} chars)", response.len());
+
+        // Parse JSON response
+        match serde_json::from_str::<serde_json::Value>(&response) {
+            Ok(json) => {
+                let mut generated_files = Vec::new();
+
+                if let Some(files) = json.get("files").and_then(|f| f.as_array()) {
+                    for file_obj in files {
+                        if let (Some(path), Some(content)) = (
+                            file_obj.get("path").and_then(|p| p.as_str()),
+                            file_obj.get("content").and_then(|c| c.as_str()),
+                        ) {
+                            // Parse file_type
+                            let file_type = match file_obj
+                                .get("file_type")
+                                .and_then(|ft| ft.as_str())
+                                .unwrap_or("source")
+                            {
+                                "test" => FileType::Test,
+                                "config" => FileType::Config,
+                                "documentation" => FileType::Documentation,
+                                "type_definition" => FileType::TypeDefinition,
+                                _ => FileType::Source,
+                            };
+
+                            // Parse dependencies
+                            let dependencies: Vec<String> = file_obj
+                                .get("dependencies")
+                                .and_then(|d| d.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+
+                            // Parse exports
+                            let exports: Vec<String> = file_obj
+                                .get("exports")
+                                .and_then(|e| e.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+
+                            generated_files.push(GeneratedFile {
+                                path: PathBuf::from(path),
+                                content: content.to_string(),
+                                file_type,
+                                dependencies,
+                                exports,
+                                tests: None, // Could be extracted if LLM provides it
+                                documentation: file_obj
+                                    .get("documentation")
+                                    .and_then(|d| d.as_str())
+                                    .map(|s| s.to_string()),
+                            });
+                        }
+                    }
+                }
+
+                tracing::info!(
+                    "[CodeGenerator] Generated {} files from LLM",
+                    generated_files.len()
+                );
+                Ok(generated_files)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "[CodeGenerator] Failed to parse LLM response as JSON: {}. Response: {}",
+                    e,
+                    response.chars().take(500).collect::<String>()
+                );
+                // Return empty rather than failing - allows fallback to other methods
+                Ok(Vec::new())
+            }
+        }
     }
 
     /// Generate code using MCP tools
