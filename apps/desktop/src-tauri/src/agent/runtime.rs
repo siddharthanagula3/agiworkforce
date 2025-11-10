@@ -11,7 +11,7 @@ use crate::agi::core::AGICore;
 use crate::mcp::{McpClient, McpToolRegistry};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use parking_lot::RwLock;
+use parking_lot::RwLock; // For synchronous locks
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -283,18 +283,22 @@ impl AgentRuntime {
 
         // Create snapshot before execution (for revert capability)
         // ChangeTracker now uses tokio::sync::RwLock for async compatibility
-        let working_dir =
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let change_tracker_clone = self.change_tracker.clone();
         let task_id_clone = task_id.clone();
 
         // Create snapshot in background
         tokio::spawn(async move {
-            if let Err(e) = change_tracker_clone
+            let tracker = change_tracker_clone.read();
+            if let Err(e) = tracker
                 .create_snapshot(task_id_clone.clone(), working_dir)
                 .await
             {
-                tracing::warn!("Failed to create snapshot for task {}: {}", task_id_clone, e);
+                tracing::warn!(
+                    "Failed to create snapshot for task {}: {}",
+                    task_id_clone,
+                    e
+                );
             }
         });
         tracing::debug!(
@@ -442,7 +446,10 @@ Be concise and actionable."#,
             // Access router through AGI core
             // Note: This is a simplification - in production, would add a method to AGICore
             // For now, use heuristic-based suggestions
-            tracing::debug!("[AgentRuntime] Would use LLM analysis with prompt: {}", prompt);
+            tracing::debug!(
+                "[AgentRuntime] Would use LLM analysis with prompt: {}",
+                prompt
+            );
         }
 
         // Fallback: heuristics for common errors
@@ -952,14 +959,10 @@ Do not repeat the error message."#,
 
     /// Revert all changes for a task
     pub async fn revert_task_changes(&self, task_id: &str) -> Result<Vec<String>, String> {
-        // Clone changes to avoid borrow checker issues
+        // Get changes using async method
         let changes: Vec<Change> = {
             let tracker = self.change_tracker.read();
-            tracker
-                .get_task_changes(task_id)
-                .into_iter()
-                .cloned()
-                .collect()
+            tracker.get_task_changes(task_id).await
         };
 
         let mut reverted_ids = Vec::new();
@@ -969,9 +972,10 @@ Do not repeat the error message."#,
             match self.revert_change(change).await {
                 Ok(id) => {
                     reverted_ids.push(id.clone());
-                    self.change_tracker
-                        .write()
+                    let tracker = self.change_tracker.read();
+                    tracker
                         .mark_reverted(&change.id)
+                        .await
                         .map_err(|e| e.to_string())?;
                 }
                 Err(e) => {
@@ -1052,8 +1056,9 @@ Do not repeat the error message."#,
     }
 
     /// Get all changes (for history view)
-    pub fn get_all_change_history(&self) -> Vec<Change> {
-        self.change_tracker.read().get_all_changes().to_vec()
+    pub async fn get_all_change_history(&self) -> Vec<Change> {
+        let tracker = self.change_tracker.read();
+        tracker.get_all_changes().await
     }
 
     /// Emit a to-do list update
