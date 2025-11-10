@@ -4,16 +4,16 @@
  */
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
-use std::sync::Arc;
 
 #[cfg(target_os = "windows")]
-use crate::automation::screen::capture::capture_screenshot;
+use crate::automation::input::keyboard::type_text;
 #[cfg(target_os = "windows")]
 use crate::automation::input::mouse::{click, move_to};
 #[cfg(target_os = "windows")]
-use crate::automation::input::keyboard::type_text;
+use crate::automation::screen::capture::capture_screenshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenCapture {
@@ -106,8 +106,8 @@ pub async fn computer_use_capture_screen(
 
     #[cfg(target_os = "windows")]
     {
-        let screenshot = capture_screenshot()
-            .map_err(|e| format!("Failed to capture screenshot: {}", e))?;
+        let screenshot =
+            capture_screenshot().map_err(|e| format!("Failed to capture screenshot: {}", e))?;
 
         let capture = ScreenCapture {
             image_data: screenshot.image_data,
