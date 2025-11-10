@@ -42,7 +42,13 @@ export default defineConfig(async () => {
       environment: 'jsdom',
       setupFiles: './src/test/setup.ts',
       css: true,
-      exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/*.e2e.{ts,tsx}'],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/e2e/**',
+        '**/*.e2e.{ts,tsx}',
+        '**/playwright/**',
+      ],
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
