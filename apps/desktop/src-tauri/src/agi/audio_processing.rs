@@ -37,17 +37,17 @@ impl AudioProcessor {
                 // - whisper.cpp for local transcription
                 // - Azure Speech Services
                 // - Google Speech-to-Text
-                tracing::info!("[AudioProcessor] Would transcribe audio from {:?}", audio_path);
+                tracing::info!(
+                    "[AudioProcessor] Would transcribe audio from {:?}",
+                    audio_path
+                );
 
                 Ok(format!(
                     "Audio transcription placeholder for file: {}",
                     audio_path.display()
                 ))
             }
-            _ => Err(anyhow::anyhow!(
-                "Unsupported audio format: {}",
-                extension
-            )),
+            _ => Err(anyhow::anyhow!("Unsupported audio format: {}", extension)),
         }
     }
 

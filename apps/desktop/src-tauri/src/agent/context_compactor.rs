@@ -165,14 +165,21 @@ impl ContextCompactor {
             } else {
                 msg.content.clone()
             };
-            conversation_text.push_str(&format!("[{}]: {}\n\n", msg.role.as_str(), truncated_content));
+            conversation_text.push_str(&format!(
+                "[{}]: {}\n\n",
+                msg.role.as_str(),
+                truncated_content
+            ));
         }
 
         // Use LLM to generate summary
         match router.send_message(&conversation_text, None).await {
             Ok(summary) => Ok(summary),
             Err(e) => {
-                tracing::warn!("LLM summary generation failed: {}, using heuristic fallback", e);
+                tracing::warn!(
+                    "LLM summary generation failed: {}, using heuristic fallback",
+                    e
+                );
                 Ok(self.generate_summary_heuristic(messages))
             }
         // Use LLM to generate summary if router is available
