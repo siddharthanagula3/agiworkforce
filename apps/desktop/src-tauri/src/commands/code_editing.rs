@@ -72,8 +72,8 @@ pub async fn code_generate_edit(
     tracing::info!("Generating code edit for: {:?}", file_path);
 
     // Read current file content
-    let original_content = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let original_content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Build prompt for LLM
     let prompt = format!(
@@ -154,9 +154,7 @@ pub async fn code_apply_edit(
     let editing_state = edit_state.lock().await;
     let mut edits = editing_state.edits.lock().await;
 
-    let edit = edits
-        .get_mut(&edit_id)
-        .ok_or("Edit not found")?;
+    let edit = edits.get_mut(&edit_id).ok_or("Edit not found")?;
 
     // Write modified content to file
     std::fs::write(&edit.file_path, &edit.modified_content)
@@ -178,9 +176,7 @@ pub async fn code_reject_edit(
     let editing_state = edit_state.lock().await;
     let mut edits = editing_state.edits.lock().await;
 
-    let edit = edits
-        .get_mut(&edit_id)
-        .ok_or("Edit not found")?;
+    let edit = edits.get_mut(&edit_id).ok_or("Edit not found")?;
 
     edit.status = EditStatus::Rejected;
 
@@ -195,7 +191,10 @@ pub async fn composer_start_session(
     router_state: State<'_, Arc<Mutex<LLMRouter>>>,
     edit_state: State<'_, Arc<Mutex<CodeEditingState>>>,
 ) -> Result<ComposerSession, String> {
-    tracing::info!("Starting composer session with {} context files", context_files.len());
+    tracing::info!(
+        "Starting composer session with {} context files",
+        context_files.len()
+    );
 
     let session_id = uuid::Uuid::new_v4().to_string();
 
@@ -256,17 +255,13 @@ Format your response as JSON:
 
     // Parse response
     let json_str = extract_json(&response.content)?;
-    let file_changes: Vec<serde_json::Value> = serde_json::from_str(&json_str)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let file_changes: Vec<serde_json::Value> =
+        serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     // Create edits for each file
     let mut edits = Vec::new();
     for change in file_changes {
-        let file_path = PathBuf::from(
-            change["file_path"]
-                .as_str()
-                .ok_or("Missing file_path")?
-        );
+        let file_path = PathBuf::from(change["file_path"].as_str().ok_or("Missing file_path")?);
         let modified_content = change["content"]
             .as_str()
             .ok_or("Missing content")?
@@ -277,8 +272,7 @@ Format your response as JSON:
             .to_string();
 
         // Read original content
-        let original_content = std::fs::read_to_string(&file_path)
-            .unwrap_or_default();
+        let original_content = std::fs::read_to_string(&file_path).unwrap_or_default();
 
         // Generate diff
         let diff = generate_diff(&original_content, &modified_content);
@@ -326,9 +320,7 @@ pub async fn composer_apply_session(
     let editing_state = edit_state.lock().await;
     let mut sessions = editing_state.composer_sessions.lock().await;
 
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or("Session not found")?;
+    let session = sessions.get_mut(&session_id).ok_or("Session not found")?;
 
     // Apply all edits
     for edit in &mut session.edits {

@@ -11,9 +11,9 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Shortcut {
     pub id: String,
-    pub key: String,           // e.g., "CommandOrControl+K"
+    pub key: String, // e.g., "CommandOrControl+K"
     pub description: String,
-    pub action: String,        // e.g., "open_chat", "toggle_window"
+    pub action: String, // e.g., "open_chat", "toggle_window"
     pub enabled: bool,
 }
 
@@ -101,7 +101,11 @@ pub async fn shortcuts_register(
     app: AppHandle,
     state: State<'_, Arc<Mutex<ShortcutsState>>>,
 ) -> Result<(), String> {
-    tracing::info!("Registering shortcut: {} -> {}", shortcut.key, shortcut.action);
+    tracing::info!(
+        "Registering shortcut: {} -> {}",
+        shortcut.key,
+        shortcut.action
+    );
 
     let shortcuts_state = state.lock().await;
 
@@ -122,7 +126,8 @@ pub async fn shortcuts_register(
         registered.push(shortcut.key.clone());
 
         // Emit event (actual hotkey registration would happen via plugin)
-        app_clone.emit_all("shortcut_registered", shortcut)
+        app_clone
+            .emit_all("shortcut_registered", shortcut)
             .map_err(|e| format!("Failed to emit event: {}", e))?;
     }
 
@@ -211,10 +216,7 @@ pub async fn shortcuts_update(
 
 /// Trigger a shortcut action manually
 #[tauri::command]
-pub async fn shortcuts_trigger(
-    action: String,
-    app: AppHandle,
-) -> Result<(), String> {
+pub async fn shortcuts_trigger(action: String, app: AppHandle) -> Result<(), String> {
     tracing::info!("Triggering shortcut action: {}", action);
 
     // Emit event for the action
