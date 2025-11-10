@@ -362,7 +362,8 @@ Return ONLY the JSON array."#,
                 1.0
             };
 
-            let step_duration = (base_duration as f64 * resource_multiplier * network_multiplier) as u64;
+            let step_duration =
+                (base_duration as f64 * resource_multiplier * network_multiplier) as u64;
             total_seconds += step_duration;
         }
 
@@ -434,7 +435,10 @@ Respond with ONLY "true" or "false"."#,
                 Ok(is_met)
             }
             Err(e) => {
-                tracing::warn!("LLM criterion evaluation failed: {}, defaulting to false", e);
+                tracing::warn!(
+                    "LLM criterion evaluation failed: {}, defaulting to false",
+                    e
+                );
                 // On error, conservatively assume criterion not met
                 Ok(false)
             }
