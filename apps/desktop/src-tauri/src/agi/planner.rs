@@ -250,6 +250,8 @@ Return ONLY the JSON array."#,
             steps.push(step);
         }
 
+        // Calculate estimated duration based on steps
+        let estimated_duration = self.calculate_plan_duration(&steps);
         // Calculate estimated duration based on steps and tool complexity
         let mut total_duration_secs = 0u64;
         for step in &steps {
@@ -277,6 +279,7 @@ Return ONLY the JSON array."#,
         Ok(Plan {
             goal_id: goal.id.clone(),
             steps,
+            estimated_duration,
             estimated_duration: Duration::from_secs(total_estimated),
             estimated_resources: ResourceUsage {
                 cpu_percent: total_cpu,
@@ -340,12 +343,126 @@ Return ONLY the JSON array."#,
         })
     }
 
+    /// Calculate estimated duration based on plan steps
+    fn calculate_plan_duration(&self, steps: &[PlanStep]) -> Duration {
+        if steps.is_empty() {
+            return Duration::from_secs(5); // Minimum duration
+        }
+
+        let mut total_seconds = 0u64;
+
+        for step in steps {
+            // Base duration estimate based on tool type
+            let base_duration = match step.tool_id.as_str() {
+                // Fast operations (< 1 second)
+                "ui_screenshot" | "file_read" | "ui_click" => 1,
+
+                // Medium operations (1-5 seconds)
+                "ui_type" | "file_write" | "image_ocr" => 3,
+
+                // Slower operations (5-15 seconds)
+                "browser_navigate" | "db_query" | "api_call" => 8,
+
+                // Potentially long operations (15-30 seconds)
+                "code_execute" | "llm_reason" => 20,
+
+                // Unknown tools - assume medium duration
+                _ => 5,
+            };
+
+            // Adjust based on resource usage (high resource = potentially longer)
+            let resource_multiplier = if step.estimated_resources.cpu_percent > 50.0 {
+                1.5
+            } else if step.estimated_resources.cpu_percent > 80.0 {
+                2.0
+            } else {
+                1.0
+            };
+
+            // Network operations may take longer
+            let network_multiplier = if step.estimated_resources.network_mb > 0.0 {
+                1.2
+            } else {
+                1.0
+            };
+
+            let step_duration = (base_duration as f64 * resource_multiplier * network_multiplier) as u64;
+            total_seconds += step_duration;
+        }
+
+        // Add overhead for step transitions (0.5s per step)
+        total_seconds += (steps.len() as u64) / 2;
+
+        // Cap at reasonable maximum (10 minutes)
+        total_seconds = total_seconds.min(600);
+
+        Duration::from_secs(total_seconds)
+    }
+
     /// Evaluate if a success criterion is met
     pub async fn evaluate_criterion(
         &self,
         criterion: &str,
         context: &ExecutionContext,
     ) -> Result<bool> {
+        // Build evaluation prompt
+        let prompt = format!(
+            r#"Evaluate if the following success criterion is met based on the execution context.
+
+Success Criterion: {}
+
+Execution Context:
+- Completed Steps: {}
+- Last Tool Results: {}
+- Current Resources: CPU {}%, Memory {}MB
+- Recent Errors: {}
+
+Analyze the context and determine if the criterion is met.
+Respond with ONLY "true" or "false"."#,
+            criterion,
+            context.completed_steps.len(),
+            context
+                .tool_results
+                .iter()
+                .rev()
+                .take(3)
+                .map(|(tool, result)| format!("{}: {}", tool, result.success))
+                .collect::<Vec<_>>()
+                .join(", "),
+            context.available_resources.cpu_usage_percent,
+            context.available_resources.memory_usage_mb,
+            if context.errors.is_empty() {
+                "None".to_string()
+            } else {
+                context.errors.len().to_string()
+            }
+        );
+
+        // Use LLM to evaluate
+        let router = self.router.lock().await;
+        match router.send_message(&prompt, None).await {
+            Ok(response) => {
+                let response_lower = response.trim().to_lowercase();
+                // Parse response - look for true/false/yes/no
+                let is_met = response_lower.contains("true")
+                    || response_lower.starts_with("yes")
+                    || (response_lower.contains("met") && !response_lower.contains("not met"));
+
+                tracing::info!(
+                    "[Planner] Criterion '{}' evaluation: {} (response: {})",
+                    criterion,
+                    is_met,
+                    response.trim()
+                );
+
+                Ok(is_met)
+            }
+            Err(e) => {
+                tracing::warn!("LLM criterion evaluation failed: {}, defaulting to false", e);
+                // On error, conservatively assume criterion not met
+                Ok(false)
+            }
+        }
         tracing::info!("[Planner] Evaluating criterion: {}", criterion);
 
         // Build context summary from execution results
