@@ -423,15 +423,14 @@ impl AGICore {
 
     /// Get goal status
     pub fn get_goal_status(&self, goal_id: &str) -> Option<ExecutionContext> {
-        self.execution_contexts
-            .lock()
-            .ok()?
-            .get(goal_id)
-            .cloned()
+        self.execution_contexts.lock().ok()?.get(goal_id).cloned()
     }
 
     /// List all active goals
     pub fn list_goals(&self) -> Vec<Goal> {
-        self.active_goals.lock().ok().map_or(Vec::new(), |g| g.clone())
+        self.active_goals
+            .lock()
+            .ok()
+            .map_or(Vec::new(), |g| g.clone())
     }
 }

@@ -963,7 +963,10 @@ mod tests {
         // Test creating tool definitions for core tools
         let file_read_tool = create_file_read_tool();
         assert_eq!(file_read_tool.name, "file_read");
-        assert_eq!(file_read_tool.description, "Read contents of a file from the filesystem");
+        assert_eq!(
+            file_read_tool.description,
+            "Read contents of a file from the filesystem"
+        );
         assert!(file_read_tool.parameters.is_object());
 
         let ui_screenshot_tool = create_ui_screenshot_tool();
@@ -972,7 +975,10 @@ mod tests {
 
         let browser_navigate_tool = create_browser_navigate_tool();
         assert_eq!(browser_navigate_tool.name, "browser_navigate");
-        assert!(browser_navigate_tool.description.contains("browser") || browser_navigate_tool.description.contains("URL"));
+        assert!(
+            browser_navigate_tool.description.contains("browser")
+                || browser_navigate_tool.description.contains("URL")
+        );
     }
 
     #[test]
@@ -1038,10 +1044,22 @@ mod tests {
         // Ensure all tools have unique names
         let mut names = std::collections::HashSet::new();
         for tool in &tools {
-            assert!(names.insert(&tool.name), "Duplicate tool name: {}", tool.name);
+            assert!(
+                names.insert(&tool.name),
+                "Duplicate tool name: {}",
+                tool.name
+            );
             assert!(!tool.name.is_empty(), "Tool has empty name");
-            assert!(!tool.description.is_empty(), "Tool {} has empty description", tool.name);
-            assert!(tool.parameters.is_object(), "Tool {} has invalid parameters", tool.name);
+            assert!(
+                !tool.description.is_empty(),
+                "Tool {} has empty description",
+                tool.name
+            );
+            assert!(
+                tool.parameters.is_object(),
+                "Tool {} has invalid parameters",
+                tool.name
+            );
         }
 
         assert_eq!(tools.len(), 10, "Expected 10 core tools to be defined");
