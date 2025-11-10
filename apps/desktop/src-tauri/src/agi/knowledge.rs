@@ -232,11 +232,13 @@ impl KnowledgeBase {
                 let conn = self.db.lock().unwrap();
 
                 // Calculate how many entries to keep based on average entry size
-                let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+                let count: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
 
                 if count > 0 {
                     let avg_entry_size = file_size_mb * 1024 * 1024 / count as u64;
-                    let target_count = (self._memory_limit_mb * 1024 * 1024) / avg_entry_size.max(1);
+                    let target_count =
+                        (self._memory_limit_mb * 1024 * 1024) / avg_entry_size.max(1);
 
                     // Keep 80% of limit to avoid frequent pruning
                     let keep_count = (target_count * 80 / 100).max(100); // Keep at least 100 entries

@@ -276,7 +276,7 @@ impl AutonomousAgent {
     /// Check resource limits (CPU, memory)
     async fn check_resource_limits(&self) -> Result<bool> {
         // Use sysinfo to monitor actual system resources
-        use sysinfo::{System, SystemExt, ProcessExt, CpuExt};
+        use sysinfo::{CpuExt, ProcessExt, System, SystemExt};
 
         let mut sys = System::new_all();
         sys.refresh_all();
@@ -293,11 +293,12 @@ impl AutonomousAgent {
         }
 
         // Check memory usage for current process
-        let current_pid = sysinfo::get_current_pid()
-            .map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
+        let current_pid =
+            sysinfo::get_current_pid().map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
 
         if let Some(process) = sys.process(current_pid) {
-            let memory_mb = process.memory() / 1024 / 1024; // Convert bytes to MB
+            // process.memory() returns KiB, divide by 1024 once to get MB
+            let memory_mb = process.memory() / 1024;
             if memory_mb > self.config.memory_limit_mb {
                 tracing::warn!(
                     "[Agent] Memory usage ({}MB) exceeds limit ({}MB)",

@@ -110,6 +110,40 @@ impl KeyboardSimulator {
         Ok(())
     }
 
+    /// Press a key down (without releasing)
+    pub fn key_down(&self, virtual_key: u8) -> Result<()> {
+        let down = INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(virtual_key as u16),
+                    wScan: 0,
+                    dwFlags: KEYBD_EVENT_FLAGS(0),
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        self.dispatch(&mut [down])
+    }
+
+    /// Release a key
+    pub fn key_up(&self, virtual_key: u8) -> Result<()> {
+        let up = INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(virtual_key as u16),
+                    wScan: 0,
+                    dwFlags: KEYEVENTF_KEYUP,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        self.dispatch(&mut [up])
+    }
+
     pub fn press_key(&self, virtual_key: u16) -> Result<()> {
         let down = INPUT {
             r#type: INPUT_KEYBOARD,

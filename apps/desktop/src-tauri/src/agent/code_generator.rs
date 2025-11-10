@@ -223,6 +223,7 @@ impl CodeGenerator {
         );
 
         let response = _router
+            .as_ref()
             .send_message(&_prompt, None)
             .await
             .map_err(|e| anyhow::anyhow!("LLM generation failed: {}", e))?;
@@ -232,14 +233,25 @@ impl CodeGenerator {
             parsed
         } else {
             // Try to extract JSON from markdown code block
-            let json_start = response.find('[').unwrap_or(0);
-            let json_end = response.rfind(']').unwrap_or(response.len());
-            let json_str = &response[json_start..=json_end];
+            let json_start = response.find('[');
+            let json_end = response.rfind(']');
 
-            serde_json::from_str(json_str).unwrap_or_else(|e| {
-                tracing::warn!("Failed to parse LLM response as JSON: {}", e);
+            // Only attempt to extract if both markers exist
+            if let (Some(start), Some(end)) = (json_start, json_end) {
+                if start < end {
+                    let json_str = &response[start..=end];
+                    serde_json::from_str(json_str).unwrap_or_else(|e| {
+                        tracing::warn!("Failed to parse LLM response as JSON: {}", e);
+                        Vec::new()
+                    })
+                } else {
+                    tracing::warn!("Invalid JSON markers in LLM response");
+                    Vec::new()
+                }
+            } else {
+                tracing::warn!("No JSON array found in LLM response");
                 Vec::new()
-            })
+            }
         };
 
         Ok(files)
