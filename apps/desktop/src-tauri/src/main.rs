@@ -10,9 +10,10 @@ use agiworkforce_desktop::{
     build_system_tray,
     commands::{
         load_persisted_calendar_accounts, AgentRuntimeState, ApiState, AppDatabase,
-        BrowserStateWrapper, CalendarState, CloudState, CodeGeneratorState, ContextManagerState,
-        DatabaseState, DocumentState, FileWatcherState, LLMState, McpState, ProductivityState,
-        SettingsServiceState, SettingsState,
+        BrowserStateWrapper, CalendarState, CloudState, CodeEditingState, CodeGeneratorState,
+        ComputerUseState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState,
+        GitHubState, LLMState, McpState, ProductivityState, SettingsServiceState, SettingsState,
+        ShortcutsState, VoiceState, WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -178,6 +179,42 @@ fn main() {
             ))));
 
             tracing::info!("CodeGenerator initialized");
+
+            // Initialize GitHub integration state
+            let workspace_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir")
+                .join("github_repos");
+            std::fs::create_dir_all(&workspace_dir).ok();
+            app.manage(Arc::new(TokioMutex::new(GitHubState::new(workspace_dir))));
+
+            tracing::info!("GitHub state initialized");
+
+            // Initialize Computer Use state
+            app.manage(Arc::new(TokioMutex::new(ComputerUseState::new())));
+
+            tracing::info!("Computer Use state initialized");
+
+            // Initialize Code Editing state
+            app.manage(Arc::new(TokioMutex::new(CodeEditingState::new())));
+
+            tracing::info!("Code Editing state initialized");
+
+            // Initialize Voice Input state
+            app.manage(Arc::new(TokioMutex::new(VoiceState::new())));
+
+            tracing::info!("Voice state initialized");
+
+            // Initialize Shortcuts state with defaults
+            app.manage(Arc::new(TokioMutex::new(ShortcutsState::with_defaults())));
+
+            tracing::info!("Shortcuts state initialized");
+
+            // Initialize Workspace Indexing state
+            app.manage(Arc::new(TokioMutex::new(WorkspaceIndexState::new())));
+
+            tracing::info!("Workspace indexing state initialized");
 
             // Initialize window state
             let state = AppState::load(app.handle())?;
@@ -360,6 +397,71 @@ fn main() {
             agiworkforce_desktop::commands::browser_focus,
             agiworkforce_desktop::commands::browser_query_all,
             agiworkforce_desktop::commands::browser_scroll_into_view,
+            // Advanced browser automation commands
+            agiworkforce_desktop::commands::browser_execute_async_js,
+            agiworkforce_desktop::commands::browser_get_element_state,
+            agiworkforce_desktop::commands::browser_wait_for_interactive,
+            agiworkforce_desktop::commands::browser_fill_form,
+            agiworkforce_desktop::commands::browser_drag_and_drop,
+            agiworkforce_desktop::commands::browser_upload_file,
+            agiworkforce_desktop::commands::browser_get_cookies,
+            agiworkforce_desktop::commands::browser_set_cookie,
+            agiworkforce_desktop::commands::browser_clear_cookies,
+            agiworkforce_desktop::commands::browser_get_performance_metrics,
+            agiworkforce_desktop::commands::browser_wait_for_navigation,
+            agiworkforce_desktop::commands::browser_get_frames,
+            agiworkforce_desktop::commands::browser_execute_in_frame,
+            agiworkforce_desktop::commands::browser_call_function,
+            agiworkforce_desktop::commands::browser_enable_request_interception,
+            // Git commands
+            agiworkforce_desktop::commands::git_init,
+            agiworkforce_desktop::commands::git_status,
+            agiworkforce_desktop::commands::git_add,
+            agiworkforce_desktop::commands::git_commit,
+            agiworkforce_desktop::commands::git_push,
+            agiworkforce_desktop::commands::git_pull,
+            agiworkforce_desktop::commands::git_create_branch,
+            agiworkforce_desktop::commands::git_checkout,
+            agiworkforce_desktop::commands::git_checkout_new_branch,
+            agiworkforce_desktop::commands::git_list_branches,
+            agiworkforce_desktop::commands::git_delete_branch,
+            agiworkforce_desktop::commands::git_merge,
+            agiworkforce_desktop::commands::git_log,
+            agiworkforce_desktop::commands::git_diff,
+            agiworkforce_desktop::commands::git_clone,
+            agiworkforce_desktop::commands::git_fetch,
+            agiworkforce_desktop::commands::git_stash,
+            agiworkforce_desktop::commands::git_stash_pop,
+            agiworkforce_desktop::commands::git_reset,
+            agiworkforce_desktop::commands::git_list_remotes,
+            agiworkforce_desktop::commands::git_add_remote,
+            // Design/CSS generation commands
+            agiworkforce_desktop::commands::design_generate_css,
+            agiworkforce_desktop::commands::design_apply_css,
+            agiworkforce_desktop::commands::design_get_element_styles,
+            agiworkforce_desktop::commands::design_generate_color_scheme,
+            agiworkforce_desktop::commands::design_suggest_improvements,
+            agiworkforce_desktop::commands::design_tokens_to_css,
+            agiworkforce_desktop::commands::design_check_accessibility,
+            // Debugging commands
+            agiworkforce_desktop::commands::debug_parse_error,
+            agiworkforce_desktop::commands::debug_suggest_fixes,
+            agiworkforce_desktop::commands::debug_analyze_stack_trace,
+            // Task persistence and coordination commands
+            agiworkforce_desktop::commands::task_create,
+            agiworkforce_desktop::commands::task_get_status,
+            agiworkforce_desktop::commands::task_update_progress,
+            agiworkforce_desktop::commands::task_pause,
+            agiworkforce_desktop::commands::task_resume,
+            agiworkforce_desktop::commands::task_cancel,
+            agiworkforce_desktop::commands::task_list,
+            agiworkforce_desktop::commands::task_list_by_status,
+            agiworkforce_desktop::commands::task_complete,
+            agiworkforce_desktop::commands::task_save_context,
+            agiworkforce_desktop::commands::task_get_resumable,
+            agiworkforce_desktop::commands::coord_update_app_state,
+            agiworkforce_desktop::commands::coord_request_approval,
+            agiworkforce_desktop::commands::coord_get_pending_approvals,
             // Migration commands
             agiworkforce_desktop::commands::migration_test_lovable_connection,
             agiworkforce_desktop::commands::migration_list_lovable_workflows,
@@ -498,7 +600,55 @@ fn main() {
             agiworkforce_desktop::commands::mcp_store_credential,
             agiworkforce_desktop::commands::mcp_get_tool_schemas,
             agiworkforce_desktop::commands::mcp_get_health,
-            agiworkforce_desktop::commands::mcp_check_server_health
+            agiworkforce_desktop::commands::mcp_check_server_health,
+            // GitHub integration commands
+            agiworkforce_desktop::commands::github_clone_repo,
+            agiworkforce_desktop::commands::github_get_repo_context,
+            agiworkforce_desktop::commands::github_search_files,
+            agiworkforce_desktop::commands::github_read_file,
+            agiworkforce_desktop::commands::github_get_file_tree,
+            agiworkforce_desktop::commands::github_list_repos,
+            // Computer use commands
+            agiworkforce_desktop::commands::computer_use_start_session,
+            agiworkforce_desktop::commands::computer_use_capture_screen,
+            agiworkforce_desktop::commands::computer_use_click,
+            agiworkforce_desktop::commands::computer_use_move_mouse,
+            agiworkforce_desktop::commands::computer_use_type_text,
+            agiworkforce_desktop::commands::computer_use_get_session,
+            agiworkforce_desktop::commands::computer_use_list_sessions,
+            agiworkforce_desktop::commands::computer_use_execute_tool,
+            // Code editing commands
+            agiworkforce_desktop::commands::code_generate_edit,
+            agiworkforce_desktop::commands::code_apply_edit,
+            agiworkforce_desktop::commands::code_reject_edit,
+            agiworkforce_desktop::commands::code_list_pending_edits,
+            agiworkforce_desktop::commands::composer_start_session,
+            agiworkforce_desktop::commands::composer_apply_session,
+            agiworkforce_desktop::commands::composer_get_session,
+            // Voice input commands
+            agiworkforce_desktop::commands::voice_transcribe_file,
+            agiworkforce_desktop::commands::voice_transcribe_blob,
+            agiworkforce_desktop::commands::voice_configure,
+            agiworkforce_desktop::commands::voice_get_settings,
+            agiworkforce_desktop::commands::voice_start_recording,
+            agiworkforce_desktop::commands::voice_stop_recording,
+            // Keyboard shortcuts commands
+            agiworkforce_desktop::commands::shortcuts_register,
+            agiworkforce_desktop::commands::shortcuts_unregister,
+            agiworkforce_desktop::commands::shortcuts_list,
+            agiworkforce_desktop::commands::shortcuts_update,
+            agiworkforce_desktop::commands::shortcuts_trigger,
+            agiworkforce_desktop::commands::shortcuts_reset,
+            agiworkforce_desktop::commands::shortcuts_check_key,
+            agiworkforce_desktop::commands::shortcuts_get_defaults,
+            // Workspace indexing commands
+            agiworkforce_desktop::commands::workspace_index,
+            agiworkforce_desktop::commands::workspace_search_symbols,
+            agiworkforce_desktop::commands::workspace_find_definition,
+            agiworkforce_desktop::commands::workspace_find_references,
+            agiworkforce_desktop::commands::workspace_get_dependencies,
+            agiworkforce_desktop::commands::workspace_get_file_symbols,
+            agiworkforce_desktop::commands::workspace_get_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

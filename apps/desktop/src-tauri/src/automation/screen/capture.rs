@@ -386,12 +386,15 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
         // Get bitmap handle from clipboard
         let clipboard_data = GetClipboardData(CF_BITMAP);
 
-        if clipboard_data.is_err() || clipboard_data.as_ref().unwrap().is_invalid() {
-            CloseClipboard().ok();
-            return Err(anyhow!("No bitmap data in clipboard"));
-        }
+        let handle = match clipboard_data {
+            Ok(h) if !h.is_invalid() => h,
+            _ => {
+                CloseClipboard().ok();
+                return Err(anyhow!("No bitmap data in clipboard"));
+            }
+        };
 
-        let bitmap_handle = HBITMAP(clipboard_data.unwrap().0);
+        let bitmap_handle = HBITMAP(handle.0);
 
         // Get screen DC
         let screen_dc = GetDC(HWND(0));
