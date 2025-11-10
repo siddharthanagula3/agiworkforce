@@ -64,6 +64,7 @@
     "**/*.spec.ts",
     "**/*.test.ts",
     "**/build",
-    "**/target"
+    "**/target",
+    "services/**"
   ]
 }
