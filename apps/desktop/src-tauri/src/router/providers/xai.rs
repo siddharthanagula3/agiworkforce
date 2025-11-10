@@ -2,7 +2,6 @@
  * xAI Provider (Grok 4, Grok 3)
  * OpenAI-compatible API at https://api.x.ai/v1
  */
-
 use crate::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
