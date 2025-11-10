@@ -431,10 +431,110 @@ impl AgentRuntime {
     }
 
     /// Execute task via AGI Core
-    async fn execute_via_agi(&self, _agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
-        // TODO: Integrate with AGI Core's goal execution
-        // For now, use standalone execution
-        self.execute_standalone(task).await
+    async fn execute_via_agi(&self, agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
+        tracing::info!("[AgentRuntime] Executing task via AGI Core: {}", task.id);
+
+        // Convert Task to Goal
+        let priority = match task.priority {
+            TaskPriority::Low => crate::agi::Priority::Low,
+            TaskPriority::Normal => crate::agi::Priority::Medium,
+            TaskPriority::High => crate::agi::Priority::High,
+            TaskPriority::Critical => crate::agi::Priority::Critical,
+        };
+
+        let goal = crate::agi::Goal {
+            id: task.id.clone(),
+            description: format!("{}: {}", task.goal, task.description),
+            priority,
+            deadline: None,
+            constraints: Vec::new(),
+            success_criteria: vec![task.goal.clone()],
+        };
+
+        // Submit goal to AGI Core
+        let goal_id = agi.submit_goal(goal).await?;
+        tracing::info!("[AgentRuntime] Goal submitted to AGI Core: {}", goal_id);
+
+        // Wait for goal completion by polling status
+        // In production, this could use event listeners instead
+        let start_time = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(300); // 5 minute timeout
+
+        loop {
+            // Check timeout
+            if start_time.elapsed() > timeout {
+                return Err(anyhow::anyhow!(
+                    "Goal execution timed out after {} seconds",
+                    timeout.as_secs()
+                ));
+            }
+
+            // Get goal status
+            if let Some(context) = agi.get_goal_status(&goal_id) {
+                // Check if all steps completed
+                let all_steps_completed = !context.tool_results.is_empty()
+                    && context
+                        .tool_results
+                        .iter()
+                        .all(|result| result.success || result.error.is_some());
+
+                if all_steps_completed {
+                    // Calculate overall success
+                    let success_count = context.tool_results.iter().filter(|r| r.success).count();
+                    let total_count = context.tool_results.len();
+                    let overall_success = success_count > total_count / 2; // More than 50% success
+
+                    // Calculate total execution time
+                    let total_execution_time: u64 = context
+                        .tool_results
+                        .iter()
+                        .map(|r| r.execution_time_ms)
+                        .sum();
+
+                    // Collect all results
+                    let results: Vec<serde_json::Value> = context
+                        .tool_results
+                        .iter()
+                        .map(|r| {
+                            serde_json::json!({
+                                "tool_id": r.tool_id,
+                                "success": r.success,
+                                "result": r.result,
+                                "error": r.error,
+                                "execution_time_ms": r.execution_time_ms,
+                            })
+                        })
+                        .collect();
+
+                    // Collect errors
+                    let errors: Vec<String> = context
+                        .tool_results
+                        .iter()
+                        .filter_map(|r| r.error.clone())
+                        .collect();
+
+                    tracing::info!(
+                        "[AgentRuntime] Goal execution completed: {} ({}/{} steps succeeded)",
+                        goal_id,
+                        success_count,
+                        total_count
+                    );
+
+                    return Ok(serde_json::json!({
+                        "success": overall_success,
+                        "goal_id": goal_id,
+                        "completed_steps": total_count,
+                        "successful_steps": success_count,
+                        "execution_time_ms": total_execution_time,
+                        "results": results,
+                        "errors": if errors.is_empty() { None } else { Some(errors) },
+                    }));
+                }
+            }
+
+            // Sleep before next poll
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
     }
 
     /// Execute task standalone (without AGI Core)
