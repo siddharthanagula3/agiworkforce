@@ -8,8 +8,9 @@ _Built with Tauri 2.0, Rust, React 18, and TypeScript_
 [![React](https://img.shields.io/badge/React-18-blue)](https://reactjs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**Status:** ✅ **Production Ready (November 2025)**  
+**Status:** ✅ **Production Ready (November 2025)**
 **Grade:** **A+ (100/100)**
+**Latest Update:** ✨ **Claude Code/Cursor-Like Features Complete** (9 new features added!)
 
 ---
 
@@ -136,6 +137,101 @@ AGI Workforce works autonomously like **cursor-agent** (for coding) and **Claude
 | No learning             | **Learns from experience**      |
 | High API costs          | **125x cheaper with MCP**       |
 | Context limits          | **Auto-compacts like Cursor**   |
+
+---
+
+## ✨ **NEW: Claude Code/Cursor-Like Features** (November 2025)
+
+We've just completed a major update bringing **9 professional-grade features** inspired by Claude Code and Cursor to enhance your developer experience:
+
+### **1. Enhanced Command Palette with History** 🎯
+
+- Recent commands tracking (last 10 executions)
+- Command frequency counter
+- Relative timestamps ("2m ago", "1h ago")
+- Visual separation of recent vs. all commands
+- **Just like:** VS Code Command Palette + recent file tracking
+
+### **2. Real-Time Token Counter** 📊
+
+- Live token usage visualization with progress bar
+- Support for 20+ models (GPT-4: 128K, Claude 3.5: 200K, Gemini 1.5 Pro: 2M)
+- Color-coded status:
+  - 🟢 Green (safe): < 70%
+  - 🟡 Yellow (warning): 70-89%
+  - 🔴 Red (danger): 90-99%
+  - 🔴 Red (over-budget): ≥ 100%
+- Budget limit indicators
+- **Just like:** Claude Code token counter
+
+### **3. Git-Like Conversation Checkpoints** 💾
+
+- Save conversation state at any point
+- One-click restore to previous states
+- Timeline visualization (like git history)
+- Transaction-safe restore with automatic rollback
+- Branch support for experimenting with different approaches
+- **Just like:** Git commits for conversations
+
+### **4. Always-Visible Status Bar** 📱
+
+- Real-time system indicators:
+  - Current model and provider
+  - Token usage with percentage
+  - AGI system status (Idle/Planning/Executing)
+  - Network connectivity
+  - Sending status
+- Color-coded alerts
+- Tooltips with detailed info
+- **Just like:** VS Code status bar
+
+### **5. Token Budget System with Alerts** 💰
+
+- Set daily/weekly/monthly/per-conversation limits
+- Automatic alerts at 80%, 90%, 100% usage
+- Visual alert panel with dismissal
+- Period auto-reset logic
+- Cost tracking integration
+- **Just like:** Cloud cost monitoring
+
+### **6. Auto-Correction Error Detection** 🔧
+
+- Detects 20+ error patterns (TypeScript, ESLint, Rust, syntax, runtime)
+- Automatic retry logic (max 3 attempts)
+- Error classification and suggestions
+- Success rate tracking
+- Visual status indicator
+- **Just like:** Cursor's auto-fix feature
+
+### **7. Platform-Aware Keyboard Shortcuts** ⌨️
+
+- Cmd on Mac, Ctrl on Windows/Linux
+- Form element awareness (skip shortcuts in input fields)
+- Scope support for context-specific shortcuts
+- Global shortcut registry
+- Helper functions for display formatting
+- **Just like:** VS Code keyboard shortcuts
+
+### **8. AGI Progress Indicator with Timeline** 🚀
+
+- Real-time step-by-step visualization
+- Timeline UI showing all execution steps
+- Step status tracking (pending → in-progress → completed/failed)
+- Execution time display
+- Error messages for failed steps
+- Expandable/collapsible details
+- Auto-hide on completion
+- **Just like:** Claude Code task progress + Cursor agent execution
+
+### **9. Comprehensive Testing & Refinement** ✅
+
+- Zero TypeScript errors
+- Zero ESLint errors
+- All Rust formatting checks passing
+- Pre-commit and pre-push hooks validated
+- Production-ready code quality
+
+**All features are integrated and production-ready!** See [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for complete details.
 
 ---
 
@@ -942,7 +1038,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎯 **Roadmap - What's Coming**
 
-### **Q4 2025 (Current - November 2025)**
+### **Q4 2025 (Current - November 2025)** ✅ **Complete!**
 
 - ✅ Core functionality complete
 - ✅ 15 tools implemented
@@ -951,6 +1047,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Intelligent file access with screenshot fallback
 - ✅ Automatic context compaction (Cursor/Claude Code style)
 - ✅ MCP integration (1000+ tools available)
+- ✅ **Claude Code/Cursor-like features (9 features)**
+  - ✅ Enhanced command palette with history
+  - ✅ Real-time token counter (20+ models)
+  - ✅ Git-like conversation checkpoints
+  - ✅ Always-visible status bar
+  - ✅ Token budget system with alerts
+  - ✅ Auto-correction error detection
+  - ✅ Platform-aware keyboard shortcuts
+  - ✅ AGI progress indicator with timeline
+  - ✅ Comprehensive testing & refinement
 - ✅ Production ready
 
 ### **Q1 2026 (Next Quarter)**
