@@ -1,7 +1,7 @@
 use crate::router::providers::{
     anthropic::AnthropicProvider, deepseek::DeepSeekProvider, google::GoogleProvider,
-    mistral::MistralProvider, ollama::OllamaProvider, openai::OpenAIProvider,
-    qwen::QwenProvider, xai::XAIProvider,
+    mistral::MistralProvider, ollama::OllamaProvider, openai::OpenAIProvider, qwen::QwenProvider,
+    xai::XAIProvider,
 };
 use crate::router::{
     cache_manager::CacheManager,

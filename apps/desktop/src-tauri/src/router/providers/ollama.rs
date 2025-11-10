@@ -11,7 +11,6 @@
  * Install models: `ollama pull llama3.1:405b`
  * Note: Larger models (405B) require significant VRAM/RAM
  */
-
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::router::{LLMProvider, LLMRequest, LLMResponse};
 use futures_util::Stream;

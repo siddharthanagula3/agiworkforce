@@ -2,7 +2,6 @@
  * Mistral AI Provider (Mistral Large 2, Codestral)
  * OpenAI-compatible API at https://api.mistral.ai/v1
  */
-
 use crate::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use async_trait::async_trait;
 use reqwest::Client;
