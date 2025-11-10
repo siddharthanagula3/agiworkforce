@@ -113,9 +113,9 @@ impl GoogleProvider {
         // Pricing as of November 2025 (per 1M tokens)
         let (input_cost, output_cost) = match model {
             // 2025 Gemini 2.5 Generation (Latest)
-            "gemini-2.5-pro" | "gemini-2-5-pro" => (1.25, 5.0),              // Most capable
-            "gemini-2.5-flash" | "gemini-2-5-flash" => (0.075, 0.3),         // Fast & affordable
-            "gemini-2.5-computer-use" => (1.25, 5.0),                        // UI automation specialist
+            "gemini-2.5-pro" | "gemini-2-5-pro" => (1.25, 5.0), // Most capable
+            "gemini-2.5-flash" | "gemini-2-5-flash" => (0.075, 0.3), // Fast & affordable
+            "gemini-2.5-computer-use" => (1.25, 5.0),           // UI automation specialist
 
             // Gemini 1.5 Generation (Previous)
             "gemini-1.5-pro" => (1.25, 5.0),
