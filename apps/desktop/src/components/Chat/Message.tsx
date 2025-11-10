@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 import {
   User,
   Bot,
@@ -104,7 +104,7 @@ function MarkdownCodeBlock({ inline, className, children, ...props }: CodeProps)
   );
 }
 
-export function Message({ message, onRegenerate, onEdit, onDelete }: MessageProps) {
+function MessageComponent({ message, onRegenerate, onEdit, onDelete }: MessageProps) {
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -361,3 +361,21 @@ export function Message({ message, onRegenerate, onEdit, onDelete }: MessageProp
     </div>
   );
 }
+
+// Export memoized component to prevent unnecessary re-renders
+export const Message = memo(MessageComponent, (prevProps, nextProps) => {
+  // Only re-render if message content, streaming state, or handlers change
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.streaming === nextProps.message.streaming &&
+    prevProps.message.tokens === nextProps.message.tokens &&
+    prevProps.message.cost === nextProps.message.cost &&
+    prevProps.onRegenerate === nextProps.onRegenerate &&
+    prevProps.onEdit === nextProps.onEdit &&
+    prevProps.onDelete === nextProps.onDelete
+  );
+});
+
+Message.displayName = "Message";
+
