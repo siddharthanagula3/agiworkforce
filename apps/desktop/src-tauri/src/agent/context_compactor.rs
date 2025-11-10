@@ -144,7 +144,7 @@ impl ContextCompactor {
     /// Generate summary using LLM
     async fn generate_summary_with_llm(
         &self,
-        _router: &Arc<LLMRouter>,
+        router: &Arc<LLMRouter>,
         messages: &[Message],
     ) -> Result<String> {
         // Build conversation context
@@ -153,17 +153,29 @@ impl ContextCompactor {
         conversation_text.push_str("- Key decisions and outcomes\n");
         conversation_text.push_str("- Important context and constraints\n");
         conversation_text.push_str("- Code changes and implementations\n");
-        conversation_text.push_str("- User preferences and requirements\n\n");
+        conversation_text.push_str("- User preferences and requirements\n");
+        conversation_text.push_str("- Tasks completed and in progress\n");
+        conversation_text.push_str("- Error messages and resolutions\n\n");
+        conversation_text.push_str("Be concise but comprehensive. Keep technical details.\n\n");
         conversation_text.push_str("Conversation:\n\n");
 
         for msg in messages {
-            conversation_text.push_str(&format!("[{}]: {}\n\n", msg.role.as_str(), msg.content));
+            let truncated_content = if msg.content.len() > 1000 {
+                format!("{}... [truncated]", &msg.content[..1000])
+            } else {
+                msg.content.clone()
+            };
+            conversation_text.push_str(&format!("[{}]: {}\n\n", msg.role.as_str(), truncated_content));
         }
 
         // Use LLM to generate summary
-        // TODO: Implement actual LLM call with router
-        // For now, return heuristic summary
-        Ok(self.generate_summary_heuristic(messages))
+        match router.send_message(&conversation_text, None).await {
+            Ok(summary) => Ok(summary),
+            Err(e) => {
+                tracing::warn!("LLM summary generation failed: {}, using heuristic fallback", e);
+                Ok(self.generate_summary_heuristic(messages))
+            }
+        }
     }
 
     /// Generate heuristic-based summary (fallback)
