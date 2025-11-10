@@ -117,8 +117,15 @@ impl OpenAIProvider {
 
     /// Calculate cost based on model and tokens
     fn calculate_cost(model: &str, prompt_tokens: u32, completion_tokens: u32) -> f64 {
-        // Pricing as of 2025 (per 1M tokens)
+        // Pricing as of November 2025 (per 1M tokens)
         let (input_cost, output_cost) = match model {
+            // 2025 Latest Models
+            "gpt-5" => (15.0, 45.0),                    // GPT-5 flagship
+            "gpt-5-codex" => (10.0, 30.0),              // GPT-5 Codex for coding
+            "gpt-5-mini" => (2.0, 6.0),                 // GPT-5 Mini
+            "o3" | "o3-mini" => (15.0, 60.0),           // o3 reasoning model
+
+            // Previous Generation
             "gpt-4-turbo" | "gpt-4-turbo-preview" => (10.0, 30.0),
             "gpt-4" => (30.0, 60.0),
             "gpt-3.5-turbo" => (0.5, 1.5),
