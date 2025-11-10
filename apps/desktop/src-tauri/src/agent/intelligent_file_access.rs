@@ -200,13 +200,21 @@ impl IntelligentFileAccess {
 
         // Use LLM to analyze (if available)
         if let Some(ref router) = self.llm_router {
-            // TODO: Use vision-capable LLM to analyze screenshot
-            // For now, use text-based analysis with OCR text
-            let analysis_text = self
+            // Use vision-capable LLM to analyze screenshot
+            // Note: Currently uses text-based analysis with OCR text
+            // Future enhancement: Pass actual screenshot image to vision-capable models
+            match self
                 .analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text)
-                .await?;
-
-            return Ok(self.parse_analysis(&analysis_text, ocr_result));
+                .await
+            {
+                Ok(analysis_text) => {
+                    return Ok(self.parse_analysis(&analysis_text, ocr_result));
+                }
+                Err(e) => {
+                    tracing::warn!("Vision LLM analysis failed, using heuristic fallback: {}", e);
+                    // Fall through to heuristic analysis
+                }
+            }
         }
 
         // Fallback: Simple heuristic-based analysis
@@ -216,16 +224,21 @@ impl IntelligentFileAccess {
     /// Analyze with LLM
     async fn analyze_with_llm(
         &self,
-        _router: &LLMRouter,
+        router: &LLMRouter,
         prompt: &str,
-        ocr_text: &str,
+        _ocr_text: &str,
     ) -> Result<String> {
-        // TODO: Implement LLM call with vision support
-        // For now, return simple analysis
-        Ok(format!(
-            "Based on OCR text: {}\n\nPrompt: {}",
-            ocr_text, prompt
-        ))
+        // Use LLM to analyze the screenshot context with OCR text
+        // Note: For true vision support, we would pass image data to vision-capable models
+        // For now, we use text-based analysis with OCR text embedded in the prompt
+
+        match router.send_message(prompt, None).await {
+            Ok(analysis) => Ok(analysis),
+            Err(e) => {
+                tracing::warn!("LLM analysis failed: {}", e);
+                Err(anyhow!("LLM analysis failed: {}", e))
+            }
+        }
     }
 
     /// Parse LLM analysis into structured format
