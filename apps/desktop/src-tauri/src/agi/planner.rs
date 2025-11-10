@@ -250,10 +250,34 @@ Return ONLY the JSON array."#,
             steps.push(step);
         }
 
+        // Calculate estimated duration based on steps and tool complexity
+        let mut total_duration_secs = 0u64;
+        for step in &steps {
+            // Estimate duration based on tool type
+            let tool_duration = match step.tool_id.as_str() {
+                "file_read" | "file_write" | "file_list" => 2,
+                "ui_click" | "ui_type" | "ui_screenshot" => 3,
+                "browser_navigate" | "browser_click" | "browser_extract" => 5,
+                "code_execute" | "code_analyze" => 10,
+                "db_query" | "db_execute" | "db_transaction_begin" | "db_transaction_commit"
+                | "db_transaction_rollback" => 8,
+                "api_call" | "api_upload" | "api_download" => 6,
+                "document_read" | "document_search" | "image_ocr" => 7,
+                "llm_reason" => 15, // LLM calls are typically slower
+                _ => 5,             // default for unknown tools
+            };
+            total_duration_secs += tool_duration;
+        }
+
+        // Add overhead for planning, dependencies, and error handling
+        let planning_overhead = 5; // Fixed planning overhead
+        let dependency_overhead = steps.len() as u64 * 2; // 2s per step for dependency resolution
+        let total_estimated = total_duration_secs + planning_overhead + dependency_overhead;
+
         Ok(Plan {
             goal_id: goal.id.clone(),
             steps,
-            estimated_duration: Duration::from_secs(30), // TODO: Calculate based on steps
+            estimated_duration: Duration::from_secs(total_estimated),
             estimated_resources: ResourceUsage {
                 cpu_percent: total_cpu,
                 memory_mb: total_memory,
