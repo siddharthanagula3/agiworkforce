@@ -1,6 +1,7 @@
 use crate::router::providers::{
-    anthropic::AnthropicProvider, google::GoogleProvider, ollama::OllamaProvider,
-    openai::OpenAIProvider,
+    anthropic::AnthropicProvider, deepseek::DeepSeekProvider, google::GoogleProvider,
+    mistral::MistralProvider, ollama::OllamaProvider, openai::OpenAIProvider,
+    qwen::QwenProvider, xai::XAIProvider,
 };
 use crate::router::{
     cache_manager::CacheManager,
@@ -54,6 +55,10 @@ pub async fn llm_send_message(
         "anthropic" => Some(Provider::Anthropic),
         "google" => Some(Provider::Google),
         "ollama" => Some(Provider::Ollama),
+        "xai" | "grok" => Some(Provider::XAI),
+        "deepseek" => Some(Provider::DeepSeek),
+        "qwen" | "alibaba" => Some(Provider::Qwen),
+        "mistral" | "mistralai" => Some(Provider::Mistral),
         _ => None,
     });
 
@@ -148,6 +153,38 @@ pub async fn llm_configure_provider(
             router.set_ollama(Box::new(OllamaProvider::new(base_url)));
             Ok(())
         }
+        "xai" | "grok" => {
+            if let Some(key) = api_key {
+                router.set_xai(Box::new(XAIProvider::new(Some(key))));
+                Ok(())
+            } else {
+                Err("XAI requires an API key".to_string())
+            }
+        }
+        "deepseek" => {
+            if let Some(key) = api_key {
+                router.set_deepseek(Box::new(DeepSeekProvider::new(Some(key))));
+                Ok(())
+            } else {
+                Err("DeepSeek requires an API key".to_string())
+            }
+        }
+        "qwen" | "alibaba" => {
+            if let Some(key) = api_key {
+                router.set_qwen(Box::new(QwenProvider::new(Some(key))));
+                Ok(())
+            } else {
+                Err("Qwen requires an API key".to_string())
+            }
+        }
+        "mistral" | "mistralai" => {
+            if let Some(key) = api_key {
+                router.set_mistral(Box::new(MistralProvider::new(Some(key))));
+                Ok(())
+            } else {
+                Err("Mistral requires an API key".to_string())
+            }
+        }
         _ => Err(format!("Unknown provider: {}", provider)),
     }
 }
@@ -164,6 +201,10 @@ pub async fn llm_set_default_provider(
         "anthropic" => Provider::Anthropic,
         "google" => Provider::Google,
         "ollama" => Provider::Ollama,
+        "xai" | "grok" => Provider::XAI,
+        "deepseek" => Provider::DeepSeek,
+        "qwen" | "alibaba" => Provider::Qwen,
+        "mistral" | "mistralai" => Provider::Mistral,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
