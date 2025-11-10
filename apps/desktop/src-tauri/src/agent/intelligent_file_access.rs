@@ -215,7 +215,10 @@ impl IntelligentFileAccess {
                     return Ok(self.parse_analysis(&analysis_text, ocr_result));
                 }
                 Err(e) => {
-                    tracing::warn!("Vision LLM analysis failed, using heuristic fallback: {}", e);
+                    tracing::warn!(
+                        "Vision LLM analysis failed, using heuristic fallback: {}",
+                        e
+                    );
                     // Fall through to heuristic analysis
                 }
             }
