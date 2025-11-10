@@ -200,14 +200,25 @@ impl IntelligentFileAccess {
 
         // Use LLM to analyze (if available)
         if let Some(ref router) = self.llm_router {
+            // Use vision-capable LLM to analyze screenshot
+            // Note: Currently uses text-based analysis with OCR text
+            // Future enhancement: Pass actual screenshot image to vision-capable models
+            match self
             // Use LLM with OCR text for analysis
             // Note: Vision-capable models (GPT-4V, Claude 3+) can process images directly
             // Current implementation uses text-based analysis with OCR extraction
             let analysis_text = self
                 .analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text)
-                .await?;
-
-            return Ok(self.parse_analysis(&analysis_text, ocr_result));
+                .await
+            {
+                Ok(analysis_text) => {
+                    return Ok(self.parse_analysis(&analysis_text, ocr_result));
+                }
+                Err(e) => {
+                    tracing::warn!("Vision LLM analysis failed, using heuristic fallback: {}", e);
+                    // Fall through to heuristic analysis
+                }
+            }
         }
 
         // Fallback: Simple heuristic-based analysis
@@ -219,8 +230,19 @@ impl IntelligentFileAccess {
         &self,
         router: &LLMRouter,
         prompt: &str,
-        ocr_text: &str,
+        _ocr_text: &str,
     ) -> Result<String> {
+        // Use LLM to analyze the screenshot context with OCR text
+        // Note: For true vision support, we would pass image data to vision-capable models
+        // For now, we use text-based analysis with OCR text embedded in the prompt
+
+        match router.send_message(prompt, None).await {
+            Ok(analysis) => Ok(analysis),
+            Err(e) => {
+                tracing::warn!("LLM analysis failed: {}", e);
+                Err(anyhow!("LLM analysis failed: {}", e))
+            }
+        }
         tracing::info!("[IntelligentFileAccess] Analyzing screenshot with LLM");
 
         // Build comprehensive prompt with OCR text
