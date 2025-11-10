@@ -80,12 +80,21 @@ impl AnthropicProvider {
 
     /// Calculate cost based on model and tokens
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
-        // Pricing as of 2025 (per 1M tokens)
+        // Pricing as of November 2025 (per 1M tokens)
         let (input_cost, output_cost) = match model {
+            // 2025 Claude 4.x Generation (Latest)
+            "claude-sonnet-4-5" | "claude-4.5-sonnet" => (3.0, 15.0),    // Best coding model
+            "claude-haiku-4-5" | "claude-4.5-haiku" => (0.25, 1.25),     // Fast & affordable
+            "claude-opus-4" | "claude-4-opus" => (15.0, 75.0),           // Most capable
+
+            // Claude 3.5 Generation
+            "claude-3-5-sonnet-20241022" => (3.0, 15.0),
+
+            // Claude 3 Generation (Legacy)
             "claude-3-opus-20240229" => (15.0, 75.0),
             "claude-3-sonnet-20240229" => (3.0, 15.0),
             "claude-3-haiku-20240307" => (0.25, 1.25),
-            "claude-3-5-sonnet-20241022" => (3.0, 15.0),
+
             _ => (3.0, 15.0), // Default to sonnet pricing
         };
 
