@@ -275,8 +275,32 @@ impl AutonomousAgent {
 
     /// Check resource limits (CPU, memory)
     async fn check_resource_limits(&self) -> Result<bool> {
-        // TODO: Implement actual resource monitoring
-        // For now, always return true
+        use sysinfo::{System, SystemExt, CpuExt, ProcessExt};
+
+        let mut system = System::new_all();
+        system.refresh_all();
+
+        // Check CPU usage (throttle if > 80%)
+        let cpu_usage = system.global_cpu_info().cpu_usage();
+        if cpu_usage > 80.0 {
+            tracing::warn!("CPU usage high: {:.1}%, throttling autonomous agent", cpu_usage);
+            return Ok(false);
+        }
+
+        // Check memory usage (throttle if > 80% of available)
+        let used_memory = system.used_memory();
+        let total_memory = system.total_memory();
+        let memory_percent = (used_memory as f64 / total_memory as f64) * 100.0;
+        if memory_percent > 80.0 {
+            tracing::warn!("Memory usage high: {:.1}%, throttling autonomous agent", memory_percent);
+            return Ok(false);
+        }
+
+        tracing::debug!(
+            "Resource check passed: CPU {:.1}%, Memory {:.1}%",
+            cpu_usage,
+            memory_percent
+        );
         Ok(true)
     }
 
