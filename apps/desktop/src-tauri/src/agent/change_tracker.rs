@@ -5,10 +5,13 @@
 /// - Tracks terminal commands executed
 /// - Stores git snapshots before major changes
 /// - Provides revert functionality
+///
+/// NOTE: Refactored to use tokio::sync::RwLock for async compatibility and Send safety
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Type of change made
@@ -74,12 +77,6 @@ impl Change {
     }
 }
 
-/// Change tracker that maintains history of all agent actions
-pub struct ChangeTracker {
-    changes: Vec<Change>,
-    snapshots: HashMap<String, GitSnapshot>, // task_id -> snapshot
-}
-
 /// Git snapshot before major changes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitSnapshot {
@@ -91,17 +88,31 @@ pub struct GitSnapshot {
     pub changed_files: Vec<PathBuf>,
 }
 
+/// Internal state wrapped in RwLock
+struct ChangeTrackerState {
+    changes: Vec<Change>,
+    snapshots: HashMap<String, GitSnapshot>, // task_id -> snapshot
+}
+
+/// Change tracker that maintains history of all agent actions
+/// Now using tokio::sync::RwLock for async compatibility
+pub struct ChangeTracker {
+    state: RwLock<ChangeTrackerState>,
+}
+
 impl ChangeTracker {
     pub fn new() -> Self {
         Self {
-            changes: Vec::new(),
-            snapshots: HashMap::new(),
+            state: RwLock::new(ChangeTrackerState {
+                changes: Vec::new(),
+                snapshots: HashMap::new(),
+            }),
         }
     }
 
     /// Record a file creation
-    pub fn record_file_created(
-        &mut self,
+    pub async fn record_file_created(
+        &self,
         path: PathBuf,
         content: String,
         task_id: String,
@@ -114,13 +125,16 @@ impl ChangeTracker {
             Some(content),
         );
         let id = change.id.clone();
-        self.changes.push(change);
+
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+
         id
     }
 
     /// Record a file modification
-    pub fn record_file_modified(
-        &mut self,
+    pub async fn record_file_modified(
+        &self,
         path: PathBuf,
         before_content: String,
         after_content: String,
@@ -134,13 +148,16 @@ impl ChangeTracker {
             Some(after_content),
         );
         let id = change.id.clone();
-        self.changes.push(change);
+
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+
         id
     }
 
     /// Record a file deletion
-    pub fn record_file_deleted(
-        &mut self,
+    pub async fn record_file_deleted(
+        &self,
         path: PathBuf,
         content: String,
         task_id: String,
@@ -153,13 +170,16 @@ impl ChangeTracker {
             None,
         );
         let id = change.id.clone();
-        self.changes.push(change);
+
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+
         id
     }
 
     /// Record a command execution
-    pub fn record_command(
-        &mut self,
+    pub async fn record_command(
+        &self,
         command: String,
         working_dir: PathBuf,
         task_id: String,
@@ -179,13 +199,16 @@ impl ChangeTracker {
             .metadata
             .insert("command".to_string(), serde_json::json!(command));
         let id = change.id.clone();
-        self.changes.push(change);
+
+        let mut state = self.state.write().await;
+        state.changes.push(change);
+
         id
     }
 
     /// Create a git snapshot before major changes
     pub async fn create_snapshot(
-        &mut self,
+        &self,
         task_id: String,
         working_dir: PathBuf,
     ) -> Result<GitSnapshot, String> {
@@ -209,34 +232,44 @@ impl ChangeTracker {
             changed_files,
         };
 
-        self.snapshots.insert(task_id, snapshot.clone());
+        let mut state = self.state.write().await;
+        state.snapshots.insert(task_id, snapshot.clone());
+
         Ok(snapshot)
     }
 
     /// Get all changes for a task
-    pub fn get_task_changes(&self, task_id: &str) -> Vec<&Change> {
-        self.changes
+    pub async fn get_task_changes(&self, task_id: &str) -> Vec<Change> {
+        let state = self.state.read().await;
+        state
+            .changes
             .iter()
             .filter(|c| c.task_id == task_id && !c.reverted)
+            .cloned()
             .collect()
     }
 
     /// Get all changes (for history view)
-    pub fn get_all_changes(&self) -> &[Change] {
-        &self.changes
+    pub async fn get_all_changes(&self) -> Vec<Change> {
+        let state = self.state.read().await;
+        state.changes.clone()
     }
 
     /// Get changes that can be reverted
-    pub fn get_revertible_changes(&self, task_id: Option<&str>) -> Vec<&Change> {
-        self.changes
+    pub async fn get_revertible_changes(&self, task_id: Option<&str>) -> Vec<Change> {
+        let state = self.state.read().await;
+        state
+            .changes
             .iter()
             .filter(|c| c.can_revert && !c.reverted && task_id.map_or(true, |tid| c.task_id == tid))
+            .cloned()
             .collect()
     }
 
     /// Mark a change as reverted
-    pub fn mark_reverted(&mut self, change_id: &str) -> Result<(), String> {
-        let change = self
+    pub async fn mark_reverted(&self, change_id: &str) -> Result<(), String> {
+        let mut state = self.state.write().await;
+        let change = state
             .changes
             .iter_mut()
             .find(|c| c.id == change_id)
@@ -323,8 +356,9 @@ impl ChangeTracker {
     }
 
     /// Get snapshot for a task
-    pub fn get_snapshot(&self, task_id: &str) -> Option<&GitSnapshot> {
-        self.snapshots.get(task_id)
+    pub async fn get_snapshot(&self, task_id: &str) -> Option<GitSnapshot> {
+        let state = self.state.read().await;
+        state.snapshots.get(task_id).cloned()
     }
 }
 
