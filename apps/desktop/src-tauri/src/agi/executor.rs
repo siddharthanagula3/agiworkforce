@@ -151,7 +151,7 @@ impl AGIExecutor {
                 // If element_id provided, focus and type
                 if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                     self.automation.uia.set_focus(element_id)?;
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
                     // Find element by text and focus
                     use crate::automation::uia::ElementQuery;
@@ -167,12 +167,12 @@ impl AGIExecutor {
                     let elements = self.automation.uia.find_elements(None, &query)?;
                     if let Some(element) = elements.first() {
                         self.automation.uia.set_focus(&element.id)?;
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
                 }
 
                 // Type the text
-                self.automation.keyboard.send_text(text)?;
+                self.automation.keyboard.send_text(text).await?;
                 Ok(json!({ "success": true, "action": "typed", "text": text }))
             }
             "browser_navigate" => {

@@ -64,7 +64,7 @@
     "framer-motion": "^11.2.4",
     "fuse.js": "^7.0.0",
     "highlight.js": "^11.9.0",
-    "immer": "^10.1.1",
+    "immer": "^10.2.0",
     "katex": "^0.16.9",
     "lucide-react": "^0.378.0",
     "monaco-editor": "^0.47.0",

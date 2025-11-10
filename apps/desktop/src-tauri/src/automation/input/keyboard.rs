@@ -35,16 +35,16 @@ impl KeyboardSimulator {
         self.typing_delay_ms = delay_ms;
     }
 
-    pub fn send_text(&self, text: &str) -> Result<()> {
-        self.send_text_with_delay(text, self.typing_delay_ms)
+    pub async fn send_text(&self, text: &str) -> Result<()> {
+        self.send_text_with_delay(text, self.typing_delay_ms).await
     }
 
     /// Send text with custom delay between keystrokes
-    pub fn send_text_with_delay(&self, text: &str, delay_ms: u64) -> Result<()> {
+    pub async fn send_text_with_delay(&self, text: &str, delay_ms: u64) -> Result<()> {
         for ch in text.chars() {
             self.send_unicode(ch)?;
             if delay_ms > 0 {
-                std::thread::sleep(Duration::from_millis(delay_ms));
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
         }
         Ok(())
@@ -63,7 +63,7 @@ impl KeyboardSimulator {
     }
 
     /// Play back a recorded macro
-    pub fn play_macro(&self, steps: &[MacroStep]) -> Result<()> {
+    pub async fn play_macro(&self, steps: &[MacroStep]) -> Result<()> {
         for step in steps {
             match &step.action {
                 MacroAction::PressKey(key) => {
@@ -97,14 +97,14 @@ impl KeyboardSimulator {
                     self.dispatch(&mut [up])?;
                 }
                 MacroAction::SendText(text) => {
-                    self.send_text_with_delay(text, step.delay_ms)?;
+                    self.send_text_with_delay(text, step.delay_ms).await?;
                 }
                 MacroAction::Hotkey(modifiers, key) => {
                     self.hotkey(modifiers, *key)?;
                 }
             }
             if step.delay_ms > 0 {
-                std::thread::sleep(Duration::from_millis(step.delay_ms));
+                tokio::time::sleep(Duration::from_millis(step.delay_ms)).await;
             }
         }
         Ok(())

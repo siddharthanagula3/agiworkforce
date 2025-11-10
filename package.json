@@ -21,7 +21,7 @@
     "lint:fix": "pnpm lint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc -p tsconfig.base.json --noEmit",
+    "typecheck": "cd apps/desktop && tsc --noEmit",
     "test": "pnpm -r test",
     "clean": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "clean:build": "pnpm -r exec rm -rf dist",
