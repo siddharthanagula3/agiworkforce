@@ -78,39 +78,44 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
     window.set_focus()?;
     window.set_title("AGI Workforce")?;
 
-    // Handle docking first if present
-    if let Some(dock) = snapshot.dock.clone() {
-        apply_dock(window, &app_state, dock)?;
-    } else {
-        // Validate saved geometry or use defaults
-        let monitor = resolve_monitor(window)?;
-        let scale_factor = monitor.scale_factor();
-        let monitor_size: LogicalSize<f64> = monitor.size().to_logical(scale_factor);
-        let monitor_position: LogicalPosition<f64> = monitor.position().to_logical(scale_factor);
+    // ALWAYS start in normal windowed mode (not docked) to prevent taskbar overlap
+    // Users can manually dock the window after startup if desired
+    let monitor = resolve_monitor(window)?;
+    let scale_factor = monitor.scale_factor();
+    let monitor_size: LogicalSize<f64> = monitor.size().to_logical(scale_factor);
+    let monitor_position: LogicalPosition<f64> = monitor.position().to_logical(scale_factor);
 
-        let geometry = if let Some(saved_geometry) = snapshot.geometry.clone() {
-            // Validate saved geometry
-            if saved_geometry.width >= WINDOW_MIN_WIDTH
-                && saved_geometry.height >= WINDOW_MIN_HEIGHT
-                && saved_geometry.x >= monitor_position.x
-                && saved_geometry.y >= monitor_position.y
-                && saved_geometry.x + saved_geometry.width
-                    <= monitor_position.x + monitor_size.width
-                && saved_geometry.y + saved_geometry.height
-                    <= monitor_position.y + monitor_size.height
-            {
-                saved_geometry
-            } else {
-                // Invalid geometry - calculate default centered position
-                calculate_default_geometry(&monitor)?
-            }
+    // Clear any saved docking state on startup
+    app_state.update(|state| {
+        if state.dock.is_some() {
+            state.dock = None;
+            state.previous_geometry = None;
+            true
         } else {
-            // No saved geometry - calculate default centered position
-            calculate_default_geometry(&monitor)?
-        };
+            false
+        }
+    })?;
 
-        apply_geometry(window, &app_state, &geometry)?;
-    }
+    let geometry = if let Some(saved_geometry) = snapshot.geometry.clone() {
+        // Validate saved geometry
+        if saved_geometry.width >= WINDOW_MIN_WIDTH
+            && saved_geometry.height >= WINDOW_MIN_HEIGHT
+            && saved_geometry.x >= monitor_position.x
+            && saved_geometry.y >= monitor_position.y
+            && saved_geometry.x + saved_geometry.width <= monitor_position.x + monitor_size.width
+            && saved_geometry.y + saved_geometry.height <= monitor_position.y + monitor_size.height
+        {
+            saved_geometry
+        } else {
+            // Invalid geometry - calculate default centered position
+            calculate_default_geometry(&monitor)?
+        }
+    } else {
+        // No saved geometry - calculate default centered position
+        calculate_default_geometry(&monitor)?
+    };
+
+    apply_geometry(window, &app_state, &geometry)?;
 
     register_event_handlers(window, &app_state)?;
 
