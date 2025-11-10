@@ -4,8 +4,9 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::browser::{
-    BrowserOptions, BrowserState, BrowserType, ClickOptions, DomOperations, ImageFormat,
-    NavigationOptions, ScreenshotOptions, TypeOptions,
+    AdvancedBrowserOps, BrowserOptions, BrowserState, BrowserType, ClickOptions, Cookie,
+    DomOperations, ElementState, ExecuteOptions, FormField, ImageFormat, NavigationOptions,
+    ScreenshotOptions, TypeOptions,
 };
 
 /// Browser state wrapper for Tauri
@@ -440,4 +441,304 @@ pub async fn browser_scroll_into_view(
     DomOperations::scroll_into_view(&tab_id, &selector)
         .await
         .map_err(|e| format!("Failed to scroll into view: {}", e))
+}
+
+// ============================================================================
+// ADVANCED BROWSER AUTOMATION COMMANDS
+// ============================================================================
+
+/// Execute async JavaScript with full promise support and retry logic
+#[tauri::command]
+pub async fn browser_execute_async_js(
+    tab_id: String,
+    script: String,
+    args: Option<Vec<serde_json::Value>>,
+    timeout_ms: Option<u64>,
+    retry_count: Option<u32>,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<serde_json::Value, String> {
+    tracing::info!("Executing async JS in tab: {}", tab_id);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    let options = ExecuteOptions {
+        timeout_ms: timeout_ms.unwrap_or(30000),
+        retry_count: retry_count.unwrap_or(3),
+        ..Default::default()
+    };
+
+    AdvancedBrowserOps::execute_async_js(cdp_client, &script, args, options)
+        .await
+        .map_err(|e| format!("Failed to execute async JS: {}", e))
+}
+
+/// Get comprehensive element state (visibility, interactivity, bounds, styles)
+#[tauri::command]
+pub async fn browser_get_element_state(
+    tab_id: String,
+    selector: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<ElementState, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::get_element_state(cdp_client, &selector)
+        .await
+        .map_err(|e| format!("Failed to get element state: {}", e))
+}
+
+/// Wait for element to be interactive (visible + enabled + clickable)
+#[tauri::command]
+pub async fn browser_wait_for_interactive(
+    tab_id: String,
+    selector: String,
+    timeout_ms: u64,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    tracing::info!("Waiting for element to be interactive: {}", selector);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::wait_for_interactive(cdp_client, &selector, timeout_ms)
+        .await
+        .map_err(|e| format!("Failed to wait for interactive: {}", e))
+}
+
+/// Fill entire form with multiple fields
+#[tauri::command]
+pub async fn browser_fill_form(
+    tab_id: String,
+    fields: Vec<FormField>,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    tracing::info!("Filling form with {} fields", fields.len());
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::fill_form(cdp_client, fields)
+        .await
+        .map_err(|e| format!("Failed to fill form: {}", e))
+}
+
+/// Drag and drop elements
+#[tauri::command]
+pub async fn browser_drag_and_drop(
+    tab_id: String,
+    source_selector: String,
+    target_selector: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    tracing::info!("Dragging {} to {}", source_selector, target_selector);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::drag_and_drop(cdp_client, &source_selector, &target_selector)
+        .await
+        .map_err(|e| format!("Failed to drag and drop: {}", e))
+}
+
+/// Upload file to file input
+#[tauri::command]
+pub async fn browser_upload_file(
+    tab_id: String,
+    selector: String,
+    file_path: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    tracing::info!("Uploading file {} to {}", file_path, selector);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::upload_file(cdp_client, &selector, &file_path)
+        .await
+        .map_err(|e| format!("Failed to upload file: {}", e))
+}
+
+/// Get all cookies
+#[tauri::command]
+pub async fn browser_get_cookies(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<Cookie>, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::get_cookies(cdp_client)
+        .await
+        .map_err(|e| format!("Failed to get cookies: {}", e))
+}
+
+/// Set cookie
+#[tauri::command]
+pub async fn browser_set_cookie(
+    tab_id: String,
+    cookie: Cookie,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::set_cookie(cdp_client, cookie)
+        .await
+        .map_err(|e| format!("Failed to set cookie: {}", e))
+}
+
+/// Clear all cookies
+#[tauri::command]
+pub async fn browser_clear_cookies(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::clear_cookies(cdp_client)
+        .await
+        .map_err(|e| format!("Failed to clear cookies: {}", e))
+}
+
+/// Get performance metrics
+#[tauri::command]
+pub async fn browser_get_performance_metrics(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<serde_json::Value, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    let metrics = AdvancedBrowserOps::get_performance_metrics(cdp_client)
+        .await
+        .map_err(|e| format!("Failed to get performance metrics: {}", e))?;
+
+    serde_json::to_value(&metrics).map_err(|e| format!("Failed to serialize metrics: {}", e))
+}
+
+/// Wait for navigation to complete
+#[tauri::command]
+pub async fn browser_wait_for_navigation(
+    tab_id: String,
+    timeout_ms: u64,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<String, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::wait_for_navigation(cdp_client, timeout_ms)
+        .await
+        .map_err(|e| format!("Failed to wait for navigation: {}", e))
+}
+
+/// Get all frames in the page
+#[tauri::command]
+pub async fn browser_get_frames(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    let frames = AdvancedBrowserOps::get_frames(cdp_client)
+        .await
+        .map_err(|e| format!("Failed to get frames: {}", e))?;
+
+    frames
+        .iter()
+        .map(|f| serde_json::to_value(f).map_err(|e| format!("Failed to serialize frame: {}", e)))
+        .collect()
+}
+
+/// Execute JavaScript in specific frame
+#[tauri::command]
+pub async fn browser_execute_in_frame(
+    tab_id: String,
+    frame_id: String,
+    script: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<serde_json::Value, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::execute_in_frame(cdp_client, &frame_id, &script)
+        .await
+        .map_err(|e| format!("Failed to execute in frame: {}", e))
+}
+
+/// Call window function with arguments
+#[tauri::command]
+pub async fn browser_call_function(
+    tab_id: String,
+    function_name: String,
+    args: Vec<serde_json::Value>,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<serde_json::Value, String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::call_function(cdp_client, &function_name, args)
+        .await
+        .map_err(|e| format!("Failed to call function: {}", e))
+}
+
+/// Enable network request interception
+#[tauri::command]
+pub async fn browser_enable_request_interception(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    AdvancedBrowserOps::enable_request_interception(cdp_client)
+        .await
+        .map_err(|e| format!("Failed to enable request interception: {}", e))
 }
