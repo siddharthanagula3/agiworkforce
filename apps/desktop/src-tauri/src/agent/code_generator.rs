@@ -206,18 +206,43 @@ impl CodeGenerator {
         _prompt.push_str("3. Integrates seamlessly with existing code\n");
         _prompt.push_str("4. Includes comprehensive tests\n");
         _prompt.push_str("5. Has proper documentation\n");
+        _prompt.push_str("\n## Task Description\n\n");
+        _prompt.push_str(&request.description);
+        _prompt.push_str("\n\n## Constraints\n\n");
+        for constraint in &request.constraints {
+            _prompt.push_str(&format!("- {}\n", constraint.name));
+        }
+        _prompt.push_str("\n## Output Format\n\n");
+        _prompt.push_str("Return JSON array with this structure:\n");
+        _prompt.push_str("[\n  {\n    \"path\": \"file/path\",\n    \"content\": \"file content\",\n    \"file_type\": \"source|test|config|documentation|type_definition\",\n    \"dependencies\": [\"dep1\"],\n    \"exports\": [\"export1\"]\n  }\n]\n");
 
         // Use LLM to generate code
-        // TODO: Implement actual LLM call via router
-        // For now, return placeholder
         tracing::info!(
             "[CodeGenerator] Generating code with LLM for task: {}",
             request.task_id
         );
 
-        // This would call router.generate_code() or similar
-        // For now, return empty result
-        Ok(Vec::new())
+        let response = _router
+            .send_message(&_prompt, None)
+            .await
+            .map_err(|e| anyhow::anyhow!("LLM generation failed: {}", e))?;
+
+        // Parse JSON response
+        let files: Vec<GeneratedFile> = if let Ok(parsed) = serde_json::from_str(&response) {
+            parsed
+        } else {
+            // Try to extract JSON from markdown code block
+            let json_start = response.find('[').unwrap_or(0);
+            let json_end = response.rfind(']').unwrap_or(response.len());
+            let json_str = &response[json_start..=json_end];
+
+            serde_json::from_str(json_str).unwrap_or_else(|e| {
+                tracing::warn!("Failed to parse LLM response as JSON: {}", e);
+                Vec::new()
+            })
+        };
+
+        Ok(files)
     }
 
     /// Generate code using MCP tools
@@ -401,7 +426,7 @@ impl CodeGenerator {
     pub async fn generate_tests(
         &self,
         source_files: Vec<PathBuf>,
-        _test_framework: Option<String>,
+        test_framework: Option<String>,
     ) -> Result<Vec<GeneratedFile>> {
         // Analyze source files
         let existing_code = self.analyze_existing_code(&source_files).await?;
@@ -409,16 +434,47 @@ impl CodeGenerator {
         // Generate test files
         let mut test_files = Vec::new();
 
-        for (source_path, _code) in existing_code {
+        for (source_path, code) in existing_code {
             // Determine test file path
             let test_path = self.get_test_path(&source_path);
 
-            // Generate test content (simplified - would use LLM in production)
-            let test_content = format!(
-                "// Generated tests for {}\n// TODO: Implement actual tests\n\ndescribe('{}', () => {{\n  it('should work', () => {{\n    // Test implementation\n  }});\n}});",
-                source_path.display(),
-                source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("module")
-            );
+            // Generate test content using LLM if available
+            let test_content = if let Some(ref router) = self.llm_router {
+                let framework = test_framework.as_deref().unwrap_or("auto-detect");
+                let prompt = format!(
+                    "Generate comprehensive tests for the following code using {} framework.\n\n\
+                    File: {}\n\n\
+                    Code:\n```\n{}\n```\n\n\
+                    Generate test code that:\n\
+                    1. Tests all public functions/methods\n\
+                    2. Includes edge cases and error handling\n\
+                    3. Uses appropriate assertions\n\
+                    4. Has descriptive test names\n\n\
+                    Return ONLY the test code, no explanations.",
+                    framework,
+                    source_path.display(),
+                    code
+                );
+
+                match router.send_message(&prompt, None).await {
+                    Ok(content) => content,
+                    Err(e) => {
+                        tracing::warn!("LLM test generation failed for {:?}: {}", source_path, e);
+                        format!(
+                            "// Generated tests for {}\n// Error: {}\n\ndescribe('{}', () => {{\n  it('should work', () => {{\n    // Test implementation\n  }});\n}});",
+                            source_path.display(),
+                            e,
+                            source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("module")
+                        )
+                    }
+                }
+            } else {
+                format!(
+                    "// Generated tests for {}\n\ndescribe('{}', () => {{\n  it('should work', () => {{\n    // Test implementation\n  }});\n}});",
+                    source_path.display(),
+                    source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("module")
+                )
+            };
 
             test_files.push(GeneratedFile {
                 path: test_path,

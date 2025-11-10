@@ -282,13 +282,21 @@ impl AgentRuntime {
         let task_id = task.id.clone();
 
         // Create snapshot before execution (for revert capability)
-        // Note: Snapshot creation is skipped in spawned tasks due to Send issues with parking_lot::RwLock
-        // TODO: Refactor ChangeTracker to use tokio::sync::RwLock instead of parking_lot for async compatibility
-        let _working_dir =
+        // ChangeTracker now uses tokio::sync::RwLock for async compatibility
+        let working_dir =
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let _change_tracker_clone = self.change_tracker.clone();
-        let _task_id_clone = task_id.clone();
-        // Snapshot creation will be implemented after refactoring ChangeTracker
+        let change_tracker_clone = self.change_tracker.clone();
+        let task_id_clone = task_id.clone();
+
+        // Create snapshot in background
+        tokio::spawn(async move {
+            if let Err(e) = change_tracker_clone
+                .create_snapshot(task_id_clone.clone(), working_dir)
+                .await
+            {
+                tracing::warn!("Failed to create snapshot for task {}: {}", task_id_clone, e);
+            }
+        });
         tracing::debug!(
             "[AgentRuntime] Snapshot creation deferred for task: {}",
             task_id
@@ -410,18 +418,44 @@ impl AgentRuntime {
     }
 
     /// Analyze error and suggest fix using LLM (via MCP or router)
-    async fn analyze_error_and_suggest_fix(&self, _task: &Task, error: &str) -> Option<String> {
-        // TODO: Use LLM router to analyze error and suggest fix
-        // For now, return a simple suggestion
+    async fn analyze_error_and_suggest_fix(&self, task: &Task, error: &str) -> Option<String> {
         tracing::info!("[AgentRuntime] Analyzing error: {}", error);
 
-        // Simple heuristics for common errors
+        // Try to use AGI Core's LLM router if available
+        if let Some(ref agi) = self.agi_core {
+            let prompt = format!(
+                r#"Analyze this error and suggest a fix.
+
+Task: {}
+Goal: {}
+Error: {}
+
+Provide:
+1. Root cause analysis
+2. Specific fix/solution
+3. Code changes if applicable
+
+Be concise and actionable."#,
+                task.description, task.goal, error
+            );
+
+            // Access router through AGI core
+            // Note: This is a simplification - in production, would add a method to AGICore
+            // For now, use heuristic-based suggestions
+            tracing::debug!("[AgentRuntime] Would use LLM analysis with prompt: {}", prompt);
+        }
+
+        // Fallback: heuristics for common errors
         if error.contains("not found") || error.contains("does not exist") {
             Some("Check if file/path exists before operation".to_string())
         } else if error.contains("permission") || error.contains("denied") {
             Some("Check file permissions and try with elevated privileges if needed".to_string())
         } else if error.contains("syntax") || error.contains("parse") {
             Some("Review syntax and fix parsing errors".to_string())
+        } else if error.contains("timeout") {
+            Some("Increase timeout duration or optimize the operation".to_string())
+        } else if error.contains("network") || error.contains("connection") {
+            Some("Check network connectivity and retry".to_string())
         } else {
             Some(format!(
                 "Review error message and adjust approach: {}",
@@ -431,10 +465,46 @@ impl AgentRuntime {
     }
 
     /// Execute task via AGI Core
-    async fn execute_via_agi(&self, _agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
-        // TODO: Integrate with AGI Core's goal execution
-        // For now, use standalone execution
-        self.execute_standalone(task).await
+    async fn execute_via_agi(&self, agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
+        tracing::info!("[AgentRuntime] Executing task via AGI Core: {}", task.id);
+
+        // Convert Task to AGI Goal
+        let goal = crate::agi::Goal {
+            id: task.id.clone(),
+            description: task.description.clone(),
+            priority: match task.priority {
+                TaskPriority::Low => crate::agi::GoalPriority::Low,
+                TaskPriority::Normal => crate::agi::GoalPriority::Medium,
+                TaskPriority::High => crate::agi::GoalPriority::High,
+                TaskPriority::Critical => crate::agi::GoalPriority::Critical,
+            },
+            success_criteria: vec![task.goal.clone()],
+            context: task.metadata.clone(),
+            deadline: None,
+            dependencies: task.dependencies.clone(),
+            created_at: task.created_at,
+            status: crate::agi::GoalStatus::Active,
+        };
+
+        // Submit goal to AGI Core for execution
+        let goal_id = agi
+            .submit_goal(goal)
+            .await
+            .map_err(|e| anyhow!("Failed to submit goal to AGI Core: {}", e))?;
+
+        tracing::info!(
+            "[AgentRuntime] Task {} submitted to AGI Core as goal {}",
+            task.id,
+            goal_id
+        );
+
+        // Return success - AGI Core will execute asynchronously
+        // The AGI Core emits events that the frontend can listen to
+        Ok(serde_json::json!({
+            "status": "submitted_to_agi",
+            "goal_id": goal_id,
+            "message": "Task submitted to AGI Core for autonomous execution"
+        }))
     }
 
     /// Execute task standalone (without AGI Core)
