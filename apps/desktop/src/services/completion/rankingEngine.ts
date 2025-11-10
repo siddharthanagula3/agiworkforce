@@ -12,7 +12,7 @@ import type { CodeContext } from './completionProvider';
  */
 export function rankCompletions(
   completions: monaco.languages.CompletionItem[],
-  context: CodeContext
+  context: CodeContext,
 ): monaco.languages.CompletionItem[] {
   const scored = completions.map((completion) => ({
     completion,
@@ -34,13 +34,16 @@ export function rankCompletions(
  */
 function scoreCompletion(
   completion: monaco.languages.CompletionItem,
-  context: CodeContext
+  context: CodeContext,
 ): number {
   let score = 100; // Base score
 
-  const text = typeof completion.insertText === 'string'
-    ? completion.insertText
-    : completion.label;
+  const text =
+    typeof completion.insertText === 'string'
+      ? completion.insertText
+      : typeof completion.label === 'string'
+        ? completion.label
+        : '';
 
   // Penalize very short completions (likely incomplete)
   if (text.length < 5) {
