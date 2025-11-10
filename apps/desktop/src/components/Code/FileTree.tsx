@@ -174,9 +174,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
 
   useEffect(() => {
     setExpandedPaths(new Set([normalizedRoot]));
-    void loadDirectory(rootPath);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedRoot]);
+    void loadDirectory(normalizedRoot);
+  }, [normalizedRoot, loadDirectory]);
 
   useEffect(() => {
     let unlistenRef: UnlistenFn | null = null;

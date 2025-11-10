@@ -22,6 +22,19 @@ pub struct KnowledgeEntry {
 }
 
 impl KnowledgeBase {
+    /// Get current timestamp in seconds since UNIX_EPOCH
+    fn current_timestamp() -> Result<u64> {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .map_err(|e| anyhow::anyhow!("System time error: {}", e))
+    }
+
+    /// Lock the database connection with proper error handling
+    fn lock_db(&self) -> Result<parking_lot::MutexGuard<'_, Connection>> {
+        Ok(self.db.lock())
+    }
+
     pub fn new(memory_limit_mb: u64) -> Result<Self> {
         let db_path = Self::get_db_path()?;
         std::fs::create_dir_all(db_path.parent().unwrap())?;
@@ -45,7 +58,7 @@ impl KnowledgeBase {
     }
 
     fn init_schema(&self) -> Result<()> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.lock_db()?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS knowledge (
                 id TEXT PRIMARY KEY,
@@ -85,10 +98,7 @@ impl KnowledgeBase {
             category: "goal".to_string(),
             content: goal.description.clone(),
             metadata: HashMap::from([("priority".to_string(), format!("{:?}", goal.priority))]),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: Self::current_timestamp()?,
             importance: match goal.priority {
                 Priority::Low => 0.25,
                 Priority::Medium => 0.5,
@@ -118,10 +128,7 @@ impl KnowledgeBase {
                     result.execution_time_ms.to_string(),
                 ),
             ]),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: Self::current_timestamp()?,
             importance: if result.success { 0.7 } else { 0.9 }, // Failures are more important to remember
         };
 
@@ -131,7 +138,7 @@ impl KnowledgeBase {
     /// Add a knowledge entry
     pub async fn add_entry(&self, entry: KnowledgeEntry) -> Result<()> {
         {
-            let conn = self.db.lock().unwrap();
+            let conn = self.lock_db()?;
             let metadata_json = serde_json::to_string(&entry.metadata)?;
 
             conn.execute(
@@ -156,7 +163,7 @@ impl KnowledgeBase {
 
     /// Query knowledge base
     pub async fn query(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeEntry>> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.lock_db()?;
         let mut stmt = conn.prepare(
             "SELECT id, category, content, metadata, timestamp, importance
              FROM knowledge
@@ -238,7 +245,7 @@ impl KnowledgeBase {
                 self._memory_limit_mb
             );
 
-            let conn = self.db.lock().unwrap();
+            let conn = self.lock_db()?;
 
             // First, VACUUM to reclaim space
             conn.execute("VACUUM", [])?;
@@ -265,7 +272,7 @@ impl KnowledgeBase {
         }
 
         // Also enforce a reasonable count limit to prevent unbounded growth
-        let conn = self.db.lock().unwrap();
+        let conn = self.lock_db()?;
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
 
         if let Ok(metadata) = std::fs::metadata(&db_path) {
@@ -278,7 +285,7 @@ impl KnowledgeBase {
                     self._memory_limit_mb
                 );
 
-                let conn = self.db.lock().unwrap();
+                let conn = self.lock_db()?;
 
                 // Calculate how many entries to keep based on average entry size
                 let count: i64 =
