@@ -172,16 +172,6 @@ impl ContextCompactor {
             ));
         }
 
-        // Use LLM to generate summary
-        match router.send_message(&conversation_text, None).await {
-            Ok(summary) => Ok(summary),
-            Err(e) => {
-                tracing::warn!(
-                    "LLM summary generation failed: {}, using heuristic fallback",
-                    e
-                );
-                Ok(self.generate_summary_heuristic(messages))
-            }
         // Use LLM to generate summary if router is available
         if let Some(router) = &self.llm_router {
             match router.send_message(&conversation_text, None).await {
