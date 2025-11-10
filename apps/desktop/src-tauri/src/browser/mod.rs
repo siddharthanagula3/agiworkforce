@@ -1,4 +1,5 @@
 // Browser automation modules
+pub mod advanced;
 pub mod cdp_client;
 pub mod dom_operations;
 pub mod extension_bridge;
@@ -6,6 +7,7 @@ pub mod playwright_bridge;
 pub mod tab_manager;
 
 // Re-exports for convenience
+pub use advanced::*;
 pub use cdp_client::CdpClient;
 pub use dom_operations::*;
 pub use extension_bridge::*;
