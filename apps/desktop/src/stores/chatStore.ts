@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import type {
   Conversation,
   ConversationUI,
@@ -16,6 +17,47 @@ import type {
   ChatStreamEndPayload,
 } from '../types/chat';
 import type { CaptureResult } from '../types/capture';
+
+/**
+ * Format context items as markdown for LLM consumption
+ */
+function formatContextItems(contextItems: unknown[]): string {
+  const parts: string[] = ['**Context:**\n'];
+
+  for (const item of contextItems) {
+    const ctx = item as Record<string, unknown>;
+
+    if (ctx['type'] === 'file' && ctx['content']) {
+      const name = ctx['name'] as string;
+      const path = ctx['path'] as string;
+      const language = ctx['language'] as string | undefined;
+      const content = ctx['content'] as string;
+
+      parts.push(`\n### File: ${name}`);
+      parts.push(`Path: \`${path}\``);
+      if (language) {
+        parts.push(`\n\`\`\`${language}\n${content}\n\`\`\``);
+      } else {
+        parts.push(`\n\`\`\`\n${content}\n\`\`\``);
+      }
+    } else if (ctx['type'] === 'folder') {
+      const name = ctx['name'] as string;
+      const path = ctx['path'] as string;
+      parts.push(`\n### Folder: ${name}`);
+      parts.push(`Path: \`${path}\``);
+    } else if (ctx['type'] === 'url') {
+      const name = ctx['name'] as string;
+      const url = ctx['url'] as string;
+      parts.push(`\n### URL: ${name}`);
+      parts.push(`Link: ${url}`);
+    } else if (ctx['type'] === 'web') {
+      const query = ctx['query'] as string;
+      parts.push(`\n### Web Search: ${query}`);
+    }
+  }
+
+  return parts.join('\n');
+}
 
 interface ChatState {
   conversations: ConversationUI[];
@@ -36,6 +78,7 @@ interface ChatState {
     attachments?: File[],
     captures?: CaptureResult[],
     routing?: ChatRoutingPreferences,
+    contextItems?: unknown[],
   ) => Promise<void>;
   getStats: (conversationId: number) => Promise<ConversationStats>;
   togglePinnedConversation: (id: number) => Promise<void>;
@@ -116,7 +159,7 @@ let streamListenersInitialized = false;
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set, get) => ({
+    immer((set, get) => ({
       conversations: [],
       activeConversationId: null,
       messages: [],
@@ -147,15 +190,12 @@ export const useChatStore = create<ChatState>()(
           );
 
           set((state) => {
-            const incomingPinned = state.pinnedConversations.filter((id) =>
+            state.pinnedConversations = state.pinnedConversations.filter((id) =>
               conversationsWithStats.some((conv) => conv.id === id),
             );
-            const pinnedSet = new Set(incomingPinned);
-            return {
-              conversations: applyPinnedState(conversationsWithStats, pinnedSet),
-              pinnedConversations: incomingPinned,
-              loading: false,
-            };
+            const pinnedSet = new Set(state.pinnedConversations);
+            state.conversations = applyPinnedState(conversationsWithStats, pinnedSet);
+            state.loading = false;
           });
         } catch (error) {
           console.error('Failed to load conversations:', error);
@@ -186,17 +226,13 @@ export const useChatStore = create<ChatState>()(
           const conversationUI = toConversationUI(conversation, 0);
           set((state) => {
             const pinnedSet = new Set(state.pinnedConversations);
-            const conversations = applyPinnedState(
+            state.conversations = applyPinnedState(
               [conversationUI, ...state.conversations],
               pinnedSet,
             );
-
-            return {
-              conversations,
-              activeConversationId: conversation.id,
-              messages: [],
-              loading: false,
-            };
+            state.activeConversationId = conversation.id;
+            state.messages = [];
+            state.loading = false;
           });
 
           return conversation.id;
@@ -217,9 +253,7 @@ export const useChatStore = create<ChatState>()(
             const updated = state.conversations.map((conv) =>
               conv.id === id ? { ...conv, title } : conv,
             );
-            return {
-              conversations: applyPinnedState(updated, pinnedSet),
-            };
+            state.conversations = applyPinnedState(updated, pinnedSet);
           });
         } catch (error) {
           console.error('Failed to update conversation:', error);
@@ -233,19 +267,14 @@ export const useChatStore = create<ChatState>()(
           await invoke('chat_delete_conversation', { id });
 
           set((state) => {
-            const pinned = state.pinnedConversations.filter((pid) => pid !== id);
-            const pinnedSet = new Set(pinned);
+            state.pinnedConversations = state.pinnedConversations.filter((pid) => pid !== id);
+            const pinnedSet = new Set(state.pinnedConversations);
             const remaining = state.conversations.filter((conv) => conv.id !== id);
-            const activeConversationId =
-              state.activeConversationId === id ? null : state.activeConversationId;
-            const messages = state.activeConversationId === id ? [] : state.messages;
-
-            return {
-              conversations: applyPinnedState(remaining, pinnedSet),
-              activeConversationId,
-              messages,
-              pinnedConversations: pinned,
-            };
+            state.conversations = applyPinnedState(remaining, pinnedSet);
+            if (state.activeConversationId === id) {
+              state.activeConversationId = null;
+              state.messages = [];
+            }
           });
         } catch (error) {
           console.error('Failed to delete conversation:', error);
@@ -264,6 +293,7 @@ export const useChatStore = create<ChatState>()(
         attachments?: File[],
         captures?: CaptureResult[],
         routing?: ChatRoutingPreferences,
+        contextItems?: unknown[],
       ) => {
         if (!content.trim()) {
           return;
@@ -271,11 +301,20 @@ export const useChatStore = create<ChatState>()(
 
         const pendingAttachments = attachments ?? [];
         const pendingCaptures = captures ?? [];
+        const pendingContextItems = contextItems ?? [];
 
         if (pendingAttachments.length > 0 || pendingCaptures.length > 0) {
           console.info(
             `[chatStore] attachment handling pending. Files: ${pendingAttachments.length}, captures: ${pendingCaptures.length}`,
           );
+        }
+
+        // Format context items as markdown prefix
+        let messageContent = content;
+        if (pendingContextItems.length > 0) {
+          const contextPrefix = formatContextItems(pendingContextItems);
+          messageContent = `${contextPrefix}\n\n---\n\n${content}`;
+          console.info(`[chatStore] Added ${pendingContextItems.length} context items to message`);
         }
 
         const conversationId = get().activeConversationId;
@@ -342,7 +381,7 @@ export const useChatStore = create<ChatState>()(
           const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
             request: {
               conversationId,
-              content,
+              content: messageContent,
               provider: routing?.provider,
               model: routing?.model,
               strategy: routing?.strategy,
@@ -362,33 +401,27 @@ export const useChatStore = create<ChatState>()(
             const assistantMessageUI = toMessageUI(response.assistant_message);
             assistantMessageUI.streaming = false;
 
-            let updatedMessages: MessageUI[];
             if (isSameConversation) {
               const filtered = state.messages.filter(
                 (msg) => msg.id !== userMessageUI.id && msg.id !== assistantMessageUI.id,
               );
-              updatedMessages = [...filtered, userMessageUI, assistantMessageUI].sort(
+              state.messages = [...filtered, userMessageUI, assistantMessageUI].sort(
                 (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
               );
             } else {
-              updatedMessages = [userMessageUI, assistantMessageUI];
+              state.messages = [userMessageUI, assistantMessageUI];
             }
 
             const otherConversations = state.conversations.filter(
               (conv) => conv.id !== response.conversation.id,
             );
             const pinnedSet = new Set(state.pinnedConversations);
-            const conversations = applyPinnedState(
+            state.conversations = applyPinnedState(
               [conversationUI, ...otherConversations],
               pinnedSet,
             );
-
-            return {
-              conversations,
-              activeConversationId: response.conversation.id,
-              messages: updatedMessages,
-              loading: false,
-            };
+            state.activeConversationId = response.conversation.id;
+            state.loading = false;
           });
         } catch (error) {
           console.error('Failed to send message:', error);
@@ -416,11 +449,8 @@ export const useChatStore = create<ChatState>()(
           } else {
             pinnedSet.add(id);
           }
-
-          return {
-            pinnedConversations: Array.from(pinnedSet),
-            conversations: applyPinnedState(state.conversations, pinnedSet),
-          };
+          state.pinnedConversations = Array.from(pinnedSet);
+          state.conversations = applyPinnedState(state.conversations, pinnedSet);
         });
       },
 
@@ -446,7 +476,7 @@ export const useChatStore = create<ChatState>()(
           const updated = await invoke<Message>('chat_update_message', { id, content: trimmed });
 
           set((state) => {
-            const updatedMessages = state.messages.map((message) =>
+            state.messages = state.messages.map((message) =>
               message.id === updated.id
                 ? ({
                     ...message,
@@ -460,7 +490,7 @@ export const useChatStore = create<ChatState>()(
             );
 
             const pinnedSet = new Set(state.pinnedConversations);
-            const conversations = applyPinnedState(
+            state.conversations = applyPinnedState(
               state.conversations.map((conversation) => {
                 if (conversation.id !== updated.conversation_id) {
                   return conversation;
@@ -468,8 +498,8 @@ export const useChatStore = create<ChatState>()(
 
                 const isActiveConversation = state.activeConversationId === updated.conversation_id;
                 const lastMessageInActiveConversation =
-                  isActiveConversation && updatedMessages.length > 0
-                    ? updatedMessages[updatedMessages.length - 1]
+                  isActiveConversation && state.messages.length > 0
+                    ? state.messages[state.messages.length - 1]
                     : undefined;
 
                 const isLastMessageActive = lastMessageInActiveConversation?.id === updated.id;
@@ -487,11 +517,6 @@ export const useChatStore = create<ChatState>()(
               }),
               pinnedSet,
             );
-
-            return {
-              messages: updatedMessages,
-              conversations,
-            };
           });
         } catch (error) {
           console.error('Failed to edit message:', error);
@@ -510,14 +535,14 @@ export const useChatStore = create<ChatState>()(
           await invoke('chat_delete_message', { id });
 
           set((state) => {
-            const remainingMessages = state.messages.filter((message) => message.id !== id);
+            state.messages = state.messages.filter((message) => message.id !== id);
 
             if (conversationId == null) {
-              return { messages: remainingMessages };
+              return;
             }
 
             const pinnedSet = new Set(state.pinnedConversations);
-            const conversations = applyPinnedState(
+            state.conversations = applyPinnedState(
               state.conversations.map((conversation) => {
                 if (conversation.id !== conversationId) {
                   return conversation;
@@ -528,8 +553,8 @@ export const useChatStore = create<ChatState>()(
                   : conversation.messageCount;
                 const isActiveConversation = state.activeConversationId === conversationId;
                 const lastMessageInActiveConversation =
-                  isActiveConversation && remainingMessages.length > 0
-                    ? remainingMessages[remainingMessages.length - 1]
+                  isActiveConversation && state.messages.length > 0
+                    ? state.messages[state.messages.length - 1]
                     : undefined;
 
                 let nextLastMessage = conversation.lastMessage;
@@ -555,11 +580,6 @@ export const useChatStore = create<ChatState>()(
               }),
               pinnedSet,
             );
-
-            return {
-              messages: remainingMessages,
-              conversations,
-            };
           });
         } catch (error) {
           console.error('Failed to delete message:', error);
@@ -578,7 +598,7 @@ export const useChatStore = create<ChatState>()(
           pinnedConversations: [],
         });
       },
-    }),
+    })),
     {
       name: 'agiworkforce-chat',
       storage: chatStorage,
@@ -667,7 +687,7 @@ async function initializeStreamListeners() {
 function handleStreamStart(payload: ChatStreamStartPayload) {
   useChatStore.setState((state) => {
     let conversationsChanged = false;
-    const updatedConversations = state.conversations.map((conversation) => {
+    state.conversations = state.conversations.map((conversation) => {
       if (conversation.id !== payload.conversationId) {
         return conversation;
       }
@@ -679,20 +699,17 @@ function handleStreamStart(payload: ChatStreamStartPayload) {
       };
     });
 
-    const pinnedSet = new Set(state.pinnedConversations);
-    const conversations = conversationsChanged
-      ? applyPinnedState(updatedConversations, pinnedSet)
-      : state.conversations;
-
-    let messagesChanged = false;
-    let messages = state.messages;
+    if (conversationsChanged) {
+      const pinnedSet = new Set(state.pinnedConversations);
+      state.conversations = applyPinnedState(state.conversations, pinnedSet);
+    }
 
     if (state.activeConversationId === payload.conversationId) {
       const timestamp = new Date(payload.createdAt);
       const hasExisting = state.messages.some((message) => message.id === payload.messageId);
 
       if (hasExisting) {
-        messages = state.messages.map((message) =>
+        state.messages = state.messages.map((message) =>
           message.id === payload.messageId ? { ...message, timestamp, streaming: true } : message,
         );
       } else {
@@ -705,27 +722,16 @@ function handleStreamStart(payload: ChatStreamStartPayload) {
           timestamp,
           streaming: true,
         };
-        messages = [...state.messages, placeholder];
+        state.messages = [...state.messages, placeholder];
       }
-
-      messagesChanged = true;
     }
-
-    const partial: Partial<ChatState> = {};
-    if (conversationsChanged) {
-      partial.conversations = conversations;
-    }
-    if (messagesChanged) {
-      partial.messages = messages;
-    }
-    return partial;
   });
 }
 
 function handleStreamChunk(payload: ChatStreamChunkPayload) {
   useChatStore.setState((state) => {
     let conversationsChanged = false;
-    const updatedConversations = state.conversations.map((conversation) => {
+    state.conversations = state.conversations.map((conversation) => {
       if (conversation.id !== payload.conversationId) {
         return conversation;
       }
@@ -737,19 +743,16 @@ function handleStreamChunk(payload: ChatStreamChunkPayload) {
       };
     });
 
-    const pinnedSet = new Set(state.pinnedConversations);
-    const conversations = conversationsChanged
-      ? applyPinnedState(updatedConversations, pinnedSet)
-      : state.conversations;
-
-    let messagesChanged = false;
-    let messages = state.messages;
+    if (conversationsChanged) {
+      const pinnedSet = new Set(state.pinnedConversations);
+      state.conversations = applyPinnedState(state.conversations, pinnedSet);
+    }
 
     if (state.activeConversationId === payload.conversationId) {
       const hasExisting = state.messages.some((message) => message.id === payload.messageId);
 
       if (hasExisting) {
-        messages = state.messages.map((message) =>
+        state.messages = state.messages.map((message) =>
           message.id === payload.messageId
             ? { ...message, content: payload.content, streaming: true }
             : message,
@@ -765,38 +768,125 @@ function handleStreamChunk(payload: ChatStreamChunkPayload) {
           timestamp,
           streaming: true,
         };
-        messages = [...state.messages, placeholder];
+        state.messages = [...state.messages, placeholder];
       }
-
-      messagesChanged = true;
     }
-
-    const partial: Partial<ChatState> = {};
-    if (conversationsChanged) {
-      partial.conversations = conversations;
-    }
-    if (messagesChanged) {
-      partial.messages = messages;
-    }
-    return partial;
   });
 }
 
 function handleStreamEnd(payload: ChatStreamEndPayload) {
   useChatStore.setState((state) => {
     if (state.activeConversationId !== payload.conversationId) {
-      return {};
+      return;
     }
 
     const hasExisting = state.messages.some((message) => message.id === payload.messageId);
     if (!hasExisting) {
-      return {};
+      return;
     }
 
-    const messages = state.messages.map((message) =>
+    state.messages = state.messages.map((message) =>
       message.id === payload.messageId ? { ...message, streaming: false } : message,
     );
-
-    return { messages };
   });
 }
+
+// ========================================
+// SELECTORS - Use these in components for optimized subscriptions
+// ========================================
+
+/**
+ * Selector: Get all conversations
+ * Usage: const conversations = useChatStore(selectConversations);
+ */
+export const selectConversations = (state: ChatState) => state.conversations;
+
+/**
+ * Selector: Get active conversation ID
+ * Usage: const activeId = useChatStore(selectActiveConversationId);
+ */
+export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
+
+/**
+ * Selector: Get active conversation object
+ * Usage: const activeConv = useChatStore(selectActiveConversation);
+ */
+export const selectActiveConversation = (state: ChatState) =>
+  state.conversations.find((conv) => conv.id === state.activeConversationId) ?? null;
+
+/**
+ * Selector: Get all messages for active conversation
+ * Usage: const messages = useChatStore(selectMessages);
+ */
+export const selectMessages = (state: ChatState) => state.messages;
+
+/**
+ * Selector: Get loading state
+ * Usage: const loading = useChatStore(selectLoading);
+ */
+export const selectLoading = (state: ChatState) => state.loading;
+
+/**
+ * Selector: Get error state
+ * Usage: const error = useChatStore(selectError);
+ */
+export const selectError = (state: ChatState) => state.error;
+
+/**
+ * Selector: Get pinned conversation IDs
+ * Usage: const pinnedIds = useChatStore(selectPinnedConversations);
+ */
+export const selectPinnedConversations = (state: ChatState) => state.pinnedConversations;
+
+/**
+ * Selector: Get pinned conversations (full objects)
+ * Usage: const pinnedConvs = useChatStore(selectPinnedConversationObjects);
+ */
+export const selectPinnedConversationObjects = (state: ChatState) =>
+  state.conversations.filter((conv) => conv.pinned);
+
+/**
+ * Selector: Get unpinned conversations
+ * Usage: const unpinnedConvs = useChatStore(selectUnpinnedConversations);
+ */
+export const selectUnpinnedConversations = (state: ChatState) =>
+  state.conversations.filter((conv) => !conv.pinned);
+
+/**
+ * Selector: Check if a conversation is pinned
+ * Usage: const isPinned = useChatStore(selectIsConversationPinned(conversationId));
+ */
+export const selectIsConversationPinned = (conversationId: number) => (state: ChatState) =>
+  state.pinnedConversations.includes(conversationId);
+
+/**
+ * Selector: Get conversation by ID
+ * Usage: const conv = useChatStore(selectConversationById(id));
+ */
+export const selectConversationById = (id: number) => (state: ChatState) =>
+  state.conversations.find((conv) => conv.id === id) ?? null;
+
+/**
+ * Selector: Get message count for active conversation
+ * Usage: const count = useChatStore(selectMessageCount);
+ */
+export const selectMessageCount = (state: ChatState) => state.messages.length;
+
+/**
+ * Selector: Check if currently sending
+ * Usage: const isSending = useChatStore(selectIsSending);
+ */
+export const selectIsSending = (state: ChatState) => state.loading;
+
+/**
+ * Selector: Check if any message is streaming
+ * Usage: const isStreaming = useChatStore(selectIsStreaming);
+ */
+export const selectIsStreaming = (state: ChatState) => state.messages.some((msg) => msg.streaming);
+
+/**
+ * Selector: Get last message in active conversation
+ * Usage: const lastMsg = useChatStore(selectLastMessage);
+ */
+export const selectLastMessage = (state: ChatState) =>
+  state.messages.length > 0 ? state.messages[state.messages.length - 1] : null;

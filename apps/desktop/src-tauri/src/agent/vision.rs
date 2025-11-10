@@ -49,7 +49,7 @@ impl VisionAutomation {
         #[cfg(feature = "ocr")]
         {
             use crate::automation::screen::perform_ocr;
-            let ocr_result = perform_ocr(&screenshot_path)?;
+            let ocr_result = perform_ocr(&screenshot_path).await?;
 
             // For now, simple text matching
             // In production, use the full OCR result with bounding boxes

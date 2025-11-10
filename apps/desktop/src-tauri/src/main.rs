@@ -258,6 +258,11 @@ fn main() {
             agiworkforce_desktop::commands::chat_get_cost_overview,
             agiworkforce_desktop::commands::chat_get_cost_analytics,
             agiworkforce_desktop::commands::chat_set_monthly_budget,
+            // Checkpoint commands
+            agiworkforce_desktop::commands::checkpoint_create,
+            agiworkforce_desktop::commands::checkpoint_restore,
+            agiworkforce_desktop::commands::checkpoint_list,
+            agiworkforce_desktop::commands::checkpoint_delete,
             // Cloud storage commands
             agiworkforce_desktop::commands::cloud_connect,
             agiworkforce_desktop::commands::cloud_complete_oauth,
@@ -410,6 +415,10 @@ fn main() {
             agiworkforce_desktop::commands::dir_list,
             agiworkforce_desktop::commands::dir_delete,
             agiworkforce_desktop::commands::dir_traverse,
+            // File search commands
+            agiworkforce_desktop::filesystem::fs_search_files,
+            agiworkforce_desktop::filesystem::fs_search_folders,
+            agiworkforce_desktop::filesystem::fs_read_file_content,
             // File watcher commands
             agiworkforce_desktop::commands::file_watch_start,
             agiworkforce_desktop::commands::file_watch_stop,

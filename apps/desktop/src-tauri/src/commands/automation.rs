@@ -201,12 +201,12 @@ pub fn automation_focus_window(element_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn automation_send_keys(
+pub async fn automation_send_keys(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: SendKeysRequest,
 ) -> Result<(), String> {
-    execute_text_input(&app, &db, &request, false)
+    execute_text_input(&app, &db, &request, false).await
 }
 
 #[tauri::command]
@@ -273,32 +273,34 @@ pub fn automation_click(
 }
 
 #[tauri::command]
-pub fn automation_type(
+pub async fn automation_type(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: SendKeysRequest,
 ) -> Result<(), String> {
-    execute_text_input(&app, &db, &request, true)
+    execute_text_input(&app, &db, &request, true).await
 }
 
 #[tauri::command]
-pub fn automation_drag_drop(
+pub async fn automation_drag_drop(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: DragDropRequest,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
 
-    with_service(|service| {
-        service.mouse.drag_and_drop(
+    // Create mouse simulator outside the service to avoid async closure issues
+    let mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
+    mouse
+        .drag_and_drop(
             request.from_x,
             request.from_y,
             request.to_x,
             request.to_y,
             request.duration_ms,
         )
-    })
-    .map_err(|err| err.to_string())?;
+        .await
+        .map_err(|err| err.to_string())?;
 
     // Emit overlay animation for drag-drop
     if let Ok(conn) = db.0.lock() {
@@ -330,8 +332,10 @@ pub fn automation_clipboard_set(text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
-    perform_ocr(&image_path).map_err(|err| err.to_string())
+pub async fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
+    perform_ocr(&image_path)
+        .await
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -375,7 +379,7 @@ where
     operation(service)
 }
 
-fn execute_text_input(
+async fn execute_text_input(
     app: &AppHandle,
     db: &State<'_, AppDatabase>,
     request: &SendKeysRequest,
@@ -388,6 +392,9 @@ fn execute_text_input(
     let fallback_position = request.x.zip(request.y);
     let should_focus = force_focus || request.focus.unwrap_or(false);
 
+    // Create a keyboard simulator outside the closure
+    let keyboard = KeyboardSimulator::new().map_err(|e| e.to_string())?;
+
     let location = with_service(|service| {
         if let Some(element_id) = &element_id {
             if should_focus {
@@ -397,15 +404,16 @@ fn execute_text_input(
             if let Some(bounds) = service.uia.bounding_rect(element_id)? {
                 let x = (bounds.left + bounds.width / 2.0).round() as i32;
                 let y = (bounds.top + bounds.height / 2.0).round() as i32;
-                service.keyboard.send_text(&text)?;
                 return Ok(Some((x, y)));
             }
         }
 
-        service.keyboard.send_text(&text)?;
         Ok(fallback_position)
     })
     .map_err(|err| err.to_string())?;
+
+    // Send text asynchronously outside the closure
+    keyboard.send_text(&text).await.map_err(|e| e.to_string())?;
 
     if let Ok(conn) = db.0.lock() {
         if let Err(err) = dispatch_overlay_animation(
