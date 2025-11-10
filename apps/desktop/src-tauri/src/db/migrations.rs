@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 8;
+const CURRENT_VERSION: i32 = 13;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -68,6 +68,31 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 8 {
         apply_migration_v8(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
+    }
+
+    if current_version < 9 {
+        apply_migration_v9(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
+    }
+
+    if current_version < 10 {
+        apply_migration_v10(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [10])?;
+    }
+
+    if current_version < 11 {
+        apply_migration_v11(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [11])?;
+    }
+
+    if current_version < 12 {
+        apply_migration_v12(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [12])?;
+    }
+
+    if current_version < 13 {
+        apply_migration_v13(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [13])?;
     }
 
     Ok(())
@@ -760,6 +785,359 @@ fn apply_migration_v7(conn: &Connection) -> Result<()> {
             content=emails,
             content_rowid=rowid
         )",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v9: Enhanced messages with context items, images, tool calls, artifacts
+fn apply_migration_v9(conn: &Connection) -> Result<()> {
+    // Add new columns to messages table for enhanced features
+    ensure_column(
+        conn,
+        "messages",
+        "context_items",
+        "context_items TEXT", // JSON array of context items
+    )?;
+
+    ensure_column(
+        conn,
+        "messages",
+        "images",
+        "images TEXT", // JSON array of image attachments
+    )?;
+
+    ensure_column(
+        conn,
+        "messages",
+        "tool_calls",
+        "tool_calls TEXT", // JSON array of tool calls
+    )?;
+
+    ensure_column(
+        conn,
+        "messages",
+        "artifacts",
+        "artifacts TEXT", // JSON array of code artifacts
+    )?;
+
+    ensure_column(
+        conn,
+        "messages",
+        "timeline_events",
+        "timeline_events TEXT", // JSON array of timeline events
+    )?;
+
+    // Context items table for detailed context tracking
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS context_items (
+            id TEXT PRIMARY KEY,
+            message_id INTEGER NOT NULL,
+            type TEXT NOT NULL CHECK(type IN ('file', 'folder', 'url', 'web', 'image', 'code-snippet')),
+            name TEXT NOT NULL,
+            description TEXT,
+            path TEXT,
+            url TEXT,
+            content TEXT,
+            metadata TEXT,
+            tokens INTEGER,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_context_items_message
+         ON context_items(message_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_context_items_type
+         ON context_items(type)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v10: MCP (Model Context Protocol) infrastructure
+fn apply_migration_v10(conn: &Connection) -> Result<()> {
+    // MCP servers configuration
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS mcp_servers (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            command TEXT NOT NULL,
+            args TEXT, -- JSON array
+            env TEXT, -- JSON object
+            enabled INTEGER NOT NULL DEFAULT 1,
+            auto_start INTEGER NOT NULL DEFAULT 1,
+            connection_status TEXT CHECK(connection_status IN ('connected', 'disconnected', 'error')),
+            last_error TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mcp_servers_enabled
+         ON mcp_servers(enabled)",
+        [],
+    )?;
+
+    // MCP tools cache for fast lookup
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS mcp_tools_cache (
+            id TEXT PRIMARY KEY,
+            server_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            input_schema TEXT NOT NULL, -- JSON schema
+            output_schema TEXT, -- JSON schema
+            cached_at INTEGER NOT NULL,
+            FOREIGN KEY (server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mcp_tools_server
+         ON mcp_tools_cache(server_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mcp_tools_name
+         ON mcp_tools_cache(name)",
+        [],
+    )?;
+
+    // Full-text search on tool descriptions
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS mcp_tools_fts USING fts5(
+            tool_id UNINDEXED,
+            name,
+            description,
+            content=mcp_tools_cache,
+            content_rowid=rowid
+        )",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v11: Autonomous operations (AGI task logs and sessions)
+fn apply_migration_v11(conn: &Connection) -> Result<()> {
+    // Autonomous sessions tracking
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS autonomous_sessions (
+            id TEXT PRIMARY KEY,
+            goal_id TEXT NOT NULL,
+            goal_description TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('planning', 'executing', 'completed', 'failed', 'paused')),
+            priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
+            progress_percent REAL NOT NULL DEFAULT 0.0,
+            completed_steps INTEGER NOT NULL DEFAULT 0,
+            total_steps INTEGER NOT NULL DEFAULT 0,
+            started_at INTEGER NOT NULL,
+            completed_at INTEGER,
+            error_message TEXT,
+            metadata TEXT, -- JSON object
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_autonomous_sessions_status
+         ON autonomous_sessions(status, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_autonomous_sessions_priority
+         ON autonomous_sessions(priority, created_at DESC)",
+        [],
+    )?;
+
+    // Autonomous task execution logs
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS autonomous_task_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            step_number INTEGER NOT NULL,
+            step_description TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('pending', 'executing', 'completed', 'failed', 'skipped')),
+            tool_name TEXT,
+            tool_input TEXT, -- JSON
+            tool_output TEXT, -- JSON
+            error_message TEXT,
+            duration_ms INTEGER,
+            tokens_used INTEGER,
+            cost REAL,
+            created_at INTEGER NOT NULL,
+            completed_at INTEGER,
+            FOREIGN KEY (session_id) REFERENCES autonomous_sessions(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_logs_session
+         ON autonomous_task_logs(session_id, step_number)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_logs_status
+         ON autonomous_task_logs(status)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v12: Performance indexes for common queries
+fn apply_migration_v12(conn: &Connection) -> Result<()> {
+    // Composite index for message + conversation queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+         ON messages(conversation_id, created_at DESC)",
+        [],
+    )?;
+
+    // Index for token/cost analytics
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_tokens_cost
+         ON messages(created_at DESC, tokens, cost)
+         WHERE tokens IS NOT NULL",
+        [],
+    )?;
+
+    // Index for streaming message lookups
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_role_created
+         ON messages(role, created_at DESC)",
+        [],
+    )?;
+
+    // Index for context item searches
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_context_items_type_created
+         ON context_items(type, created_at DESC)",
+        [],
+    )?;
+
+    // Index for automation history analytics
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_automation_history_status
+         ON automation_history(status, created_at DESC)",
+        [],
+    )?;
+
+    // Index for capture lookups by conversation
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_captures_conversation
+         ON captures(conversation_id, created_at DESC)",
+        [],
+    )?;
+
+    // Index for OCR result searches
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ocr_results_confidence
+         ON ocr_results(confidence DESC, created_at DESC)
+         WHERE confidence > 0.5",
+        [],
+    )?;
+
+    // Index for command history search
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_command_history_command
+         ON command_history(command, created_at DESC)",
+        [],
+    )?;
+
+    // Index for clipboard history by content type
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_clipboard_history_type
+         ON clipboard_history(content_type, created_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v13: Conversation checkpoints for safe AI editing
+fn apply_migration_v13(conn: &Connection) -> Result<()> {
+    // Checkpoints table - stores conversation state snapshots
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS conversation_checkpoints (
+            id TEXT PRIMARY KEY,
+            conversation_id INTEGER NOT NULL,
+            checkpoint_name TEXT NOT NULL,
+            description TEXT,
+            message_count INTEGER NOT NULL,
+            messages_snapshot TEXT NOT NULL,
+            context_snapshot TEXT,
+            metadata TEXT,
+            parent_checkpoint_id TEXT,
+            branch_name TEXT,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_checkpoint_id) REFERENCES conversation_checkpoints(id) ON DELETE SET NULL
+        )",
+        [],
+    )?;
+
+    // Index for checkpoint queries by conversation
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_conversation
+         ON conversation_checkpoints(conversation_id, created_at DESC)",
+        [],
+    )?;
+
+    // Index for checkpoint branches
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_branch
+         ON conversation_checkpoints(branch_name, created_at DESC)
+         WHERE branch_name IS NOT NULL",
+        [],
+    )?;
+
+    // Index for checkpoint hierarchy (parent-child relationships)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoints_parent
+         ON conversation_checkpoints(parent_checkpoint_id)
+         WHERE parent_checkpoint_id IS NOT NULL",
+        [],
+    )?;
+
+    // Checkpoint restore history - track when checkpoints are restored
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS checkpoint_restore_history (
+            id TEXT PRIMARY KEY,
+            checkpoint_id TEXT NOT NULL,
+            conversation_id INTEGER NOT NULL,
+            restored_at INTEGER NOT NULL,
+            restored_message_count INTEGER NOT NULL,
+            success INTEGER NOT NULL DEFAULT 1,
+            error_message TEXT,
+            FOREIGN KEY (checkpoint_id) REFERENCES conversation_checkpoints(id) ON DELETE CASCADE,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Index for restore history queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_checkpoint_restore_history
+         ON checkpoint_restore_history(conversation_id, restored_at DESC)",
         [],
     )?;
 

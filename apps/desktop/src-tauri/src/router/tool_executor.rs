@@ -383,7 +383,7 @@ impl ToolExecutor {
                                 metadata: HashMap::new(),
                             });
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
                         let query = ElementQuery {
                             window: None,
@@ -405,7 +405,7 @@ impl ToolExecutor {
                                             metadata: HashMap::new(),
                                         });
                                     }
-                                    std::thread::sleep(std::time::Duration::from_millis(100));
+                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                                 }
                             }
                             Err(e) => {
