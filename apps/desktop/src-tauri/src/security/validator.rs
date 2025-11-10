@@ -3,6 +3,11 @@ use regex::Regex;
 use std::path::Path;
 use tracing::{debug, warn};
 
+/// Helper function to compile regex patterns safely
+fn compile_regex(pattern: &str) -> Regex {
+    Regex::new(pattern).expect(&format!("Invalid regex pattern: {}", pattern))
+}
+
 /// Command safety level
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SafetyLevel {
@@ -101,15 +106,15 @@ impl CommandValidator {
             ],
             // Blocked patterns
             blocked_patterns: vec![
-                Regex::new(r"rm\s+-rf\s+/").unwrap(),
-                Regex::new(r"del\s+/[fFsS]").unwrap(),
-                Regex::new(r"sudo\s+").unwrap(),
-                Regex::new(r">\s*/dev/").unwrap(),
-                Regex::new(r"mkfs\.").unwrap(),
-                Regex::new(r"dd\s+.*of=/dev/").unwrap(),
-                Regex::new(r"chmod\s+777").unwrap(),
-                Regex::new(r"shutdown").unwrap(),
-                Regex::new(r"reboot").unwrap(),
+                compile_regex(r"rm\s+-rf\s+/"),
+                compile_regex(r"del\s+/[fFsS]"),
+                compile_regex(r"sudo\s+"),
+                compile_regex(r">\s*/dev/"),
+                compile_regex(r"mkfs\."),
+                compile_regex(r"dd\s+.*of=/dev/"),
+                compile_regex(r"chmod\s+777"),
+                compile_regex(r"shutdown"),
+                compile_regex(r"reboot"),
             ],
         }
     }
