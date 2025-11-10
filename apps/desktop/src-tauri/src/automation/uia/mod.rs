@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
@@ -27,7 +27,7 @@ pub use element_tree::{BoundingRectangle, ElementQuery, UIElementInfo};
 pub use patterns::PatternCapabilities;
 pub use wait::WaitConfig;
 
-static mut COM_INITIALIZED: bool = false;
+static COM_INITIALIZED: OnceLock<()> = OnceLock::new();
 
 #[derive(Clone)]
 struct CachedElement {
@@ -46,26 +46,25 @@ unsafe impl Sync for UIAutomationService {}
 
 impl UIAutomationService {
     pub fn new() -> Result<Self> {
-        unsafe {
-            if !COM_INITIALIZED {
-                CoInitializeEx(None, COINIT_APARTMENTTHREADED)
-                    .ok()
-                    .map_err(|err| anyhow!("CoInitializeEx failed: {err:?}"))?;
-                let _ = CoInitializeSecurity(
-                    None,
-                    -1,
-                    None,
-                    None,
-                    RPC_C_AUTHN_LEVEL_DEFAULT,
-                    RPC_C_IMP_LEVEL_IDENTIFY,
-                    None,
-                    EOAC_NONE,
-                    None,
-                )
-                .ok();
-                COM_INITIALIZED = true;
-            }
-        }
+        // Thread-safe COM initialization using OnceLock
+        COM_INITIALIZED.get_or_try_init(|| unsafe {
+            CoInitializeEx(None, COINIT_APARTMENTTHREADED)
+                .ok()
+                .map_err(|err| anyhow!("CoInitializeEx failed: {err:?}"))?;
+            let _ = CoInitializeSecurity(
+                None,
+                -1,
+                None,
+                None,
+                RPC_C_AUTHN_LEVEL_DEFAULT,
+                RPC_C_IMP_LEVEL_IDENTIFY,
+                None,
+                EOAC_NONE,
+                None,
+            )
+            .ok();
+            Ok(())
+        })?;
 
         let automation: IUIAutomation = unsafe {
             CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
@@ -93,7 +92,10 @@ impl UIAutomationService {
             unsafe { element.GetRuntimeId() }.map_err(|err| anyhow!("GetRuntimeId: {err:?}"))?;
         let id = safe_array_to_runtime_id(runtime_id)?;
 
-        let mut cache = self.cache.lock().expect("automation cache poisoned");
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire cache lock"))?;
         cache.insert(
             id.clone(),
             CachedElement {
@@ -105,7 +107,10 @@ impl UIAutomationService {
     }
 
     pub(super) fn get_element(&self, id: &str) -> Result<IUIAutomationElement> {
-        let mut cache = self.cache.lock().expect("automation cache poisoned");
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|_| anyhow!("Failed to acquire cache lock"))?;
 
         // Clean expired entries
         cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
@@ -118,27 +123,28 @@ impl UIAutomationService {
 
     /// Clear expired cache entries
     pub fn clear_expired_cache(&self) {
-        let mut cache = self.cache.lock().expect("automation cache poisoned");
-        cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.retain(|_, cached| cached.cached_at.elapsed() < self.cache_ttl);
+        }
     }
 
     /// Clear all cache entries
     pub fn clear_cache(&self) {
-        let mut cache = self.cache.lock().expect("automation cache poisoned");
-        cache.clear();
-    }
-}
-
-impl Drop for UIAutomationService {
-    fn drop(&mut self) {
-        unsafe {
-            if COM_INITIALIZED {
-                CoUninitialize();
-                COM_INITIALIZED = false;
-            }
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.clear();
         }
     }
 }
+
+// Note: We don't uninitialize COM in Drop because:
+// 1. COM is initialized once per process using OnceLock
+// 2. Multiple UIAutomationService instances may exist
+// 3. COM will be cleaned up when the process exits
+// impl Drop for UIAutomationService {
+//     fn drop(&mut self) {
+//         // Cannot safely uninitialize COM with OnceLock
+//     }
+// }
 
 pub(super) fn read_bstr<F>(mut f: F) -> Option<String>
 where

@@ -64,7 +64,8 @@ pub async fn mcp_initialize(
     tracing::info!("Initializing MCP system");
 
     // Load configuration from file
-    let config_path = McpServersConfig::default_config_path();
+    let config_path = McpServersConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
 
     let mut config = if config_path.exists() {
         McpServersConfig::from_file(&config_path)
@@ -312,7 +313,8 @@ pub async fn mcp_update_config(
         .map_err(|e| format!("Failed to inject credentials: {}", e))?;
 
     // Save to file
-    let config_path = McpServersConfig::default_config_path();
+    let config_path = McpServersConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
     parsed_config
         .save_to_file(&config_path)
         .await
