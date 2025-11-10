@@ -160,10 +160,27 @@ impl ContextCompactor {
             conversation_text.push_str(&format!("[{}]: {}\n\n", msg.role.as_str(), msg.content));
         }
 
-        // Use LLM to generate summary
-        // TODO: Implement actual LLM call with router
-        // For now, return heuristic summary
-        Ok(self.generate_summary_heuristic(messages))
+        // Use LLM to generate summary if router is available
+        if let Some(router) = &self.llm_router {
+            match router.send_message(&conversation_text, None).await {
+                Ok(response) => {
+                    tracing::info!(
+                        "Generated LLM-powered summary: {} tokens, cost: ${:.4}",
+                        response.tokens.unwrap_or(0),
+                        response.cost.unwrap_or(0.0)
+                    );
+                    Ok(response.content)
+                }
+                Err(e) => {
+                    tracing::warn!("LLM summary failed, using heuristic fallback: {}", e);
+                    Ok(self.generate_summary_heuristic(messages))
+                }
+            }
+        } else {
+            // Fallback to heuristic if no router available
+            tracing::debug!("No LLM router available, using heuristic summary");
+            Ok(self.generate_summary_heuristic(messages))
+        }
     }
 
     /// Generate heuristic-based summary (fallback)
