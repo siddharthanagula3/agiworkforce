@@ -2,7 +2,6 @@
  * Code Completion Commands
  * Tauri commands for AI-powered code completions
  */
-
 use crate::router::{LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -85,7 +84,14 @@ pub async fn get_inline_completion(
     let prompt = format!(
         "Complete the code:\n```{}\n{}[CURSOR]{}\n```\nReturn ONLY the completion text:",
         language,
-        context_before.chars().rev().take(200).collect::<String>().chars().rev().collect::<String>(),
+        context_before
+            .chars()
+            .rev()
+            .take(200)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>(),
         context_after.chars().take(100).collect::<String>()
     );
 
@@ -99,7 +105,7 @@ pub async fn get_inline_completion(
             role: crate::router::MessageRole::User,
             content: prompt,
         }],
-        max_tokens: Some(50), // Very short completions
+        max_tokens: Some(50),   // Very short completions
         temperature: Some(0.2), // Low temperature for consistency
         stream: false,
     };

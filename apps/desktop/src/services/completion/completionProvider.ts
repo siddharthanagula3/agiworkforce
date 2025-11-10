@@ -15,7 +15,6 @@ export class AICompletionProvider implements monaco.languages.CompletionItemProv
     model: monaco.editor.ITextModel,
     position: monaco.Position,
     context: monaco.languages.CompletionContext,
-    token: monaco.CancellationToken
   ): Promise<monaco.languages.CompletionList | null> {
     // Skip if manually triggered without typing
     if (
@@ -43,7 +42,7 @@ export class AICompletionProvider implements monaco.languages.CompletionItemProv
           temperature: 0.3,
         }),
         new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Completion timeout')), 500)
+          setTimeout(() => reject(new Error('Completion timeout')), 500),
         ),
       ]);
 
@@ -52,15 +51,13 @@ export class AICompletionProvider implements monaco.languages.CompletionItemProv
       }
 
       // Parse and rank suggestions
-      const suggestions = this.parseCompletionResponse(
-        completionResult,
-        position,
-        codeContext
-      );
+      const suggestions = this.parseCompletionResponse(completionResult, position, codeContext);
       const rankedSuggestions = rankCompletions(suggestions, codeContext);
 
       const latency = Date.now() - startTime;
-      console.debug(`[Completion] Generated ${rankedSuggestions.length} suggestions in ${latency}ms`);
+      console.debug(
+        `[Completion] Generated ${rankedSuggestions.length} suggestions in ${latency}ms`,
+      );
 
       return {
         suggestions: rankedSuggestions,
@@ -105,7 +102,7 @@ Support multi-line completions if appropriate.`;
   private parseCompletionResponse(
     response: CompletionResponse,
     position: monaco.Position,
-    context: CodeContext
+    _context: CodeContext,
   ): monaco.languages.CompletionItem[] {
     const completions: monaco.languages.CompletionItem[] = [];
     const lines = response.content.split('\n');
@@ -116,7 +113,7 @@ Support multi-line completions if appropriate.`;
     if (completion.length > 0) {
       completions.push({
         label: this.getCompletionLabel(completion),
-        kind: this.inferCompletionKind(completion, context),
+        kind: this.inferCompletionKind(completion),
         insertText: completion,
         insertTextRules:
           monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
@@ -138,14 +135,11 @@ Support multi-line completions if appropriate.`;
   }
 
   private getCompletionLabel(completion: string): string {
-    const firstLine = completion.split('\n')[0];
+    const firstLine = completion.split('\n')[0] || '';
     return firstLine.length > 50 ? firstLine.slice(0, 47) + '...' : firstLine;
   }
 
-  private inferCompletionKind(
-    completion: string,
-    context: CodeContext
-  ): monaco.languages.CompletionItemKind {
+  private inferCompletionKind(completion: string): monaco.languages.CompletionItemKind {
     const firstLine = completion.trim();
 
     if (firstLine.startsWith('function') || firstLine.startsWith('const')) {
@@ -186,10 +180,10 @@ export interface CompletionResponse {
  * Register the AI completion provider with Monaco
  */
 export function registerCompletionProvider(
-  languages: string[] = ['typescript', 'javascript', 'rust', 'python', 'go']
+  languages: string[] = ['typescript', 'javascript', 'rust', 'python', 'go'],
 ): monaco.IDisposable[] {
   const provider = new AICompletionProvider();
   return languages.map((lang) =>
-    monaco.languages.registerCompletionItemProvider(lang, provider)
+    monaco.languages.registerCompletionItemProvider(lang, provider),
   );
 }
