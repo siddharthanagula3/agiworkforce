@@ -2,7 +2,7 @@
  * Qwen Provider (Alibaba Cloud - Qwen2.5-Max, Qwen3-Coder)
  * OpenAI-compatible API at https://dashscope-intl.aliyuncs.com/compatible-mode/v1
  */
-use crate::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, ToolCall};
+use crate::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
