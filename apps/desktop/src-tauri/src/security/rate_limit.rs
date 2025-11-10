@@ -1,5 +1,5 @@
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
@@ -36,7 +36,7 @@ impl RateLimiter {
 
     pub fn check_rate_limit(&self, key: &str) -> Result<(), String> {
         let now = Instant::now();
-        let mut records = self.records.lock().unwrap();
+        let mut records = self.records.lock();
 
         let record = records.entry(key.to_string()).or_insert_with(|| RequestRecord {
             timestamps: Vec::new(),
@@ -62,12 +62,12 @@ impl RateLimiter {
     }
 
     pub fn reset(&self, key: &str) {
-        let mut records = self.records.lock().unwrap();
+        let mut records = self.records.lock();
         records.remove(key);
     }
 
     pub fn reset_all(&self) {
-        let mut records = self.records.lock().unwrap();
+        let mut records = self.records.lock();
         records.clear();
     }
 }

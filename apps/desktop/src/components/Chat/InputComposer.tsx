@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Send, Paperclip, X, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, memo, type KeyboardEvent } from 'react';
+import { Send, Paperclip, X, Loader2, File, Folder, Link, Globe } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
@@ -7,14 +7,18 @@ import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
 import { CapturePreview } from '../ScreenCapture/CapturePreview';
 import type { CaptureResult } from '../../hooks/useScreenCapture';
 import { cn } from '../../lib/utils';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { FileDropZone } from './FileDropZone';
 import { validateFiles, formatFileSize, generateId } from '../../utils/fileUtils';
 import { toast } from 'sonner';
+import { estimateContextItemTokens, formatTokens } from '../../utils/tokenCount';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import type { ChatRoutingPreferences } from '../../types/chat';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
+import { useCommandAutocomplete } from '../../hooks/useCommandAutocomplete';
+import { CommandAutocomplete } from './CommandAutocomplete';
+import type { ContextSuggestion, ContextItem, FileContextItem } from '@agiworkforce/types';
 
 interface InputComposerProps {
   onSend: (
@@ -22,6 +26,7 @@ interface InputComposerProps {
     attachments?: File[],
     captures?: CaptureResult[],
     routing?: ChatRoutingPreferences,
+    contextItems?: ContextItem[],
   ) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -48,7 +53,7 @@ function cleanupAttachmentPreview(attachment: AttachmentEntry) {
   }
 }
 
-export function InputComposer({
+function InputComposerComponent({
   onSend,
   disabled = false,
   placeholder = 'Type a message...',
@@ -61,6 +66,7 @@ export function InputComposer({
   const [attachments, setAttachments] = useState<AttachmentEntry[]>([]);
   const [captures, setCaptures] = useState<CaptureResult[]>([]);
   const [selectedCapture, setSelectedCapture] = useState<CaptureResult | null>(null);
+  const [contextItems, setContextItems] = useState<ContextItem[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<AttachmentEntry[]>([]);
@@ -70,6 +76,122 @@ export function InputComposer({
     setDefaultProvider: state.setDefaultProvider,
     setDefaultModel: state.setDefaultModel,
   }));
+
+  // Command autocomplete for @file, @folder, @url, @web
+  const {
+    autocompleteState,
+    handleInputChange: handleAutocompleteInput,
+    handleKeyDown: handleAutocompleteKeyDown,
+    selectSuggestion,
+    isActive: isAutocompleteActive,
+  } = useCommandAutocomplete({
+    onSelect: async (suggestion: ContextSuggestion) => {
+      // Create a type-specific context item
+      let contextItem: ContextItem;
+
+      if (suggestion.type === 'file') {
+        // Fetch file content from backend
+        try {
+          const fileContent = await invoke<{
+            content: string;
+            size: number;
+            line_count: number;
+            language: string | null;
+            excerpt: string;
+          }>('fs_read_file_content', { filePath: suggestion.value });
+
+          contextItem = {
+            id: suggestion.id,
+            type: 'file',
+            name: suggestion.label,
+            description: suggestion.description,
+            path: suggestion.value,
+            content: fileContent.content,
+            language: fileContent.language ?? undefined,
+            size: fileContent.size,
+            lineCount: fileContent.line_count,
+            excerpt: fileContent.excerpt,
+            timestamp: new Date(),
+          } as FileContextItem;
+        } catch (error) {
+          console.error('Failed to read file content:', error);
+          // Fallback without content
+          contextItem = {
+            id: suggestion.id,
+            type: 'file',
+            name: suggestion.label,
+            description: suggestion.description,
+            path: suggestion.value,
+            timestamp: new Date(),
+          } as FileContextItem;
+        }
+      } else if (suggestion.type === 'folder') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'folder',
+          name: suggestion.label,
+          description: suggestion.description,
+          path: suggestion.value,
+          timestamp: new Date(),
+        } as any;
+      } else if (suggestion.type === 'url') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'url',
+          name: suggestion.label,
+          description: suggestion.description,
+          url: suggestion.value,
+          timestamp: new Date(),
+        } as any;
+      } else if (suggestion.type === 'web') {
+        contextItem = {
+          id: suggestion.id,
+          type: 'web',
+          name: suggestion.label,
+          description: suggestion.description,
+          query: suggestion.value,
+          timestamp: new Date(),
+        } as any;
+      } else {
+        // Fallback for other types
+        contextItem = {
+          id: suggestion.id,
+          type: suggestion.type,
+          name: suggestion.label,
+          description: suggestion.description,
+          timestamp: new Date(),
+        } as any;
+      }
+
+      // Add to context items
+      setContextItems((prev) => [...prev, contextItem]);
+
+      // Remove the @command from the input
+      if (textareaRef.current) {
+        const cursorPos = textareaRef.current.selectionStart;
+        const beforeCursor = content.slice(0, cursorPos);
+        const afterCursor = content.slice(cursorPos);
+        const match = beforeCursor.match(/(@file|@folder|@url|@web)([^\s]*)$/);
+
+        if (match) {
+          const startPos = beforeCursor.length - match[0].length;
+          const newContent = content.slice(0, startPos) + afterCursor;
+          setContent(newContent);
+
+          // Set cursor position after the removed @command
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = startPos;
+              textareaRef.current.selectionEnd = startPos;
+              textareaRef.current.focus();
+            }
+          }, 0);
+        }
+      }
+    },
+    maxSuggestions: 10,
+    debounceMs: 150,
+  });
 
   const [selectedProvider, setSelectedProvider] = useState<Provider>(llmConfig.defaultProvider);
   const [selectedModel, setSelectedModel] = useState(
@@ -137,12 +259,14 @@ export function InputComposer({
         provider: selectedProvider,
         model: selectedModel || undefined,
       },
+      contextItems,
     );
     setContent('');
     attachments.forEach(cleanupAttachmentPreview);
     setAttachments([]);
     setCaptures([]);
     setSelectedCapture(null);
+    setContextItems([]);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -150,6 +274,12 @@ export function InputComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Check autocomplete first
+    if (isAutocompleteActive && handleAutocompleteKeyDown(event)) {
+      return; // Autocomplete handled it
+    }
+
+    // Original Enter handling
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       if (canSend) {
@@ -232,6 +362,10 @@ export function InputComposer({
 
   const removeCapture = (index: number) => {
     setCaptures((previous) => previous.filter((_, idx) => idx !== index));
+  };
+
+  const removeContextItem = (id: string) => {
+    setContextItems((previous) => previous.filter((item) => item.id !== id));
   };
 
   const handleProviderChange = (value: string) => {
@@ -370,6 +504,62 @@ export function InputComposer({
             </div>
           )}
 
+          {contextItems.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Context items ({contextItems.length}) ~
+                  {formatTokens(
+                    contextItems.reduce((sum, item) => sum + estimateContextItemTokens(item), 0),
+                  )}{' '}
+                  tokens
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {contextItems.map((item) => {
+                  const Icon =
+                    item.type === 'file'
+                      ? File
+                      : item.type === 'folder'
+                        ? Folder
+                        : item.type === 'url'
+                          ? Link
+                          : Globe;
+
+                  const tokens = estimateContextItemTokens(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="group flex items-center gap-2 rounded-lg border border-border/60 bg-primary/10 px-3 py-2"
+                    >
+                      <Icon className="h-4 w-4 text-primary flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
+                        {item.description && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {item.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          ~{formatTokens(tokens)} tokens
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeContextItem(item.id)}
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label="Remove context item"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <input
               ref={fileInputRef}
@@ -406,10 +596,17 @@ export function InputComposer({
             />
 
             <div className="relative flex-1">
+              <CommandAutocomplete state={autocompleteState} onSelect={selectSuggestion} />
+
               <Textarea
                 ref={textareaRef}
                 value={content}
-                onChange={(event) => setContent(event.target.value)}
+                onChange={(event) => {
+                  setContent(event.target.value);
+                  if (textareaRef.current) {
+                    handleAutocompleteInput(event.target.value, textareaRef.current.selectionStart);
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 disabled={controlsDisabled}
@@ -484,3 +681,20 @@ export function InputComposer({
     </div>
   );
 }
+
+// Export memoized component to prevent unnecessary re-renders
+export const InputComposer = memo(InputComposerComponent, (prevProps, nextProps) => {
+  // Only re-render if disabled state, placeholder, conversationId, or isSending changes
+  // onSend is expected to be stable (useCallback in parent)
+  return (
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.placeholder === nextProps.placeholder &&
+    prevProps.maxLength === nextProps.maxLength &&
+    prevProps.className === nextProps.className &&
+    prevProps.conversationId === nextProps.conversationId &&
+    prevProps.isSending === nextProps.isSending &&
+    prevProps.onSend === nextProps.onSend
+  );
+});
+
+InputComposer.displayName = 'InputComposer';

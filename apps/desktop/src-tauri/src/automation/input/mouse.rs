@@ -25,7 +25,7 @@ impl MouseSimulator {
     }
 
     /// Move cursor smoothly to target position with animation
-    pub fn move_to_smooth(&self, x: i32, y: i32, duration_ms: u32) -> Result<()> {
+    pub async fn move_to_smooth(&self, x: i32, y: i32, duration_ms: u32) -> Result<()> {
         use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
         let mut current_pos = windows::Win32::Foundation::POINT { x: 0, y: 0 };
         unsafe { GetCursorPos(&mut current_pos) }
@@ -52,16 +52,16 @@ impl MouseSimulator {
             let current_y = from_y + (dy as f64 * ease_t) as i32;
             self.move_to(current_x, current_y)?;
             if i < steps {
-                std::thread::sleep(std::time::Duration::from_millis(step_delay as u64));
+                tokio::time::sleep(std::time::Duration::from_millis(step_delay as u64)).await;
             }
         }
 
         Ok(())
     }
 
-    pub fn double_click(&self, x: i32, y: i32) -> Result<()> {
+    pub async fn double_click(&self, x: i32, y: i32) -> Result<()> {
         self.click(x, y, MouseButton::Left)?;
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         self.click(x, y, MouseButton::Left)
     }
 
@@ -173,7 +173,7 @@ impl MouseSimulator {
     ///
     /// The animation creates intermediate points for smooth movement, with a minimum
     /// of 5 steps and approximately 10 steps per second based on duration.
-    pub fn drag_and_drop(
+    pub async fn drag_and_drop(
         &self,
         from_x: i32,
         from_y: i32,
@@ -185,7 +185,7 @@ impl MouseSimulator {
         self.move_to(from_x, from_y)?;
 
         // Small delay to ensure position is set
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         // Press left mouse button
         let mut press_input = [INPUT {
@@ -204,7 +204,7 @@ impl MouseSimulator {
         self.dispatch(&mut press_input)?;
 
         // Small delay after pressing button
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         // Calculate smooth animation parameters
         let duration_ms = duration_ms.max(50); // Minimum 50ms
@@ -230,12 +230,12 @@ impl MouseSimulator {
             self.move_to(current_x, current_y)?;
 
             if i < steps {
-                std::thread::sleep(std::time::Duration::from_millis(step_delay as u64));
+                tokio::time::sleep(std::time::Duration::from_millis(step_delay as u64)).await;
             }
         }
 
         // Small delay before releasing button
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         // Release left mouse button
         let mut release_input = [INPUT {
