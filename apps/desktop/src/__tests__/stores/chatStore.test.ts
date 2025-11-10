@@ -5,14 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useChatStore } from '../../stores/chatStore';
-import type {
-  Conversation,
-  Message,
-  ConversationStats,
-  ChatStreamStartPayload,
-  ChatStreamChunkPayload,
-  ChatStreamEndPayload,
-} from '../../types/chat';
+import type { Conversation, Message, ConversationStats } from '../../types/chat';
 
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
@@ -57,7 +50,6 @@ describe('chatStore', () => {
           title: 'Test Conversation',
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
-          pinned: false,
         },
       ];
 
@@ -89,7 +81,7 @@ describe('chatStore', () => {
 
       const state = useChatStore.getState();
       expect(state.conversations).toHaveLength(1);
-      expect(state.conversations[0].title).toBe('Test Conversation');
+      expect(state.conversations[0]?.title).toBe('Test Conversation');
       expect(state.loading).toBe(false);
       expect(state.error).toBeNull();
     });
@@ -100,7 +92,6 @@ describe('chatStore', () => {
         title: 'New Chat',
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
-        pinned: false,
       };
 
       const { invoke } = await import('@tauri-apps/api/core');
@@ -136,7 +127,7 @@ describe('chatStore', () => {
       await useChatStore.getState().updateConversation(1, 'New Title');
 
       const state = useChatStore.getState();
-      expect(state.conversations[0].title).toBe('New Title');
+      expect(state.conversations[0]?.title).toBe('New Title');
     });
 
     it('should delete conversation', async () => {
@@ -145,12 +136,10 @@ describe('chatStore', () => {
           {
             id: 1,
             title: 'Test',
-            updatedAt: new Date(),
-            messageCount: 0,
-            unreadCount: 0,
-            pinned: false,
             created_at: '2024-01-01T00:00:00Z',
             updated_at: '2024-01-01T00:00:00Z',
+            messageCount: 0,
+            updatedAt: new Date('2024-01-01T00:00:00Z'),
           },
         ],
         activeConversationId: 1,
@@ -193,8 +182,8 @@ describe('chatStore', () => {
 
       const state = useChatStore.getState();
       expect(state.messages).toHaveLength(2);
-      expect(state.messages[0].content).toBe('Hello');
-      expect(state.messages[1].content).toBe('Hi there!');
+      expect(state.messages[0]?.content).toBe('Hello');
+      expect(state.messages[1]?.content).toBe('Hi there!');
     });
 
     it('should send a message', async () => {
@@ -237,8 +226,8 @@ describe('chatStore', () => {
 
       const state = useChatStore.getState();
       expect(state.messages).toHaveLength(2);
-      expect(state.messages[0].content).toBe('Hello');
-      expect(state.messages[1].content).toBe('Hi there!');
+      expect(state.messages[0]?.content).toBe('Hello');
+      expect(state.messages[1]?.content).toBe('Hi there!');
     });
 
     it('should edit a message', async () => {
@@ -270,7 +259,7 @@ describe('chatStore', () => {
       await useChatStore.getState().editMessage(1, 'New content');
 
       const state = useChatStore.getState();
-      expect(state.messages[0].content).toBe('New content');
+      expect(state.messages[0]?.content).toBe('New content');
     });
 
     it('should delete a message', async () => {
@@ -321,14 +310,14 @@ describe('chatStore', () => {
 
       let state = useChatStore.getState();
       expect(state.pinnedConversations).toContain(1);
-      expect(state.conversations[0].pinned).toBe(true);
+      expect(state.conversations[0]?.pinned).toBe(true);
 
       // Toggle again to unpin
       await useChatStore.getState().togglePinnedConversation(1);
 
       state = useChatStore.getState();
       expect(state.pinnedConversations).not.toContain(1);
-      expect(state.conversations[0].pinned).toBe(false);
+      expect(state.conversations[0]?.pinned).toBe(false);
     });
 
     it('should sort pinned conversations first', () => {
@@ -361,7 +350,7 @@ describe('chatStore', () => {
 
       const state = useChatStore.getState();
       // Pinned conversation should be first even if older
-      expect(state.conversations[0].pinned).toBe(true);
+      expect(state.conversations[0]?.pinned).toBe(true);
     });
   });
 
@@ -413,12 +402,7 @@ describe('chatStore', () => {
     });
 
     it('should not detect non-goal messages as goals', async () => {
-      const nonGoalMessages = [
-        'Hi',
-        'Thanks',
-        'What is 2+2?',
-        'Tell me a joke',
-      ];
+      const nonGoalMessages = ['Hi', 'Thanks', 'What is 2+2?', 'Tell me a joke'];
 
       const { invoke } = await import('@tauri-apps/api/core');
       (invoke as any).mockResolvedValue({
@@ -489,11 +473,15 @@ describe('chatStore', () => {
     });
 
     it('should reject empty conversation title', async () => {
-      await expect(useChatStore.getState().renameConversation(1, '')).rejects.toThrow('Title cannot be empty');
+      await expect(useChatStore.getState().renameConversation(1, '')).rejects.toThrow(
+        'Title cannot be empty',
+      );
     });
 
     it('should reject empty message edit', async () => {
-      await expect(useChatStore.getState().editMessage(1, '')).rejects.toThrow('Message cannot be empty');
+      await expect(useChatStore.getState().editMessage(1, '')).rejects.toThrow(
+        'Message cannot be empty',
+      );
     });
   });
 
