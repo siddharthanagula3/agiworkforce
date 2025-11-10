@@ -275,8 +275,65 @@ impl AutonomousAgent {
 
     /// Check resource limits (CPU, memory)
     async fn check_resource_limits(&self) -> Result<bool> {
-        // TODO: Implement actual resource monitoring
-        // For now, always return true
+        // Use sysinfo to monitor actual system resources
+        use sysinfo::{System, SystemExt, ProcessExt, CpuExt};
+
+        let mut sys = System::new_all();
+        sys.refresh_all();
+
+        // Check CPU usage
+        let cpu_usage = sys.global_cpu_info().cpu_usage() as f64;
+        if cpu_usage > self.config.cpu_limit_percent {
+            tracing::warn!(
+                "[Agent] CPU usage ({:.1}%) exceeds limit ({:.1}%)",
+                cpu_usage,
+                self.config.cpu_limit_percent
+            );
+            return Ok(false);
+        }
+
+        // Check memory usage for current process
+        let current_pid = sysinfo::get_current_pid()
+            .map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
+
+        if let Some(process) = sys.process(current_pid) {
+            let memory_mb = process.memory() / 1024 / 1024; // Convert bytes to MB
+            if memory_mb > self.config.memory_limit_mb {
+                tracing::warn!(
+                    "[Agent] Memory usage ({}MB) exceeds limit ({}MB)",
+                    memory_mb,
+                    self.config.memory_limit_mb
+                );
+                return Ok(false);
+            }
+        }
+
+        use sysinfo::{System, SystemExt, CpuExt, ProcessExt};
+
+        let mut system = System::new_all();
+        system.refresh_all();
+
+        // Check CPU usage (throttle if > 80%)
+        let cpu_usage = system.global_cpu_info().cpu_usage();
+        if cpu_usage > 80.0 {
+            tracing::warn!("CPU usage high: {:.1}%, throttling autonomous agent", cpu_usage);
+            return Ok(false);
+        }
+
+        // Check memory usage (throttle if > 80% of available)
+        let used_memory = system.used_memory();
+        let total_memory = system.total_memory();
+        let memory_percent = (used_memory as f64 / total_memory as f64) * 100.0;
+        if memory_percent > 80.0 {
+            tracing::warn!("Memory usage high: {:.1}%, throttling autonomous agent", memory_percent);
+            return Ok(false);
+        }
+
+        tracing::debug!(
+            "Resource check passed: CPU {:.1}%, Memory {:.1}%",
+            cpu_usage,
+            memory_percent
+        );
         Ok(true)
     }
 

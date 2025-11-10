@@ -1,4 +1,5 @@
 pub mod api_tools_impl;
+pub mod audio_processing;
 pub mod context_manager;
 pub mod core;
 pub mod executor;
@@ -176,7 +177,7 @@ impl Default for AGICapabilities {
             can_access_databases: true,
             can_make_api_calls: true,
             can_process_images: true,
-            can_process_audio: false, // TODO: Implement
+            can_process_audio: true, // Basic audio processing capability available
             can_understand_code: true,
             can_learn_from_experience: true,
             can_plan_complex_tasks: true,
