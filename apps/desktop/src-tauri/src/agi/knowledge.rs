@@ -216,22 +216,100 @@ impl KnowledgeBase {
 
     /// Enforce memory limit by removing least important entries
     async fn enforce_memory_limit(&self) -> Result<()> {
-        // TODO: Implement actual memory size checking
-        // For now, limit by count
-        let conn = self.db.lock().unwrap();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+        // Check actual database file size
+        let db_path = Self::get_db_path()?;
+        let file_size_mb = if let Ok(metadata) = std::fs::metadata(&db_path) {
+            metadata.len() / (1024 * 1024) // Convert bytes to MB
+        } else {
+            0 // If file doesn't exist or can't be read, assume 0
+        };
 
-        // Keep only top 10000 entries by importance
-        if count > 10000 {
+        tracing::debug!(
+            "Knowledge base size: {} MB (limit: {} MB)",
+            file_size_mb,
+            self._memory_limit_mb
+        );
+
+        // If we're over the limit, trigger compaction and pruning
+        if file_size_mb > self._memory_limit_mb {
+            tracing::warn!(
+                "Knowledge base size ({} MB) exceeds limit ({} MB), pruning entries",
+                file_size_mb,
+                self._memory_limit_mb
+            );
+
+            let conn = self.db.lock().unwrap();
+
+            // First, VACUUM to reclaim space
+            conn.execute("VACUUM", [])?;
+
+            // Then remove oldest and least important entries (keep top 80% by importance)
+            let count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+            let keep_count = (count as f64 * 0.8) as i64;
+
             conn.execute(
                 "DELETE FROM knowledge
                  WHERE id NOT IN (
                      SELECT id FROM knowledge
                      ORDER BY importance DESC, timestamp DESC
-                     LIMIT 10000
+                     LIMIT ?
                  )",
-                [],
+                params![keep_count],
             )?;
+
+            // VACUUM again to actually free the space
+            conn.execute("VACUUM", [])?;
+
+            tracing::info!("Knowledge base pruned to {} entries", keep_count);
+        }
+
+        // Also enforce a reasonable count limit to prevent unbounded growth
+        let conn = self.db.lock().unwrap();
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+
+        if let Ok(metadata) = std::fs::metadata(&db_path) {
+            let file_size_mb = metadata.len() / 1024 / 1024; // Convert bytes to MB
+
+            if file_size_mb > self._memory_limit_mb {
+                tracing::warn!(
+                    "[Knowledge] Database size ({}MB) exceeds limit ({}MB), pruning entries",
+                    file_size_mb,
+                    self._memory_limit_mb
+                );
+
+                let conn = self.db.lock().unwrap();
+
+                // Calculate how many entries to keep based on average entry size
+                let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+
+                if count > 0 {
+                    let avg_entry_size = file_size_mb * 1024 * 1024 / count as u64;
+                    let target_count = (self._memory_limit_mb * 1024 * 1024) / avg_entry_size.max(1);
+
+                    // Keep 80% of limit to avoid frequent pruning
+                    let keep_count = (target_count * 80 / 100).max(100); // Keep at least 100 entries
+
+                    tracing::info!(
+                        "[Knowledge] Keeping top {} entries (out of {})",
+                        keep_count,
+                        count
+                    );
+
+                    conn.execute(
+                        "DELETE FROM knowledge
+                         WHERE id NOT IN (
+                             SELECT id FROM knowledge
+                             ORDER BY importance DESC, timestamp DESC
+                             LIMIT ?1
+                         )",
+                        params![keep_count],
+                    )?;
+
+                    // Vacuum to reclaim space
+                    conn.execute("VACUUM", [])?;
+                }
+            }
         }
 
         Ok(())
