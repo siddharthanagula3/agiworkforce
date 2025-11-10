@@ -421,53 +421,6 @@ impl AgentRuntime {
         Err(anyhow!("Task execution failed after retries"))
     }
 
-    /// Analyze error and suggest fix using LLM (via MCP or router)
-    async fn analyze_error_and_suggest_fix(&self, task: &Task, error: &str) -> Option<String> {
-        tracing::info!("[AgentRuntime] Analyzing error: {}", error);
-
-        // Try to use AGI Core's LLM router if available
-        if let Some(ref agi) = self.agi_core {
-            let prompt = format!(
-                r#"Analyze this error and suggest a fix.
-
-Task: {}
-Goal: {}
-Error: {}
-
-Provide:
-1. Root cause analysis
-2. Specific fix/solution
-3. Code changes if applicable
-
-Be concise and actionable."#,
-                task.description, task.goal, error
-            );
-
-            // Access router through AGI core
-            // Note: This is a simplification - in production, would add a method to AGICore
-            // For now, use heuristic-based suggestions
-            tracing::debug!(
-                "[AgentRuntime] Would use LLM analysis with prompt: {}",
-                prompt
-            );
-        }
-
-        // Fallback: heuristics for common errors
-        if error.contains("not found") || error.contains("does not exist") {
-            Some("Check if file/path exists before operation".to_string())
-        } else if error.contains("permission") || error.contains("denied") {
-            Some("Check file permissions and try with elevated privileges if needed".to_string())
-        } else if error.contains("syntax") || error.contains("parse") {
-            Some("Review syntax and fix parsing errors".to_string())
-        } else if error.contains("timeout") {
-            Some("Increase timeout duration or optimize the operation".to_string())
-        } else if error.contains("network") || error.contains("connection") {
-            Some("Check network connectivity and retry".to_string())
-        } else {
-            Some(format!(
-                "Review error message and adjust approach: {}",
-                error
-            ))
     /// Analyze error and suggest fix using LLM (via AGI Core router)
     async fn analyze_error_and_suggest_fix(&self, task: &Task, error: &str) -> Option<String> {
         tracing::info!("[AgentRuntime] Analyzing error with LLM: {}", error);
@@ -507,18 +460,29 @@ Do not repeat the error message."#,
         let suggestion = if error.contains("not found") || error.contains("does not exist") {
             if error.to_lowercase().contains("file") || error.to_lowercase().contains("path") {
                 "File or path does not exist. Verify the path is correct and the file has been created. Use file_list or file_read tools to check existence before operations."
-            } else if error.to_lowercase().contains("module") || error.to_lowercase().contains("import") {
+            } else if error.to_lowercase().contains("module")
+                || error.to_lowercase().contains("import")
+            {
                 "Module not found. Check import statements and ensure all dependencies are installed. Verify the module name spelling and availability."
             } else {
                 "Resource not found. Verify the resource identifier is correct and the resource exists in the system."
             }
-        } else if error.contains("permission") || error.contains("denied") || error.contains("access denied") {
+        } else if error.contains("permission")
+            || error.contains("denied")
+            || error.contains("access denied")
+        {
             "Permission denied. Check file/directory permissions. Ensure the process has read/write access. On Windows, try running with administrator privileges if needed."
-        } else if error.contains("syntax") || error.contains("parse") || error.contains("unexpected token") {
+        } else if error.contains("syntax")
+            || error.contains("parse")
+            || error.contains("unexpected token")
+        {
             "Syntax or parsing error. Review the code/data format for syntax errors. Check for missing brackets, quotes, or incorrect structure. Validate against the expected format."
         } else if error.contains("timeout") || error.contains("timed out") {
             "Operation timed out. Increase timeout duration, check network connectivity, or optimize the operation to complete faster. Verify the target service is responsive."
-        } else if error.contains("connection") || error.contains("network") || error.contains("unreachable") {
+        } else if error.contains("connection")
+            || error.contains("network")
+            || error.contains("unreachable")
+        {
             "Network or connection error. Verify network connectivity, check firewall settings, and ensure the target service is running and accessible."
         } else if error.contains("invalid") || error.contains("malformed") {
             "Invalid or malformed input. Verify the input data format matches expected schema. Check for correct data types, encoding, and structure."
@@ -580,6 +544,10 @@ Do not repeat the error message."#,
             "goal_id": goal_id,
             "message": "Task submitted to AGI Core for autonomous execution"
         }))
+    }
+
+    /// Execute task with retry logic (fallback)
+    async fn execute_with_retry_fallback(&self, task: &Task) -> Result<serde_json::Value> {
         // Convert Task to Goal
         let priority = match task.priority {
             TaskPriority::Low => crate::agi::Priority::Low,
