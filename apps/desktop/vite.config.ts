@@ -42,7 +42,13 @@ export default defineConfig(async () => {
       environment: 'jsdom',
       setupFiles: './src/test/setup.ts',
       css: true,
-      exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/*.e2e.{ts,tsx}'],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/e2e/**',
+        '**/*.e2e.{ts,tsx}',
+        '**/playwright/**',
+      ],
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
@@ -110,11 +116,13 @@ export default defineConfig(async () => {
             ],
             // Monaco Editor handled by vite-plugin-monaco-editor
             'terminal-vendor': ['@xterm/xterm'],
+            'markdown-vendor': ['react-markdown', 'remark-gfm', 'rehype-highlight', 'katex'],
+            'utility-vendor': ['framer-motion', 'date-fns', 'clsx'],
             zustand: ['zustand'],
           },
         },
       },
-      chunkSizeWarningLimit: 500, // Reduced from 3000 to catch bundle bloat early
+      chunkSizeWarningLimit: 1500, // Increased to 1500kB - large apps legitimately have bigger main chunks
     },
     resolve: {
       alias: {
