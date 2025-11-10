@@ -16,15 +16,15 @@
 
 ## Build & Test Status
 
-| Check                                     | Status  | Notes                                                                         |
-| ----------------------------------------- | ------- | ----------------------------------------------------------------------------- |
-| `pnpm typecheck`                          | Pass    | TypeScript errors reduced from ~1,200 to under 100 through critical fixes.    |
-| `pnpm lint`                               | Pass    | Repo-wide lint passes with the TypeScript-aware resolver.                     |
-| Version pinning                           | Done    | Node 20.11.0+/22.x, pnpm 8.15.0+, Rust 1.90.0 enforced via config files.      |
-| Rust safety fixes                         | Done    | Fixed critical undefined behavior in screen capture (RGBQUAD initialization). |
-| `pnpm --filter @agiworkforce/desktop dev` | Pending | UI compiles; functional smoke-tests still required on a live desktop.         |
-| Rust `cargo check` / tests                | Pending | Must be re-run after recent TypeScript and UI refactors.                      |
-| Automated tests                           | Gaps    | Vitest/Playwright suites for desktop; Jest/Detox for mobile.                  |
+| Check                                     | Status    | Notes                                                                                       |
+| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                          | ✅ Pass   | All TypeScript errors resolved. Zero errors.                                                |
+| `pnpm lint`                               | ✅ Pass   | All ESLint violations resolved. Zero errors.                                                |
+| Version pinning                           | Done      | Node 20.11.0+/22.x, pnpm 8.15.0+, Rust 1.90.0 enforced via config files.                    |
+| Rust safety fixes                         | Done      | Fixed critical undefined behavior in screen capture (RGBQUAD initialization).               |
+| `pnpm --filter @agiworkforce/desktop dev` | Pending   | UI compiles; functional smoke-tests still required on a live desktop.                       |
+| Rust `cargo check` / tests                | ⚠️ Issues | Pre-existing syntax errors require investigation (code_generator.rs, context_compactor.rs). |
+| Automated tests                           | Gaps      | Vitest/Playwright suites for desktop; Jest/Detox for mobile.                                |
 
 ## Multi-LLM Strategy
 
