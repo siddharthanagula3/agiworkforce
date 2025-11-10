@@ -3,12 +3,12 @@
  * Clone, browse, and understand GitHub repositories similar to Claude's GitHub integration
  */
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
-use std::sync::Arc;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitHubRepo {
@@ -70,7 +70,10 @@ pub async fn github_clone_repo(
 
     // Clone repository using git command
     if local_path.exists() {
-        tracing::info!("Repository already exists at {:?}, pulling latest", local_path);
+        tracing::info!(
+            "Repository already exists at {:?}, pulling latest",
+            local_path
+        );
 
         // Pull latest changes
         let output = Command::new("git")
@@ -80,7 +83,10 @@ pub async fn github_clone_repo(
             .map_err(|e| format!("Failed to pull repository: {}", e))?;
 
         if !output.status.success() {
-            return Err(format!("Git pull failed: {}", String::from_utf8_lossy(&output.stderr)));
+            return Err(format!(
+                "Git pull failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
     } else {
         // Clone repository
@@ -99,7 +105,10 @@ pub async fn github_clone_repo(
             .map_err(|e| format!("Failed to clone repository: {}", e))?;
 
         if !output.status.success() {
-            return Err(format!("Git clone failed: {}", String::from_utf8_lossy(&output.stderr)));
+            return Err(format!(
+                "Git clone failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
     }
 
@@ -132,7 +141,8 @@ pub async fn github_get_repo_context(
     let repo_id = format!("{}/{}", owner, name);
 
     let repos = github_state.repos.lock().await;
-    repos.get(&repo_id)
+    repos
+        .get(&repo_id)
         .cloned()
         .ok_or_else(|| format!("Repository not found: {}", repo_id))
 }
@@ -185,8 +195,7 @@ pub async fn github_read_file(
         .ok_or("Repository not cloned locally")?;
 
     let full_path = local_path.join(&file_path);
-    std::fs::read_to_string(full_path)
-        .map_err(|e| format!("Failed to read file: {}", e))
+    std::fs::read_to_string(full_path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 /// Get repository file tree
@@ -237,7 +246,10 @@ fn parse_github_url(url: &str) -> Result<(String, String), String> {
     Err(format!("Invalid GitHub URL format: {}", url))
 }
 
-async fn build_repo_context(repo: &GitHubRepo, local_path: &PathBuf) -> Result<RepoContext, String> {
+async fn build_repo_context(
+    repo: &GitHubRepo,
+    local_path: &PathBuf,
+) -> Result<RepoContext, String> {
     // Get repository structure
     let structure = generate_file_tree(local_path)?;
 
@@ -295,13 +307,18 @@ fn read_readme(path: &PathBuf) -> Option<String> {
 fn scan_repository_files(path: &PathBuf) -> Result<Vec<RepoFile>, String> {
     let mut files = Vec::new();
 
-    fn scan_dir(dir: &PathBuf, base: &PathBuf, files: &mut Vec<RepoFile>, depth: usize) -> Result<(), String> {
+    fn scan_dir(
+        dir: &PathBuf,
+        base: &PathBuf,
+        files: &mut Vec<RepoFile>,
+        depth: usize,
+    ) -> Result<(), String> {
         if depth > 10 {
             return Ok(()); // Prevent infinite recursion
         }
 
-        let entries = std::fs::read_dir(dir)
-            .map_err(|e| format!("Failed to read directory: {}", e))?;
+        let entries =
+            std::fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {}", e))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
@@ -314,13 +331,15 @@ fn scan_repository_files(path: &PathBuf) -> Result<Vec<RepoFile>, String> {
                     || name_str == "node_modules"
                     || name_str == "target"
                     || name_str == "dist"
-                    || name_str == "build" {
+                    || name_str == "build"
+                {
                     continue;
                 }
             }
 
             if path.is_file() {
-                let relative_path = path.strip_prefix(base)
+                let relative_path = path
+                    .strip_prefix(base)
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .to_string();
@@ -328,7 +347,8 @@ fn scan_repository_files(path: &PathBuf) -> Result<Vec<RepoFile>, String> {
                 let metadata = std::fs::metadata(&path).ok();
                 let size = metadata.map(|m| m.len()).unwrap_or(0);
 
-                let file_type = path.extension()
+                let file_type = path
+                    .extension()
                     .and_then(|ext| ext.to_str())
                     .unwrap_or("unknown")
                     .to_string();
@@ -361,10 +381,41 @@ fn scan_repository_files(path: &PathBuf) -> Result<Vec<RepoFile>, String> {
 fn is_text_file(ext: &str) -> bool {
     matches!(
         ext,
-        "rs" | "ts" | "tsx" | "js" | "jsx" | "py" | "java" | "c" | "cpp" | "h" | "hpp"
-            | "go" | "rb" | "php" | "cs" | "swift" | "kt" | "scala" | "sh" | "bash"
-            | "md" | "txt" | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css"
-            | "scss" | "sass" | "less" | "sql" | "proto" | "graphql" | "vue"
+        "rs" | "ts"
+            | "tsx"
+            | "js"
+            | "jsx"
+            | "py"
+            | "java"
+            | "c"
+            | "cpp"
+            | "h"
+            | "hpp"
+            | "go"
+            | "rb"
+            | "php"
+            | "cs"
+            | "swift"
+            | "kt"
+            | "scala"
+            | "sh"
+            | "bash"
+            | "md"
+            | "txt"
+            | "json"
+            | "yaml"
+            | "yml"
+            | "toml"
+            | "xml"
+            | "html"
+            | "css"
+            | "scss"
+            | "sass"
+            | "less"
+            | "sql"
+            | "proto"
+            | "graphql"
+            | "vue"
     )
 }
 
