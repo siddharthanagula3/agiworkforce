@@ -83,9 +83,9 @@ impl AnthropicProvider {
         // Pricing as of November 2025 (per 1M tokens)
         let (input_cost, output_cost) = match model {
             // 2025 Claude 4.x Generation (Latest)
-            "claude-sonnet-4-5" | "claude-4.5-sonnet" => (3.0, 15.0),    // Best coding model
-            "claude-haiku-4-5" | "claude-4.5-haiku" => (0.25, 1.25),     // Fast & affordable
-            "claude-opus-4" | "claude-4-opus" => (15.0, 75.0),           // Most capable
+            "claude-sonnet-4-5" | "claude-4.5-sonnet" => (3.0, 15.0), // Best coding model
+            "claude-haiku-4-5" | "claude-4.5-haiku" => (0.25, 1.25),  // Fast & affordable
+            "claude-opus-4" | "claude-4-opus" => (15.0, 75.0),        // Most capable
 
             // Claude 3.5 Generation
             "claude-3-5-sonnet-20241022" => (3.0, 15.0),
