@@ -85,7 +85,10 @@ impl TaskExecutor {
                 // Integrate with browser automation
                 // Note: BrowserState would need to be added to TaskExecutor as a field
                 // For now, log the intent
-                tracing::info!("[Executor] Would navigate to {} using browser automation", url);
+                tracing::info!(
+                    "[Executor] Would navigate to {} using browser automation",
+                    url
+                );
 
                 // In production, this would call:
                 // let browser = self.browser_state.playwright.lock().await;
@@ -150,13 +153,9 @@ impl TaskExecutor {
 
                 use std::process::Command;
                 let output = if cfg!(target_os = "windows") {
-                    Command::new("cmd")
-                        .args(&["/C", &full_command])
-                        .output()
+                    Command::new("cmd").args(&["/C", &full_command]).output()
                 } else {
-                    Command::new("sh")
-                        .args(&["-c", &full_command])
-                        .output()
+                    Command::new("sh").args(&["-c", &full_command]).output()
                 };
 
                 match output {
@@ -246,16 +245,16 @@ impl TaskExecutor {
                 // Map of key names to VK codes (simplified)
                 let parse_key = |key_str: &str| -> Result<u8> {
                     match key_str {
-                        "ctrl" | "control" => Ok(0x11), // VK_CONTROL
-                        "alt" => Ok(0x12), // VK_MENU
-                        "shift" => Ok(0x10), // VK_SHIFT
+                        "ctrl" | "control" => Ok(0x11),          // VK_CONTROL
+                        "alt" => Ok(0x12),                       // VK_MENU
+                        "shift" => Ok(0x10),                     // VK_SHIFT
                         "win" | "windows" | "super" => Ok(0x5B), // VK_LWIN
-                        "tab" => Ok(0x09), // VK_TAB
-                        "enter" | "return" => Ok(0x0D), // VK_RETURN
-                        "esc" | "escape" => Ok(0x1B), // VK_ESCAPE
-                        "space" => Ok(0x20), // VK_SPACE
-                        "backspace" => Ok(0x08), // VK_BACK
-                        "delete" | "del" => Ok(0x2E), // VK_DELETE
+                        "tab" => Ok(0x09),                       // VK_TAB
+                        "enter" | "return" => Ok(0x0D),          // VK_RETURN
+                        "esc" | "escape" => Ok(0x1B),            // VK_ESCAPE
+                        "space" => Ok(0x20),                     // VK_SPACE
+                        "backspace" => Ok(0x08),                 // VK_BACK
+                        "delete" | "del" => Ok(0x2E),            // VK_DELETE
                         s if s.len() == 1 => {
                             // Single character - convert to uppercase ASCII
                             let c = s.chars().next().unwrap().to_ascii_uppercase();
