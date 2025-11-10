@@ -261,7 +261,10 @@ Return ONLY the JSON array."#,
                 "ui_click" | "ui_type" | "ui_screenshot" => 3,
                 "browser_navigate" | "browser_click" | "browser_extract" => 5,
                 "code_execute" | "code_analyze" => 10,
-                "db_query" | "db_execute" | "db_transaction_begin" | "db_transaction_commit"
+                "db_query"
+                | "db_execute"
+                | "db_transaction_begin"
+                | "db_transaction_commit"
                 | "db_transaction_rollback" => 8,
                 "api_call" | "api_upload" | "api_download" => 6,
                 "document_read" | "document_search" | "image_ocr" => 7,
@@ -479,11 +482,7 @@ Respond with ONLY "true" or "false"."#,
                     "{}. Tool '{}': {} ({}ms)\n",
                     i + 1,
                     result.tool_id,
-                    if result.success {
-                        "SUCCESS"
-                    } else {
-                        "FAILED"
-                    },
+                    if result.success { "SUCCESS" } else { "FAILED" },
                     result.execution_time_ms
                 ));
                 if let Some(error) = &result.error {
@@ -513,7 +512,8 @@ Respond with ONLY 'true' or 'false' (lowercase) based on whether the criterion i
 Your response:"#,
             criterion,
             context_summary,
-            serde_json::to_string_pretty(&context.current_state).unwrap_or_else(|_| "{}".to_string())
+            serde_json::to_string_pretty(&context.current_state)
+                .unwrap_or_else(|_| "{}".to_string())
         );
 
         // Use LLM to evaluate

@@ -1,3 +1,16 @@
+/**
+ * Ollama Provider - Local LLM Inference (Zero Cost)
+ *
+ * Supported Models (November 2025):
+ * - llama3.1:405b (Meta Llama 3.1 405B Instruct) - Most capable local model
+ * - llama3.1:70b, llama3.1:8b - Smaller variants
+ * - codellama:70b - Specialized for code
+ * - mistral:latest - Mistral 7B
+ * - mixtral:8x7b - Mixture of Experts
+ *
+ * Install models: `ollama pull llama3.1:405b`
+ * Note: Larger models (405B) require significant VRAM/RAM
+ */
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::router::{LLMProvider, LLMRequest, LLMResponse};
 use futures_util::Stream;

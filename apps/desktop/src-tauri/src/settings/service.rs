@@ -100,10 +100,9 @@ impl SettingsService {
 
     /// Encrypt a value
     fn encrypt(&self, plaintext: &str) -> Result<String, SettingsServiceError> {
-        let cipher = self
-            .cipher
-            .lock()
-            .map_err(|_| SettingsServiceError::Encryption("Failed to acquire cipher lock".into()))?;
+        let cipher = self.cipher.lock().map_err(|_| {
+            SettingsServiceError::Encryption("Failed to acquire cipher lock".into())
+        })?;
 
         // Generate random nonce
         let mut nonce_bytes = [0u8; 12];
@@ -125,10 +124,9 @@ impl SettingsService {
 
     /// Decrypt a value
     fn decrypt(&self, encrypted: &str) -> Result<String, SettingsServiceError> {
-        let cipher = self
-            .cipher
-            .lock()
-            .map_err(|_| SettingsServiceError::Encryption("Failed to acquire cipher lock".into()))?;
+        let cipher = self.cipher.lock().map_err(|_| {
+            SettingsServiceError::Encryption("Failed to acquire cipher lock".into())
+        })?;
 
         // Decode from base64
         let combined = general_purpose::STANDARD.decode(encrypted).map_err(|e| {

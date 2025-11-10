@@ -219,7 +219,11 @@ impl CodeGenerator {
             }
             // Truncate large files
             let truncated_content = if content.len() > 2000 {
-                format!("{}...\n[truncated {} chars]", &content[..2000], content.len() - 2000)
+                format!(
+                    "{}...\n[truncated {} chars]",
+                    &content[..2000],
+                    content.len() - 2000
+                )
             } else {
                 content.clone()
             };

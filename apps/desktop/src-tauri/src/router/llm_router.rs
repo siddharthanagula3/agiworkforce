@@ -87,6 +87,22 @@ impl LLMRouter {
         self.set_provider(Provider::Ollama, provider);
     }
 
+    pub fn set_xai(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::XAI, provider);
+    }
+
+    pub fn set_deepseek(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::DeepSeek, provider);
+    }
+
+    pub fn set_qwen(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Qwen, provider);
+    }
+
+    pub fn set_mistral(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Mistral, provider);
+    }
+
     pub fn has_provider(&self, provider: Provider) -> bool {
         self.providers
             .get(&provider)
@@ -145,6 +161,10 @@ impl LLMRouter {
             Provider::Anthropic,
             Provider::Google,
             Provider::Ollama,
+            Provider::XAI,
+            Provider::DeepSeek,
+            Provider::Qwen,
+            Provider::Mistral,
         ] {
             if order.iter().any(|c| c.provider == provider) {
                 continue;
