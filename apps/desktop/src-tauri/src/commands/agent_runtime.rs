@@ -149,5 +149,5 @@ pub async fn runtime_get_all_changes(
     state: State<'_, AgentRuntimeState>,
 ) -> Result<Vec<crate::agent::change_tracker::Change>, String> {
     let runtime = state.0.lock().await;
-    Ok(runtime.get_all_change_history())
+    Ok(runtime.get_all_change_history().await)
 }

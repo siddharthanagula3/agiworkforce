@@ -9,6 +9,8 @@ import type {
   AutomationElementInfo,
   AutomationOcrResult,
   AutomationQuery,
+  AutomationScreenshotOptions,
+  OverlayTypePayload,
 } from '../../types/automation';
 import type { CaptureResult } from '../../types/capture';
 
@@ -63,24 +65,26 @@ describe('automationStore', () => {
         {
           id: 'window1',
           name: 'Test Window',
-          type: 'window',
-          x: 0,
-          y: 0,
-          width: 800,
-          height: 600,
-          visible: true,
-          enabled: true,
+          className: 'WindowClass1',
+          controlType: 'window',
+          boundingRect: {
+            left: 0,
+            top: 0,
+            width: 800,
+            height: 600,
+          },
         },
         {
           id: 'window2',
           name: 'Another Window',
-          type: 'window',
-          x: 100,
-          y: 100,
-          width: 1024,
-          height: 768,
-          visible: true,
-          enabled: true,
+          className: 'WindowClass2',
+          controlType: 'window',
+          boundingRect: {
+            left: 100,
+            top: 100,
+            width: 1024,
+            height: 768,
+          },
         },
       ];
 
@@ -91,8 +95,8 @@ describe('automationStore', () => {
 
       const state = useAutomationStore.getState();
       expect(state.windows).toHaveLength(2);
-      expect(state.windows[0].name).toBe('Test Window');
-      expect(state.windows[1].name).toBe('Another Window');
+      expect(state.windows[0]?.name).toBe('Test Window');
+      expect(state.windows[1]?.name).toBe('Another Window');
       expect(state.loadingWindows).toBe(false);
       expect(state.error).toBeNull();
     });
@@ -114,20 +118,21 @@ describe('automationStore', () => {
     it('should search for automation elements', async () => {
       const query: AutomationQuery = {
         name: 'Submit Button',
-        type: 'button',
+        controlType: 'button',
       };
 
       const mockElements: AutomationElementInfo[] = [
         {
           id: 'btn1',
           name: 'Submit Button',
-          type: 'button',
-          x: 100,
-          y: 200,
-          width: 120,
-          height: 40,
-          visible: true,
-          enabled: true,
+          className: 'ButtonClass',
+          controlType: 'button',
+          boundingRect: {
+            left: 100,
+            top: 200,
+            width: 120,
+            height: 40,
+          },
         },
       ];
 
@@ -138,8 +143,8 @@ describe('automationStore', () => {
 
       const state = useAutomationStore.getState();
       expect(state.elements).toHaveLength(1);
-      expect(state.elements[0].name).toBe('Submit Button');
-      expect(state.elements[0].type).toBe('button');
+      expect(state.elements[0]?.name).toBe('Submit Button');
+      expect(state.elements[0]?.controlType).toBe('button');
       expect(state.loadingElements).toBe(false);
     });
 
@@ -275,11 +280,14 @@ describe('automationStore', () => {
   describe('Screenshot', () => {
     it('should capture fullscreen screenshot', async () => {
       const mockCapture: CaptureResult = {
+        id: 'capture1',
         path: '/tmp/screenshot.png',
-        width: 1920,
-        height: 1080,
-        format: 'png',
-        timestamp: Date.now(),
+        captureType: 'fullscreen',
+        metadata: {
+          width: 1920,
+          height: 1080,
+        },
+        createdAt: Date.now(),
       };
 
       const { automationScreenshot } = await import('../../api/automation');
@@ -294,16 +302,23 @@ describe('automationStore', () => {
     });
 
     it('should capture region screenshot', async () => {
-      const options = {
-        region: { x: 0, y: 0, width: 800, height: 600 },
+      const options: AutomationScreenshotOptions = {
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
       };
 
       const mockCapture: CaptureResult = {
+        id: 'capture2',
         path: '/tmp/region.png',
-        width: 800,
-        height: 600,
-        format: 'png',
-        timestamp: Date.now(),
+        captureType: 'region',
+        metadata: {
+          width: 800,
+          height: 600,
+          region: { x: 0, y: 0, width: 800, height: 600 },
+        },
+        createdAt: Date.now(),
       };
 
       const { automationScreenshot } = await import('../../api/automation');
@@ -312,8 +327,8 @@ describe('automationStore', () => {
       const result = await useAutomationStore.getState().screenshot(options);
 
       expect(automationScreenshot).toHaveBeenCalledWith(options);
-      expect(result.width).toBe(800);
-      expect(result.height).toBe(600);
+      expect(result.metadata.width).toBe(800);
+      expect(result.metadata.height).toBe(600);
     });
 
     it('should handle screenshot error', async () => {
@@ -333,13 +348,6 @@ describe('automationStore', () => {
       const mockOcrResult: AutomationOcrResult = {
         text: 'Hello World',
         confidence: 0.95,
-        regions: [
-          {
-            text: 'Hello World',
-            confidence: 0.95,
-            bbox: { x: 0, y: 0, width: 100, height: 20 },
-          },
-        ],
       };
 
       const { automationOcr } = await import('../../api/automation');
@@ -384,10 +392,10 @@ describe('automationStore', () => {
     });
 
     it('should emit overlay type event', async () => {
-      const payload = {
+      const payload: OverlayTypePayload = {
+        x: 100,
+        y: 200,
         text: 'Test input',
-        elementId: 'input1',
-        timestamp: Date.now(),
       };
 
       const { emitOverlayType } = await import('../../api/automation');
@@ -453,35 +461,40 @@ describe('automationStore', () => {
           {
             id: 'window1',
             name: 'Test',
-            type: 'window',
-            x: 0,
-            y: 0,
-            width: 800,
-            height: 600,
-            visible: true,
-            enabled: true,
+            className: 'WindowClass',
+            controlType: 'window',
+            boundingRect: {
+              left: 0,
+              top: 0,
+              width: 800,
+              height: 600,
+            },
           },
         ],
         elements: [
           {
             id: 'btn1',
             name: 'Button',
-            type: 'button',
-            x: 100,
-            y: 200,
-            width: 120,
-            height: 40,
-            visible: true,
-            enabled: true,
+            className: 'ButtonClass',
+            controlType: 'button',
+            boundingRect: {
+              left: 100,
+              top: 200,
+              width: 120,
+              height: 40,
+            },
           },
         ],
         error: 'Some error',
         lastScreenshot: {
+          id: 'capture3',
           path: '/tmp/test.png',
-          width: 800,
-          height: 600,
-          format: 'png',
-          timestamp: Date.now(),
+          captureType: 'fullscreen',
+          metadata: {
+            width: 800,
+            height: 600,
+          },
+          createdAt: Date.now(),
         },
       });
 

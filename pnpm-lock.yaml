@@ -248,8 +248,8 @@ importers:
         specifier: ^1.4.41
         version: 1.7.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       tailwind-merge:
-        specifier: ^2.3.0
-        version: 2.6.0
+        specifier: ^3.3.1
+        version: 3.4.0
       use-debounce:
         specifier: ^10.0.0
         version: 10.0.6(react@18.3.1)
@@ -375,14 +375,14 @@ importers:
         specifier: ^16.0.2
         version: 16.0.2(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1))
       expo-device:
-        specifier: ^6.0.1
-        version: 6.0.2(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1))
+        specifier: ^8.0.9
+        version: 8.0.9(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1))
       expo-notifications:
         specifier: ^0.28.18
         version: 0.28.19(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1))
       expo-secure-store:
-        specifier: ^13.0.1
-        version: 13.0.2(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1))
+        specifier: ^15.0.7
+        version: 15.0.7(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1))
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -2347,7 +2347,7 @@ packages:
       {
         integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==,
       }
-    engines: { node: '>=0.10.0' }
+    engines: { '0': node >=0.10.0 }
 
   '@expo/cli@0.18.31':
     resolution:
@@ -7238,10 +7238,10 @@ packages:
     peerDependencies:
       expo: '*'
 
-  expo-device@6.0.2:
+  expo-device@8.0.9:
     resolution:
       {
-        integrity: sha512-sCt91CuTmAuMXX4SlFOn4lIos2UIr8vb0jDstDDZXys6kErcj0uynC7bQAMreU5uRUTKMAl4MAMpKt9ufCXPBw==,
+        integrity: sha512-XqRpaljDNAYZGZzMpC+b9KZfzfydtkwx3pJAp6ODDH+O/5wjAw+mLc5wQMGJCx8/aqVmMsAokec7iebxDPFZDA==,
       }
     peerDependencies:
       expo: '*'
@@ -7299,10 +7299,10 @@ packages:
     peerDependencies:
       expo: '*'
 
-  expo-secure-store@13.0.2:
+  expo-secure-store@15.0.7:
     resolution:
       {
-        integrity: sha512-3QYgoneo8p8yeeBPBiAfokNNc2xq6+n8+Ob4fAlErEcf4H7Y72LH+K/dx0nQyWau2ZKZUXBxyyfuHFyVKrEVLg==,
+        integrity: sha512-9q7+G1Zxr5P6J5NRIlm86KulvmYwc6UnQlYPjQLDu1drDnerz6AT6l884dPu29HgtDTn4rR0heYeeGFhMKM7/Q==,
       }
     peerDependencies:
       expo: '*'
@@ -12591,6 +12591,12 @@ packages:
     resolution:
       {
         integrity: sha512-P+Vu1qXfzediirmHOC3xKGAYeZtPcV9g76X+xg2FD4tYgR71ewMA35Y3sCz3zhiN/dwefRpJX0yBcgwi1fXNQA==,
+      }
+
+  tailwind-merge@3.4.0:
+    resolution:
+      {
+        integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==,
       }
 
   tailwindcss-animate@1.0.7:
@@ -18760,7 +18766,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  expo-device@6.0.2(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)):
+  expo-device@8.0.9(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)):
     dependencies:
       expo: 51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)
       ua-parser-js: 0.7.41
@@ -18811,7 +18817,7 @@ snapshots:
       - encoding
       - supports-color
 
-  expo-secure-store@13.0.2(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)):
+  expo-secure-store@15.0.7(expo@51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)):
     dependencies:
       expo: 51.0.39(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(react-native@0.74.3(@babel/core@7.28.5)(@babel/preset-env@7.28.5(@babel/core@7.28.5))(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)
 
@@ -22401,6 +22407,8 @@ snapshots:
   symbol-tree@3.2.4: {}
 
   tailwind-merge@2.6.0: {}
+
+  tailwind-merge@3.4.0: {}
 
   tailwindcss-animate@1.0.7(tailwindcss@3.4.18(tsx@4.20.6)(yaml@2.8.1)):
     dependencies:
