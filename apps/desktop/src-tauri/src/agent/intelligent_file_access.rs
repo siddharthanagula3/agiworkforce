@@ -200,14 +200,10 @@ impl IntelligentFileAccess {
 
         // Use LLM to analyze (if available)
         if let Some(ref router) = self.llm_router {
-            // Use vision-capable LLM to analyze screenshot
-            // Note: Currently uses text-based analysis with OCR text
-            // Future enhancement: Pass actual screenshot image to vision-capable models
-            match self
             // Use LLM with OCR text for analysis
             // Note: Vision-capable models (GPT-4V, Claude 3+) can process images directly
             // Current implementation uses text-based analysis with OCR extraction
-            let analysis_text = self
+            match self
                 .analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text)
                 .await
             {
@@ -304,7 +300,9 @@ Provide your analysis in a clear, structured format."#
         }
 
         // Invoke LLM
-        let outcome = router.invoke_candidate(&candidates[0], &llm_request).await?;
+        let outcome = router
+            .invoke_candidate(&candidates[0], &llm_request)
+            .await?;
         let analysis = outcome.response.content;
 
         tracing::debug!(

@@ -82,12 +82,29 @@ pub struct ToolCall {
     pub arguments: String, // JSON string
 }
 
+/// Task types for intelligent model routing
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaskType {
+    FastCompletion,
+    CodeGeneration,
+    ComplexReasoning,
+    Chat,
+    Vision,
+    LongContext,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Provider {
+    // Existing providers
     OpenAI,
     Anthropic,
     Google,
     Ollama,
+    // NEW: 2025 frontier providers
+    XAI,      // Grok 4, Grok 3
+    DeepSeek, // DeepSeek-V3, DeepSeek-Coder-V2
+    Qwen,     // Qwen2.5-Max, Qwen3-Coder (Alibaba)
+    Mistral,  // Mistral Large 2, Codestral
 }
 
 impl Provider {
@@ -98,6 +115,10 @@ impl Provider {
             Provider::Anthropic => "anthropic",
             Provider::Google => "google",
             Provider::Ollama => "ollama",
+            Provider::XAI => "xai",
+            Provider::DeepSeek => "deepseek",
+            Provider::Qwen => "qwen",
+            Provider::Mistral => "mistral",
         }
     }
 
@@ -108,7 +129,72 @@ impl Provider {
             "anthropic" => Some(Provider::Anthropic),
             "google" => Some(Provider::Google),
             "ollama" => Some(Provider::Ollama),
+            "xai" | "grok" => Some(Provider::XAI),
+            "deepseek" => Some(Provider::DeepSeek),
+            "qwen" | "alibaba" => Some(Provider::Qwen),
+            "mistral" | "mistralai" => Some(Provider::Mistral),
             _ => None,
+        }
+    }
+
+    /// Get the default model for this provider
+    pub fn default_model(&self) -> &'static str {
+        match self {
+            Provider::OpenAI => "gpt-5",
+            Provider::Anthropic => "claude-sonnet-4-5",
+            Provider::Google => "gemini-2.5-pro",
+            Provider::Ollama => "llama3.1",
+            Provider::XAI => "grok-4",
+            Provider::DeepSeek => "deepseek-chat",
+            Provider::Qwen => "qwen-max-2025-01-25",
+            Provider::Mistral => "mistral-large-2",
+        }
+    }
+
+    /// Get recommended model for specific task type
+    pub fn get_model_for_task(&self, task: TaskType) -> &'static str {
+        match (self, task) {
+            // OpenAI routing
+            (Provider::OpenAI, TaskType::FastCompletion) => "gpt-5-mini",
+            (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5-codex",
+            (Provider::OpenAI, TaskType::ComplexReasoning) => "o3",
+            (Provider::OpenAI, TaskType::Chat) => "gpt-5",
+            (Provider::OpenAI, TaskType::Vision) => "gpt-5-vision",
+            (Provider::OpenAI, TaskType::LongContext) => "gpt-5",
+
+            // Anthropic routing
+            (Provider::Anthropic, TaskType::FastCompletion) => "claude-haiku-4-5",
+            (Provider::Anthropic, TaskType::CodeGeneration) => "claude-sonnet-4-5",
+            (Provider::Anthropic, TaskType::ComplexReasoning) => "claude-opus-4-1",
+            (Provider::Anthropic, _) => "claude-sonnet-4-5",
+
+            // Google routing
+            (Provider::Google, TaskType::FastCompletion) => "gemini-2.5-flash",
+            (Provider::Google, TaskType::CodeGeneration) => "gemini-2.5-pro",
+            (Provider::Google, TaskType::Vision) => "gemini-2.5-computer-use",
+            (Provider::Google, TaskType::LongContext) => "gemini-2.5-pro",
+            (Provider::Google, _) => "gemini-2.5-flash",
+
+            // XAI routing
+            (Provider::XAI, TaskType::FastCompletion) => "grok-3",
+            (Provider::XAI, _) => "grok-4",
+
+            // DeepSeek routing
+            (Provider::DeepSeek, TaskType::CodeGeneration) => "deepseek-coder",
+            (Provider::DeepSeek, TaskType::ComplexReasoning) => "deepseek-reasoner",
+            (Provider::DeepSeek, _) => "deepseek-chat",
+
+            // Qwen routing
+            (Provider::Qwen, TaskType::CodeGeneration) => "qwen3-coder",
+            (Provider::Qwen, _) => "qwen-max-2025-01-25",
+
+            // Mistral routing
+            (Provider::Mistral, TaskType::CodeGeneration) => "codestral-latest",
+            (Provider::Mistral, _) => "mistral-large-2",
+
+            // Ollama defaults
+            (Provider::Ollama, TaskType::CodeGeneration) => "codellama",
+            (Provider::Ollama, _) => "llama3.1",
         }
     }
 }

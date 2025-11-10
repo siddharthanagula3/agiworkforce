@@ -152,22 +152,28 @@ mod tests {
     #[test]
     fn detect_type_rejects_legacy_doc() {
         let err = DocumentManager::detect_type("legacy.doc").unwrap_err();
-        match err {
-            Error::Generic(message) => {
-                assert!(message.contains(".doc"));
-            }
-            _ => panic!("Expected generic error for legacy doc"),
+        if let Error::Generic(message) = err {
+            assert!(message.contains(".doc"));
+        } else {
+            assert!(
+                false,
+                "Expected generic error for legacy doc, got: {:?}",
+                err
+            );
         }
     }
 
     #[test]
     fn detect_type_rejects_unknown_extension() {
         let err = DocumentManager::detect_type("archive.zip").unwrap_err();
-        match err {
-            Error::Generic(message) => {
-                assert!(message.contains("Unsupported"));
-            }
-            _ => panic!("Expected generic error for unsupported extension"),
+        if let Error::Generic(message) = err {
+            assert!(message.contains("Unsupported"));
+        } else {
+            assert!(
+                false,
+                "Expected generic error for unsupported extension, got: {:?}",
+                err
+            );
         }
     }
 }
