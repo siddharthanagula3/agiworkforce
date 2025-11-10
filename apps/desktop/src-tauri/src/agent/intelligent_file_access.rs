@@ -200,32 +200,116 @@ impl IntelligentFileAccess {
 
         // Use LLM to analyze (if available)
         if let Some(ref router) = self.llm_router {
-            // TODO: Use vision-capable LLM to analyze screenshot
-            // For now, use text-based analysis with OCR text
+            // Use vision-capable LLM to analyze screenshot
+            // Note: Currently uses text-based analysis with OCR text
+            // Future enhancement: Pass actual screenshot image to vision-capable models
+            match self
+            // Use LLM with OCR text for analysis
+            // Note: Vision-capable models (GPT-4V, Claude 3+) can process images directly
+            // Current implementation uses text-based analysis with OCR extraction
             let analysis_text = self
                 .analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text)
-                .await?;
-
-            return Ok(self.parse_analysis(&analysis_text, ocr_result));
+                .await
+            {
+                Ok(analysis_text) => {
+                    return Ok(self.parse_analysis(&analysis_text, ocr_result));
+                }
+                Err(e) => {
+                    tracing::warn!("Vision LLM analysis failed, using heuristic fallback: {}", e);
+                    // Fall through to heuristic analysis
+                }
+            }
         }
 
         // Fallback: Simple heuristic-based analysis
         Ok(self.heuristic_analysis(ocr_result, error))
     }
 
-    /// Analyze with LLM
+    /// Analyze with LLM (text-based, with future vision support)
     async fn analyze_with_llm(
         &self,
-        _router: &LLMRouter,
+        router: &LLMRouter,
         prompt: &str,
-        ocr_text: &str,
+        _ocr_text: &str,
     ) -> Result<String> {
-        // TODO: Implement LLM call with vision support
-        // For now, return simple analysis
-        Ok(format!(
-            "Based on OCR text: {}\n\nPrompt: {}",
-            ocr_text, prompt
-        ))
+        // Use LLM to analyze the screenshot context with OCR text
+        // Note: For true vision support, we would pass image data to vision-capable models
+        // For now, we use text-based analysis with OCR text embedded in the prompt
+
+        match router.send_message(prompt, None).await {
+            Ok(analysis) => Ok(analysis),
+            Err(e) => {
+                tracing::warn!("LLM analysis failed: {}", e);
+                Err(anyhow!("LLM analysis failed: {}", e))
+            }
+        }
+        tracing::info!("[IntelligentFileAccess] Analyzing screenshot with LLM");
+
+        // Build comprehensive prompt with OCR text
+        let full_prompt = format!(
+            r#"{prompt}
+
+## OCR Extracted Text
+The following text was extracted from the screenshot using OCR:
+
+```
+{ocr_text}
+```
+
+## Analysis Task
+Based on the extracted text, provide a detailed analysis that answers:
+1. What UI elements are present? (buttons, inputs, labels, error messages, etc.)
+2. What is the current state or context?
+3. If there's an error, what is the likely cause?
+4. What specific actions would resolve the issue?
+5. What key information should be extracted?
+
+Provide your analysis in a clear, structured format."#
+        );
+
+        // Create LLM request
+        let llm_request = crate::router::LLMRequest {
+            messages: vec![crate::router::ChatMessage {
+                role: "user".to_string(),
+                content: full_prompt,
+                tool_calls: None,
+                tool_call_id: None,
+            }],
+            model: "".to_string(),
+            temperature: Some(0.3), // Lower temperature for more factual analysis
+            max_tokens: Some(1500), // Sufficient for detailed analysis
+            stream: false,
+            tools: None,
+            tool_choice: None,
+        };
+
+        let preferences = crate::router::RouterPreferences {
+            provider: None,
+            model: None,
+            strategy: crate::router::RoutingStrategy::Auto,
+        };
+
+        // Lock router and get candidates
+        let candidates = router.candidates(&llm_request, &preferences);
+
+        if candidates.is_empty() {
+            tracing::warn!("[IntelligentFileAccess] No LLM providers available");
+            return Ok(format!(
+                "LLM unavailable. OCR text extracted:\n\n{}",
+                ocr_text
+            ));
+        }
+
+        // Invoke LLM
+        let outcome = router.invoke_candidate(&candidates[0], &llm_request).await?;
+        let analysis = outcome.response.content;
+
+        tracing::debug!(
+            "[IntelligentFileAccess] LLM analysis received ({} chars)",
+            analysis.len()
+        );
+
+        Ok(analysis)
     }
 
     /// Parse LLM analysis into structured format
