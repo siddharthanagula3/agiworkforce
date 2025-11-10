@@ -35,6 +35,7 @@ pub mod terminal;
 pub mod tray;
 pub mod voice;
 pub mod window;
+pub mod workspace;
 
 pub use agent::*;
 pub use agent_runtime::*;
@@ -73,3 +74,4 @@ pub use terminal::*;
 pub use tray::*;
 pub use voice::*;
 pub use window::*;
+pub use workspace::*;
