@@ -208,6 +208,14 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
                   <APIKeyField provider="google" label="Google AI API Key" placeholder="AIza..." />
 
+                  <APIKeyField provider="xai" label="XAI API Key" placeholder="xai-..." />
+
+                  <APIKeyField provider="deepseek" label="DeepSeek API Key" placeholder="sk-..." />
+
+                  <APIKeyField provider="qwen" label="Qwen API Key" placeholder="sk-..." />
+
+                  <APIKeyField provider="mistral" label="Mistral API Key" placeholder="..." />
+
                   <div className="rounded-lg border border-border bg-muted/50 p-4">
                     <div className="flex items-start gap-3">
                       <div className="rounded-md bg-primary/10 p-2">
@@ -248,6 +256,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         <SelectItem value="anthropic">Anthropic</SelectItem>
                         <SelectItem value="google">Google AI</SelectItem>
                         <SelectItem value="ollama">Ollama (Local)</SelectItem>
+                        <SelectItem value="xai">XAI (Grok)</SelectItem>
+                        <SelectItem value="deepseek">DeepSeek</SelectItem>
+                        <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
+                        <SelectItem value="mistral">Mistral AI</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
@@ -319,10 +331,79 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="llama3.3">Llama 3.3</SelectItem>
                           <SelectItem value="llama3">Llama 3</SelectItem>
-                          <SelectItem value="llama2">Llama 2</SelectItem>
-                          <SelectItem value="mistral">Mistral</SelectItem>
+                          <SelectItem value="qwen2.5">Qwen 2.5</SelectItem>
+                          <SelectItem value="deepseek-coder">DeepSeek Coder</SelectItem>
                           <SelectItem value="codellama">Code Llama</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="xaiModel">XAI Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.xai}
+                        onValueChange={(value) => setDefaultModel('xai', value)}
+                      >
+                        <SelectTrigger id="xaiModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="grok-4">Grok 4</SelectItem>
+                          <SelectItem value="grok-3">Grok 3</SelectItem>
+                          <SelectItem value="grok-2">Grok 2</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="deepseekModel">DeepSeek Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.deepseek}
+                        onValueChange={(value) => setDefaultModel('deepseek', value)}
+                      >
+                        <SelectTrigger id="deepseekModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="deepseek-chat">DeepSeek V3.2</SelectItem>
+                          <SelectItem value="deepseek-coder">DeepSeek Coder V2</SelectItem>
+                          <SelectItem value="deepseek-reasoner">DeepSeek Reasoner</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="qwenModel">Qwen Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.qwen}
+                        onValueChange={(value) => setDefaultModel('qwen', value)}
+                      >
+                        <SelectTrigger id="qwenModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="qwen-max">Qwen 2.5 Max</SelectItem>
+                          <SelectItem value="qwen-plus">Qwen 2.5 Plus</SelectItem>
+                          <SelectItem value="qwen-coder">Qwen 3 Coder</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="mistralModel">Mistral Model</Label>
+                      <Select
+                        value={llmConfig.defaultModels.mistral}
+                        onValueChange={(value) => setDefaultModel('mistral', value)}
+                      >
+                        <SelectTrigger id="mistralModel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mistral-large-latest">Mistral Large 2</SelectItem>
+                          <SelectItem value="codestral-latest">Codestral</SelectItem>
+                          <SelectItem value="mistral-small-latest">Mistral Small</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
