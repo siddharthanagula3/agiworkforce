@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 13;
+const CURRENT_VERSION: i32 = 14;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -93,6 +93,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 13 {
         apply_migration_v13(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [13])?;
+    }
+
+    if current_version < 14 {
+        apply_migration_v14(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [14])?;
     }
 
     Ok(())
@@ -1157,6 +1162,39 @@ fn ensure_column(conn: &Connection, table: &str, column: &str, definition: &str)
             [],
         )?;
     }
+
+    Ok(())
+}
+
+/// Migration v14: Performance indexes for common queries
+fn apply_migration_v14(conn: &Connection) -> Result<()> {
+    // Composite index for paginated message loading (conversation_id + created_at)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+         ON messages(conversation_id, created_at DESC)",
+        [],
+    )?;
+
+    // Composite index for provider usage analytics filtering (provider + model + timestamp)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_provider_usage_filters
+         ON provider_usage(provider, model, timestamp DESC)",
+        [],
+    )?;
+
+    // Index for conversation searches by title
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_title
+         ON conversations(title)",
+        [],
+    )?;
+
+    // Index for audit log filtering by action type
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_action
+         ON audit_log(action, timestamp DESC)",
+        [],
+    )?;
 
     Ok(())
 }
