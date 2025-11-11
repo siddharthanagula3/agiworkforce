@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "expo": "^51.0.8",
+    "expo": "^54.0.23",
     "expo-barcode-scanner": "^13.0.1",
     "expo-constants": "^16.0.2",
     "expo-device": "^8.0.9",
