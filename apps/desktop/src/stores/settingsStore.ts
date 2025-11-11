@@ -2,7 +2,15 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type Provider = 'openai' | 'anthropic' | 'google' | 'ollama' | 'xai' | 'deepseek' | 'qwen' | 'mistral';
+export type Provider =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'ollama'
+  | 'xai'
+  | 'deepseek'
+  | 'qwen'
+  | 'mistral';
 export type Theme = 'light' | 'dark' | 'system';
 
 interface APIKeys {
@@ -257,8 +265,26 @@ export const useSettingsStore = create<SettingsState>()(
           }>('settings_load');
 
           // Load API keys from keyring
-          const providers: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
-          const apiKeys: APIKeys = { openai: '', anthropic: '', google: '', ollama: '' };
+          const providers: Provider[] = [
+            'openai',
+            'anthropic',
+            'google',
+            'ollama',
+            'xai',
+            'deepseek',
+            'qwen',
+            'mistral',
+          ];
+          const apiKeys: APIKeys = {
+            openai: '',
+            anthropic: '',
+            google: '',
+            ollama: '',
+            xai: '',
+            deepseek: '',
+            qwen: '',
+            mistral: '',
+          };
 
           for (const provider of providers) {
             try {
