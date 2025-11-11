@@ -12,6 +12,7 @@ import { useChatStore } from './stores/chatStore';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import ErrorBoundary from './components/ErrorBoundary';
 import {
   Plus,
   History,
@@ -211,11 +212,7 @@ const App = () => {
   const isOverlayMode =
     typeof window !== 'undefined' && window.location.search.includes('mode=overlay');
 
-  if (isOverlayMode) {
-    return <VisualizationLayer />;
-  }
-
-  return <DesktopShell />;
+  return <ErrorBoundary>{isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}</ErrorBoundary>;
 };
 
 export default App;
