@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
 import { TokenCounter } from './TokenCounter';
@@ -71,67 +71,83 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     }, 0);
   }, [messages]);
 
-  const handleSendMessage = async (
-    content: string,
-    attachments?: File[],
-    captures?: CaptureResult[],
-    routing?: ChatRoutingPreferences,
-    contextItems?: unknown[],
-  ) => {
-    await sendMessage(content, attachments, captures, routing, contextItems);
-  };
+  const handleSendMessage = useCallback(
+    async (
+      content: string,
+      attachments?: File[],
+      captures?: CaptureResult[],
+      routing?: ChatRoutingPreferences,
+      contextItems?: unknown[],
+    ) => {
+      await sendMessage(content, attachments, captures, routing, contextItems);
+    },
+    [sendMessage],
+  );
 
   // Convert backend data to UI format for components
-  const messagesUI = messages.map((msg) => ({
-    id: msg.id.toString(),
-    role: msg.role,
-    content: msg.content,
-    timestamp: msg.timestamp,
-    tokens: msg.tokens,
-    cost: msg.cost,
-    sourceId: msg.id,
-  }));
+  const messagesUI = useMemo(
+    () =>
+      messages.map((msg) => ({
+        id: msg.id.toString(),
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        tokens: msg.tokens,
+        cost: msg.cost,
+        sourceId: msg.id,
+      })),
+    [messages],
+  );
 
-  const handleRegenerateMessage = async (targetMessage: MessagePresentation) => {
-    const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
-    if (Number.isNaN(sourceId)) {
-      return;
-    }
+  const handleRegenerateMessage = useCallback(
+    async (targetMessage: MessagePresentation) => {
+      const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
+      if (Number.isNaN(sourceId)) {
+        return;
+      }
 
-    const targetIndex = messages.findIndex((msg) => msg.id === sourceId);
-    if (targetIndex === -1) {
-      return;
-    }
+      const targetIndex = messages.findIndex((msg) => msg.id === sourceId);
+      if (targetIndex === -1) {
+        return;
+      }
 
-    const previousUserMessage = [...messages.slice(0, targetIndex)]
-      .reverse()
-      .find((msg) => msg.role === 'user');
+      const previousUserMessage = [...messages.slice(0, targetIndex)]
+        .reverse()
+        .find((msg) => msg.role === 'user');
 
-    if (!previousUserMessage) {
-      console.warn('[ChatInterface] Unable to find user message to regenerate from.');
-      return;
-    }
+      if (!previousUserMessage) {
+        console.warn('[ChatInterface] Unable to find user message to regenerate from.');
+        return;
+      }
 
-    await sendMessage(previousUserMessage.content);
-  };
+      await sendMessage(previousUserMessage.content);
+    },
+    [messages, sendMessage],
+  );
 
-  const handleEditMessage = async (targetMessage: MessagePresentation, content: string) => {
-    const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
-    if (Number.isNaN(sourceId)) {
-      return;
-    }
+  const handleEditMessage = useCallback(
+    async (targetMessage: MessagePresentation, content: string) => {
+      const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
+      if (Number.isNaN(sourceId)) {
+        return;
+      }
 
-    await editMessage(sourceId, content);
-  };
+      await editMessage(sourceId, content);
+    },
+    [editMessage],
+  );
 
-  const handleDeleteMessage = async (targetMessage: MessagePresentation) => {
-    const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
-    if (Number.isNaN(sourceId)) {
-      return;
-    }
+  const handleDeleteMessage = useCallback(
+    async (targetMessage: MessagePresentation) => {
+      const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
+      if (Number.isNaN(sourceId)) {
+        return;
+      }
 
-    await deleteMessage(sourceId);
-  };
+      await deleteMessage(sourceId);
+    },
+    [deleteMessage],
+  );
 
   return (
     <div className={cn('flex h-full flex-col min-h-0 min-w-0', className)}>
