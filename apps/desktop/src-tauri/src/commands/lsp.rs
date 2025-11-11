@@ -81,14 +81,8 @@ impl LSPClient {
             .spawn()
             .map_err(|e| format!("Failed to start LSP server: {}", e))?;
 
-        let stdin = process
-            .stdin
-            .take()
-            .ok_or("Failed to get stdin")?;
-        let stdout = process
-            .stdout
-            .take()
-            .ok_or("Failed to get stdout")?;
+        let stdin = process.stdin.take().ok_or("Failed to get stdin")?;
+        let stdout = process.stdout.take().ok_or("Failed to get stdout")?;
 
         let mut client = LSPClient {
             process,
@@ -158,11 +152,7 @@ impl LSPClient {
 
     async fn send_request(&mut self, request: &serde_json::Value) -> Result<(), String> {
         let content = request.to_string();
-        let message = format!(
-            "Content-Length: {}\r\n\r\n{}",
-            content.len(),
-            content
-        );
+        let message = format!("Content-Length: {}\r\n\r\n{}", content.len(), content);
 
         self.stdin
             .write_all(message.as_bytes())
@@ -179,11 +169,7 @@ impl LSPClient {
 
     async fn send_notification(&mut self, notification: &serde_json::Value) -> Result<(), String> {
         let content = notification.to_string();
-        let message = format!(
-            "Content-Length: {}\r\n\r\n{}",
-            content.len(),
-            content
-        );
+        let message = format!("Content-Length: {}\r\n\r\n{}", content.len(), content);
 
         self.stdin
             .write_all(message.as_bytes())
@@ -226,11 +212,9 @@ impl LSPClient {
             .await
             .map_err(|e| format!("Failed to read content: {}", e))?;
 
-        let content = String::from_utf8(buffer)
-            .map_err(|e| format!("Invalid UTF-8: {}", e))?;
+        let content = String::from_utf8(buffer).map_err(|e| format!("Invalid UTF-8: {}", e))?;
 
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Invalid JSON: {}", e))
+        serde_json::from_str(&content).map_err(|e| format!("Invalid JSON: {}", e))
     }
 
     pub async fn shutdown(&mut self) -> Result<(), String> {
@@ -308,8 +292,8 @@ impl LSPClient {
 
         if let Some(result) = response.get("result") {
             if let Some(items) = result.get("items") {
-                let completion_items: Vec<CompletionItem> = serde_json::from_value(items.clone())
-                    .unwrap_or_default();
+                let completion_items: Vec<CompletionItem> =
+                    serde_json::from_value(items.clone()).unwrap_or_default();
                 return Ok(completion_items);
             }
         }
@@ -344,8 +328,8 @@ impl LSPClient {
 
         if let Some(result) = response.get("result") {
             if !result.is_null() {
-                let hover: Hover = serde_json::from_value(result.clone())
-                    .unwrap_or_else(|_| Hover {
+                let hover: Hover =
+                    serde_json::from_value(result.clone()).unwrap_or_else(|_| Hover {
                         contents: String::new(),
                         range: None,
                     });
@@ -383,16 +367,22 @@ impl LSPClient {
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
-                let locations: Vec<Location> = serde_json::from_value(result.clone())
-                    .unwrap_or_default();
+                let locations: Vec<Location> =
+                    serde_json::from_value(result.clone()).unwrap_or_default();
                 return Ok(locations);
             } else if !result.is_null() {
-                let location: Location = serde_json::from_value(result.clone())
-                    .unwrap_or_else(|_| Location {
+                let location: Location =
+                    serde_json::from_value(result.clone()).unwrap_or_else(|_| Location {
                         uri: String::new(),
                         range: Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position { line: 0, character: 0 },
+                            start: Position {
+                                line: 0,
+                                character: 0,
+                            },
+                            end: Position {
+                                line: 0,
+                                character: 0,
+                            },
                         },
                     });
                 return Ok(vec![location]);
@@ -432,8 +422,8 @@ impl LSPClient {
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
-                let locations: Vec<Location> = serde_json::from_value(result.clone())
-                    .unwrap_or_default();
+                let locations: Vec<Location> =
+                    serde_json::from_value(result.clone()).unwrap_or_default();
                 return Ok(locations);
             }
         }
@@ -463,10 +453,7 @@ fn get_lsp_command(language: &str) -> Result<(String, Vec<String>), String> {
         )),
         "python" => Ok(("pylsp".to_string(), vec![])),
         "go" => Ok(("gopls".to_string(), vec![])),
-        "java" => Ok((
-            "jdtls".to_string(),
-            vec![],
-        )),
+        "java" => Ok(("jdtls".to_string(), vec![])),
         "cpp" | "c" => Ok(("clangd".to_string(), vec![])),
         _ => Err(format!("Unsupported language: {}", language)),
     }
@@ -512,9 +499,7 @@ pub async fn lsp_did_open(
     state: tauri::State<'_, Arc<LSPState>>,
 ) -> Result<(), String> {
     let clients = state.clients.lock().await;
-    let client_arc = clients
-        .get(&language)
-        .ok_or("LSP server not started")?;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
     client
@@ -531,9 +516,7 @@ pub async fn lsp_completion(
     state: tauri::State<'_, Arc<LSPState>>,
 ) -> Result<Vec<CompletionItem>, String> {
     let clients = state.clients.lock().await;
-    let client_arc = clients
-        .get(&language)
-        .ok_or("LSP server not started")?;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
     client.text_document_completion(&uri, line, character).await
@@ -548,9 +531,7 @@ pub async fn lsp_hover(
     state: tauri::State<'_, Arc<LSPState>>,
 ) -> Result<Option<Hover>, String> {
     let clients = state.clients.lock().await;
-    let client_arc = clients
-        .get(&language)
-        .ok_or("LSP server not started")?;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
     client.text_document_hover(&uri, line, character).await
@@ -565,9 +546,7 @@ pub async fn lsp_definition(
     state: tauri::State<'_, Arc<LSPState>>,
 ) -> Result<Vec<Location>, String> {
     let clients = state.clients.lock().await;
-    let client_arc = clients
-        .get(&language)
-        .ok_or("LSP server not started")?;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
     client.text_document_definition(&uri, line, character).await
@@ -582,9 +561,7 @@ pub async fn lsp_references(
     state: tauri::State<'_, Arc<LSPState>>,
 ) -> Result<Vec<Location>, String> {
     let clients = state.clients.lock().await;
-    let client_arc = clients
-        .get(&language)
-        .ok_or("LSP server not started")?;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
     client.text_document_references(&uri, line, character).await
