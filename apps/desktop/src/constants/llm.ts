@@ -5,6 +5,10 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   anthropic: 'Anthropic',
   google: 'Google',
   ollama: 'Ollama',
+  xai: 'xAI',
+  deepseek: 'DeepSeek',
+  qwen: 'Qwen',
+  mistral: 'Mistral',
 };
 
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
@@ -25,9 +29,31 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
     { value: 'llama3', label: 'Llama 3 (local)' },
     { value: 'mistral', label: 'Mistral (local)' },
   ],
+  xai: [{ value: 'grok-beta', label: 'Grok Beta' }],
+  deepseek: [
+    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+    { value: 'deepseek-coder', label: 'DeepSeek Coder' },
+  ],
+  qwen: [
+    { value: 'qwen-turbo', label: 'Qwen Turbo' },
+    { value: 'qwen-plus', label: 'Qwen Plus' },
+  ],
+  mistral: [
+    { value: 'mistral-small', label: 'Mistral Small' },
+    { value: 'mistral-medium', label: 'Mistral Medium' },
+  ],
 };
 
-export const PROVIDERS_IN_ORDER: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
+export const PROVIDERS_IN_ORDER: Provider[] = [
+  'openai',
+  'anthropic',
+  'google',
+  'ollama',
+  'xai',
+  'deepseek',
+  'qwen',
+  'mistral',
+];
 
 /**
  * Model-specific context window sizes (in tokens)
