@@ -131,6 +131,31 @@ function applyPinnedState(
   );
 }
 
+function conversationsMatchPinnedOrder(current: ConversationUI[], next: ConversationUI[]): boolean {
+  if (current.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < current.length; index += 1) {
+    const currentConversation = current[index];
+    const nextConversation = next[index];
+
+    if (!nextConversation) {
+      return false;
+    }
+
+    if (currentConversation.id !== nextConversation.id) {
+      return false;
+    }
+
+    if (Boolean(currentConversation.pinned) !== Boolean(nextConversation.pinned)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 const storageFallback: Storage = {
   get length() {
     return 0;
@@ -609,6 +634,19 @@ export const useChatStore = create<ChatState>()(
     },
   ),
 );
+
+useChatStore.subscribe((state, previous) => {
+  if (state.pinnedConversations === previous.pinnedConversations) {
+    return;
+  }
+
+  const pinnedSet = new Set(state.pinnedConversations);
+  const resorted = applyPinnedState(state.conversations, pinnedSet);
+
+  if (!conversationsMatchPinnedOrder(state.conversations, resorted)) {
+    useChatStore.setState({ conversations: resorted });
+  }
+});
 
 if (typeof window !== 'undefined') {
   void initializeStreamListeners();
