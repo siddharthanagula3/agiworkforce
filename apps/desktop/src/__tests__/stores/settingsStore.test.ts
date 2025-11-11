@@ -20,6 +20,10 @@ describe('settingsStore', () => {
         anthropic: '',
         google: '',
         ollama: '',
+        xai: '',
+        deepseek: '',
+        qwen: '',
+        mistral: '',
       },
       llmConfig: {
         defaultProvider: 'openai',
@@ -30,6 +34,10 @@ describe('settingsStore', () => {
           anthropic: 'claude-3-5-sonnet-20241022',
           google: 'gemini-1.5-flash',
           ollama: 'llama3',
+          xai: 'grok-beta',
+          deepseek: 'deepseek-chat',
+          qwen: 'qwen-turbo',
+          mistral: 'mistral-small',
         },
       },
       windowPreferences: {
@@ -151,9 +159,7 @@ describe('settingsStore', () => {
       const { invoke } = await import('@tauri-apps/api/core');
       (invoke as any).mockRejectedValue(new Error('Save failed'));
 
-      await expect(
-        useSettingsStore.getState().setAPIKey('openai', 'sk-test123'),
-      ).rejects.toThrow();
+      await expect(useSettingsStore.getState().setAPIKey('openai', 'sk-test123')).rejects.toThrow();
 
       const state = useSettingsStore.getState();
       expect(state.error).toBe('Error: Save failed');
@@ -215,9 +221,7 @@ describe('settingsStore', () => {
       const { invoke } = await import('@tauri-apps/api/core');
       (invoke as any).mockRejectedValue(new Error('Provider error'));
 
-      await expect(
-        useSettingsStore.getState().setDefaultProvider('anthropic'),
-      ).rejects.toThrow();
+      await expect(useSettingsStore.getState().setDefaultProvider('anthropic')).rejects.toThrow();
 
       const state = useSettingsStore.getState();
       expect(state.error).toBe('Error: Provider error');
@@ -331,6 +335,10 @@ describe('settingsStore', () => {
             anthropic: 'claude-3-opus',
             google: 'gemini-pro',
             ollama: 'llama3',
+            xai: 'grok-beta',
+            deepseek: 'deepseek-chat',
+            qwen: 'qwen-turbo',
+            mistral: 'mistral-small',
           },
         },
         windowPreferences: {
@@ -392,6 +400,10 @@ describe('settingsStore', () => {
             anthropic: 'claude-3-opus',
             google: 'gemini-pro',
             ollama: 'llama3',
+            xai: 'grok-beta',
+            deepseek: 'deepseek-chat',
+            qwen: 'qwen-turbo',
+            mistral: 'mistral-small',
           },
         },
         windowPreferences: {
@@ -497,6 +509,10 @@ describe('settingsStore', () => {
                 anthropic: 'claude-3-5-sonnet-20241022',
                 google: 'gemini-1.5-flash',
                 ollama: 'llama3',
+                xai: 'grok-beta',
+                deepseek: 'deepseek-chat',
+                qwen: 'qwen-turbo',
+                mistral: 'mistral-small',
               },
             },
             windowPreferences: {

@@ -12,8 +12,8 @@ use agiworkforce_desktop::{
         load_persisted_calendar_accounts, AgentRuntimeState, ApiState, AppDatabase,
         BrowserStateWrapper, CalendarState, CloudState, CodeEditingState, CodeGeneratorState,
         ComputerUseState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState,
-        GitHubState, LLMState, McpState, ProductivityState, SettingsServiceState, SettingsState,
-        ShortcutsState, VoiceState, WorkspaceIndexState,
+        GitHubState, LLMState, LSPState, McpState, ProductivityState, SettingsServiceState,
+        SettingsState, ShortcutsState, VoiceState, WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -215,6 +215,11 @@ fn main() {
             app.manage(Arc::new(TokioMutex::new(WorkspaceIndexState::new())));
 
             tracing::info!("Workspace indexing state initialized");
+
+            // Initialize LSP state
+            app.manage(Arc::new(LSPState::new()));
+
+            tracing::info!("LSP state initialized");
 
             // Initialize window state
             let state = AppState::load(app.handle())?;
@@ -648,7 +653,15 @@ fn main() {
             agiworkforce_desktop::commands::workspace_find_references,
             agiworkforce_desktop::commands::workspace_get_dependencies,
             agiworkforce_desktop::commands::workspace_get_file_symbols,
-            agiworkforce_desktop::commands::workspace_get_stats
+            agiworkforce_desktop::commands::workspace_get_stats,
+            // LSP integration commands
+            agiworkforce_desktop::commands::lsp_start_server,
+            agiworkforce_desktop::commands::lsp_stop_server,
+            agiworkforce_desktop::commands::lsp_did_open,
+            agiworkforce_desktop::commands::lsp_completion,
+            agiworkforce_desktop::commands::lsp_hover,
+            agiworkforce_desktop::commands::lsp_definition,
+            agiworkforce_desktop::commands::lsp_references
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
