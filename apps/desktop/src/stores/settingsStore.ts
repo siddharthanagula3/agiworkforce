@@ -2,7 +2,15 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type Provider = 'openai' | 'anthropic' | 'google' | 'ollama';
+export type Provider =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'ollama'
+  | 'xai'
+  | 'deepseek'
+  | 'qwen'
+  | 'mistral';
 export type Theme = 'light' | 'dark' | 'system';
 
 interface APIKeys {
@@ -10,6 +18,10 @@ interface APIKeys {
   anthropic: string;
   google: string;
   ollama: string; // Local provider, typically empty
+  xai: string;
+  deepseek: string;
+  qwen: string;
+  mistral: string;
 }
 
 interface LLMConfig {
@@ -21,6 +33,10 @@ interface LLMConfig {
     anthropic: string;
     google: string;
     ollama: string;
+    xai: string;
+    deepseek: string;
+    qwen: string;
+    mistral: string;
   };
 }
 
@@ -64,6 +80,10 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
     anthropic: '',
     google: '',
     ollama: '',
+    xai: '',
+    deepseek: '',
+    qwen: '',
+    mistral: '',
   },
   llmConfig: {
     defaultProvider: 'openai',
@@ -73,7 +93,11 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
       openai: 'gpt-4o-mini',
       anthropic: 'claude-3-5-sonnet-20241022',
       google: 'gemini-1.5-flash',
-      ollama: 'llama3',
+      ollama: 'llama3.3',
+      xai: 'grok-4',
+      deepseek: 'deepseek-chat',
+      qwen: 'qwen-max',
+      mistral: 'mistral-large-latest',
     },
   },
   windowPreferences: {
@@ -241,8 +265,26 @@ export const useSettingsStore = create<SettingsState>()(
           }>('settings_load');
 
           // Load API keys from keyring
-          const providers: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
-          const apiKeys: APIKeys = { openai: '', anthropic: '', google: '', ollama: '' };
+          const providers: Provider[] = [
+            'openai',
+            'anthropic',
+            'google',
+            'ollama',
+            'xai',
+            'deepseek',
+            'qwen',
+            'mistral',
+          ];
+          const apiKeys: APIKeys = {
+            openai: '',
+            anthropic: '',
+            google: '',
+            ollama: '',
+            xai: '',
+            deepseek: '',
+            qwen: '',
+            mistral: '',
+          };
 
           for (const provider of providers) {
             try {
