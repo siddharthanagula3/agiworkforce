@@ -1,7 +1,7 @@
 use super::*;
-use crate::automation::input::Key;
 use crate::automation::AutomationService;
 use anyhow::Result;
+use enigo::Key;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::time::timeout;
@@ -79,7 +79,7 @@ impl TaskExecutor {
             }
             Action::Type { target, text } => {
                 self.click_target(target, vision).await?;
-                self.automation.keyboard.send_text(text)?;
+                self.automation.keyboard.send_text(text).await?;
                 Ok(format!("Typed: {}", text))
             }
             Action::Navigate { url } => {
@@ -240,13 +240,37 @@ impl TaskExecutor {
 
                 // Press the key combination
                 if modifiers.is_empty() {
-                    // Single key press
-                    self.automation.keyboard.press_key(main_key)?;
+                    // Single key press - use enigo::Key for compatibility
+                    use enigo::{Enigo, Keyboard, Settings};
+                    let mut enigo =
+                        Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
+                    enigo
+                        .key(main_key, enigo::Direction::Click)
+                        .map_err(|e| anyhow::anyhow!("{}", e))?;
                 } else {
-                    // Key combination with modifiers
-                    self.automation
-                        .keyboard
-                        .press_key_combination(&modifiers, main_key)?;
+                    // Key combination with modifiers - use enigo for key combinations
+                    use enigo::{Enigo, Keyboard, Settings};
+                    let mut enigo =
+                        Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                    // Press down all modifiers
+                    for modifier in &modifiers {
+                        enigo
+                            .key(*modifier, enigo::Direction::Press)
+                            .map_err(|e| anyhow::anyhow!("{}", e))?;
+                    }
+
+                    // Press and release the main key
+                    enigo
+                        .key(main_key, enigo::Direction::Click)
+                        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                    // Release all modifiers
+                    for modifier in modifiers.iter().rev() {
+                        enigo
+                            .key(*modifier, enigo::Direction::Release)
+                            .map_err(|e| anyhow::anyhow!("{}", e))?;
+                    }
                 }
 
                 Ok(format!("Pressed key combination: {:?}", keys))
@@ -257,7 +281,7 @@ impl TaskExecutor {
     async fn click_target(&self, target: &ClickTarget, vision: &VisionAutomation) -> Result<()> {
         match target {
             ClickTarget::Coordinates { x, y } => {
-                self.automation.mouse.move_to_smooth(*x, *y, 200)?;
+                self.automation.mouse.move_to_smooth(*x, *y, 200).await?;
                 self.automation
                     .mouse
                     .click(*x, *y, crate::automation::input::MouseButton::Left)?;
@@ -275,7 +299,7 @@ impl TaskExecutor {
                 threshold,
             } => {
                 let (x, y) = vision.find_image(image_path, *threshold).await?;
-                self.automation.mouse.move_to_smooth(x, y, 200)?;
+                self.automation.mouse.move_to_smooth(x, y, 200).await?;
                 self.automation
                     .mouse
                     .click(x, y, crate::automation::input::MouseButton::Left)?;
@@ -284,7 +308,7 @@ impl TaskExecutor {
             ClickTarget::TextMatch { text, fuzzy } => {
                 let matches = vision.find_text(text, *fuzzy).await?;
                 if let Some((x, y, _)) = matches.first() {
-                    self.automation.mouse.move_to_smooth(*x, *y, 200)?;
+                    self.automation.mouse.move_to_smooth(*x, *y, 200).await?;
                     self.automation.mouse.click(
                         *x,
                         *y,
