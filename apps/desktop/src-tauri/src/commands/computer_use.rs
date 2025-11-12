@@ -319,3 +319,33 @@ fn current_timestamp() -> u64 {
         .unwrap()
         .as_secs()
 }
+
+#[cfg(target_os = "windows")]
+fn capture_screenshot() -> Result<ScreenCapture, anyhow::Error> {
+    use base64::{engine::general_purpose, Engine as _};
+    use image::ImageEncoder;
+
+    let captured = screen::capture_primary_screen()?;
+    let (width, height) = captured.pixels.dimensions();
+
+    // Convert to PNG and base64 encode
+    let mut png_bytes = Vec::new();
+    {
+        let mut cursor = std::io::Cursor::new(&mut png_bytes);
+        image::codecs::png::PngEncoder::new(&mut cursor).write_image(
+            captured.pixels.as_raw(),
+            width,
+            height,
+            image::ColorType::Rgba8,
+        )?;
+    }
+
+    let image_data = general_purpose::STANDARD.encode(&png_bytes);
+
+    Ok(ScreenCapture {
+        image_data,
+        width,
+        height,
+        timestamp: current_timestamp(),
+    })
+}
