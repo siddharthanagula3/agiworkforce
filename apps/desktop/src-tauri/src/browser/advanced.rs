@@ -10,6 +10,7 @@ use std::time::Duration;
 use crate::error::{Error, Result};
 
 use super::cdp_client::CdpClient;
+use super::dom_operations::ElementBounds;
 
 /// Execute JavaScript with timeout and retry logic
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,14 +42,6 @@ pub struct ElementState {
     pub interactive: bool,
     pub bounds: Option<ElementBounds>,
     pub computed_styles: Option<ComputedStyles>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElementBounds {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
