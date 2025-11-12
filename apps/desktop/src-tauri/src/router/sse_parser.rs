@@ -134,6 +134,10 @@ fn parse_sse_event(
         crate::router::Provider::Anthropic => parse_anthropic_sse(event),
         crate::router::Provider::Google => parse_google_sse(event),
         crate::router::Provider::Ollama => parse_ollama_sse(event),
+        crate::router::Provider::XAI => parse_openai_sse(event), // XAI uses OpenAI-compatible format
+        crate::router::Provider::DeepSeek => parse_openai_sse(event), // DeepSeek uses OpenAI-compatible format
+        crate::router::Provider::Qwen => parse_openai_sse(event), // Qwen uses OpenAI-compatible format
+        crate::router::Provider::Mistral => parse_openai_sse(event), // Mistral uses OpenAI-compatible format
     }
 }
 
