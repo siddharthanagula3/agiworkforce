@@ -28,7 +28,7 @@ pub struct DesignContext {
 }
 
 /// Design constraints
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DesignConstraints {
     pub color_scheme: Option<String>, // "light", "dark", "auto"
     pub max_width: Option<u32>,
