@@ -144,7 +144,7 @@ impl ContextCompactor {
     /// Generate summary using LLM
     async fn generate_summary_with_llm(
         &self,
-        router: &Arc<LLMRouter>,
+        _router: &Arc<LLMRouter>,
         messages: &[Message],
     ) -> Result<String> {
         // Build conversation context

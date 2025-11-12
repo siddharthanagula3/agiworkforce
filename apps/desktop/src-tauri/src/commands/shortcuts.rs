@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,7 +127,7 @@ pub async fn shortcuts_register(
 
         // Emit event (actual hotkey registration would happen via plugin)
         app_clone
-            .emit_all("shortcut_registered", shortcut)
+            .emit("shortcut_registered", shortcut)
             .map_err(|e| format!("Failed to emit event: {}", e))?;
     }
 
@@ -156,7 +156,7 @@ pub async fn shortcuts_unregister(
         let mut registered = shortcuts_state.registered_keys.lock().await;
         registered.retain(|k| k != &shortcut.key);
 
-        app.emit_all("shortcut_unregistered", shortcut_id)
+        app.emit("shortcut_unregistered", shortcut_id)
             .map_err(|e| format!("Failed to emit event: {}", e))?;
     }
 
@@ -208,7 +208,7 @@ pub async fn shortcuts_update(
 
     let updated = shortcut.clone();
 
-    app.emit_all("shortcut_updated", &updated)
+    app.emit("shortcut_updated", &updated)
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     Ok(updated)
@@ -220,7 +220,7 @@ pub async fn shortcuts_trigger(action: String, app: AppHandle) -> Result<(), Str
     tracing::info!("Triggering shortcut action: {}", action);
 
     // Emit event for the action
-    app.emit_all("shortcut_action", action)
+    app.emit("shortcut_action", action)
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     Ok(())
@@ -250,7 +250,7 @@ pub async fn shortcuts_reset(
 
     let result: Vec<Shortcut> = shortcuts.values().cloned().collect();
 
-    app.emit_all("shortcuts_reset", &result)
+    app.emit("shortcuts_reset", &result)
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     Ok(result)

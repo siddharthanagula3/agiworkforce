@@ -3,7 +3,7 @@
  * OpenAI-compatible API at https://api.x.ai/v1
  * With full function calling support
  */
-use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
