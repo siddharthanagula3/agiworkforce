@@ -146,18 +146,18 @@ pub async fn checkpoint_restore(
                 context_items, images, tool_calls, created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
-                msg.get("id"),
+                msg.get("id").and_then(|v| v.as_i64()),
                 request.conversation_id,
-                msg.get("role"),
-                msg.get("content"),
-                msg.get("provider"),
-                msg.get("model"),
-                msg.get("tokens"),
-                msg.get("cost"),
+                msg.get("role").and_then(|v| v.as_str()),
+                msg.get("content").and_then(|v| v.as_str()),
+                msg.get("provider").and_then(|v| v.as_str()),
+                msg.get("model").and_then(|v| v.as_str()),
+                msg.get("tokens").and_then(|v| v.as_i64()),
+                msg.get("cost").and_then(|v| v.as_f64()),
                 msg.get("context_items").and_then(|v| v.as_str()),
                 msg.get("images").and_then(|v| v.as_str()),
                 msg.get("tool_calls").and_then(|v| v.as_str()),
-                msg.get("created_at"),
+                msg.get("created_at").and_then(|v| v.as_str()),
             ],
         )
         .map_err(|e| {
