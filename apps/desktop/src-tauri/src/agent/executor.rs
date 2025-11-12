@@ -1,4 +1,5 @@
 use super::*;
+use crate::automation::input::Key;
 use crate::automation::AutomationService;
 use anyhow::Result;
 use std::sync::Arc;
@@ -198,8 +199,6 @@ impl TaskExecutor {
             }
             Action::PressKey { keys } => {
                 // Parse and press key combination (e.g., ["Ctrl", "C"] or ["Ctrl+C"])
-                use crate::automation::input::Key;
-
                 tracing::info!("Pressing key combination: {:?}", keys);
 
                 // Convert Vec<String> to key parts
@@ -300,9 +299,7 @@ impl TaskExecutor {
     }
 
     /// Parse a key string (e.g., "Enter", "A", "F1") to a Key enum
-    fn parse_key_string(&self, key_str: &str) -> Result<crate::automation::input::Key> {
-        use crate::automation::input::Key;
-
+    fn parse_key_string(&self, key_str: &str) -> Result<Key> {
         let key = match key_str.to_lowercase().as_str() {
             // Special keys
             "enter" | "return" => Key::Return,
