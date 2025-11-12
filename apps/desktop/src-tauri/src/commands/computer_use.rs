@@ -8,12 +8,15 @@ use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
 
+// Note: These imports are placeholders for Windows-specific automation
+// The actual automation is done through the AutomationService
+// which provides KeyboardSimulator, MouseSimulator, etc.
 #[cfg(target_os = "windows")]
-use crate::automation::input::keyboard::type_text;
+use crate::automation::input::KeyboardSimulator;
 #[cfg(target_os = "windows")]
-use crate::automation::input::mouse::{click, move_to};
+use crate::automation::input::MouseSimulator;
 #[cfg(target_os = "windows")]
-use crate::automation::screen::capture::capture_screenshot;
+use crate::automation::screen;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenCapture {
