@@ -3,10 +3,11 @@ use tauri::async_runtime::block_on;
 use tauri::State;
 use tokio::sync::Mutex;
 
+use crate::browser::advanced::Cookie;
 use crate::browser::{
-    AdvancedBrowserOps, BrowserOptions, BrowserState, BrowserType, ClickOptions, Cookie,
-    DomOperations, ElementState, ExecuteOptions, FormField, ImageFormat, NavigationOptions,
-    ScreenshotOptions, TypeOptions,
+    AdvancedBrowserOps, BrowserOptions, BrowserState, BrowserType, ClickOptions, DomOperations,
+    ElementState, ExecuteOptions, FormField, ImageFormat, NavigationOptions, ScreenshotOptions,
+    TypeOptions,
 };
 
 /// Browser state wrapper for Tauri
