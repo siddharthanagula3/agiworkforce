@@ -32,6 +32,10 @@ impl TokenCounter {
             Provider::Anthropic => (1.05, 1.05),
             Provider::Google => (0.95, 0.95),
             Provider::Ollama => (1.10, 1.10),
+            Provider::XAI => (1.0, 1.0), // XAI uses similar tokenization to OpenAI
+            Provider::DeepSeek => (1.05, 1.05),
+            Provider::Qwen => (1.0, 1.0),
+            Provider::Mistral => (1.0, 1.0),
         };
 
         let prompt =

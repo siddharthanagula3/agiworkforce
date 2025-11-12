@@ -2,7 +2,7 @@
  * Inline Code Editing & Composer Mode
  * Similar to Claude Code and Cursor's inline editing with diff views
  */
-use crate::router::{LLMRequest, LLMRouter, Message, MessageRole};
+use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -101,10 +101,13 @@ Respond ONLY with the modified code. Do not include explanations or markdown for
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(4000),
         temperature: Some(0.3),
         stream: false,
@@ -113,12 +116,19 @@ Respond ONLY with the modified code. Do not include explanations or markdown for
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
-    let modified_content = response.content.trim().to_string();
+    let modified_content = outcome.response.content.trim().to_string();
 
     // Generate diff
     let diff = generate_diff(&original_content, &modified_content);
@@ -236,10 +246,13 @@ Format your response as JSON:
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: llm_prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(8000),
         temperature: Some(0.4),
         stream: false,
@@ -248,13 +261,20 @@ Format your response as JSON:
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
     // Parse response
-    let json_str = extract_json(&response.content)?;
+    let json_str = extract_json(&outcome.response.content)?;
     let file_changes: Vec<serde_json::Value> =
         serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse response: {}", e))?;
 
