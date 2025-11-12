@@ -164,7 +164,6 @@ impl TaskExecutor {
                             ))
                         }
                     }
-                    Err(e) => Err(anyhow::anyhow!("Failed to execute command: {}", e)),
                     Ok(Err(e)) => {
                         tracing::error!("Failed to execute command: {}", e);
                         Err(anyhow::anyhow!("Failed to execute command: {}", e))
@@ -198,13 +197,18 @@ impl TaskExecutor {
                 Ok(format!("Scrolled {:?} by {}", direction, amount))
             }
             Action::PressKey { keys } => {
-                // Parse and press key combination (e.g., "Ctrl+C", "Alt+Tab", "Enter")
+                // Parse and press key combination (e.g., ["Ctrl", "C"] or ["Ctrl+C"])
                 use crate::automation::input::Key;
 
                 tracing::info!("Pressing key combination: {:?}", keys);
 
-                // Split on '+' to get individual keys
-                let key_parts: Vec<&str> = keys.split('+').map(|s| s.trim()).collect();
+                // Convert Vec<String> to key parts
+                // If vec has one element with '+', split it; otherwise use the vec as-is
+                let key_parts: Vec<String> = if keys.len() == 1 && keys[0].contains('+') {
+                    keys[0].split('+').map(|s| s.trim().to_string()).collect()
+                } else {
+                    keys.clone()
+                };
 
                 // Parse modifier keys and main key
                 let mut modifiers = Vec::new();
@@ -230,7 +234,7 @@ impl TaskExecutor {
 
                 // If no main key and only one part, treat it as a single key press
                 if main_key.is_none() && key_parts.len() == 1 {
-                    main_key = Some(self.parse_key_string(key_parts[0])?);
+                    main_key = Some(self.parse_key_string(&key_parts[0])?);
                 }
 
                 let main_key = main_key.ok_or_else(|| anyhow::anyhow!("No main key specified"))?;
@@ -246,7 +250,7 @@ impl TaskExecutor {
                         .press_key_combination(&modifiers, main_key)?;
                 }
 
-                Ok(format!("Pressed key combination: {}", keys))
+                Ok(format!("Pressed key combination: {:?}", keys))
             }
         }
     }
