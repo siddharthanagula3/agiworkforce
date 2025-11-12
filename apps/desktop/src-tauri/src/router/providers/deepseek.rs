@@ -2,13 +2,10 @@
  * DeepSeek Provider (V3.2, Coder-V2, Reasoner)
  * OpenAI-compatible API at https://api.deepseek.com/v1
  */
-use crate::router::{
-    ChatMessage, LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition,
-};
+use crate::router::{LLMProvider, LLMRequest, LLMResponse};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::error::Error;
 
 const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
