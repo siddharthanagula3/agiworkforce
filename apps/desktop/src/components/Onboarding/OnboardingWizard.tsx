@@ -164,22 +164,22 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
         {/* Content area */}
         <div className="flex-1 overflow-y-auto p-8">
           <div className="mx-auto max-w-2xl">
-            {currentStep.stepId === 'welcome' && (
+            {currentStep && currentStep.stepId === 'welcome' && (
               <WelcomeStep onNext={() => void completeStep(currentStep.stepId)} />
             )}
-            {currentStep.stepId === 'api_keys' && (
+            {currentStep && currentStep.stepId === 'api_keys' && (
               <ApiKeysStep
                 onNext={() => void completeStep(currentStep.stepId)}
                 onSkip={() => void skipStep(currentStep.stepId)}
               />
             )}
-            {currentStep.stepId === 'first_task' && (
+            {currentStep && currentStep.stepId === 'first_task' && (
               <FirstTaskStep
                 onNext={() => void completeStep(currentStep.stepId)}
                 onSkip={() => void skipStep(currentStep.stepId)}
               />
             )}
-            {currentStep.stepId === 'explore_features' && (
+            {currentStep && currentStep.stepId === 'explore_features' && (
               <ExploreStep onNext={() => void completeStep(currentStep.stepId)} />
             )}
           </div>
