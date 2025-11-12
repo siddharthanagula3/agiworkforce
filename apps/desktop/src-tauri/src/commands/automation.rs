@@ -333,9 +333,16 @@ pub fn automation_clipboard_set(text: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
-    perform_ocr(&image_path)
-        .await
-        .map_err(|err| err.to_string())
+    #[cfg(feature = "ocr")]
+    {
+        perform_ocr(&image_path)
+            .await
+            .map_err(|err| err.to_string())
+    }
+    #[cfg(not(feature = "ocr"))]
+    {
+        perform_ocr(&image_path).map_err(|err| err.to_string())
+    }
 }
 
 #[tauri::command]
