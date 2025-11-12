@@ -234,22 +234,16 @@ impl CodeGenerator {
             ));
         }
 
-        _prompt.push_str("\n## Generation Instructions\n\n");
-        _prompt.push_str("Generate code that:\n");
-        _prompt.push_str("1. Implements the requested functionality\n");
-        _prompt.push_str("2. Follows all constraints and patterns\n");
-        _prompt.push_str("3. Integrates seamlessly with existing code\n");
-        _prompt.push_str("4. Includes comprehensive tests\n");
-        _prompt.push_str("5. Has proper documentation\n");
-        _prompt.push_str("\n## Task Description\n\n");
-        _prompt.push_str(&request.description);
-        _prompt.push_str("\n\n## Constraints\n\n");
-        for constraint in &request.constraints {
-            _prompt.push_str(&format!("- {}\n", constraint.name));
-        }
-        _prompt.push_str("\n## Output Format\n\n");
-        _prompt.push_str("Return JSON array with this structure:\n");
-        _prompt.push_str("[\n  {\n    \"path\": \"file/path\",\n    \"content\": \"file content\",\n    \"file_type\": \"source|test|config|documentation|type_definition\",\n    \"dependencies\": [\"dep1\"],\n    \"exports\": [\"export1\"]\n  }\n]\n");
+        prompt.push_str("\n## Generation Instructions\n\n");
+        prompt.push_str("Generate code that:\n");
+        prompt.push_str("1. Implements the requested functionality\n");
+        prompt.push_str("2. Follows all constraints and patterns\n");
+        prompt.push_str("3. Integrates seamlessly with existing code\n");
+        prompt.push_str("4. Includes comprehensive tests\n");
+        prompt.push_str("5. Has proper documentation\n");
+        prompt.push_str("\n## Output Format\n\n");
+        prompt.push_str("Return JSON array with this structure:\n");
+        prompt.push_str("[\n  {\n    \"path\": \"file/path\",\n    \"content\": \"file content\",\n    \"file_type\": \"source|test|config|documentation|type_definition\",\n    \"dependencies\": [\"dep1\"],\n    \"exports\": [\"export1\"]\n  }\n]\n");
 
         // Use LLM to generate code
         tracing::info!(
@@ -257,9 +251,8 @@ impl CodeGenerator {
             request.task_id
         );
 
-        let response = _router
-            .as_ref()
-            .send_message(&_prompt, None)
+        let response = router
+            .send_message(&prompt, None)
             .await
             .map_err(|e| anyhow::anyhow!("LLM generation failed: {}", e))?;
 
