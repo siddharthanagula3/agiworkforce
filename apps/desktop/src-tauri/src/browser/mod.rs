@@ -7,10 +7,11 @@ pub mod playwright_bridge;
 pub mod tab_manager;
 
 // Re-exports for convenience
+// Note: Cookie is exported from advanced, not extension_bridge to avoid ambiguity
 pub use advanced::*;
 pub use cdp_client::CdpClient;
 pub use dom_operations::*;
-pub use extension_bridge::*;
+pub use extension_bridge::{ExtensionBridge, TabInfo};
 pub use playwright_bridge::*;
 pub use tab_manager::*;
 
