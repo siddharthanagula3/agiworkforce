@@ -36,7 +36,7 @@ pub struct StackFrame {
     pub column: Option<u32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DebugSuggestion {
     pub title: String,
     pub description: String,
