@@ -2,7 +2,7 @@
  * Visual Design Capabilities
  * AI-powered CSS generation and UI styling from natural language
  */
-use crate::router::{LLMRequest, LLMRouter, Message, MessageRole};
+use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -84,23 +84,35 @@ pub async fn design_generate_css(
 
     // Query LLM
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(1500),
         temperature: Some(0.3), // Lower temperature for more consistent CSS
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
     // Parse response and extract CSS
-    let (css, explanation) = parse_css_response(&response.content)?;
+    let (css, explanation) = parse_css_response(&outcome.response.content)?;
 
     // Generate accessibility notes if requested
     let accessibility_notes = if request
@@ -196,23 +208,35 @@ Ensure colors have proper contrast ratios (WCAG AA minimum):
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(500),
         temperature: Some(0.4),
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
     // Extract JSON from response
-    let json_str = extract_json_from_response(&response.content)?;
+    let json_str = extract_json_from_response(&outcome.response.content)?;
 
     serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse color scheme: {}", e))
 }
@@ -253,22 +277,34 @@ Return as JSON array:
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(2000),
         temperature: Some(0.5),
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
-    let json_str = extract_json_from_response(&response.content)?;
+    let json_str = extract_json_from_response(&outcome.response.content)?;
 
     serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse suggestions: {}", e))
 }
@@ -352,22 +388,34 @@ Return as JSON:
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(1500),
         temperature: Some(0.3),
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
-    let json_str = extract_json_from_response(&response.content)?;
+    let json_str = extract_json_from_response(&outcome.response.content)?;
 
     serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse accessibility report: {}", e))
