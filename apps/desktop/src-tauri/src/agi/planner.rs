@@ -436,7 +436,11 @@ Respond with ONLY "true" or "false"."#,
             context.available_resources.cpu_usage_percent,
             context.available_resources.memory_usage_mb,
             {
-                let error_count = context.tool_results.iter().filter(|r| r.error.is_some()).count();
+                let error_count = context
+                    .tool_results
+                    .iter()
+                    .filter(|r| r.error.is_some())
+                    .count();
                 if error_count == 0 {
                     "None".to_string()
                 } else {
