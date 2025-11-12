@@ -661,7 +661,18 @@ fn main() {
             agiworkforce_desktop::commands::lsp_completion,
             agiworkforce_desktop::commands::lsp_hover,
             agiworkforce_desktop::commands::lsp_definition,
-            agiworkforce_desktop::commands::lsp_references
+            agiworkforce_desktop::commands::lsp_references,
+            // Onboarding and data management commands
+            agiworkforce_desktop::commands::get_onboarding_status,
+            agiworkforce_desktop::commands::complete_onboarding_step,
+            agiworkforce_desktop::commands::skip_onboarding_step,
+            agiworkforce_desktop::commands::reset_onboarding,
+            agiworkforce_desktop::commands::export_user_data,
+            agiworkforce_desktop::commands::check_connectivity,
+            agiworkforce_desktop::commands::get_session_info,
+            agiworkforce_desktop::commands::update_session_activity,
+            agiworkforce_desktop::commands::get_user_preference,
+            agiworkforce_desktop::commands::set_user_preference
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

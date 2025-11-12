@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 import TitleBar from './components/Layout/TitleBar';
 import { Sidebar } from './components/Layout/Sidebar';
@@ -12,6 +13,8 @@ import { useChatStore } from './stores/chatStore';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import ErrorBoundary from './components/ErrorBoundary';
+import { OnboardingWizard } from './components/Onboarding/OnboardingWizard';
 import {
   Plus,
   History,
@@ -30,6 +33,7 @@ const DesktopShell = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [agentChatPosition] = useState<'left' | 'right'>('right');
   const [agentChatVisible, setAgentChatVisible] = useState(true);
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
 
   const createConversation = useChatStore((store) => store.createConversation);
@@ -37,6 +41,20 @@ const DesktopShell = () => {
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
+
+  // Check onboarding status on mount
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const status = await invoke<{ completed: boolean }>('get_onboarding_status');
+        setOnboardingComplete(status.completed);
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+        setOnboardingComplete(true); // Assume complete on error
+      }
+    };
+    void checkOnboarding();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -146,6 +164,23 @@ const DesktopShell = () => {
     isMac,
   ]);
 
+  // Show loading state while checking onboarding
+  if (onboardingComplete === null) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show onboarding if not complete
+  if (!onboardingComplete) {
+    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
+  }
+
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       <TitleBar
@@ -211,11 +246,7 @@ const App = () => {
   const isOverlayMode =
     typeof window !== 'undefined' && window.location.search.includes('mode=overlay');
 
-  if (isOverlayMode) {
-    return <VisualizationLayer />;
-  }
-
-  return <DesktopShell />;
+  return <ErrorBoundary>{isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}</ErrorBoundary>;
 };
 
 export default App;
