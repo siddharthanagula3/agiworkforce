@@ -282,7 +282,6 @@ Return ONLY the JSON array."#,
         Ok(Plan {
             goal_id: goal.id.clone(),
             steps,
-            estimated_duration,
             estimated_duration: Duration::from_secs(total_estimated),
             estimated_resources: ResourceUsage {
                 cpu_percent: total_cpu,
@@ -466,7 +465,7 @@ Respond with ONLY "true" or "false"."#,
                     response.trim()
                 );
 
-                Ok(is_met)
+                return Ok(is_met);
             }
             Err(e) => {
                 tracing::warn!(
@@ -474,9 +473,18 @@ Respond with ONLY "true" or "false"."#,
                     e
                 );
                 // On error, conservatively assume criterion not met
-                Ok(false)
+                return Ok(false);
             }
         }
+    }
+
+    /// Evaluate a criterion based on context (UNREACHABLE - duplicate code below)
+    #[allow(dead_code)]
+    async fn _evaluate_criterion_old(
+        &self,
+        criterion: &str,
+        context: &ExecutionContext,
+    ) -> Result<bool> {
         tracing::info!("[Planner] Evaluating criterion: {}", criterion);
 
         // Build context summary from execution results
