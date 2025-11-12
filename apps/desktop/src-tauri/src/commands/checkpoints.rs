@@ -7,9 +7,10 @@
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use tauri::State;
 use uuid::Uuid;
 
-use crate::db::get_connection;
+use crate::commands::AppDatabase;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Checkpoint {
@@ -43,8 +44,13 @@ pub struct RestoreCheckpointRequest {
 
 /// Create a checkpoint for a conversation
 #[tauri::command]
-pub async fn checkpoint_create(request: CreateCheckpointRequest) -> Result<Checkpoint, String> {
-    let conn = get_connection().map_err(|e| format!("Failed to get connection: {}", e))?;
+pub async fn checkpoint_create(
+    request: CreateCheckpointRequest,
+    db: State<'_, AppDatabase>,
+) -> Result<Checkpoint, String> {
+    let conn =
+        db.0.lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get all messages for this conversation
     let messages = get_conversation_messages(&conn, request.conversation_id)
@@ -98,8 +104,13 @@ pub async fn checkpoint_create(request: CreateCheckpointRequest) -> Result<Check
 
 /// Restore a conversation to a checkpoint
 #[tauri::command]
-pub async fn checkpoint_restore(request: RestoreCheckpointRequest) -> Result<(), String> {
-    let conn = get_connection().map_err(|e| format!("Failed to get connection: {}", e))?;
+pub async fn checkpoint_restore(
+    request: RestoreCheckpointRequest,
+    db: State<'_, AppDatabase>,
+) -> Result<(), String> {
+    let conn =
+        db.0.lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get checkpoint
     let checkpoint = get_checkpoint(&conn, &request.checkpoint_id)
@@ -185,8 +196,13 @@ pub async fn checkpoint_restore(request: RestoreCheckpointRequest) -> Result<(),
 
 /// List all checkpoints for a conversation
 #[tauri::command]
-pub async fn checkpoint_list(conversation_id: i64) -> Result<Vec<Checkpoint>, String> {
-    let conn = get_connection().map_err(|e| format!("Failed to get connection: {}", e))?;
+pub async fn checkpoint_list(
+    conversation_id: i64,
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<Checkpoint>, String> {
+    let conn =
+        db.0.lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let mut stmt = conn
         .prepare(
@@ -224,8 +240,13 @@ pub async fn checkpoint_list(conversation_id: i64) -> Result<Vec<Checkpoint>, St
 
 /// Delete a checkpoint
 #[tauri::command]
-pub async fn checkpoint_delete(checkpoint_id: String) -> Result<(), String> {
-    let conn = get_connection().map_err(|e| format!("Failed to get connection: {}", e))?;
+pub async fn checkpoint_delete(
+    checkpoint_id: String,
+    db: State<'_, AppDatabase>,
+) -> Result<(), String> {
+    let conn =
+        db.0.lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     conn.execute(
         "DELETE FROM conversation_checkpoints WHERE id = ?1",

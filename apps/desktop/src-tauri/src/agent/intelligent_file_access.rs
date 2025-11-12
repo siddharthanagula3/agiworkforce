@@ -229,7 +229,7 @@ impl IntelligentFileAccess {
         &self,
         router: &LLMRouter,
         prompt: &str,
-        _ocr_text: &str,
+        ocr_text: &str,
     ) -> Result<String> {
         // Use LLM to analyze the screenshot context with OCR text
         // Note: For true vision support, we would pass image data to vision-capable models

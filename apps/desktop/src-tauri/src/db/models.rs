@@ -31,6 +31,12 @@ pub enum MessageRole {
     System,
 }
 
+impl Default for MessageRole {
+    fn default() -> Self {
+        Self::User
+    }
+}
+
 impl MessageRole {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -63,6 +69,22 @@ pub struct Message {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub created_at: DateTime<Utc>,
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            conversation_id: 0,
+            role: MessageRole::default(),
+            content: String::new(),
+            tokens: None,
+            cost: None,
+            provider: None,
+            model: None,
+            created_at: Utc::now(),
+        }
+    }
 }
 
 impl Message {
