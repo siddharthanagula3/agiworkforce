@@ -285,7 +285,7 @@ impl AutonomousAgent {
     /// Check resource limits (CPU, memory)
     async fn check_resource_limits(&self) -> Result<bool> {
         // Use sysinfo to monitor actual system resources
-        use sysinfo::{CpuExt, ProcessExt, System, SystemExt};
+        use sysinfo::System;
 
         let mut sys = System::new_all();
         sys.refresh_all();
@@ -306,8 +306,8 @@ impl AutonomousAgent {
             sysinfo::get_current_pid().map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
 
         if let Some(process) = sys.process(current_pid) {
-            // process.memory() returns KiB, divide by 1024 once to get MB
-            let memory_mb = process.memory() / 1024;
+            // process.memory() returns bytes in newer sysinfo versions
+            let memory_mb = process.memory() / (1024 * 1024);
             if memory_mb > self.config.memory_limit_mb {
                 tracing::warn!(
                     "[Agent] Memory usage ({}MB) exceeds limit ({}MB)",
@@ -318,13 +318,8 @@ impl AutonomousAgent {
             }
         }
 
-        use sysinfo::{CpuExt, ProcessExt, System, SystemExt};
-
-        let mut system = System::new_all();
-        system.refresh_all();
-
-        // Check CPU usage (throttle if > 80%)
-        let cpu_usage = system.global_cpu_info().cpu_usage();
+        // Check CPU usage again (throttle if > 80%)
+        let cpu_usage = sys.global_cpu_info().cpu_usage();
         if cpu_usage > 80.0 {
             tracing::warn!(
                 "CPU usage high: {:.1}%, throttling autonomous agent",
