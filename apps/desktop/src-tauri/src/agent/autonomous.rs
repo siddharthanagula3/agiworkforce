@@ -329,8 +329,8 @@ impl AutonomousAgent {
         }
 
         // Check memory usage (throttle if > 80% of available)
-        let used_memory = system.used_memory();
-        let total_memory = system.total_memory();
+        let used_memory = sys.used_memory();
+        let total_memory = sys.total_memory();
         let memory_percent = (used_memory as f64 / total_memory as f64) * 100.0;
         if memory_percent > 80.0 {
             tracing::warn!(

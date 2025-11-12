@@ -426,7 +426,7 @@ impl AgentRuntime {
         tracing::info!("[AgentRuntime] Analyzing error with LLM: {}", error);
 
         // Try to use LLM through AGI Core if available
-        if let Some(agi_core) = &self.agi_core {
+        if let Some(_agi_core) = &self.agi_core {
             // Access the router through AGI Core
             // Note: We need to access the router field, which is private
             // For this implementation, we'll use a workaround by having AGI Core expose a method
