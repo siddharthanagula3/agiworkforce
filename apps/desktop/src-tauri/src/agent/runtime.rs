@@ -289,11 +289,13 @@ impl AgentRuntime {
 
         // Create snapshot in background
         tokio::spawn(async move {
-            let tracker = change_tracker_clone.read();
-            if let Err(e) = tracker
-                .create_snapshot(task_id_clone.clone(), working_dir)
-                .await
-            {
+            let result = {
+                let tracker = change_tracker_clone.read();
+                tracker
+                    .create_snapshot(task_id_clone.clone(), working_dir)
+                    .await
+            };
+            if let Err(e) = result {
                 tracing::warn!(
                     "Failed to create snapshot for task {}: {}",
                     task_id_clone,
