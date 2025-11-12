@@ -118,7 +118,7 @@ pub async fn get_inline_completion(
             tool_calls: None,
             tool_call_id: None,
         }],
-        model: "".to_string(), // Will be set by router
+        model: "".to_string(),  // Will be set by router
         max_tokens: Some(50),   // Very short completions
         temperature: Some(0.2), // Low temperature for consistency
         stream: false,

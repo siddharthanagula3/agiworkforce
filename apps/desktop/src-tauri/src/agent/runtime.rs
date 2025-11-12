@@ -544,7 +544,11 @@ Do not repeat the error message."#,
     }
 
     /// Execute task with retry logic (fallback)
-    async fn execute_with_retry_fallback(&self, agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
+    async fn execute_with_retry_fallback(
+        &self,
+        agi: &Arc<AGICore>,
+        task: &Task,
+    ) -> Result<serde_json::Value> {
         // Convert Task to Goal
         let priority = match task.priority {
             TaskPriority::Low => crate::agi::Priority::Low,
