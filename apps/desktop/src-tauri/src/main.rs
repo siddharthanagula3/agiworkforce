@@ -670,7 +670,9 @@ fn main() {
             agiworkforce_desktop::commands::export_user_data,
             agiworkforce_desktop::commands::check_connectivity,
             agiworkforce_desktop::commands::get_session_info,
-            agiworkforce_desktop::commands::update_session_activity
+            agiworkforce_desktop::commands::update_session_activity,
+            agiworkforce_desktop::commands::get_user_preference,
+            agiworkforce_desktop::commands::set_user_preference
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
