@@ -324,6 +324,18 @@ export const useChatStore = create<ChatState>()(
           return;
         }
 
+        // Check token budget before sending
+        const { useTokenBudgetStore } = await import('./tokenBudgetStore');
+        const budgetState = useTokenBudgetStore.getState();
+        const { budget } = budgetState;
+        if (budget.enabled && budget.currentUsage >= budget.limit) {
+          set({
+            error: `Token budget exceeded (${budget.currentUsage}/${budget.limit} tokens). Increase your budget limit in settings to continue.`,
+            loading: false,
+          });
+          return;
+        }
+
         const pendingAttachments = attachments ?? [];
         const pendingCaptures = captures ?? [];
         const pendingContextItems = contextItems ?? [];
