@@ -273,7 +273,7 @@ impl KnowledgeBase {
 
         // Also enforce a reasonable count limit to prevent unbounded growth
         let conn = self.lock_db()?;
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
+        let _count: i64 = conn.query_row("SELECT COUNT(*) FROM knowledge", [], |row| row.get(0))?;
 
         if let Ok(metadata) = std::fs::metadata(&db_path) {
             let file_size_mb = metadata.len() / 1024 / 1024; // Convert bytes to MB

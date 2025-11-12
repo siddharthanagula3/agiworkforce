@@ -3,18 +3,10 @@
  * Screen capture, UI automation, and intelligent computer control
  */
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
 
-// Note: These imports are placeholders for Windows-specific automation
-// The actual automation is done through the AutomationService
-// which provides KeyboardSimulator, MouseSimulator, etc.
-#[cfg(target_os = "windows")]
-use crate::automation::input::KeyboardSimulator;
-#[cfg(target_os = "windows")]
-use crate::automation::input::MouseSimulator;
 #[cfg(target_os = "windows")]
 use crate::automation::screen;
 
@@ -348,4 +340,29 @@ fn capture_screenshot() -> Result<ScreenCapture, anyhow::Error> {
         height,
         timestamp: current_timestamp(),
     })
+}
+
+#[cfg(target_os = "windows")]
+fn click(x: i32, y: i32) -> Result<(), anyhow::Error> {
+    use enigo::{Enigo, Mouse, Settings};
+    let mut enigo = Enigo::new(&Settings::default())?;
+    enigo.move_mouse(x, y, enigo::Coordinate::Abs)?;
+    enigo.button(enigo::Button::Left, enigo::Direction::Click)?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn move_to(x: i32, y: i32) -> Result<(), anyhow::Error> {
+    use enigo::{Enigo, Mouse, Settings};
+    let mut enigo = Enigo::new(&Settings::default())?;
+    enigo.move_mouse(x, y, enigo::Coordinate::Abs)?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn type_text(text: &str) -> Result<(), anyhow::Error> {
+    use enigo::{Enigo, Keyboard, Settings};
+    let mut enigo = Enigo::new(&Settings::default())?;
+    enigo.text(text)?;
+    Ok(())
 }
