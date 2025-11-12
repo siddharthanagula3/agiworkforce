@@ -1,5 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Check, X, Loader2, Key, Settings2, Monitor } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Eye,
+  EyeOff,
+  Check,
+  X,
+  Loader2,
+  Key,
+  Settings2,
+  Monitor,
+  Shield,
+  Download,
+} from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { Label } from '../ui/Label';
@@ -174,7 +188,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           </div>
         ) : (
           <Tabs defaultValue="api-keys" className="mt-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
                 <Key className="h-4 w-4" />
                 API Keys
@@ -186,6 +200,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <TabsTrigger value="window" className="flex items-center gap-2">
                 <Monitor className="h-4 w-4" />
                 Window
+              </TabsTrigger>
+              <TabsTrigger value="data-privacy" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Data & Privacy
               </TabsTrigger>
             </TabsList>
 
@@ -510,6 +528,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 </div>
               </div>
             </TabsContent>
+
+            <TabsContent value="data-privacy" className="space-y-6 pt-6">
+              <DataPrivacyTab />
+            </TabsContent>
           </Tabs>
         )}
 
@@ -521,6 +543,219 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DataPrivacyTab() {
+  const [exporting, setExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [crashReportingEnabled, setCrashReportingEnabled] = useState(true);
+  const [savingCrashReporting, setSavingCrashReporting] = useState(false);
+
+  // Load crash reporting preference
+  useEffect(() => {
+    const loadPreference = async () => {
+      try {
+        const result = await invoke<{ value: string } | null>('get_user_preference', {
+          key: 'crash_reporting_enabled',
+        });
+        if (result) {
+          setCrashReportingEnabled(result.value === 'true');
+        }
+      } catch (error) {
+        console.error('Failed to load crash reporting preference:', error);
+      }
+    };
+    void loadPreference();
+  }, []);
+
+  const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
+    setSavingCrashReporting(true);
+    try {
+      await invoke('set_user_preference', {
+        key: 'crash_reporting_enabled',
+        value: enabled.toString(),
+        category: 'privacy',
+        dataType: 'boolean',
+        description: 'Enable automatic crash reporting via Sentry',
+      });
+      setCrashReportingEnabled(enabled);
+    } catch (error) {
+      console.error('Failed to save crash reporting preference:', error);
+    } finally {
+      setSavingCrashReporting(false);
+    }
+  }, []);
+
+  const handleExportData = useCallback(async () => {
+    setExporting(true);
+    setExportError(null);
+    setExportSuccess(false);
+
+    try {
+      // Get export data from backend
+      const exportData = await invoke<string>('export_user_data');
+
+      // Show save dialog
+      const savePath = await save({
+        defaultPath: `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`,
+        filters: [
+          {
+            name: 'JSON',
+            extensions: ['json'],
+          },
+        ],
+      });
+
+      if (savePath) {
+        // Write to file
+        await writeTextFile(savePath, exportData);
+        setExportSuccess(true);
+        setTimeout(() => setExportSuccess(false), 5000);
+      }
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      setExportError(error instanceof Error ? error.message : 'Failed to export data');
+      setTimeout(() => setExportError(null), 5000);
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Data & Privacy</h3>
+      <p className="text-sm text-muted-foreground mb-6">
+        Manage your data, privacy settings, and GDPR compliance
+      </p>
+
+      <div className="space-y-6">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-md bg-primary/10 p-3">
+              <Download className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold mb-2">Export Your Data</h4>
+              <p className="text-sm text-muted-foreground mb-4">
+                Download all your conversations, messages, and settings in JSON format. This
+                includes all data stored locally on your device.
+              </p>
+              <Button onClick={handleExportData} disabled={exporting} size="sm">
+                {exporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export Data
+                  </>
+                )}
+              </Button>
+              {exportSuccess && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-green-600">
+                  <Check className="h-4 w-4" />
+                  <span>Data exported successfully!</span>
+                </div>
+              )}
+              {exportError && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-red-600">
+                  <X className="h-4 w-4" />
+                  <span>{exportError}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h4 className="font-semibold mb-2">Data Storage</h4>
+          <p className="text-sm text-muted-foreground mb-2">
+            All your data is stored locally on your device at:
+          </p>
+          <code className="block rounded bg-secondary px-3 py-2 text-xs font-mono">
+            {typeof window !== 'undefined' && navigator.platform.startsWith('Win')
+              ? '%APPDATA%\\AGI Workforce\\'
+              : '~/.local/share/agi-workforce/'}
+          </code>
+          <p className="text-xs text-muted-foreground mt-2">
+            Your API keys are stored securely in your system keyring, separate from the database.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h4 className="font-semibold mb-2">Privacy First</h4>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <span>No data is sent to AGI Workforce servers</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <span>All processing happens locally or with your chosen AI providers</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <span>You control which AI providers to use and when</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <span>API keys are encrypted and stored in your system keyring</span>
+            </li>
+          </ul>
+        </div>
+
+        <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+          <h4 className="font-semibold text-yellow-600 dark:text-yellow-400 mb-2">
+            GDPR Compliance
+          </h4>
+          <p className="text-sm text-yellow-600 dark:text-yellow-400">
+            AGI Workforce respects your right to data portability and privacy. Use the export
+            feature above to exercise your GDPR rights. To delete all your data, simply uninstall
+            the application and remove the data directory.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-semibold mb-2">Crash Reporting</h4>
+              <p className="text-sm text-muted-foreground mb-3">
+                Help us improve AGI Workforce by automatically sending crash reports and error
+                diagnostics. Reports include stack traces and system information but never include
+                your conversations, API keys, or personal data.
+              </p>
+              <ul className="space-y-1 text-xs text-muted-foreground mb-3">
+                <li>• Error messages and stack traces</li>
+                <li>• Operating system and app version</li>
+                <li>• Memory and performance metrics</li>
+                <li>• NO personal data, API keys, or conversation content</li>
+              </ul>
+            </div>
+            <div className="ml-4">
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={crashReportingEnabled}
+                  disabled={savingCrashReporting}
+                  onChange={(e) => void handleToggleCrashReporting(e.target.checked)}
+                />
+                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary peer-focus:ring-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700"></div>
+              </label>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            {crashReportingEnabled
+              ? 'Crash reporting is enabled. Thank you for helping us improve!'
+              : 'Crash reporting is disabled. You can enable it anytime.'}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
