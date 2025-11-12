@@ -140,7 +140,7 @@ pub async fn runtime_get_task_changes(
     task_id: String,
 ) -> Result<Vec<crate::agent::change_tracker::Change>, String> {
     let runtime = state.0.lock().await;
-    Ok(runtime.get_task_change_history(&task_id))
+    Ok(runtime.get_task_change_history(&task_id).await)
 }
 
 /// Get all change history
