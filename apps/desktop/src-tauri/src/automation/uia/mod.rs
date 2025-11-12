@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CoUninitialize, CLSCTX_INPROC_SERVER,
+    CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CLSCTX_INPROC_SERVER,
     COINIT_APARTMENTTHREADED, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IDENTIFY,
     SAFEARRAY,
 };

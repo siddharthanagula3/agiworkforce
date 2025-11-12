@@ -426,7 +426,7 @@ fn walk_directory(
     Ok(())
 }
 
-fn index_file(path: &PathBuf, root: &PathBuf) -> Option<IndexedFile> {
+fn index_file(path: &PathBuf, _root: &PathBuf) -> Option<IndexedFile> {
     let extension = path.extension()?.to_str()?;
     let language = match extension {
         "rs" => "Rust",
