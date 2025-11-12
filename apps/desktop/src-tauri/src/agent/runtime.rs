@@ -512,17 +512,14 @@ Do not repeat the error message."#,
             id: task.id.clone(),
             description: task.description.clone(),
             priority: match task.priority {
-                TaskPriority::Low => crate::agi::GoalPriority::Low,
-                TaskPriority::Normal => crate::agi::GoalPriority::Medium,
-                TaskPriority::High => crate::agi::GoalPriority::High,
-                TaskPriority::Critical => crate::agi::GoalPriority::Critical,
+                TaskPriority::Low => crate::agi::Priority::Low,
+                TaskPriority::Normal => crate::agi::Priority::Medium,
+                TaskPriority::High => crate::agi::Priority::High,
+                TaskPriority::Critical => crate::agi::Priority::Critical,
             },
-            success_criteria: vec![task.goal.clone()],
-            context: task.metadata.clone(),
             deadline: None,
-            dependencies: task.dependencies.clone(),
-            created_at: task.created_at,
-            status: crate::agi::GoalStatus::Active,
+            constraints: Vec::new(),
+            success_criteria: vec![task.goal.clone()],
         };
 
         // Submit goal to AGI Core for execution
@@ -547,7 +544,7 @@ Do not repeat the error message."#,
     }
 
     /// Execute task with retry logic (fallback)
-    async fn execute_with_retry_fallback(&self, task: &Task) -> Result<serde_json::Value> {
+    async fn execute_with_retry_fallback(&self, agi: &Arc<AGICore>, task: &Task) -> Result<serde_json::Value> {
         // Convert Task to Goal
         let priority = match task.priority {
             TaskPriority::Low => crate::agi::Priority::Low,
@@ -1014,13 +1011,9 @@ Do not repeat the error message."#,
     }
 
     /// Get all changes for a task (for UI display)
-    pub fn get_task_change_history(&self, task_id: &str) -> Vec<Change> {
-        self.change_tracker
-            .read()
-            .get_task_changes(task_id)
-            .into_iter()
-            .cloned()
-            .collect()
+    pub async fn get_task_change_history(&self, task_id: &str) -> Vec<Change> {
+        let tracker = self.change_tracker.read();
+        tracker.get_task_changes(task_id).await
     }
 
     /// Get all changes (for history view)

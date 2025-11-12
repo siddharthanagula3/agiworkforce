@@ -2,7 +2,7 @@
  * Enhanced Debugging Capabilities
  * Error parsing, stack trace analysis, and AI-powered fix suggestions
  */
-use crate::router::{LLMRequest, LLMRouter, Message, MessageRole};
+use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -119,22 +119,34 @@ Provide solutions in JSON format:
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(1500),
         temperature: Some(0.4),
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
-    let json_str = extract_json(&response.content)?;
+    let json_str = extract_json(&outcome.response.content)?;
     serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse suggestions: {}", e))
 }
 
@@ -178,22 +190,34 @@ Provide analysis in JSON format:
     );
 
     let llm_request = LLMRequest {
-        messages: vec![Message {
-            role: MessageRole::User,
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: Some(1000),
         temperature: Some(0.3),
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message(&llm_request)
+    let preferences = RouterPreferences::default();
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("LLM request failed: {}", e))?;
 
-    let json_str = extract_json(&response.content)?;
+    let json_str = extract_json(&outcome.response.content)?;
     serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse analysis: {}", e))
 }
 
