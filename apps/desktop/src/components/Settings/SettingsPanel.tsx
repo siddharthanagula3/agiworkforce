@@ -550,6 +550,43 @@ function DataPrivacyTab() {
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [crashReportingEnabled, setCrashReportingEnabled] = useState(true);
+  const [savingCrashReporting, setSavingCrashReporting] = useState(false);
+
+  // Load crash reporting preference
+  useEffect(() => {
+    const loadPreference = async () => {
+      try {
+        const result = await invoke<{ value: string } | null>('get_user_preference', {
+          key: 'crash_reporting_enabled',
+        });
+        if (result) {
+          setCrashReportingEnabled(result.value === 'true');
+        }
+      } catch (error) {
+        console.error('Failed to load crash reporting preference:', error);
+      }
+    };
+    void loadPreference();
+  }, []);
+
+  const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
+    setSavingCrashReporting(true);
+    try {
+      await invoke('set_user_preference', {
+        key: 'crash_reporting_enabled',
+        value: enabled.toString(),
+        category: 'privacy',
+        dataType: 'boolean',
+        description: 'Enable automatic crash reporting via Sentry',
+      });
+      setCrashReportingEnabled(enabled);
+    } catch (error) {
+      console.error('Failed to save crash reporting preference:', error);
+    } finally {
+      setSavingCrashReporting(false);
+    }
+  }, []);
 
   const handleExportData = useCallback(async () => {
     setExporting(true);
@@ -679,6 +716,42 @@ function DataPrivacyTab() {
             AGI Workforce respects your right to data portability and privacy. Use the export
             feature above to exercise your GDPR rights. To delete all your data, simply uninstall
             the application and remove the data directory.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-semibold mb-2">Crash Reporting</h4>
+              <p className="text-sm text-muted-foreground mb-3">
+                Help us improve AGI Workforce by automatically sending crash reports and error
+                diagnostics. Reports include stack traces and system information but never include
+                your conversations, API keys, or personal data.
+              </p>
+              <ul className="space-y-1 text-xs text-muted-foreground mb-3">
+                <li>• Error messages and stack traces</li>
+                <li>• Operating system and app version</li>
+                <li>• Memory and performance metrics</li>
+                <li>• NO personal data, API keys, or conversation content</li>
+              </ul>
+            </div>
+            <div className="ml-4">
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={crashReportingEnabled}
+                  disabled={savingCrashReporting}
+                  onChange={(e) => void handleToggleCrashReporting(e.target.checked)}
+                />
+                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary peer-focus:ring-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700"></div>
+              </label>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            {crashReportingEnabled
+              ? 'Crash reporting is enabled. Thank you for helping us improve!'
+              : 'Crash reporting is disabled. You can enable it anytime.'}
           </p>
         </div>
       </div>
