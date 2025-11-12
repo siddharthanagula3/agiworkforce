@@ -176,12 +176,8 @@ impl ContextCompactor {
         if let Some(router) = &self.llm_router {
             match router.send_message(&conversation_text, None).await {
                 Ok(response) => {
-                    tracing::info!(
-                        "Generated LLM-powered summary: {} tokens, cost: ${:.4}",
-                        response.tokens.unwrap_or(0),
-                        response.cost.unwrap_or(0.0)
-                    );
-                    Ok(response.content)
+                    tracing::info!("Generated LLM-powered summary");
+                    Ok(response)
                 }
                 Err(e) => {
                     tracing::warn!("LLM summary failed, using heuristic fallback: {}", e);

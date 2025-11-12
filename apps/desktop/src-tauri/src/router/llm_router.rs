@@ -368,6 +368,26 @@ impl LLMRouter {
                 TaskCategory::Creative => "gemini-1.5-pro".to_string(),
             },
             Provider::Ollama => "llama3".to_string(),
+            Provider::XAI => match task {
+                TaskCategory::Simple => "grok-3".to_string(),
+                TaskCategory::Complex => "grok-4".to_string(),
+                TaskCategory::Creative => "grok-4".to_string(),
+            },
+            Provider::DeepSeek => match task {
+                TaskCategory::Simple => "deepseek-chat".to_string(),
+                TaskCategory::Complex => "deepseek-reasoner".to_string(),
+                TaskCategory::Creative => "deepseek-chat".to_string(),
+            },
+            Provider::Qwen => match task {
+                TaskCategory::Simple => "qwen-max-2025-01-25".to_string(),
+                TaskCategory::Complex => "qwen-max-2025-01-25".to_string(),
+                TaskCategory::Creative => "qwen-max-2025-01-25".to_string(),
+            },
+            Provider::Mistral => match task {
+                TaskCategory::Simple => "mistral-large-2".to_string(),
+                TaskCategory::Complex => "mistral-large-2".to_string(),
+                TaskCategory::Creative => "mistral-large-2".to_string(),
+            },
         }
     }
 }
