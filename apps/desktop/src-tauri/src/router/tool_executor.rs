@@ -420,7 +420,7 @@ impl ToolExecutor {
                     }
 
                     // Type the text
-                    match automation.keyboard.send_text(text) {
+                    match automation.keyboard.send_text(text).await {
                         Ok(_) => Ok(ToolResult {
                             success: true,
                             data: json!({ "success": true, "action": "typed", "text": text }),

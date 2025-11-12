@@ -235,13 +235,6 @@ impl IntelligentFileAccess {
         // Note: For true vision support, we would pass image data to vision-capable models
         // For now, we use text-based analysis with OCR text embedded in the prompt
 
-        match router.send_message(prompt, None).await {
-            Ok(analysis) => Ok(analysis),
-            Err(e) => {
-                tracing::warn!("LLM analysis failed: {}", e);
-                Err(anyhow!("LLM analysis failed: {}", e))
-            }
-        }
         tracing::info!("[IntelligentFileAccess] Analyzing screenshot with LLM");
 
         // Build comprehensive prompt with OCR text

@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CoUninitialize, CLSCTX_INPROC_SERVER,
+    CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CLSCTX_INPROC_SERVER,
     COINIT_APARTMENTTHREADED, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IDENTIFY,
     SAFEARRAY,
 };
@@ -47,10 +47,11 @@ unsafe impl Sync for UIAutomationService {}
 impl UIAutomationService {
     pub fn new() -> Result<Self> {
         // Thread-safe COM initialization using OnceLock
-        COM_INITIALIZED.get_or_try_init(|| unsafe {
-            CoInitializeEx(None, COINIT_APARTMENTTHREADED)
-                .ok()
-                .map_err(|err| anyhow!("CoInitializeEx failed: {err:?}"))?;
+        COM_INITIALIZED.get_or_init(|| unsafe {
+            if let Err(err) = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() {
+                tracing::error!("CoInitializeEx failed: {:?}", err);
+                return;
+            }
             let _ = CoInitializeSecurity(
                 None,
                 -1,
@@ -63,8 +64,7 @@ impl UIAutomationService {
                 None,
             )
             .ok();
-            Ok(())
-        })?;
+        });
 
         let automation: IUIAutomation = unsafe {
             CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
