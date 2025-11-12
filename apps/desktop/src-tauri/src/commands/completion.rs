@@ -40,33 +40,44 @@ pub async fn get_code_completion(
     };
 
     let llm_request = LLMRequest {
-        messages: vec![crate::router::Message {
-            role: crate::router::MessageRole::User,
+        messages: vec![crate::router::ChatMessage {
+            role: "user".to_string(),
             content: request.prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(), // Will be set by router
         max_tokens: request.max_tokens.or(Some(150)),
         temperature: request.temperature.or(Some(0.3)),
         stream: false, // No streaming for completions (need full response fast)
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message_with_preferences(&llm_request, &preferences)
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("Completion failed: {}", e))?;
 
     let latency = start_time.elapsed().as_millis() as u64;
 
     tracing::debug!(
-        "[Completion] Generated completion using {} in {}ms",
-        response.provider,
+        "[Completion] Generated completion using {:?} in {}ms",
+        outcome.provider,
         latency
     );
 
     Ok(CompletionResponse {
-        content: response.content,
-        model: response.provider.to_string(),
-        tokens: response.tokens.unwrap_or(0),
+        content: outcome.response.content,
+        model: outcome.model,
+        tokens: outcome.completion_tokens,
         latency,
     })
 }
@@ -101,22 +112,33 @@ pub async fn get_inline_completion(
     };
 
     let llm_request = LLMRequest {
-        messages: vec![crate::router::Message {
-            role: crate::router::MessageRole::User,
+        messages: vec![crate::router::ChatMessage {
+            role: "user".to_string(),
             content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
         }],
+        model: "".to_string(),  // Will be set by router
         max_tokens: Some(50),   // Very short completions
         temperature: Some(0.2), // Low temperature for consistency
         stream: false,
+        tools: None,
+        tool_choice: None,
     };
 
     let router = router_state.lock().await;
-    let response = router
-        .send_message_with_preferences(&llm_request, &preferences)
+    let candidates = router.candidates(&llm_request, &preferences);
+
+    if candidates.is_empty() {
+        return Err("No LLM providers configured".to_string());
+    }
+
+    let outcome = router
+        .invoke_candidate(&candidates[0], &llm_request)
         .await
         .map_err(|e| format!("Inline completion failed: {}", e))?;
 
-    Ok(response.content.trim().to_string())
+    Ok(outcome.response.content.trim().to_string())
 }
 
 #[cfg(test)]
