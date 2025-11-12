@@ -512,15 +512,14 @@ pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, S
 pub async fn git_stash(path: String, message: Option<String>) -> Result<String, String> {
     tracing::info!("Stashing changes");
 
-    let mut args = vec!["stash", "push"];
+    let mut cmd = Command::new("git");
+    cmd.current_dir(&path).arg("stash").arg("push");
+
     if let Some(msg) = message {
-        args.push("-m");
-        args.push(&msg);
+        cmd.arg("-m").arg(msg);
     }
 
-    let output = Command::new("git")
-        .current_dir(&path)
-        .args(&args)
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to stash: {}", e))?;
 
