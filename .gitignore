@@ -57,6 +57,8 @@ apps/desktop/src-tauri/tauri-info.json
 # --- Rust / Cargo ---
 **/target/
 **/*.rs.bk
+**/*.rlib
+*.rlib
 Cargo.lock
 # Allow Cargo.lock for applications
 !apps/**/Cargo.lock
