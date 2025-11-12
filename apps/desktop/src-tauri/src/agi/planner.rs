@@ -424,21 +424,24 @@ Execution Context:
 Analyze the context and determine if the criterion is met.
 Respond with ONLY "true" or "false"."#,
             criterion,
-            context.completed_steps.len(),
+            context.tool_results.len(),
             context
                 .tool_results
                 .iter()
                 .rev()
                 .take(3)
-                .map(|(tool, result)| format!("{}: {}", tool, result.success))
+                .map(|result| format!("{}: {}", result.tool_id, result.success))
                 .collect::<Vec<_>>()
                 .join(", "),
             context.available_resources.cpu_usage_percent,
             context.available_resources.memory_usage_mb,
-            if context.errors.is_empty() {
-                "None".to_string()
-            } else {
-                context.errors.len().to_string()
+            {
+                let error_count = context.tool_results.iter().filter(|r| r.error.is_some()).count();
+                if error_count == 0 {
+                    "None".to_string()
+                } else {
+                    error_count.to_string()
+                }
             }
         );
 
