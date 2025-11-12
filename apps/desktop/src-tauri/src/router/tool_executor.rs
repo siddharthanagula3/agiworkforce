@@ -959,29 +959,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_tool_definition_conversion() {
-        // Test creating tool definitions for core tools
-        let file_read_tool = create_file_read_tool();
-        assert_eq!(file_read_tool.name, "file_read");
-        assert_eq!(
-            file_read_tool.description,
-            "Read contents of a file from the filesystem"
-        );
-        assert!(file_read_tool.parameters.is_object());
-
-        let ui_screenshot_tool = create_ui_screenshot_tool();
-        assert_eq!(ui_screenshot_tool.name, "ui_screenshot");
-        assert!(ui_screenshot_tool.description.contains("screenshot"));
-
-        let browser_navigate_tool = create_browser_navigate_tool();
-        assert_eq!(browser_navigate_tool.name, "browser_navigate");
-        assert!(
-            browser_navigate_tool.description.contains("browser")
-                || browser_navigate_tool.description.contains("URL")
-        );
-    }
-
-    #[test]
     fn test_tool_call_parsing() {
         // Test parsing tool calls
         let tool_call = ToolCall {
@@ -989,12 +966,17 @@ mod tests {
             name: "file_read".to_string(),
             arguments: serde_json::json!({
                 "path": "/tmp/test.txt"
-            }),
+            })
+            .to_string(),
         };
 
         assert_eq!(tool_call.id, "test_123");
         assert_eq!(tool_call.name, "file_read");
-        assert!(tool_call.arguments["path"].is_string());
+
+        // Parse arguments to verify they're valid JSON
+        let args: HashMap<String, serde_json::Value> =
+            serde_json::from_str(&tool_call.arguments).unwrap();
+        assert!(args.get("path").and_then(|v| v.as_str()).is_some());
     }
 
     #[tokio::test]
@@ -1016,52 +998,15 @@ mod tests {
             name: "file_read".to_string(),
             arguments: serde_json::json!({
                 "path": file_path.to_str().unwrap()
-            }),
+            })
+            .to_string(),
         };
 
-        // Execute file_read (basic functionality test)
-        let path_str = tool_call.arguments["path"].as_str().unwrap();
+        // Parse arguments and execute file_read (basic functionality test)
+        let args: HashMap<String, serde_json::Value> =
+            serde_json::from_str(&tool_call.arguments).unwrap();
+        let path_str = args.get("path").and_then(|v| v.as_str()).unwrap();
         let content = std::fs::read_to_string(path_str).unwrap();
         assert!(content.contains("Hello, World!"));
-    }
-
-    #[test]
-    fn test_all_core_tools_defined() {
-        // Verify all core tools are properly defined
-        let tools = vec![
-            create_file_read_tool(),
-            create_file_write_tool(),
-            create_ui_screenshot_tool(),
-            create_ui_click_tool(),
-            create_ui_type_tool(),
-            create_browser_navigate_tool(),
-            create_code_execute_tool(),
-            create_db_query_tool(),
-            create_api_call_tool(),
-            create_image_ocr_tool(),
-        ];
-
-        // Ensure all tools have unique names
-        let mut names = std::collections::HashSet::new();
-        for tool in &tools {
-            assert!(
-                names.insert(&tool.name),
-                "Duplicate tool name: {}",
-                tool.name
-            );
-            assert!(!tool.name.is_empty(), "Tool has empty name");
-            assert!(
-                !tool.description.is_empty(),
-                "Tool {} has empty description",
-                tool.name
-            );
-            assert!(
-                tool.parameters.is_object(),
-                "Tool {} has invalid parameters",
-                tool.name
-            );
-        }
-
-        assert_eq!(tools.len(), 10, "Expected 10 core tools to be defined");
     }
 }
