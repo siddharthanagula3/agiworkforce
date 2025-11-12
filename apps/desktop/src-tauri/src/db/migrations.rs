@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 14;
+const CURRENT_VERSION: i32 = 15;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -98,6 +98,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 14 {
         apply_migration_v14(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [14])?;
+    }
+
+    if current_version < 15 {
+        apply_migration_v15(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [15])?;
     }
 
     Ok(())
@@ -1193,6 +1198,158 @@ fn apply_migration_v14(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_audit_log_action
          ON audit_log(action, timestamp DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v15: Onboarding progress tracking
+fn apply_migration_v15(conn: &Connection) -> Result<()> {
+    // Onboarding progress table - tracks user completion of onboarding steps
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS onboarding_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            step_id TEXT NOT NULL UNIQUE,
+            step_name TEXT NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0 CHECK(completed IN (0, 1)),
+            skipped INTEGER NOT NULL DEFAULT 0 CHECK(skipped IN (0, 1)),
+            completed_at INTEGER,
+            data TEXT, -- JSON object for step-specific data
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Index for onboarding step queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_onboarding_step_id
+         ON onboarding_progress(step_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_onboarding_completed
+         ON onboarding_progress(completed, completed_at DESC)",
+        [],
+    )?;
+
+    // Insert default onboarding steps
+    let steps = vec![
+        ("welcome", "Welcome Screen"),
+        ("api_keys", "API Keys Setup"),
+        ("first_task", "First Task Tutorial"),
+        ("explore_features", "Explore Features"),
+    ];
+
+    for (step_id, step_name) in steps {
+        conn.execute(
+            "INSERT OR IGNORE INTO onboarding_progress (step_id, step_name, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?3)",
+            [
+                step_id,
+                step_name,
+                &chrono::Utc::now().timestamp().to_string(),
+            ],
+        )?;
+    }
+
+    // User preferences table for expanded settings
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT NOT NULL UNIQUE,
+            value TEXT NOT NULL,
+            category TEXT NOT NULL CHECK(category IN (
+                'shortcuts',
+                'notifications',
+                'privacy',
+                'appearance',
+                'behavior',
+                'advanced'
+            )),
+            data_type TEXT NOT NULL CHECK(data_type IN (
+                'string',
+                'number',
+                'boolean',
+                'json'
+            )),
+            description TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_preferences_category
+         ON user_preferences(category)",
+        [],
+    )?;
+
+    // Session management table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_sessions (
+            id TEXT PRIMARY KEY,
+            started_at INTEGER NOT NULL,
+            last_activity INTEGER NOT NULL,
+            idle_timeout_minutes INTEGER NOT NULL DEFAULT 30,
+            auto_lock_enabled INTEGER NOT NULL DEFAULT 0 CHECK(auto_lock_enabled IN (0, 1)),
+            locked_at INTEGER,
+            unlock_required INTEGER NOT NULL DEFAULT 0 CHECK(unlock_required IN (0, 1)),
+            session_data TEXT, -- JSON object
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_sessions_activity
+         ON user_sessions(last_activity DESC)",
+        [],
+    )?;
+
+    // Offline operations queue
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS offline_operations_queue (
+            id TEXT PRIMARY KEY,
+            operation_type TEXT NOT NULL CHECK(operation_type IN (
+                'message',
+                'automation',
+                'file_sync',
+                'settings_sync',
+                'other'
+            )),
+            payload TEXT NOT NULL, -- JSON object
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            max_retries INTEGER NOT NULL DEFAULT 3,
+            priority INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL CHECK(status IN (
+                'pending',
+                'processing',
+                'completed',
+                'failed'
+            )) DEFAULT 'pending',
+            error_message TEXT,
+            created_at INTEGER NOT NULL,
+            scheduled_at INTEGER, -- When to process (for delayed operations)
+            processed_at INTEGER
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_offline_queue_status
+         ON offline_operations_queue(status, priority DESC, created_at)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_offline_queue_scheduled
+         ON offline_operations_queue(scheduled_at)
+         WHERE scheduled_at IS NOT NULL",
         [],
     )?;
 
