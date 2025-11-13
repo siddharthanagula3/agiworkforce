@@ -10,7 +10,7 @@ use agiworkforce_desktop::billing::BillingStateWrapper;
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        load_persisted_calendar_accounts, AgentRuntimeState, ApiState, AppDatabase,
+        load_persisted_calendar_accounts, AgentRuntimeState, AIEmployeeState, ApiState, AppDatabase,
         BrowserStateWrapper, CalendarState, CloudState, CodeEditingState, CodeGeneratorState,
         ComputerUseState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState,
         GitHubState, LLMState, LSPState, McpState, ProductivityState, SettingsServiceState,
@@ -249,6 +249,15 @@ fn main() {
 
             tracing::info!("Workflow orchestration state initialized");
 
+            // Initialize Marketplace state for public workflows
+            let marketplace_conn =
+                Connection::open(&db_path).expect("Failed to open database for marketplace");
+            app.manage(agiworkforce_desktop::commands::marketplace::MarketplaceState {
+                db: Arc::new(Mutex::new(marketplace_conn)),
+            });
+
+            tracing::info!("Marketplace state initialized");
+
             // Initialize Template Manager state
             let template_conn =
                 Connection::open(&db_path).expect("Failed to open database for template manager");
@@ -260,6 +269,77 @@ fn main() {
             });
 
             tracing::info!("Template manager state initialized");
+
+            // Initialize Real-time Metrics and ROI Dashboard
+            let realtime_server = Arc::new(agiworkforce_desktop::realtime::RealtimeServer::new());
+            let metrics_db = Arc::new(Mutex::new(
+                Connection::open(&db_path).expect("Failed to open database for metrics"),
+            ));
+            let metrics_collector = Arc::new(
+                agiworkforce_desktop::metrics::RealtimeMetricsCollector::new(
+                    metrics_db.clone(),
+                    realtime_server.clone(),
+                ),
+            );
+            let metrics_comparison = Arc::new(agiworkforce_desktop::metrics::MetricsComparison::new(
+                metrics_db.clone(),
+            ));
+
+            // Manage metrics states
+            app.manage(agiworkforce_desktop::commands::MetricsCollectorState(
+                metrics_collector,
+            ));
+            app.manage(agiworkforce_desktop::commands::MetricsComparisonState(
+                metrics_comparison,
+            ));
+
+            tracing::info!("Real-time metrics and ROI dashboard initialized");
+
+            // Initialize AI Employee system
+            let employee_db = Arc::new(Mutex::new(
+                Connection::open(&db_path).expect("Failed to open database for AI employees"),
+            ));
+
+            // Create LLM router for employee executor (reuse existing LLM state)
+            let llm_router = Arc::new(Mutex::new(agiworkforce_desktop::router::LLMRouter::new()));
+
+            // Create tool registry for employee executor
+            let tools = Arc::new(agiworkforce_desktop::agi::tools::ToolRegistry::new());
+
+            // Create employee system components
+            let employee_executor = Arc::new(Mutex::new(
+                agiworkforce_desktop::ai_employees::executor::AIEmployeeExecutor::new(
+                    employee_db.clone(),
+                    llm_router,
+                    tools,
+                ),
+            ));
+
+            let employee_marketplace = Arc::new(Mutex::new(
+                agiworkforce_desktop::ai_employees::marketplace::EmployeeMarketplace::new(
+                    employee_db.clone(),
+                ),
+            ));
+
+            let employee_registry = Arc::new(Mutex::new(
+                agiworkforce_desktop::ai_employees::registry::AIEmployeeRegistry::new(
+                    employee_db.clone(),
+                ),
+            ));
+
+            // Initialize pre-built employees
+            if let Err(e) = employee_registry.lock().unwrap().initialize() {
+                tracing::warn!("Failed to initialize AI employee registry: {}", e);
+            }
+
+            // Manage AI employee state
+            app.manage(AIEmployeeState {
+                executor: employee_executor,
+                marketplace: employee_marketplace,
+                registry: employee_registry,
+            });
+
+            tracing::info!("AI Employee system initialized");
 
             // Initialize window state
             let state = AppState::load(app.handle())?;
@@ -781,6 +861,34 @@ fn main() {
             agiworkforce_desktop::commands::schedule_workflow,
             agiworkforce_desktop::commands::trigger_workflow_on_event,
             agiworkforce_desktop::commands::get_next_execution_time,
+            // Marketplace commands - Public workflow sharing
+            agiworkforce_desktop::commands::publish_workflow_to_marketplace,
+            agiworkforce_desktop::commands::unpublish_workflow,
+            agiworkforce_desktop::commands::get_featured_workflows,
+            agiworkforce_desktop::commands::get_trending_workflows,
+            agiworkforce_desktop::commands::search_marketplace_workflows,
+            agiworkforce_desktop::commands::get_workflow_by_share_url,
+            agiworkforce_desktop::commands::get_creator_workflows,
+            agiworkforce_desktop::commands::get_my_published_workflows,
+            agiworkforce_desktop::commands::get_workflows_by_category,
+            agiworkforce_desktop::commands::get_category_counts,
+            agiworkforce_desktop::commands::get_popular_tags,
+            agiworkforce_desktop::commands::clone_marketplace_workflow,
+            agiworkforce_desktop::commands::fork_marketplace_workflow,
+            agiworkforce_desktop::commands::rate_workflow,
+            agiworkforce_desktop::commands::get_user_workflow_rating,
+            agiworkforce_desktop::commands::comment_on_workflow,
+            agiworkforce_desktop::commands::get_workflow_comments,
+            agiworkforce_desktop::commands::delete_workflow_comment,
+            agiworkforce_desktop::commands::favorite_workflow,
+            agiworkforce_desktop::commands::unfavorite_workflow,
+            agiworkforce_desktop::commands::is_workflow_favorited,
+            agiworkforce_desktop::commands::get_user_favorites,
+            agiworkforce_desktop::commands::share_workflow,
+            agiworkforce_desktop::commands::get_workflow_stats,
+            agiworkforce_desktop::commands::get_workflow_templates,
+            agiworkforce_desktop::commands::get_templates_by_category,
+            agiworkforce_desktop::commands::search_templates,
             // Team collaboration commands
             agiworkforce_desktop::commands::create_team,
             agiworkforce_desktop::commands::get_team,
@@ -822,7 +930,34 @@ fn main() {
             agiworkforce_desktop::commands::search_templates,
             agiworkforce_desktop::commands::execute_template,
             agiworkforce_desktop::commands::uninstall_template,
-            agiworkforce_desktop::commands::get_template_categories
+            agiworkforce_desktop::commands::get_template_categories,
+            // Real-time metrics and ROI dashboard commands
+            agiworkforce_desktop::commands::get_realtime_stats,
+            agiworkforce_desktop::commands::record_automation_metrics,
+            agiworkforce_desktop::commands::get_metrics_history,
+            agiworkforce_desktop::commands::get_employee_performance,
+            agiworkforce_desktop::commands::compare_to_manual,
+            agiworkforce_desktop::commands::compare_to_previous_period,
+            agiworkforce_desktop::commands::compare_to_industry_benchmark,
+            agiworkforce_desktop::commands::get_milestones,
+            agiworkforce_desktop::commands::share_milestone,
+            // AI Employee Library commands
+            agiworkforce_desktop::commands::ai_employees_initialize,
+            agiworkforce_desktop::commands::ai_employees_get_all,
+            agiworkforce_desktop::commands::ai_employees_get_by_id,
+            agiworkforce_desktop::commands::ai_employees_search,
+            agiworkforce_desktop::commands::ai_employees_get_featured,
+            agiworkforce_desktop::commands::ai_employees_get_by_category,
+            agiworkforce_desktop::commands::ai_employees_hire,
+            agiworkforce_desktop::commands::ai_employees_fire,
+            agiworkforce_desktop::commands::ai_employees_get_user_employees,
+            agiworkforce_desktop::commands::ai_employees_assign_task,
+            agiworkforce_desktop::commands::ai_employees_execute_task,
+            agiworkforce_desktop::commands::ai_employees_get_task_status,
+            agiworkforce_desktop::commands::ai_employees_list_tasks,
+            agiworkforce_desktop::commands::ai_employees_run_demo,
+            agiworkforce_desktop::commands::ai_employees_get_stats,
+            agiworkforce_desktop::commands::ai_employees_publish
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

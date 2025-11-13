@@ -2,6 +2,8 @@ pub mod tutorial_manager;
 pub mod progress_tracker;
 pub mod sample_data;
 pub mod rewards;
+pub mod first_run;
+pub mod instant_demo;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -119,5 +121,7 @@ pub struct TutorialStats {
 
 pub use tutorial_manager::{TutorialManager, TutorialError};
 pub use progress_tracker::{ProgressTracker, ProgressError};
-pub use sample_data::{SampleDataGenerator, SampleDataError};
+pub use sample_data::{SampleDataGenerator, SampleDataError, SampleEmail, SampleInvoice, SampleCodePR};
 pub use rewards::{RewardSystem, Reward, RewardType};
+pub use first_run::{FirstRunExperience, FirstRunSession, OnboardingStep, AIEmployeeRecommendation, DemoResult, FirstRunError, FirstRunStatistics};
+pub use instant_demo::{InstantDemo, DemoError, DemoStatistics};
