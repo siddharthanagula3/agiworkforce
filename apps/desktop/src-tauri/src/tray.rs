@@ -1,7 +1,4 @@
-use crate::{
-    state::{AppState, DockPosition},
-    window,
-};
+use crate::{state::AppState, window};
 use anyhow::Result;
 use tauri::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
@@ -30,10 +27,6 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
         None::<&str>,
     )?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    let dock_left = MenuItem::with_id(app, "dock_left", "Dock Left", true, None::<&str>)?;
-    let dock_right = MenuItem::with_id(app, "dock_right", "Dock Right", true, None::<&str>)?;
-    let undock = MenuItem::with_id(app, "undock", "Undock", true, None::<&str>)?;
-    let sep3 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::with_items(
@@ -47,10 +40,6 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
             &pin,
             &always_on_top,
             &sep2,
-            &dock_left,
-            &dock_right,
-            &undock,
-            &sep3,
             &quit,
         ],
     )?;
@@ -123,24 +112,6 @@ fn handle_menu_click(app: &AppHandle, id: &str) -> Result<()> {
             if let Some(window) = app.get_webview_window("main") {
                 let current = state.with_state(|s| s.always_on_top);
                 window::set_always_on_top(&window, &state, !current)?;
-            }
-        }
-        "dock_left" => {
-            let state = app.state::<AppState>().clone();
-            if let Some(window) = app.get_webview_window("main") {
-                window::apply_dock(&window, &state, DockPosition::Left)?;
-            }
-        }
-        "dock_right" => {
-            let state = app.state::<AppState>().clone();
-            if let Some(window) = app.get_webview_window("main") {
-                window::apply_dock(&window, &state, DockPosition::Right)?;
-            }
-        }
-        "undock" => {
-            let state = app.state::<AppState>().clone();
-            if let Some(window) = app.get_webview_window("main") {
-                window::undock(&window, &state)?;
             }
         }
         "new_conversation" => {

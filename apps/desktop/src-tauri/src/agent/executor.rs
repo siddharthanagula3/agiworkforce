@@ -220,7 +220,7 @@ impl TaskExecutor {
                         "ctrl" | "control" => modifiers.push(Key::Control),
                         "alt" => modifiers.push(Key::Alt),
                         "shift" => modifiers.push(Key::Shift),
-                        "win" | "windows" | "super" | "meta" => modifiers.push(Key::Windows),
+                        "win" | "windows" | "super" | "meta" => modifiers.push(Key::Meta),
                         key_str if is_last => {
                             // This is the main key
                             main_key = Some(self.parse_key_string(key_str)?);
@@ -362,7 +362,7 @@ impl TaskExecutor {
             s if s.len() == 1 => {
                 let c = s.chars().next().unwrap();
                 if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
-                    Key::Layout(c)
+                    Key::Unicode(c)
                 } else {
                     return Err(anyhow::anyhow!("Unsupported key character: {}", c));
                 }
