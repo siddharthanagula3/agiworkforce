@@ -5,7 +5,6 @@
 
 import { useEffect, useState } from 'react';
 import { ScrollArea } from '../components/ui/ScrollArea';
-import { Button } from '../components/ui/Button';
 import { Users } from 'lucide-react';
 import { EmployeeHero } from '../components/employees/EmployeeHero';
 import { EmployeeFilters } from '../components/employees/EmployeeFilters';
@@ -14,7 +13,7 @@ import { EmployeeDetailModal } from '../components/employees/EmployeeDetailModal
 import { DemoResultsModal } from '../components/employees/DemoResultsModal';
 import { MyEmployeesView } from '../components/employees/MyEmployeesView';
 import { useEmployeeStore } from '../stores/employeeStore';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/Tabs';
 
 export function EmployeesPage() {
   const {

@@ -116,6 +116,27 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   lastScreenshot: null,
   lastOcr: null,
 
+  // Recording state
+  isRecording: false,
+  currentRecording: null,
+  recordings: [],
+
+  // Script library state
+  scripts: [],
+  selectedScript: null,
+  loadingScripts: false,
+
+  // Execution state
+  isExecuting: false,
+  executionProgress: 0,
+  executionHistory: [],
+  currentExecution: null,
+
+  // Inspector state
+  inspector: {
+    isActive: false,
+  },
+
   async loadWindows() {
     set({ loadingWindows: true, error: null });
     try {
@@ -243,6 +264,82 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       error: null,
       lastScreenshot: null,
       lastOcr: null,
+      isRecording: false,
+      currentRecording: null,
+      recordings: [],
+      scripts: [],
+      selectedScript: null,
+      loadingScripts: false,
+      isExecuting: false,
+      executionProgress: 0,
+      executionHistory: [],
+      currentExecution: null,
+      inspector: {
+        isActive: false,
+      },
     });
+  },
+
+  // Recording actions (placeholder implementations)
+  startRecording: async () => {
+    set({ isRecording: true, currentRecording: null });
+  },
+
+  stopRecording: async () => {
+    set({ isRecording: false });
+    return null;
+  },
+
+  saveRecordingAsScript: async () => {
+    return null;
+  },
+
+  // Script library actions (placeholder implementations)
+  loadScripts: async () => {
+    set({ loadingScripts: true });
+    try {
+      set({ scripts: [], loadingScripts: false });
+    } catch (error) {
+      console.error('Failed to load scripts:', error);
+      set({ loadingScripts: false });
+    }
+  },
+
+  saveScript: async () => {
+    // Placeholder
+  },
+
+  deleteScript: async () => {
+    // Placeholder
+  },
+
+  selectScript: (script) => {
+    set({ selectedScript: script });
+  },
+
+  // Execution actions (placeholder implementations)
+  executeScript: async () => {
+    return null;
+  },
+
+  stopExecution: () => {
+    set({ isExecuting: false });
+  },
+
+  // Inspector actions (placeholder implementations)
+  activateInspector: () => {
+    set((state) => ({
+      inspector: { ...state.inspector, isActive: true },
+    }));
+  },
+
+  deactivateInspector: () => {
+    set((state) => ({
+      inspector: { ...state.inspector, isActive: false },
+    }));
+  },
+
+  inspectElementAt: async () => {
+    // Placeholder
   },
 }));

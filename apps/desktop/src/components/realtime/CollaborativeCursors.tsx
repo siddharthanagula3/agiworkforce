@@ -11,7 +11,8 @@ interface CollaborativeCursorsProps {
   resourceId: string;
 }
 
-const userColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+const userColors: readonly string[] = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+const DEFAULT_COLOR = '#3b82f6';
 
 export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ resourceId }) => {
   const [cursors, setCursors] = useState<Map<string, CursorData>>(new Map());
@@ -54,7 +55,7 @@ export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ reso
 
   const getUserColor = (userId: string): string => {
     const hash = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return userColors[hash % userColors.length];
+    return userColors[hash % userColors.length] ?? DEFAULT_COLOR;
   };
 
   const getUserName = (userId: string): string => {

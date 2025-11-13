@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Label } from '../ui/Label';
 import { Switch } from '../ui/Switch';
 import { Badge } from '../ui/Badge';

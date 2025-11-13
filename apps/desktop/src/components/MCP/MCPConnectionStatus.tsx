@@ -44,10 +44,12 @@ export function MCPConnectionStatus() {
   useEffect(() => {
     fetchHealth();
 
-    if (autoRefresh) {
-      const interval = setInterval(fetchHealth, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
+    if (!autoRefresh) {
+      return;
     }
+
+    const interval = setInterval(fetchHealth, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
   }, [autoRefresh]);
 
   const getStatusBadge = (status: 'healthy' | 'unhealthy' | 'unknown') => {

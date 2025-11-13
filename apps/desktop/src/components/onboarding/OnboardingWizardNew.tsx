@@ -5,9 +5,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Sparkles, Rocket, Target, CheckCircle, Clock, DollarSign } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
+import { Sparkles, Rocket, Target, Clock, DollarSign } from 'lucide-react';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { ProgressIndicator } from './ProgressIndicator';
 import { RoleSelection } from './RoleSelection';
@@ -96,7 +96,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
   };
 
   // Handle hire/complete
-  const handleComplete = async () => {
+  const _handleComplete = async () => {
     await completeOnboarding();
     onComplete();
   };
