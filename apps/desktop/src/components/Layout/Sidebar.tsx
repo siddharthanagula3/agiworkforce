@@ -42,6 +42,7 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
 
   const navigationItems = [
     { id: 'chat' as AppView, label: 'Chat', icon: MessageCircle },
+    { id: 'employees' as AppView, label: 'AI Employees', icon: Users },
     { id: 'templates' as AppView, label: 'Templates', icon: Package },
     { id: 'workflows' as AppView, label: 'Workflows', icon: Workflow },
     { id: 'teams' as AppView, label: 'Teams', icon: Users },

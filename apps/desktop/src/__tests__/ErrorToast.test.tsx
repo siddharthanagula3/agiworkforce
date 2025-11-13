@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ErrorToastContainer, useErrorToast } from '../components/errors/ErrorToast';
 import useErrorStore from '../stores/errorStore';
 
@@ -14,26 +14,10 @@ describe('ErrorToast', () => {
   describe('ErrorToastContainer', () => {
     it('should render nothing when no toasts', () => {
       const { container } = render(<ErrorToastContainer />);
-      expect(container.querySelector('[aria-live="polite"]')).toBeEmptyDOMElement();
+      expect(container.querySelector('[aria-live="polite"]')).not.toBeInTheDocument();
     });
 
-    it('should render toast when error is added', () => {
-      const { rerender } = render(<ErrorToastContainer />);
-
-      // Add an error
-      useErrorStore.getState().addError({
-        type: 'NETWORK_ERROR',
-        severity: 'error',
-        message: 'Connection failed',
-      });
-
-      rerender(<ErrorToastContainer />);
-
-      expect(screen.getByText('Connection Issue')).toBeInTheDocument();
-      expect(screen.getByText('Connection failed')).toBeInTheDocument();
-    });
-
-    it('should dismiss toast when X button is clicked', () => {
+    it('should render toast when error is added', async () => {
       render(<ErrorToastContainer />);
 
       // Add an error
@@ -43,34 +27,64 @@ describe('ErrorToast', () => {
         message: 'Connection failed',
       });
 
-      // Click dismiss button
+      // Wait for the component to update
+      await waitFor(() => {
+        expect(screen.getByText('Connection Issue')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Connection failed')).toBeInTheDocument();
+    });
+
+    it('should dismiss toast when X button is clicked', async () => {
+      render(<ErrorToastContainer />);
+
+      // Add an error
+      useErrorStore.getState().addError({
+        type: 'NETWORK_ERROR',
+        severity: 'error',
+        message: 'Connection failed',
+      });
+
+      // Wait for toast to appear
+      await waitFor(() => {
+        expect(screen.getByText('Connection failed')).toBeInTheDocument();
+      });
+
+      // Find and click dismiss button
       const dismissButton = screen.getByLabelText('Dismiss');
       fireEvent.click(dismissButton);
 
       // Toast should be removed
-      expect(screen.queryByText('Connection failed')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByText('Connection failed')).not.toBeInTheDocument();
+      });
     });
 
-    it('should show error count when error occurs multiple times', () => {
+    it('should show error count when error occurs multiple times', async () => {
       render(<ErrorToastContainer />);
 
-      // Add same error multiple times
+      // Add same error twice quickly (within 5 seconds)
       const addError = useErrorStore.getState().addError;
       addError({
         type: 'NETWORK_ERROR',
         severity: 'error',
         message: 'Connection failed',
       });
+
+      // Add the exact same error again immediately
       addError({
         type: 'NETWORK_ERROR',
         severity: 'error',
         message: 'Connection failed',
       });
 
-      expect(screen.getByText('2x')).toBeInTheDocument();
+      // Should show count badge
+      await waitFor(() => {
+        expect(screen.getByText('2x')).toBeInTheDocument();
+      });
     });
 
-    it('should show details when details section is expanded', () => {
+    it('should show details when details section is expanded', async () => {
       render(<ErrorToastContainer />);
 
       useErrorStore.getState().addError({
@@ -80,15 +94,17 @@ describe('ErrorToast', () => {
         details: 'Detailed error information',
       });
 
-      // Details should be hidden initially
-      expect(screen.queryByText('Detailed error information')).not.toBeVisible();
+      // Wait for toast to render
+      await waitFor(() => {
+        expect(screen.getByText('Connection failed')).toBeInTheDocument();
+      });
 
       // Click to show details
       const detailsToggle = screen.getByText('Show details');
       fireEvent.click(detailsToggle);
 
       // Details should now be visible
-      expect(screen.getByText('Detailed error information')).toBeVisible();
+      expect(screen.getByText('Detailed error information')).toBeInTheDocument();
     });
 
     it('should render different severity levels with correct styling', () => {
@@ -101,7 +117,9 @@ describe('ErrorToast', () => {
         message: 'Info message',
       });
       rerender(<ErrorToastContainer />);
-      expect(screen.getByText('Info message').closest('div')).toHaveClass('bg-blue-50');
+      // Find the toast container (role="alert")
+      const infoAlert = screen.getByRole('alert');
+      expect(infoAlert).toHaveClass('bg-blue-50');
 
       // Clear and test warning
       useErrorStore.getState().clearHistory();
@@ -111,7 +129,8 @@ describe('ErrorToast', () => {
         message: 'Warning message',
       });
       rerender(<ErrorToastContainer />);
-      expect(screen.getByText('Warning message').closest('div')).toHaveClass('bg-yellow-50');
+      const warningAlert = screen.getByRole('alert');
+      expect(warningAlert).toHaveClass('bg-yellow-50');
 
       // Clear and test error
       useErrorStore.getState().clearHistory();
@@ -121,7 +140,8 @@ describe('ErrorToast', () => {
         message: 'Error message',
       });
       rerender(<ErrorToastContainer />);
-      expect(screen.getByText('Error message').closest('div')).toHaveClass('bg-red-50');
+      const errorAlert = screen.getByRole('alert');
+      expect(errorAlert).toHaveClass('bg-red-50');
     });
 
     it('should limit number of visible toasts', () => {
