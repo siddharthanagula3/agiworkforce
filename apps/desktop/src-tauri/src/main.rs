@@ -427,6 +427,12 @@ fn main() {
             agiworkforce_desktop::commands::browser_execute_in_frame,
             agiworkforce_desktop::commands::browser_call_function,
             agiworkforce_desktop::commands::browser_enable_request_interception,
+            // Browser visualization commands
+            agiworkforce_desktop::commands::browser_get_screenshot_stream,
+            agiworkforce_desktop::commands::browser_highlight_element,
+            agiworkforce_desktop::commands::browser_get_dom_snapshot,
+            agiworkforce_desktop::commands::browser_get_console_logs,
+            agiworkforce_desktop::commands::browser_get_network_activity,
             // Git commands
             agiworkforce_desktop::commands::git_init,
             agiworkforce_desktop::commands::git_status,
