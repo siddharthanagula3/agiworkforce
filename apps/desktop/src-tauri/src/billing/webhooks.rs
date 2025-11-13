@@ -1,3 +1,6 @@
+// This module requires the "billing" feature to be enabled
+#![cfg(feature = "billing")]
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};

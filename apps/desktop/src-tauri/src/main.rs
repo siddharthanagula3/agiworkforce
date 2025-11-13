@@ -679,7 +679,7 @@ fn main() {
             // File search commands
             agiworkforce_desktop::filesystem::fs_search_files,
             agiworkforce_desktop::filesystem::fs_search_folders,
-            agiworkforce_desktop::filesystem::fs_read_file_content,
+            agiworkforce_desktop::commands::fs_read_file_content,
             agiworkforce_desktop::commands::fs_get_workspace_files,
             // File watcher commands
             agiworkforce_desktop::commands::file_watch_start,
@@ -887,8 +887,8 @@ fn main() {
             agiworkforce_desktop::commands::share_workflow,
             agiworkforce_desktop::commands::get_workflow_stats,
             agiworkforce_desktop::commands::get_workflow_templates,
-            agiworkforce_desktop::commands::get_templates_by_category,
-            agiworkforce_desktop::commands::search_templates,
+            agiworkforce_desktop::commands::get_workflow_templates_by_category,
+            agiworkforce_desktop::commands::search_workflow_templates,
             // Team collaboration commands
             agiworkforce_desktop::commands::create_team,
             agiworkforce_desktop::commands::get_team,

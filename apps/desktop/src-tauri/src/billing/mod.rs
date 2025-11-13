@@ -1,9 +1,13 @@
+#[cfg(feature = "billing")]
 pub mod stripe_client;
+#[cfg(feature = "billing")]
 pub mod webhooks;
 
+#[cfg(feature = "billing")]
 pub use stripe_client::{
     CustomerInfo, InvoiceInfo, PaymentMethodInfo, StripeService, SubscriptionInfo, UsageStats,
 };
+#[cfg(feature = "billing")]
 pub use webhooks::{WebhookEvent, WebhookHandler};
 
 use anyhow::Result;
@@ -11,12 +15,20 @@ use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
+#[cfg(feature = "billing")]
 /// Billing state wrapper for Tauri
 pub struct BillingState {
     stripe_service: Option<StripeService>,
     webhook_handler: Option<WebhookHandler>,
 }
 
+#[cfg(not(feature = "billing"))]
+/// Billing state wrapper for Tauri (stub when billing feature is disabled)
+pub struct BillingState {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+#[cfg(feature = "billing")]
 impl BillingState {
     pub fn new() -> Self {
         Self {
@@ -48,6 +60,15 @@ impl BillingState {
     }
 }
 
+#[cfg(not(feature = "billing"))]
+impl BillingState {
+    pub fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
 impl Default for BillingState {
     fn default() -> Self {
         Self::new()
@@ -69,6 +90,8 @@ impl Default for BillingStateWrapper {
     }
 }
 
+// All Tauri commands require the billing feature
+#[cfg(feature = "billing")]
 /// Initialize billing service with Stripe API key
 #[tauri::command]
 pub async fn billing_initialize(
@@ -88,6 +111,7 @@ pub async fn billing_initialize(
     Ok(())
 }
 
+#[cfg(feature = "billing")]
 /// Create a new customer
 #[tauri::command]
 pub async fn stripe_create_customer(
@@ -110,6 +134,7 @@ pub async fn stripe_create_customer(
         .map_err(|e| format!("Failed to create customer: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Get customer by email
 #[tauri::command]
 pub fn stripe_get_customer_by_email(
@@ -130,6 +155,7 @@ pub fn stripe_get_customer_by_email(
         .map_err(|e| format!("Failed to get customer: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Create a subscription
 #[tauri::command]
 pub async fn stripe_create_subscription(
@@ -161,6 +187,7 @@ pub async fn stripe_create_subscription(
         .map_err(|e| format!("Failed to create subscription: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Get subscription details
 #[tauri::command]
 pub async fn stripe_get_subscription(
@@ -182,6 +209,7 @@ pub async fn stripe_get_subscription(
         .map_err(|e| format!("Failed to get subscription: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Update subscription (upgrade/downgrade)
 #[tauri::command]
 pub async fn stripe_update_subscription(
@@ -205,6 +233,7 @@ pub async fn stripe_update_subscription(
         .map_err(|e| format!("Failed to update subscription: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Cancel subscription
 #[tauri::command]
 pub async fn stripe_cancel_subscription(
@@ -226,6 +255,7 @@ pub async fn stripe_cancel_subscription(
         .map_err(|e| format!("Failed to cancel subscription: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Get invoices for customer
 #[tauri::command]
 pub async fn stripe_get_invoices(
@@ -247,6 +277,7 @@ pub async fn stripe_get_invoices(
         .map_err(|e| format!("Failed to get invoices: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Get usage statistics
 #[tauri::command]
 pub fn stripe_get_usage(
@@ -269,6 +300,7 @@ pub fn stripe_get_usage(
         .map_err(|e| format!("Failed to get usage: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Track usage event
 #[tauri::command]
 pub fn stripe_track_usage(
@@ -301,6 +333,7 @@ pub fn stripe_track_usage(
         .map_err(|e| format!("Failed to track usage: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Create Stripe billing portal session
 #[tauri::command]
 pub async fn stripe_create_portal_session(
@@ -323,6 +356,7 @@ pub async fn stripe_create_portal_session(
         .map_err(|e| format!("Failed to create portal session: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Get active subscription for customer
 #[tauri::command]
 pub fn stripe_get_active_subscription(
@@ -343,6 +377,7 @@ pub fn stripe_get_active_subscription(
         .map_err(|e| format!("Failed to get active subscription: {}", e))
 }
 
+#[cfg(feature = "billing")]
 /// Process webhook event
 #[tauri::command]
 pub async fn stripe_process_webhook(

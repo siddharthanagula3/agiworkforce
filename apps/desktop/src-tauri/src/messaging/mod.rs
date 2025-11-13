@@ -5,7 +5,7 @@ pub mod types;
 
 pub use types::*;
 
-// Re-export main clients
-pub use slack::SlackClient;
+// Re-export main clients and configs
+pub use slack::{SlackClient, SlackConfig};
 pub use whatsapp::WhatsAppClient;
-pub use teams::TeamsClient;
+pub use teams::{TeamsClient, TeamsConfig};

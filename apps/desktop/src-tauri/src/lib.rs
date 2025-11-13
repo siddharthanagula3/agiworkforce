@@ -91,8 +91,14 @@ pub mod agi;
 // AI Employee Library - Pre-built AI employees for instant value
 pub mod ai_employees;
 
+// Analytics and ROI tracking system
+pub mod analytics;
+
 // Workflow Orchestration System
 pub mod orchestration;
+
+// Onboarding and first-run experience
+pub mod onboarding;
 
 // Public Workflow Marketplace - Viral sharing system
 pub mod workflows;

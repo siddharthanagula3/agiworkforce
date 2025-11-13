@@ -148,12 +148,12 @@ pub fn filter_sensitive_data(input: &str) -> String {
 
     // Patterns for sensitive data
     let patterns = [
-        (r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?([a-zA-Z0-9_-]+)['\"]?", "API_KEY=***"),
-        (r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"]?([^\s'\"]+)['\"]?", "PASSWORD=***"),
-        (r"(?i)(token|auth[_-]?token)\s*[:=]\s*['\"]?([a-zA-Z0-9._-]+)['\"]?", "TOKEN=***"),
-        (r"(?i)(secret|client[_-]?secret)\s*[:=]\s*['\"]?([a-zA-Z0-9_-]+)['\"]?", "SECRET=***"),
-        (r"(?i)(bearer|authorization)\s*[:=]\s*['\"]?([a-zA-Z0-9._-]+)['\"]?", "BEARER=***"),
-        (r"(?i)(private[_-]?key)\s*[:=]\s*['\"]?([^\s'\"]+)['\"]?", "PRIVATE_KEY=***"),
+        (r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?([a-zA-Z0-9_-]+)['"]?"#, "API_KEY=***"),
+        (r#"(?i)(password|passwd|pwd)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#, "PASSWORD=***"),
+        (r#"(?i)(token|auth[_-]?token)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#, "TOKEN=***"),
+        (r#"(?i)(secret|client[_-]?secret)\s*[:=]\s*['"]?([a-zA-Z0-9_-]+)['"]?"#, "SECRET=***"),
+        (r#"(?i)(bearer|authorization)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#, "BEARER=***"),
+        (r#"(?i)(private[_-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#, "PRIVATE_KEY=***"),
     ];
 
     let mut filtered = input.to_string();
