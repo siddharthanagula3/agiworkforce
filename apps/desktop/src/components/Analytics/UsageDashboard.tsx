@@ -27,8 +27,6 @@ import {
   queryTimeSeriesData,
   queryCategoryData,
   queryTopEvents,
-  queryFeatureUsage,
-  queryErrorStats,
 } from '../../services/analyticsQueries';
 import { TimeSeriesData, CategoryData } from '../../types/analytics';
 
@@ -209,7 +207,7 @@ export const UsageDashboard: React.FC = () => {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {featureData.map((entry, index) => (
+                  {featureData.map((_entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}

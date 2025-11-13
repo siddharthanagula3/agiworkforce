@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import useErrorStore from '../stores/errorStore';
 
 describe('errorStore', () => {
@@ -12,7 +12,7 @@ describe('errorStore', () => {
 
   describe('addError', () => {
     it('should add a new error to the store', () => {
-      const { addError, errors } = useErrorStore.getState();
+      const { addError } = useErrorStore.getState();
 
       addError({
         type: 'NETWORK_ERROR',
@@ -22,9 +22,9 @@ describe('errorStore', () => {
 
       const currentErrors = useErrorStore.getState().errors;
       expect(currentErrors).toHaveLength(1);
-      expect(currentErrors[0].message).toBe('Failed to connect');
-      expect(currentErrors[0].type).toBe('NETWORK_ERROR');
-      expect(currentErrors[0].severity).toBe('error');
+      expect(currentErrors[0]?.message).toBe('Failed to connect');
+      expect(currentErrors[0]?.type).toBe('NETWORK_ERROR');
+      expect(currentErrors[0]?.severity).toBe('error');
     });
 
     it('should increment count for duplicate errors within 5 seconds', () => {
@@ -46,7 +46,7 @@ describe('errorStore', () => {
 
       const currentErrors = useErrorStore.getState().errors;
       expect(currentErrors).toHaveLength(1);
-      expect(currentErrors[0].count).toBe(2);
+      expect(currentErrors[0]?.count).toBe(2);
     });
 
     it('should limit error history to maxHistorySize', () => {
@@ -92,11 +92,14 @@ describe('errorStore', () => {
         message: 'Test error',
       });
 
-      const errorId = useErrorStore.getState().errors[0].id;
-      dismissError(errorId);
+      const errorId = useErrorStore.getState().errors[0]?.id;
+      if (errorId) {
+        dismissError(errorId);
 
-      const { errors, toasts } = useErrorStore.getState();
-      expect(errors[0].dismissed).toBe(true);
+        const { errors } = useErrorStore.getState();
+        expect(errors[0]?.dismissed).toBe(true);
+      }
+      const { toasts } = useErrorStore.getState();
       expect(toasts).toHaveLength(0);
     });
   });
@@ -145,11 +148,11 @@ describe('errorStore', () => {
       const stats = getStatistics();
 
       expect(stats.totalErrors).toBe(4);
-      expect(stats.errorsByType.NETWORK_ERROR).toBe(2);
-      expect(stats.errorsByType.DATABASE_ERROR).toBe(1);
-      expect(stats.errorsBySeverity.error).toBe(2);
-      expect(stats.errorsBySeverity.critical).toBe(1);
-      expect(stats.errorsBySeverity.warning).toBe(1);
+      expect(stats.errorsByType['NETWORK_ERROR']).toBe(2);
+      expect(stats.errorsByType['DATABASE_ERROR']).toBe(1);
+      expect(stats.errorsBySeverity['error']).toBe(2);
+      expect(stats.errorsBySeverity['critical']).toBe(1);
+      expect(stats.errorsBySeverity['warning']).toBe(1);
     });
   });
 

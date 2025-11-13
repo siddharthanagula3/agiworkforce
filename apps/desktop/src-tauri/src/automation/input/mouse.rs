@@ -273,6 +273,22 @@ impl MouseSimulator {
         self.dispatch(&mut inputs)
     }
 
+    /// Scroll up (positive delta)
+    pub fn scroll_up(&self, amount: i32) -> Result<()> {
+        self.scroll(amount)
+    }
+
+    /// Scroll down (negative delta)
+    pub fn scroll_down(&self, amount: i32) -> Result<()> {
+        self.scroll(-amount)
+    }
+
+    /// Drag from one point to another (alias for drag_and_drop with default duration)
+    pub fn drag_to(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
+        // Use synchronous drag for simplicity
+        self.drag((from_x, from_y), (to_x, to_y))
+    }
+
     fn dispatch(&self, inputs: &mut [INPUT]) -> Result<()> {
         let sent = unsafe { SendInput(inputs, std::mem::size_of::<INPUT>() as i32) };
         if sent == inputs.len() as u32 {
