@@ -46,7 +46,7 @@ interface AGIStore {
 
 // Mock implementation of AGI store
 const createAGIStore = (): AGIStore => {
-  let state = {
+  const state = {
     goals: [] as Goal[],
     activeGoalId: null as string | null,
     isExecuting: false,
@@ -64,7 +64,7 @@ const createAGIStore = (): AGIStore => {
     },
 
     async createGoal(description: string, priority: Goal['priority']): Promise<string> {
-      const id = `goal-${Date.now()}`;
+      const id = `goal-${Date.now()}-${Math.random()}`;
       const goal: Goal = {
         id,
         description,
@@ -112,11 +112,9 @@ const createAGIStore = (): AGIStore => {
     },
 
     reset() {
-      state = {
-        goals: [],
-        activeGoalId: null,
-        isExecuting: false,
-      };
+      state.goals = [];
+      state.activeGoalId = null;
+      state.isExecuting = false;
     },
   };
 };
@@ -347,10 +345,19 @@ describe('AGI Store', () => {
       const priorities: Goal['priority'][] = ['Low', 'Medium', 'High', 'Critical'];
 
       for (const priority of priorities) {
+        // Small delay to ensure unique timestamps
+        await new Promise((resolve) => setTimeout(resolve, 1));
+
         const goalId = await store.createGoal(`${priority} priority goal`, priority);
         const goal = store.getGoal(goalId);
+
+        expect(goal).toBeDefined();
         expect(goal?.priority).toBe(priority);
+        expect(goal?.description).toBe(`${priority} priority goal`);
       }
+
+      // Verify all goals were created
+      expect(store.goals).toHaveLength(4);
     });
   });
 

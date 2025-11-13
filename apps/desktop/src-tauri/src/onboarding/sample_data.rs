@@ -389,3 +389,324 @@ pub struct TeamMember {
     pub email: String,
     pub role: String,
 }
+
+// ===== Sample Data for Instant Demos =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SampleEmail {
+    pub id: String,
+    pub from: String,
+    pub from_name: String,
+    pub subject: String,
+    pub body: String,
+    pub category: String,
+    pub priority: String,
+    pub is_spam: bool,
+    pub requires_response: bool,
+    pub received_at: i64,
+}
+
+impl SampleEmail {
+    /// Generate a batch of realistic sample emails
+    pub fn generate_batch(count: usize) -> Vec<Self> {
+        let mut emails = Vec::new();
+        let base_time = Utc::now().timestamp();
+
+        let samples = vec![
+            // Urgent customer inquiries
+            ("urgent_customer_1", "sarah.johnson@acmecorp.com", "Sarah Johnson", "URGENT: Production server down",
+             "Our production server has been down for 30 minutes. This is affecting all our customers. Need immediate help!",
+             "customer_inquiry", "urgent", false, true),
+            ("urgent_customer_2", "mike.chen@techstartup.io", "Mike Chen", "Critical bug in payment processing",
+             "We've discovered a critical bug that's preventing customers from completing purchases. Can you prioritize this?",
+             "customer_inquiry", "urgent", false, true),
+
+            // Important business emails
+            ("important_1", "john.smith@bigclient.com", "John Smith", "Re: Q4 Contract Renewal",
+             "Thanks for sending the proposal. We'd like to discuss the pricing for the enterprise tier. Available this week?",
+             "business", "important", false, true),
+            ("important_2", "lisa.wang@partner.com", "Lisa Wang", "Partnership Opportunity",
+             "We're interested in exploring a partnership. Our product complements yours well. Let's schedule a call.",
+             "business", "important", false, true),
+            ("important_3", "david.brown@investor.vc", "David Brown", "Following up on our conversation",
+             "Great meeting you at the conference! I'd love to learn more about your roadmap and growth plans.",
+             "business", "important", false, true),
+
+            // Customer support
+            ("support_1", "customer1@gmail.com", "Jane Doe", "How do I reset my password?",
+             "I forgot my password and the reset link isn't working. Can you help me access my account?",
+             "customer_inquiry", "normal", false, true),
+            ("support_2", "user@example.com", "Bob Wilson", "Feature request: Dark mode",
+             "Love your product! Would be great to have a dark mode option for night-time use.",
+             "customer_inquiry", "normal", false, true),
+            ("support_3", "help@company.com", "Support Team", "Question about API rate limits",
+             "We're hitting rate limits on the API. Is there a way to increase our quota?",
+             "customer_inquiry", "normal", false, true),
+
+            // Spam
+            ("spam_1", "noreply@spam1.com", "Marketing Team", "You've won $1,000,000!!!",
+             "Congratulations! Click here to claim your prize now! Limited time offer!",
+             "spam", "low", true, false),
+            ("spam_2", "deals@spam2.com", "Super Deals", "50% OFF Everything!!!",
+             "SALE SALE SALE! Get 50% off on products you don't need! Act now!",
+             "spam", "low", true, false),
+            ("spam_3", "prince@nigeria.com", "Nigerian Prince", "Urgent Business Proposal",
+             "I am a prince and I need your help to transfer $10 million dollars...",
+             "spam", "low", true, false),
+
+            // Newsletters
+            ("newsletter_1", "weekly@techcrunch.com", "TechCrunch", "This Week in Tech",
+             "Here are the top tech stories from this week...",
+             "newsletter", "low", false, false),
+            ("newsletter_2", "digest@medium.com", "Medium Daily", "Your Daily Reading List",
+             "5 articles we think you'll love based on your interests...",
+             "newsletter", "low", false, false),
+            ("newsletter_3", "updates@github.com", "GitHub", "Your weekly GitHub activity",
+             "You had 12 contributions last week across 3 repositories...",
+             "newsletter", "low", false, false),
+
+            // Internal team emails
+            ("team_1", "alice@mycompany.com", "Alice Manager", "Team standup notes",
+             "Here are the notes from today's standup: Sprint is on track, Bob is blocked on API integration...",
+             "internal", "normal", false, false),
+            ("team_2", "bob@mycompany.com", "Bob Dev", "Code review request",
+             "Can someone review PR #123? It's the new authentication flow.",
+             "internal", "normal", false, true),
+
+            // Notifications
+            ("notif_1", "notifications@slack.com", "Slack", "New message in #engineering",
+             "You have 15 new messages in #engineering channel",
+             "notification", "low", false, false),
+            ("notif_2", "calendar@google.com", "Google Calendar", "Meeting in 15 minutes",
+             "Reminder: Team sync starts in 15 minutes",
+             "notification", "normal", false, false),
+        ];
+
+        for (i, (id, from, from_name, subject, body, category, priority, is_spam, requires_response)) in samples.into_iter().enumerate() {
+            if emails.len() >= count {
+                break;
+            }
+
+            emails.push(SampleEmail {
+                id: id.to_string(),
+                from: from.to_string(),
+                from_name: from_name.to_string(),
+                subject: subject.to_string(),
+                body: body.to_string(),
+                category: category.to_string(),
+                priority: priority.to_string(),
+                is_spam,
+                requires_response,
+                received_at: base_time - (i as i64 * 3600), // 1 hour apart
+            });
+        }
+
+        // Fill remaining with generic emails if needed
+        while emails.len() < count {
+            let i = emails.len();
+            emails.push(SampleEmail {
+                id: format!("generic_{}", i),
+                from: format!("user{}@example.com", i),
+                from_name: format!("User {}", i),
+                subject: format!("Sample email #{}", i),
+                body: "This is a generic sample email for demo purposes.".to_string(),
+                category: "other".to_string(),
+                priority: "normal".to_string(),
+                is_spam: false,
+                requires_response: i % 3 == 0,
+                received_at: base_time - (i as i64 * 3600),
+            });
+        }
+
+        emails
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SampleInvoice {
+    pub invoice_number: String,
+    pub vendor_name: String,
+    pub date: String,
+    pub due_date: String,
+    pub line_items: Vec<InvoiceLineItem>,
+    pub subtotal: f64,
+    pub tax: f64,
+    pub total_amount: f64,
+    pub po_number: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InvoiceLineItem {
+    pub description: String,
+    pub quantity: u32,
+    pub unit_price: f64,
+    pub total: f64,
+}
+
+impl SampleInvoice {
+    /// Generate a batch of realistic sample invoices
+    pub fn generate_batch(count: usize) -> Vec<Self> {
+        let mut invoices = Vec::new();
+
+        let vendors = vec![
+            ("Acme Office Supplies", vec![
+                ("Copy Paper (500 sheets)", 10, 12.99),
+                ("Ballpoint Pens (Box of 50)", 3, 8.50),
+                ("Sticky Notes (Pack of 12)", 5, 6.75),
+            ]),
+            ("TechGear Inc", vec![
+                ("USB-C Cable (6ft)", 20, 15.99),
+                ("Wireless Mouse", 5, 29.99),
+                ("Laptop Stand", 3, 49.99),
+            ]),
+            ("CloudServe Hosting", vec![
+                ("Server Hosting (Monthly)", 1, 299.00),
+                ("Bandwidth (100GB)", 1, 49.00),
+                ("SSL Certificate", 1, 79.00),
+            ]),
+            ("Marketing Masters", vec![
+                ("Social Media Management", 1, 1500.00),
+                ("Content Creation (5 posts)", 1, 750.00),
+                ("Analytics Report", 1, 250.00),
+            ]),
+            ("Legal Services LLP", vec![
+                ("Contract Review", 2, 350.00),
+                ("Consultation (hourly)", 5, 200.00),
+            ]),
+        ];
+
+        for i in 0..count {
+            let (vendor_name, items_template) = &vendors[i % vendors.len()];
+            let invoice_num = format!("INV-{:05}", 2000 + i);
+            let has_po = i % 10 != 0; // 90% have PO numbers
+
+            let mut line_items = Vec::new();
+            let mut subtotal = 0.0;
+
+            for (desc, qty, price) in items_template {
+                let total = *qty as f64 * price;
+                subtotal += total;
+                line_items.push(InvoiceLineItem {
+                    description: desc.to_string(),
+                    quantity: *qty,
+                    unit_price: *price,
+                    total,
+                });
+            }
+
+            let tax = subtotal * 0.08; // 8% sales tax
+            let total = subtotal + tax;
+
+            invoices.push(SampleInvoice {
+                invoice_number: invoice_num.clone(),
+                vendor_name: vendor_name.to_string(),
+                date: format!("2025-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1),
+                due_date: format!("2025-{:02}-{:02}", ((i + 1) % 12) + 1, (i % 28) + 1),
+                line_items,
+                subtotal,
+                tax,
+                total_amount: total,
+                po_number: if has_po { Some(format!("PO-{:05}", 5000 + i)) } else { None },
+            });
+        }
+
+        invoices
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SampleCodePR {
+    pub pr_number: u32,
+    pub title: String,
+    pub description: String,
+    pub author: String,
+    pub files_changed: u32,
+    pub additions: u32,
+    pub deletions: u32,
+    pub commits: Vec<String>,
+    pub diff_preview: String,
+}
+
+impl SampleCodePR {
+    /// Generate a sample TypeScript PR
+    pub fn generate_typescript_pr() -> Self {
+        SampleCodePR {
+            pr_number: 123,
+            title: "Add user authentication endpoints".to_string(),
+            description: "This PR adds JWT-based authentication endpoints for user login, logout, and token refresh.".to_string(),
+            author: "developer123".to_string(),
+            files_changed: 4,
+            additions: 247,
+            deletions: 18,
+            commits: vec![
+                "feat: add JWT token generation".to_string(),
+                "feat: implement login endpoint".to_string(),
+                "feat: add token refresh logic".to_string(),
+                "test: add auth endpoint tests".to_string(),
+            ],
+            diff_preview: r#"
+// src/auth/authController.ts
++import jwt from 'jsonwebtoken';
++import bcrypt from 'bcrypt';
++
++export const loginUser = async (req, res) => {
++  const { email, password } = req.body;
++
++  // TODO: Add input validation
++  const user = await User.findOne({ email });
++
++  if (!user) {
++    return res.status(401).json({ error: 'Invalid credentials' });
++  }
++
++  const isValid = await bcrypt.compare(password, user.passwordHash);
++
++  if (!isValid) {
++    return res.status(401).json({ error: 'Invalid credentials' });
++  }
++
++  const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
++
++  res.json({ token, user: { id: user.id, email: user.email } });
++};
+            "#.to_string(),
+        }
+    }
+
+    /// Generate a sample Python PR
+    pub fn generate_python_pr() -> Self {
+        SampleCodePR {
+            pr_number: 124,
+            title: "Optimize database queries with connection pooling".to_string(),
+            description: "Improves database performance by implementing connection pooling and adding query result caching.".to_string(),
+            author: "pythonista42".to_string(),
+            files_changed: 6,
+            additions: 183,
+            deletions: 72,
+            commits: vec![
+                "refactor: add connection pool manager".to_string(),
+                "perf: implement query result caching".to_string(),
+                "fix: close connections properly".to_string(),
+                "docs: update database setup guide".to_string(),
+            ],
+            diff_preview: r#"
+# database/pool.py
++from sqlalchemy.pool import QueuePool
++import redis
++
++class ConnectionPool:
++    def __init__(self, connection_string, pool_size=10):
++        self.engine = create_engine(
++            connection_string,
++            poolclass=QueuePool,
++            pool_size=pool_size,
++            max_overflow=20
++        )
++        self.cache = redis.Redis(host='localhost', port=6379)
++
++    def get_connection(self):
++        return self.engine.connect()
+            "#.to_string(),
+        }
+    }
+}
