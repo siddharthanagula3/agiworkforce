@@ -15,8 +15,13 @@ mod security_tests {
 
             // Check for absolute paths to system directories
             let system_paths = vec![
-                "/etc/", "/sys/", "/proc/", "/dev/",
-                "C:\\Windows\\", "C:\\System32\\", "/root/",
+                "/etc/",
+                "/sys/",
+                "/proc/",
+                "/dev/",
+                "C:\\Windows\\",
+                "C:\\System32\\",
+                "/root/",
             ];
 
             for sys_path in system_paths {
@@ -31,8 +36,7 @@ mod security_tests {
         fn validate_command(cmd: &str) -> Result<(), String> {
             // Check for command injection patterns
             let dangerous_patterns = vec![
-                ";", "&&", "||", "|", "`", "$(",
-                "$(", "${", ")", ">", "<", "&",
+                ";", "&&", "||", "|", "`", "$(", "$(", "${", ")", ">", "<", "&",
             ];
 
             for pattern in dangerous_patterns {
@@ -43,8 +47,14 @@ mod security_tests {
 
             // Check for dangerous commands
             let dangerous_commands = vec![
-                "rm -rf", "del /f", "format", "dd if=",
-                "mkfs", "fdisk", "parted", ":(){:|:&};:",
+                "rm -rf",
+                "del /f",
+                "format",
+                "dd if=",
+                "mkfs",
+                "fdisk",
+                "parted",
+                ":(){:|:&};:",
             ];
 
             for dangerous_cmd in dangerous_commands {
@@ -145,7 +155,11 @@ mod security_tests {
 
         for cmd in malicious_commands {
             let result = SecurityValidator::validate_command(cmd);
-            assert!(result.is_err(), "Failed to detect command injection: {}", cmd);
+            assert!(
+                result.is_err(),
+                "Failed to detect command injection: {}",
+                cmd
+            );
         }
     }
 
@@ -162,7 +176,11 @@ mod security_tests {
 
         for cmd in dangerous_commands {
             let result = SecurityValidator::validate_command(cmd);
-            assert!(result.is_err(), "Failed to block dangerous command: {}", cmd);
+            assert!(
+                result.is_err(),
+                "Failed to block dangerous command: {}",
+                cmd
+            );
         }
     }
 
@@ -305,11 +323,7 @@ mod security_tests {
 
         for injection in env_injections {
             let result = SecurityValidator::validate_command(injection);
-            assert!(
-                result.is_err(),
-                "Should block env injection: {}",
-                injection
-            );
+            assert!(result.is_err(), "Should block env injection: {}", injection);
         }
     }
 
@@ -347,9 +361,12 @@ mod security_tests {
         for ip in internal_ips {
             // In real implementation, this would be validated by API tool
             assert!(
-                ip.contains("192.168") || ip.contains("10.0") ||
-                ip.contains("172.16") || ip.contains("localhost") ||
-                ip.contains("127.0") || ip.contains("169.254"),
+                ip.contains("192.168")
+                    || ip.contains("10.0")
+                    || ip.contains("172.16")
+                    || ip.contains("localhost")
+                    || ip.contains("127.0")
+                    || ip.contains("169.254"),
                 "Internal network IP: {}",
                 ip
             );
@@ -379,11 +396,7 @@ mod security_tests {
     #[test]
     fn test_credential_storage_security() {
         // Test that credentials are never logged or stored in plain text
-        let sensitive_data = vec![
-            "password123",
-            "sk-1234567890abcdef",
-            "ghp_1234567890",
-        ];
+        let sensitive_data = vec!["password123", "sk-1234567890abcdef", "ghp_1234567890"];
 
         for data in sensitive_data {
             // In real implementation, this would use keyring for secure storage
@@ -403,8 +416,10 @@ mod security_tests {
         for attack in xss_attacks {
             // In real implementation, UI would sanitize HTML
             assert!(
-                attack.contains("<script>") || attack.contains("javascript:") ||
-                attack.contains("onerror") || attack.contains("<iframe"),
+                attack.contains("<script>")
+                    || attack.contains("javascript:")
+                    || attack.contains("onerror")
+                    || attack.contains("<iframe"),
                 "XSS pattern: {}",
                 attack
             );
@@ -443,15 +458,13 @@ mod security_tests {
 
         for capability in dangerous_capabilities {
             // In real implementation, these would require user approval
-            assert!(
-                matches!(
-                    capability,
-                    ToolCapability::FileWrite |
-                    ToolCapability::CodeExecution |
-                    ToolCapability::SystemCommand |
-                    ToolCapability::NetworkAccess
-                )
-            );
+            assert!(matches!(
+                capability,
+                ToolCapability::FileWrite
+                    | ToolCapability::CodeExecution
+                    | ToolCapability::SystemCommand
+                    | ToolCapability::NetworkAccess
+            ));
         }
     }
 
@@ -459,9 +472,9 @@ mod security_tests {
     fn test_safe_json_parsing() {
         // Test that malicious JSON doesn't cause issues
         let malicious_json = vec![
-            r#"{"key": "\u0000"}"#, // Null byte
+            r#"{"key": "\u0000"}"#,                 // Null byte
             r#"{"a":{"b":{"c":{"d":{"e":"f"}}}}}"#, // Deep nesting
-            &"{".repeat(10000), // Extreme nesting
+            &"{".repeat(10000),                     // Extreme nesting
         ];
 
         for json_str in &malicious_json[0..2] {

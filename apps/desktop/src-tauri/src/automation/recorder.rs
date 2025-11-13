@@ -283,10 +283,7 @@ impl RecorderService {
 
     /// Get current session
     pub fn get_session(&self) -> Option<RecordingSession> {
-        self.state
-            .lock()
-            .ok()
-            .and_then(|s| s.session.clone())
+        self.state.lock().ok().and_then(|s| s.session.clone())
     }
 
     /// Get elapsed milliseconds since recording started

@@ -61,7 +61,10 @@ mod outcome_tracker_tests {
         };
 
         assert_eq!(success_rate.success_rate, 0.85);
-        assert_eq!(success_rate.total_attempts, success_rate.successful_outcomes + success_rate.failed_outcomes);
+        assert_eq!(
+            success_rate.total_attempts,
+            success_rate.successful_outcomes + success_rate.failed_outcomes
+        );
     }
 
     #[test]
@@ -303,7 +306,10 @@ mod outcome_tracker_tests {
         ];
 
         let high_value = outcomes.iter().filter(|o| o.actual_value >= 0.9).count();
-        let medium_value = outcomes.iter().filter(|o| o.actual_value >= 0.8 && o.actual_value < 0.9).count();
+        let medium_value = outcomes
+            .iter()
+            .filter(|o| o.actual_value >= 0.8 && o.actual_value < 0.9)
+            .count();
 
         assert_eq!(high_value, 3);
         assert_eq!(medium_value, 2);
@@ -340,7 +346,8 @@ mod outcome_tracker_tests {
         let variance: f64 = outcomes
             .iter()
             .map(|o| (o.actual_value - mean).powi(2))
-            .sum::<f64>() / outcomes.len() as f64;
+            .sum::<f64>()
+            / outcomes.len() as f64;
 
         let std_dev = variance.sqrt();
 
@@ -399,7 +406,13 @@ mod outcome_tracker_tests {
         };
 
         assert_eq!(outcome.metadata["impact_score"], 0.9);
-        assert_eq!(outcome.metadata["affected_systems"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            outcome.metadata["affected_systems"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
     }
 
     #[test]
@@ -416,8 +429,16 @@ mod outcome_tracker_tests {
             create_test_outcome("b3", true, 0.91),
         ];
 
-        let avg_a: f64 = strategy_a_outcomes.iter().map(|o| o.actual_value).sum::<f64>() / 3.0;
-        let avg_b: f64 = strategy_b_outcomes.iter().map(|o| o.actual_value).sum::<f64>() / 3.0;
+        let avg_a: f64 = strategy_a_outcomes
+            .iter()
+            .map(|o| o.actual_value)
+            .sum::<f64>()
+            / 3.0;
+        let avg_b: f64 = strategy_b_outcomes
+            .iter()
+            .map(|o| o.actual_value)
+            .sum::<f64>()
+            / 3.0;
 
         // Strategy B performs better
         assert!(avg_b > avg_a);

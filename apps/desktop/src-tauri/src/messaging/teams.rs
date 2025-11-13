@@ -1,4 +1,4 @@
-use reqwest::{Client, header};
+use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -506,7 +506,7 @@ pub struct TeamsAttachment {
 pub struct AdaptiveCard {
     #[serde(rename = "type")]
     pub card_type: String, // "AdaptiveCard"
-    pub version: String,   // "1.4"
+    pub version: String, // "1.4"
     pub body: Vec<AdaptiveCardElement>,
     pub actions: Option<Vec<AdaptiveCardAction>>,
 }

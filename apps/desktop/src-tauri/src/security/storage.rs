@@ -3,11 +3,11 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
+use keyring::Entry;
 use pbkdf2::pbkdf2_hmac_array;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::RwLock;
-use keyring::Entry;
 
 const NONCE_SIZE: usize = 12;
 const PBKDF2_ITERATIONS: u32 = 600_000; // OWASP recommended for PBKDF2-HMAC-SHA256
@@ -197,11 +197,8 @@ impl SecureStorage {
 
 /// Derive encryption key from password using PBKDF2
 fn derive_key_from_password(password: &str, salt: &[u8]) -> Vec<u8> {
-    let key: [u8; KEY_SIZE] = pbkdf2_hmac_array::<Sha256, KEY_SIZE>(
-        password.as_bytes(),
-        salt,
-        PBKDF2_ITERATIONS,
-    );
+    let key: [u8; KEY_SIZE] =
+        pbkdf2_hmac_array::<Sha256, KEY_SIZE>(password.as_bytes(), salt, PBKDF2_ITERATIONS);
     key.to_vec()
 }
 
@@ -214,21 +211,16 @@ fn generate_salt() -> Vec<u8> {
 }
 
 /// Encrypt file at rest with AES-256-GCM
-pub fn encrypt_file(
-    input_path: &str,
-    output_path: &str,
-    password: &str,
-) -> Result<(), String> {
+pub fn encrypt_file(input_path: &str, output_path: &str, password: &str) -> Result<(), String> {
     use std::fs;
 
-    let plaintext = fs::read(input_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let plaintext = fs::read(input_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     let salt = generate_salt();
     let key = derive_key_from_password(password, &salt);
 
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
     use aes_gcm::aead::rand_core::RngCore;
     let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -245,22 +237,16 @@ pub fn encrypt_file(
     output.extend_from_slice(&nonce_bytes);
     output.extend_from_slice(&ciphertext);
 
-    fs::write(output_path, output)
-        .map_err(|e| format!("Failed to write encrypted file: {}", e))?;
+    fs::write(output_path, output).map_err(|e| format!("Failed to write encrypted file: {}", e))?;
 
     Ok(())
 }
 
 /// Decrypt file encrypted with encrypt_file
-pub fn decrypt_file(
-    input_path: &str,
-    output_path: &str,
-    password: &str,
-) -> Result<(), String> {
+pub fn decrypt_file(input_path: &str, output_path: &str, password: &str) -> Result<(), String> {
     use std::fs;
 
-    let encrypted_data = fs::read(input_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let encrypted_data = fs::read(input_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     if encrypted_data.len() < SALT_SIZE + NONCE_SIZE {
         return Err("Invalid encrypted file format".to_string());
@@ -273,8 +259,8 @@ pub fn decrypt_file(
 
     let key = derive_key_from_password(password, salt);
 
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
     let nonce = Nonce::from_slice(nonce_bytes);
 
