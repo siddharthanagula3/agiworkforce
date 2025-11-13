@@ -1,5 +1,8 @@
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition};
+use crate::router::{
+    ContentPart, ImageDetail, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall,
+    ToolChoice, ToolDefinition,
+};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -10,13 +13,38 @@ use std::pin::Pin;
 struct OpenAIMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    content: Option<String>,
+    content: Option<OpenAIContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<OpenAIToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum OpenAIContent {
+    Text(String),
+    Multimodal(Vec<OpenAIContentPart>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum OpenAIContentPart {
+    Text {
+        text: String,
+    },
+    ImageUrl {
+        image_url: OpenAIImageUrl,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct OpenAIImageUrl {
+    url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +143,74 @@ impl OpenAIProvider {
         }
     }
 
+    /// Convert ImageFormat and ImageDetail to OpenAI format
+    fn image_to_data_url(
+        data: &[u8],
+        format: ImageFormat,
+        detail: ImageDetail,
+    ) -> (String, Option<String>) {
+        let mime_type = match format {
+            ImageFormat::Png => "image/png",
+            ImageFormat::Jpeg => "image/jpeg",
+            ImageFormat::Webp => "image/webp",
+        };
+        let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
+        let data_url = format!("data:{};base64,{}", mime_type, base64_data);
+        let detail_str = match detail {
+            ImageDetail::Low => Some("low".to_string()),
+            ImageDetail::High => Some("high".to_string()),
+            ImageDetail::Auto => Some("auto".to_string()),
+        };
+        (data_url, detail_str)
+    }
+
+    /// Convert multimodal content to OpenAI format
+    fn convert_content(
+        text: &str,
+        multimodal: Option<&Vec<ContentPart>>,
+    ) -> Option<OpenAIContent> {
+        if let Some(parts) = multimodal {
+            // Has multimodal content (text + images)
+            let mut openai_parts = Vec::new();
+
+            // Add text first if not empty
+            if !text.is_empty() {
+                openai_parts.push(OpenAIContentPart::Text {
+                    text: text.to_string(),
+                });
+            }
+
+            // Add all content parts
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        openai_parts.push(OpenAIContentPart::Text {
+                            text: text.clone(),
+                        });
+                    }
+                    ContentPart::Image { image } => {
+                        let (data_url, detail) =
+                            Self::image_to_data_url(&image.data, image.format, image.detail);
+                        openai_parts.push(OpenAIContentPart::ImageUrl {
+                            image_url: OpenAIImageUrl {
+                                url: data_url,
+                                detail,
+                            },
+                        });
+                    }
+                }
+            }
+
+            Some(OpenAIContent::Multimodal(openai_parts))
+        } else if !text.is_empty() {
+            // Just text content
+            Some(OpenAIContent::Text(text.to_string()))
+        } else {
+            // Empty content
+            None
+        }
+    }
+
     /// Calculate cost based on model and tokens
     fn calculate_cost(model: &str, prompt_tokens: u32, completion_tokens: u32) -> f64 {
         // Pricing as of November 2025 (per 1M tokens)
@@ -194,11 +290,10 @@ impl LLMProvider for OpenAIProvider {
                 .map(|m| {
                     let mut msg = OpenAIMessage {
                         role: m.role.clone(),
-                        content: if m.content.is_empty() {
-                            None
-                        } else {
-                            Some(m.content.clone())
-                        },
+                        content: Self::convert_content(
+                            &m.content,
+                            m.multimodal_content.as_ref(),
+                        ),
                         tool_calls: None,
                         tool_call_id: m.tool_call_id.clone(),
                         name: None,
@@ -270,7 +365,21 @@ impl LLMProvider for OpenAIProvider {
             .first()
             .ok_or("No choices in response")?;
 
-        let content = choice.message.content.clone().unwrap_or_default();
+        let content = match &choice.message.content {
+            Some(OpenAIContent::Text(text)) => text.clone(),
+            Some(OpenAIContent::Multimodal(parts)) => {
+                // Extract text from multimodal response (OpenAI may return images in responses too)
+                parts
+                    .iter()
+                    .filter_map(|part| match part {
+                        OpenAIContentPart::Text { text } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+            None => String::new(),
+        };
 
         let tool_calls = choice
             .message
@@ -305,6 +414,14 @@ impl LLMProvider for OpenAIProvider {
         "OpenAI"
     }
 
+    fn supports_vision(&self) -> bool {
+        true // OpenAI models support vision (GPT-4o, GPT-5, etc.)
+    }
+
+    fn supports_function_calling(&self) -> bool {
+        true // All OpenAI models support function calling
+    }
+
     async fn send_message_streaming(
         &self,
         request: &LLMRequest,
@@ -319,7 +436,7 @@ impl LLMProvider for OpenAIProvider {
                 .iter()
                 .map(|m| OpenAIMessage {
                     role: m.role.clone(),
-                    content: Some(m.content.clone()),
+                    content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
                     tool_calls: None,
                     tool_call_id: None,
                     name: None,
@@ -328,8 +445,11 @@ impl LLMProvider for OpenAIProvider {
             temperature: request.temperature,
             max_tokens: request.max_tokens,
             stream: Some(true),
-            tools: None, // Streaming with tools not yet implemented
-            tool_choice: None,
+            tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .and_then(Self::convert_tool_choice),
         };
 
         tracing::debug!(
