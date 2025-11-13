@@ -243,9 +243,7 @@ export const WorkflowMarketplace: React.FC = () => {
                   : 'border-gray-300 hover:border-blue-400'
               }`}
             >
-              <div className="text-lg font-semibold capitalize">
-                {category.replace('_', ' ')}
-              </div>
+              <div className="text-lg font-semibold capitalize">{category.replace('_', ' ')}</div>
               <div className="text-sm text-gray-600">{count} workflows</div>
             </button>
           ))}
@@ -276,7 +274,7 @@ interface WorkflowCardProps {
   onShare: (id: string, platform: string) => void;
 }
 
-const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onRate, onShare }) => {
+const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onShare }) => {
   const [showShareMenu, setShowShareMenu] = useState(false);
 
   return (
@@ -293,7 +291,9 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onRate, 
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-xl font-bold text-gray-900 flex-1">{workflow.title}</h3>
           {workflow.is_verified && (
-            <span className="ml-2 text-blue-600" title="Verified">✓</span>
+            <span className="ml-2 text-blue-600" title="Verified">
+              ✓
+            </span>
           )}
         </div>
 
@@ -313,7 +313,9 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onRate, 
           </div>
           <div className="flex items-center gap-1">
             <span>⭐</span>
-            <span>{workflow.rating.toFixed(1)} ({workflow.rating_count})</span>
+            <span>
+              {workflow.rating.toFixed(1)} ({workflow.rating_count})
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <span>⏱️</span>
@@ -324,10 +326,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onRate, 
         {/* Tags */}
         <div className="flex flex-wrap gap-2 mb-4">
           {workflow.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
-            >
+            <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
               {tag}
             </span>
           ))}

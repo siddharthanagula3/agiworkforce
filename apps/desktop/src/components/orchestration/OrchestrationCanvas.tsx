@@ -50,13 +50,17 @@ export const OrchestrationCanvas: React.FC<OrchestrationCanvasProps> = ({
     }));
   };
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(convertToReactFlowNodes(storeNodes));
-  const [edges, setEdges, onEdgesChange] = useEdgesState(convertToReactFlowEdges(storeEdges));
+  const [nodes, setNodes, onNodesChange] = useNodesState(
+    convertToReactFlowNodes(storeNodes) as any,
+  );
+  const [edges, setEdges, onEdgesChange] = useEdgesState(
+    convertToReactFlowEdges(storeEdges) as any,
+  );
 
   // Update React Flow nodes/edges when store changes
   useEffect(() => {
-    setNodes(convertToReactFlowNodes(storeNodes));
-    setEdges(convertToReactFlowEdges(storeEdges));
+    setNodes(convertToReactFlowNodes(storeNodes) as any);
+    setEdges(convertToReactFlowEdges(storeEdges) as any);
   }, [storeNodes, storeEdges, setNodes, setEdges]);
 
   const onConnect = useCallback(
