@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 15;
+const CURRENT_VERSION: i32 = 17;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -103,6 +103,16 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 15 {
         apply_migration_v15(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [15])?;
+    }
+
+    if current_version < 16 {
+        apply_migration_v16(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [16])?;
+    }
+
+    if current_version < 17 {
+        apply_migration_v17(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [17])?;
     }
 
     Ok(())
@@ -1330,6 +1340,146 @@ fn apply_migration_v15(conn: &Connection) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_offline_queue_scheduled
          ON offline_operations_queue(scheduled_at)
          WHERE scheduled_at IS NOT NULL",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v16: Enhanced LLM response cache with statistics tracking
+fn apply_migration_v16(conn: &Connection) -> Result<()> {
+    // Add hit_count column to track cache hits
+    ensure_column(
+        conn,
+        "cache_entries",
+        "hit_count",
+        "hit_count INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    // Add tokens_saved column to track cumulative token savings
+    ensure_column(
+        conn,
+        "cache_entries",
+        "tokens_saved",
+        "tokens_saved INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    // Add cost_saved column to track cumulative cost savings
+    ensure_column(
+        conn,
+        "cache_entries",
+        "cost_saved",
+        "cost_saved REAL NOT NULL DEFAULT 0.0",
+    )?;
+
+    // Add temperature column for temperature-aware TTL
+    ensure_column(
+        conn,
+        "cache_entries",
+        "temperature",
+        "temperature REAL",
+    )?;
+
+    // Add max_tokens column for better cache key differentiation
+    ensure_column(
+        conn,
+        "cache_entries",
+        "max_tokens",
+        "max_tokens INTEGER",
+    )?;
+
+    // Create index on hit_count for analytics queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cache_entries_hit_count
+         ON cache_entries(hit_count DESC)",
+        [],
+    )?;
+
+    // Create index on cost_saved for savings analytics
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cache_entries_cost_saved
+         ON cache_entries(cost_saved DESC)",
+        [],
+    )?;
+
+    // Create index on temperature for temperature-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cache_entries_temperature
+         ON cache_entries(temperature)
+         WHERE temperature IS NOT NULL",
+        [],
+    )?;
+
+    // Cache statistics summary view (virtual table would be better, but view is simpler)
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS cache_statistics AS
+         SELECT
+             provider,
+             model,
+             COUNT(*) as entry_count,
+             SUM(hit_count) as total_hits,
+             SUM(tokens_saved) as total_tokens_saved,
+             SUM(cost_saved) as total_cost_saved,
+             AVG(CASE WHEN hit_count > 0 THEN hit_count ELSE NULL END) as avg_hits_per_entry,
+             MIN(created_at) as oldest_entry,
+             MAX(last_used_at) as most_recent_use
+         FROM cache_entries
+         GROUP BY provider, model",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v17: Codebase analysis cache for AGI system
+fn apply_migration_v17(conn: &Connection) -> Result<()> {
+    // Codebase cache table - stores file trees, symbols, and dependency graphs
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS codebase_cache (
+            id TEXT PRIMARY KEY,
+            project_path TEXT NOT NULL,
+            cache_type TEXT NOT NULL CHECK(cache_type IN ('file_tree', 'symbols', 'deps', 'file_metadata')),
+            file_hash TEXT,
+            data TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Index for efficient project-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_codebase_cache_project
+         ON codebase_cache(project_path, cache_type)",
+        [],
+    )?;
+
+    // Index for cache type filtering
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_codebase_cache_type
+         ON codebase_cache(cache_type)",
+        [],
+    )?;
+
+    // Index for expiration cleanup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_codebase_cache_expires
+         ON codebase_cache(expires_at)",
+        [],
+    )?;
+
+    // Index for file hash-based invalidation
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_codebase_cache_file_hash
+         ON codebase_cache(file_hash)
+         WHERE file_hash IS NOT NULL AND file_hash != ''",
+        [],
+    )?;
+
+    // Composite index for common query pattern (project + type + hash)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_codebase_cache_lookup
+         ON codebase_cache(project_path, cache_type, file_hash)",
         [],
     )?;
 
