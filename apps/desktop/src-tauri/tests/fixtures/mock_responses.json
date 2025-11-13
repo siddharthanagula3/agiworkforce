@@ -1,0 +1,26 @@
+{
+  "plan_generation": {
+    "prompt_pattern": "generate.*plan|create.*plan|plan for",
+    "response": "To accomplish this goal, I recommend the following steps:\n\n1. Gather required information and validate inputs\n2. Set up the necessary environment and resources\n3. Execute the main task with proper error handling\n4. Validate the results\n5. Clean up resources and finalize\n\nEach step should be executed sequentially with appropriate error handling."
+  },
+  "file_operations": {
+    "prompt_pattern": "read file|write file|file operation",
+    "response": "I will perform the file operation safely:\n\n1. Validate the file path for security\n2. Check file permissions\n3. Perform the requested operation\n4. Verify the operation succeeded\n5. Return the result"
+  },
+  "data_analysis": {
+    "prompt_pattern": "analyze|analysis|examine data",
+    "response": "Based on the data provided, here are my findings:\n\n1. Data Quality: Good\n2. Key Patterns: Identified 3 significant trends\n3. Anomalies: None detected\n4. Recommendations: Proceed with normal processing\n\nThe data appears suitable for the intended purpose."
+  },
+  "code_generation": {
+    "prompt_pattern": "generate code|write.*code|code for",
+    "response": "```python\ndef process_data(input_data):\n    \"\"\"Process the input data.\"\"\"\n    result = []\n    for item in input_data:\n        processed = transform(item)\n        result.append(processed)\n    return result\n```"
+  },
+  "error_explanation": {
+    "prompt_pattern": "error|exception|failed|failure",
+    "response": "The error occurred due to:\n\n1. Invalid input parameters\n2. Missing required permissions\n3. Resource not available\n\nRecommended solution:\n- Validate inputs before execution\n- Check permissions\n- Ensure resources are accessible"
+  },
+  "default": {
+    "prompt_pattern": ".*",
+    "response": "I understand your request. I will proceed with the following approach:\n\n1. Analyze the requirements\n2. Develop a solution strategy\n3. Execute the necessary steps\n4. Validate the results\n5. Provide feedback\n\nThis ensures a systematic and thorough completion of the task."
+  }
+}

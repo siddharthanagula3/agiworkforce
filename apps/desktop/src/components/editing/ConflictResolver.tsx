@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useEditingStore, type ConflictMarker } from '../../stores/editingStore';
+import { useEditingStore } from '../../stores/editingStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ScrollArea } from '../ui/ScrollArea';
-import { Tooltip } from '../ui/Tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/Tooltip';
 
 interface ConflictResolverProps {
   filePath: string;
@@ -122,15 +122,18 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
                       <pre className="text-xs font-mono p-2 bg-blue-500/5 rounded border border-blue-500/20 overflow-x-auto">
                         <code>{conflict.ourContent}</code>
                       </pre>
-                      <Tooltip content="Accept our changes and discard theirs">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 w-full border-blue-500/30 hover:bg-blue-500/10"
-                          onClick={() => handleResolve(index, 'ours')}
-                        >
-                          Accept Ours
-                        </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 w-full border-blue-500/30 hover:bg-blue-500/10"
+                            onClick={() => handleResolve(index, 'ours')}
+                          >
+                            Accept Ours
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Accept our changes and discard theirs</TooltipContent>
                       </Tooltip>
                     </div>
 
@@ -145,30 +148,36 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
                       <pre className="text-xs font-mono p-2 bg-green-500/5 rounded border border-green-500/20 overflow-x-auto">
                         <code>{conflict.theirContent}</code>
                       </pre>
-                      <Tooltip content="Accept their changes and discard ours">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 w-full border-green-500/30 hover:bg-green-500/10"
-                          onClick={() => handleResolve(index, 'theirs')}
-                        >
-                          Accept Theirs
-                        </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 w-full border-green-500/30 hover:bg-green-500/10"
+                            onClick={() => handleResolve(index, 'theirs')}
+                          >
+                            Accept Theirs
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Accept their changes and discard ours</TooltipContent>
                       </Tooltip>
                     </div>
 
                     {/* Accept Both */}
                     <div className="p-3 bg-muted/20">
-                      <Tooltip content="Keep both changes (ours first, then theirs)">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => handleResolve(index, 'both')}
-                        >
-                          <GitMerge className="h-4 w-4 mr-2" />
-                          Accept Both
-                        </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => handleResolve(index, 'both')}
+                          >
+                            <GitMerge className="h-4 w-4 mr-2" />
+                            Accept Both
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Keep both changes (ours first, then theirs)</TooltipContent>
                       </Tooltip>
                     </div>
                   </div>

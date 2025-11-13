@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -170,14 +170,14 @@ function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetails
   if (!server) return null;
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <div className="p-6 max-w-2xl">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-2xl font-bold mb-2">{server.name}</h2>
             <p className="text-gray-600">v{server.version} by {server.author}</p>
           </div>
-          <Badge variant="primary">{server.category}</Badge>
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800">{server.category}</Badge>
         </div>
 
         <p className="text-gray-700 mb-6">{server.description}</p>
@@ -227,7 +227,7 @@ function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetails
             Close
           </Button>
           {server.installed ? (
-            <Button variant="success" disabled className="flex items-center gap-2">
+            <Button variant="outline" disabled className="flex items-center gap-2 bg-green-50 text-green-700">
               <CheckCircle className="w-4 h-4" />
               Installed
             </Button>
@@ -257,7 +257,7 @@ function ServerPackageCard({ server, onViewDetails, onInstall }: ServerPackageCa
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-lg">{server.name}</h3>
             {server.installed && (
-              <Badge variant="success" className="flex items-center gap-1">
+              <Badge variant="secondary" className="flex items-center gap-1 bg-green-100 text-green-800">
                 <CheckCircle className="w-3 h-3" />
                 Installed
               </Badge>
