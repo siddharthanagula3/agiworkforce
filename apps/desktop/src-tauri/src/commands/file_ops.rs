@@ -651,6 +651,216 @@ pub async fn dir_traverse(
 }
 
 // ============================================================================
+// CONTEXT AND WORKSPACE OPERATIONS
+// ============================================================================
+
+/// File content with metadata for LLM context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileContextContent {
+    pub content: String,
+    pub size: u64,
+    pub line_count: usize,
+    pub language: Option<String>,
+    pub excerpt: String, // First 500 characters for preview
+}
+
+/// Detect programming language from file extension
+fn detect_language(path: &str) -> Option<String> {
+    let extension = Path::new(path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())?;
+
+    let language = match extension.as_str() {
+        "rs" => "rust",
+        "js" => "javascript",
+        "ts" => "typescript",
+        "tsx" => "typescript",
+        "jsx" => "javascript",
+        "py" => "python",
+        "go" => "go",
+        "java" => "java",
+        "cpp" | "cc" | "cxx" => "cpp",
+        "c" => "c",
+        "h" | "hpp" => "cpp",
+        "cs" => "csharp",
+        "rb" => "ruby",
+        "php" => "php",
+        "swift" => "swift",
+        "kt" => "kotlin",
+        "scala" => "scala",
+        "sh" | "bash" => "bash",
+        "ps1" => "powershell",
+        "sql" => "sql",
+        "html" | "htm" => "html",
+        "css" => "css",
+        "scss" | "sass" => "scss",
+        "json" => "json",
+        "xml" => "xml",
+        "yaml" | "yml" => "yaml",
+        "toml" => "toml",
+        "md" | "markdown" => "markdown",
+        "txt" => "text",
+        _ => return None,
+    };
+
+    Some(language.to_string())
+}
+
+/// Read file content with metadata for LLM context
+#[tauri::command]
+pub async fn fs_read_file_content(
+    file_path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<FileContextContent, String> {
+    debug!("Reading file content for context: {}", file_path);
+
+    // Check permissions
+    if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
+        let error = "Permission denied".to_string();
+        log_file_operation(
+            &file_path,
+            FileOperation::Read,
+            false,
+            Some(error.clone()),
+            &state,
+        )
+        .await?;
+        return Err(error);
+    }
+
+    // Read file
+    let content = match fs::read_to_string(&file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            let error = format!("Failed to read file: {}", e);
+            log_file_operation(&file_path, FileOperation::Read, false, Some(error.clone()), &state)
+                .await?;
+            return Err(error);
+        }
+    };
+
+    // Get file size
+    let metadata = fs::metadata(&file_path)
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    let size = metadata.len();
+
+    // Count lines
+    let line_count = content.lines().count();
+
+    // Detect language
+    let language = detect_language(&file_path);
+
+    // Create excerpt (first 500 characters)
+    let excerpt = if content.len() > 500 {
+        format!("{}...", &content[..500])
+    } else {
+        content.clone()
+    };
+
+    log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
+
+    Ok(FileContextContent {
+        content,
+        size,
+        line_count,
+        language,
+        excerpt,
+    })
+}
+
+/// Workspace file entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceFile {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    pub is_file: bool,
+    pub is_dir: bool,
+    pub extension: Option<String>,
+    pub language: Option<String>,
+}
+
+/// Get list of files in workspace directory (non-recursive)
+#[tauri::command]
+pub async fn fs_get_workspace_files(
+    workspace_path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<Vec<WorkspaceFile>, String> {
+    debug!("Getting workspace files: {}", workspace_path);
+
+    // Check permissions
+    if !check_file_permission(&workspace_path, FileOperation::Read, &state).await? {
+        return Err("Permission denied".to_string());
+    }
+
+    // Read directory
+    let entries = fs::read_dir(&workspace_path)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    let mut files = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+        let path_str = path.to_str().unwrap_or("").to_string();
+
+        // Skip hidden files and common ignored directories
+        let name = entry.file_name().to_str().unwrap_or("").to_string();
+        if name.starts_with('.')
+            || name == "node_modules"
+            || name == "target"
+            || name == "dist"
+            || name == "build" {
+            continue;
+        }
+
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        let is_file = metadata.is_file();
+        let is_dir = metadata.is_dir();
+        let size = metadata.len();
+
+        let extension = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string());
+
+        let language = if is_file {
+            detect_language(&path_str)
+        } else {
+            None
+        };
+
+        files.push(WorkspaceFile {
+            path: path_str,
+            name,
+            size,
+            is_file,
+            is_dir,
+            extension,
+            language,
+        });
+    }
+
+    // Sort: directories first, then files alphabetically
+    files.sort_by(|a, b| {
+        if a.is_dir && !b.is_dir {
+            std::cmp::Ordering::Less
+        } else if !a.is_dir && b.is_dir {
+            std::cmp::Ordering::Greater
+        } else {
+            a.name.to_lowercase().cmp(&b.name.to_lowercase())
+        }
+    });
+
+    Ok(files)
+}
+
+// ============================================================================
 // TESTS
 // ============================================================================
 
