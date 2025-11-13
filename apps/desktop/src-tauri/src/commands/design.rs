@@ -89,6 +89,7 @@ pub async fn design_generate_css(
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(1500),
@@ -213,6 +214,7 @@ Ensure colors have proper contrast ratios (WCAG AA minimum):
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(500),
@@ -282,6 +284,7 @@ Return as JSON array:
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(2000),
@@ -393,6 +396,7 @@ Return as JSON:
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(1500),

@@ -117,7 +117,7 @@ pub async fn capture_screen_full(
         timestamp,
     )?;
 
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
@@ -176,7 +176,7 @@ pub async fn capture_screen_region(
         timestamp,
     )?;
 
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         let region_animation = OverlayAnimation::RegionHighlight {
             x,
             y,
@@ -222,7 +222,7 @@ pub async fn capture_get_history(
     let limit = limit.unwrap_or(50);
 
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let captures: Result<Vec<CaptureRecord>, String> = if let Some(conv_id) = conversation_id {
@@ -293,7 +293,7 @@ pub async fn capture_delete(db: State<'_, AppDatabase>, capture_id: String) -> R
     tracing::info!("Deleting capture: {}", capture_id);
 
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get file paths before deleting
@@ -332,7 +332,7 @@ pub async fn capture_save_to_clipboard(
     tracing::info!("Copying capture to clipboard: {}", capture_id);
 
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let file_path: String = conn
@@ -405,7 +405,7 @@ pub async fn capture_screen_window(
         timestamp,
     )?;
 
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
@@ -452,7 +452,7 @@ pub async fn capture_from_clipboard(
         timestamp,
     )?;
 
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         let _ = dispatch_overlay_animation(&app_handle, &conn, OverlayAnimation::ScreenshotFlash);
     }
 
@@ -493,7 +493,7 @@ fn persist_capture(
     let metadata_json = serde_json::to_string(metadata)
         .map_err(|e| format!("Failed to serialize metadata: {e}"))?;
 
-    db.0.lock()
+    db.conn.lock()
         .map_err(|e| format!("Failed to lock database: {e}"))?
         .execute(
             "INSERT INTO captures (id, conversation_id, capture_type, file_path, thumbnail_path, metadata, created_at)

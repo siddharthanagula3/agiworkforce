@@ -664,9 +664,9 @@ impl AGIExecutor {
 
                 // HYBRID STRATEGY: Use Claude Haiku 4.5 for execution (4-5x faster, 1/3 cost)
                 let preferences = RouterPreferences {
-                    provider: Some("anthropic".to_string()),
+                    provider: Some(crate::router::Provider::Anthropic),
                     model: Some("claude-haiku-4-5".to_string()),
-                    strategy: RoutingStrategy::PreferenceWithFallback,
+                    strategy: RoutingStrategy::Auto,
                 };
 
                 let request = LLMRequest {
@@ -675,6 +675,7 @@ impl AGIExecutor {
                         content: prompt.to_string(),
                         tool_calls: None,
                         tool_call_id: None,
+                        multimodal_content: None,
                     }],
                     model: "claude-haiku-4-5".to_string(),
                     temperature: Some(0.7),

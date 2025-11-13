@@ -1,5 +1,5 @@
 use super::process_reasoning::{Outcome, ProcessType, Strategy};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

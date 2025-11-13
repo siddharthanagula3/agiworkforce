@@ -121,7 +121,7 @@ pub struct TutorialStats {
 
 pub use tutorial_manager::{TutorialManager, TutorialError};
 pub use progress_tracker::{ProgressTracker, ProgressError};
-pub use sample_data::{SampleDataGenerator, SampleDataError, SampleEmail, SampleInvoice, SampleCodePR};
+pub use sample_data::{SampleDataGenerator, SampleDataError, SampleEmail, SampleInvoice, SampleCodePR, SampleDataSummary};
 pub use rewards::{RewardSystem, Reward, RewardType};
 pub use first_run::{FirstRunExperience, FirstRunSession, OnboardingStep, AIEmployeeRecommendation, DemoResult, FirstRunError, FirstRunStatistics};
 pub use instant_demo::{InstantDemo, DemoError, DemoStatistics};

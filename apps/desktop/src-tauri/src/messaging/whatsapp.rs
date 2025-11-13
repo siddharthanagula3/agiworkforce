@@ -1,7 +1,6 @@
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhatsAppConfig {

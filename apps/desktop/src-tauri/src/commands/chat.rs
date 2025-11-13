@@ -385,6 +385,7 @@ async fn chat_send_message_streaming(
             content: message.content.clone(),
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         })
         .collect();
 
@@ -593,6 +594,7 @@ pub async fn chat_send_message(
             content: message.content.clone(),
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         })
         .collect();
 
@@ -824,6 +826,7 @@ pub async fn chat_send_message(
                                 content: message.content.clone(),
                                 tool_calls: None,
                                 tool_call_id: None,
+                                multimodal_content: None,
                             })
                             .collect();
 

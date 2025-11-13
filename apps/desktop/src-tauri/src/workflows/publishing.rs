@@ -129,7 +129,7 @@ impl WorkflowPublisher {
             rusqlite::params![
                 &published_id,
                 &workflow.name,
-                &workflow.description.unwrap_or_default(),
+                &workflow.description.as_ref().map(|s| s.as_str()).unwrap_or(""),
                 category.to_string(),
                 publisher_id,
                 publisher_name,

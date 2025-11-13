@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use super::{PresenceStatus, UserActivity, CursorPosition};
+use super::{PresenceStatus, CursorPosition};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
