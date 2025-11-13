@@ -7,16 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
-import {
-  File,
-  FilePlus,
-  FileEdit,
-  FileX,
-  Check,
-  X,
-  
-  AlertCircle,
-} from 'lucide-react';
+import { File, FilePlus, FileEdit, FileX, Check, X, AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
   useExecutionStore,
@@ -247,13 +238,7 @@ interface FileListItemProps {
   onToggleExpand: () => void;
 }
 
-function FileListItem({
-  file,
-  isSelected,
-  _isExpanded,
-  onSelect,
-  _onToggleExpand,
-}: FileListItemProps) {
+function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
   const operationConfig = getOperationConfig(file.operation);
   const OperationIcon = operationConfig.icon;
   const fileName = file.path.split('/').pop() || file.path;
@@ -285,9 +270,7 @@ function FileListItem({
         {/* File info */}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
-          {filePath && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{filePath}</p>
-          )}
+          {filePath && <p className="mt-0.5 truncate text-xs text-muted-foreground">{filePath}</p>}
         </div>
 
         {/* Status indicator */}

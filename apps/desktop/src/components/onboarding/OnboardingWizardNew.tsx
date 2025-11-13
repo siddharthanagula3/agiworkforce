@@ -22,9 +22,7 @@ interface OnboardingWizardNewProps {
   onComplete: () => void;
 }
 
-export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
-  onComplete,
-}) => {
+export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComplete }) => {
   const {
     currentStep,
     totalSteps,
@@ -95,11 +93,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
     setCurrentStep(2); // Go back to demo selection
   };
 
-  // Handle hire/complete
-  const _handleComplete = async () => {
-    await completeOnboarding();
-    onComplete();
-  };
+  // Handle hire/complete (handled inline in UI)
 
   // Handle skip
   const handleSkip = async () => {
@@ -198,7 +192,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
                         'Tell us about your role (15 seconds)',
                         'Pick a quick demo tailored to you (30 seconds)',
                         'Watch it run with real sample data (30-60 seconds)',
-                        'See exactly how much time and money you\'ll save',
+                        "See exactly how much time and money you'll save",
                         'Choose your settings and start automating!',
                       ].map((step, index) => (
                         <li key={index} className="flex items-start gap-3">
@@ -214,20 +208,11 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
 
                 {/* CTA buttons */}
                 <div className="flex gap-4 pt-4">
-                  <Button
-                    size="lg"
-                    className="flex-1 text-lg h-14"
-                    onClick={nextStep}
-                  >
+                  <Button size="lg" className="flex-1 text-lg h-14" onClick={nextStep}>
                     <Rocket className="mr-2 h-5 w-5" />
                     Get Started
                   </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="text-lg h-14"
-                    onClick={handleSkip}
-                  >
+                  <Button size="lg" variant="outline" className="text-lg h-14" onClick={handleSkip}>
                     Skip for Now
                   </Button>
                 </div>
@@ -246,10 +231,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
 
         {/* Step 1: Role Selection */}
         {currentStep === 1 && (
-          <RoleSelection
-            onSelectRole={handleRoleSelect}
-            selectedRole={selectedRole}
-          />
+          <RoleSelection onSelectRole={handleRoleSelect} selectedRole={selectedRole} />
         )}
 
         {/* Step 2: Demo Selection */}
@@ -263,11 +245,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
 
         {/* Step 3: Demo Runner */}
         {currentStep === 3 && selectedDemoData && demoProgress && (
-          <DemoRunner
-            demo={selectedDemoData}
-            progress={demoProgress}
-            isRunning={demoRunning}
-          />
+          <DemoRunner demo={selectedDemoData} progress={demoProgress} isRunning={demoRunning} />
         )}
 
         {/* Step 4: Demo Results */}
@@ -281,10 +259,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({
 
         {/* Step 5: Quick Setup */}
         {currentStep === 5 && (
-          <QuickSetup
-            initialSettings={settings}
-            onComplete={handleQuickSetupComplete}
-          />
+          <QuickSetup initialSettings={settings} onComplete={handleQuickSetupComplete} />
         )}
       </div>
     </div>

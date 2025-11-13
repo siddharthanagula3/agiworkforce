@@ -78,12 +78,7 @@ export const trackGoalEvents = {
     });
   },
 
-  completed: (
-    goalId: string,
-    duration: number,
-    stepsCount: number,
-    toolsUsed: string[]
-  ) => {
+  completed: (goalId: string, duration: number, stepsCount: number, toolsUsed: string[]) => {
     analytics.track('goal_completed', {
       goal_id: goalId,
       duration_ms: duration,
@@ -296,7 +291,7 @@ export const trackFeatureEvents = {
  * Track settings changes
  */
 export const trackSettingsEvents = {
-  changed: (settingType: string, newValue: any) => {
+  changed: (settingType: string, _newValue: any) => {
     analytics.track('settings_changed', {
       setting_type: settingType,
       // Don't log the actual value if it might be sensitive
@@ -398,11 +393,11 @@ export const trackPageView = (pageName: string, referrer?: string) => {
 /**
  * Helper to track timed operations
  */
-export const trackTimedOperation = async <T,>(
+export const trackTimedOperation = async <T>(
   operationName: string,
   operation: () => Promise<T>,
   eventName: EventName,
-  additionalProps?: Record<string, any>
+  additionalProps?: Record<string, any>,
 ): Promise<T> => {
   return await performanceMonitor.timeOperation(operationName, async () => {
     const result = await operation();
