@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 17;
+const CURRENT_VERSION: i32 = 18;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -113,6 +113,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 17 {
         apply_migration_v17(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [17])?;
+    }
+
+    if current_version < 18 {
+        apply_migration_v18(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [18])?;
     }
 
     Ok(())
@@ -1480,6 +1485,274 @@ fn apply_migration_v17(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_codebase_cache_lookup
          ON codebase_cache(project_path, cache_type, file_hash)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v18: Billing and subscription management (Stripe integration)
+fn apply_migration_v18(conn: &Connection) -> Result<()> {
+    // Customers table - stores Stripe customer information
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS billing_customers (
+            id TEXT PRIMARY KEY,
+            stripe_customer_id TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL,
+            name TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_customers_email
+         ON billing_customers(email)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_customers_stripe_id
+         ON billing_customers(stripe_customer_id)",
+        [],
+    )?;
+
+    // Subscriptions table - stores active and past subscriptions
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS billing_subscriptions (
+            id TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            stripe_subscription_id TEXT NOT NULL UNIQUE,
+            stripe_price_id TEXT NOT NULL,
+            plan_name TEXT NOT NULL CHECK(plan_name IN ('free', 'pro', 'proplus', 'team', 'enterprise')),
+            billing_interval TEXT NOT NULL CHECK(billing_interval IN ('monthly', 'yearly')),
+            status TEXT NOT NULL CHECK(status IN (
+                'active',
+                'trialing',
+                'past_due',
+                'canceled',
+                'incomplete',
+                'incomplete_expired',
+                'unpaid'
+            )),
+            current_period_start INTEGER NOT NULL,
+            current_period_end INTEGER NOT NULL,
+            cancel_at_period_end INTEGER NOT NULL DEFAULT 0 CHECK(cancel_at_period_end IN (0, 1)),
+            cancel_at INTEGER,
+            canceled_at INTEGER,
+            trial_start INTEGER,
+            trial_end INTEGER,
+            amount INTEGER NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'usd',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (customer_id) REFERENCES billing_customers(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_customer
+         ON billing_subscriptions(customer_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_status
+         ON billing_subscriptions(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_stripe_id
+         ON billing_subscriptions(stripe_subscription_id)",
+        [],
+    )?;
+
+    // Invoices table - stores billing history
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS billing_invoices (
+            id TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            subscription_id TEXT,
+            stripe_invoice_id TEXT NOT NULL UNIQUE,
+            invoice_number TEXT,
+            amount_due INTEGER NOT NULL,
+            amount_paid INTEGER NOT NULL,
+            amount_remaining INTEGER NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'usd',
+            status TEXT NOT NULL CHECK(status IN (
+                'draft',
+                'open',
+                'paid',
+                'void',
+                'uncollectible'
+            )),
+            invoice_pdf TEXT,
+            hosted_invoice_url TEXT,
+            period_start INTEGER NOT NULL,
+            period_end INTEGER NOT NULL,
+            due_date INTEGER,
+            paid_at INTEGER,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (customer_id) REFERENCES billing_customers(id) ON DELETE CASCADE,
+            FOREIGN KEY (subscription_id) REFERENCES billing_subscriptions(id) ON DELETE SET NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_invoices_customer
+         ON billing_invoices(customer_id, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_invoices_subscription
+         ON billing_invoices(subscription_id, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_invoices_status
+         ON billing_invoices(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_invoices_stripe_id
+         ON billing_invoices(stripe_invoice_id)",
+        [],
+    )?;
+
+    // Usage tracking table - tracks feature usage for billing limits
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS billing_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id TEXT NOT NULL,
+            usage_type TEXT NOT NULL CHECK(usage_type IN (
+                'automation_execution',
+                'api_call',
+                'storage_mb',
+                'llm_tokens',
+                'browser_session',
+                'mcp_tool_call'
+            )),
+            usage_count INTEGER NOT NULL DEFAULT 1,
+            metadata TEXT,
+            billing_period_start INTEGER NOT NULL,
+            billing_period_end INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (customer_id) REFERENCES billing_customers(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_usage_customer
+         ON billing_usage(customer_id, usage_type)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_usage_period
+         ON billing_usage(billing_period_start, billing_period_end)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_usage_type
+         ON billing_usage(usage_type, created_at DESC)",
+        [],
+    )?;
+
+    // Usage summary view for quick lookups
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS billing_usage_summary AS
+         SELECT
+             customer_id,
+             usage_type,
+             billing_period_start,
+             billing_period_end,
+             SUM(usage_count) as total_usage,
+             COUNT(*) as usage_events,
+             MIN(created_at) as first_usage,
+             MAX(created_at) as last_usage
+         FROM billing_usage
+         GROUP BY customer_id, usage_type, billing_period_start, billing_period_end",
+        [],
+    )?;
+
+    // Payment methods table - stores customer payment methods
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS billing_payment_methods (
+            id TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            stripe_payment_method_id TEXT NOT NULL UNIQUE,
+            type TEXT NOT NULL CHECK(type IN ('card', 'bank_account', 'other')),
+            card_brand TEXT,
+            card_last4 TEXT,
+            card_exp_month INTEGER,
+            card_exp_year INTEGER,
+            is_default INTEGER NOT NULL DEFAULT 0 CHECK(is_default IN (0, 1)),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (customer_id) REFERENCES billing_customers(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_payment_methods_customer
+         ON billing_payment_methods(customer_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_payment_methods_default
+         ON billing_payment_methods(customer_id, is_default)
+         WHERE is_default = 1",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_payment_methods_stripe_id
+         ON billing_payment_methods(stripe_payment_method_id)",
+        [],
+    )?;
+
+    // Webhook events table - tracks processed Stripe webhooks for idempotency
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS billing_webhook_events (
+            id TEXT PRIMARY KEY,
+            stripe_event_id TEXT NOT NULL UNIQUE,
+            event_type TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            processed INTEGER NOT NULL DEFAULT 0 CHECK(processed IN (0, 1)),
+            processing_error TEXT,
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            processed_at INTEGER
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_webhook_events_type
+         ON billing_webhook_events(event_type, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_webhook_events_processed
+         ON billing_webhook_events(processed, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_billing_webhook_events_stripe_id
+         ON billing_webhook_events(stripe_event_id)",
         [],
     )?;
 
