@@ -1,10 +1,10 @@
-use reqwest::{Client, header};
+use futures_util::{SinkExt, StreamExt};
+use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use futures_util::{StreamExt, SinkExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlackConfig {
@@ -44,7 +44,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -80,7 +83,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -114,7 +120,10 @@ impl SlackClient {
         let response = self
             .client
             .get(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .send()
             .await?;
 
@@ -172,7 +181,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .multipart(form)
             .send()
             .await?;
@@ -198,7 +210,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.app_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.app_token),
+            )
             .send()
             .await?;
 
@@ -271,7 +286,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -304,7 +322,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -335,7 +356,10 @@ impl SlackClient {
         let response = self
             .client
             .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -360,7 +384,10 @@ impl SlackClient {
         let response = self
             .client
             .get(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .send()
             .await?;
 
@@ -380,7 +407,10 @@ impl SlackClient {
         let response = self
             .client
             .get(url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.config.bot_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.config.bot_token),
+            )
             .send()
             .await?;
 

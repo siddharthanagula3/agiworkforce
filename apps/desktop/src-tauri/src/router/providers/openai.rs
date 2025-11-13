@@ -32,12 +32,8 @@ enum OpenAIContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum OpenAIContentPart {
-    Text {
-        text: String,
-    },
-    ImageUrl {
-        image_url: OpenAIImageUrl,
-    },
+    Text { text: String },
+    ImageUrl { image_url: OpenAIImageUrl },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,10 +161,7 @@ impl OpenAIProvider {
     }
 
     /// Convert multimodal content to OpenAI format
-    fn convert_content(
-        text: &str,
-        multimodal: Option<&Vec<ContentPart>>,
-    ) -> Option<OpenAIContent> {
+    fn convert_content(text: &str, multimodal: Option<&Vec<ContentPart>>) -> Option<OpenAIContent> {
         if let Some(parts) = multimodal {
             // Has multimodal content (text + images)
             let mut openai_parts = Vec::new();
@@ -184,9 +177,7 @@ impl OpenAIProvider {
             for part in parts {
                 match part {
                     ContentPart::Text { text } => {
-                        openai_parts.push(OpenAIContentPart::Text {
-                            text: text.clone(),
-                        });
+                        openai_parts.push(OpenAIContentPart::Text { text: text.clone() });
                     }
                     ContentPart::Image { image } => {
                         let (data_url, detail) =
@@ -290,10 +281,7 @@ impl LLMProvider for OpenAIProvider {
                 .map(|m| {
                     let mut msg = OpenAIMessage {
                         role: m.role.clone(),
-                        content: Self::convert_content(
-                            &m.content,
-                            m.multimodal_content.as_ref(),
-                        ),
+                        content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
                         tool_calls: None,
                         tool_call_id: m.tool_call_id.clone(),
                         name: None,

@@ -1,8 +1,8 @@
-pub mod registry;
+pub mod demo_workflows;
 pub mod employees;
 pub mod executor;
 pub mod marketplace;
-pub mod demo_workflows;
+pub mod registry;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -67,18 +67,22 @@ impl EmployeeRole {
             Self::SupportAgent | Self::EmailResponder | Self::LiveChatBot | Self::TicketTriager => {
                 "Customer Support"
             }
-            Self::LeadQualifier | Self::EmailCampaigner | Self::SocialMediaManager | Self::ContentWriter => {
-                "Sales & Marketing"
-            }
-            Self::DataEntry | Self::InvoiceProcessor | Self::ExpenseReconciler | Self::ScheduleManager => {
-                "Operations"
-            }
-            Self::CodeReviewer | Self::BugTriager | Self::DocumentationWriter | Self::TestRunner => {
-                "Development"
-            }
-            Self::InboxManager | Self::CalendarOptimizer | Self::TaskOrganizer | Self::ResearchAssistant => {
-                "Personal Assistant"
-            }
+            Self::LeadQualifier
+            | Self::EmailCampaigner
+            | Self::SocialMediaManager
+            | Self::ContentWriter => "Sales & Marketing",
+            Self::DataEntry
+            | Self::InvoiceProcessor
+            | Self::ExpenseReconciler
+            | Self::ScheduleManager => "Operations",
+            Self::CodeReviewer
+            | Self::BugTriager
+            | Self::DocumentationWriter
+            | Self::TestRunner => "Development",
+            Self::InboxManager
+            | Self::CalendarOptimizer
+            | Self::TaskOrganizer
+            | Self::ResearchAssistant => "Personal Assistant",
         }
     }
 }

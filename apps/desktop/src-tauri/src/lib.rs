@@ -67,8 +67,8 @@ pub mod database;
 // Communications (Email/IMAP/SMTP)
 
 // Messaging platform integrations (Slack, WhatsApp, Teams)
-pub mod messaging;
 pub mod communications;
+pub mod messaging;
 
 // Calendar integration (Google Calendar, Outlook)
 pub mod calendar;

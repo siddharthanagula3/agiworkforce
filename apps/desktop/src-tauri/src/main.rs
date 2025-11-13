@@ -10,12 +10,12 @@ use agiworkforce_desktop::billing::BillingStateWrapper;
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        load_persisted_calendar_accounts, AgentRuntimeState, AIEmployeeState, ApiState, AppDatabase,
-        BrowserStateWrapper, CalendarState, CloudState, CodeEditingState, CodeGeneratorState,
-        ComputerUseState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState,
-        GitHubState, LLMState, LSPState, McpState, ProductivityState, SettingsServiceState,
-        SettingsState, ShortcutsState, TemplateManagerState, VoiceState, WorkflowEngineState,
-        WorkspaceIndexState,
+        load_persisted_calendar_accounts, AIEmployeeState, AgentRuntimeState, ApiState,
+        AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
+        CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState, DocumentState,
+        FileWatcherState, GitHubState, LLMState, LSPState, McpState, ProductivityState,
+        SettingsServiceState, SettingsState, ShortcutsState, TemplateManagerState, VoiceState,
+        WorkflowEngineState, WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -252,9 +252,11 @@ fn main() {
             // Initialize Marketplace state for public workflows
             let marketplace_conn =
                 Connection::open(&db_path).expect("Failed to open database for marketplace");
-            app.manage(agiworkforce_desktop::commands::marketplace::MarketplaceState {
-                db: Arc::new(Mutex::new(marketplace_conn)),
-            });
+            app.manage(
+                agiworkforce_desktop::commands::marketplace::MarketplaceState {
+                    db: Arc::new(Mutex::new(marketplace_conn)),
+                },
+            );
 
             tracing::info!("Marketplace state initialized");
 
@@ -281,9 +283,9 @@ fn main() {
                     realtime_server.clone(),
                 ),
             );
-            let metrics_comparison = Arc::new(agiworkforce_desktop::metrics::MetricsComparison::new(
-                metrics_db.clone(),
-            ));
+            let metrics_comparison = Arc::new(
+                agiworkforce_desktop::metrics::MetricsComparison::new(metrics_db.clone()),
+            );
 
             // Manage metrics states
             app.manage(agiworkforce_desktop::commands::MetricsCollectorState(

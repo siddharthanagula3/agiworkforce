@@ -75,29 +75,74 @@ impl TeamPermissions {
 
         match role {
             TeamRole::Owner => vec![
-                ViewResources, CreateResources, ModifyResources, DeleteResources, ShareResources,
-                ViewMembers, InviteMembers, RemoveMembers, ModifyMemberRoles,
-                ViewTeamSettings, ModifyTeamSettings, DeleteTeam,
-                ViewAutomations, RunAutomations, CreateAutomations, ModifyAutomations, DeleteAutomations,
-                ViewWorkflows, CreateWorkflows, ModifyWorkflows, DeleteWorkflows, ExecuteWorkflows,
-                ViewBilling, ManageBilling,
-                ViewActivity, ExportActivity,
+                ViewResources,
+                CreateResources,
+                ModifyResources,
+                DeleteResources,
+                ShareResources,
+                ViewMembers,
+                InviteMembers,
+                RemoveMembers,
+                ModifyMemberRoles,
+                ViewTeamSettings,
+                ModifyTeamSettings,
+                DeleteTeam,
+                ViewAutomations,
+                RunAutomations,
+                CreateAutomations,
+                ModifyAutomations,
+                DeleteAutomations,
+                ViewWorkflows,
+                CreateWorkflows,
+                ModifyWorkflows,
+                DeleteWorkflows,
+                ExecuteWorkflows,
+                ViewBilling,
+                ManageBilling,
+                ViewActivity,
+                ExportActivity,
             ],
             TeamRole::Admin => vec![
-                ViewResources, CreateResources, ModifyResources, DeleteResources, ShareResources,
-                ViewMembers, InviteMembers, RemoveMembers, ModifyMemberRoles,
-                ViewTeamSettings, ModifyTeamSettings,
-                ViewAutomations, RunAutomations, CreateAutomations, ModifyAutomations, DeleteAutomations,
-                ViewWorkflows, CreateWorkflows, ModifyWorkflows, DeleteWorkflows, ExecuteWorkflows,
+                ViewResources,
+                CreateResources,
+                ModifyResources,
+                DeleteResources,
+                ShareResources,
+                ViewMembers,
+                InviteMembers,
+                RemoveMembers,
+                ModifyMemberRoles,
+                ViewTeamSettings,
+                ModifyTeamSettings,
+                ViewAutomations,
+                RunAutomations,
+                CreateAutomations,
+                ModifyAutomations,
+                DeleteAutomations,
+                ViewWorkflows,
+                CreateWorkflows,
+                ModifyWorkflows,
+                DeleteWorkflows,
+                ExecuteWorkflows,
                 ViewBilling,
-                ViewActivity, ExportActivity,
+                ViewActivity,
+                ExportActivity,
             ],
             TeamRole::Editor => vec![
-                ViewResources, CreateResources, ModifyResources, ShareResources,
+                ViewResources,
+                CreateResources,
+                ModifyResources,
+                ShareResources,
                 ViewMembers,
                 ViewTeamSettings,
-                ViewAutomations, RunAutomations, CreateAutomations, ModifyAutomations,
-                ViewWorkflows, CreateWorkflows, ModifyWorkflows, ExecuteWorkflows,
+                ViewAutomations,
+                RunAutomations,
+                CreateAutomations,
+                ModifyAutomations,
+                ViewWorkflows,
+                CreateWorkflows,
+                ModifyWorkflows,
+                ExecuteWorkflows,
                 ViewActivity,
             ],
             TeamRole::Viewer => vec![
@@ -113,7 +158,7 @@ impl TeamPermissions {
 
     /// Owner permissions (all permissions)
     fn owner_permissions(permission: Permission) -> bool {
-        true  // Owners have all permissions
+        true // Owners have all permissions
     }
 
     /// Admin permissions (all except team deletion and billing management)
@@ -166,8 +211,12 @@ impl TeamPermissions {
 
         matches!(
             permission,
-            ViewResources | ViewMembers | ViewTeamSettings | ViewActivity |
-            ViewAutomations | ViewWorkflows
+            ViewResources
+                | ViewMembers
+                | ViewTeamSettings
+                | ViewActivity
+                | ViewAutomations
+                | ViewWorkflows
         )
     }
 
@@ -284,8 +333,12 @@ impl TeamPermissions {
     /// Get role description
     pub fn get_role_description(role: TeamRole) -> &'static str {
         match role {
-            TeamRole::Owner => "Full access to all team features including billing and team deletion",
-            TeamRole::Admin => "Manage members, settings, and all resources except billing and team deletion",
+            TeamRole::Owner => {
+                "Full access to all team features including billing and team deletion"
+            }
+            TeamRole::Admin => {
+                "Manage members, settings, and all resources except billing and team deletion"
+            }
             TeamRole::Editor => "Create and modify resources, run workflows and automations",
             TeamRole::Viewer => "View-only access to team resources",
         }
@@ -294,16 +347,16 @@ impl TeamPermissions {
     /// Check if role A can modify role B
     pub fn can_modify_role(actor_role: TeamRole, target_role: TeamRole) -> bool {
         match actor_role {
-            TeamRole::Owner => true,  // Owner can modify any role
-            TeamRole::Admin => target_role != TeamRole::Owner,  // Admin cannot modify owner
-            TeamRole::Editor | TeamRole::Viewer => false,  // Cannot modify roles
+            TeamRole::Owner => true, // Owner can modify any role
+            TeamRole::Admin => target_role != TeamRole::Owner, // Admin cannot modify owner
+            TeamRole::Editor | TeamRole::Viewer => false, // Cannot modify roles
         }
     }
 
     /// Check if role A can remove role B
     pub fn can_remove_role(actor_role: TeamRole, target_role: TeamRole) -> bool {
         match actor_role {
-            TeamRole::Owner => target_role != TeamRole::Owner,  // Cannot remove another owner
+            TeamRole::Owner => target_role != TeamRole::Owner, // Cannot remove another owner
             TeamRole::Admin => matches!(target_role, TeamRole::Editor | TeamRole::Viewer),
             TeamRole::Editor | TeamRole::Viewer => false,
         }
@@ -397,9 +450,18 @@ mod tests {
 
     #[test]
     fn test_role_modification_rules() {
-        assert!(TeamPermissions::can_modify_role(TeamRole::Owner, TeamRole::Admin));
-        assert!(!TeamPermissions::can_modify_role(TeamRole::Admin, TeamRole::Owner));
-        assert!(!TeamPermissions::can_modify_role(TeamRole::Editor, TeamRole::Viewer));
+        assert!(TeamPermissions::can_modify_role(
+            TeamRole::Owner,
+            TeamRole::Admin
+        ));
+        assert!(!TeamPermissions::can_modify_role(
+            TeamRole::Admin,
+            TeamRole::Owner
+        ));
+        assert!(!TeamPermissions::can_modify_role(
+            TeamRole::Editor,
+            TeamRole::Viewer
+        ));
     }
 
     #[test]

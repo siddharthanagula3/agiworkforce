@@ -1,6 +1,6 @@
 use super::*;
-use crate::router::LLMRouter;
 use crate::agi::tools::ToolRegistry;
+use crate::router::LLMRouter;
 use chrono::Utc;
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -31,9 +31,10 @@ impl AIEmployeeExecutor {
 
     /// Hire an employee for a user
     pub async fn hire(&self, employee_id: &str, user_id: &str) -> Result<String> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         // Check if employee exists
         let exists: bool = conn
@@ -84,9 +85,10 @@ impl AIEmployeeExecutor {
 
     /// Fire (deactivate) an employee
     pub async fn fire(&self, user_employee_id: &str) -> Result<()> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         conn.execute(
             "UPDATE user_employees SET is_active = 0 WHERE id = ?1",
@@ -122,9 +124,10 @@ impl AIEmployeeExecutor {
         };
 
         // Store task in database
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let input_json = serde_json::to_string(&input_data).unwrap_or_default();
 
@@ -161,14 +164,15 @@ impl AIEmployeeExecutor {
                 EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
             })?;
 
-            let result: std::result::Result<(String, String, String, String), rusqlite::Error> = conn.query_row(
-                "SELECT et.task_type, et.input_data, et.user_employee_id, ue.employee_id
+            let result: std::result::Result<(String, String, String, String), rusqlite::Error> =
+                conn.query_row(
+                    "SELECT et.task_type, et.input_data, et.user_employee_id, ue.employee_id
                  FROM employee_tasks et
                  JOIN user_employees ue ON et.user_employee_id = ue.id
                  WHERE et.id = ?1",
-                [task_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            );
+                    [task_id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                );
 
             result.map_err(|e| EmployeeError::DatabaseError(e.to_string()))?
         };
@@ -255,14 +259,18 @@ impl AIEmployeeExecutor {
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             );
 
-            result.map_err(|e| EmployeeError::NotFound(format!("Employee {}: {}", employee_id, e)))?
+            result
+                .map_err(|e| EmployeeError::NotFound(format!("Employee {}: {}", employee_id, e)))?
         };
 
-        let demo_workflow: Option<DemoWorkflow> = demo_json
-            .and_then(|json| serde_json::from_str(&json).ok());
+        let demo_workflow: Option<DemoWorkflow> =
+            demo_json.and_then(|json| serde_json::from_str(&json).ok());
 
         let demo_workflow = demo_workflow.ok_or_else(|| {
-            EmployeeError::DemoFailed(format!("No demo workflow found for employee {}", employee_id))
+            EmployeeError::DemoFailed(format!(
+                "No demo workflow found for employee {}",
+                employee_id
+            ))
         })?;
 
         // Execute demo steps
@@ -307,9 +315,10 @@ impl AIEmployeeExecutor {
 
     /// Get task status
     pub async fn get_task_status(&self, task_id: &str) -> Result<EmployeeTask> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let result: std::result::Result<EmployeeTask, rusqlite::Error> = conn.query_row(
             "SELECT id, user_employee_id, task_type, input_data, output_data, time_saved_minutes, cost_saved_usd, started_at, completed_at, status
@@ -355,9 +364,10 @@ impl AIEmployeeExecutor {
 
     /// List all tasks for a user employee
     pub async fn list_tasks(&self, user_employee_id: &str) -> Result<Vec<EmployeeTask>> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut stmt = conn
             .prepare(

@@ -1,13 +1,15 @@
 use crate::db::Database;
 use crate::error::Result;
 use crate::security::{
-    create_tool_execution_event, create_workflow_execution_event, ApprovalAction,
-    ApprovalDecision, ApprovalRequest, ApprovalStatistics, ApprovalWorkflow,
-    AuditEvent, AuditFilters, AuditIntegrityReport, AuditStatus,
-    EnhancedAuditLogger,
+    create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
+    ApprovalRequest, ApprovalStatistics, ApprovalStatus, ApprovalWorkflow, AuditEvent,
+    AuditEventType, AuditFilters, AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
 };
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
+use uuid::Uuid;
 
 /// Get audit events with filtering
 #[tauri::command]
@@ -78,7 +80,8 @@ pub async fn log_workflow_execution(
         _ => AuditStatus::Pending,
     };
 
-    let event = create_workflow_execution_event(user_id, team_id, workflow_id, audit_status, metadata);
+    let event =
+        create_workflow_execution_event(user_id, team_id, workflow_id, audit_status, metadata);
 
     logger.log(event)
 }
@@ -105,7 +108,14 @@ pub async fn create_approval_request(
         _ => crate::security::ApprovalRiskLevel::Medium,
     };
 
-    workflow.create_approval_request(requester_id, team_id, action, risk, justification, timeout_minutes)
+    workflow.create_approval_request(
+        requester_id,
+        team_id,
+        action,
+        risk,
+        justification,
+        timeout_minutes,
+    )
 }
 
 /// Get pending approval requests

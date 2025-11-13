@@ -54,15 +54,11 @@ pub fn init_logging(config: LogConfig) -> Result<(), Box<dyn std::error::Error>>
     fs::create_dir_all(&config.log_dir)?;
 
     // Set up file appender with rotation
-    let file_appender = RollingFileAppender::new(
-        config.rotation,
-        &config.log_dir,
-        "agiworkforce.log",
-    );
+    let file_appender =
+        RollingFileAppender::new(config.rotation, &config.log_dir, "agiworkforce.log");
 
     // Build filter
-    let filter = EnvFilter::from_default_env()
-        .add_directive(config.level.into());
+    let filter = EnvFilter::from_default_env().add_directive(config.level.into());
 
     // Build subscriber layers
     let mut layers = Vec::new();
@@ -118,9 +114,7 @@ pub fn init_logging(config: LogConfig) -> Result<(), Box<dyn std::error::Error>>
 fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) -> Result<(), Box<dyn std::error::Error>> {
     let mut log_files: Vec<_> = fs::read_dir(log_dir)?
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.path().extension().and_then(|s| s.to_str()) == Some("log")
-        })
+        .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("log"))
         .collect();
 
     // Sort by modification time (newest first)
@@ -148,12 +142,30 @@ pub fn filter_sensitive_data(input: &str) -> String {
 
     // Patterns for sensitive data
     let patterns = [
-        (r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?([a-zA-Z0-9_-]+)['"]?"#, "API_KEY=***"),
-        (r#"(?i)(password|passwd|pwd)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#, "PASSWORD=***"),
-        (r#"(?i)(token|auth[_-]?token)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#, "TOKEN=***"),
-        (r#"(?i)(secret|client[_-]?secret)\s*[:=]\s*['"]?([a-zA-Z0-9_-]+)['"]?"#, "SECRET=***"),
-        (r#"(?i)(bearer|authorization)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#, "BEARER=***"),
-        (r#"(?i)(private[_-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#, "PRIVATE_KEY=***"),
+        (
+            r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?([a-zA-Z0-9_-]+)['"]?"#,
+            "API_KEY=***",
+        ),
+        (
+            r#"(?i)(password|passwd|pwd)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#,
+            "PASSWORD=***",
+        ),
+        (
+            r#"(?i)(token|auth[_-]?token)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#,
+            "TOKEN=***",
+        ),
+        (
+            r#"(?i)(secret|client[_-]?secret)\s*[:=]\s*['"]?([a-zA-Z0-9_-]+)['"]?"#,
+            "SECRET=***",
+        ),
+        (
+            r#"(?i)(bearer|authorization)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#,
+            "BEARER=***",
+        ),
+        (
+            r#"(?i)(private[_-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?"#,
+            "PRIVATE_KEY=***",
+        ),
     ];
 
     let mut filtered = input.to_string();
