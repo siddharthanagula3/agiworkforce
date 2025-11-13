@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
 use futures_util::Stream;
+use rusqlite::Connection;
 
+use crate::router::cache_manager::CacheManager;
 use crate::router::cost_calculator::CostCalculator;
 use crate::router::sse_parser::StreamChunk;
 use crate::router::token_counter::TokenCounter;
@@ -46,6 +49,8 @@ pub struct LLMRouter {
     providers: HashMap<Provider, Box<dyn LLMProvider>>,
     default_provider: Provider,
     cost_calculator: CostCalculator,
+    cache_manager: Option<CacheManager>,
+    db_connection: Option<Arc<Mutex<Connection>>>,
 }
 
 impl Default for LLMRouter {
@@ -60,7 +65,19 @@ impl LLMRouter {
             providers: HashMap::new(),
             default_provider: Provider::OpenAI,
             cost_calculator: CostCalculator::new(),
+            cache_manager: None,
+            db_connection: None,
         }
+    }
+
+    /// Set cache manager and database connection for LLM response caching
+    pub fn set_cache(
+        &mut self,
+        cache_manager: CacheManager,
+        db_connection: Arc<Mutex<Connection>>,
+    ) {
+        self.cache_manager = Some(cache_manager);
+        self.db_connection = Some(db_connection);
     }
 
     pub fn set_default_provider(&mut self, provider: Provider) {
@@ -186,6 +203,62 @@ impl LLMRouter {
         candidate: &RouteCandidate,
         request: &LLMRequest,
     ) -> Result<RouteOutcome> {
+        // Check cache if available
+        if let (Some(cache_manager), Some(db_conn)) =
+            (&self.cache_manager, &self.db_connection)
+        {
+            let cache_key = CacheManager::compute_cache_key(
+                candidate.provider,
+                &candidate.model,
+                &request.messages,
+                request.temperature,
+                request.max_tokens,
+            );
+
+            // Try to fetch from cache
+            if let Ok(conn) = db_conn.lock() {
+                if let Ok(Some(cached_entry)) = cache_manager.fetch(&conn, &cache_key) {
+                    // Parse cached response
+                    if let Ok(cached_response) =
+                        serde_json::from_str::<LLMResponse>(&cached_entry.response)
+                    {
+                        let prompt_tokens = cached_response.prompt_tokens.unwrap_or(0);
+                        let completion_tokens = cached_response.completion_tokens.unwrap_or(0);
+                        let cost = cached_response.cost.unwrap_or(0.0);
+
+                        // Update cache hit statistics
+                        let _ = cache_manager.update_cache_hit(
+                            &conn,
+                            &cache_key,
+                            prompt_tokens + completion_tokens,
+                            cost,
+                        );
+
+                        tracing::info!(
+                            "Cache hit for {}/{} - saved {} tokens, ${:.4}",
+                            candidate.provider.as_string(),
+                            candidate.model,
+                            prompt_tokens + completion_tokens,
+                            cost
+                        );
+
+                        let mut response = cached_response;
+                        response.cached = true;
+
+                        return Ok(RouteOutcome {
+                            provider: candidate.provider,
+                            model: response.model.clone(),
+                            response,
+                            prompt_tokens,
+                            completion_tokens,
+                            cost,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Cache miss - call provider
         let provider = self
             .providers
             .get(&candidate.provider)
@@ -229,6 +302,51 @@ impl LLMRouter {
         }
 
         let total_cost = response.cost.unwrap_or(0.0);
+
+        // Store in cache if available
+        if let (Some(cache_manager), Some(db_conn)) =
+            (&self.cache_manager, &self.db_connection)
+        {
+            if let Ok(conn) = db_conn.lock() {
+                let cache_key = CacheManager::compute_cache_key(
+                    candidate.provider,
+                    &candidate.model,
+                    &request.messages,
+                    request.temperature,
+                    request.max_tokens,
+                );
+
+                let prompt_hash = CacheManager::compute_hash(&request.messages);
+                let expires_at =
+                    cache_manager.temperature_aware_expiry(request.temperature);
+
+                if let Ok(response_json) = serde_json::to_string(&response) {
+                    let cache_record = crate::router::cache_manager::CacheRecord {
+                        cache_key: &cache_key,
+                        provider: candidate.provider,
+                        model: &candidate.model,
+                        prompt_hash: &prompt_hash,
+                        response: &response_json,
+                        tokens: Some(total_tokens),
+                        cost: Some(total_cost),
+                        temperature: request.temperature,
+                        max_tokens: request.max_tokens,
+                        expires_at,
+                    };
+
+                    if let Err(e) = cache_manager.upsert(&conn, cache_record) {
+                        tracing::warn!("Failed to cache LLM response: {}", e);
+                    } else {
+                        tracing::debug!(
+                            "Cached response for {}/{} (expires: {})",
+                            candidate.provider.as_string(),
+                            candidate.model,
+                            expires_at
+                        );
+                    }
+                }
+            }
+        }
 
         Ok(RouteOutcome {
             provider: candidate.provider,
