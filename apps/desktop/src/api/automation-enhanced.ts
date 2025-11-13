@@ -15,7 +15,7 @@ import type {
 // ============================================================================
 
 function toCamelCase(str: string): string {
-  return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  return str.replace(/_([a-z])/g, (g) => g[1]?.toUpperCase() ?? g);
 }
 
 function toSnakeCase(str: string): string {

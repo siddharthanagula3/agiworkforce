@@ -1,5 +1,6 @@
 pub mod cache_manager;
 pub mod cost_calculator;
+pub mod function_executor;
 pub mod llm_router;
 pub mod providers;
 pub mod sse_parser;
@@ -34,6 +35,47 @@ pub struct ChatMessage {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// Optional multimodal content (for vision support)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub multimodal_content: Option<Vec<ContentPart>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentPart {
+    Text { text: String },
+    Image { image: ImageInput },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageInput {
+    /// Raw image bytes (PNG, JPEG, WEBP)
+    pub data: Vec<u8>,
+    /// Image format
+    pub format: ImageFormat,
+    /// Detail level for vision models
+    #[serde(default = "default_image_detail")]
+    pub detail: ImageDetail,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageFormat {
+    Png,
+    Jpeg,
+    Webp,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageDetail {
+    Low,
+    High,
+    Auto,
+}
+
+fn default_image_detail() -> ImageDetail {
+    ImageDetail::Auto
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -245,6 +287,16 @@ pub trait LLMProvider: Send + Sync {
 
     /// Get the provider name
     fn name(&self) -> &str;
+
+    /// Check if this provider supports vision (image inputs)
+    fn supports_vision(&self) -> bool {
+        false // Default: no vision support
+    }
+
+    /// Check if this provider supports function calling
+    fn supports_function_calling(&self) -> bool {
+        false // Default: no function calling
+    }
 }
 
 pub use llm_router::{LLMRouter, RouteCandidate, RouteOutcome, RouterPreferences, RoutingStrategy};
