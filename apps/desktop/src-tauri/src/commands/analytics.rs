@@ -200,6 +200,195 @@ pub async fn metrics_set_cache_hit_rate(
     Ok(())
 }
 
+// ==================== ROI Analytics Commands ====================
+
+use crate::analytics::{
+    MetricsAggregator, ProcessMetrics, ROICalculator, ROIReport, ReportGenerator,
+    ScheduledReportGenerator, TrendPoint, UserMetrics, ToolMetrics,
+};
+use crate::db::AppDatabase;
+
+/// Calculate ROI for a given date range
+#[tauri::command]
+pub async fn analytics_calculate_roi(
+    start_date: i64,
+    end_date: i64,
+    state: State<'_, AppDatabase>,
+) -> Result<ROIReport, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let calculator = ROICalculator::new(db);
+
+    calculator.calculate_roi(start_date, end_date).await
+        .map_err(|e| format!("Failed to calculate ROI: {}", e))
+}
+
+/// Get process metrics aggregated by process type
+#[tauri::command]
+pub async fn analytics_get_process_metrics(
+    start_date: i64,
+    end_date: i64,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<ProcessMetrics>, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let aggregator = MetricsAggregator::new(db);
+
+    aggregator.aggregate_by_process_type(start_date, end_date).await
+        .map_err(|e| format!("Failed to aggregate process metrics: {}", e))
+}
+
+/// Get user metrics
+#[tauri::command]
+pub async fn analytics_get_user_metrics(
+    start_date: i64,
+    end_date: i64,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<UserMetrics>, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let aggregator = MetricsAggregator::new(db);
+
+    aggregator.aggregate_by_user(start_date, end_date).await
+        .map_err(|e| format!("Failed to aggregate user metrics: {}", e))
+}
+
+/// Get tool metrics
+#[tauri::command]
+pub async fn analytics_get_tool_metrics(
+    start_date: i64,
+    end_date: i64,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<ToolMetrics>, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let aggregator = MetricsAggregator::new(db);
+
+    aggregator.aggregate_by_tool(start_date, end_date).await
+        .map_err(|e| format!("Failed to aggregate tool metrics: {}", e))
+}
+
+/// Get metric trends over time
+#[tauri::command]
+pub async fn analytics_get_metric_trends(
+    metric: String,
+    days: usize,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<TrendPoint>, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let aggregator = MetricsAggregator::new(db);
+
+    aggregator.calculate_trends(&metric, days).await
+        .map_err(|e| format!("Failed to calculate trends: {}", e))
+}
+
+/// Export analytics report in specified format
+#[tauri::command]
+pub async fn analytics_export_report(
+    format: String,
+    start_date: i64,
+    end_date: i64,
+    state: State<'_, AppDatabase>,
+) -> Result<String, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    let calculator = ROICalculator::new(db.clone());
+    let aggregator = MetricsAggregator::new(db.clone());
+    let generator = ReportGenerator::new();
+
+    let roi = calculator.calculate_roi(start_date, end_date).await
+        .map_err(|e| format!("Failed to calculate ROI: {}", e))?;
+
+    match format.as_str() {
+        "markdown" | "md" => {
+            let process_metrics = aggregator.aggregate_by_process_type(start_date, end_date).await
+                .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
+            Ok(generator.generate_executive_summary(&roi, &process_metrics))
+        },
+        "csv" => {
+            let process_metrics = aggregator.aggregate_by_process_type(start_date, end_date).await
+                .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
+            Ok(generator.generate_csv_export(&process_metrics))
+        },
+        "json" => {
+            let process_metrics = aggregator.aggregate_by_process_type(start_date, end_date).await
+                .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
+            let user_metrics = aggregator.aggregate_by_user(start_date, end_date).await
+                .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
+            let tool_metrics = aggregator.aggregate_by_tool(start_date, end_date).await
+                .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
+
+            generator.generate_json_export(&roi, &process_metrics, &user_metrics, &tool_metrics)
+                .map_err(|e| format!("Failed to generate JSON: {}", e))
+        },
+        _ => Err(format!("Unsupported format: {}. Use 'markdown', 'csv', or 'json'", format))
+    }
+}
+
+/// Generate weekly ROI report
+#[tauri::command]
+pub async fn analytics_generate_weekly_report(
+    user_id: String,
+    state: State<'_, AppDatabase>,
+) -> Result<String, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let generator = ScheduledReportGenerator::new(db);
+
+    generator.generate_weekly_report(&user_id).await
+}
+
+/// Generate monthly ROI report
+#[tauri::command]
+pub async fn analytics_generate_monthly_report(
+    user_id: String,
+    state: State<'_, AppDatabase>,
+) -> Result<String, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let generator = ScheduledReportGenerator::new(db);
+
+    generator.generate_monthly_report(&user_id).await
+}
+
+/// Get top performing processes
+#[tauri::command]
+pub async fn analytics_get_top_processes(
+    start_date: i64,
+    end_date: i64,
+    limit: usize,
+    state: State<'_, AppDatabase>,
+) -> Result<Vec<ProcessMetrics>, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let aggregator = MetricsAggregator::new(db);
+
+    aggregator.get_top_processes(start_date, end_date, limit).await
+        .map_err(|e| format!("Failed to get top processes: {}", e))
+}
+
+/// Save ROI snapshot
+#[tauri::command]
+pub async fn analytics_save_snapshot(
+    user_id: String,
+    team_id: Option<String>,
+    start_date: i64,
+    end_date: i64,
+    state: State<'_, AppDatabase>,
+) -> Result<String, String> {
+    let db = state.get_connection().await
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let calculator = ROICalculator::new(db);
+
+    let roi = calculator.calculate_roi(start_date, end_date).await
+        .map_err(|e| format!("Failed to calculate ROI: {}", e))?;
+
+    calculator.save_snapshot(&user_id, team_id.as_deref(), &roi).await
+        .map_err(|e| format!("Failed to save snapshot: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,7 +20,6 @@ import { CommandSuggestions, DEFAULT_COMMANDS, type CommandSuggestion } from './
 import { useInputStore } from '../../stores/inputStore';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
-import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 
 interface EnhancedInputProps {
@@ -78,7 +77,7 @@ export function EnhancedInput({
   const [showCommands, setShowCommands] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
-  const [isImagePasted, setIsImagePasted] = useState(false);
+  const [_isImagePasted, _setIsImagePasted] = useState(false);
 
   const {
     attachments,
@@ -347,9 +346,9 @@ export function EnhancedInput({
         const file = item.getAsFile();
         if (file) {
           addAttachment(file);
-          setIsImagePasted(true);
+          _setIsImagePasted(true);
           toast.success('Image pasted successfully');
-          setTimeout(() => setIsImagePasted(false), 2000);
+          setTimeout(() => _setIsImagePasted(false), 2000);
         }
       }
     }

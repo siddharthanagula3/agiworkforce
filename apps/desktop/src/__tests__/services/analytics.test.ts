@@ -79,7 +79,7 @@ describe('AnalyticsService', () => {
     });
 
     it('should sanitize PII from event properties', () => {
-      service.track('test_event', {
+      service.track('app_opened', {
         email: 'test@example.com',
         name: 'John Doe',
         safe_property: 'safe_value',
@@ -93,9 +93,9 @@ describe('AnalyticsService', () => {
     it('should auto-flush when batch size is reached', async () => {
       service.updateConfig({ batchSize: 3 });
 
-      service.track('event_1', {});
-      service.track('event_2', {});
-      service.track('event_3', {});
+      service.track('automation_created', {});
+      service.track('automation_edited', {});
+      service.track('automation_deleted', {});
 
       // After 3 events, queue should be flushed
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -152,7 +152,7 @@ describe('AnalyticsService', () => {
   describe('Data Export', () => {
     it('should export analytics data', async () => {
       service.updateConfig({ enabled: true });
-      service.track('test_event', { foo: 'bar' });
+      service.track('app_opened', { foo: 'bar' });
 
       const data = await service.exportData();
 
@@ -165,7 +165,7 @@ describe('AnalyticsService', () => {
   describe('Data Deletion', () => {
     it('should delete all analytics data', async () => {
       service.updateConfig({ enabled: true });
-      service.track('test_event', { foo: 'bar' });
+      service.track('app_closed', { foo: 'bar' });
 
       await service.deleteAllData();
 
@@ -185,7 +185,7 @@ describe('AnalyticsService', () => {
         value: false,
       });
 
-      service.track('offline_event', {});
+      service.track('error_occurred', {});
 
       const sessionInfo = service.getSessionInfo();
       expect(sessionInfo.events_count).toBeGreaterThan(0);
