@@ -206,7 +206,33 @@ use crate::analytics::{
     MetricsAggregator, ProcessMetrics, ROICalculator, ROIReport, ReportGenerator,
     ScheduledReportGenerator, TrendPoint, UserMetrics, ToolMetrics,
 };
-use crate::db::AppDatabase;
+use crate::commands::AppDatabase;
+use std::sync::Arc;
+use rusqlite::Connection;
+
+/// Helper function to create a tokio::sync::Mutex<Connection> for analytics
+/// Note: AppDatabase uses std::sync::Mutex, but analytics module expects tokio::sync::Mutex
+/// This creates a temporary connection for analytics operations
+fn create_analytics_db_connection(app_db: &AppDatabase) -> Result<Arc<tokio::sync::Mutex<Connection>>, String> {
+    // Get the connection to verify it exists
+    let _conn = app_db.conn.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+
+    // For now, we'll use an environment variable or default path
+    // In production, this should be passed from the app initialization
+    let db_path = std::env::var("AGI_DB_PATH")
+        .unwrap_or_else(|_| {
+            // Try to get app data directory path
+            std::path::PathBuf::from(".")
+                .join("agiworkforce.db")
+                .to_string_lossy()
+                .to_string()
+        });
+
+    let new_conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open analytics connection: {}", e))?;
+
+    Ok(Arc::new(tokio::sync::Mutex::new(new_conn)))
+}
 
 /// Calculate ROI for a given date range
 #[tauri::command]
@@ -215,8 +241,7 @@ pub async fn analytics_calculate_roi(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<ROIReport, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let calculator = ROICalculator::new(db);
 
     calculator.calculate_roi(start_date, end_date).await
@@ -230,8 +255,7 @@ pub async fn analytics_get_process_metrics(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<ProcessMetrics>, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
     aggregator.aggregate_by_process_type(start_date, end_date).await
@@ -245,8 +269,7 @@ pub async fn analytics_get_user_metrics(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<UserMetrics>, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
     aggregator.aggregate_by_user(start_date, end_date).await
@@ -260,8 +283,7 @@ pub async fn analytics_get_tool_metrics(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<ToolMetrics>, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
     aggregator.aggregate_by_tool(start_date, end_date).await
@@ -275,8 +297,7 @@ pub async fn analytics_get_metric_trends(
     days: usize,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<TrendPoint>, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
     aggregator.calculate_trends(&metric, days).await
@@ -291,8 +312,7 @@ pub async fn analytics_export_report(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
 
     let calculator = ROICalculator::new(db.clone());
     let aggregator = MetricsAggregator::new(db.clone());
@@ -333,8 +353,7 @@ pub async fn analytics_generate_weekly_report(
     user_id: String,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let generator = ScheduledReportGenerator::new(db);
 
     generator.generate_weekly_report(&user_id).await
@@ -346,8 +365,7 @@ pub async fn analytics_generate_monthly_report(
     user_id: String,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let generator = ScheduledReportGenerator::new(db);
 
     generator.generate_monthly_report(&user_id).await
@@ -361,8 +379,7 @@ pub async fn analytics_get_top_processes(
     limit: usize,
     state: State<'_, AppDatabase>,
 ) -> Result<Vec<ProcessMetrics>, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
     aggregator.get_top_processes(start_date, end_date, limit).await
@@ -378,8 +395,7 @@ pub async fn analytics_save_snapshot(
     end_date: i64,
     state: State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let db = state.get_connection().await
-        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let db = create_analytics_db_connection(&state)?;
     let calculator = ROICalculator::new(db);
 
     let roi = calculator.calculate_roi(start_date, end_date).await
