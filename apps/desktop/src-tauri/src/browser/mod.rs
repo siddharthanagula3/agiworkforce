@@ -11,7 +11,7 @@ pub mod tab_manager;
 pub use advanced::*;
 pub use cdp_client::CdpClient;
 pub use dom_operations::*;
-pub use extension_bridge::{ExtensionBridge, TabInfo};
+pub use extension_bridge::ExtensionBridge;
 pub use playwright_bridge::*;
 pub use tab_manager::*;
 

@@ -30,7 +30,7 @@ pub struct OnboardingStatus {
 /// Get onboarding status
 #[tauri::command]
 pub async fn get_onboarding_status(db: State<'_, AppDatabase>) -> Result<OnboardingStatus, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -83,7 +83,7 @@ pub async fn complete_onboarding_step(
     step_id: String,
     data: Option<String>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -104,7 +104,7 @@ pub async fn skip_onboarding_step(
     db: State<'_, AppDatabase>,
     step_id: String,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -122,7 +122,7 @@ pub async fn skip_onboarding_step(
 /// Reset onboarding progress
 #[tauri::command]
 pub async fn reset_onboarding(db: State<'_, AppDatabase>) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -141,7 +141,7 @@ pub async fn reset_onboarding(db: State<'_, AppDatabase>) -> Result<(), String> 
 pub async fn export_user_data(db: State<'_, AppDatabase>) -> Result<String, String> {
     use serde_json::json;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     // Export conversations
     let mut stmt = conn
@@ -224,7 +224,7 @@ pub async fn check_connectivity() -> Result<bool, String> {
 pub async fn get_session_info(db: State<'_, AppDatabase>) -> Result<serde_json::Value, String> {
     use serde_json::json;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     // Get most recent session
     let result = conn.query_row(
@@ -278,7 +278,7 @@ pub async fn update_session_activity(
     db: State<'_, AppDatabase>,
     session_id: String,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -301,7 +301,7 @@ pub async fn get_user_preference(
 ) -> Result<Option<serde_json::Value>, String> {
     use serde_json::json;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
         "SELECT value, data_type FROM user_preferences WHERE key = ?1",
@@ -334,7 +334,7 @@ pub async fn set_user_preference(
     data_type: String,
     description: Option<String>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
 

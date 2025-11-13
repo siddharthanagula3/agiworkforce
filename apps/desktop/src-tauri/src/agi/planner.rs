@@ -250,10 +250,9 @@ Return ONLY the JSON array."#,
             steps.push(step);
         }
 
-        // Calculate estimated duration based on steps
-        let estimated_duration = self.calculate_plan_duration(&steps);
         // Calculate estimated duration based on steps and tool complexity
-        let mut total_duration_secs = 0u64;
+        let heuristic_duration_secs = self.calculate_plan_duration(&steps).as_secs();
+        let mut rule_based_duration_secs = 0u64;
         for step in &steps {
             // Estimate duration based on tool type
             let tool_duration = match step.tool_id.as_str() {
@@ -271,8 +270,10 @@ Return ONLY the JSON array."#,
                 "llm_reason" => 15, // LLM calls are typically slower
                 _ => 5,             // default for unknown tools
             };
-            total_duration_secs += tool_duration;
+            rule_based_duration_secs += tool_duration;
         }
+
+        let total_duration_secs = rule_based_duration_secs.max(heuristic_duration_secs);
 
         // Add overhead for planning, dependencies, and error handling
         let planning_overhead = 5; // Fixed planning overhead

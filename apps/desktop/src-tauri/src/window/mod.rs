@@ -14,6 +14,7 @@ const WINDOW_MIN_HEIGHT: f64 = 700.0; // Match tauri.conf.json minHeight
 const WINDOW_DOCK_MIN_WIDTH: f64 = 360.0; // Minimum width when docked
 const WINDOW_DEFAULT_MAX_WIDTH: f64 = 480.0; // Used for docking only
 const DOCK_THRESHOLD: f64 = 32.0;
+const DOCKING_ENABLED: bool = false;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,7 +75,7 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
     let snapshot = app_state.snapshot();
 
     window.set_always_on_top(snapshot.always_on_top)?;
-    window.set_decorations(false)?;
+    window.set_decorations(true)?;
     window.set_focus()?;
     window.set_title("AGI Workforce")?;
 
@@ -129,6 +130,11 @@ pub fn apply_dock(
     app_state: &AppState,
     position: DockPosition,
 ) -> Result<()> {
+    if !DOCKING_ENABLED {
+        emit_preview(window, None)?;
+        return Ok(());
+    }
+
     let monitor = resolve_monitor(window)?;
     let scale_factor = monitor.scale_factor();
     let monitor_size = monitor.size().to_logical(scale_factor);
@@ -214,8 +220,8 @@ fn handle_move_event(
         true
     })?;
 
-    // Skip dock detection if window is maximized
-    if !is_maximized {
+    // Skip dock detection if disabled or the window is maximized
+    if DOCKING_ENABLED && !is_maximized {
         let dock_candidate = detect_dock_candidate(&monitor, &logical_position, outer_size.width);
         match dock_candidate {
             Some(position) => {
@@ -234,10 +240,13 @@ fn handle_move_event(
                 emit_preview(window, None)?;
             }
         }
-    } else {
-        emit_preview(window, None)?;
+        return Ok(());
     }
 
+    emit_preview(window, None)?;
+    if !DOCKING_ENABLED {
+        emit_state(window, app_state)?;
+    }
     Ok(())
 }
 
@@ -402,6 +411,9 @@ fn emit_focus(window: &WebviewWindow, focused: bool) -> Result<()> {
 }
 
 fn emit_preview(window: &WebviewWindow, preview: Option<DockPosition>) -> Result<()> {
+    if !DOCKING_ENABLED {
+        return Ok(());
+    }
     let payload = DockPreviewEvent { preview };
     window.emit("window://dock-preview", &payload)?;
     Ok(())
