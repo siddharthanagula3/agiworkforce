@@ -110,6 +110,9 @@ sha2 = "0.10"
 aes-gcm = "0.10"
 base64 = "0.22"
 rand = "0.8"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+hmac = "0.12"
+hex = "0.4"
 
 # Image Processing
 image = { version = "0.24.9", features = ["png", "jpeg", "webp"] }
@@ -133,6 +136,7 @@ url = "2.5"
 uuid = { version = "1.8", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.8"
+cron = "0.12"
 
 # Configuration
 config = "0.14"
@@ -175,6 +179,9 @@ async-imap = "0.9"
 tokio-native-tls = "0.3"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
 mailparse = "0.15"
+
+# Stripe payment processing
+# stripe-rust = { version = "0.12" }  # Temporarily disabled due to dependency conflicts
 
 # Model Context Protocol (MCP)
 rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }

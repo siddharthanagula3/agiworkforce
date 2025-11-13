@@ -1,5 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertCircle, RefreshCw, Home } from 'lucide-react';
+import { AlertCircle, RefreshCw, Home, Copy, Send } from 'lucide-react';
+import useErrorStore from '../stores/errorStore';
+import { errorReportingService } from '../services/errorReporting';
 
 interface Props {
   children: ReactNode;
@@ -10,6 +12,8 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  errorReported: boolean;
+  copySuccess: boolean;
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -19,10 +23,12 @@ class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      errorReported: false,
+      copySuccess: false,
     };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return {
       hasError: true,
       error,
@@ -37,8 +43,39 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
-    // Log to external service if needed
-    // logErrorToService(error, errorInfo);
+    // Report to error store
+    const errorStore = useErrorStore.getState();
+    errorStore.addError({
+      type: 'SYSTEM_ERROR',
+      severity: 'critical',
+      message: error.message,
+      details: errorInfo.componentStack || undefined,
+      stack: error.stack,
+      context: {
+        componentStack: errorInfo.componentStack,
+        errorBoundary: true,
+      },
+    });
+
+    // Report to error reporting service
+    const isDevelopment = import.meta.env.DEV;
+    if (!isDevelopment && errorReportingService.isEnabled()) {
+      void errorReportingService.reportError({
+        id: `boundary_${Date.now()}`,
+        type: 'COMPONENT_ERROR',
+        severity: 'critical',
+        message: error.message,
+        details: errorInfo.componentStack || undefined,
+        stack: error.stack,
+        timestamp: Date.now(),
+        dismissed: false,
+        count: 1,
+        context: {
+          componentStack: errorInfo.componentStack,
+        },
+      });
+      this.setState({ errorReported: true });
+    }
   }
 
   handleReset = () => {
@@ -46,11 +83,56 @@ class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      errorReported: false,
+      copySuccess: false,
     });
   };
 
   handleReload = () => {
     window.location.reload();
+  };
+
+  handleCopyError = async () => {
+    if (!this.state.error) return;
+
+    const errorDetails = {
+      message: this.state.error.message,
+      stack: this.state.error.stack,
+      componentStack: this.state.errorInfo?.componentStack,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(errorDetails, null, 2));
+      this.setState({ copySuccess: true });
+      setTimeout(() => this.setState({ copySuccess: false }), 2000);
+    } catch (err) {
+      console.error('Failed to copy error details:', err);
+    }
+  };
+
+  handleReportError = async () => {
+    if (!this.state.error) return;
+
+    try {
+      await errorReportingService.reportError({
+        id: `boundary_${Date.now()}`,
+        type: 'COMPONENT_ERROR',
+        severity: 'critical',
+        message: this.state.error.message,
+        details: this.state.errorInfo?.componentStack || undefined,
+        stack: this.state.error.stack,
+        timestamp: Date.now(),
+        dismissed: false,
+        count: 1,
+        context: {
+          componentStack: this.state.errorInfo?.componentStack,
+        },
+      });
+      this.setState({ errorReported: true });
+    } catch (err) {
+      console.error('Failed to report error:', err);
+    }
   };
 
   override render() {
@@ -74,6 +156,14 @@ class ErrorBoundary extends Component<Props, State> {
               resetting the view.
             </p>
 
+            {this.state.errorReported && (
+              <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  Error report sent successfully. Thank you for helping us improve!
+                </p>
+              </div>
+            )}
+
             {this.state.error && (
               <details className="mb-6 rounded border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
                 <summary className="cursor-pointer font-medium text-gray-700 dark:text-gray-200">
@@ -92,7 +182,7 @@ class ErrorBoundary extends Component<Props, State> {
               </details>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={this.handleReset}
                 className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600"
@@ -107,6 +197,22 @@ class ErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="h-4 w-4" />
                 Reload Page
               </button>
+              <button
+                onClick={this.handleCopyError}
+                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+              >
+                <Copy className="h-4 w-4" />
+                {this.state.copySuccess ? 'Copied!' : 'Copy Error'}
+              </button>
+              {!this.state.errorReported && (
+                <button
+                  onClick={this.handleReportError}
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                >
+                  <Send className="h-4 w-4" />
+                  Report Error
+                </button>
+              )}
             </div>
           </div>
         </div>

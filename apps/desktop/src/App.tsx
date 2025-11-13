@@ -10,11 +10,17 @@ import { VisualizationLayer } from './components/Overlay/VisualizationLayer';
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import { useTheme } from './hooks/useTheme';
 import { useChatStore } from './stores/chatStore';
+import { useTemplateStore } from './stores/templateStore';
+import { useOrchestrationStore } from './stores/orchestrationStore';
+import { useTeamStore } from './stores/teamStore';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import { OnboardingWizard } from './components/Onboarding/OnboardingWizard';
+import ErrorToastContainer from './components/errors/ErrorToast';
+import useErrorStore from './stores/errorStore';
+import { errorReportingService } from './services/errorReporting';
 import {
   Plus,
   History,
@@ -25,6 +31,12 @@ import {
   Maximize2,
   RefreshCcw,
 } from 'lucide-react';
+import { TemplateMarketplace } from './components/templates/TemplateMarketplace';
+import { WorkflowBuilder } from './components/orchestration/WorkflowBuilder';
+import { TeamDashboard } from './components/teams/TeamDashboard';
+import { GovernanceDashboard } from './components/governance/GovernanceDashboard';
+
+export type AppView = 'chat' | 'templates' | 'workflows' | 'teams' | 'governance';
 
 const DesktopShell = () => {
   const { state, actions } = useWindowManager();
@@ -34,13 +46,83 @@ const DesktopShell = () => {
   const [agentChatPosition] = useState<'left' | 'right'>('right');
   const [agentChatVisible, setAgentChatVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [currentView, setCurrentView] = useState<AppView>('chat');
   const { theme, toggleTheme } = useTheme();
 
   const createConversation = useChatStore((store) => store.createConversation);
   const selectConversation = useChatStore((store) => store.selectConversation);
+  const addError = useErrorStore((store) => store.addError);
+
+  const fetchTemplates = useTemplateStore((store) => store.fetchTemplates);
+  const fetchInstalledTemplates = useTemplateStore((store) => store.fetchInstalledTemplates);
+  const loadWorkflows = useOrchestrationStore((store) => store.loadWorkflows);
+  const getUserTeams = useTeamStore((store) => store.getUserTeams);
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
+
+  // Global error handlers
+  useEffect(() => {
+    // Handle unhandled promise rejections
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+
+      const error = event.reason;
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+
+      addError({
+        type: 'UNHANDLED_PROMISE_REJECTION',
+        severity: 'error',
+        message: `Unhandled promise rejection: ${message}`,
+        stack,
+        context: {
+          promise: event.promise,
+        },
+      });
+    };
+
+    // Handle general window errors
+    const handleWindowError = (event: ErrorEvent) => {
+      event.preventDefault();
+
+      addError({
+        type: 'WINDOW_ERROR',
+        severity: 'error',
+        message: event.message,
+        details: `${event.filename}:${event.lineno}:${event.colno}`,
+        stack: event.error?.stack,
+        context: {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+        },
+      });
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    window.addEventListener('error', handleWindowError);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener('error', handleWindowError);
+    };
+  }, [addError]);
+
+  // Track user actions for error reporting
+  useEffect(() => {
+    const trackAction = (action: string) => {
+      errorReportingService.trackAction(action);
+    };
+
+    // Track important user actions
+    trackAction('app_loaded');
+
+    return () => {
+      // Flush error reports on unmount
+      void errorReportingService.flush();
+    };
+  }, []);
 
   // Check onboarding status on mount
   useEffect(() => {
@@ -50,11 +132,52 @@ const DesktopShell = () => {
         setOnboardingComplete(status.completed);
       } catch (error) {
         console.error('Failed to check onboarding status:', error);
+        addError({
+          type: 'ONBOARDING_ERROR',
+          severity: 'warning',
+          message: 'Failed to check onboarding status',
+          details: error instanceof Error ? error.message : String(error),
+        });
         setOnboardingComplete(true); // Assume complete on error
       }
     };
     void checkOnboarding();
-  }, []);
+  }, [addError]);
+
+  // Initialize stores on mount
+  useEffect(() => {
+    const initializeStores = async () => {
+      try {
+        // Initialize templates
+        await Promise.all([fetchTemplates(), fetchInstalledTemplates()]);
+
+        // Initialize workflows (using default user ID for now)
+        await loadWorkflows('default-user');
+
+        // Initialize teams (using default user ID for now)
+        await getUserTeams('default-user');
+      } catch (error) {
+        console.error('Failed to initialize stores:', error);
+        addError({
+          type: 'INITIALIZATION_ERROR',
+          severity: 'warning',
+          message: 'Failed to initialize some features',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    if (onboardingComplete) {
+      void initializeStores();
+    }
+  }, [
+    onboardingComplete,
+    fetchTemplates,
+    fetchInstalledTemplates,
+    loadWorkflows,
+    getUserTeams,
+    addError,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -181,6 +304,61 @@ const DesktopShell = () => {
     return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
+  const renderMainContent = () => {
+    switch (currentView) {
+      case 'templates':
+        return <TemplateMarketplace />;
+      case 'workflows':
+        return <WorkflowBuilder />;
+      case 'teams':
+        return <TeamDashboard />;
+      case 'governance':
+        return <GovernanceDashboard />;
+      case 'chat':
+      default:
+        return (
+          <div className="flex flex-1 overflow-hidden min-w-0">
+            {/* Agent Chat (Left) */}
+            {agentChatVisible && agentChatPosition === 'left' && (
+              <>
+                <AgentChatInterface className="w-96 shrink-0" position="left" />
+                <div className="w-px bg-border shrink-0" />
+              </>
+            )}
+
+            {/* Main Chat Interface */}
+            <div className="flex-1 overflow-hidden min-w-0">
+              <ChatInterface className="h-full" />
+            </div>
+
+            {/* Agent Chat (Right) */}
+            {agentChatVisible && agentChatPosition === 'right' && (
+              <>
+                <div className="w-px bg-border shrink-0" />
+                <AgentChatInterface className="w-96 shrink-0" position="right" />
+              </>
+            )}
+
+            {/* Toggle Button */}
+            {!agentChatVisible && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute bottom-4 right-4 z-10"
+                onClick={() => setAgentChatVisible(true)}
+              >
+                {agentChatPosition === 'right' ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       <TitleBar
@@ -191,46 +369,14 @@ const DesktopShell = () => {
       />
       <main className="flex flex-1 overflow-hidden min-h-0 min-w-0">
         {!sidebarCollapsed && (
-          <Sidebar className="shrink-0" onOpenSettings={() => setSettingsPanelOpen(true)} />
+          <Sidebar
+            className="shrink-0"
+            onOpenSettings={() => setSettingsPanelOpen(true)}
+            currentView={currentView}
+            onViewChange={setCurrentView}
+          />
         )}
-        <div className="flex flex-1 overflow-hidden min-w-0">
-          {/* Agent Chat (Left) */}
-          {agentChatVisible && agentChatPosition === 'left' && (
-            <>
-              <AgentChatInterface className="w-96 shrink-0" position="left" />
-              <div className="w-px bg-border shrink-0" />
-            </>
-          )}
-
-          {/* Main Chat Interface */}
-          <div className="flex-1 overflow-hidden min-w-0">
-            <ChatInterface className="h-full" />
-          </div>
-
-          {/* Agent Chat (Right) */}
-          {agentChatVisible && agentChatPosition === 'right' && (
-            <>
-              <div className="w-px bg-border shrink-0" />
-              <AgentChatInterface className="w-96 shrink-0" position="right" />
-            </>
-          )}
-
-          {/* Toggle Button */}
-          {!agentChatVisible && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute bottom-4 right-4 z-10"
-              onClick={() => setAgentChatVisible(true)}
-            >
-              {agentChatPosition === 'right' ? (
-                <ChevronLeft className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-        </div>
+        {renderMainContent()}
       </main>
       <CommandPalette
         open={commandPaletteOpen}
@@ -238,6 +384,7 @@ const DesktopShell = () => {
         options={commandOptions}
       />
       <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+      <ErrorToastContainer position="top-right" />
     </div>
   );
 };
