@@ -560,6 +560,7 @@ impl LLMRouter {
                 content: prompt.to_string(),
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             }],
             model: "".to_string(), // Will be set by router
             temperature: Some(0.7),

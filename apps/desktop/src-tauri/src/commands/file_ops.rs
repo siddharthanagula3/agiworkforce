@@ -104,7 +104,7 @@ async fn check_file_permission(
 
     // Get permission manager
     let _conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let pm = PermissionManager::new(
@@ -147,7 +147,7 @@ async fn log_file_operation(
     db: &AppDatabase,
 ) -> Result<(), String> {
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let operation_type = format!("FILE_{}", operation.as_str().to_uppercase());

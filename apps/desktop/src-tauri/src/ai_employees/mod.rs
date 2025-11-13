@@ -242,4 +242,11 @@ pub enum EmployeeError {
     MissingIntegration(String),
 }
 
+// Implement From<String> for convenient error conversions
+impl From<String> for EmployeeError {
+    fn from(msg: String) -> Self {
+        EmployeeError::ExecutionFailed(msg)
+    }
+}
+
 pub type Result<T> = std::result::Result<T, EmployeeError>;

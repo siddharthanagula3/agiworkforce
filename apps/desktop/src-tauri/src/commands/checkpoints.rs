@@ -49,7 +49,7 @@ pub async fn checkpoint_create(
     db: State<'_, AppDatabase>,
 ) -> Result<Checkpoint, String> {
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get all messages for this conversation
@@ -109,7 +109,7 @@ pub async fn checkpoint_restore(
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get checkpoint
@@ -201,7 +201,7 @@ pub async fn checkpoint_list(
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<Checkpoint>, String> {
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let mut stmt = conn
@@ -245,7 +245,7 @@ pub async fn checkpoint_delete(
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     conn.execute(

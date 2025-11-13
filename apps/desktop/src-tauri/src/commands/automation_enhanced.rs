@@ -1,4 +1,3 @@
-use anyhow::Result as AnyResult;
 use tauri::{AppHandle, State};
 
 use crate::automation::{
@@ -142,12 +141,12 @@ pub async fn automation_save_script(
     db: State<'_, AppDatabase>,
     script: AutomationScript,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Save script to database as JSON
     let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
 
-    repository::save_setting(&conn, &format!("automation_script_{}", script.id), &script_json)
+    repository::set_setting(&conn, format!("automation_script_{}", script.id), script_json, false)
         .map_err(|e| e.to_string())
 }
 
@@ -156,7 +155,7 @@ pub async fn automation_load_script(
     db: State<'_, AppDatabase>,
     script_id: String,
 ) -> Result<AutomationScript, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let script_json = repository::get_setting(&conn, &format!("automation_script_{}", script_id))
         .map_err(|e| e.to_string())?
@@ -169,7 +168,7 @@ pub async fn automation_load_script(
 pub async fn automation_list_scripts(
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<AutomationScript>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Get all settings with prefix "automation_script_"
     let settings = repository::list_settings(&conn).map_err(|e| e.to_string())?;
@@ -194,7 +193,7 @@ pub async fn automation_delete_script(
     db: State<'_, AppDatabase>,
     script_id: String,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     repository::delete_setting(&conn, &format!("automation_script_{}", script_id))
         .map_err(|e| e.to_string())
@@ -251,10 +250,10 @@ pub async fn automation_save_recording_as_script(
     };
 
     // Save to database
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
 
-    repository::save_setting(&conn, &format!("automation_script_{}", script.id), &script_json)
+    repository::set_setting(&conn, format!("automation_script_{}", script.id), script_json, false)
         .map_err(|e| e.to_string())?;
 
     Ok(script)

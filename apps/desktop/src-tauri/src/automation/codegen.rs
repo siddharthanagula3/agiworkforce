@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use super::executor::{AutomationScript, ScriptAction};
+use super::executor::AutomationScript;
 
 /// Code language options
 #[derive(Debug, Clone, Serialize, Deserialize)]

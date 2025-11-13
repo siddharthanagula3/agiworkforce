@@ -255,7 +255,7 @@ pub fn automation_click(
     })
     .map_err(|err| err.to_string())?;
 
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
             &app,
             &conn,
@@ -303,7 +303,7 @@ pub async fn automation_drag_drop(
         .map_err(|err| err.to_string())?;
 
     // Emit overlay animation for drag-drop
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
             &app,
             &conn,
@@ -422,7 +422,7 @@ async fn execute_text_input(
     // Send text asynchronously outside the closure
     keyboard.send_text(&text).await.map_err(|e| e.to_string())?;
 
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
             app,
             &conn,
@@ -446,7 +446,7 @@ pub fn overlay_emit_click(
     payload: OverlayClickPayload,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         dispatch_overlay_animation_normalized(
             &app,
             &conn,
@@ -468,7 +468,7 @@ pub fn overlay_emit_type(
     payload: OverlayTypePayload,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         dispatch_overlay_animation_normalized(
             &app,
             &conn,
@@ -490,7 +490,7 @@ pub fn overlay_emit_region(
     payload: OverlayRegionPayload,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
-    if let Ok(conn) = db.0.lock() {
+    if let Ok(conn) = db.conn.lock() {
         dispatch_overlay_animation_normalized(
             &app,
             &conn,
@@ -514,7 +514,7 @@ pub fn overlay_replay_recent(
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
     let events = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
         repository::list_overlay_events(&conn, None, None).map_err(|e| e.to_string())?
     };
 

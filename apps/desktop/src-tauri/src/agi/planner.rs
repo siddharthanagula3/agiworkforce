@@ -205,9 +205,9 @@ Return ONLY the JSON array."#,
         // Use LLM to generate plan
         // HYBRID STRATEGY: Use Claude Sonnet 4.5 for planning (best reasoning, 77.2% SWE-bench)
         let preferences = RouterPreferences {
-            provider: Some("anthropic".to_string()),
+            provider: Some(crate::router::Provider::Anthropic),
             model: Some("claude-sonnet-4-5".to_string()),
-            strategy: RoutingStrategy::PreferenceWithFallback,
+            strategy: RoutingStrategy::Auto,
         };
 
         let request = LLMRequest {
@@ -216,6 +216,7 @@ Return ONLY the JSON array."#,
                 content: prompt.clone(),
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             }],
             model: "claude-sonnet-4-5".to_string(),
             temperature: Some(0.7),
@@ -601,6 +602,7 @@ Your response:"#,
                 content: prompt,
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             }],
             model: "".to_string(),
             temperature: Some(0.1), // Low temperature for consistent evaluation
@@ -762,9 +764,9 @@ Return ONLY a JSON array of steps with this structure:
         );
 
         let preferences = RouterPreferences {
-            provider: Some("anthropic".to_string()),
+            provider: Some(crate::router::Provider::Anthropic),
             model: Some("claude-sonnet-4-5".to_string()),
-            strategy: RoutingStrategy::PreferenceWithFallback,
+            strategy: RoutingStrategy::Auto,
         };
 
         let request = LLMRequest {
@@ -773,6 +775,7 @@ Return ONLY a JSON array of steps with this structure:
                 content: prompt,
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             }],
             model: "claude-sonnet-4-5".to_string(),
             temperature: Some(0.8),

@@ -10,10 +10,7 @@ pub use stripe_client::{
 #[cfg(feature = "billing")]
 pub use webhooks::{WebhookEvent, WebhookHandler};
 
-use anyhow::Result;
-use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
-use tauri::State;
 
 #[cfg(feature = "billing")]
 /// Billing state wrapper for Tauri

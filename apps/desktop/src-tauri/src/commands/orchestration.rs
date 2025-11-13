@@ -1,6 +1,6 @@
 use crate::orchestration::{
     WorkflowDefinition, WorkflowEngine, WorkflowExecution, WorkflowExecutionLog, WorkflowExecutor,
-    WorkflowScheduler, WorkflowStatus,
+    WorkflowScheduler,
 };
 use serde_json::Value;
 use std::collections::HashMap;

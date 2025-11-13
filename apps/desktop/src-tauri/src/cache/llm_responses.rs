@@ -5,7 +5,6 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::db::models::CacheEntry;
 use crate::router::{ChatMessage, LLMResponse, Provider};
 
 /// LLM Response Cache - manages caching of LLM API responses
@@ -75,28 +74,37 @@ impl LLMResponseCache {
                 .unwrap_or_else(|_| chrono::Utc::now());
 
             if expires_at < chrono::Utc::now() {
-                // Entry expired, remove it
+                // Entry expired, remove it - collect data first
+                let cache_key_owned = cache_key.clone();
                 drop(rows);
                 drop(stmt);
-                conn.execute("DELETE FROM cache_entries WHERE cache_key = ?1", [&cache_key])?;
+                conn.execute("DELETE FROM cache_entries WHERE cache_key = ?1", [&cache_key_owned])?;
                 return Ok(None);
             }
 
-            // Update last_used_at
+            // Collect data before dropping rows/stmt
+            let content: String = row.get(0)?;
+            let tokens: Option<i32> = row.get(1)?;
+            let cost: Option<f64> = row.get(2)?;
+            let model: String = row.get(3)?;
+            let created_at: String = row.get(4)?;
+
+            // Now we can safely drop and update
+            let cache_key_owned = cache_key.clone();
             drop(rows);
             drop(stmt);
             conn.execute(
                 "UPDATE cache_entries SET last_used_at = CURRENT_TIMESTAMP WHERE cache_key = ?1",
-                [&cache_key],
+                [&cache_key_owned],
             )?;
 
             let response = LLMResponse {
-                content: row.get(0)?,
-                tokens: row.get::<_, Option<i32>>(1)?.map(|t| t as u32),
+                content,
+                tokens: tokens.map(|t| t as u32),
                 prompt_tokens: None,
                 completion_tokens: None,
-                cost: row.get(2)?,
-                model: row.get(3)?,
+                cost,
+                model,
                 cached: true,
                 tool_calls: None,
                 finish_reason: None,
