@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use rusqlite::{Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -422,14 +422,9 @@ impl RealtimeMetricsCollector {
         };
 
         let mut stmt = conn.prepare(query)?;
-        let params: Vec<&dyn rusqlite::ToSql> = if let Some(cutoff) = cutoff_timestamp {
-            vec![&user_id, &cutoff]
-        } else {
-            vec![&user_id]
-        };
 
-        let employees = stmt
-            .query_map(params.as_slice(), |row| {
+        let employees = if let Some(cutoff) = cutoff_timestamp {
+            stmt.query_map([user_id, &cutoff.to_string()], |row| {
                 let employee_id: String = row.get(0)?;
                 let total_time_minutes: i64 = row.get(1)?;
                 let total_cost: f64 = row.get(2)?;
@@ -444,7 +439,25 @@ impl RealtimeMetricsCollector {
                     success_rate: 1.0,
                 })
             })?
-            .collect::<SqliteResult<Vec<_>>>()?;
+            .collect::<SqliteResult<Vec<_>>>()?
+        } else {
+            stmt.query_map([user_id], |row| {
+                let employee_id: String = row.get(0)?;
+                let total_time_minutes: i64 = row.get(1)?;
+                let total_cost: f64 = row.get(2)?;
+                let count: i64 = row.get(3)?;
+
+                Ok(EmployeePerformance {
+                    employee_id: employee_id.clone(),
+                    employee_name: format!("Employee {}", employee_id), // TODO: Get actual name
+                    total_time_saved_hours: total_time_minutes as f64 / 60.0,
+                    total_cost_saved_usd: total_cost,
+                    automations_run: count as u64,
+                    success_rate: 1.0,
+                })
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?
+        };
 
         Ok(employees)
     }

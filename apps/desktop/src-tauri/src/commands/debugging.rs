@@ -124,6 +124,7 @@ Provide solutions in JSON format:
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(1500),
@@ -195,6 +196,7 @@ Provide analysis in JSON format:
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(1000),

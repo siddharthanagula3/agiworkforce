@@ -106,6 +106,7 @@ Respond ONLY with the modified code. Do not include explanations or markdown for
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(4000),
@@ -251,6 +252,7 @@ Format your response as JSON:
             content: llm_prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: Some(8000),

@@ -45,6 +45,7 @@ pub async fn get_code_completion(
             content: request.prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(), // Will be set by router
         max_tokens: request.max_tokens.or(Some(150)),
@@ -117,6 +118,7 @@ pub async fn get_inline_completion(
             content: prompt,
             tool_calls: None,
             tool_call_id: None,
+            multimodal_content: None,
         }],
         model: "".to_string(),  // Will be set by router
         max_tokens: Some(50),   // Very short completions

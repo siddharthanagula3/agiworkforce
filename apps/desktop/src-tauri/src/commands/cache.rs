@@ -1,5 +1,4 @@
 use super::{llm::LLMState, AppDatabase};
-use crate::db::models::CacheEntry;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -81,7 +80,7 @@ pub async fn cache_get_stats(
     db: State<'_, AppDatabase>,
     codebase_cache: State<'_, CodebaseCacheState>,
 ) -> Result<CacheStats, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Get LLM cache statistics
     let llm_stats = get_llm_cache_stats(&conn)?;
@@ -112,7 +111,7 @@ pub async fn cache_clear_all(
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Clear LLM cache entries from database
     conn.execute("DELETE FROM cache_entries", [])
@@ -138,7 +137,7 @@ pub async fn cache_clear_by_type(
 ) -> Result<(), String> {
     match cache_type.as_str() {
         "llm" => {
-            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
             // Clear all LLM cache entries
             conn.execute("DELETE FROM cache_entries", [])
@@ -178,7 +177,7 @@ pub async fn cache_clear_by_provider(
     provider: String,
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let deleted = conn
         .execute("DELETE FROM cache_entries WHERE provider = ?1", [&provider])
@@ -191,7 +190,7 @@ pub async fn cache_clear_by_provider(
 /// Get total cache size in MB
 #[tauri::command]
 pub async fn cache_get_size(db: State<'_, AppDatabase>) -> Result<f64, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Calculate approximate size based on text content
     let total_bytes: i64 = conn
@@ -244,7 +243,7 @@ pub async fn cache_warmup(queries: Vec<String>) -> Result<(), String> {
 /// Export cache entries for backup
 #[tauri::command]
 pub async fn cache_export(db: State<'_, AppDatabase>) -> Result<String, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -287,7 +286,7 @@ pub async fn cache_export(db: State<'_, AppDatabase>) -> Result<String, String> 
 /// Get cache analytics (most cached queries, biggest savings)
 #[tauri::command]
 pub async fn cache_get_analytics(db: State<'_, AppDatabase>) -> Result<CacheAnalytics, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Get most frequently cached queries (using actual hit_count and cost_saved columns)
     let mut stmt = conn
@@ -372,7 +371,7 @@ pub async fn cache_prune_expired(
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
 ) -> Result<usize, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let pruned = llm_state
         .cache_manager
@@ -494,7 +493,7 @@ mod tests {
 
 use crate::cache::CodebaseCache;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Codebase cache state wrapper
 pub struct CodebaseCacheState(pub Arc<CodebaseCache>);

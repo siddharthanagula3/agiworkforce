@@ -2,15 +2,12 @@ use crate::db::Database;
 use crate::error::Result;
 use crate::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction,
-    ApprovalDecision, ApprovalRequest, ApprovalStatistics, ApprovalStatus, ApprovalWorkflow,
-    AuditEvent, AuditEventType, AuditFilters, AuditIntegrityReport, AuditStatus,
+    ApprovalDecision, ApprovalRequest, ApprovalStatistics, ApprovalWorkflow,
+    AuditEvent, AuditFilters, AuditIntegrityReport, AuditStatus,
     EnhancedAuditLogger,
 };
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
-use uuid::Uuid;
 
 /// Get audit events with filtering
 #[tauri::command]

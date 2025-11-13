@@ -1,7 +1,6 @@
 use crate::agi::templates::{
     get_builtin_templates, AgentTemplate, TemplateCategory, TemplateManager,
 };
-use crate::db::Database;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

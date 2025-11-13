@@ -224,6 +224,7 @@ impl ContextManager {
                 content: format!("[Previous conversation summary]: {}", summary.content),
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             });
         }
 
@@ -234,6 +235,7 @@ impl ContextManager {
                 content: message.content.clone(),
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             });
         }
 

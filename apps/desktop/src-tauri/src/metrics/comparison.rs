@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rusqlite::{Connection, Result as SqliteResult};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 

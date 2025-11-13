@@ -1,5 +1,5 @@
 use super::*;
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use chrono::Utc;

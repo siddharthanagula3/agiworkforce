@@ -1,6 +1,6 @@
 use crate::agi::tools::ToolRegistry;
 use crate::router::{ToolCall, ToolDefinition};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
