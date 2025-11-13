@@ -1,10 +1,9 @@
-use crate::teams::{
-    Team, TeamMember, TeamRole, TeamManager, TeamUpdates, TeamInvitation,
-    TeamResource, TeamResourceManager, ResourceType,
-    TeamActivity, TeamActivityManager, ActivityType,
-    TeamBilling, BillingPlan, BillingCycle, TeamBillingManager, UsageMetrics,
-};
 use crate::commands::AppDatabase;
+use crate::teams::{
+    ActivityType, BillingCycle, BillingPlan, ResourceType, Team, TeamActivity, TeamActivityManager,
+    TeamBilling, TeamBillingManager, TeamInvitation, TeamManager, TeamMember, TeamResource,
+    TeamResourceManager, TeamRole, TeamUpdates, UsageMetrics,
+};
 use serde_json::json;
 use tauri::State;
 
@@ -22,10 +21,7 @@ pub async fn create_team(
 
 /// Get a team by ID
 #[tauri::command]
-pub async fn get_team(
-    team_id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<Option<Team>, String> {
+pub async fn get_team(team_id: String, db: State<'_, AppDatabase>) -> Result<Option<Team>, String> {
     let manager = TeamManager::new(db.conn.clone());
     manager.get_team(&team_id)
 }
@@ -49,10 +45,7 @@ pub async fn update_team(
 
 /// Delete a team
 #[tauri::command]
-pub async fn delete_team(
-    team_id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
+pub async fn delete_team(team_id: String, db: State<'_, AppDatabase>) -> Result<(), String> {
     let manager = TeamManager::new(db.conn.clone());
     manager.delete_team(&team_id)
 }
@@ -78,8 +71,7 @@ pub async fn invite_member(
 ) -> Result<String, String> {
     let manager = TeamManager::new(db.conn.clone());
 
-    let team_role = TeamRole::from_str(&role)
-        .ok_or_else(|| format!("Invalid role: {}", role))?;
+    let team_role = TeamRole::from_str(&role).ok_or_else(|| format!("Invalid role: {}", role))?;
 
     let invitation = manager.create_invitation(&team_id, email, team_role, &invited_by)?;
 
@@ -157,8 +149,7 @@ pub async fn update_member_role(
 ) -> Result<(), String> {
     let manager = TeamManager::new(db.conn.clone());
 
-    let team_role = TeamRole::from_str(&role)
-        .ok_or_else(|| format!("Invalid role: {}", role))?;
+    let team_role = TeamRole::from_str(&role).ok_or_else(|| format!("Invalid role: {}", role))?;
 
     manager.update_member_role(&team_id, &user_id, team_role)?;
 
@@ -211,7 +202,14 @@ pub async fn share_resource(
         .ok_or_else(|| format!("Invalid resource type: {}", resource_type))?;
 
     let manager = TeamResourceManager::new(db.conn.clone());
-    manager.share_resource(&team_id, res_type, &resource_id, resource_name.clone(), resource_description.clone(), &shared_by)?;
+    manager.share_resource(
+        &team_id,
+        res_type,
+        &resource_id,
+        resource_name.clone(),
+        resource_description.clone(),
+        &shared_by,
+    )?;
 
     // Log activity
     let activity_manager = TeamActivityManager::new(db.conn.clone());
@@ -323,14 +321,15 @@ pub async fn initialize_team_billing(
     seat_count: usize,
     db: State<'_, AppDatabase>,
 ) -> Result<TeamBilling, String> {
-    let plan_tier = BillingPlan::from_str(&plan)
-        .ok_or_else(|| format!("Invalid plan: {}", plan))?;
+    let plan_tier =
+        BillingPlan::from_str(&plan).ok_or_else(|| format!("Invalid plan: {}", plan))?;
 
     let billing_cycle = BillingCycle::from_str(&cycle)
         .ok_or_else(|| format!("Invalid billing cycle: {}", cycle))?;
 
     let manager = TeamBillingManager::new(db.conn.clone());
-    let billing = manager.initialize_team_billing(&team_id, plan_tier, billing_cycle, seat_count)?;
+    let billing =
+        manager.initialize_team_billing(&team_id, plan_tier, billing_cycle, seat_count)?;
 
     // Log activity
     let activity_manager = TeamActivityManager::new(db.conn.clone());
@@ -354,8 +353,8 @@ pub async fn update_team_plan(
     updated_by: String,
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let plan_tier = BillingPlan::from_str(&plan)
-        .ok_or_else(|| format!("Invalid plan: {}", plan))?;
+    let plan_tier =
+        BillingPlan::from_str(&plan).ok_or_else(|| format!("Invalid plan: {}", plan))?;
 
     let manager = TeamBillingManager::new(db.conn.clone());
     manager.update_team_plan(&team_id, plan_tier)?;

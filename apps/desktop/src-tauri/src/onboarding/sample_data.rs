@@ -1,8 +1,8 @@
+use chrono::Utc;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-use chrono::Utc;
 use uuid::Uuid;
 
 #[derive(Debug, Error)]
@@ -40,7 +40,10 @@ impl SampleDataGenerator {
     }
 
     /// Populate all sample data for tutorial demonstrations
-    pub fn populate_sample_data(&self, user_id: &str) -> Result<SampleDataSummary, SampleDataError> {
+    pub fn populate_sample_data(
+        &self,
+        user_id: &str,
+    ) -> Result<SampleDataSummary, SampleDataError> {
         if self.has_sample_data(user_id) {
             return Err(SampleDataError::AlreadyExists);
         }
@@ -52,7 +55,8 @@ impl SampleDataGenerator {
         conn.execute(
             "INSERT INTO sample_data_marker (user_id, created_at) VALUES (?1, ?2)",
             params![user_id, now],
-        ).ok();
+        )
+        .ok();
 
         let mut summary = SampleDataSummary {
             goals_created: 0,
@@ -80,7 +84,9 @@ impl SampleDataGenerator {
             (1, "Read invoice PDF file"),
             (2, "Extract text using OCR"),
             (3, "Parse invoice data and save to database"),
-        ].iter() {
+        ]
+        .iter()
+        {
             conn.execute(
                 "INSERT INTO autonomous_task_logs (session_id, step_number, step_description, status, tool_name, duration_ms, tokens_used, cost, created_at, completed_at)
                  VALUES (?1, ?2, ?3, 'completed', ?4, ?5, 150, 0.002, ?6, ?6)",
@@ -142,17 +148,36 @@ impl SampleDataGenerator {
             "INSERT INTO workflow_executions (id, workflow_id, status, started_at, completed_at)
              VALUES (?1, ?2, 'completed', ?3, ?3)",
             params![execution_id, workflow_id, now - 7200], // Completed 2 hours ago
-        ).ok();
+        )
+        .ok();
 
         // Create sample execution logs
         for (node_id, event, data) in [
-            ("trigger1", "node_started", r#"{"message": "Workflow triggered manually"}"#),
+            (
+                "trigger1",
+                "node_started",
+                r#"{"message": "Workflow triggered manually"}"#,
+            ),
             ("trigger1", "node_completed", r#"{"success": true}"#),
-            ("action1", "node_started", r#"{"reading": "data/input.csv"}"#),
-            ("action1", "node_completed", r#"{"rows": 42, "size": "1.2 KB"}"#),
-            ("action2", "node_started", r#"{"query": "INSERT INTO records..."}"#),
+            (
+                "action1",
+                "node_started",
+                r#"{"reading": "data/input.csv"}"#,
+            ),
+            (
+                "action1",
+                "node_completed",
+                r#"{"rows": 42, "size": "1.2 KB"}"#,
+            ),
+            (
+                "action2",
+                "node_started",
+                r#"{"query": "INSERT INTO records..."}"#,
+            ),
             ("action2", "node_completed", r#"{"inserted": 42}"#),
-        ].iter() {
+        ]
+        .iter()
+        {
             conn.execute(
                 "INSERT INTO workflow_execution_logs (id, execution_id, node_id, event_type, data, timestamp)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -173,18 +198,21 @@ impl SampleDataGenerator {
                 "INSERT OR IGNORE INTO template_installs (user_id, template_id, installed_at)
                  VALUES (?1, ?2, ?3)",
                 params![user_id, template_id, now - 86400], // Installed 1 day ago
-            ).ok();
+            )
+            .ok();
             summary.templates_installed += 1;
         }
 
         // Create sample conversation with messages
-        let conversation_id = conn.query_row(
-            "INSERT INTO conversations (title, created_at, updated_at)
+        let conversation_id = conn
+            .query_row(
+                "INSERT INTO conversations (title, created_at, updated_at)
              VALUES ('Sample Automation Discussion', ?1, ?1)
              RETURNING id",
-            [now - 172800], // 2 days ago
-            |row| row.get::<_, i64>(0),
-        ).ok();
+                [now - 172800], // 2 days ago
+                |row| row.get::<_, i64>(0),
+            )
+            .ok();
 
         if let Some(conv_id) = conversation_id {
             for (role, content) in [
@@ -261,7 +289,8 @@ impl SampleDataGenerator {
                         "pattern": "by_extension",
                         "create_folders": true
                     }),
-                    expected_output: "Files organized into Documents/, Images/, Videos/ folders".to_string(),
+                    expected_output: "Files organized into Documents/, Images/, Videos/ folders"
+                        .to_string(),
                 },
             ],
             success_criteria: vec![
@@ -276,7 +305,8 @@ impl SampleDataGenerator {
         SampleWorkflow {
             id: Uuid::new_v4().to_string(),
             name: "Daily Email Summary".to_string(),
-            description: "Automatically generate a summary of unread emails every morning".to_string(),
+            description: "Automatically generate a summary of unread emails every morning"
+                .to_string(),
             nodes: vec![
                 WorkflowNode {
                     id: "trigger1".to_string(),
@@ -482,7 +512,11 @@ impl SampleEmail {
              "notification", "normal", false, false),
         ];
 
-        for (i, (id, from, from_name, subject, body, category, priority, is_spam, requires_response)) in samples.into_iter().enumerate() {
+        for (
+            i,
+            (id, from, from_name, subject, body, category, priority, is_spam, requires_response),
+        ) in samples.into_iter().enumerate()
+        {
             if emails.len() >= count {
                 break;
             }
@@ -549,30 +583,45 @@ impl SampleInvoice {
         let mut invoices = Vec::new();
 
         let vendors = vec![
-            ("Acme Office Supplies", vec![
-                ("Copy Paper (500 sheets)", 10, 12.99),
-                ("Ballpoint Pens (Box of 50)", 3, 8.50),
-                ("Sticky Notes (Pack of 12)", 5, 6.75),
-            ]),
-            ("TechGear Inc", vec![
-                ("USB-C Cable (6ft)", 20, 15.99),
-                ("Wireless Mouse", 5, 29.99),
-                ("Laptop Stand", 3, 49.99),
-            ]),
-            ("CloudServe Hosting", vec![
-                ("Server Hosting (Monthly)", 1, 299.00),
-                ("Bandwidth (100GB)", 1, 49.00),
-                ("SSL Certificate", 1, 79.00),
-            ]),
-            ("Marketing Masters", vec![
-                ("Social Media Management", 1, 1500.00),
-                ("Content Creation (5 posts)", 1, 750.00),
-                ("Analytics Report", 1, 250.00),
-            ]),
-            ("Legal Services LLP", vec![
-                ("Contract Review", 2, 350.00),
-                ("Consultation (hourly)", 5, 200.00),
-            ]),
+            (
+                "Acme Office Supplies",
+                vec![
+                    ("Copy Paper (500 sheets)", 10, 12.99),
+                    ("Ballpoint Pens (Box of 50)", 3, 8.50),
+                    ("Sticky Notes (Pack of 12)", 5, 6.75),
+                ],
+            ),
+            (
+                "TechGear Inc",
+                vec![
+                    ("USB-C Cable (6ft)", 20, 15.99),
+                    ("Wireless Mouse", 5, 29.99),
+                    ("Laptop Stand", 3, 49.99),
+                ],
+            ),
+            (
+                "CloudServe Hosting",
+                vec![
+                    ("Server Hosting (Monthly)", 1, 299.00),
+                    ("Bandwidth (100GB)", 1, 49.00),
+                    ("SSL Certificate", 1, 79.00),
+                ],
+            ),
+            (
+                "Marketing Masters",
+                vec![
+                    ("Social Media Management", 1, 1500.00),
+                    ("Content Creation (5 posts)", 1, 750.00),
+                    ("Analytics Report", 1, 250.00),
+                ],
+            ),
+            (
+                "Legal Services LLP",
+                vec![
+                    ("Contract Review", 2, 350.00),
+                    ("Consultation (hourly)", 5, 200.00),
+                ],
+            ),
         ];
 
         for i in 0..count {
@@ -606,7 +655,11 @@ impl SampleInvoice {
                 subtotal,
                 tax,
                 total_amount: total,
-                po_number: if has_po { Some(format!("PO-{:05}", 5000 + i)) } else { None },
+                po_number: if has_po {
+                    Some(format!("PO-{:05}", 5000 + i))
+                } else {
+                    None
+                },
             });
         }
 

@@ -2,7 +2,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -48,14 +48,16 @@ impl SecretStore {
 
     pub fn retrieve_secret(&self, name: &str) -> Result<String, String> {
         let secrets = self.secrets.read().unwrap();
-        let encrypted = secrets.get(name)
+        let encrypted = secrets
+            .get(name)
             .ok_or_else(|| format!("Secret '{}' not found", name))?;
         decrypt_secret(&self.key, encrypted)
     }
 
     pub fn delete_secret(&self, name: &str) -> Result<(), String> {
         let mut secrets = self.secrets.write().unwrap();
-        secrets.remove(name)
+        secrets
+            .remove(name)
             .ok_or_else(|| format!("Secret '{}' not found", name))?;
         Ok(())
     }
@@ -67,8 +69,8 @@ impl SecretStore {
 }
 
 pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, String> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
     use aes_gcm::aead::rand_core::RngCore;
     let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -86,8 +88,8 @@ pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, St
 }
 
 pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String, String> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
     let ciphertext = general_purpose::STANDARD
         .decode(&encrypted.ciphertext)
@@ -126,7 +128,9 @@ mod tests {
     fn test_secret_store() {
         let store = SecretStore::new().unwrap();
 
-        store.store_secret("api_key".to_string(), "sk-1234567890").unwrap();
+        store
+            .store_secret("api_key".to_string(), "sk-1234567890")
+            .unwrap();
         let retrieved = store.retrieve_secret("api_key").unwrap();
         assert_eq!(retrieved, "sk-1234567890");
 

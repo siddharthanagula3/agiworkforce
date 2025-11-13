@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
-use rusqlite::{Connection, params};
-use std::sync::{Arc, Mutex};
-use thiserror::Error;
 use chrono::Utc;
-use uuid::Uuid;
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use thiserror::Error;
+use uuid::Uuid;
 
 use super::first_run::DemoResult;
-use super::sample_data::{SampleEmail, SampleInvoice, SampleCodePR};
+use super::sample_data::{SampleCodePR, SampleEmail, SampleInvoice};
 
 #[derive(Debug, Error)]
 pub enum DemoError {
@@ -31,7 +31,11 @@ impl InstantDemo {
     }
 
     /// Run demo for specified employee type
-    pub async fn run_demo(&self, employee_id: &str, user_id: Option<&str>) -> Result<DemoResult, DemoError> {
+    pub async fn run_demo(
+        &self,
+        employee_id: &str,
+        user_id: Option<&str>,
+    ) -> Result<DemoResult, DemoError> {
         let start_time = Instant::now();
 
         let result = match employee_id {
@@ -61,10 +65,19 @@ impl InstantDemo {
         let sample_emails = SampleEmail::generate_batch(50);
 
         // Simulate categorization
-        let urgent_count = sample_emails.iter().filter(|e| e.priority == "urgent").count();
-        let important_count = sample_emails.iter().filter(|e| e.priority == "important").count();
+        let urgent_count = sample_emails
+            .iter()
+            .filter(|e| e.priority == "urgent")
+            .count();
+        let important_count = sample_emails
+            .iter()
+            .filter(|e| e.priority == "important")
+            .count();
         let spam_count = sample_emails.iter().filter(|e| e.is_spam).count();
-        let newsletter_count = sample_emails.iter().filter(|e| e.category == "newsletter").count();
+        let newsletter_count = sample_emails
+            .iter()
+            .filter(|e| e.category == "newsletter")
+            .count();
 
         // Count emails requiring responses
         let response_count = sample_emails.iter().filter(|e| e.requires_response).count();
@@ -101,7 +114,8 @@ impl InstantDemo {
         let sample_invoices = SampleInvoice::generate_batch(20);
 
         let total_amount: f64 = sample_invoices.iter().map(|i| i.total_amount).sum();
-        let vendor_count = sample_invoices.iter()
+        let vendor_count = sample_invoices
+            .iter()
             .map(|i| &i.vendor_name)
             .collect::<std::collections::HashSet<_>>()
             .len();
@@ -198,8 +212,11 @@ impl InstantDemo {
             employee_id: "meeting_scheduler".to_string(),
             employee_name: "Meeting Scheduler".to_string(),
             task_description: "Schedule 5 meetings with optimal time slots".to_string(),
-            input_summary: "5 meeting requests with 3-6 participants each, various time zones".to_string(),
-            output_summary: "Found optimal times for all 5 meetings, sent 23 invites, resolved 2 conflicts".to_string(),
+            input_summary: "5 meeting requests with 3-6 participants each, various time zones"
+                .to_string(),
+            output_summary:
+                "Found optimal times for all 5 meetings, sent 23 invites, resolved 2 conflicts"
+                    .to_string(),
             actions_taken: vec![
                 "Analyzed calendars for 15 participants across 4 time zones".to_string(),
                 "Found optimal time slots for all 5 meetings".to_string(),
@@ -292,7 +309,12 @@ impl InstantDemo {
     }
 
     /// Record demo run to database
-    fn record_demo_run(&self, employee_id: &str, user_id: Option<&str>, results: &DemoResult) -> Result<(), DemoError> {
+    fn record_demo_run(
+        &self,
+        employee_id: &str,
+        user_id: Option<&str>,
+        results: &DemoResult,
+    ) -> Result<(), DemoError> {
         let conn = self.db.lock().unwrap();
         let now = Utc::now().timestamp();
         let run_id = Uuid::new_v4().to_string();
@@ -313,7 +335,10 @@ impl InstantDemo {
     }
 
     /// Get demo statistics
-    pub fn get_demo_statistics(&self, employee_id: Option<&str>) -> Result<DemoStatistics, DemoError> {
+    pub fn get_demo_statistics(
+        &self,
+        employee_id: Option<&str>,
+    ) -> Result<DemoStatistics, DemoError> {
         let conn = self.db.lock().unwrap();
 
         let (total_runs, hire_conversion): (i64, i64) = if let Some(emp_id) = employee_id {
@@ -322,25 +347,25 @@ impl InstantDemo {
                     "SELECT COUNT(*) FROM demo_runs WHERE employee_id = ?1",
                     [emp_id],
                     |row| row.get(0),
-                ).unwrap_or(0),
+                )
+                .unwrap_or(0),
                 conn.query_row(
                     "SELECT COUNT(*) FROM demo_runs WHERE employee_id = ?1 AND led_to_hire = 1",
                     [emp_id],
                     |row| row.get(0),
-                ).unwrap_or(0),
+                )
+                .unwrap_or(0),
             )
         } else {
             (
-                conn.query_row(
-                    "SELECT COUNT(*) FROM demo_runs",
-                    [],
-                    |row| row.get(0),
-                ).unwrap_or(0),
+                conn.query_row("SELECT COUNT(*) FROM demo_runs", [], |row| row.get(0))
+                    .unwrap_or(0),
                 conn.query_row(
                     "SELECT COUNT(*) FROM demo_runs WHERE led_to_hire = 1",
                     [],
                     |row| row.get(0),
-                ).unwrap_or(0),
+                )
+                .unwrap_or(0),
             )
         };
 

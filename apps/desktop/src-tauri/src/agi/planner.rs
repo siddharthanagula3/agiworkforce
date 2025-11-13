@@ -89,11 +89,12 @@ impl AGIPlanner {
         };
 
         // Get process-specific best practices
-        let best_practices = if let (Some(pt), Some(ref po)) = (process_type, &self.process_ontology) {
-            po.get_best_practices(pt)
-        } else {
-            vec![]
-        };
+        let best_practices =
+            if let (Some(pt), Some(ref po)) = (process_type, &self.process_ontology) {
+                po.get_best_practices(pt)
+            } else {
+                vec![]
+            };
 
         // Get relevant knowledge
         let knowledge = self.knowledge_base.get_relevant_knowledge(goal, 10).await?;
@@ -131,8 +132,14 @@ impl AGIPlanner {
             .collect();
 
         let best_practices_section = if !best_practices.is_empty() {
-            format!("\nBest Practices for this Process:\n{}\n",
-                best_practices.iter().map(|p| format!("- {}", p)).collect::<Vec<_>>().join("\n"))
+            format!(
+                "\nBest Practices for this Process:\n{}\n",
+                best_practices
+                    .iter()
+                    .map(|p| format!("- {}", p))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
         } else {
             String::new()
         };
@@ -241,7 +248,12 @@ Return ONLY the JSON array."#,
         self.generate_basic_plan(goal, tools, best_practices).await
     }
 
-    async fn generate_basic_plan(&self, goal: &Goal, tools: &[Tool], _best_practices: &[String]) -> Result<String> {
+    async fn generate_basic_plan(
+        &self,
+        goal: &Goal,
+        tools: &[Tool],
+        _best_practices: &[String],
+    ) -> Result<String> {
         // Generate basic plan without LLM (fallback)
         let mut steps = Vec::new();
 

@@ -1,9 +1,9 @@
-pub mod tutorial_manager;
-pub mod progress_tracker;
-pub mod sample_data;
-pub mod rewards;
 pub mod first_run;
 pub mod instant_demo;
+pub mod progress_tracker;
+pub mod rewards;
+pub mod sample_data;
+pub mod tutorial_manager;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,12 +37,22 @@ pub struct TutorialStep {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ActionType {
-    Click { selector: String },
-    Input { field: String, value: Option<String>, placeholder: Option<String> },
-    Wait { duration_ms: u64 },
-    Navigate { route: String },
+    Click {
+        selector: String,
+    },
+    Input {
+        field: String,
+        value: Option<String>,
+        placeholder: Option<String>,
+    },
+    Wait {
+        duration_ms: u64,
+    },
+    Navigate {
+        route: String,
+    },
     Complete, // User marks as complete manually
-    Observe, // Just show information, no action needed
+    Observe,  // Just show information, no action needed
 }
 
 /// Validation criteria for step completion
@@ -72,7 +82,7 @@ pub struct Tutorial {
     pub estimated_minutes: usize,
     pub steps: Vec<TutorialStep>,
     pub prerequisites: Vec<String>, // IDs of tutorials that must be completed first
-    pub rewards: Vec<String>, // Reward IDs granted upon completion
+    pub rewards: Vec<String>,       // Reward IDs granted upon completion
     pub tags: Vec<String>,
 }
 
@@ -119,9 +129,14 @@ pub struct TutorialStats {
     pub most_common_drop_off_step: Option<String>,
 }
 
-pub use tutorial_manager::{TutorialManager, TutorialError};
-pub use progress_tracker::{ProgressTracker, ProgressError};
-pub use sample_data::{SampleDataGenerator, SampleDataError, SampleEmail, SampleInvoice, SampleCodePR, SampleDataSummary};
-pub use rewards::{RewardSystem, Reward, RewardType};
-pub use first_run::{FirstRunExperience, FirstRunSession, OnboardingStep, AIEmployeeRecommendation, DemoResult, FirstRunError, FirstRunStatistics};
-pub use instant_demo::{InstantDemo, DemoError, DemoStatistics};
+pub use first_run::{
+    AIEmployeeRecommendation, DemoResult, FirstRunError, FirstRunExperience, FirstRunSession,
+    FirstRunStatistics, OnboardingStep,
+};
+pub use instant_demo::{DemoError, DemoStatistics, InstantDemo};
+pub use progress_tracker::{ProgressError, ProgressTracker};
+pub use rewards::{Reward, RewardSystem, RewardType};
+pub use sample_data::{
+    SampleCodePR, SampleDataError, SampleDataGenerator, SampleEmail, SampleInvoice,
+};
+pub use tutorial_manager::{TutorialError, TutorialManager};

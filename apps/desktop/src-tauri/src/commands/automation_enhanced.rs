@@ -1,5 +1,7 @@
+use anyhow::Result as AnyResult;
 use tauri::{AppHandle, State};
 
+use super::AppDatabase;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
@@ -7,7 +9,6 @@ use crate::automation::{
     recorder::{global_recorder, Recording, RecordingSession},
 };
 use crate::db::repository;
-use super::AppDatabase;
 
 // ============================================================================
 // Recorder Commands
@@ -30,7 +31,9 @@ pub fn automation_record_stop() -> Result<Recording, String> {
 pub fn automation_record_action_click(x: i32, y: i32, button: String) -> Result<(), String> {
     let recorder = global_recorder();
     if recorder.is_recording() {
-        recorder.record_click(x, y, &button).map_err(|e| e.to_string())
+        recorder
+            .record_click(x, y, &button)
+            .map_err(|e| e.to_string())
     } else {
         Ok(())
     }
@@ -85,13 +88,17 @@ pub fn automation_record_get_session() -> Result<Option<RecordingSession>, Strin
 #[tauri::command]
 pub fn automation_inspect_element_at_point(x: i32, y: i32) -> Result<DetailedElementInfo, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector.inspect_element_at_point(x, y).map_err(|e| e.to_string())
+    inspector
+        .inspect_element_at_point(x, y)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn automation_inspect_element_by_id(element_id: String) -> Result<DetailedElementInfo, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector.inspect_element_by_id(&element_id).map_err(|e| e.to_string())
+    inspector
+        .inspect_element_by_id(&element_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -99,13 +106,17 @@ pub fn automation_find_element_by_selector(
     selector: ElementSelector,
 ) -> Result<Option<String>, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector.find_element_by_selector(&selector).map_err(|e| e.to_string())
+    inspector
+        .find_element_by_selector(&selector)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn automation_generate_selector(element_id: String) -> Result<Vec<ElementSelector>, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector.generate_selector(&element_id).map_err(|e| e.to_string())
+    inspector
+        .generate_selector(&element_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -119,7 +130,9 @@ pub fn automation_get_element_tree(
     String,
 > {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector.get_element_tree(&element_id).map_err(|e| e.to_string())
+    inspector
+        .get_element_tree(&element_id)
+        .map_err(|e| e.to_string())
 }
 
 // ============================================================================
@@ -133,7 +146,10 @@ pub async fn automation_execute_script(
 ) -> Result<ExecutionResult, String> {
     let config = ExecutorConfig::default();
     let executor = ExecutorService::new(config).map_err(|e| e.to_string())?;
-    executor.execute_script(script, Some(&app)).await.map_err(|e| e.to_string())
+    executor
+        .execute_script(script, Some(&app))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -141,13 +157,17 @@ pub async fn automation_save_script(
     db: State<'_, AppDatabase>,
     script: AutomationScript,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     // Save script to database as JSON
     let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
 
-    repository::set_setting(&conn, format!("automation_script_{}", script.id), script_json, false)
-        .map_err(|e| e.to_string())
+    repository::save_setting(
+        &conn,
+        &format!("automation_script_{}", script.id),
+        &script_json,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -155,7 +175,7 @@ pub async fn automation_load_script(
     db: State<'_, AppDatabase>,
     script_id: String,
 ) -> Result<AutomationScript, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let script_json = repository::get_setting(&conn, &format!("automation_script_{}", script_id))
         .map_err(|e| e.to_string())?
@@ -168,7 +188,7 @@ pub async fn automation_load_script(
 pub async fn automation_list_scripts(
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<AutomationScript>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     // Get all settings with prefix "automation_script_"
     let settings = repository::list_settings(&conn).map_err(|e| e.to_string())?;
@@ -193,7 +213,7 @@ pub async fn automation_delete_script(
     db: State<'_, AppDatabase>,
     script_id: String,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     repository::delete_setting(&conn, &format!("automation_script_{}", script_id))
         .map_err(|e| e.to_string())
@@ -220,10 +240,13 @@ pub async fn automation_save_recording_as_script(
         .actions
         .into_iter()
         .map(|action| {
-            let coordinates = action.target.map(|target| crate::automation::executor::Coordinates {
-                x: target.x,
-                y: target.y,
-            });
+            let coordinates =
+                action
+                    .target
+                    .map(|target| crate::automation::executor::Coordinates {
+                        x: target.x,
+                        y: target.y,
+                    });
 
             crate::automation::executor::ScriptAction {
                 id: action.id,
@@ -250,11 +273,15 @@ pub async fn automation_save_recording_as_script(
     };
 
     // Save to database
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
     let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
 
-    repository::set_setting(&conn, format!("automation_script_{}", script.id), script_json, false)
-        .map_err(|e| e.to_string())?;
+    repository::save_setting(
+        &conn,
+        &format!("automation_script_{}", script.id),
+        &script_json,
+    )
+    .map_err(|e| e.to_string())?;
 
     Ok(script)
 }

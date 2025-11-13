@@ -43,7 +43,10 @@ impl Default for ToolCacheTTLConfig {
         configs.insert("db_execute".to_string(), Duration::from_secs(0)); // Never cache mutations
         configs.insert("db_transaction_begin".to_string(), Duration::from_secs(0));
         configs.insert("db_transaction_commit".to_string(), Duration::from_secs(0));
-        configs.insert("db_transaction_rollback".to_string(), Duration::from_secs(0));
+        configs.insert(
+            "db_transaction_rollback".to_string(),
+            Duration::from_secs(0),
+        );
 
         // Code execution: Never cache (always fresh)
         configs.insert("code_execute".to_string(), Duration::from_secs(0));
@@ -72,7 +75,10 @@ impl Default for ToolCacheTTLConfig {
         configs.insert("cloud_download".to_string(), Duration::from_secs(300)); // 5 minutes
 
         // Productivity tools
-        configs.insert("productivity_create_task".to_string(), Duration::from_secs(0));
+        configs.insert(
+            "productivity_create_task".to_string(),
+            Duration::from_secs(0),
+        );
 
         Self {
             configs,
@@ -471,10 +477,7 @@ impl ToolResultCache {
         }
 
         if removed_count > 0 {
-            tracing::info!(
-                "[ToolCache] Pruned {} expired cache entries",
-                removed_count
-            );
+            tracing::info!("[ToolCache] Pruned {} expired cache entries", removed_count);
         }
 
         Ok(removed_count)

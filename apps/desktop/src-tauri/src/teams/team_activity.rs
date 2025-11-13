@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -176,11 +176,15 @@ impl TeamActivityManager {
         let activity_id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
 
-        let metadata_json = metadata.as_ref()
+        let metadata_json = metadata
+            .as_ref()
             .map(|m| serde_json::to_string(m).ok())
             .flatten();
 
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         conn.execute(
             "INSERT INTO team_activity (id, team_id, user_id, action, resource_type, resource_id, metadata, timestamp)
@@ -210,8 +214,16 @@ impl TeamActivityManager {
     }
 
     /// Get team activity with pagination
-    pub fn get_team_activity(&self, team_id: &str, limit: usize, offset: usize) -> Result<Vec<TeamActivity>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_team_activity(
+        &self,
+        team_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<TeamActivity>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -226,7 +238,8 @@ impl TeamActivityManager {
         let activities = stmt
             .query_map(params![team_id, limit as i64, offset as i64], |row| {
                 let action_str: String = row.get(3)?;
-                let action = ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
+                let action =
+                    ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
 
                 let metadata_str: Option<String> = row.get(6)?;
                 let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
@@ -250,8 +263,16 @@ impl TeamActivityManager {
     }
 
     /// Get user activity in a team
-    pub fn get_user_activity(&self, team_id: &str, user_id: &str, limit: usize) -> Result<Vec<TeamActivity>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_user_activity(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        limit: usize,
+    ) -> Result<Vec<TeamActivity>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -266,7 +287,8 @@ impl TeamActivityManager {
         let activities = stmt
             .query_map(params![team_id, user_id, limit as i64], |row| {
                 let action_str: String = row.get(3)?;
-                let action = ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
+                let action =
+                    ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
 
                 let metadata_str: Option<String> = row.get(6)?;
                 let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
@@ -290,8 +312,16 @@ impl TeamActivityManager {
     }
 
     /// Get activities by type
-    pub fn get_activities_by_type(&self, team_id: &str, action_type: ActivityType, limit: usize) -> Result<Vec<TeamActivity>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_activities_by_type(
+        &self,
+        team_id: &str,
+        action_type: ActivityType,
+        limit: usize,
+    ) -> Result<Vec<TeamActivity>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -304,24 +334,28 @@ impl TeamActivityManager {
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let activities = stmt
-            .query_map(params![team_id, action_type.as_str(), limit as i64], |row| {
-                let action_str: String = row.get(3)?;
-                let action = ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
+            .query_map(
+                params![team_id, action_type.as_str(), limit as i64],
+                |row| {
+                    let action_str: String = row.get(3)?;
+                    let action = ActivityType::from_str(&action_str)
+                        .unwrap_or(ActivityType::SettingsChanged);
 
-                let metadata_str: Option<String> = row.get(6)?;
-                let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+                    let metadata_str: Option<String> = row.get(6)?;
+                    let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
 
-                Ok(TeamActivity {
-                    id: row.get(0)?,
-                    team_id: row.get(1)?,
-                    user_id: row.get(2)?,
-                    action,
-                    resource_type: row.get(4)?,
-                    resource_id: row.get(5)?,
-                    metadata,
-                    timestamp: row.get(7)?,
-                })
-            })
+                    Ok(TeamActivity {
+                        id: row.get(0)?,
+                        team_id: row.get(1)?,
+                        user_id: row.get(2)?,
+                        action,
+                        resource_type: row.get(4)?,
+                        resource_id: row.get(5)?,
+                        metadata,
+                        timestamp: row.get(7)?,
+                    })
+                },
+            )
             .map_err(|e| format!("Failed to query activities: {}", e))?
             .collect::<SqliteResult<Vec<_>>>()
             .map_err(|e| format!("Failed to collect activities: {}", e))?;
@@ -330,8 +364,16 @@ impl TeamActivityManager {
     }
 
     /// Get activities within a time range
-    pub fn get_activities_in_range(&self, team_id: &str, start_time: i64, end_time: i64) -> Result<Vec<TeamActivity>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_activities_in_range(
+        &self,
+        team_id: &str,
+        start_time: i64,
+        end_time: i64,
+    ) -> Result<Vec<TeamActivity>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -345,7 +387,8 @@ impl TeamActivityManager {
         let activities = stmt
             .query_map(params![team_id, start_time, end_time], |row| {
                 let action_str: String = row.get(3)?;
-                let action = ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
+                let action =
+                    ActivityType::from_str(&action_str).unwrap_or(ActivityType::SettingsChanged);
 
                 let metadata_str: Option<String> = row.get(6)?;
                 let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
@@ -370,7 +413,10 @@ impl TeamActivityManager {
 
     /// Get activity statistics
     pub fn get_activity_stats(&self, team_id: &str) -> Result<ActivityStats, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let total_activities: i64 = conn
             .query_row(
@@ -424,7 +470,10 @@ impl TeamActivityManager {
 
     /// Delete old activities (older than specified days)
     pub fn cleanup_old_activities(&self, team_id: &str, days: i64) -> Result<usize, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
         let cutoff_time = now - (days * 24 * 60 * 60);
 
@@ -439,7 +488,12 @@ impl TeamActivityManager {
     }
 
     /// Export activities to JSON
-    pub fn export_activities(&self, team_id: &str, start_time: Option<i64>, end_time: Option<i64>) -> Result<String, String> {
+    pub fn export_activities(
+        &self,
+        team_id: &str,
+        start_time: Option<i64>,
+        end_time: Option<i64>,
+    ) -> Result<String, String> {
         let activities = if let (Some(start), Some(end)) = (start_time, end_time) {
             self.get_activities_in_range(team_id, start, end)?
         } else {
@@ -480,7 +534,8 @@ mod tests {
                 timestamp INTEGER
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         Arc::new(Mutex::new(conn))
     }
@@ -511,10 +566,24 @@ mod tests {
         let manager = TeamActivityManager::new(db);
 
         manager
-            .log_activity("team123", Some("user1".to_string()), ActivityType::MemberJoined, None, None, None)
+            .log_activity(
+                "team123",
+                Some("user1".to_string()),
+                ActivityType::MemberJoined,
+                None,
+                None,
+                None,
+            )
             .unwrap();
         manager
-            .log_activity("team123", Some("user2".to_string()), ActivityType::ResourceShared, None, None, None)
+            .log_activity(
+                "team123",
+                Some("user2".to_string()),
+                ActivityType::ResourceShared,
+                None,
+                None,
+                None,
+            )
             .unwrap();
 
         let activities = manager.get_team_activity("team123", 10, 0).unwrap();
@@ -527,10 +596,24 @@ mod tests {
         let manager = TeamActivityManager::new(db);
 
         manager
-            .log_activity("team123", Some("user1".to_string()), ActivityType::MemberJoined, None, None, None)
+            .log_activity(
+                "team123",
+                Some("user1".to_string()),
+                ActivityType::MemberJoined,
+                None,
+                None,
+                None,
+            )
             .unwrap();
         manager
-            .log_activity("team123", Some("user2".to_string()), ActivityType::ResourceShared, None, None, None)
+            .log_activity(
+                "team123",
+                Some("user2".to_string()),
+                ActivityType::ResourceShared,
+                None,
+                None,
+                None,
+            )
             .unwrap();
 
         let activities = manager.get_user_activity("team123", "user1", 10).unwrap();
@@ -544,10 +627,24 @@ mod tests {
         let manager = TeamActivityManager::new(db);
 
         manager
-            .log_activity("team123", Some("user1".to_string()), ActivityType::MemberJoined, None, None, None)
+            .log_activity(
+                "team123",
+                Some("user1".to_string()),
+                ActivityType::MemberJoined,
+                None,
+                None,
+                None,
+            )
             .unwrap();
         manager
-            .log_activity("team123", Some("user2".to_string()), ActivityType::ResourceShared, None, None, None)
+            .log_activity(
+                "team123",
+                Some("user2".to_string()),
+                ActivityType::ResourceShared,
+                None,
+                None,
+                None,
+            )
             .unwrap();
 
         let stats = manager.get_activity_stats("team123").unwrap();
