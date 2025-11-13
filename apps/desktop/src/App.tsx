@@ -15,6 +15,9 @@ import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import { OnboardingWizard } from './components/Onboarding/OnboardingWizard';
+import ErrorToastContainer from './components/errors/ErrorToast';
+import useErrorStore from './stores/errorStore';
+import { errorReportingService } from './services/errorReporting';
 import {
   Plus,
   History,
@@ -38,9 +41,73 @@ const DesktopShell = () => {
 
   const createConversation = useChatStore((store) => store.createConversation);
   const selectConversation = useChatStore((store) => store.selectConversation);
+  const addError = useErrorStore((store) => store.addError);
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
+
+  // Global error handlers
+  useEffect(() => {
+    // Handle unhandled promise rejections
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+
+      const error = event.reason;
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+
+      addError({
+        type: 'UNHANDLED_PROMISE_REJECTION',
+        severity: 'error',
+        message: `Unhandled promise rejection: ${message}`,
+        stack,
+        context: {
+          promise: event.promise,
+        },
+      });
+    };
+
+    // Handle general window errors
+    const handleWindowError = (event: ErrorEvent) => {
+      event.preventDefault();
+
+      addError({
+        type: 'WINDOW_ERROR',
+        severity: 'error',
+        message: event.message,
+        details: `${event.filename}:${event.lineno}:${event.colno}`,
+        stack: event.error?.stack,
+        context: {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+        },
+      });
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    window.addEventListener('error', handleWindowError);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener('error', handleWindowError);
+    };
+  }, [addError]);
+
+  // Track user actions for error reporting
+  useEffect(() => {
+    const trackAction = (action: string) => {
+      errorReportingService.trackAction(action);
+    };
+
+    // Track important user actions
+    trackAction('app_loaded');
+
+    return () => {
+      // Flush error reports on unmount
+      void errorReportingService.flush();
+    };
+  }, []);
 
   // Check onboarding status on mount
   useEffect(() => {
@@ -50,11 +117,17 @@ const DesktopShell = () => {
         setOnboardingComplete(status.completed);
       } catch (error) {
         console.error('Failed to check onboarding status:', error);
+        addError({
+          type: 'ONBOARDING_ERROR',
+          severity: 'warning',
+          message: 'Failed to check onboarding status',
+          details: error instanceof Error ? error.message : String(error),
+        });
         setOnboardingComplete(true); // Assume complete on error
       }
     };
     void checkOnboarding();
-  }, []);
+  }, [addError]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -238,6 +311,7 @@ const DesktopShell = () => {
         options={commandOptions}
       />
       <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+      <ErrorToastContainer position="top-right" />
     </div>
   );
 };
