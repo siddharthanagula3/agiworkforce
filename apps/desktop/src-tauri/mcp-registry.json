@@ -1,0 +1,342 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-11-13",
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem Access",
+      "version": "1.0.0",
+      "category": "development",
+      "description": "Read and write files on the local filesystem. List directories and manage file operations safely.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-filesystem",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.9,
+      "downloads": 34567,
+      "tools": [
+        {
+          "name": "read_file",
+          "description": "Read the contents of a file from disk"
+        },
+        {
+          "name": "write_file",
+          "description": "Write contents to a file. Creates the file if missing."
+        },
+        {
+          "name": "list_directory",
+          "description": "List files and folders within a directory"
+        },
+        {
+          "name": "create_directory",
+          "description": "Create a new directory"
+        }
+      ],
+      "configuration": {
+        "required": ["allowed_directories"],
+        "optional": ["excluded_patterns"]
+      }
+    },
+    {
+      "id": "github",
+      "name": "GitHub Integration",
+      "version": "1.0.0",
+      "category": "development",
+      "description": "Access GitHub repositories, create issues, search code, manage pull requests, and interact with GitHub API.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-github",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.9,
+      "downloads": 23456,
+      "tools": [
+        {
+          "name": "create_issue",
+          "description": "Create a new issue in a GitHub repository"
+        },
+        {
+          "name": "search_code",
+          "description": "Search for code across GitHub repositories"
+        },
+        {
+          "name": "get_file",
+          "description": "Get the contents of a file from a GitHub repository"
+        },
+        {
+          "name": "create_pull_request",
+          "description": "Create a new pull request"
+        },
+        {
+          "name": "list_repositories",
+          "description": "List accessible GitHub repositories"
+        }
+      ],
+      "configuration": {
+        "required": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+        "optional": ["default_owner", "default_repo"]
+      }
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright Browser Automation",
+      "version": "1.0.0",
+      "category": "automation",
+      "description": "Browser automation with Playwright. Navigate, click, type, screenshot, and interact with web pages programmatically.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-playwright",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.8,
+      "downloads": 12543,
+      "tools": [
+        {
+          "name": "playwright_navigate",
+          "description": "Navigate to a URL in the browser"
+        },
+        {
+          "name": "playwright_click",
+          "description": "Click an element on the page"
+        },
+        {
+          "name": "playwright_screenshot",
+          "description": "Take a screenshot of the current page"
+        },
+        {
+          "name": "playwright_fill",
+          "description": "Fill in a form field"
+        },
+        {
+          "name": "playwright_evaluate",
+          "description": "Execute JavaScript in the page context"
+        }
+      ],
+      "configuration": {
+        "required": [],
+        "optional": ["headless", "browser_type"]
+      }
+    },
+    {
+      "id": "google-drive",
+      "name": "Google Drive",
+      "version": "1.0.0",
+      "category": "data",
+      "description": "Access Google Drive files and folders. Read, write, search, and manage documents in your Google Drive.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-gdrive",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.7,
+      "downloads": 18234,
+      "tools": [
+        {
+          "name": "list_files",
+          "description": "List files in Google Drive"
+        },
+        {
+          "name": "read_file",
+          "description": "Read the contents of a Google Drive file"
+        },
+        {
+          "name": "create_file",
+          "description": "Create a new file in Google Drive"
+        },
+        {
+          "name": "update_file",
+          "description": "Update an existing Google Drive file"
+        },
+        {
+          "name": "search",
+          "description": "Search for files in Google Drive"
+        }
+      ],
+      "configuration": {
+        "required": ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"],
+        "optional": ["default_folder"]
+      }
+    },
+    {
+      "id": "brave-search",
+      "name": "Brave Search",
+      "version": "1.0.0",
+      "category": "search",
+      "description": "Web search using Brave Search API. Get up-to-date information from the web with privacy-focused search.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-brave-search",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.6,
+      "downloads": 9876,
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search"
+        },
+        {
+          "name": "local_search",
+          "description": "Search for local businesses and places"
+        }
+      ],
+      "configuration": {
+        "required": ["BRAVE_API_KEY"],
+        "optional": ["default_country", "safe_search"]
+      }
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL Database",
+      "version": "1.0.0",
+      "category": "data",
+      "description": "Query PostgreSQL databases. Execute SQL queries, manage schemas, and access database metadata.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-postgres",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.5,
+      "downloads": 7654,
+      "tools": [
+        {
+          "name": "query",
+          "description": "Execute a SQL query"
+        },
+        {
+          "name": "schema",
+          "description": "Get database schema information"
+        },
+        {
+          "name": "execute",
+          "description": "Execute a SQL command (INSERT, UPDATE, DELETE)"
+        }
+      ],
+      "configuration": {
+        "required": ["POSTGRES_CONNECTION_STRING"],
+        "optional": ["default_schema", "read_only"]
+      }
+    },
+    {
+      "id": "slack",
+      "name": "Slack Integration",
+      "version": "1.0.0",
+      "category": "productivity",
+      "description": "Post messages to Slack channels, read conversations, and manage your Slack workspace.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-slack",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.4,
+      "downloads": 11234,
+      "tools": [
+        {
+          "name": "post_message",
+          "description": "Post a message to a Slack channel"
+        },
+        {
+          "name": "list_channels",
+          "description": "List available Slack channels"
+        },
+        {
+          "name": "read_messages",
+          "description": "Read recent messages from a channel"
+        }
+      ],
+      "configuration": {
+        "required": ["SLACK_BOT_TOKEN"],
+        "optional": ["default_channel"]
+      }
+    },
+    {
+      "id": "notion",
+      "name": "Notion Integration",
+      "version": "1.0.0",
+      "category": "productivity",
+      "description": "Access Notion pages and databases. Read, create, and update notes and structured data.",
+      "author": "Anthropic",
+      "npm_package": "@modelcontextprotocol/server-notion",
+      "github": "https://github.com/modelcontextprotocol/servers",
+      "rating": 4.7,
+      "downloads": 15432,
+      "tools": [
+        {
+          "name": "search",
+          "description": "Search Notion workspace"
+        },
+        {
+          "name": "get_page",
+          "description": "Get a Notion page by ID"
+        },
+        {
+          "name": "create_page",
+          "description": "Create a new Notion page"
+        },
+        {
+          "name": "query_database",
+          "description": "Query a Notion database"
+        }
+      ],
+      "configuration": {
+        "required": ["NOTION_API_KEY"],
+        "optional": ["default_database_id"]
+      }
+    },
+    {
+      "id": "google-maps",
+      "name": "Google Maps",
+      "version": "1.0.0",
+      "category": "integration",
+      "description": "Access Google Maps API for geocoding, directions, and place information.",
+      "author": "Community",
+      "npm_package": "@mcp-community/server-google-maps",
+      "github": "https://github.com/mcp-community/servers",
+      "rating": 4.3,
+      "downloads": 5432,
+      "tools": [
+        {
+          "name": "geocode",
+          "description": "Convert address to coordinates"
+        },
+        {
+          "name": "reverse_geocode",
+          "description": "Convert coordinates to address"
+        },
+        {
+          "name": "directions",
+          "description": "Get directions between two locations"
+        },
+        {
+          "name": "place_search",
+          "description": "Search for places nearby"
+        }
+      ],
+      "configuration": {
+        "required": ["GOOGLE_MAPS_API_KEY"],
+        "optional": []
+      }
+    },
+    {
+      "id": "jira",
+      "name": "Jira Integration",
+      "version": "1.0.0",
+      "category": "productivity",
+      "description": "Manage Jira issues, projects, and sprints. Create, update, and query issues.",
+      "author": "Community",
+      "npm_package": "@mcp-community/server-jira",
+      "github": "https://github.com/mcp-community/servers",
+      "rating": 4.2,
+      "downloads": 4321,
+      "tools": [
+        {
+          "name": "create_issue",
+          "description": "Create a new Jira issue"
+        },
+        {
+          "name": "update_issue",
+          "description": "Update an existing Jira issue"
+        },
+        {
+          "name": "search_issues",
+          "description": "Search for Jira issues using JQL"
+        },
+        {
+          "name": "get_issue",
+          "description": "Get details of a specific issue"
+        }
+      ],
+      "configuration": {
+        "required": ["JIRA_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"],
+        "optional": ["default_project"]
+      }
+    }
+  ]
+}
