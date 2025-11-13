@@ -14,6 +14,7 @@ export interface McpToolInfo {
   name: string;
   description: string;
   server: string;
+  parameters?: string[];
 }
 
 export interface McpServersConfig {

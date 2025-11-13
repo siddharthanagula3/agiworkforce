@@ -294,7 +294,10 @@ export const ERROR_MESSAGES: Record<string, ErrorMessageDefinition> = {
  * Get a user-friendly error message for an error type
  */
 export function getErrorMessage(errorType: string): ErrorMessageDefinition {
-  return ERROR_MESSAGES[errorType] || ERROR_MESSAGES.UNKNOWN_ERROR;
+  return ERROR_MESSAGES[errorType] ?? ERROR_MESSAGES['UNKNOWN_ERROR'] ?? {
+    title: 'Unknown Error',
+    message: 'An unexpected error occurred.',
+  };
 }
 
 /**

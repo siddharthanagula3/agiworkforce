@@ -22,7 +22,10 @@ export const TemplateInstaller: React.FC<TemplateInstallerProps> = ({ template, 
         const strValue = JSON.stringify(value);
         const matches = strValue.matchAll(/\{\{(\w+)\}\}/g);
         for (const match of matches) {
-          paramSet.add(match[1]);
+          const paramName = match[1];
+          if (paramName) {
+            paramSet.add(paramName);
+          }
         }
       });
     });

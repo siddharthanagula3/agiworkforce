@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
 import { Repeat, X } from 'lucide-react';
 import { cn } from '../../../lib/utils';

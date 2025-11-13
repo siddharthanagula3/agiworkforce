@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
 
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
@@ -132,9 +131,9 @@ describe('AGI Store', () => {
       const goalId = await store.createGoal('Process customer emails', 'High');
 
       expect(store.goals).toHaveLength(1);
-      expect(store.goals[0].id).toBe(goalId);
-      expect(store.goals[0].description).toBe('Process customer emails');
-      expect(store.goals[0].priority).toBe('High');
+      expect(store.goals[0]?.id).toBe(goalId);
+      expect(store.goals[0]?.description).toBe('Process customer emails');
+      expect(store.goals[0]?.priority).toBe('High');
     });
 
     it('should create goals with different priorities', async () => {
@@ -143,15 +142,15 @@ describe('AGI Store', () => {
       await store.createGoal('Critical task', 'Critical');
 
       expect(store.goals).toHaveLength(3);
-      expect(store.goals[0].priority).toBe('Low');
-      expect(store.goals[1].priority).toBe('High');
-      expect(store.goals[2].priority).toBe('Critical');
+      expect(store.goals[0]?.priority).toBe('Low');
+      expect(store.goals[1]?.priority).toBe('High');
+      expect(store.goals[2]?.priority).toBe('Critical');
     });
 
     it('should set initial status to pending', async () => {
       await store.createGoal('Test goal', 'Medium');
 
-      expect(store.goals[0].status).toBe('pending');
+      expect(store.goals[0]?.status).toBe('pending');
     });
   });
 
@@ -191,7 +190,7 @@ describe('AGI Store', () => {
       const goalId = await store.createGoal('Cancellable goal', 'Medium');
 
       // Start execution
-      const executionPromise = store.executeGoal(goalId);
+      void store.executeGoal(goalId);
 
       // Cancel immediately
       await store.cancelExecution(goalId);
@@ -244,7 +243,7 @@ describe('AGI Store', () => {
       const goalId = await store.createGoal('Active deletable goal', 'High');
 
       // Set as active
-      const executionPromise = store.executeGoal(goalId);
+      void store.executeGoal(goalId);
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       await store.deleteGoal(goalId);
@@ -302,8 +301,8 @@ describe('AGI Store', () => {
       }
 
       expect(goal?.outcomes).toHaveLength(2);
-      expect(goal?.outcomes?.[0].achieved).toBe(true);
-      expect(goal?.outcomes?.[1].achieved).toBe(false);
+      expect(goal?.outcomes?.[0]?.achieved).toBe(true);
+      expect(goal?.outcomes?.[1]?.achieved).toBe(false);
     });
   });
 
@@ -334,9 +333,9 @@ describe('AGI Store', () => {
       }
 
       expect(goal?.steps).toHaveLength(3);
-      expect(goal?.steps?.[0].status).toBe('completed');
-      expect(goal?.steps?.[1].status).toBe('in_progress');
-      expect(goal?.steps?.[2].status).toBe('pending');
+      expect(goal?.steps?.[0]?.status).toBe('completed');
+      expect(goal?.steps?.[1]?.status).toBe('in_progress');
+      expect(goal?.steps?.[2]?.status).toBe('pending');
     });
   });
 

@@ -17,7 +17,7 @@ import {
 /**
  * Query daily active users (DAU)
  */
-export async function queryDAU(dateRange?: {
+export async function queryDAU(_dateRange?: {
   start: Date;
   end: Date;
 }): Promise<number> {
@@ -29,7 +29,7 @@ export async function queryDAU(dateRange?: {
 /**
  * Query monthly active users (MAU)
  */
-export async function queryMAU(dateRange?: {
+export async function queryMAU(_dateRange?: {
   start: Date;
   end: Date;
 }): Promise<number> {
@@ -60,7 +60,7 @@ export async function queryUsageStats(): Promise<UsageStats> {
  * Query feature usage by date range
  */
 export async function queryFeatureUsage(
-  dateRange?: { start: Date; end: Date }
+  _dateRange?: { start: Date; end: Date }
 ): Promise<FeatureUsageStats[]> {
   // In production, this would query the backend
   const features = [
@@ -83,7 +83,7 @@ export async function queryFeatureUsage(
 /**
  * Query average session duration
  */
-export async function queryAvgSessionDuration(dateRange?: {
+export async function queryAvgSessionDuration(_dateRange?: {
   start: Date;
   end: Date;
 }): Promise<number> {
@@ -154,7 +154,7 @@ export async function queryConversionFunnel(
 /**
  * Query error rate by version
  */
-export async function queryErrorStats(dateRange?: {
+export async function queryErrorStats(_dateRange?: {
   start: Date;
   end: Date;
 }): Promise<ErrorStats[]> {
@@ -185,7 +185,7 @@ export async function queryErrorStats(dateRange?: {
  * Query time series data for charts
  */
 export async function queryTimeSeriesData(
-  metric: 'dau' | 'events' | 'session_duration',
+  _metric: 'dau' | 'events' | 'session_duration',
   dateRange: { start: Date; end: Date }
 ): Promise<TimeSeriesData[]> {
   // In production, this would query the backend
@@ -252,7 +252,7 @@ export async function queryCategoryData(
  */
 export async function queryTopEvents(
   limit: number = 10,
-  dateRange?: { start: Date; end: Date }
+  _dateRange?: { start: Date; end: Date }
 ): Promise<{ event_name: string; count: number }[]> {
   // In production, this would query the backend
   return [
