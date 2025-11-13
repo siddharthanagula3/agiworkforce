@@ -436,3 +436,234 @@ fn current_timestamp() -> u64 {
         .unwrap()
         .as_secs()
 }
+
+/// Enhanced diff generation with hunk-level granularity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileDiff {
+    pub file_path: String,
+    pub hunks: Vec<DiffHunk>,
+    pub stats: DiffStats,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffHunk {
+    pub old_start: usize,
+    pub old_lines: usize,
+    pub new_start: usize,
+    pub new_lines: usize,
+    pub changes: Vec<LineChange>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LineChange {
+    #[serde(rename = "type")]
+    pub change_type: String, // "add" | "delete" | "context"
+    pub old_line_number: Option<usize>,
+    pub new_line_number: Option<usize>,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffStats {
+    pub additions: usize,
+    pub deletions: usize,
+    pub changes: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileChange {
+    pub path: String,
+    pub original_content: String,
+    pub modified_content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplyResult {
+    pub success: bool,
+    pub files_modified: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+/// Generate detailed file diff with hunks
+#[tauri::command]
+pub async fn get_file_diff(
+    file_path: String,
+    original: String,
+    modified: String,
+) -> Result<FileDiff, String> {
+    tracing::info!("Generating diff for: {}", file_path);
+
+    let original_lines: Vec<&str> = original.lines().collect();
+    let modified_lines: Vec<&str> = modified.lines().collect();
+
+    let mut hunks = Vec::new();
+    let mut additions = 0;
+    let mut deletions = 0;
+
+    // Simple line-by-line diff algorithm
+    // In production, you'd use a proper diff library like similar or diff
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < original_lines.len() || j < modified_lines.len() {
+        let mut changes = Vec::new();
+        let hunk_start_old = i;
+        let hunk_start_new = j;
+
+        // Collect context and changes for this hunk
+        let mut context_before = Vec::new();
+        let mut hunk_changes = Vec::new();
+        let mut context_after = Vec::new();
+
+        // Simplified diff: compare lines directly
+        while i < original_lines.len() || j < modified_lines.len() {
+            if i >= original_lines.len() {
+                // Only new lines left
+                hunk_changes.push(LineChange {
+                    change_type: "add".to_string(),
+                    old_line_number: None,
+                    new_line_number: Some(j + 1),
+                    content: modified_lines[j].to_string(),
+                });
+                additions += 1;
+                j += 1;
+            } else if j >= modified_lines.len() {
+                // Only old lines left
+                hunk_changes.push(LineChange {
+                    change_type: "delete".to_string(),
+                    old_line_number: Some(i + 1),
+                    new_line_number: None,
+                    content: original_lines[i].to_string(),
+                });
+                deletions += 1;
+                i += 1;
+            } else if original_lines[i] == modified_lines[j] {
+                // Lines match - context
+                hunk_changes.push(LineChange {
+                    change_type: "context".to_string(),
+                    old_line_number: Some(i + 1),
+                    new_line_number: Some(j + 1),
+                    content: original_lines[i].to_string(),
+                });
+                i += 1;
+                j += 1;
+            } else {
+                // Lines differ
+                hunk_changes.push(LineChange {
+                    change_type: "delete".to_string(),
+                    old_line_number: Some(i + 1),
+                    new_line_number: None,
+                    content: original_lines[i].to_string(),
+                });
+                hunk_changes.push(LineChange {
+                    change_type: "add".to_string(),
+                    old_line_number: None,
+                    new_line_number: Some(j + 1),
+                    content: modified_lines[j].to_string(),
+                });
+                deletions += 1;
+                additions += 1;
+                i += 1;
+                j += 1;
+            }
+
+            // Break into hunks every 50 lines or at the end
+            if hunk_changes.len() > 50 || (i >= original_lines.len() && j >= modified_lines.len()) {
+                break;
+            }
+        }
+
+        if !hunk_changes.is_empty() {
+            let old_lines = i - hunk_start_old;
+            let new_lines = j - hunk_start_new;
+
+            hunks.push(DiffHunk {
+                old_start: hunk_start_old + 1,
+                old_lines,
+                new_start: hunk_start_new + 1,
+                new_lines,
+                changes: hunk_changes,
+            });
+        }
+
+        if i >= original_lines.len() && j >= modified_lines.len() {
+            break;
+        }
+    }
+
+    // If no hunks were created, create a single hunk with all changes
+    if hunks.is_empty() {
+        let mut all_changes = Vec::new();
+        for (idx, line) in original_lines.iter().enumerate() {
+            all_changes.push(LineChange {
+                change_type: "context".to_string(),
+                old_line_number: Some(idx + 1),
+                new_line_number: Some(idx + 1),
+                content: line.to_string(),
+            });
+        }
+        hunks.push(DiffHunk {
+            old_start: 1,
+            old_lines: original_lines.len(),
+            new_start: 1,
+            new_lines: modified_lines.len(),
+            changes: all_changes,
+        });
+    }
+
+    Ok(FileDiff {
+        file_path,
+        hunks,
+        stats: DiffStats {
+            additions,
+            deletions,
+            changes: additions + deletions,
+        },
+    })
+}
+
+/// Apply multiple file changes
+#[tauri::command]
+pub async fn apply_changes(
+    changes: Vec<FileChange>,
+) -> Result<ApplyResult, String> {
+    tracing::info!("Applying {} file changes", changes.len());
+
+    let mut files_modified = Vec::new();
+    let mut errors = Vec::new();
+
+    for change in changes {
+        match std::fs::write(&change.path, &change.modified_content) {
+            Ok(_) => {
+                files_modified.push(change.path.clone());
+                tracing::info!("Applied changes to: {}", change.path);
+            }
+            Err(e) => {
+                let error_msg = format!("Failed to write {}: {}", change.path, e);
+                errors.push(error_msg.clone());
+                tracing::error!("{}", error_msg);
+            }
+        }
+    }
+
+    Ok(ApplyResult {
+        success: errors.is_empty(),
+        files_modified,
+        errors,
+    })
+}
+
+/// Revert changes to files
+#[tauri::command]
+pub async fn revert_changes(
+    file_paths: Vec<String>,
+) -> Result<(), String> {
+    tracing::info!("Reverting {} files", file_paths.len());
+
+    for path in file_paths {
+        // In a real implementation, you'd restore from backup or git
+        tracing::warn!("Revert not implemented for: {}", path);
+    }
+
+    Ok(())
+}

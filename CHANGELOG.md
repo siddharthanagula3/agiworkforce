@@ -2,6 +2,43 @@
 
 All notable changes to AGI Workforce are documented in this file.
 
+## [1.2.0] - 2025-11-13
+
+### Major Update: Latest LLM Models (November 2025)
+
+**Summary:** Updated all LLM providers to use the latest models available as of November 2025, providing significant improvements in code generation, reasoning, and task execution.
+
+#### Added
+- **GPT-5** (OpenAI) - Released August 2025, most capable general model
+- **Claude Sonnet 4.5** (Anthropic) - Released September 2025, 77.2% SWE-bench (best coding model)
+- **Claude Opus 4** (Anthropic) - Deep reasoning with extended thinking
+- **O3** (OpenAI) - Advanced reasoning model
+- **Gemini 2.5 Pro** (Google) - 1M token context window
+- **Gemini 2.5 Flash** (Google) - Fast responses with 1M context
+- **Llama 4 Maverick** (Ollama) - 1M context, FREE local inference
+- **DeepSeek V3** (DeepSeek) - Coding specialist with 64K context
+- **DeepSeek Coder V3** (Ollama) - Local coding specialist
+- **Mistral Large 2** (Mistral) - 128K context window
+
+#### Changed
+- **Default provider** changed from OpenAI to Anthropic (Claude 4.5 best for coding)
+- Updated context windows for all models
+- Enhanced model selection UI with ⭐ indicators for recommended models
+- Added model descriptions and performance notes
+
+#### Model Performance
+- **Best Coding:** Claude Sonnet 4.5 (77.2% SWE-bench)
+- **Best Research:** Gemini 2.5 Pro (1M context)
+- **Best Cost/Privacy:** Llama 4 Maverick (FREE, 1M context)
+- **Best Reasoning:** Claude Opus 4 & O3
+- **Best Real-Time:** Grok 4
+
+#### Files Modified
+- `apps/desktop/src/stores/settingsStore.ts` - Updated default models
+- `apps/desktop/src/constants/llm.ts` - Added 15+ new model options with context windows
+- `README.md` - Updated to reflect latest models
+- `MODEL_UPDATE_NOV_2025.md` - Comprehensive model update documentation
+
 ## [1.1.0] - 2025-11-09
 
 ### Major Feature Update: Claude Code/Cursor-Like Developer Experience
