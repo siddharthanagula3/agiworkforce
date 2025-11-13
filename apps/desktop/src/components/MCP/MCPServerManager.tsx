@@ -8,7 +8,6 @@ import { Dialog } from '../ui/Dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { Spinner } from '../ui/Spinner';
 import { ScrollArea } from '../ui/ScrollArea';
-import { Alert } from '../ui/Alert';
 import {
   Server,
   Power,
@@ -307,10 +306,13 @@ export function MCPServerManager() {
         </div>
 
         {error && (
-          <Alert variant="destructive" onClose={clearError}>
+          <div className="flex items-center gap-2 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700">
             <AlertCircle className="w-4 h-4" />
-            <span>{error}</span>
-          </Alert>
+            <span className="flex-1">{error}</span>
+            <button onClick={clearError} className="text-red-700 hover:text-red-900">
+              ✕
+            </button>
+          </div>
         )}
       </div>
 

@@ -312,7 +312,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   cloneWorkflow: async (request: CloneWorkflowRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const clonedId = await invoke<string>('clone_marketplace_workflow', request);
+      const clonedId = await invoke<string>('clone_marketplace_workflow', request as any);
 
       // Update clone count for the workflow
       const { workflows, featuredWorkflows, trendingWorkflows } = get();
@@ -337,7 +337,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   publishWorkflow: async (request: PublishWorkflowRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const published = await invoke<PublishedWorkflow>('publish_workflow', request);
+      const published = await invoke<PublishedWorkflow>('publish_workflow', request as any);
       set((state) => ({
         myPublishedWorkflows: [published, ...state.myPublishedWorkflows],
         isLoading: false,
@@ -367,7 +367,7 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   rateWorkflow: async (request: RateWorkflowRequest) => {
     try {
-      await invoke('rate_workflow', request);
+      await invoke('rate_workflow', request as any);
 
       // Refresh reviews
       await get().fetchWorkflowReviews(request.workflow_id);
