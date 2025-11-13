@@ -221,6 +221,14 @@ fn main() {
 
             tracing::info!("LSP state initialized");
 
+            // Initialize Codebase Cache
+            let cache_conn = Connection::open(&db_path).expect("Failed to open database for codebase cache");
+            let codebase_cache = agiworkforce_desktop::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
+                .expect("Failed to initialize codebase cache");
+            app.manage(agiworkforce_desktop::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
+
+            tracing::info!("Codebase cache initialized");
+
             // Initialize window state
             let state = AppState::load(app.handle())?;
             app.manage(state);
@@ -476,6 +484,30 @@ fn main() {
             agiworkforce_desktop::commands::llm_send_message,
             agiworkforce_desktop::commands::llm_configure_provider,
             agiworkforce_desktop::commands::llm_set_default_provider,
+            // Cache management commands
+            agiworkforce_desktop::commands::cache_get_stats,
+            agiworkforce_desktop::commands::cache_clear_all,
+            agiworkforce_desktop::commands::cache_clear_by_type,
+            agiworkforce_desktop::commands::cache_clear_by_provider,
+            agiworkforce_desktop::commands::cache_get_size,
+            agiworkforce_desktop::commands::cache_configure,
+            agiworkforce_desktop::commands::cache_warmup,
+            agiworkforce_desktop::commands::cache_export,
+            agiworkforce_desktop::commands::cache_get_analytics,
+            agiworkforce_desktop::commands::cache_prune_expired,
+            // Codebase cache commands
+            agiworkforce_desktop::commands::codebase_cache_get_stats,
+            agiworkforce_desktop::commands::codebase_cache_clear_project,
+            agiworkforce_desktop::commands::codebase_cache_clear_file,
+            agiworkforce_desktop::commands::codebase_cache_clear_all,
+            agiworkforce_desktop::commands::codebase_cache_clear_expired,
+            agiworkforce_desktop::commands::codebase_cache_get_file_tree,
+            agiworkforce_desktop::commands::codebase_cache_set_file_tree,
+            agiworkforce_desktop::commands::codebase_cache_get_symbols,
+            agiworkforce_desktop::commands::codebase_cache_set_symbols,
+            agiworkforce_desktop::commands::codebase_cache_get_dependencies,
+            agiworkforce_desktop::commands::codebase_cache_set_dependencies,
+            agiworkforce_desktop::commands::codebase_cache_calculate_hash,
             // Settings commands (legacy)
             agiworkforce_desktop::commands::settings_save_api_key,
             agiworkforce_desktop::commands::settings_get_api_key,
