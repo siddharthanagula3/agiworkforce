@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -47,7 +47,7 @@ function ServerConfigDialog({ server, open, onClose, onSave }: ServerConfigDialo
   if (!server) return null;
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <div className="p-6">
         <h2 className="text-xl font-semibold mb-4">Configure {server.name}</h2>
 
@@ -111,14 +111,14 @@ function ServerCard({
   const getStatusBadge = () => {
     if (server.connected) {
       return (
-        <Badge variant="success" className="flex items-center gap-1">
+        <Badge variant="secondary" className="flex items-center gap-1 bg-green-100 text-green-800">
           <CheckCircle className="w-3 h-3" />
           Running
         </Badge>
       );
     } else if (server.enabled) {
       return (
-        <Badge variant="warning" className="flex items-center gap-1">
+        <Badge variant="secondary" className="flex items-center gap-1 bg-yellow-100 text-yellow-800">
           <AlertCircle className="w-3 h-3" />
           Stopped
         </Badge>
@@ -258,7 +258,7 @@ export function MCPServerManager() {
     setConfigDialogOpen(true);
   };
 
-  const handleSaveConfig = async (serverName: string, config: any) => {
+  const handleSaveConfig = async (_serverName: string, _config: any) => {
     // Configuration is saved through the dialog
     await refreshServers();
   };
@@ -307,7 +307,7 @@ export function MCPServerManager() {
         </div>
 
         {error && (
-          <Alert variant="error" onClose={clearError}>
+          <Alert variant="destructive" onClose={clearError}>
             <AlertCircle className="w-4 h-4" />
             <span>{error}</span>
           </Alert>

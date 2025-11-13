@@ -1,5 +1,7 @@
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall};
+use crate::router::{
+    ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall,
+};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -10,7 +12,33 @@ use std::pin::Pin;
 #[derive(Debug, Clone, Serialize)]
 struct AnthropicMessage {
     role: String,
-    content: String,
+    content: AnthropicMessageContent,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+enum AnthropicMessageContent {
+    Text(String),
+    Multimodal(Vec<AnthropicContentPart>),
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum AnthropicContentPart {
+    Text {
+        text: String,
+    },
+    Image {
+        source: AnthropicImageSource,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AnthropicImageSource {
+    #[serde(rename = "type")]
+    source_type: String, // "base64"
+    media_type: String,  // "image/png", "image/jpeg", "image/webp"
+    data: String,        // base64 encoded image data
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,6 +106,58 @@ impl AnthropicProvider {
         }
     }
 
+    /// Convert multimodal content to Anthropic format
+    fn convert_content(
+        text: &str,
+        multimodal: Option<&Vec<ContentPart>>,
+    ) -> AnthropicMessageContent {
+        if let Some(parts) = multimodal {
+            // Has multimodal content (text + images)
+            let mut anthropic_parts = Vec::new();
+
+            // Add text first if not empty
+            if !text.is_empty() {
+                anthropic_parts.push(AnthropicContentPart::Text {
+                    text: text.to_string(),
+                });
+            }
+
+            // Add all content parts
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        anthropic_parts.push(AnthropicContentPart::Text {
+                            text: text.clone(),
+                        });
+                    }
+                    ContentPart::Image { image } => {
+                        let media_type = match image.format {
+                            ImageFormat::Png => "image/png",
+                            ImageFormat::Jpeg => "image/jpeg",
+                            ImageFormat::Webp => "image/webp",
+                        };
+                        let base64_data = base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            &image.data,
+                        );
+                        anthropic_parts.push(AnthropicContentPart::Image {
+                            source: AnthropicImageSource {
+                                source_type: "base64".to_string(),
+                                media_type: media_type.to_string(),
+                                data: base64_data,
+                            },
+                        });
+                    }
+                }
+            }
+
+            AnthropicMessageContent::Multimodal(anthropic_parts)
+        } else {
+            // Just text content
+            AnthropicMessageContent::Text(text.to_string())
+        }
+    }
+
     /// Calculate cost based on model and tokens
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
         // Pricing as of November 2025 (per 1M tokens)
@@ -129,7 +209,7 @@ impl LLMProvider for AnthropicProvider {
                 .iter()
                 .map(|m| AnthropicMessage {
                     role: m.role.clone(),
-                    content: m.content.clone(),
+                    content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
                 })
                 .collect(),
             max_tokens: request.max_tokens.or(Some(4096)),
@@ -224,6 +304,14 @@ impl LLMProvider for AnthropicProvider {
         "Anthropic"
     }
 
+    fn supports_vision(&self) -> bool {
+        true // Claude 3+ models support vision
+    }
+
+    fn supports_function_calling(&self) -> bool {
+        true // Claude 3+ models support tool use (function calling)
+    }
+
     async fn send_message_streaming(
         &self,
         request: &LLMRequest,
@@ -250,7 +338,7 @@ impl LLMProvider for AnthropicProvider {
                 .iter()
                 .map(|m| AnthropicMessage {
                     role: m.role.clone(),
-                    content: m.content.clone(),
+                    content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
                 })
                 .collect(),
             max_tokens: request.max_tokens.or(Some(4096)),

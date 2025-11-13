@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { Alert } from '../ui/Alert';
 import {
   Search,
-  Tool,
+  Wrench,
   Play,
   Star,
   StarOff,
@@ -25,7 +25,7 @@ import {
 import type { McpToolInfo } from '../../types/mcp';
 
 interface ToolTestDialogProps {
-  tool: McpToolInfo | null;
+  tool: (McpToolInfo & { parameters?: string[] }) | null;
   open: boolean;
   onClose: () => void;
   onExecute: (toolId: string, args: Record<string, unknown>) => Promise<void>;
@@ -38,7 +38,7 @@ function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps)
   const [isExecuting, setIsExecuting] = useState(false);
 
   useEffect(() => {
-    if (tool) {
+    if (tool && tool.parameters) {
       // Create template arguments based on parameters
       const template: Record<string, string> = {};
       tool.parameters.forEach(param => {
@@ -77,7 +77,7 @@ function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps)
   if (!tool) return null;
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <div className="p-6 max-w-3xl">
         <h2 className="text-xl font-bold mb-4">Test Tool: {tool.name}</h2>
 
@@ -89,7 +89,7 @@ function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps)
               {tool.server}
             </Badge>
             <span className="text-gray-500">
-              {tool.parameters.length} parameter{tool.parameters.length !== 1 ? 's' : ''}
+              {tool.parameters?.length ?? 0} parameter{(tool.parameters?.length ?? 0) !== 1 ? 's' : ''}
             </span>
           </div>
         </div>
@@ -115,7 +115,7 @@ function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps)
         </Button>
 
         {error && (
-          <Alert variant="error" className="mb-4">
+          <Alert variant="destructive" className="mb-4">
             <AlertCircle className="w-4 h-4" />
             <span>{error}</span>
           </Alert>
@@ -168,7 +168,7 @@ function ToolCard({ tool, isFavorite, onToggleFavorite, onTest, usageCount = 0 }
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <Tool className="w-4 h-4 text-blue-500" />
+            <Wrench className="w-4 h-4 text-blue-500" />
             <h3 className="font-semibold">{tool.name}</h3>
           </div>
           <p className="text-sm text-gray-600 mb-2">{tool.description}</p>
@@ -191,10 +191,10 @@ function ToolCard({ tool, isFavorite, onToggleFavorite, onTest, usageCount = 0 }
           {tool.server}
         </Badge>
         <Badge variant="secondary">
-          {tool.parameters.length} param{tool.parameters.length !== 1 ? 's' : ''}
+          {tool.parameters?.length ?? 0} param{(tool.parameters?.length ?? 0) !== 1 ? 's' : ''}
         </Badge>
         {usageCount > 0 && (
-          <Badge variant="primary">
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
             <TrendingUp className="w-3 h-3 mr-1" />
             {usageCount} uses
           </Badge>
@@ -278,9 +278,9 @@ export function MCPToolExplorer() {
     setTestDialogOpen(true);
   };
 
-  const handleExecuteTool = async (toolId: string, args: Record<string, unknown>) => {
+  const handleExecuteTool = async (toolId: string, args: Record<string, unknown>): Promise<void> => {
     const { McpClient } = await import('../../api/mcp');
-    return await McpClient.callTool(toolId, args);
+    await McpClient.callTool(toolId, args);
   };
 
   const favoriteTools = tools.filter(tool => favorites.has(tool.id));
@@ -319,14 +319,14 @@ export function MCPToolExplorer() {
         <div className="flex gap-2">
           <Button
             size="sm"
-            variant={groupBy === 'all' ? 'primary' : 'outline'}
+            variant={groupBy === 'all' ? 'default' : 'outline'}
             onClick={() => setGroupBy('all')}
           >
             All Tools ({allTools.length})
           </Button>
           <Button
             size="sm"
-            variant={groupBy === 'server' ? 'primary' : 'outline'}
+            variant={groupBy === 'server' ? 'default' : 'outline'}
             onClick={() => setGroupBy('server')}
           >
             By Server ({Object.keys(toolsByServer).length})
@@ -349,7 +349,7 @@ export function MCPToolExplorer() {
             <ScrollArea className="h-[600px]">
               {allTools.length === 0 ? (
                 <div className="text-center py-12">
-                  <Tool className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <Wrench className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No tools available</h3>
                   <p className="text-gray-600">
                     Connect to MCP servers to access their tools

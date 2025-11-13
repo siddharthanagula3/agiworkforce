@@ -5,7 +5,6 @@ import {
   Square,
   Save,
   Trash2,
-  Edit,
   Clock,
   MousePointer,
   Keyboard,
@@ -226,9 +225,9 @@ export function ActionRecorder({ onSaveScript }: ActionRecorderProps) {
                           </Badge>
                         )}
                       </div>
-                      {action.target && (
+                      {action.target && action.target.boundingRect && (
                         <div className="text-xs text-gray-500">
-                          Position: ({action.target.x}, {action.target.y})
+                          Position: ({action.target.boundingRect.left}, {action.target.boundingRect.top})
                         </div>
                       )}
                     </div>

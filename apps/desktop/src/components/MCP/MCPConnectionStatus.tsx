@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -23,16 +23,6 @@ interface ServerHealth {
   latency_ms: number | null;
   uptime_seconds: number | null;
   requests_handled: number;
-}
-
-interface ConnectionMetrics {
-  serverName: string;
-  status: 'connected' | 'disconnected' | 'error';
-  latency: number | null;
-  uptime: string;
-  requestsHandled: number;
-  errorRate: number;
-  lastError: string | null;
 }
 
 export function MCPConnectionStatus() {
@@ -64,14 +54,14 @@ export function MCPConnectionStatus() {
     switch (status) {
       case 'healthy':
         return (
-          <Badge variant="success" className="flex items-center gap-1">
+          <Badge variant="secondary" className="flex items-center gap-1 bg-green-100 text-green-800">
             <CheckCircle className="w-3 h-3" />
             Healthy
           </Badge>
         );
       case 'unhealthy':
         return (
-          <Badge variant="error" className="flex items-center gap-1">
+          <Badge variant="secondary" className="flex items-center gap-1 bg-red-100 text-red-800">
             <XCircle className="w-3 h-3" />
             Unhealthy
           </Badge>
