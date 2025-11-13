@@ -69,14 +69,22 @@ impl ProcessType {
 
     pub fn description(&self) -> &'static str {
         match self {
-            ProcessType::AccountsPayable => "Invoice processing, payment verification, expense tracking",
+            ProcessType::AccountsPayable => {
+                "Invoice processing, payment verification, expense tracking"
+            }
             ProcessType::CustomerSupport => "Ticket triage, response drafting, escalation routing",
             ProcessType::DataEntry => "Form filling, data migration, spreadsheet updates",
-            ProcessType::EmailManagement => "Email categorization, response drafting, follow-up tracking",
-            ProcessType::CodeReview => "Pull request analysis, code quality checks, security scanning",
+            ProcessType::EmailManagement => {
+                "Email categorization, response drafting, follow-up tracking"
+            }
+            ProcessType::CodeReview => {
+                "Pull request analysis, code quality checks, security scanning"
+            }
             ProcessType::Testing => "Test execution, regression testing, bug verification",
             ProcessType::Documentation => "README updates, API documentation, changelog generation",
-            ProcessType::Deployment => "Build verification, deployment orchestration, rollback procedures",
+            ProcessType::Deployment => {
+                "Build verification, deployment orchestration, rollback procedures"
+            }
             ProcessType::LeadQualification => "Lead scoring, enrichment, CRM updates",
             ProcessType::SocialMedia => "Post scheduling, engagement tracking, sentiment analysis",
         }
@@ -84,31 +92,43 @@ impl ProcessType {
 
     pub fn typical_tools(&self) -> Vec<&'static str> {
         match self {
-            ProcessType::AccountsPayable => vec!["document_read", "api_call", "email_send", "db_query"],
-            ProcessType::CustomerSupport => vec!["email_fetch", "llm_reason", "api_call", "db_query"],
+            ProcessType::AccountsPayable => {
+                vec!["document_read", "api_call", "email_send", "db_query"]
+            }
+            ProcessType::CustomerSupport => {
+                vec!["email_fetch", "llm_reason", "api_call", "db_query"]
+            }
             ProcessType::DataEntry => vec!["file_read", "file_write", "db_execute", "api_call"],
-            ProcessType::EmailManagement => vec!["email_fetch", "email_send", "llm_reason", "file_write"],
+            ProcessType::EmailManagement => {
+                vec!["email_fetch", "email_send", "llm_reason", "file_write"]
+            }
             ProcessType::CodeReview => vec!["file_read", "code_analyze", "llm_reason", "api_call"],
-            ProcessType::Testing => vec!["code_execute", "browser_navigate", "ui_click", "api_call"],
+            ProcessType::Testing => {
+                vec!["code_execute", "browser_navigate", "ui_click", "api_call"]
+            }
             ProcessType::Documentation => vec!["file_read", "file_write", "llm_reason", "api_call"],
             ProcessType::Deployment => vec!["code_execute", "api_call", "file_read", "db_query"],
-            ProcessType::LeadQualification => vec!["api_call", "db_query", "db_execute", "llm_reason"],
-            ProcessType::SocialMedia => vec!["api_call", "llm_reason", "browser_navigate", "file_write"],
+            ProcessType::LeadQualification => {
+                vec!["api_call", "db_query", "db_execute", "llm_reason"]
+            }
+            ProcessType::SocialMedia => {
+                vec!["api_call", "llm_reason", "browser_navigate", "file_write"]
+            }
         }
     }
 
     pub fn expected_duration_range(&self) -> (u64, u64) {
         match self {
-            ProcessType::AccountsPayable => (30000, 180000),    // 30s - 3min
-            ProcessType::CustomerSupport => (15000, 120000),    // 15s - 2min
-            ProcessType::DataEntry => (10000, 60000),           // 10s - 1min
-            ProcessType::EmailManagement => (5000, 30000),      // 5s - 30s
-            ProcessType::CodeReview => (60000, 300000),         // 1min - 5min
-            ProcessType::Testing => (30000, 600000),            // 30s - 10min
-            ProcessType::Documentation => (45000, 240000),      // 45s - 4min
-            ProcessType::Deployment => (120000, 900000),        // 2min - 15min
-            ProcessType::LeadQualification => (20000, 90000),   // 20s - 1.5min
-            ProcessType::SocialMedia => (10000, 60000),         // 10s - 1min
+            ProcessType::AccountsPayable => (30000, 180000), // 30s - 3min
+            ProcessType::CustomerSupport => (15000, 120000), // 15s - 2min
+            ProcessType::DataEntry => (10000, 60000),        // 10s - 1min
+            ProcessType::EmailManagement => (5000, 30000),   // 5s - 30s
+            ProcessType::CodeReview => (60000, 300000),      // 1min - 5min
+            ProcessType::Testing => (30000, 600000),         // 30s - 10min
+            ProcessType::Documentation => (45000, 240000),   // 45s - 4min
+            ProcessType::Deployment => (120000, 900000),     // 2min - 15min
+            ProcessType::LeadQualification => (20000, 90000), // 20s - 1.5min
+            ProcessType::SocialMedia => (10000, 60000),      // 10s - 1min
         }
     }
 }
@@ -141,7 +161,7 @@ pub struct Strategy {
 /// OutcomeScore - Evaluation of how well outcomes were achieved
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutcomeScore {
-    pub overall_score: f64,  // 0.0 - 1.0
+    pub overall_score: f64, // 0.0 - 1.0
     pub outcomes_achieved: usize,
     pub outcomes_total: usize,
     pub average_achievement: f64,
@@ -176,7 +196,10 @@ impl ProcessReasoning {
         {
             let cache = self.process_cache.lock().unwrap();
             if let Some(cached_type) = cache.get(&goal.id) {
-                tracing::info!("[ProcessReasoning] Using cached process type for goal {}", goal.id);
+                tracing::info!(
+                    "[ProcessReasoning] Using cached process type for goal {}",
+                    goal.id
+                );
                 return Ok(*cached_type);
             }
         }
@@ -185,7 +208,10 @@ impl ProcessReasoning {
         let process_type = self.classify_by_keywords(&goal.description);
 
         if let Some(pt) = process_type {
-            tracing::info!("[ProcessReasoning] Identified process type by keywords: {:?}", pt);
+            tracing::info!(
+                "[ProcessReasoning] Identified process type by keywords: {:?}",
+                pt
+            );
 
             // Cache the result
             {
@@ -214,43 +240,82 @@ impl ProcessReasoning {
         let desc_lower = description.to_lowercase();
 
         // Keywords for each process type
-        if desc_lower.contains("invoice") || desc_lower.contains("payment") || desc_lower.contains("expense") || desc_lower.contains("accounts payable") {
+        if desc_lower.contains("invoice")
+            || desc_lower.contains("payment")
+            || desc_lower.contains("expense")
+            || desc_lower.contains("accounts payable")
+        {
             return Some(ProcessType::AccountsPayable);
         }
 
-        if desc_lower.contains("customer") && (desc_lower.contains("support") || desc_lower.contains("ticket") || desc_lower.contains("help")) {
+        if desc_lower.contains("customer")
+            && (desc_lower.contains("support")
+                || desc_lower.contains("ticket")
+                || desc_lower.contains("help"))
+        {
             return Some(ProcessType::CustomerSupport);
         }
 
-        if desc_lower.contains("data entry") || (desc_lower.contains("fill") && desc_lower.contains("form")) || desc_lower.contains("spreadsheet") {
+        if desc_lower.contains("data entry")
+            || (desc_lower.contains("fill") && desc_lower.contains("form"))
+            || desc_lower.contains("spreadsheet")
+        {
             return Some(ProcessType::DataEntry);
         }
 
-        if desc_lower.contains("email") && (desc_lower.contains("manage") || desc_lower.contains("organize") || desc_lower.contains("categorize")) {
+        if desc_lower.contains("email")
+            && (desc_lower.contains("manage")
+                || desc_lower.contains("organize")
+                || desc_lower.contains("categorize"))
+        {
             return Some(ProcessType::EmailManagement);
         }
 
-        if (desc_lower.contains("code") || desc_lower.contains("pull request") || desc_lower.contains("pr")) && desc_lower.contains("review") {
+        if (desc_lower.contains("code")
+            || desc_lower.contains("pull request")
+            || desc_lower.contains("pr"))
+            && desc_lower.contains("review")
+        {
             return Some(ProcessType::CodeReview);
         }
 
-        if desc_lower.contains("test") && (desc_lower.contains("run") || desc_lower.contains("execute") || desc_lower.contains("regression")) {
+        if desc_lower.contains("test")
+            && (desc_lower.contains("run")
+                || desc_lower.contains("execute")
+                || desc_lower.contains("regression"))
+        {
             return Some(ProcessType::Testing);
         }
 
-        if desc_lower.contains("document") || desc_lower.contains("readme") || desc_lower.contains("api doc") || desc_lower.contains("changelog") {
+        if desc_lower.contains("document")
+            || desc_lower.contains("readme")
+            || desc_lower.contains("api doc")
+            || desc_lower.contains("changelog")
+        {
             return Some(ProcessType::Documentation);
         }
 
-        if desc_lower.contains("deploy") || desc_lower.contains("release") || desc_lower.contains("rollout") || desc_lower.contains("rollback") {
+        if desc_lower.contains("deploy")
+            || desc_lower.contains("release")
+            || desc_lower.contains("rollout")
+            || desc_lower.contains("rollback")
+        {
             return Some(ProcessType::Deployment);
         }
 
-        if desc_lower.contains("lead") && (desc_lower.contains("qualify") || desc_lower.contains("score") || desc_lower.contains("enrich")) {
+        if desc_lower.contains("lead")
+            && (desc_lower.contains("qualify")
+                || desc_lower.contains("score")
+                || desc_lower.contains("enrich"))
+        {
             return Some(ProcessType::LeadQualification);
         }
 
-        if desc_lower.contains("social media") || desc_lower.contains("twitter") || desc_lower.contains("linkedin") || desc_lower.contains("facebook") {
+        if desc_lower.contains("social media")
+            || desc_lower.contains("twitter")
+            || desc_lower.contains("linkedin")
+            || desc_lower.contains("facebook")
+        {
             return Some(ProcessType::SocialMedia);
         }
 
@@ -598,7 +663,11 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             name: format!("Default {} Strategy", process_type.as_str()),
             description: format!("Standard approach for {}", process_type.description()),
             process_type,
-            priority_tools: process_type.typical_tools().iter().map(|s| s.to_string()).collect(),
+            priority_tools: process_type
+                .typical_tools()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             estimated_success_rate: 0.85,
             estimated_duration_ms: estimated_duration,
             resource_requirements: ResourceUsage {
@@ -674,7 +743,11 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             }
             "processing_time" | "response_time" | "deployment_time" => {
                 // For time metrics, faster = better (inverse relationship)
-                let total_time_ms: u64 = context.tool_results.iter().map(|r| r.execution_time_ms).sum();
+                let total_time_ms: u64 = context
+                    .tool_results
+                    .iter()
+                    .map(|r| r.execution_time_ms)
+                    .sum();
                 let total_time_s = total_time_ms as f64 / 1000.0;
                 let target_time = outcome.target_value;
 
@@ -708,7 +781,10 @@ mod tests {
     fn test_process_type_serialization() {
         let pt = ProcessType::CodeReview;
         assert_eq!(pt.as_str(), "code_review");
-        assert_eq!(ProcessType::from_str("code_review"), Some(ProcessType::CodeReview));
+        assert_eq!(
+            ProcessType::from_str("code_review"),
+            Some(ProcessType::CodeReview)
+        );
     }
 
     #[test]
@@ -722,6 +798,9 @@ mod tests {
         // This would need a ProcessReasoning instance, but we can test the enum
         let description = "Review this pull request for code quality";
         assert!(description.to_lowercase().contains("review"));
-        assert!(description.to_lowercase().contains("code") || description.to_lowercase().contains("pull request"));
+        assert!(
+            description.to_lowercase().contains("code")
+                || description.to_lowercase().contains("pull request")
+        );
     }
 }

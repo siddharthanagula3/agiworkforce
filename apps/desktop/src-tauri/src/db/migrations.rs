@@ -1483,20 +1483,10 @@ fn apply_migration_v16(conn: &Connection) -> Result<()> {
     )?;
 
     // Add temperature column for temperature-aware TTL
-    ensure_column(
-        conn,
-        "cache_entries",
-        "temperature",
-        "temperature REAL",
-    )?;
+    ensure_column(conn, "cache_entries", "temperature", "temperature REAL")?;
 
     // Add max_tokens column for better cache key differentiation
-    ensure_column(
-        conn,
-        "cache_entries",
-        "max_tokens",
-        "max_tokens INTEGER",
-    )?;
+    ensure_column(conn, "cache_entries", "max_tokens", "max_tokens INTEGER")?;
 
     // Create index on hit_count for analytics queries
     conn.execute(
@@ -2872,7 +2862,6 @@ fn apply_migration_v31(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-
 /// Migration v32: Messaging platform integrations
 fn apply_migration_v32(conn: &Connection) -> Result<()> {
     // Messaging connections table
@@ -3191,7 +3180,17 @@ fn apply_migration_v36(conn: &Connection) -> Result<()> {
         ("document_processing", 150, 8, 142, 118.33, 0.18, 0.02, 500),
     ];
 
-    for (automation_type, manual_time, automated_time, time_saved, cost_saved, manual_error, automated_error, sample_size) in benchmarks {
+    for (
+        automation_type,
+        manual_time,
+        automated_time,
+        time_saved,
+        cost_saved,
+        manual_error,
+        automated_error,
+        sample_size,
+    ) in benchmarks
+    {
         conn.execute(
             "INSERT OR IGNORE INTO automation_benchmarks
              (automation_type, avg_manual_time_minutes, avg_automated_time_minutes,

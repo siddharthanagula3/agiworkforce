@@ -131,7 +131,12 @@ impl ExecutorService {
             self.log(
                 &mut logs,
                 "info",
-                &format!("Executing action {}/{}: {}", index + 1, script.actions.len(), action.action_type),
+                &format!(
+                    "Executing action {}/{}: {}",
+                    index + 1,
+                    script.actions.len(),
+                    action.action_type
+                ),
                 Some(&action.id),
             );
 
@@ -173,7 +178,12 @@ impl ExecutorService {
                             self.log(
                                 &mut logs,
                                 "warn",
-                                &format!("Action failed (attempt {}/{}): {}", attempt, self.config.retry_count + 1, err),
+                                &format!(
+                                    "Action failed (attempt {}/{}): {}",
+                                    attempt,
+                                    self.config.retry_count + 1,
+                                    err
+                                ),
                                 Some(&action.id),
                             );
                             sleep(Duration::from_millis(self.config.retry_delay_ms)).await;
@@ -392,7 +402,13 @@ impl ExecutorService {
     }
 
     /// Add log entry
-    fn log(&self, logs: &mut Vec<ExecutionLog>, level: &str, message: &str, action_id: Option<&str>) {
+    fn log(
+        &self,
+        logs: &mut Vec<ExecutionLog>,
+        level: &str,
+        message: &str,
+        action_id: Option<&str>,
+    ) {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()

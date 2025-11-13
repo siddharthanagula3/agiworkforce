@@ -1,7 +1,7 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use chrono::Utc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Participant {
@@ -48,7 +48,10 @@ impl CollaborationSession {
     }
 
     pub fn update_cursor(&self, user_id: &str, position: CursorPosition) {
-        self.cursor_positions.lock().unwrap().insert(user_id.to_string(), position);
+        self.cursor_positions
+            .lock()
+            .unwrap()
+            .insert(user_id.to_string(), position);
     }
 
     pub fn get_active_editors(&self) -> Vec<Participant> {

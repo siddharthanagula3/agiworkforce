@@ -56,8 +56,8 @@ pub async fn error_get_logs(app: tauri::AppHandle, lines: usize) -> Result<Vec<S
         return Ok(Vec::new());
     }
 
-    let content = fs::read_to_string(&log_file)
-        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    let content =
+        fs::read_to_string(&log_file).map_err(|e| format!("Failed to read log file: {}", e))?;
 
     let all_lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
 
@@ -79,8 +79,8 @@ pub async fn error_clear_logs(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     // Read all log files
-    let entries = fs::read_dir(&log_dir)
-        .map_err(|e| format!("Failed to read log directory: {}", e))?;
+    let entries =
+        fs::read_dir(&log_dir).map_err(|e| format!("Failed to read log directory: {}", e))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
@@ -115,8 +115,8 @@ pub async fn error_get_stats(app: tauri::AppHandle) -> Result<ErrorStats, String
     let log_file = log_dir.join("agiworkforce.log");
 
     let (total_errors, critical_errors, warnings) = if log_file.exists() {
-        let content = fs::read_to_string(&log_file)
-            .map_err(|e| format!("Failed to read log file: {}", e))?;
+        let content =
+            fs::read_to_string(&log_file).map_err(|e| format!("Failed to read log file: {}", e))?;
 
         let total = content.matches("ERROR").count();
         let critical = content.matches("CRITICAL").count();
@@ -157,8 +157,8 @@ pub async fn error_export_logs(app: tauri::AppHandle) -> Result<String, String> 
         return Ok("[]".to_string());
     }
 
-    let content = fs::read_to_string(&log_file)
-        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    let content =
+        fs::read_to_string(&log_file).map_err(|e| format!("Failed to read log file: {}", e))?;
 
     // Parse log lines into structured format
     let logs: Vec<HashMap<String, String>> = content

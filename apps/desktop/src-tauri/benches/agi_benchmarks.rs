@@ -16,9 +16,8 @@ fn benchmark_prompt_injection_detection(c: &mut Criterion) {
             for input in &test_inputs {
                 // Simulate detection logic
                 let lower = input.to_lowercase();
-                let _is_malicious = lower.contains("ignore") ||
-                    lower.contains("system:") ||
-                    lower.contains("<|");
+                let _is_malicious =
+                    lower.contains("ignore") || lower.contains("system:") || lower.contains("<|");
                 black_box(_is_malicious);
             }
         });
@@ -37,9 +36,9 @@ fn benchmark_path_traversal_detection(c: &mut Criterion) {
     c.bench_function("path_traversal_detection", |b| {
         b.iter(|| {
             for path in &test_paths {
-                let _is_safe = !path.contains("..") &&
-                    !path.starts_with("/etc/") &&
-                    !path.contains("\\Windows\\");
+                let _is_safe = !path.contains("..")
+                    && !path.starts_with("/etc/")
+                    && !path.contains("\\Windows\\");
                 black_box(_is_safe);
             }
         });
@@ -179,9 +178,9 @@ fn benchmark_resource_monitoring(c: &mut Criterion) {
             let memory_limit = 2048u64;
             let network_limit = 100.0;
 
-            let _within_limits = cpu_usage < cpu_limit &&
-                memory_usage < memory_limit &&
-                network_usage < network_limit;
+            let _within_limits = cpu_usage < cpu_limit
+                && memory_usage < memory_limit
+                && network_usage < network_limit;
 
             black_box(_within_limits);
         });
@@ -293,19 +292,27 @@ fn benchmark_memory_allocation(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_allocation");
 
     for size in [10, 100, 1000, 10000].iter() {
-        group.bench_with_input(BenchmarkId::new("vec_allocation", size), size, |b, &size| {
-            b.iter(|| {
-                let vec: Vec<u64> = (0..size).collect();
-                black_box(vec);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("vec_allocation", size),
+            size,
+            |b, &size| {
+                b.iter(|| {
+                    let vec: Vec<u64> = (0..size).collect();
+                    black_box(vec);
+                });
+            },
+        );
 
-        group.bench_with_input(BenchmarkId::new("string_allocation", size), size, |b, &size| {
-            b.iter(|| {
-                let s = "x".repeat(size);
-                black_box(s);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("string_allocation", size),
+            size,
+            |b, &size| {
+                b.iter(|| {
+                    let s = "x".repeat(size);
+                    black_box(s);
+                });
+            },
+        );
     }
 
     group.finish();

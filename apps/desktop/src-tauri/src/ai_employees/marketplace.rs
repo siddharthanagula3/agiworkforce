@@ -15,9 +15,10 @@ impl EmployeeMarketplace {
 
     /// Get featured employees (top-rated, most-used)
     pub fn get_featured_employees(&self) -> Result<Vec<AIEmployee>> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut stmt = conn
             .prepare(
@@ -45,10 +46,15 @@ impl EmployeeMarketplace {
     }
 
     /// Search employees by query and filters
-    pub fn search_employees(&self, query: &str, filters: EmployeeFilters) -> Result<Vec<AIEmployee>> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+    pub fn search_employees(
+        &self,
+        query: &str,
+        filters: EmployeeFilters,
+    ) -> Result<Vec<AIEmployee>> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut sql = String::from(
             "SELECT id, name, role, description, capabilities, estimated_time_saved, estimated_cost_saved,
@@ -123,9 +129,10 @@ impl EmployeeMarketplace {
 
     /// Get employee by ID
     pub fn get_employee_by_id(&self, employee_id: &str) -> Result<AIEmployee> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let result = conn.query_row(
             "SELECT id, name, role, description, capabilities, estimated_time_saved, estimated_cost_saved,
@@ -140,12 +147,19 @@ impl EmployeeMarketplace {
 
     /// Get statistics for an employee
     pub fn get_employee_stats(&self, employee_id: &str) -> Result<EmployeeStats> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         // Get aggregate stats
-        let (total_hires, total_tasks, total_time_mins, total_cost, avg_rating): (i64, i64, i64, f64, f64) = conn
+        let (total_hires, total_tasks, total_time_mins, total_cost, avg_rating): (
+            i64,
+            i64,
+            i64,
+            f64,
+            f64,
+        ) = conn
             .query_row(
                 "SELECT
                     COUNT(DISTINCT ue.id) as total_hires,
@@ -174,23 +188,25 @@ impl EmployeeMarketplace {
             total_time_saved_hours: total_time_mins as f64 / 60.0,
             total_cost_saved_usd: total_cost,
             avg_rating,
-            testimonials: Vec::new(), // TODO: Implement testimonials
+            testimonials: Vec::new(),    // TODO: Implement testimonials
             recent_activity: Vec::new(), // TODO: Implement activity log
         })
     }
 
     /// Publish a new employee (created by user)
     pub fn publish_employee(&self, employee: AIEmployee, creator_id: &str) -> Result<String> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let capabilities_json = serde_json::to_string(&employee.capabilities).unwrap_or_default();
         let demo_json = employee
             .demo_workflow
             .as_ref()
             .and_then(|d| serde_json::to_string(d).ok());
-        let integrations_json = serde_json::to_string(&employee.required_integrations).unwrap_or_default();
+        let integrations_json =
+            serde_json::to_string(&employee.required_integrations).unwrap_or_default();
         let tags_json = serde_json::to_string(&employee.tags).unwrap_or_default();
 
         conn.execute(
@@ -224,9 +240,10 @@ impl EmployeeMarketplace {
 
     /// Get all employees by category
     pub fn get_employees_by_category(&self, category: &str) -> Result<Vec<AIEmployee>> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut stmt = conn
             .prepare(
@@ -255,9 +272,10 @@ impl EmployeeMarketplace {
 
     /// Get user's hired employees
     pub fn get_user_employees(&self, user_id: &str) -> Result<Vec<UserEmployee>> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut stmt = conn
             .prepare(
@@ -299,7 +317,10 @@ impl EmployeeMarketplace {
     }
 
     /// Helper: Convert database row to AIEmployee
-    fn row_to_employee(&self, row: &rusqlite::Row) -> std::result::Result<AIEmployee, rusqlite::Error> {
+    fn row_to_employee(
+        &self,
+        row: &rusqlite::Row,
+    ) -> std::result::Result<AIEmployee, rusqlite::Error> {
         let role_str: String = row.get(2)?;
         let capabilities_json: String = row.get(4)?;
         let demo_json: Option<String> = row.get(7)?;
@@ -330,9 +351,12 @@ impl EmployeeMarketplace {
             _ => EmployeeRole::SupportAgent, // Default
         };
 
-        let capabilities: Vec<String> = serde_json::from_str(&capabilities_json).unwrap_or_default();
-        let demo_workflow: Option<DemoWorkflow> = demo_json.and_then(|json| serde_json::from_str(&json).ok());
-        let required_integrations: Vec<String> = serde_json::from_str(&integrations_json).unwrap_or_default();
+        let capabilities: Vec<String> =
+            serde_json::from_str(&capabilities_json).unwrap_or_default();
+        let demo_workflow: Option<DemoWorkflow> =
+            demo_json.and_then(|json| serde_json::from_str(&json).ok());
+        let required_integrations: Vec<String> =
+            serde_json::from_str(&integrations_json).unwrap_or_default();
         let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
 
         Ok(AIEmployee {

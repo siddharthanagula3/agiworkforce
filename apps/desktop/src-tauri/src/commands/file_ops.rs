@@ -734,15 +734,21 @@ pub async fn fs_read_file_content(
         Ok(content) => content,
         Err(e) => {
             let error = format!("Failed to read file: {}", e);
-            log_file_operation(&file_path, FileOperation::Read, false, Some(error.clone()), &state)
-                .await?;
+            log_file_operation(
+                &file_path,
+                FileOperation::Read,
+                false,
+                Some(error.clone()),
+                &state,
+            )
+            .await?;
             return Err(error);
         }
     };
 
     // Get file size
-    let metadata = fs::metadata(&file_path)
-        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(&file_path).map_err(|e| format!("Failed to get file metadata: {}", e))?;
     let size = metadata.len();
 
     // Count lines
@@ -795,8 +801,8 @@ pub async fn fs_get_workspace_files(
     }
 
     // Read directory
-    let entries = fs::read_dir(&workspace_path)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    let entries =
+        fs::read_dir(&workspace_path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     let mut files = Vec::new();
 
@@ -811,7 +817,8 @@ pub async fn fs_get_workspace_files(
             || name == "node_modules"
             || name == "target"
             || name == "dist"
-            || name == "build" {
+            || name == "build"
+        {
             continue;
         }
 
