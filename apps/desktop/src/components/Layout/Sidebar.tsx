@@ -1,4 +1,15 @@
-import { ChevronLeft, ChevronRight, HelpCircle, MessageCircle, Plus, Settings } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  HelpCircle,
+  MessageCircle,
+  Plus,
+  Settings,
+  Package,
+  Workflow,
+  Users,
+  Shield,
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useChatStore } from '../../stores/chatStore';
@@ -6,13 +17,16 @@ import type { ConversationUI } from '../../types/chat';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
+import type { AppView } from '../../App';
 
 interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
+  currentView: AppView;
+  onViewChange: (view: AppView) => void;
 }
 
-export function Sidebar({ className, onOpenSettings }: SidebarProps) {
+export function Sidebar({ className, onOpenSettings, currentView, onViewChange }: SidebarProps) {
   const {
     conversations,
     activeConversationId,
@@ -25,6 +39,14 @@ export function Sidebar({ className, onOpenSettings }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+
+  const navigationItems = [
+    { id: 'chat' as AppView, label: 'Chat', icon: MessageCircle },
+    { id: 'templates' as AppView, label: 'Templates', icon: Package },
+    { id: 'workflows' as AppView, label: 'Workflows', icon: Workflow },
+    { id: 'teams' as AppView, label: 'Teams', icon: Users },
+    { id: 'governance' as AppView, label: 'Governance', icon: Shield },
+  ];
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
@@ -153,8 +175,48 @@ export function Sidebar({ className, onOpenSettings }: SidebarProps) {
         </Button>
       </div>
 
-      {!collapsed && (
-        <div className="space-y-3 px-3">
+      {/* Navigation Menu */}
+      <div className="px-3 pb-3 border-b border-border/60">
+        {!collapsed ? (
+          <div className="space-y-1">
+            {navigationItems.map((item) => (
+              <Button
+                key={item.id}
+                variant={currentView === item.id ? 'secondary' : 'ghost'}
+                className={cn(
+                  'w-full justify-start',
+                  currentView === item.id && 'bg-primary/10 text-primary hover:bg-primary/15',
+                )}
+                onClick={() => onViewChange(item.id)}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {navigationItems.map((item) => (
+              <Button
+                key={item.id}
+                variant={currentView === item.id ? 'secondary' : 'ghost'}
+                size="icon"
+                className={cn(
+                  'w-full',
+                  currentView === item.id && 'bg-primary/10 text-primary hover:bg-primary/15',
+                )}
+                onClick={() => onViewChange(item.id)}
+                title={item.label}
+              >
+                <item.icon className="h-4 w-4" />
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!collapsed && currentView === 'chat' && (
+        <div className="space-y-3 px-3 pt-3">
           <Button className="w-full" onClick={handleNewTask}>
             <Plus className="mr-2 h-4 w-4" />
             New Automation Task
@@ -168,21 +230,29 @@ export function Sidebar({ className, onOpenSettings }: SidebarProps) {
         </div>
       )}
 
-      <ScrollArea className="flex-1 px-2 py-4">
-        {filtered.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
-            <MessageCircle className="h-5 w-5" />
-            <p>No tasks yet. Start a new automation.</p>
-            {!collapsed && (
-              <Button variant="link" size="sm" onClick={handleNewTask}>
-                Start new task
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">{filtered.map(renderConversation)}</div>
-        )}
-      </ScrollArea>
+      {currentView === 'chat' && (
+        <ScrollArea className="flex-1 px-2 py-4">
+          {filtered.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
+              <MessageCircle className="h-5 w-5" />
+              <p>No tasks yet. Start a new automation.</p>
+              {!collapsed && (
+                <Button variant="link" size="sm" onClick={handleNewTask}>
+                  Start new task
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">{filtered.map(renderConversation)}</div>
+          )}
+        </ScrollArea>
+      )}
+
+      {currentView !== 'chat' && !collapsed && (
+        <div className="flex-1 px-4 py-6 text-center text-sm text-muted-foreground">
+          <p>Navigate using the menu above</p>
+        </div>
+      )}
 
       {/* Bottom Actions - Similar to Claude Desktop/OpenAI */}
       <div className="border-t border-border/60 bg-background/80">

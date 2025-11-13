@@ -9,6 +9,10 @@ pub mod state;
 pub mod tray;
 pub mod window;
 
+// Error handling and logging
+pub mod errors;
+pub mod logging;
+
 // LLM Router and Cost Management
 pub mod router;
 
@@ -23,6 +27,9 @@ pub mod p2p;
 
 // Database layer
 pub mod db;
+
+// Billing and subscriptions (Stripe integration)
+pub mod billing;
 
 // Settings storage
 pub mod settings;
@@ -78,8 +85,17 @@ pub mod agent;
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 
+// Workflow Orchestration System
+pub mod orchestration;
+
 // Model Context Protocol (MCP) integration
 pub mod mcp;
+
+// Cache system for LLM responses and tool results
+pub mod cache;
+
+// Team collaboration system
+pub mod teams;
 
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
