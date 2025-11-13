@@ -156,7 +156,7 @@ class ErrorTrackingService {
       severity?: ErrorSeverity;
       tags?: Record<string, string>;
       extra?: Record<string, any>;
-    }
+    },
   ) {
     if (!this.config.enabled) {
       console.error(error);
@@ -197,10 +197,7 @@ class ErrorTrackingService {
   /**
    * Capture a message
    */
-  public captureMessage(
-    _message: string,
-    _severity: ErrorSeverity = ErrorSeverity.LOW
-  ) {
+  public captureMessage(_message: string, _severity: ErrorSeverity = ErrorSeverity.LOW) {
     if (!this.config.enabled) {
       console.log(_message);
       return;
@@ -220,11 +217,7 @@ class ErrorTrackingService {
   /**
    * Add breadcrumb for debugging
    */
-  public addBreadcrumb(
-    _category: string,
-    _message: string,
-    _data?: Record<string, any>
-  ) {
+  public addBreadcrumb(_category: string, _message: string, _data?: Record<string, any>) {
     if (!this.config.enabled) {
       return;
     }
@@ -333,8 +326,10 @@ class ErrorTrackingService {
   }
 
   /**
-   * Map severity to Sentry level
+   * Map severity to Sentry level (currently unused but kept for future Sentry integration)
+   * Uncomment the usage in captureError and captureMessage when Sentry is integrated
    */
+  // @ts-expect-error - Kept for future Sentry integration
   private _mapSeverityToLevel(severity?: ErrorSeverity): any {
     switch (severity) {
       case ErrorSeverity.LOW:
@@ -374,14 +369,12 @@ export function setupGlobalErrorHandler() {
   window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
     errorTracking.captureError(
-      event.reason instanceof Error
-        ? event.reason
-        : new Error(String(event.reason)),
+      event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
       {
         component: 'global',
         severity: ErrorSeverity.HIGH,
         tags: { type: 'unhandled_promise' },
-      }
+      },
     );
   });
 
@@ -402,10 +395,7 @@ export function setupGlobalErrorHandler() {
 }
 
 // React error boundary handler
-export function captureErrorBoundaryError(
-  error: Error,
-  errorInfo: { componentStack: string }
-) {
+export function captureErrorBoundaryError(error: Error, errorInfo: { componentStack: string }) {
   errorTracking.captureError(error, {
     component: 'react_boundary',
     severity: ErrorSeverity.HIGH,

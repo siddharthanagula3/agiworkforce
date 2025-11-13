@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Loader2, Play } from 'lucide-react';
@@ -34,11 +34,7 @@ interface InstantDemoProps {
   onComplete?: (results: DemoResult) => void;
 }
 
-export const InstantDemo: React.FC<InstantDemoProps> = ({
-  employee,
-  sessionId,
-  onComplete,
-}) => {
+export const InstantDemo: React.FC<InstantDemoProps> = ({ employee, sessionId, onComplete }) => {
   const [status, setStatus] = useState<'ready' | 'running' | 'completed'>('ready');
   const [results, setResults] = useState<DemoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,14 +75,10 @@ export const InstantDemo: React.FC<InstantDemoProps> = ({
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
             <div className="text-center">
               <h3 className="text-lg font-semibold">Running Demo...</h3>
-              <p className="text-sm text-muted-foreground mt-2">
-                Watch {employee.name} in action
-              </p>
+              <p className="text-sm text-muted-foreground mt-2">Watch {employee.name} in action</p>
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                 <p className="animate-pulse">Processing sample data...</p>
-                <p className="text-xs">
-                  Estimated time: {employee.demoDurationSeconds} seconds
-                </p>
+                <p className="text-xs">Estimated time: {employee.demoDurationSeconds} seconds</p>
               </div>
             </div>
           </div>
@@ -137,12 +129,7 @@ export const InstantDemo: React.FC<InstantDemoProps> = ({
           </div>
         )}
 
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={runDemo}
-          disabled={status === 'running'}
-        >
+        <Button size="lg" className="w-full" onClick={runDemo}>
           <Play className="mr-2 h-5 w-5" />
           Run 30-Second Demo →
         </Button>
