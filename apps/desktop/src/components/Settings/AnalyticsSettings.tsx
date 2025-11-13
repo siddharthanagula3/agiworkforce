@@ -5,14 +5,12 @@
  * GDPR/CCPA compliant
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAnalyticsStore } from '../../stores/analyticsStore';
 import { PrivacyConsent } from '../../types/analytics';
-import { analytics } from '../../services/analytics';
 
-export const AnalyticsSettings: React.FC = () => {
+export const AnalyticsSettings = () => {
   const {
-    config,
     privacyConsent,
     updatePrivacyConsent,
     exportAnalyticsData,

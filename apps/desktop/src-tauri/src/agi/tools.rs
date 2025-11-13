@@ -652,6 +652,45 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        self.register_tool(Tool {
+            id: "image_analyze".to_string(),
+            name: "Analyze Image with AI".to_string(),
+            description: "Analyze an image using vision-capable AI models to answer questions or describe content".to_string(),
+            capabilities: vec![
+                ToolCapability::ImageProcessing,
+                ToolCapability::Planning,
+            ],
+            parameters: vec![
+                ToolParameter {
+                    name: "image_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path to image file (PNG, JPEG, WEBP)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "question".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Question to ask about the image or description request".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "detail".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Detail level: 'low', 'high', or 'auto' (default: 'auto')".to_string(),
+                    default: Some(serde_json::json!("auto")),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 20.0,
+                memory_mb: 150,
+                network_mb: 5.0, // API call to vision model
+            },
+            dependencies: vec![],
+        })?;
+
         // Code Analysis
         self.register_tool(Tool {
             id: "code_analyze".to_string(),
