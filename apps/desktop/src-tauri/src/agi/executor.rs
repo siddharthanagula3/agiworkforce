@@ -954,4 +954,113 @@ impl AGIExecutor {
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
     }
+
+    pub async fn execute_plans_parallel(
+        &self,
+        plans: Vec<planner::Plan>,
+        sandbox_manager: &crate::agi::SandboxManager,
+        goal: &Goal,
+    ) -> Result<Vec<crate::agi::ExecutionResult>> {
+        use tokio::time::Instant;
+
+        tracing::info!(
+            "[Executor] Starting parallel execution of {} plans",
+            plans.len()
+        );
+
+        let mut handles = Vec::new();
+
+        for plan in plans {
+            let tool_registry = self.tool_registry.clone();
+            let automation = self.automation.clone();
+            let router = self.router.clone();
+
+            let sandbox = sandbox_manager.create_sandbox(false).await?;
+            let sandbox_id = sandbox.id.clone();
+            let plan_id = plan.goal_id.clone();
+            let goal_clone = goal.clone();
+
+            let handle = tokio::spawn(async move {
+                let start_time = Instant::now();
+
+                let context = ExecutionContext {
+                    goal: goal_clone,
+                    current_state: HashMap::new(),
+                    available_resources: ResourceState {
+                        cpu_usage_percent: 0.0,
+                        memory_usage_mb: 0,
+                        network_usage_mbps: 0.0,
+                        storage_usage_mb: 0,
+                        available_tools: vec![],
+                    },
+                    tool_results: Vec::new(),
+                    context_memory: Vec::new(),
+                };
+
+                let executor = AGIExecutor::new(
+                    tool_registry,
+                    Arc::new(ResourceManager::new(ResourceLimits {
+                        cpu_percent: 80.0,
+                        memory_mb: 2048,
+                        network_mbps: 100.0,
+                        storage_mb: 10240,
+                    }).unwrap()),
+                    automation,
+                    router,
+                    None,
+                ).unwrap();
+
+                let mut steps_completed = 0;
+                let mut steps_failed = 0;
+                let mut total_cost = 0.0;
+                let mut output = serde_json::json!({});
+                let mut error_msg = None;
+
+                for step in &plan.steps {
+                    match executor.execute_step(step, &context).await {
+                        Ok(result) => {
+                            steps_completed += 1;
+                            output = result;
+                        }
+                        Err(e) => {
+                            steps_failed += 1;
+                            error_msg = Some(e.to_string());
+                            break;
+                        }
+                    }
+                }
+
+                let execution_time_ms = start_time.elapsed().as_millis() as u64;
+                let success = steps_failed == 0 && steps_completed > 0;
+
+                crate::agi::ExecutionResult {
+                    plan_id,
+                    sandbox_id,
+                    success,
+                    output,
+                    execution_time_ms,
+                    steps_completed,
+                    steps_failed,
+                    error: error_msg,
+                    cost: Some(total_cost),
+                }
+            });
+
+            handles.push(handle);
+        }
+
+        let results = futures::future::join_all(handles).await;
+
+        let execution_results: Vec<crate::agi::ExecutionResult> = results
+            .into_iter()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        tracing::info!(
+            "[Executor] Parallel execution complete. {} results collected",
+            execution_results.len()
+        );
+
+        Ok(execution_results)
+    }
 }
