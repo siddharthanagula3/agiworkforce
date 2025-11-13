@@ -6,12 +6,7 @@ import { useMarketplaceStore } from '../../stores/marketplaceStore';
 import { WorkflowCard } from './WorkflowCard';
 
 export function MarketplaceHero() {
-  const {
-    marketplaceStats,
-    featuredWorkflows,
-    searchWorkflows,
-    filters
-  } = useMarketplaceStore();
+  const { marketplaceStats, featuredWorkflows, searchWorkflows, filters } = useMarketplaceStore();
 
   const [searchInput, setSearchInput] = useState(filters.searchQuery);
 
@@ -33,9 +28,7 @@ export function MarketplaceHero() {
       <div className="container mx-auto px-6 py-12">
         {/* Main Header */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold tracking-tight mb-4">
-            Workflow Marketplace
-          </h1>
+          <h1 className="text-5xl font-bold tracking-tight mb-4">Workflow Marketplace</h1>
           <p className="text-xl text-muted-foreground mb-2">
             Clone, Customize, Share - The Future of Work Automation
           </p>
@@ -45,11 +38,16 @@ export function MarketplaceHero() {
         </div>
 
         {/* Stats Bar */}
-        <div className="flex items-center justify-center gap-8 mb-8">
+        <div className="flex items-center justify-center gap-6 mb-8 flex-wrap">
+          <StatCard
+            icon={<Upload className="h-5 w-5" />}
+            value={formatNumber(marketplaceStats?.total_workflows || 0)}
+            label="Total Workflows"
+          />
           <StatCard
             icon={<Copy className="h-5 w-5" />}
             value={formatNumber(marketplaceStats?.total_clones || 0)}
-            label="Workflows Cloned"
+            label="Total Clones"
           />
           <StatCard
             icon={<Users className="h-5 w-5" />}
