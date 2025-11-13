@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 32;
+const CURRENT_VERSION: i32 = 39;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -188,6 +188,41 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 32 {
         apply_migration_v32(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [32])?;
+    }
+
+    if current_version < 33 {
+        apply_migration_v33(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [33])?;
+    }
+
+    if current_version < 34 {
+        apply_migration_v34(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [34])?;
+    }
+
+    if current_version < 35 {
+        apply_migration_v35(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [35])?;
+    }
+
+    if current_version < 36 {
+        apply_migration_v36(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [36])?;
+    }
+
+    if current_version < 37 {
+        apply_migration_v37(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [37])?;
+    }
+
+    if current_version < 38 {
+        apply_migration_v38(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [38])?;
+    }
+
+    if current_version < 39 {
+        apply_migration_v39(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [39])?;
     }
 
     Ok(())
@@ -2913,9 +2948,569 @@ fn apply_migration_v32(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v32: Placeholder for future features
+/// Migration v32: Placeholder (already used for messaging)
 fn apply_migration_v32(_conn: &Connection) -> Result<()> {
     // Reserved for future use
+    Ok(())
+}
+
+/// Migration v33: AI Employee Library and Real-time metrics tracking
+fn apply_migration_v33(conn: &Connection) -> Result<()> {
+    // AI Employees table - stores pre-built and custom AI employees
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ai_employees (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            description TEXT NOT NULL,
+            capabilities TEXT NOT NULL,
+            estimated_time_saved INTEGER NOT NULL,
+            estimated_cost_saved REAL NOT NULL,
+            demo_workflow TEXT,
+            required_integrations TEXT,
+            template_id TEXT,
+            is_verified INTEGER DEFAULT 0 CHECK(is_verified IN (0, 1)),
+            usage_count INTEGER DEFAULT 0,
+            avg_rating REAL DEFAULT 0.0,
+            created_at INTEGER NOT NULL,
+            creator_id TEXT,
+            tags TEXT NOT NULL DEFAULT '[]'
+        )",
+        [],
+    )?;
+
+    // Index for employee search
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_employees_role
+         ON ai_employees(role)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_employees_verified
+         ON ai_employees(is_verified, avg_rating DESC)",
+        [],
+    )?;
+
+    // User Employees table - tracks hired employees per user
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_employees (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            hired_at INTEGER NOT NULL,
+            tasks_completed INTEGER DEFAULT 0,
+            time_saved_minutes INTEGER DEFAULT 0,
+            cost_saved_usd REAL DEFAULT 0.0,
+            is_active INTEGER DEFAULT 1 CHECK(is_active IN (0, 1)),
+            custom_config TEXT,
+            FOREIGN KEY(employee_id) REFERENCES ai_employees(id)
+        )",
+        [],
+    )?;
+
+    // Index for user employee queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_employees_user
+         ON user_employees(user_id, hired_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_employees_active
+         ON user_employees(user_id, is_active)
+         WHERE is_active = 1",
+        [],
+    )?;
+
+    // Employee Tasks table - tracks all tasks assigned to employees
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS employee_tasks (
+            id TEXT PRIMARY KEY,
+            user_employee_id TEXT NOT NULL,
+            task_type TEXT NOT NULL,
+            input_data TEXT NOT NULL,
+            output_data TEXT,
+            time_saved_minutes INTEGER,
+            cost_saved_usd REAL,
+            started_at INTEGER NOT NULL,
+            completed_at INTEGER,
+            status TEXT NOT NULL CHECK(status IN ('Pending', 'Running', 'Completed', 'Failed', 'Cancelled')),
+            FOREIGN KEY(user_employee_id) REFERENCES user_employees(id)
+        )",
+        [],
+    )?;
+
+    // Index for task queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_employee_tasks_user_employee
+         ON employee_tasks(user_employee_id, started_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_employee_tasks_status
+         ON employee_tasks(status, started_at DESC)",
+        [],
+    )?;
+
+    // Real-time metrics table - stores immediate ROI metrics after each automation
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS realtime_metrics (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            automation_id TEXT,
+            employee_id TEXT,
+            time_saved_minutes INTEGER NOT NULL,
+            cost_saved_usd REAL NOT NULL,
+            tasks_completed INTEGER DEFAULT 1,
+            errors_prevented INTEGER DEFAULT 0,
+            quality_score REAL,
+            timestamp INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Index for user-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_metrics_user_time
+         ON realtime_metrics(user_id, timestamp DESC)",
+        [],
+    )?;
+
+    // Index for employee performance queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_metrics_employee
+         ON realtime_metrics(employee_id, timestamp DESC)
+         WHERE employee_id IS NOT NULL",
+        [],
+    )?;
+
+    // Index for automation-specific metrics
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_metrics_automation
+         ON realtime_metrics(automation_id, timestamp DESC)
+         WHERE automation_id IS NOT NULL",
+        [],
+    )?;
+
+    // Index for time-based aggregations
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_metrics_timestamp
+         ON realtime_metrics(timestamp DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v34: User milestones tracking
+fn apply_migration_v34(conn: &Connection) -> Result<()> {
+    // User milestones table - tracks achievement milestones
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_milestones (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            milestone_type TEXT NOT NULL,
+            threshold_value REAL NOT NULL,
+            achieved_at INTEGER NOT NULL,
+            shared INTEGER DEFAULT 0 CHECK(shared IN (0, 1))
+        )",
+        [],
+    )?;
+
+    // Index for user milestone queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_milestones_user
+         ON user_milestones(user_id, achieved_at DESC)",
+        [],
+    )?;
+
+    // Index for milestone type queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_milestones_type
+         ON user_milestones(milestone_type)",
+        [],
+    )?;
+
+    // Unique constraint to prevent duplicate milestones
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_milestones_unique
+         ON user_milestones(user_id, milestone_type)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v35: Metrics aggregation cache for dashboard performance
+fn apply_migration_v35(conn: &Connection) -> Result<()> {
+    // Daily aggregation cache - pre-computed daily stats for fast dashboard loading
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS metrics_daily_cache (
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            total_time_saved_minutes INTEGER NOT NULL,
+            total_cost_saved_usd REAL NOT NULL,
+            total_automations INTEGER NOT NULL,
+            avg_time_saved_per_run REAL NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, date)
+        )",
+        [],
+    )?;
+
+    // Index for date range queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_daily_cache_date
+         ON metrics_daily_cache(user_id, date DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v36: ROI comparison benchmarks
+fn apply_migration_v36(conn: &Connection) -> Result<()> {
+    // Automation type benchmarks - stores industry benchmarks for comparison
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS automation_benchmarks (
+            automation_type TEXT PRIMARY KEY,
+            avg_manual_time_minutes INTEGER NOT NULL,
+            avg_automated_time_minutes INTEGER NOT NULL,
+            avg_time_saved_minutes INTEGER NOT NULL,
+            avg_cost_saved_usd REAL NOT NULL,
+            manual_error_rate REAL NOT NULL,
+            automated_error_rate REAL NOT NULL,
+            sample_size INTEGER NOT NULL,
+            last_updated INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Insert default benchmarks
+    let benchmarks = vec![
+        ("data_entry", 120, 5, 115, 95.83, 0.15, 0.02, 1000),
+        ("report_generation", 60, 3, 57, 47.50, 0.10, 0.01, 800),
+        ("email_processing", 90, 4, 86, 71.67, 0.12, 0.02, 1200),
+        ("web_scraping", 180, 10, 170, 141.67, 0.20, 0.03, 600),
+        ("document_processing", 150, 8, 142, 118.33, 0.18, 0.02, 500),
+    ];
+
+    for (automation_type, manual_time, automated_time, time_saved, cost_saved, manual_error, automated_error, sample_size) in benchmarks {
+        conn.execute(
+            "INSERT OR IGNORE INTO automation_benchmarks
+             (automation_type, avg_manual_time_minutes, avg_automated_time_minutes,
+              avg_time_saved_minutes, avg_cost_saved_usd, manual_error_rate,
+              automated_error_rate, sample_size, last_updated)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                automation_type,
+                manual_time,
+                automated_time,
+                time_saved,
+                cost_saved,
+                manual_error,
+                automated_error,
+                sample_size,
+                chrono::Utc::now().timestamp(),
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Migration v37: First-run experience tracking
+fn apply_migration_v37(conn: &Connection) -> Result<()> {
+    // First-run sessions table - tracks onboarding completion
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS first_run_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            started_at INTEGER NOT NULL,
+            completed_at INTEGER,
+            step TEXT NOT NULL,
+            recommended_employees TEXT NOT NULL,
+            selected_employee_id TEXT,
+            demo_results TEXT,
+            time_to_value_seconds INTEGER NOT NULL DEFAULT 0,
+            hired_employee INTEGER NOT NULL DEFAULT 0 CHECK(hired_employee IN (0, 1)),
+            updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+        )",
+        [],
+    )?;
+
+    // Index for user-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_first_run_user
+         ON first_run_sessions(user_id, started_at DESC)",
+        [],
+    )?;
+
+    // Index for completion status
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_first_run_completed
+         ON first_run_sessions(completed_at DESC)
+         WHERE completed_at IS NOT NULL",
+        [],
+    )?;
+
+    // Index for conversion tracking
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_first_run_hired
+         ON first_run_sessions(hired_employee)
+         WHERE hired_employee = 1",
+        [],
+    )?;
+
+    // Sample data marker table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sample_data_marker (
+            user_id TEXT PRIMARY KEY,
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v38: Demo runs tracking
+fn apply_migration_v38(conn: &Connection) -> Result<()> {
+    // Demo runs table - tracks all instant demo executions
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS demo_runs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            employee_id TEXT NOT NULL,
+            ran_at INTEGER NOT NULL,
+            results TEXT NOT NULL,
+            led_to_hire INTEGER NOT NULL DEFAULT 0 CHECK(led_to_hire IN (0, 1))
+        )",
+        [],
+    )?;
+
+    // Index for user demo history
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_demo_runs_user
+         ON demo_runs(user_id, ran_at DESC)
+         WHERE user_id IS NOT NULL",
+        [],
+    )?;
+
+    // Index for employee performance
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_demo_runs_employee
+         ON demo_runs(employee_id, ran_at DESC)",
+        [],
+    )?;
+
+    // Index for conversion tracking
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_demo_runs_conversion
+         ON demo_runs(led_to_hire)
+         WHERE led_to_hire = 1",
+        [],
+    )?;
+
+    // Index for time-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_demo_runs_time
+         ON demo_runs(ran_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v39: Public workflow marketplace
+fn apply_migration_v39(conn: &Connection) -> Result<()> {
+    // Published workflows table - public marketplace
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS published_workflows (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            category TEXT NOT NULL,
+            creator_id TEXT NOT NULL,
+            creator_name TEXT NOT NULL,
+            workflow_definition TEXT NOT NULL,
+            thumbnail_url TEXT,
+            share_url TEXT NOT NULL UNIQUE,
+            clone_count INTEGER NOT NULL DEFAULT 0,
+            view_count INTEGER NOT NULL DEFAULT 0,
+            favorite_count INTEGER NOT NULL DEFAULT 0,
+            avg_rating REAL NOT NULL DEFAULT 0.0,
+            rating_count INTEGER NOT NULL DEFAULT 0,
+            tags TEXT NOT NULL,
+            estimated_time_saved INTEGER NOT NULL DEFAULT 0,
+            estimated_cost_saved REAL NOT NULL DEFAULT 0.0,
+            is_verified INTEGER NOT NULL DEFAULT 0 CHECK(is_verified IN (0, 1)),
+            is_featured INTEGER NOT NULL DEFAULT 0 CHECK(is_featured IN (0, 1)),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Workflow clones tracking
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_clones (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT NOT NULL,
+            cloner_id TEXT NOT NULL,
+            cloner_name TEXT NOT NULL,
+            cloned_at INTEGER NOT NULL,
+            FOREIGN KEY(workflow_id) REFERENCES published_workflows(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Workflow ratings
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_ratings (
+            workflow_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+            comment TEXT,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY(workflow_id, user_id),
+            FOREIGN KEY(workflow_id) REFERENCES published_workflows(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Workflow favorites
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_favorites (
+            workflow_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            favorited_at INTEGER NOT NULL,
+            PRIMARY KEY(workflow_id, user_id),
+            FOREIGN KEY(workflow_id) REFERENCES published_workflows(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Workflow comments
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_comments (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            comment TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(workflow_id) REFERENCES published_workflows(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Indexes for performance
+
+    // Search and filtering indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_category
+         ON published_workflows(category)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_creator
+         ON published_workflows(creator_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_share_url
+         ON published_workflows(share_url)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_featured
+         ON published_workflows(is_featured, avg_rating DESC)
+         WHERE is_featured = 1",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_rating
+         ON published_workflows(avg_rating DESC, rating_count DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_popular
+         ON published_workflows(clone_count DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_published_workflows_recent
+         ON published_workflows(created_at DESC)",
+        [],
+    )?;
+
+    // Clone tracking indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_clones_workflow
+         ON workflow_clones(workflow_id, cloned_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_clones_user
+         ON workflow_clones(cloner_id, cloned_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_clones_recent
+         ON workflow_clones(cloned_at DESC)",
+        [],
+    )?;
+
+    // Rating indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_ratings_workflow
+         ON workflow_ratings(workflow_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_ratings_user
+         ON workflow_ratings(user_id)",
+        [],
+    )?;
+
+    // Favorites indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_favorites_workflow
+         ON workflow_favorites(workflow_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_favorites_user
+         ON workflow_favorites(user_id, favorited_at DESC)",
+        [],
+    )?;
+
+    // Comments indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_comments_workflow
+         ON workflow_comments(workflow_id, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflow_comments_user
+         ON workflow_comments(user_id, created_at DESC)",
+        [],
+    )?;
+
     Ok(())
 }
 

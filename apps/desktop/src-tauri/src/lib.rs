@@ -88,8 +88,14 @@ pub mod agent;
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 
+// AI Employee Library - Pre-built AI employees for instant value
+pub mod ai_employees;
+
 // Workflow Orchestration System
 pub mod orchestration;
+
+// Public Workflow Marketplace - Viral sharing system
+pub mod workflows;
 
 // Model Context Protocol (MCP) integration
 pub mod mcp;
@@ -102,6 +108,9 @@ pub mod teams;
 
 // Real-time collaboration and WebSocket communication
 pub mod realtime;
+
+// Real-time ROI metrics and dashboard
+pub mod metrics;
 
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
