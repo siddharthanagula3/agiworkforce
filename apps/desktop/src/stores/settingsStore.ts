@@ -86,18 +86,19 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
     mistral: '',
   },
   llmConfig: {
-    defaultProvider: 'openai',
+    defaultProvider: 'anthropic', // Claude 4.5 is best for coding (77.2% SWE-bench)
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      openai: 'gpt-4o-mini',
-      anthropic: 'claude-3-5-sonnet-20241022',
-      google: 'gemini-1.5-flash',
-      ollama: 'llama3.3',
-      xai: 'grok-4',
-      deepseek: 'deepseek-chat',
+      // November 2025 latest models
+      openai: 'gpt-5', // Released Aug 2025 - most capable
+      anthropic: 'claude-sonnet-4-5', // Released Sep 2025 - best coding
+      google: 'gemini-2.5-pro', // 1M token context window
+      ollama: 'llama4-maverick', // Latest local model with 1M context
+      xai: 'grok-4', // Real-time data access
+      deepseek: 'deepseek-v3', // Coding specialist
       qwen: 'qwen-max',
-      mistral: 'mistral-large-latest',
+      mistral: 'mistral-large-2',
     },
   },
   windowPreferences: {
