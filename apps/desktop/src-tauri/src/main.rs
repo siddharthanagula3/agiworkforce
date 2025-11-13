@@ -884,6 +884,7 @@ fn main() {
             agiworkforce_desktop::commands::unfavorite_workflow,
             agiworkforce_desktop::commands::is_workflow_favorited,
             agiworkforce_desktop::commands::get_user_favorites,
+            agiworkforce_desktop::commands::get_user_clones,
             agiworkforce_desktop::commands::share_workflow,
             agiworkforce_desktop::commands::get_workflow_stats,
             agiworkforce_desktop::commands::get_workflow_templates,
