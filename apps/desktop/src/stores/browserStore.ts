@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export interface BrowserTab {
   id: string;
@@ -18,11 +19,87 @@ export interface BrowserSession {
 
 export type BrowserType = BrowserSession['browserType'];
 
+export type ActionType = 'navigate' | 'click' | 'type' | 'extract' | 'screenshot' | 'scroll' | 'wait' | 'execute';
+
+export interface BrowserAction {
+  id: string;
+  type: ActionType;
+  timestamp: number;
+  duration?: number;
+  success: boolean;
+  details: {
+    url?: string;
+    selector?: string;
+    text?: string;
+    script?: string;
+    result?: any;
+    error?: string;
+  };
+  screenshotId?: string;
+}
+
+export interface Screenshot {
+  id: string;
+  timestamp: number;
+  data: string; // base64
+  tabId: string;
+}
+
+export interface ElementBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface DOMSnapshot {
+  html: string;
+  timestamp: number;
+}
+
+export interface ConsoleLog {
+  level: 'log' | 'warn' | 'error' | 'info';
+  message: string;
+  timestamp: number;
+}
+
+export interface NetworkRequest {
+  url: string;
+  method: string;
+  status: number;
+  duration_ms: number;
+  timestamp: number;
+}
+
+export interface RecordedStep {
+  id: string;
+  type: ActionType;
+  selector?: string;
+  value?: string;
+  timestamp: number;
+}
+
 interface BrowserState {
   // Sessions
   sessions: BrowserSession[];
   activeSessionId: string | null;
   initialized: boolean;
+
+  // Visualization state
+  screenshots: Screenshot[];
+  actions: BrowserAction[];
+  domSnapshots: DOMSnapshot[];
+  consoleLogs: ConsoleLog[];
+  networkRequests: NetworkRequest[];
+  highlightedElement: ElementBounds | null;
+
+  // Recording state
+  isRecording: boolean;
+  recordedSteps: RecordedStep[];
+
+  // Streaming state
+  isStreaming: boolean;
+  streamIntervalId: number | null;
 
   // Actions
   initialize: () => Promise<void>;
@@ -37,17 +114,77 @@ interface BrowserState {
   getPageContent: (tabId: string) => Promise<string>;
   executeScript: (tabId: string, script: string) => Promise<any>;
   setActiveSession: (sessionId: string) => void;
+
+  // Visualization actions
+  addAction: (action: BrowserAction) => void;
+  addScreenshot: (screenshot: Screenshot) => void;
+  highlightElement: (tabId: string, selector: string) => Promise<void>;
+  clearHighlight: () => void;
+  getDOMSnapshot: (tabId: string) => Promise<DOMSnapshot>;
+  getConsoleLogs: (tabId: string) => Promise<ConsoleLog[]>;
+  getNetworkActivity: (tabId: string) => Promise<NetworkRequest[]>;
+
+  // Screenshot streaming
+  startStreaming: (tabId: string) => void;
+  stopStreaming: () => void;
+
+  // Recording
+  startRecording: () => void;
+  stopRecording: () => void;
+  addRecordedStep: (step: RecordedStep) => void;
+  clearRecording: () => void;
+  generatePlaywrightCode: () => string;
+
+  // Clear data
+  clearActions: () => void;
+  clearScreenshots: () => void;
 }
 
-export const useBrowserStore = create<BrowserState>((set) => ({
+export const useBrowserStore = create<BrowserState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   initialized: false,
+
+  // Visualization state
+  screenshots: [],
+  actions: [],
+  domSnapshots: [],
+  consoleLogs: [],
+  networkRequests: [],
+  highlightedElement: null,
+
+  // Recording state
+  isRecording: false,
+  recordedSteps: [],
+
+  // Streaming state
+  isStreaming: false,
+  streamIntervalId: null,
 
   initialize: async () => {
     try {
       await invoke('browser_init');
       set({ initialized: true });
+
+      // Listen for browser automation events
+      listen('browser:action', (event: any) => {
+        const action = event.payload as BrowserAction;
+        get().addAction(action);
+      });
+
+      listen('browser:console', (event: any) => {
+        const log = event.payload as ConsoleLog;
+        set((state) => ({
+          consoleLogs: [...state.consoleLogs, log],
+        }));
+      });
+
+      listen('browser:network', (event: any) => {
+        const request = event.payload as NetworkRequest;
+        set((state) => ({
+          networkRequests: [...state.networkRequests, request],
+        }));
+      });
     } catch (error) {
       console.error('Failed to initialize browser:', error);
       throw error;
@@ -221,5 +358,181 @@ export const useBrowserStore = create<BrowserState>((set) => ({
 
   setActiveSession: (sessionId: string) => {
     set({ activeSessionId: sessionId });
+  },
+
+  // Visualization actions
+  addAction: (action: BrowserAction) => {
+    set((state) => ({
+      actions: [...state.actions, action],
+    }));
+
+    // If recording, add to recorded steps
+    if (get().isRecording && action.success) {
+      const step: RecordedStep = {
+        id: crypto.randomUUID(),
+        type: action.type,
+        selector: action.details.selector,
+        value: action.details.text || action.details.url,
+        timestamp: action.timestamp,
+      };
+      get().addRecordedStep(step);
+    }
+  },
+
+  addScreenshot: (screenshot: Screenshot) => {
+    set((state) => {
+      const screenshots = [...state.screenshots, screenshot];
+      // Keep only last 50 screenshots
+      if (screenshots.length > 50) {
+        screenshots.shift();
+      }
+      return { screenshots };
+    });
+  },
+
+  highlightElement: async (tabId: string, selector: string) => {
+    try {
+      const bounds = await invoke<ElementBounds>('browser_highlight_element', {
+        tabId,
+        selector,
+      });
+      set({ highlightedElement: bounds });
+    } catch (error) {
+      console.error('Failed to highlight element:', error);
+      throw error;
+    }
+  },
+
+  clearHighlight: () => {
+    set({ highlightedElement: null });
+  },
+
+  getDOMSnapshot: async (tabId: string) => {
+    try {
+      const snapshot = await invoke<DOMSnapshot>('browser_get_dom_snapshot', { tabId });
+      set((state) => ({
+        domSnapshots: [...state.domSnapshots, snapshot],
+      }));
+      return snapshot;
+    } catch (error) {
+      console.error('Failed to get DOM snapshot:', error);
+      throw error;
+    }
+  },
+
+  getConsoleLogs: async (tabId: string) => {
+    try {
+      const logs = await invoke<ConsoleLog[]>('browser_get_console_logs', { tabId });
+      set({ consoleLogs: logs });
+      return logs;
+    } catch (error) {
+      console.error('Failed to get console logs:', error);
+      throw error;
+    }
+  },
+
+  getNetworkActivity: async (tabId: string) => {
+    try {
+      const requests = await invoke<NetworkRequest[]>('browser_get_network_activity', { tabId });
+      set({ networkRequests: requests });
+      return requests;
+    } catch (error) {
+      console.error('Failed to get network activity:', error);
+      throw error;
+    }
+  },
+
+  // Screenshot streaming
+  startStreaming: (tabId: string) => {
+    if (get().isStreaming) {
+      return;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const data = await invoke<string>('browser_get_screenshot_stream', { tabId });
+        const screenshot: Screenshot = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          data,
+          tabId,
+        };
+        get().addScreenshot(screenshot);
+      } catch (error) {
+        console.error('Failed to get screenshot stream:', error);
+      }
+    }, 500);
+
+    set({ isStreaming: true, streamIntervalId: intervalId });
+  },
+
+  stopStreaming: () => {
+    const { streamIntervalId } = get();
+    if (streamIntervalId !== null) {
+      window.clearInterval(streamIntervalId);
+      set({ isStreaming: false, streamIntervalId: null });
+    }
+  },
+
+  // Recording
+  startRecording: () => {
+    set({ isRecording: true, recordedSteps: [] });
+  },
+
+  stopRecording: () => {
+    set({ isRecording: false });
+  },
+
+  addRecordedStep: (step: RecordedStep) => {
+    set((state) => ({
+      recordedSteps: [...state.recordedSteps, step],
+    }));
+  },
+
+  clearRecording: () => {
+    set({ recordedSteps: [] });
+  },
+
+  generatePlaywrightCode: () => {
+    const { recordedSteps } = get();
+    let code = `import { test, expect } from '@playwright/test';
+
+test('recorded automation', async ({ page }) => {
+`;
+
+    recordedSteps.forEach((step) => {
+      switch (step.type) {
+        case 'navigate':
+          code += `  await page.goto('${step.value}');\n`;
+          break;
+        case 'click':
+          code += `  await page.click('${step.selector}');\n`;
+          break;
+        case 'type':
+          code += `  await page.fill('${step.selector}', '${step.value}');\n`;
+          break;
+        case 'wait':
+          code += `  await page.waitForSelector('${step.selector}');\n`;
+          break;
+        case 'screenshot':
+          code += `  await page.screenshot({ path: 'screenshot.png' });\n`;
+          break;
+        case 'execute':
+          code += `  await page.evaluate(() => { ${step.value} });\n`;
+          break;
+      }
+    });
+
+    code += `});\n`;
+    return code;
+  },
+
+  // Clear data
+  clearActions: () => {
+    set({ actions: [] });
+  },
+
+  clearScreenshots: () => {
+    set({ screenshots: [] });
   },
 }));
