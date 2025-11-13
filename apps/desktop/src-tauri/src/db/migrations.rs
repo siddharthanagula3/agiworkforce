@@ -2948,12 +2948,6 @@ fn apply_migration_v32(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v32: Placeholder (already used for messaging)
-fn apply_migration_v32(_conn: &Connection) -> Result<()> {
-    // Reserved for future use
-    Ok(())
-}
-
 /// Migration v33: AI Employee Library and Real-time metrics tracking
 fn apply_migration_v33(conn: &Connection) -> Result<()> {
     // AI Employees table - stores pre-built and custom AI employees

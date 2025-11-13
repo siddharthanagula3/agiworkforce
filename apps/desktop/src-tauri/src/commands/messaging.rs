@@ -1,4 +1,4 @@
-use crate::db::AppDatabase;
+use crate::commands::AppDatabase;
 use crate::messaging::{
     MessagingConnection, MessagingPlatform, MessagingRouter, SendMessageRequest,
     SendMessageResponse, SlackClient, SlackConfig, TeamsClient, TeamsConfig, UnifiedMessage,
