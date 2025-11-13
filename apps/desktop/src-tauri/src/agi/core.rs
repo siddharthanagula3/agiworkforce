@@ -47,6 +47,7 @@ impl AGICore {
             tool_registry.clone(),
             resource_manager.clone(),
             automation.clone(),
+            router.clone(),
             app_handle.clone(),
         )?);
         let memory = Arc::new(AGIMemory::new()?);
