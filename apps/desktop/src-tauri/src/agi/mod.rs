@@ -7,9 +7,13 @@ pub mod executor;
 pub mod knowledge;
 pub mod learning;
 pub mod memory;
+pub mod outcome_tracker;
 pub mod planner;
+pub mod process_ontology;
+pub mod process_reasoning;
 pub mod resources;
 pub mod sandbox;
+pub mod templates;
 pub mod tools;
 
 #[cfg(test)]
@@ -22,9 +26,16 @@ pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
 pub use memory::AGIMemory;
+pub use outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
 pub use planner::AGIPlanner;
+pub use process_ontology::{ProcessOntology, ProcessTemplate};
+pub use process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
 pub use resources::ResourceManager;
 pub use sandbox::{Sandbox, SandboxManager};
+pub use templates::{
+    get_builtin_templates, AgentTemplate, DifficultyLevel, TemplateCategory, TemplateManager,
+    WorkflowDefinition, WorkflowStep,
+};
 pub use tools::{Tool, ToolCapability, ToolRegistry, ToolResult};
 
 use serde::{Deserialize, Serialize};

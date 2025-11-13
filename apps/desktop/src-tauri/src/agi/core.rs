@@ -25,6 +25,9 @@ pub struct AGICore {
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
     stop_signal: Arc<Mutex<bool>>,
     pub(crate) app_handle: Option<tauri::AppHandle>,
+    process_reasoning: Option<Arc<ProcessReasoning>>,
+    process_ontology: Option<Arc<ProcessOntology>>,
+    outcome_tracker: Option<Arc<OutcomeTracker>>,
 }
 
 impl AGICore {
@@ -57,6 +60,74 @@ impl AGICore {
         )?);
 
         // Register all available tools
+        tool_registry.register_all_tools(automation.clone(), router.clone())?);
+
+        Ok(Self {
+            config,
+            capabilities: AGICapabilities::default(),
+            tool_registry,
+            knowledge_base,
+            resource_manager,
+            planner,
+            executor,
+            memory,
+            learning,
+            router,
+            automation,
+            active_goals: Arc::new(Mutex::new(Vec::new())),
+            execution_contexts: Arc::new(Mutex::new(HashMap::new())),
+            stop_signal: Arc::new(Mutex::new(false)),
+            app_handle,
+            process_reasoning: None,
+            process_ontology: None,
+            outcome_tracker: None,
+        })
+    }
+
+    /// Create AGI Core with process reasoning and outcome tracking enabled
+    pub fn with_process_reasoning(
+        config: AGIConfig,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        automation: Arc<AutomationService>,
+        app_handle: Option<tauri::AppHandle>,
+        db_path: String,
+    ) -> Result<Self> {
+        let tool_registry = Arc::new(ToolRegistry::new()?);
+        let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
+        let resource_manager = Arc::new(ResourceManager::new(config.resource_limits.clone())?);
+
+        // Initialize process reasoning components
+        let process_reasoning = Arc::new(ProcessReasoning::new(router.clone())?);
+        let process_ontology = Arc::new(ProcessOntology::new(db_path.clone())?);
+        let outcome_tracker = Arc::new(OutcomeTracker::new(db_path)?);
+
+        // Create planner with process reasoning
+        let planner = Arc::new(AGIPlanner::with_process_reasoning(
+            router.clone(),
+            tool_registry.clone(),
+            knowledge_base.clone(),
+            process_reasoning.clone(),
+            process_ontology.clone(),
+        )?);
+
+        // Create executor with process reasoning and outcome tracking
+        let executor = Arc::new(AGIExecutor::with_process_reasoning(
+            tool_registry.clone(),
+            resource_manager.clone(),
+            automation.clone(),
+            router.clone(),
+            app_handle.clone(),
+            process_reasoning.clone(),
+            outcome_tracker.clone(),
+        )?);
+
+        let memory = Arc::new(AGIMemory::new()?);
+        let learning = Arc::new(LearningSystem::new(
+            config.enable_learning,
+            config.enable_self_improvement,
+        )?);
+
+        // Register all available tools
         tool_registry.register_all_tools(automation.clone(), router.clone())?;
 
         Ok(Self {
@@ -75,6 +146,9 @@ impl AGICore {
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(Mutex::new(false)),
             app_handle,
+            process_reasoning: Some(process_reasoning),
+            process_ontology: Some(process_ontology),
+            outcome_tracker: Some(outcome_tracker),
         })
     }
 
@@ -529,6 +603,9 @@ impl AGICore {
             execution_contexts: self.execution_contexts.clone(),
             stop_signal: self.stop_signal.clone(),
             app_handle: None, // Don't clone app handle (not Send) - events will be emitted from main thread
+            process_reasoning: self.process_reasoning.clone(),
+            process_ontology: self.process_ontology.clone(),
+            outcome_tracker: self.outcome_tracker.clone(),
         }
     }
 

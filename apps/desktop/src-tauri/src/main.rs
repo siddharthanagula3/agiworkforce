@@ -14,7 +14,8 @@ use agiworkforce_desktop::{
         BrowserStateWrapper, CalendarState, CloudState, CodeEditingState, CodeGeneratorState,
         ComputerUseState, ContextManagerState, DatabaseState, DocumentState, FileWatcherState,
         GitHubState, LLMState, LSPState, McpState, ProductivityState, SettingsServiceState,
-        SettingsState, ShortcutsState, VoiceState, WorkspaceIndexState,
+        SettingsState, ShortcutsState, TemplateManagerState, VoiceState, WorkflowEngineState,
+        WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -54,7 +55,9 @@ fn main() {
             tracing::info!("Database initialized at {:?}", db_path);
 
             // Manage database state
-            app.manage(AppDatabase(Mutex::new(conn)));
+            app.manage(AppDatabase {
+                conn: Arc::new(Mutex::new(conn)),
+            });
 
             // Initialize LLM router state
             app.manage(LLMState::new());
@@ -223,10 +226,14 @@ fn main() {
             tracing::info!("LSP state initialized");
 
             // Initialize Codebase Cache
-            let cache_conn = Connection::open(&db_path).expect("Failed to open database for codebase cache");
-            let codebase_cache = agiworkforce_desktop::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
-                .expect("Failed to initialize codebase cache");
-            app.manage(agiworkforce_desktop::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
+            let cache_conn =
+                Connection::open(&db_path).expect("Failed to open database for codebase cache");
+            let codebase_cache =
+                agiworkforce_desktop::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
+                    .expect("Failed to initialize codebase cache");
+            app.manage(agiworkforce_desktop::commands::cache::CodebaseCacheState(
+                Arc::new(codebase_cache),
+            ));
 
             tracing::info!("Codebase cache initialized");
 
@@ -234,6 +241,25 @@ fn main() {
             app.manage(BillingStateWrapper::new());
 
             tracing::info!("Billing state initialized");
+
+            // Initialize Workflow Orchestration state
+            let workflow_engine_state =
+                WorkflowEngineState::new(db_path.to_string_lossy().to_string());
+            app.manage(workflow_engine_state);
+
+            tracing::info!("Workflow orchestration state initialized");
+
+            // Initialize Template Manager state
+            let template_conn =
+                Connection::open(&db_path).expect("Failed to open database for template manager");
+            let template_db = Arc::new(Mutex::new(template_conn));
+            let template_manager =
+                agiworkforce_desktop::commands::templates::initialize_template_manager(template_db);
+            app.manage(TemplateManagerState {
+                manager: Arc::new(Mutex::new(template_manager)),
+            });
+
+            tracing::info!("Template manager state initialized");
 
             // Initialize window state
             let state = AppState::load(app.handle())?;
@@ -739,7 +765,64 @@ fn main() {
             agiworkforce_desktop::billing::stripe_track_usage,
             agiworkforce_desktop::billing::stripe_create_portal_session,
             agiworkforce_desktop::billing::stripe_get_active_subscription,
-            agiworkforce_desktop::billing::stripe_process_webhook
+            agiworkforce_desktop::billing::stripe_process_webhook,
+            // Workflow Orchestration commands
+            agiworkforce_desktop::commands::create_workflow,
+            agiworkforce_desktop::commands::update_workflow,
+            agiworkforce_desktop::commands::delete_workflow,
+            agiworkforce_desktop::commands::get_workflow,
+            agiworkforce_desktop::commands::get_user_workflows,
+            agiworkforce_desktop::commands::execute_workflow,
+            agiworkforce_desktop::commands::pause_workflow,
+            agiworkforce_desktop::commands::resume_workflow,
+            agiworkforce_desktop::commands::cancel_workflow,
+            agiworkforce_desktop::commands::get_workflow_status,
+            agiworkforce_desktop::commands::get_execution_logs,
+            agiworkforce_desktop::commands::schedule_workflow,
+            agiworkforce_desktop::commands::trigger_workflow_on_event,
+            agiworkforce_desktop::commands::get_next_execution_time,
+            // Team collaboration commands
+            agiworkforce_desktop::commands::create_team,
+            agiworkforce_desktop::commands::get_team,
+            agiworkforce_desktop::commands::update_team,
+            agiworkforce_desktop::commands::delete_team,
+            agiworkforce_desktop::commands::get_user_teams,
+            agiworkforce_desktop::commands::invite_member,
+            agiworkforce_desktop::commands::accept_invitation,
+            agiworkforce_desktop::commands::remove_member,
+            agiworkforce_desktop::commands::update_member_role,
+            agiworkforce_desktop::commands::get_team_members,
+            agiworkforce_desktop::commands::get_team_invitations,
+            agiworkforce_desktop::commands::share_resource,
+            agiworkforce_desktop::commands::unshare_resource,
+            agiworkforce_desktop::commands::get_team_resources,
+            agiworkforce_desktop::commands::get_team_resources_by_type,
+            agiworkforce_desktop::commands::get_team_activity,
+            agiworkforce_desktop::commands::get_user_team_activity,
+            agiworkforce_desktop::commands::get_team_billing,
+            agiworkforce_desktop::commands::initialize_team_billing,
+            agiworkforce_desktop::commands::update_team_plan,
+            agiworkforce_desktop::commands::add_team_seats,
+            agiworkforce_desktop::commands::remove_team_seats,
+            agiworkforce_desktop::commands::calculate_team_cost,
+            agiworkforce_desktop::commands::update_team_usage,
+            agiworkforce_desktop::commands::transfer_team_ownership,
+            // Process reasoning commands
+            agiworkforce_desktop::commands::get_process_templates,
+            agiworkforce_desktop::commands::get_outcome_tracking,
+            agiworkforce_desktop::commands::get_process_success_rates,
+            agiworkforce_desktop::commands::get_best_practices,
+            agiworkforce_desktop::commands::get_process_statistics,
+            // Agent template commands
+            agiworkforce_desktop::commands::get_all_templates,
+            agiworkforce_desktop::commands::get_template_by_id,
+            agiworkforce_desktop::commands::get_templates_by_category,
+            agiworkforce_desktop::commands::install_template,
+            agiworkforce_desktop::commands::get_installed_templates,
+            agiworkforce_desktop::commands::search_templates,
+            agiworkforce_desktop::commands::execute_template,
+            agiworkforce_desktop::commands::uninstall_template,
+            agiworkforce_desktop::commands::get_template_categories
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
