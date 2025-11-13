@@ -207,7 +207,6 @@ use crate::analytics::{
     ScheduledReportGenerator, TrendPoint, UserMetrics, ToolMetrics,
 };
 use crate::commands::AppDatabase;
-use std::sync::Arc;
 use rusqlite::Connection;
 
 /// Helper function to create a tokio::sync::Mutex<Connection> for analytics

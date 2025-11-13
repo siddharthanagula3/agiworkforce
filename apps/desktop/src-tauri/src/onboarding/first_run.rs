@@ -6,7 +6,6 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::sample_data::SampleDataGenerator;
-use crate::agi::AIEmployee;
 
 #[derive(Debug, Error)]
 pub enum FirstRunError {

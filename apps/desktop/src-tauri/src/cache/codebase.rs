@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Cache entry types with different TTL policies
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

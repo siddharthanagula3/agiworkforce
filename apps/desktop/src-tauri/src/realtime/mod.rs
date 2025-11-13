@@ -3,7 +3,6 @@ pub mod presence;
 pub mod collaboration;
 pub mod events;
 
-use tokio_tungstenite::tungstenite::Message;
 
 pub use websocket_server::RealtimeServer;
 pub use presence::{PresenceManager, UserPresence, PresenceStatus, UserActivity, ActivityType};
