@@ -1,4 +1,4 @@
-import type { AutomationElementInfo, BoundingRect } from './automation';
+import type { AutomationElementInfo } from './automation';
 
 // ============================================================================
 // Recording Types

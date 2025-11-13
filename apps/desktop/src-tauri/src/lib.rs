@@ -65,6 +65,9 @@ pub mod api;
 pub mod database;
 
 // Communications (Email/IMAP/SMTP)
+
+// Messaging platform integrations (Slack, WhatsApp, Teams)
+pub mod messaging;
 pub mod communications;
 
 // Calendar integration (Google Calendar, Outlook)
@@ -97,6 +100,9 @@ pub mod cache;
 // Team collaboration system
 pub mod teams;
 
+// Real-time collaboration and WebSocket communication
+pub mod realtime;
+
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use tray::build_system_tray;
@@ -111,3 +117,7 @@ pub use error::{Error, Result};
 
 // Utilities
 pub mod utils;
+
+// Test utilities (only compiled in test builds)
+#[cfg(test)]
+pub mod test_utils;

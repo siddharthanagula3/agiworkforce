@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 25;
+const CURRENT_VERSION: i32 = 32;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -153,6 +153,41 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 25 {
         apply_migration_v25(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [25])?;
+    }
+
+    if current_version < 26 {
+        apply_migration_v26(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [26])?;
+    }
+
+    if current_version < 27 {
+        apply_migration_v27(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [27])?;
+    }
+
+    if current_version < 28 {
+        apply_migration_v28(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [28])?;
+    }
+
+    if current_version < 29 {
+        apply_migration_v29(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [29])?;
+    }
+
+    if current_version < 30 {
+        apply_migration_v30(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [30])?;
+    }
+
+    if current_version < 31 {
+        apply_migration_v31(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [31])?;
+    }
+
+    if current_version < 32 {
+        apply_migration_v32(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [32])?;
     }
 
     Ok(())
@@ -2400,6 +2435,487 @@ fn apply_migration_v25(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    Ok(())
+}
+
+/// Migration v26: ROI Analytics - Snapshots table
+fn apply_migration_v26(conn: &Connection) -> Result<()> {
+    // Analytics snapshots table - stores periodic ROI snapshots
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS analytics_snapshots (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            team_id TEXT,
+            snapshot_date INTEGER NOT NULL,
+            roi_data TEXT NOT NULL,
+            metrics_data TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_date
+         ON analytics_snapshots(snapshot_date DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_user
+         ON analytics_snapshots(user_id, snapshot_date DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_team
+         ON analytics_snapshots(team_id, snapshot_date DESC)
+         WHERE team_id IS NOT NULL",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v27: ROI Analytics - Enhanced automation tracking
+fn apply_migration_v27(conn: &Connection) -> Result<()> {
+    // Add cost tracking to automation_history
+    ensure_column(
+        conn,
+        "automation_history",
+        "estimated_manual_time_ms",
+        "estimated_manual_time_ms INTEGER",
+    )?;
+
+    ensure_column(
+        conn,
+        "automation_history",
+        "time_saved_ms",
+        "time_saved_ms INTEGER",
+    )?;
+
+    ensure_column(
+        conn,
+        "automation_history",
+        "cost_savings_usd",
+        "cost_savings_usd REAL",
+    )?;
+
+    // Create index for time-based ROI queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_automation_history_time_saved
+         ON automation_history(time_saved_ms DESC)
+         WHERE time_saved_ms IS NOT NULL",
+        [],
+    )?;
+
+    // Create index for cost-based ROI queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_automation_history_cost_savings
+         ON automation_history(cost_savings_usd DESC)
+         WHERE cost_savings_usd IS NOT NULL",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v28: ROI Analytics - Process benchmarks and best practices
+fn apply_migration_v28(conn: &Connection) -> Result<()> {
+    // Process benchmarks table - stores performance benchmarks for each process type
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS process_benchmarks (
+            id TEXT PRIMARY KEY,
+            process_type TEXT NOT NULL UNIQUE,
+            avg_duration_ms REAL NOT NULL,
+            success_rate REAL NOT NULL,
+            avg_cost_savings REAL NOT NULL,
+            sample_size INTEGER NOT NULL,
+            last_updated INTEGER NOT NULL,
+            benchmark_data TEXT
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_process_benchmarks_type
+         ON process_benchmarks(process_type)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_process_benchmarks_updated
+         ON process_benchmarks(last_updated DESC)",
+        [],
+    )?;
+
+    // ROI configurations table - customizable ROI calculation parameters
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS roi_configurations (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            team_id TEXT,
+            avg_hourly_rate REAL NOT NULL DEFAULT 50.0,
+            baseline_error_rate REAL NOT NULL DEFAULT 0.15,
+            avg_error_cost REAL NOT NULL DEFAULT 100.0,
+            currency TEXT NOT NULL DEFAULT 'USD',
+            custom_multipliers TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_roi_config_user
+         ON roi_configurations(user_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_roi_config_team
+         ON roi_configurations(team_id)
+         WHERE team_id IS NOT NULL",
+        [],
+    )?;
+
+    // Insert default configuration
+    conn.execute(
+        "INSERT OR IGNORE INTO roi_configurations
+         (id, user_id, team_id, avg_hourly_rate, baseline_error_rate, avg_error_cost, currency, created_at, updated_at)
+         VALUES ('default', 'default', NULL, 50.0, 0.15, 100.0, 'USD', strftime('%s', 'now'), strftime('%s', 'now'))",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v29: Enhanced tutorial and onboarding system
+fn apply_migration_v29(conn: &Connection) -> Result<()> {
+    // Tutorial progress tracking table - comprehensive progress tracking per user per tutorial
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tutorial_progress (
+            user_id TEXT NOT NULL,
+            tutorial_id TEXT NOT NULL,
+            current_step INTEGER NOT NULL DEFAULT 0,
+            completed_steps TEXT NOT NULL DEFAULT '[]', -- JSON array of completed step IDs
+            started_at INTEGER NOT NULL,
+            completed_at INTEGER,
+            last_updated INTEGER NOT NULL,
+            PRIMARY KEY (user_id, tutorial_id)
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tutorial_progress_user
+         ON tutorial_progress(user_id, last_updated DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tutorial_progress_completed
+         ON tutorial_progress(completed_at DESC)
+         WHERE completed_at IS NOT NULL",
+        [],
+    )?;
+
+    // Tutorial step views for analytics - track which steps users view
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tutorial_step_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            tutorial_id TEXT NOT NULL,
+            step_id TEXT NOT NULL,
+            viewed_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tutorial_step_views_user
+         ON tutorial_step_views(user_id, tutorial_id, viewed_at DESC)",
+        [],
+    )?;
+
+    // User rewards tracking - badges, feature unlocks, credits earned
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_rewards (
+            user_id TEXT NOT NULL,
+            reward_id TEXT NOT NULL,
+            granted_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, reward_id)
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_rewards_user
+         ON user_rewards(user_id, granted_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_rewards_reward
+         ON user_rewards(reward_id)",
+        [],
+    )?;
+
+    // Sample data marker - tracks if sample/demo data has been populated for a user
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sample_data_marker (
+            user_id TEXT PRIMARY KEY,
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Tutorial feedback table - collect user feedback on tutorials
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tutorial_feedback (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            tutorial_id TEXT NOT NULL,
+            rating INTEGER CHECK(rating >= 1 AND rating <= 5),
+            feedback_text TEXT,
+            helpful INTEGER CHECK(helpful IN (0, 1)),
+            reported_issues TEXT, -- JSON array
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tutorial_feedback_tutorial
+         ON tutorial_feedback(tutorial_id, rating DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tutorial_feedback_user
+         ON tutorial_feedback(user_id, created_at DESC)",
+        [],
+    )?;
+
+    // Interactive help sessions - track context-sensitive help usage
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS help_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            context TEXT NOT NULL, -- Which feature/page user was on
+            query TEXT, -- User's help search query
+            help_article_id TEXT, -- Which article was shown
+            was_helpful INTEGER CHECK(was_helpful IN (0, 1)),
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_help_sessions_user
+         ON help_sessions(user_id, created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_help_sessions_context
+         ON help_sessions(context, created_at DESC)",
+        [],
+    )?;
+
+    // Full-text search on tutorial feedback
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS tutorial_feedback_fts USING fts5(
+            feedback_id UNINDEXED,
+            feedback_text,
+            content=tutorial_feedback,
+            content_rowid=rowid
+        )",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v30: Real-time collaboration tables
+fn apply_migration_v30(conn: &Connection) -> Result<()> {
+    // User presence tracking
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_presence (
+            user_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            last_seen INTEGER NOT NULL,
+            current_activity TEXT,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Collaboration sessions
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS collaboration_sessions (
+            id TEXT PRIMARY KEY,
+            resource_type TEXT NOT NULL,
+            resource_id TEXT NOT NULL,
+            participants TEXT NOT NULL,
+            started_at INTEGER NOT NULL,
+            ended_at INTEGER
+        )",
+        [],
+    )?;
+
+    // Index for active sessions
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_collaboration_active
+         ON collaboration_sessions(resource_type, resource_id)
+         WHERE ended_at IS NULL",
+        [],
+    )?;
+
+    // Index for user presence lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_user_presence_status
+         ON user_presence(status, last_seen)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v31: Computer Use Agent sessions and actions
+fn apply_migration_v31(conn: &Connection) -> Result<()> {
+    // Computer use sessions
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS computer_use_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            task_description TEXT NOT NULL,
+            started_at INTEGER NOT NULL,
+            ended_at INTEGER,
+            status TEXT NOT NULL,
+            actions_taken INTEGER DEFAULT 0
+        )",
+        [],
+    )?;
+
+    // Computer use action log
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS computer_use_actions (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            action_data TEXT NOT NULL,
+            screenshot_path TEXT,
+            timestamp INTEGER NOT NULL,
+            success INTEGER DEFAULT 1,
+            FOREIGN KEY(session_id) REFERENCES computer_use_sessions(id)
+        )",
+        [],
+    )?;
+
+    // Index for session lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_computer_use_sessions_user
+         ON computer_use_sessions(user_id, started_at DESC)",
+        [],
+    )?;
+
+    // Index for action log by session
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_computer_use_actions_session
+         ON computer_use_actions(session_id, timestamp)",
+        [],
+    )?;
+
+    // Index for active sessions
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_computer_use_sessions_status
+         ON computer_use_sessions(status)
+         WHERE status = 'running'",
+        [],
+    )?;
+
+    Ok(())
+}
+
+
+/// Migration v32: Messaging platform integrations
+fn apply_migration_v32(conn: &Connection) -> Result<()> {
+    // Messaging connections table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS messaging_connections (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL CHECK(platform IN ('slack', 'whatsapp', 'teams')),
+            workspace_id TEXT,
+            workspace_name TEXT,
+            credentials TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1 CHECK(is_active IN (0, 1)),
+            created_at INTEGER NOT NULL,
+            last_used_at INTEGER
+        )",
+        [],
+    )?;
+
+    // Index for user connections lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messaging_connections_user
+         ON messaging_connections(user_id, platform)",
+        [],
+    )?;
+
+    // Index for active connections
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messaging_connections_active
+         ON messaging_connections(user_id, is_active)
+         WHERE is_active = 1",
+        [],
+    )?;
+
+    // Messaging history table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS messaging_history (
+            id TEXT PRIMARY KEY,
+            connection_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            message_id TEXT,
+            direction TEXT NOT NULL CHECK(direction IN ('inbound', 'outbound')),
+            sender_id TEXT,
+            sender_name TEXT,
+            content TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            metadata TEXT,
+            FOREIGN KEY(connection_id) REFERENCES messaging_connections(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Index for message history lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messaging_history_connection
+         ON messaging_history(connection_id, timestamp DESC)",
+        [],
+    )?;
+
+    // Index for channel history lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messaging_history_channel
+         ON messaging_history(channel_id, timestamp DESC)",
+        [],
+    )?;
+
+    // Index for direction-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messaging_history_direction
+         ON messaging_history(connection_id, direction, timestamp DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v32: Placeholder for future features
+fn apply_migration_v32(_conn: &Connection) -> Result<()> {
+    // Reserved for future use
     Ok(())
 }
 

@@ -292,4 +292,45 @@ impl KeyboardSimulator {
             _ => None,
         }
     }
+
+    /// Press a key by name (e.g., "Enter", "Escape", "Tab")
+    pub async fn press_key_by_name(&self, key_name: &str) -> Result<()> {
+        use windows::Win32::UI::Input::KeyboardAndMouse::*;
+
+        let virtual_key = match key_name.to_lowercase().as_str() {
+            "enter" | "return" => VK_RETURN.0,
+            "escape" | "esc" => VK_ESCAPE.0,
+            "tab" => VK_TAB.0,
+            "backspace" | "back" => VK_BACK.0,
+            "delete" | "del" => VK_DELETE.0,
+            "space" => VK_SPACE.0,
+            "up" | "arrowup" => VK_UP.0,
+            "down" | "arrowdown" => VK_DOWN.0,
+            "left" | "arrowleft" => VK_LEFT.0,
+            "right" | "arrowright" => VK_RIGHT.0,
+            "home" => VK_HOME.0,
+            "end" => VK_END.0,
+            "pageup" | "pgup" => VK_PRIOR.0,
+            "pagedown" | "pgdown" => VK_NEXT.0,
+            "insert" | "ins" => VK_INSERT.0,
+            "f1" => VK_F1.0,
+            "f2" => VK_F2.0,
+            "f3" => VK_F3.0,
+            "f4" => VK_F4.0,
+            "f5" => VK_F5.0,
+            "f6" => VK_F6.0,
+            "f7" => VK_F7.0,
+            "f8" => VK_F8.0,
+            "f9" => VK_F9.0,
+            "f10" => VK_F10.0,
+            "f11" => VK_F11.0,
+            "f12" => VK_F12.0,
+            _ => {
+                return Err(anyhow!("Unsupported key name: {}", key_name));
+            }
+        };
+
+        self.press_key(virtual_key)?;
+        Ok(())
+    }
 }

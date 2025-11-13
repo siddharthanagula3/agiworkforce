@@ -1,5 +1,5 @@
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall};
+use crate::router::{ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,10 @@ enum GooglePart {
     Text {
         text: String,
     },
+    InlineData {
+        #[serde(rename = "inline_data")]
+        inline_data: GoogleInlineData,
+    },
     FunctionCall {
         #[serde(rename = "functionCall")]
         function_call: GoogleFunctionCall,
@@ -27,6 +31,12 @@ enum GooglePart {
         #[serde(rename = "functionResponse")]
         function_response: GoogleFunctionResponse,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GoogleInlineData {
+    mime_type: String,
+    data: String, // base64 encoded
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +146,57 @@ impl GoogleProvider {
             _ => role.to_string(),
         }
     }
+
+    /// Convert multimodal content to Google format
+    fn convert_content(text: &str, multimodal: Option<&Vec<ContentPart>>) -> Vec<GooglePart> {
+        let mut parts = Vec::new();
+
+        // Add text first if not empty
+        if !text.is_empty() {
+            parts.push(GooglePart::Text {
+                text: text.to_string(),
+            });
+        }
+
+        // Add multimodal content if present
+        if let Some(content_parts) = multimodal {
+            for part in content_parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        parts.push(GooglePart::Text {
+                            text: text.clone(),
+                        });
+                    }
+                    ContentPart::Image { image } => {
+                        let mime_type = match image.format {
+                            ImageFormat::Png => "image/png",
+                            ImageFormat::Jpeg => "image/jpeg",
+                            ImageFormat::Webp => "image/webp",
+                        };
+                        let base64_data = base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            &image.data,
+                        );
+                        parts.push(GooglePart::InlineData {
+                            inline_data: GoogleInlineData {
+                                mime_type: mime_type.to_string(),
+                                data: base64_data,
+                            },
+                        });
+                    }
+                }
+            }
+        }
+
+        // If no parts were added, add an empty text part
+        if parts.is_empty() {
+            parts.push(GooglePart::Text {
+                text: String::new(),
+            });
+        }
+
+        parts
+    }
 }
 
 #[async_trait::async_trait]
@@ -164,9 +225,7 @@ impl LLMProvider for GoogleProvider {
                 .iter()
                 .map(|m| GoogleContent {
                     role: Self::convert_role(&m.role),
-                    parts: vec![GooglePart::Text {
-                        text: m.content.clone(),
-                    }],
+                    parts: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
                 })
                 .collect(),
             generation_config: Some(GoogleGenerationConfig {
@@ -209,6 +268,9 @@ impl LLMProvider for GoogleProvider {
                 match part {
                     GooglePart::Text { text } => {
                         text_content.push_str(text);
+                    }
+                    GooglePart::InlineData { .. } => {
+                        // Skip inline data in responses (images)
                     }
                     GooglePart::FunctionCall { function_call } => {
                         // Generate unique ID for function call
@@ -277,6 +339,14 @@ impl LLMProvider for GoogleProvider {
         "Google"
     }
 
+    fn supports_vision(&self) -> bool {
+        true // Gemini models support vision
+    }
+
+    fn supports_function_calling(&self) -> bool {
+        true // Gemini models support function declarations
+    }
+
     async fn send_message_streaming(
         &self,
         request: &LLMRequest,
@@ -304,9 +374,7 @@ impl LLMProvider for GoogleProvider {
                 .iter()
                 .map(|m| GoogleContent {
                     role: Self::convert_role(&m.role),
-                    parts: vec![GooglePart::Text {
-                        text: m.content.clone(),
-                    }],
+                    parts: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
                 })
                 .collect(),
             generation_config: Some(GoogleGenerationConfig {
