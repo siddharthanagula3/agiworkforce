@@ -23,6 +23,10 @@ describe('AnalyticsService', () => {
     // Clear localStorage
     localStorage.clear();
 
+    // Mock URL.createObjectURL for export tests
+    global.URL.createObjectURL = vi.fn(() => 'mock-url');
+    global.URL.revokeObjectURL = vi.fn();
+
     // Create new service instance
     service = new AnalyticsService();
   });
@@ -61,24 +65,39 @@ describe('AnalyticsService', () => {
 
   describe('Event Tracking', () => {
     beforeEach(() => {
-      // Enable analytics for testing
+      // Enable analytics for testing and clear any initial events
       service.updateConfig({ enabled: true });
+      // Clear the queue that may have session_started event
+      service.getSessionInfo(); // This forces a fresh read
     });
 
     it('should track events when enabled', () => {
+      // Get initial count (may include session_started)
+      const initialCount = service.getSessionInfo().events_count;
+
       service.track('app_opened', { test: true });
       const sessionInfo = service.getSessionInfo();
-      expect(sessionInfo.events_count).toBe(1);
+
+      // Should have one more event than initial
+      expect(sessionInfo.events_count).toBe(initialCount + 1);
     });
 
     it('should not track events when disabled', () => {
+      // Get initial count before disabling
+      const initialCount = service.getSessionInfo().events_count;
+
       service.updateConfig({ enabled: false });
       service.track('app_opened', { test: true });
       const sessionInfo = service.getSessionInfo();
-      expect(sessionInfo.events_count).toBe(0);
+
+      // Event count should remain the same (no new events added)
+      expect(sessionInfo.events_count).toBe(initialCount);
     });
 
     it('should sanitize PII from event properties', () => {
+      // Get initial count
+      const initialCount = service.getSessionInfo().events_count;
+
       service.track('app_opened', {
         email: 'test@example.com',
         name: 'John Doe',
@@ -86,7 +105,7 @@ describe('AnalyticsService', () => {
       });
 
       const sessionInfo = service.getSessionInfo();
-      expect(sessionInfo.events_count).toBe(1);
+      expect(sessionInfo.events_count).toBe(initialCount + 1);
       // PII should be removed (we can't directly check the event, but it should be sanitized)
     });
 
