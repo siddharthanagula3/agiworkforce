@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,7 +118,6 @@ pub async fn shortcuts_register(
     {
         // On Windows, we can use tauri-plugin-global-shortcut or native Windows APIs
         // For now, emit an event when shortcut is triggered
-        let action = shortcut.action.clone();
         let app_clone = app.clone();
 
         // Store the key for cleanup

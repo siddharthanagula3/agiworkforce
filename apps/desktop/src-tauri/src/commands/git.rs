@@ -3,7 +3,6 @@
  * Full Git functionality for repository management
  */
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::process::Command;
 
 /// Git repository status

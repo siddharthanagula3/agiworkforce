@@ -140,7 +140,7 @@ function conversationsMatchPinnedOrder(current: ConversationUI[], next: Conversa
     const currentConversation = current[index];
     const nextConversation = next[index];
 
-    if (!nextConversation) {
+    if (!currentConversation || !nextConversation) {
       return false;
     }
 

@@ -107,6 +107,15 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
   },
 };
 
+export const createDefaultLLMConfig = (): LLMConfig => ({
+  ...defaultSettings.llmConfig,
+  defaultModels: { ...defaultSettings.llmConfig.defaultModels },
+});
+
+export const createDefaultWindowPreferences = (): WindowPreferences => ({
+  ...defaultSettings.windowPreferences,
+});
+
 const storageFallback: Storage = {
   get length() {
     return 0;
@@ -264,6 +273,20 @@ export const useSettingsStore = create<SettingsState>()(
             windowPreferences: WindowPreferences;
           }>('settings_load');
 
+          const mergedLLMConfig: LLMConfig = {
+            ...defaultSettings.llmConfig,
+            ...(settings.llmConfig ?? defaultSettings.llmConfig),
+            defaultModels: {
+              ...defaultSettings.llmConfig.defaultModels,
+              ...(settings.llmConfig?.defaultModels ?? defaultSettings.llmConfig.defaultModels),
+            },
+          };
+
+          const mergedWindowPreferences: WindowPreferences = {
+            ...defaultSettings.windowPreferences,
+            ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
+          };
+
           // Load API keys from keyring
           const providers: Provider[] = [
             'openai',
@@ -311,8 +334,8 @@ export const useSettingsStore = create<SettingsState>()(
 
           set({
             apiKeys,
-            llmConfig: settings.llmConfig,
-            windowPreferences: settings.windowPreferences,
+            llmConfig: mergedLLMConfig,
+            windowPreferences: mergedWindowPreferences,
             loading: false,
           });
 
@@ -358,6 +381,29 @@ export const useSettingsStore = create<SettingsState>()(
         llmConfig: state.llmConfig,
         windowPreferences: state.windowPreferences,
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<SettingsState> | undefined;
+        const mergedLLMConfig: LLMConfig = {
+          ...currentState.llmConfig,
+          ...(persisted?.llmConfig ?? {}),
+          defaultModels: {
+            ...currentState.llmConfig.defaultModels,
+            ...(persisted?.llmConfig?.defaultModels ?? {}),
+          },
+        };
+
+        const mergedWindowPreferences: WindowPreferences = {
+          ...currentState.windowPreferences,
+          ...(persisted?.windowPreferences ?? {}),
+        };
+
+        return {
+          ...currentState,
+          ...persisted,
+          llmConfig: mergedLLMConfig,
+          windowPreferences: mergedWindowPreferences,
+        };
+      },
     },
   ),
 );
