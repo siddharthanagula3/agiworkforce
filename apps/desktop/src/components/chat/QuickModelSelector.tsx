@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Star, Clock, Zap, Check } from 'lucide-react';
 import { useModelStore, selectFavoriteModelsMetadata, selectRecentModelsMetadata } from '../../stores/modelStore';
 import { getModelMetadata, PROVIDER_LABELS } from '../../constants/llm';
@@ -19,10 +19,8 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
 
   const {
     selectedModel,
-    selectedProvider,
     selectModel,
     favorites,
-    recentModels,
   } = useModelStore();
 
   const favoriteModels = useModelStore(selectFavoriteModelsMetadata);

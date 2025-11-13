@@ -270,6 +270,148 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     trackFeatureUsage: (flagName: string) => {
       featureFlags.trackFeatureUsage(flagName);
     },
+
+    // ==================== ROI Analytics Methods ====================
+
+    // ROI State
+    roiReport: null as any | null,
+    processMetrics: [] as any[],
+    userMetrics: [] as any[],
+    toolMetrics: [] as any[],
+    trends: {} as Record<string, any[]>,
+
+    isLoadingROI: false,
+
+    // Calculate ROI for date range
+    calculateROI: async (startDate: number, endDate: number) => {
+      set({ isLoadingROI: true });
+      try {
+        const roi = await invoke('analytics_calculate_roi', {
+          startDate,
+          endDate,
+        });
+        set({ roiReport: roi });
+        return roi;
+      } catch (error) {
+        console.error('Failed to calculate ROI:', error);
+        errorTracking.captureError(
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            component: 'analyticsStore',
+            severity: 'high' as any,
+          }
+        );
+        throw error;
+      } finally {
+        set({ isLoadingROI: false });
+      }
+    },
+
+    // Load process metrics
+    loadProcessMetrics: async (startDate: number, endDate: number) => {
+      try {
+        const metrics = await invoke('analytics_get_process_metrics', {
+          startDate,
+          endDate,
+        });
+        set({ processMetrics: metrics });
+        return metrics;
+      } catch (error) {
+        console.error('Failed to load process metrics:', error);
+        throw error;
+      }
+    },
+
+    // Load user metrics
+    loadUserMetrics: async (startDate: number, endDate: number) => {
+      try {
+        const metrics = await invoke('analytics_get_user_metrics', {
+          startDate,
+          endDate,
+        });
+        set({ userMetrics: metrics });
+        return metrics;
+      } catch (error) {
+        console.error('Failed to load user metrics:', error);
+        throw error;
+      }
+    },
+
+    // Load tool metrics
+    loadToolMetrics: async (startDate: number, endDate: number) => {
+      try {
+        const metrics = await invoke('analytics_get_tool_metrics', {
+          startDate,
+          endDate,
+        });
+        set({ toolMetrics: metrics });
+        return metrics;
+      } catch (error) {
+        console.error('Failed to load tool metrics:', error);
+        throw error;
+      }
+    },
+
+    // Load metric trends
+    loadTrends: async (metric: string, days: number) => {
+      try {
+        const trends = await invoke('analytics_get_metric_trends', {
+          metric,
+          days,
+        });
+        set((state) => {
+          state.trends[metric] = trends;
+        });
+        return trends;
+      } catch (error) {
+        console.error('Failed to load trends:', error);
+        throw error;
+      }
+    },
+
+    // Export analytics report
+    exportReport: async (format: string, startDate: number, endDate: number) => {
+      try {
+        const report = await invoke('analytics_export_report', {
+          format,
+          startDate,
+          endDate,
+        });
+
+        // Download the report
+        const blob = new Blob([report], {
+          type: format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/markdown',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `roi-report-${Date.now()}.${format === 'markdown' ? 'md' : format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        return report;
+      } catch (error) {
+        console.error('Failed to export report:', error);
+        throw error;
+      }
+    },
+
+    // Load all ROI data
+    loadAllROIData: async (startDate: number, endDate: number) => {
+      const { calculateROI, loadProcessMetrics, loadUserMetrics, loadToolMetrics } = get();
+
+      set({ isLoadingROI: true });
+      try {
+        await Promise.all([
+          calculateROI(startDate, endDate),
+          loadProcessMetrics(startDate, endDate),
+          loadUserMetrics(startDate, endDate),
+          loadToolMetrics(startDate, endDate),
+        ]);
+      } finally {
+        set({ isLoadingROI: false });
+      }
+    },
   }))
 );
 
