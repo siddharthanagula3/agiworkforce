@@ -1,4 +1,8 @@
+pub mod codegen;
+pub mod executor;
 pub mod input;
+pub mod inspector;
+pub mod recorder;
 pub mod screen;
 pub mod uia;
 

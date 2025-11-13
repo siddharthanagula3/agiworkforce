@@ -1006,6 +1006,22 @@ impl ToolRegistry {
         Ok(())
     }
 
+    /// Load MCP tools from connected MCP servers
+    pub async fn load_mcp_tools(
+        &self,
+        mcp_registry: Arc<crate::mcp::McpToolRegistry>,
+    ) -> Result<usize> {
+        let mcp_tools = mcp_registry.get_all_tool_schemas();
+        let count = mcp_tools.len();
+
+        for tool in mcp_tools {
+            self.register_tool(tool)?;
+        }
+
+        tracing::info!("Loaded {} MCP tools into AGI tool registry", count);
+        Ok(count)
+    }
+
     fn register_tool(&self, tool: Tool) -> Result<()> {
         // Index by capabilities
         let mut capabilities_index = self.capabilities_index.lock().unwrap();

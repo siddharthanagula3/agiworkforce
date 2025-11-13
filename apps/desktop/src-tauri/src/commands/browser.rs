@@ -743,3 +743,273 @@ pub async fn browser_enable_request_interception(
         .await
         .map_err(|e| format!("Failed to enable request interception: {}", e))
 }
+
+// ============================================================================
+// BROWSER VISUALIZATION COMMANDS
+// ============================================================================
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElementBounds {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DOMSnapshot {
+    pub html: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsoleLog {
+    pub level: String,
+    pub message: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkRequest {
+    pub url: String,
+    pub method: String,
+    pub status: u16,
+    pub duration_ms: u64,
+    pub timestamp: u64,
+}
+
+/// Get screenshot stream for live visualization (returns base64 PNG)
+#[tauri::command]
+pub async fn browser_get_screenshot_stream(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<String, String> {
+    tracing::debug!("Getting screenshot stream for tab: {}", tab_id);
+
+    let browser_state = state.0.lock().await;
+    let tab_manager = browser_state.tab_manager.lock().await;
+
+    let options = ScreenshotOptions {
+        full_page: false,
+        format: ImageFormat::Png,
+        quality: Some(60), // Lower quality for streaming
+    };
+
+    match tab_manager.screenshot(&tab_id, options).await {
+        Ok(path) => {
+            // Read the screenshot file and convert to base64
+            match std::fs::read(&path) {
+                Ok(bytes) => {
+                    use base64::Engine;
+                    let base64_str = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+                    // Clean up temp file
+                    let _ = std::fs::remove_file(&path);
+
+                    Ok(base64_str)
+                }
+                Err(e) => Err(format!("Failed to read screenshot file: {}", e)),
+            }
+        }
+        Err(e) => Err(format!("Failed to capture screenshot: {}", e)),
+    }
+}
+
+/// Highlight element and return its bounds
+#[tauri::command]
+pub async fn browser_highlight_element(
+    tab_id: String,
+    selector: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<ElementBounds, String> {
+    tracing::info!("Highlighting element {} in tab {}", selector, tab_id);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    // Get element state (includes bounds)
+    let element_state = AdvancedBrowserOps::get_element_state(cdp_client.clone(), &selector)
+        .await
+        .map_err(|e| format!("Failed to get element state: {}", e))?;
+
+    // Inject highlight overlay via JavaScript
+    let highlight_script = format!(
+        r#"
+        (function() {{
+            const element = document.querySelector('{}');
+            if (!element) return null;
+
+            const rect = element.getBoundingClientRect();
+
+            // Create or update highlight overlay
+            let overlay = document.getElementById('agi-highlight-overlay');
+            if (!overlay) {{
+                overlay = document.createElement('div');
+                overlay.id = 'agi-highlight-overlay';
+                overlay.style.position = 'fixed';
+                overlay.style.border = '2px solid #facc15';
+                overlay.style.backgroundColor = 'rgba(250, 204, 21, 0.1)';
+                overlay.style.pointerEvents = 'none';
+                overlay.style.zIndex = '999999';
+                overlay.style.transition = 'all 0.2s ease-out';
+                document.body.appendChild(overlay);
+            }}
+
+            overlay.style.left = rect.left + 'px';
+            overlay.style.top = rect.top + 'px';
+            overlay.style.width = rect.width + 'px';
+            overlay.style.height = rect.height + 'px';
+
+            return {{
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height
+            }};
+        }})()
+        "#,
+        selector
+    );
+
+    let result = DomOperations::evaluate(&tab_id, &highlight_script)
+        .await
+        .map_err(|e| format!("Failed to highlight element: {}", e))?;
+
+    // Parse bounds from result
+    if let Some(obj) = result.as_object() {
+        let bounds = ElementBounds {
+            x: obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            y: obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            width: obj.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
+            height: obj.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        };
+        Ok(bounds)
+    } else {
+        Err("Element not found".to_string())
+    }
+}
+
+/// Get DOM snapshot (HTML)
+#[tauri::command]
+pub async fn browser_get_dom_snapshot(
+    tab_id: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<DOMSnapshot, String> {
+    tracing::info!("Getting DOM snapshot for tab: {}", tab_id);
+
+    let script = "document.documentElement.outerHTML";
+    let html = DomOperations::evaluate(&tab_id, script)
+        .await
+        .map_err(|e| format!("Failed to get DOM snapshot: {}", e))?;
+
+    let html_string = html.as_str().unwrap_or("").to_string();
+
+    Ok(DOMSnapshot {
+        html: html_string,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64,
+    })
+}
+
+/// Get console logs from browser
+#[tauri::command]
+pub async fn browser_get_console_logs(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<ConsoleLog>, String> {
+    tracing::info!("Getting console logs for tab: {}", tab_id);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    // Execute JavaScript to get console logs
+    // Note: This is a simplified implementation. For production, you'd want to
+    // capture console.log calls via CDP Runtime.consoleAPICalled events
+    let script = r#"
+        (function() {
+            // Return any errors from the console
+            if (window.__agiConsoleLogs) {
+                return window.__agiConsoleLogs;
+            }
+            return [];
+        })()
+    "#;
+
+    let result = DomOperations::evaluate(&tab_id, script)
+        .await
+        .map_err(|e| format!("Failed to get console logs: {}", e))?;
+
+    // Parse console logs from result
+    let logs: Vec<ConsoleLog> = vec![];
+
+    // For now, return empty array. Proper implementation would:
+    // 1. Enable Runtime domain via CDP
+    // 2. Listen to Runtime.consoleAPICalled events
+    // 3. Store logs in browser state
+    // 4. Return stored logs here
+
+    Ok(logs)
+}
+
+/// Get network activity
+#[tauri::command]
+pub async fn browser_get_network_activity(
+    tab_id: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<NetworkRequest>, String> {
+    tracing::info!("Getting network activity for tab: {}", tab_id);
+
+    let browser_state = state.0.lock().await;
+    let cdp_client = browser_state
+        .get_cdp_client(&tab_id)
+        .await
+        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+
+    // Execute JavaScript to get network requests from Performance API
+    let script = r#"
+        (function() {
+            const entries = performance.getEntriesByType('resource');
+            return entries.map(entry => ({
+                url: entry.name,
+                method: 'GET', // Performance API doesn't provide method
+                status: 200, // Performance API doesn't provide status
+                duration_ms: Math.round(entry.duration),
+                timestamp: Math.round(entry.startTime + performance.timeOrigin)
+            }));
+        })()
+    "#;
+
+    let result = DomOperations::evaluate(&tab_id, script)
+        .await
+        .map_err(|e| format!("Failed to get network activity: {}", e))?;
+
+    // Parse network requests from result
+    let requests: Vec<NetworkRequest> = if let Some(arr) = result.as_array() {
+        arr.iter()
+            .filter_map(|v| {
+                let obj = v.as_object()?;
+                Some(NetworkRequest {
+                    url: obj.get("url")?.as_str()?.to_string(),
+                    method: obj.get("method")?.as_str()?.to_string(),
+                    status: obj.get("status")?.as_u64()? as u16,
+                    duration_ms: obj.get("duration_ms")?.as_u64()?,
+                    timestamp: obj.get("timestamp")?.as_u64()?,
+                })
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    Ok(requests)
+}
