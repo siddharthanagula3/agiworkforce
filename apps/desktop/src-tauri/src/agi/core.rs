@@ -60,7 +60,7 @@ impl AGICore {
         )?);
 
         // Register all available tools
-        tool_registry.register_all_tools(automation.clone(), router.clone())?);
+        tool_registry.register_all_tools(automation.clone(), router.clone())?;
 
         Ok(Self {
             config,

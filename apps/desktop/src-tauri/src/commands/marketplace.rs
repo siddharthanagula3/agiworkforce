@@ -384,9 +384,9 @@ pub async fn get_workflow_templates() -> Result<Vec<WorkflowTemplate>, String> {
     Ok(get_all_templates())
 }
 
-/// Get templates by category
+/// Get workflow templates by category
 #[tauri::command]
-pub async fn get_templates_by_category(category: String) -> Result<Vec<WorkflowTemplate>, String> {
+pub async fn get_workflow_templates_by_category(category: String) -> Result<Vec<WorkflowTemplate>, String> {
     let category_enum = WorkflowCategory::from_str(&category);
     let all_templates = get_all_templates();
 
@@ -395,9 +395,9 @@ pub async fn get_templates_by_category(category: String) -> Result<Vec<WorkflowT
         .collect())
 }
 
-/// Search templates by query
+/// Search workflow templates by query
 #[tauri::command]
-pub async fn search_templates(query: String) -> Result<Vec<WorkflowTemplate>, String> {
+pub async fn search_workflow_templates(query: String) -> Result<Vec<WorkflowTemplate>, String> {
     let all_templates = get_all_templates();
     let query_lower = query.to_lowercase();
 

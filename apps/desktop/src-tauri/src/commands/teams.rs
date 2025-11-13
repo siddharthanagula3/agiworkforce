@@ -4,7 +4,7 @@ use crate::teams::{
     TeamActivity, TeamActivityManager, ActivityType,
     TeamBilling, BillingPlan, BillingCycle, TeamBillingManager, UsageMetrics,
 };
-use crate::db::AppDatabase;
+use crate::commands::AppDatabase;
 use serde_json::json;
 use tauri::State;
 

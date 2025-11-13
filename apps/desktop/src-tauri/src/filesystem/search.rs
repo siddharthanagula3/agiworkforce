@@ -198,12 +198,14 @@ fn is_ignored(path: &Path) -> bool {
     })
 }
 
-/// Read file content for context items
+/// Read file content for autocomplete context
+///
+/// DEPRECATED: This function lacks permission checks. Use fs_read_file_content from file_ops.rs instead.
+/// Keeping for backwards compatibility but will be removed in future versions.
 ///
 /// Reads the content of a file with size limit for performance.
 /// Returns truncated content if file exceeds 100KB.
-#[tauri::command]
-pub async fn fs_read_file_content(file_path: String) -> Result<FileContentResponse, String> {
+async fn _deprecated_fs_read_file_content(file_path: String) -> Result<FileContentResponse, String> {
     let path = PathBuf::from(&file_path);
 
     // Run file reading in background thread
