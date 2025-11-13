@@ -242,6 +242,7 @@ fn main() {
             // AGI commands
             agiworkforce_desktop::commands::agi_init,
             agiworkforce_desktop::commands::agi_submit_goal,
+            agiworkforce_desktop::commands::agi_submit_goal_parallel,
             agiworkforce_desktop::commands::agi_get_goal_status,
             agiworkforce_desktop::commands::agi_list_goals,
             agiworkforce_desktop::commands::agi_stop,

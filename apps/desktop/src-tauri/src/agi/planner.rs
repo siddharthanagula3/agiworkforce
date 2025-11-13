@@ -598,4 +598,146 @@ Your response:"#,
 
         Ok(success_rate > 0.75)
     }
+
+    pub async fn create_parallel_plans(
+        &self,
+        goal: &Goal,
+        context: &ExecutionContext,
+        num_plans: usize,
+    ) -> Result<Vec<Plan>> {
+        tracing::info!(
+            "[Planner] Creating {} parallel plans for goal: {}",
+            num_plans,
+            goal.description
+        );
+
+        let knowledge = self.knowledge_base.get_relevant_knowledge(goal, 10).await?;
+        let suggested_tools: Vec<_> = self.tool_registry.suggest_tools(&goal.description);
+
+        let mut plans = Vec::new();
+
+        for i in 0..num_plans {
+            let strategy_hint = match i {
+                0 => "Focus on speed and efficiency",
+                1 => "Focus on thoroughness and accuracy",
+                2 => "Use alternative tools and approaches",
+                3 => "Optimize for minimal resource usage",
+                4 => "Prioritize reliability and error handling",
+                5 => "Experimental: try creative solutions",
+                6 => "Conservative: use proven methods only",
+                _ => "Balanced approach",
+            };
+
+            let plan_json = self
+                .plan_with_strategy(goal, context, &knowledge, &suggested_tools, strategy_hint)
+                .await?;
+
+            let mut plan = self.parse_plan(goal, &plan_json)?;
+            plan.goal_id = format!("{}_{}", goal.id, i);
+
+            plans.push(plan);
+        }
+
+        tracing::info!(
+            "[Planner] Generated {} parallel plans successfully",
+            plans.len()
+        );
+
+        Ok(plans)
+    }
+
+    async fn plan_with_strategy(
+        &self,
+        goal: &Goal,
+        context: &ExecutionContext,
+        knowledge: &[KnowledgeEntry],
+        tools: &[Tool],
+        strategy_hint: &str,
+    ) -> Result<String> {
+        let knowledge_summary: Vec<String> = knowledge
+            .iter()
+            .map(|k| format!("- {}: {}", k.category, k.content))
+            .take(5)
+            .collect();
+
+        let tools_summary: Vec<String> = tools
+            .iter()
+            .map(|t| format!("- {}: {}", t.id, t.description))
+            .take(10)
+            .collect();
+
+        let prompt = format!(
+            r#"You are an AGI planning system. Create a plan to achieve the goal using THIS STRATEGY: {}
+
+Goal: {}
+Priority: {:?}
+Success Criteria: {}
+
+Available Tools:
+{}
+
+Relevant Knowledge:
+{}
+
+Current Context:
+- CPU Usage: {}%
+- Memory Usage: {}MB
+- Previous Steps: {}
+
+Return ONLY a JSON array of steps with this structure:
+[
+  {{
+    "id": "step_1",
+    "tool_id": "tool_name",
+    "description": "what this step does",
+    "parameters": {{ }},
+    "estimated_resources": {{ "cpu_percent": 10.0, "memory_mb": 100, "network_mb": 0.0 }},
+    "dependencies": []
+  }}
+]"#,
+            strategy_hint,
+            goal.description,
+            goal.priority,
+            goal.success_criteria.join(", "),
+            tools_summary.join("\n"),
+            knowledge_summary.join("\n"),
+            context.available_resources.cpu_usage_percent,
+            context.available_resources.memory_usage_mb,
+            context.tool_results.len()
+        );
+
+        let preferences = RouterPreferences {
+            provider: Some("anthropic".to_string()),
+            model: Some("claude-sonnet-4-5".to_string()),
+            strategy: RoutingStrategy::PreferenceWithFallback,
+        };
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+                tool_calls: None,
+                tool_call_id: None,
+            }],
+            model: "claude-sonnet-4-5".to_string(),
+            temperature: Some(0.8),
+            max_tokens: Some(4000),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+        };
+
+        let router = self.router.lock().await;
+        let candidates = router.candidates(&request, &preferences);
+        drop(router);
+
+        if !candidates.is_empty() {
+            let router = self.router.lock().await;
+            if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
+                return Ok(outcome.response.content);
+            }
+        }
+
+        self.generate_basic_plan(goal, tools).await
+    }
 }
