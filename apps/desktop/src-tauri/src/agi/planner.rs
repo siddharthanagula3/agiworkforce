@@ -148,10 +148,11 @@ Return ONLY the JSON array."#,
         );
 
         // Use LLM to generate plan
+        // HYBRID STRATEGY: Use Claude Sonnet 4.5 for planning (best reasoning, 77.2% SWE-bench)
         let preferences = RouterPreferences {
-            provider: None,
-            model: None,
-            strategy: RoutingStrategy::Auto,
+            provider: Some("anthropic".to_string()),
+            model: Some("claude-sonnet-4-5".to_string()),
+            strategy: RoutingStrategy::PreferenceWithFallback,
         };
 
         let request = LLMRequest {
@@ -161,7 +162,7 @@ Return ONLY the JSON array."#,
                 tool_calls: None,
                 tool_call_id: None,
             }],
-            model: "".to_string(),
+            model: "claude-sonnet-4-5".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(4000),
             stream: false,
