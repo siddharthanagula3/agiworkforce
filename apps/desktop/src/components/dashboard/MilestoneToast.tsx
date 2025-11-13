@@ -107,7 +107,7 @@ export function MilestoneToast() {
 
       // Show toast with custom component
       toast.custom(
-        (t) => (
+        (_t) => (
           <div className="bg-background border border-border rounded-lg shadow-lg p-4 w-[400px]">
             <MilestoneToastContent
               milestone={milestone}

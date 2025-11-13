@@ -185,11 +185,12 @@ function FileChangeBadge({
   status
 }: {
   type: 'modified' | 'added' | 'deleted';
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'partial';
 }) {
   const getColor = () => {
     if (status === 'accepted') return 'bg-green-500/20 text-green-700 dark:text-green-400';
     if (status === 'rejected') return 'bg-red-500/20 text-red-700 dark:text-red-400';
+    if (status === 'partial') return 'bg-amber-500/20 text-amber-700 dark:text-amber-400';
 
     switch (type) {
       case 'added':
@@ -202,15 +203,17 @@ function FileChangeBadge({
   };
 
   const getLabel = () => {
-    if (status !== 'pending') return status.charAt(0).toUpperCase() + status.slice(1);
+    if (status !== 'pending' && status !== 'partial') {
+      return status.charAt(0).toUpperCase() + status.slice(1);
+    }
 
     switch (type) {
       case 'added':
-        return 'Added';
+        return status === 'partial' ? 'Partial' : 'Added';
       case 'deleted':
-        return 'Deleted';
+        return status === 'partial' ? 'Partial' : 'Deleted';
       case 'modified':
-        return 'Modified';
+        return status === 'partial' ? 'Partial' : 'Modified';
     }
   };
 

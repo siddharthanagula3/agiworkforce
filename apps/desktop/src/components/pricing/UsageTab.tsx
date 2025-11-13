@@ -4,7 +4,6 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Progress } from '../ui/Progress';
 import { ScrollArea } from '../ui/ScrollArea';
-import { Select } from '../ui/Select';
 import { usePricingStore } from '../../stores/pricingStore';
 import { CheckCircle2, XCircle, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';

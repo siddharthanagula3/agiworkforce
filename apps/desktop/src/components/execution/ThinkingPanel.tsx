@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Clock, Loader2, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, Clock, Loader2, XCircle, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useExecutionStore, selectSteps, selectActiveGoal, selectIsStreaming } from '../../stores/executionStore';
 import type { ExecutionStep } from '../../stores/executionStore';

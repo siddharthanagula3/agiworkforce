@@ -20,7 +20,6 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/Card';
 import { ScrollArea } from '../ui/ScrollArea';
-import { cn } from '../../lib/utils';
 import { useEmployeeStore } from '../../stores/employeeStore';
 import type { AIEmployee } from '../../types/employees';
 import {
@@ -351,7 +350,6 @@ export function MyEmployeesView() {
               <EmployeeGridItem
                 key={employee.id}
                 employee={employee}
-                viewMode={viewMode}
                 onFire={setEmployeeToFire}
               />
             ))}
@@ -362,7 +360,6 @@ export function MyEmployeesView() {
               <EmployeeListItem
                 key={employee.id}
                 employee={employee}
-                viewMode={viewMode}
                 onFire={setEmployeeToFire}
               />
             ))}
