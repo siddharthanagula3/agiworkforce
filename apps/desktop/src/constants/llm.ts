@@ -22,6 +22,7 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   anthropic: [
     // November 2025 models
     { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 ⭐ (Best Coding)' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 ⚡ (4x Faster, Auto Mode)' },
     { value: 'claude-opus-4', label: 'Claude Opus 4 (Deep Reasoning)' },
     { value: 'claude-sonnet-4', label: 'Claude Sonnet 4 (Fast)' },
     { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Legacy)' },
@@ -94,6 +95,7 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 
   // Anthropic models (November 2025)
   'claude-sonnet-4-5': 200_000, // Released Sep 2025 - best coding (77.2% SWE-bench)
+  'claude-haiku-4-5': 200_000, // 4-5x faster than Sonnet, 1/3 cost - ideal for auto mode
   'claude-opus-4': 200_000, // May 2025 - deep reasoning
   'claude-sonnet-4': 200_000,
   'claude-3-5-sonnet-20241022': 200_000,

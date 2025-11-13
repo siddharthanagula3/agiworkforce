@@ -2,6 +2,7 @@ use super::*;
 use crate::agi::api_tools_impl;
 use crate::agi::planner::PlanStep;
 use crate::automation::AutomationService;
+use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ pub struct AGIExecutor {
     tool_registry: Arc<ToolRegistry>,
     _resource_manager: Arc<ResourceManager>,
     automation: Arc<AutomationService>,
+    router: Arc<tokio::sync::Mutex<LLMRouter>>,
     app_handle: Option<tauri::AppHandle>,
 }
 
@@ -20,12 +22,14 @@ impl AGIExecutor {
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
         automation: Arc<AutomationService>,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         Ok(Self {
             tool_registry,
             _resource_manager: resource_manager,
             automation,
+            router,
             app_handle,
         })
     }
@@ -536,15 +540,54 @@ impl AGIExecutor {
                     .get("prompt")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing prompt parameter"))?;
-                // LLM reasoning requires router access
-                // For now, return success - will be connected via LLM router
-                tracing::info!(
-                    "[Executor] LLM reasoning requested: {}",
-                    &prompt[..prompt.len().min(50)]
-                );
-                Ok(
-                    json!({ "success": true, "reasoning": "Requires LLM router access", "note": "Will be connected via router" }),
-                )
+
+                tracing::info!("[Executor] LLM reasoning: {}", &prompt[..prompt.len().min(50)]);
+
+                // HYBRID STRATEGY: Use Claude Haiku 4.5 for execution (4-5x faster, 1/3 cost)
+                let preferences = RouterPreferences {
+                    provider: Some("anthropic".to_string()),
+                    model: Some("claude-haiku-4-5".to_string()),
+                    strategy: RoutingStrategy::PreferenceWithFallback,
+                };
+
+                let request = LLMRequest {
+                    messages: vec![ChatMessage {
+                        role: "user".to_string(),
+                        content: prompt.to_string(),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    }],
+                    model: "claude-haiku-4-5".to_string(),
+                    temperature: Some(0.7),
+                    max_tokens: Some(2000),
+                    stream: false,
+                    tools: None,
+                    tool_choice: None,
+                };
+
+                let router = self.router.lock().await;
+                let candidates = router.candidates(&request, &preferences);
+
+                if !candidates.is_empty() {
+                    match router.invoke_candidate(&candidates[0], &request).await {
+                        Ok(outcome) => {
+                            drop(router);
+                            Ok(json!({
+                                "success": true,
+                                "reasoning": outcome.response.content,
+                                "model": outcome.response.model,
+                                "cost": outcome.response.cost
+                            }))
+                        }
+                        Err(e) => {
+                            drop(router);
+                            Err(anyhow!("LLM reasoning failed: {}", e))
+                        }
+                    }
+                } else {
+                    drop(router);
+                    Err(anyhow!("No LLM candidates available for reasoning"))
+                }
             }
             "email_send" => {
                 let to = parameters
