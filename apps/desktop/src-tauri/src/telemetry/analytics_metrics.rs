@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use sysinfo::{CpuExt, DiskExt, NetworkExt, System, SystemExt};
+use sysinfo::System;
 
 /// System metrics collected from the host
 #[derive(Debug, Clone, Serialize, Deserialize)]

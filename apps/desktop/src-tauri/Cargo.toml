@@ -180,8 +180,10 @@ tokio-native-tls = "0.3"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
 mailparse = "0.15"
 
-# Stripe payment processing
-# stripe-rust = { version = "0.12" }  # Temporarily disabled due to dependency conflicts
+# Stripe payment processing (optional feature)
+# Note: stripe-rust crate has been abandoned. Consider using async-stripe or implementing custom client.
+# For now, keeping this disabled until a proper replacement is identified.
+# stripe = { version = "0.0.5", optional = true }
 
 # Model Context Protocol (MCP)
 rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
@@ -192,6 +194,7 @@ ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
 webrtc-support = ["webrtc"]
 sentry = ["dep:sentry"]
+# billing = ["stripe"]  # Disabled until stripe dependency is resolved
 # Windows builds typically enable webrtc-support, Linux builds may skip it to avoid GTK dependencies
 
 [build-dependencies]
