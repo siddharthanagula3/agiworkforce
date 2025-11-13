@@ -177,7 +177,7 @@ pub struct AgentRuntime {
     auto_approve: Arc<RwLock<bool>>,
 
     /// Change tracker for revert capability
-    change_tracker: Arc<RwLock<ChangeTracker>>,
+    change_tracker: Arc<ChangeTracker>,
 
     /// Maximum retry attempts for auto-correction
     max_retries: usize,
@@ -201,7 +201,7 @@ impl AgentRuntime {
             _mcp_client: mcp_client,
             mcp_registry,
             auto_approve: Arc::new(RwLock::new(true)), // Auto-approve enabled by default
-            change_tracker: Arc::new(RwLock::new(ChangeTracker::new())),
+            change_tracker: Arc::new(ChangeTracker::new()),
             max_retries: 3, // Default to 3 retry attempts
             app_handle,
         }
@@ -289,12 +289,9 @@ impl AgentRuntime {
 
         // Create snapshot in background
         tokio::spawn(async move {
-            let result = {
-                let tracker = change_tracker_clone.read();
-                tracker
-                    .create_snapshot(task_id_clone.clone(), working_dir)
-                    .await
-            };
+            let result = change_tracker_clone
+                .create_snapshot(task_id_clone.clone(), working_dir)
+                .await;
             if let Err(e) = result {
                 tracing::warn!(
                     "Failed to create snapshot for task {}: {}",
@@ -448,6 +445,10 @@ Focus on the root cause and specific actions to take.
 Do not repeat the error message."#,
                 task.goal, task.description, error
             );
+            tracing::trace!(
+                "[AgentRuntime] Prepared LLM error analysis prompt: {}",
+                prompt
+            );
 
             // Since we can't directly access the router from AGI Core's private field,
             // we'll fall through to heuristics for now
@@ -546,6 +547,7 @@ Do not repeat the error message."#,
     }
 
     /// Execute task with retry logic (fallback)
+    #[allow(dead_code)]
     async fn execute_with_retry_fallback(
         &self,
         agi: &Arc<AGICore>,
@@ -931,10 +933,7 @@ Do not repeat the error message."#,
     /// Revert all changes for a task
     pub async fn revert_task_changes(&self, task_id: &str) -> Result<Vec<String>, String> {
         // Get changes using async method
-        let changes: Vec<Change> = {
-            let tracker = self.change_tracker.read();
-            tracker.get_task_changes(task_id).await
-        };
+        let changes: Vec<Change> = self.change_tracker.get_task_changes(task_id).await;
 
         let mut reverted_ids = Vec::new();
 
@@ -943,8 +942,7 @@ Do not repeat the error message."#,
             match self.revert_change(change).await {
                 Ok(id) => {
                     reverted_ids.push(id.clone());
-                    let tracker = self.change_tracker.read();
-                    tracker
+                    self.change_tracker
                         .mark_reverted(&change.id)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -1018,14 +1016,12 @@ Do not repeat the error message."#,
 
     /// Get all changes for a task (for UI display)
     pub async fn get_task_change_history(&self, task_id: &str) -> Vec<Change> {
-        let tracker = self.change_tracker.read();
-        tracker.get_task_changes(task_id).await
+        self.change_tracker.get_task_changes(task_id).await
     }
 
     /// Get all changes (for history view)
     pub async fn get_all_change_history(&self) -> Vec<Change> {
-        let tracker = self.change_tracker.read();
-        tracker.get_all_changes().await
+        self.change_tracker.get_all_changes().await
     }
 
     /// Emit a to-do list update

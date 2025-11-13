@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 const SERVICE_NAME: &str = "AGIWorkforce";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LLMConfig {
     pub default_provider: String,
     pub temperature: f32,
@@ -21,6 +22,10 @@ pub struct DefaultModels {
     pub anthropic: String,
     pub google: String,
     pub ollama: String,
+    pub xai: String,
+    pub deepseek: String,
+    pub qwen: String,
+    pub mistral: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,7 +65,11 @@ impl SettingsState {
                         openai: "gpt-4o-mini".to_string(),
                         anthropic: "claude-3-5-sonnet-20241022".to_string(),
                         google: "gemini-1.5-flash".to_string(),
-                        ollama: "llama3".to_string(),
+                        ollama: "llama3.3".to_string(),
+                        xai: "grok-4".to_string(),
+                        deepseek: "deepseek-chat".to_string(),
+                        qwen: "qwen-max".to_string(),
+                        mistral: "mistral-large-latest".to_string(),
                     },
                 },
                 window_preferences: WindowPreferences {

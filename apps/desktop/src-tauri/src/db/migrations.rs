@@ -1044,13 +1044,6 @@ fn apply_migration_v12(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // Index for automation history analytics
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_automation_history_status
-         ON automation_history(status, created_at DESC)",
-        [],
-    )?;
-
     // Index for capture lookups by conversation
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_captures_conversation
@@ -1180,13 +1173,6 @@ fn apply_migration_v14(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    // Composite index for provider usage analytics filtering (provider + model + timestamp)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_provider_usage_filters
-         ON provider_usage(provider, model, timestamp DESC)",
-        [],
-    )?;
-
     // Index for conversation searches by title
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_conversations_title
@@ -1195,12 +1181,6 @@ fn apply_migration_v14(conn: &Connection) -> Result<()> {
     )?;
 
     // Index for audit log filtering by action type
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_log_action
-         ON audit_log(action, timestamp DESC)",
-        [],
-    )?;
-
     Ok(())
 }
 

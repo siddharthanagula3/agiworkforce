@@ -33,11 +33,11 @@ describe('settingsStore', () => {
           openai: 'gpt-4o-mini',
           anthropic: 'claude-3-5-sonnet-20241022',
           google: 'gemini-1.5-flash',
-          ollama: 'llama3',
-          xai: 'grok-beta',
+          ollama: 'llama3.3',
+          xai: 'grok-4',
           deepseek: 'deepseek-chat',
-          qwen: 'qwen-turbo',
-          mistral: 'mistral-small',
+          qwen: 'qwen-max',
+          mistral: 'mistral-large-latest',
         },
       },
       windowPreferences: {
@@ -68,7 +68,11 @@ describe('settingsStore', () => {
       expect(state.llmConfig.defaultModels.openai).toBe('gpt-4o-mini');
       expect(state.llmConfig.defaultModels.anthropic).toBe('claude-3-5-sonnet-20241022');
       expect(state.llmConfig.defaultModels.google).toBe('gemini-1.5-flash');
-      expect(state.llmConfig.defaultModels.ollama).toBe('llama3');
+      expect(state.llmConfig.defaultModels.ollama).toBe('llama3.3');
+      expect(state.llmConfig.defaultModels.xai).toBe('grok-4');
+      expect(state.llmConfig.defaultModels.deepseek).toBe('deepseek-chat');
+      expect(state.llmConfig.defaultModels.qwen).toBe('qwen-max');
+      expect(state.llmConfig.defaultModels.mistral).toBe('mistral-large-latest');
     });
   });
 
