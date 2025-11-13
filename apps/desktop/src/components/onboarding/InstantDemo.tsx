@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { invoke } from '@tauri-apps/api';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Loader2, Play } from 'lucide-react';
 import { DemoResults } from './DemoResults';
 

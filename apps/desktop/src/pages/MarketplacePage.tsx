@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs';
 import { MarketplaceHero } from '../components/marketplace/MarketplaceHero';
 import { DiscoverTab } from '../components/marketplace/DiscoverTab';

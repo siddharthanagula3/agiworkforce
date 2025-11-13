@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Flame, Sparkles, ArrowRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -42,9 +42,11 @@ export function DiscoverTab() {
           </div>
 
           {/* Large Featured Card */}
-          <div className="mb-6">
-            <WorkflowCard workflow={featuredWorkflows[0]} />
-          </div>
+          {featuredWorkflows[0] && (
+            <div className="mb-6">
+              <WorkflowCard workflow={featuredWorkflows[0]} />
+            </div>
+          )}
 
           {/* Additional Featured (2 columns) */}
           {featuredWorkflows.length > 1 && (

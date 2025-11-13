@@ -14,8 +14,7 @@ import {
   FileX,
   Check,
   X,
-  ChevronDown,
-  ChevronUp,
+  
   AlertCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -251,9 +250,9 @@ interface FileListItemProps {
 function FileListItem({
   file,
   isSelected,
-  isExpanded,
+  _isExpanded,
   onSelect,
-  onToggleExpand,
+  _onToggleExpand,
 }: FileListItemProps) {
   const operationConfig = getOperationConfig(file.operation);
   const OperationIcon = operationConfig.icon;

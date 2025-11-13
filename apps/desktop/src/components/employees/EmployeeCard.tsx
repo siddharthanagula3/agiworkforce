@@ -61,8 +61,8 @@ export function EmployeeCard({ employee, userId = 'default-user', onViewDetails 
   const [isHiring, setIsHiring] = useState(false);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
 
-  const roleConfig = ROLE_CONFIG[employee.role] || ROLE_CONFIG['Personal'];
-  const RoleIcon = roleConfig.icon;
+  const roleConfig = ROLE_CONFIG[employee.role] ?? ROLE_CONFIG['Personal'];
+  const RoleIcon = roleConfig!.icon;
 
   const handleHire = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -112,12 +112,12 @@ export function EmployeeCard({ employee, userId = 'default-user', onViewDetails 
                 'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/10'
               )}
             >
-              <RoleIcon className={cn('h-6 w-6', roleConfig.color)} />
+              <RoleIcon className={cn('h-6 w-6', roleConfig!.color)} />
             </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg truncate">{employee.name}</CardTitle>
               <Badge variant="secondary" className="mt-1">
-                {roleConfig.label}
+                {roleConfig!.label}
               </Badge>
             </div>
           </div>

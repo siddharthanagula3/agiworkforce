@@ -6,7 +6,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import type { Node, Edge } from 'reactflow';
-import { immer } from 'zustand/middleware/immer';
 import type {
   CustomEmployee,
   EmployeeTemplate,
@@ -14,7 +13,6 @@ import type {
   TrainingExample,
   TestResult,
   WorkflowDefinition,
-  BUILT_IN_CAPABILITIES,
 } from '../types/configurator';
 
 interface ConfiguratorState {

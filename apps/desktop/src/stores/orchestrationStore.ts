@@ -325,7 +325,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => ({
 
   updateNode: (id: string, updates: Partial<WorkflowNode>) => {
     set((state) => ({
-      nodes: state.nodes.map((node) => (node.id === id ? { ...node, ...updates } : node)),
+      nodes: state.nodes.map((node) => (node.id === id ? ({ ...node, ...updates } as WorkflowNode) : node)),
     }));
   },
 

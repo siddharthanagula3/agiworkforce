@@ -9,7 +9,6 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
-import { Tabs } from '../ui/Tabs';
 
 interface LivePreviewProps {
   filePath: string;
@@ -203,7 +202,7 @@ function JsonPreview({ content, onError }: { content: string; onError: (error: s
   }
 }
 
-function ComponentPreview({ content, onError }: { content: string; onError: (error: string | null) => void }) {
+function ComponentPreview({ _content, _onError }: { content: string; onError: (error: string | null) => void }) {
   // For React components, we'd need to transpile and render them
   // This is a placeholder that shows the component will be rendered in an iframe
   return (

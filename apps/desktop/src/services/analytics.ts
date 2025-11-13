@@ -8,7 +8,6 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   AnalyticsEvent,
   EventName,
-  EventBatch,
   AnalyticsConfig,
   UserProperties,
   SessionInfo,
@@ -108,11 +107,11 @@ class AnalyticsService {
       const savedConsent = localStorage.getItem('privacy_consent');
       if (savedConsent) {
         this.privacyConsent = JSON.parse(savedConsent);
-        this.config.enabled = this.privacyConsent.analytics_enabled;
+        this.config.enabled = this.privacyConsent?.analytics_enabled ?? false;
         this.config.allowErrorReporting =
-          this.privacyConsent.error_reporting_enabled;
+          this.privacyConsent?.error_reporting_enabled ?? false;
         this.config.allowPerformanceMonitoring =
-          this.privacyConsent.performance_monitoring_enabled;
+          this.privacyConsent?.performance_monitoring_enabled ?? false;
       }
     } catch (error) {
       console.error('Failed to load privacy consent:', error);
@@ -299,14 +298,6 @@ class AnalyticsService {
       return;
     }
 
-    const batch: EventBatch = {
-      events: [...this.eventQueue],
-      batchId: uuidv4(),
-      timestamp: Date.now(),
-      userId: this.userId,
-      sessionId: this.sessionId,
-    };
-
     try {
       // Send to backend
       await invoke('analytics_flush_events');
@@ -358,22 +349,6 @@ class AnalyticsService {
       );
     } catch (error) {
       console.error('Failed to save offline events:', error);
-    }
-  }
-
-  /**
-   * Load and process offline events
-   */
-  private async loadOfflineEvents() {
-    try {
-      const offlineEvents = localStorage.getItem('analytics_offline_events');
-      if (offlineEvents) {
-        const events: AnalyticsEvent[] = JSON.parse(offlineEvents);
-        this.eventQueue.push(...events);
-        await this.flushQueue();
-      }
-    } catch (error) {
-      console.error('Failed to load offline events:', error);
     }
   }
 

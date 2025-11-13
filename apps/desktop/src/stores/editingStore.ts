@@ -39,7 +39,7 @@ export interface DiffStats {
 export interface FileChange {
   path: string;
   type: 'modified' | 'added' | 'deleted';
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'partial';
 }
 
 interface EditingState {
@@ -277,7 +277,7 @@ export const useEditingStore = create<EditingState>()(
       if (historyIndex > 0) {
         const previousState = history[historyIndex - 1];
         set((state) => {
-          state.pendingChanges = new Map(previousState?.map(c => [c.filePath, c]));
+          state.pendingChanges = new Map((previousState || []).map(c => [c.filePath, c]));
           state.historyIndex = historyIndex - 1;
         });
       }
@@ -288,7 +288,7 @@ export const useEditingStore = create<EditingState>()(
       if (historyIndex < history.length - 1) {
         const nextState = history[historyIndex + 1];
         set((state) => {
-          state.pendingChanges = new Map(nextState?.map(c => [c.filePath, c]));
+          state.pendingChanges = new Map((nextState || []).map(c => [c.filePath, c]));
           state.historyIndex = historyIndex + 1;
         });
       }
@@ -367,26 +367,26 @@ export const useEditingStore = create<EditingState>()(
             changes.push({
               type: 'add',
               newLineNumber: i + 1,
-              content: modLine,
+              content: modLine || '',
             });
             additions++;
           } else if (origLine !== undefined && modLine === undefined) {
             changes.push({
               type: 'delete',
               oldLineNumber: i + 1,
-              content: origLine,
+              content: origLine || '',
             });
             deletions++;
           } else if (origLine !== modLine) {
             changes.push({
               type: 'delete',
               oldLineNumber: i + 1,
-              content: origLine,
+              content: origLine || '',
             });
             changes.push({
               type: 'add',
               newLineNumber: i + 1,
-              content: modLine,
+              content: modLine || '',
             });
             deletions++;
             additions++;
@@ -395,7 +395,7 @@ export const useEditingStore = create<EditingState>()(
               type: 'context',
               oldLineNumber: i + 1,
               newLineNumber: i + 1,
-              content: origLine,
+              content: origLine || '',
             });
           }
         }
