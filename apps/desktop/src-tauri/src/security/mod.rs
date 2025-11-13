@@ -1,7 +1,22 @@
+pub mod api;
 pub mod audit;
+pub mod auth;
+pub mod encryption;
+pub mod guardrails;
+pub mod injection_detector;
 pub mod permissions;
+pub mod rate_limit;
+pub mod sandbox;
+pub mod storage;
+pub mod updater;
 pub mod validator;
 
+pub use api::{ApiKey, ApiSecurityManager, CorsConfig, CspBuilder};
 pub use audit::{AuditFilters, AuditLogger, AutomationStats};
+pub use auth::{AuthManager, AuthToken, Session, User, UserRole};
+pub use encryption::{EncryptedSecret, SecretStore};
 pub use permissions::PermissionManager;
+pub use rate_limit::{RateLimiter, RateLimitConfig};
+pub use storage::{SecureStorage, EncryptedData, encrypt_file, decrypt_file};
+pub use updater::{UpdateSecurityManager, UpdateMetadata, VerificationResult};
 pub use validator::{CommandValidator, SafetyLevel};
