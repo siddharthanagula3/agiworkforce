@@ -19,7 +19,7 @@ export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ reso
 
   useEffect(() => {
     const unsubscribe = websocketClient.on('CursorMoved', (event) => {
-      const cursorEvent = event as {
+      const cursorEvent = event as unknown as {
         user_id: string;
         position: CursorPosition;
       };
@@ -102,14 +102,8 @@ const Cursor: React.FC<CursorProps> = ({ position, color, label }) => {
         xmlns="http://www.w3.org/2000/svg"
         style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
       >
-        <path
-          d="M5.65376 12.3673L8.47618 15.4615L11.6341 10.1551L5.65376 12.3673Z"
-          fill={color}
-        />
-        <path
-          d="M4.5 5.11803L12.545 20.4615L11.6341 10.1551L4.5 5.11803Z"
-          fill={color}
-        />
+        <path d="M5.65376 12.3673L8.47618 15.4615L11.6341 10.1551L5.65376 12.3673Z" fill={color} />
+        <path d="M4.5 5.11803L12.545 20.4615L11.6341 10.1551L4.5 5.11803Z" fill={color} />
       </svg>
 
       {/* User label */}

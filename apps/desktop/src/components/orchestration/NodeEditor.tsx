@@ -1,6 +1,7 @@
 import React from 'react';
 import { useOrchestrationStore } from '../../stores/orchestrationStore';
 import { X } from 'lucide-react';
+import type { WorkflowNode } from '../../types/workflow';
 
 export const NodeEditor: React.FC = () => {
   const { selectedNode, selectNode, updateNode, deleteNode } = useOrchestrationStore();
@@ -17,9 +18,8 @@ export const NodeEditor: React.FC = () => {
 
   const handleLabelChange = (newLabel: string) => {
     updateNode(selectedNode.id, {
-      ...selectedNode,
       data: { ...selectedNode.data, label: newLabel },
-    });
+    } as Partial<WorkflowNode>);
   };
 
   const handleDelete = () => {
@@ -97,7 +97,10 @@ export const NodeEditor: React.FC = () => {
                 onChange={(e) =>
                   updateNode(selectedNode.id, {
                     ...selectedNode,
-                    data: { ...selectedNode.data, language: e.target.value },
+                    data: {
+                      ...selectedNode.data,
+                      language: e.target.value as 'javascript' | 'python' | 'bash',
+                    },
                   })
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
