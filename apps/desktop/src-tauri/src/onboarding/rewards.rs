@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use rusqlite::{Connection, params};
-use std::sync::{Arc, Mutex};
 use chrono::Utc;
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Reward {
@@ -144,9 +144,9 @@ impl RewardSystem {
     pub fn has_unlocked_feature(&self, user_id: &str, feature_id: &str) -> bool {
         let rewards = self.get_user_rewards(user_id);
 
-        rewards.iter().any(|r| {
-            matches!(&r.value, RewardValue::Feature { feature_id: fid } if fid == feature_id)
-        })
+        rewards.iter().any(
+            |r| matches!(&r.value, RewardValue::Feature { feature_id: fid } if fid == feature_id),
+        )
     }
 
     /// Get total credits earned by user
@@ -166,11 +166,23 @@ impl RewardSystem {
     fn get_rewards_for_tutorial(&self, tutorial_id: &str) -> Vec<String> {
         match tutorial_id {
             "basic_getting_started" => vec!["badge_first_automation".to_string()],
-            "agent_templates" => vec!["badge_template_user".to_string(), "unlock_advanced_templates".to_string()],
-            "workflow_orchestration" => vec!["badge_workflow_builder".to_string(), "unlock_parallel_execution".to_string()],
+            "agent_templates" => vec![
+                "badge_template_user".to_string(),
+                "unlock_advanced_templates".to_string(),
+            ],
+            "workflow_orchestration" => vec![
+                "badge_workflow_builder".to_string(),
+                "unlock_parallel_execution".to_string(),
+            ],
             "team_collaboration" => vec!["badge_team_leader".to_string()],
-            "browser_automation" => vec!["badge_web_scraper".to_string(), "unlock_stealth_mode".to_string()],
-            "database_integration" => vec!["badge_data_engineer".to_string(), "unlock_batch_queries".to_string()],
+            "browser_automation" => vec![
+                "badge_web_scraper".to_string(),
+                "unlock_stealth_mode".to_string(),
+            ],
+            "database_integration" => vec![
+                "badge_data_engineer".to_string(),
+                "unlock_batch_queries".to_string(),
+            ],
             _ => vec![],
         }
     }
@@ -185,7 +197,9 @@ impl RewardSystem {
                 name: "First Steps".to_string(),
                 description: "Completed your first automation".to_string(),
                 icon: "🎯".to_string(),
-                value: RewardValue::Badge { rarity: BadgeRarity::Common },
+                value: RewardValue::Badge {
+                    rarity: BadgeRarity::Common,
+                },
             },
             Reward {
                 id: "badge_template_user".to_string(),
@@ -193,7 +207,9 @@ impl RewardSystem {
                 name: "Template Master".to_string(),
                 description: "Installed and used an agent template".to_string(),
                 icon: "📋".to_string(),
-                value: RewardValue::Badge { rarity: BadgeRarity::Uncommon },
+                value: RewardValue::Badge {
+                    rarity: BadgeRarity::Uncommon,
+                },
             },
             Reward {
                 id: "badge_workflow_builder".to_string(),
@@ -201,7 +217,9 @@ impl RewardSystem {
                 name: "Workflow Architect".to_string(),
                 description: "Created a complex workflow with conditional logic".to_string(),
                 icon: "🏗️".to_string(),
-                value: RewardValue::Badge { rarity: BadgeRarity::Rare },
+                value: RewardValue::Badge {
+                    rarity: BadgeRarity::Rare,
+                },
             },
             Reward {
                 id: "badge_team_leader".to_string(),
@@ -209,7 +227,9 @@ impl RewardSystem {
                 name: "Team Player".to_string(),
                 description: "Created a team and shared workflows".to_string(),
                 icon: "👥".to_string(),
-                value: RewardValue::Badge { rarity: BadgeRarity::Rare },
+                value: RewardValue::Badge {
+                    rarity: BadgeRarity::Rare,
+                },
             },
             Reward {
                 id: "badge_web_scraper".to_string(),
@@ -217,7 +237,9 @@ impl RewardSystem {
                 name: "Web Master".to_string(),
                 description: "Automated browser interactions and data extraction".to_string(),
                 icon: "🌐".to_string(),
-                value: RewardValue::Badge { rarity: BadgeRarity::Epic },
+                value: RewardValue::Badge {
+                    rarity: BadgeRarity::Epic,
+                },
             },
             Reward {
                 id: "badge_data_engineer".to_string(),
@@ -225,9 +247,10 @@ impl RewardSystem {
                 name: "Data Wizard".to_string(),
                 description: "Integrated database operations into workflows".to_string(),
                 icon: "🗄️".to_string(),
-                value: RewardValue::Badge { rarity: BadgeRarity::Epic },
+                value: RewardValue::Badge {
+                    rarity: BadgeRarity::Epic,
+                },
             },
-
             // Feature Unlocks
             Reward {
                 id: "unlock_advanced_templates".to_string(),
@@ -269,7 +292,6 @@ impl RewardSystem {
                     feature_id: "batch_queries".to_string(),
                 },
             },
-
             // Credits
             Reward {
                 id: "credits_100".to_string(),
@@ -287,7 +309,6 @@ impl RewardSystem {
                 icon: "💎".to_string(),
                 value: RewardValue::Credits { amount: 500 },
             },
-
             // Achievements
             Reward {
                 id: "achievement_speed_learner".to_string(),

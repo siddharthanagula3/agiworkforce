@@ -122,23 +122,24 @@ impl OutcomeTracker {
              ORDER BY tracked_at DESC"
         )?;
 
-        let outcomes = stmt.query_map(params![goal_id], |row| {
-            let process_type_str: String = row.get(2)?;
-            let process_type = ProcessType::from_str(&process_type_str)
-                .unwrap_or(ProcessType::DataEntry);
+        let outcomes = stmt
+            .query_map(params![goal_id], |row| {
+                let process_type_str: String = row.get(2)?;
+                let process_type =
+                    ProcessType::from_str(&process_type_str).unwrap_or(ProcessType::DataEntry);
 
-            Ok(TrackedOutcome {
-                id: row.get(0)?,
-                goal_id: row.get(1)?,
-                process_type,
-                metric_name: row.get(3)?,
-                target_value: row.get(4)?,
-                actual_value: row.get(5)?,
-                achieved: row.get::<_, i32>(6)? == 1,
-                tracked_at: row.get(7)?,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(TrackedOutcome {
+                    id: row.get(0)?,
+                    goal_id: row.get(1)?,
+                    process_type,
+                    metric_name: row.get(3)?,
+                    target_value: row.get(4)?,
+                    actual_value: row.get(5)?,
+                    achieved: row.get::<_, i32>(6)? == 1,
+                    tracked_at: row.get(7)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(outcomes)
     }
@@ -177,14 +178,19 @@ impl OutcomeTracker {
         // Update cache
         {
             let mut cache = self.cache.lock().unwrap();
-            cache.success_rates.insert(process_type.as_str().to_string(), rate);
+            cache
+                .success_rates
+                .insert(process_type.as_str().to_string(), rate);
         }
 
         Ok(rate)
     }
 
     /// Get detailed success statistics for a process type
-    pub fn get_process_success_stats(&self, process_type: ProcessType) -> Result<ProcessSuccessRate> {
+    pub fn get_process_success_stats(
+        &self,
+        process_type: ProcessType,
+    ) -> Result<ProcessSuccessRate> {
         let conn = Connection::open(&self.db_path)?;
 
         let total: i64 = conn.query_row(
@@ -210,7 +216,7 @@ impl OutcomeTracker {
                     SUM(CASE WHEN achieved = 1 THEN 1 ELSE 0 END) as achieved_outcomes
              FROM outcome_tracking
              WHERE process_type = ?1
-             GROUP BY goal_id"
+             GROUP BY goal_id",
         )?;
 
         let mut successful = 0;
@@ -245,7 +251,10 @@ impl OutcomeTracker {
     }
 
     /// Get best performing strategies for a process type
-    pub fn get_best_performing_strategies(&self, process_type: ProcessType) -> Result<Vec<Strategy>> {
+    pub fn get_best_performing_strategies(
+        &self,
+        process_type: ProcessType,
+    ) -> Result<Vec<Strategy>> {
         // For now, return a default strategy since we don't track strategy performance yet
         // This will be enhanced when we integrate with the process ontology
 
@@ -257,10 +266,17 @@ impl OutcomeTracker {
         let strategy = Strategy {
             id: format!("strategy_{}_optimized", process_type.as_str()),
             name: format!("Optimized {} Strategy", process_type.as_str()),
-            description: format!("High-performing strategy for {} (success rate: {:.1}%)",
-                process_type.description(), success_rate * 100.0),
+            description: format!(
+                "High-performing strategy for {} (success rate: {:.1}%)",
+                process_type.description(),
+                success_rate * 100.0
+            ),
             process_type,
-            priority_tools: process_type.typical_tools().iter().map(|s| s.to_string()).collect(),
+            priority_tools: process_type
+                .typical_tools()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             estimated_success_rate: success_rate,
             estimated_duration_ms: estimated_duration,
             resource_requirements: super::ResourceUsage {
@@ -286,7 +302,11 @@ impl OutcomeTracker {
     }
 
     /// Get outcomes summary for a time period
-    pub fn get_outcomes_summary(&self, start_timestamp: i64, end_timestamp: i64) -> Result<OutcomeSummary> {
+    pub fn get_outcomes_summary(
+        &self,
+        start_timestamp: i64,
+        end_timestamp: i64,
+    ) -> Result<OutcomeSummary> {
         let conn = Connection::open(&self.db_path)?;
 
         let total_outcomes: i64 = conn.query_row(
@@ -312,7 +332,7 @@ impl OutcomeTracker {
             "SELECT process_type, COUNT(*), SUM(CASE WHEN achieved = 1 THEN 1 ELSE 0 END)
              FROM outcome_tracking
              WHERE tracked_at >= ?1 AND tracked_at <= ?2
-             GROUP BY process_type"
+             GROUP BY process_type",
         )?;
 
         let mut by_process_type = HashMap::new();
@@ -353,23 +373,24 @@ impl OutcomeTracker {
              LIMIT 100"
         )?;
 
-        let outcomes = stmt.query_map([], |row| {
-            let process_type_str: String = row.get(2)?;
-            let process_type = ProcessType::from_str(&process_type_str)
-                .unwrap_or(ProcessType::DataEntry);
+        let outcomes = stmt
+            .query_map([], |row| {
+                let process_type_str: String = row.get(2)?;
+                let process_type =
+                    ProcessType::from_str(&process_type_str).unwrap_or(ProcessType::DataEntry);
 
-            Ok(TrackedOutcome {
-                id: row.get(0)?,
-                goal_id: row.get(1)?,
-                process_type,
-                metric_name: row.get(3)?,
-                target_value: row.get(4)?,
-                actual_value: row.get(5)?,
-                achieved: row.get::<_, i32>(6)? == 1,
-                tracked_at: row.get(7)?,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(TrackedOutcome {
+                    id: row.get(0)?,
+                    goal_id: row.get(1)?,
+                    process_type,
+                    metric_name: row.get(3)?,
+                    target_value: row.get(4)?,
+                    actual_value: row.get(5)?,
+                    achieved: row.get::<_, i32>(6)? == 1,
+                    tracked_at: row.get(7)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         {
             let mut cache = self.cache.lock().unwrap();
@@ -421,7 +442,11 @@ impl OutcomeTracker {
     }
 
     /// Get trending metrics for a process type
-    pub fn get_trending_metrics(&self, process_type: ProcessType, days: i64) -> Result<Vec<TrendingMetric>> {
+    pub fn get_trending_metrics(
+        &self,
+        process_type: ProcessType,
+        days: i64,
+    ) -> Result<Vec<TrendingMetric>> {
         let conn = Connection::open(&self.db_path)?;
 
         let cutoff_timestamp = chrono::Utc::now().timestamp() - (days * 86400);
@@ -435,24 +460,29 @@ impl OutcomeTracker {
              FROM outcome_tracking
              WHERE process_type = ?1 AND tracked_at >= ?2
              GROUP BY metric_name
-             ORDER BY total DESC"
+             ORDER BY total DESC",
         )?;
 
-        let metrics = stmt.query_map(params![process_type.as_str(), cutoff_timestamp], |row| {
-            let total: i64 = row.get(1)?;
-            let achieved: i64 = row.get(2)?;
-            let avg_value: f64 = row.get(3)?;
-            let avg_target: f64 = row.get(4)?;
+        let metrics = stmt
+            .query_map(params![process_type.as_str(), cutoff_timestamp], |row| {
+                let total: i64 = row.get(1)?;
+                let achieved: i64 = row.get(2)?;
+                let avg_value: f64 = row.get(3)?;
+                let avg_target: f64 = row.get(4)?;
 
-            Ok(TrendingMetric {
-                metric_name: row.get(0)?,
-                total_tracked: total as usize,
-                achievement_rate: if total > 0 { achieved as f64 / total as f64 } else { 0.0 },
-                average_value: avg_value,
-                average_target: avg_target,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(TrendingMetric {
+                    metric_name: row.get(0)?,
+                    total_tracked: total as usize,
+                    achievement_rate: if total > 0 {
+                        achieved as f64 / total as f64
+                    } else {
+                        0.0
+                    },
+                    average_value: avg_value,
+                    average_target: avg_target,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(metrics)
     }

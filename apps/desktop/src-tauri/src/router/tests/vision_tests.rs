@@ -170,11 +170,7 @@ mod vision_tests {
 
     #[test]
     fn test_image_detail_variants() {
-        let details = vec![
-            ImageDetail::Low,
-            ImageDetail::High,
-            ImageDetail::Auto,
-        ];
+        let details = vec![ImageDetail::Low, ImageDetail::High, ImageDetail::Auto];
 
         for detail in details {
             let image = ImageInput {

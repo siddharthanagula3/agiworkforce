@@ -121,12 +121,7 @@ pub struct AgentTemplate {
 }
 
 impl AgentTemplate {
-    pub fn new(
-        id: String,
-        name: String,
-        category: TemplateCategory,
-        description: String,
-    ) -> Self {
+    pub fn new(id: String, name: String, category: TemplateCategory, description: String) -> Self {
         Self {
             id,
             name,
@@ -370,7 +365,11 @@ impl TemplateManager {
         conn.execute(
             "INSERT OR REPLACE INTO template_installs (user_id, template_id, installed_at)
              VALUES (?1, ?2, ?3)",
-            [user_id, template_id, &chrono::Utc::now().timestamp().to_string()],
+            [
+                user_id,
+                template_id,
+                &chrono::Utc::now().timestamp().to_string(),
+            ],
         )?;
 
         // Increment install count

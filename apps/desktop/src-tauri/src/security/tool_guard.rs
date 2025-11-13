@@ -172,10 +172,7 @@ impl ToolExecutionGuard {
         Self {
             allowed_tools,
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
-            allowed_paths: vec![
-                PathBuf::from("/tmp"),
-                PathBuf::from(std::env::temp_dir()),
-            ],
+            allowed_paths: vec![PathBuf::from("/tmp"), PathBuf::from(std::env::temp_dir())],
             blocked_domains: vec![
                 "localhost".to_string(),
                 "127.0.0.1".to_string(),
@@ -191,7 +188,10 @@ impl ToolExecutionGuard {
         tool_name: &str,
         parameters: &Value,
     ) -> std::result::Result<(), SecurityError> {
-        debug!("Validating tool call: {} with params: {:?}", tool_name, parameters);
+        debug!(
+            "Validating tool call: {} with params: {:?}",
+            tool_name, parameters
+        );
 
         // 1. Check if tool is allowed
         let policy = self
@@ -353,9 +353,8 @@ impl ToolExecutionGuard {
         debug!("Validating URL: {}", url);
 
         // Parse URL
-        let parsed = url::Url::parse(url).map_err(|_| {
-            SecurityError::InvalidParameter(format!("Invalid URL format: {}", url))
-        })?;
+        let parsed = url::Url::parse(url)
+            .map_err(|_| SecurityError::InvalidParameter(format!("Invalid URL format: {}", url)))?;
 
         // 1. Check protocol (only allow http/https)
         let scheme = parsed.scheme();
@@ -502,9 +501,7 @@ mod tests {
     #[tokio::test]
     async fn test_unauthorized_tool() {
         let guard = ToolExecutionGuard::new();
-        let result = guard
-            .validate_tool_call("unknown_tool", &json!({}))
-            .await;
+        let result = guard.validate_tool_call("unknown_tool", &json!({})).await;
         assert!(matches!(result, Err(SecurityError::UnauthorizedTool(_))));
     }
 
@@ -530,7 +527,10 @@ mod tests {
     async fn test_command_injection() {
         let guard = ToolExecutionGuard::new();
         let result = guard
-            .validate_tool_call("code_execute", &json!({"language": "bash", "code": "rm -rf /"}))
+            .validate_tool_call(
+                "code_execute",
+                &json!({"language": "bash", "code": "rm -rf /"}),
+            )
             .await;
         assert!(matches!(result, Err(SecurityError::CommandInjection(_))));
     }
@@ -553,8 +553,14 @@ mod tests {
 
         assert_eq!(guard.get_risk_level("file_read"), Some(RiskLevel::Low));
         assert_eq!(guard.get_risk_level("file_write"), Some(RiskLevel::Medium));
-        assert_eq!(guard.get_risk_level("browser_navigate"), Some(RiskLevel::High));
-        assert_eq!(guard.get_risk_level("code_execute"), Some(RiskLevel::Critical));
+        assert_eq!(
+            guard.get_risk_level("browser_navigate"),
+            Some(RiskLevel::High)
+        );
+        assert_eq!(
+            guard.get_risk_level("code_execute"),
+            Some(RiskLevel::Critical)
+        );
     }
 
     #[test]

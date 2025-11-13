@@ -121,7 +121,9 @@ impl ApprovalWorkflow {
         justification: Option<String>,
         timeout_minutes: i64,
     ) -> Result<String> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let id = Uuid::new_v4().to_string();
@@ -159,7 +161,9 @@ impl ApprovalWorkflow {
         reviewer_id: &str,
         decision: ApprovalDecision,
     ) -> Result<()> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let now = Utc::now().timestamp();
@@ -200,7 +204,9 @@ impl ApprovalWorkflow {
 
     /// Get approval request by ID
     pub fn get_request(&self, request_id: &str) -> Result<ApprovalRequest> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let request = conn.query_row(
@@ -237,14 +243,16 @@ impl ApprovalWorkflow {
 
     /// Get pending approval requests
     pub fn get_pending_approvals(&self, team_id: Option<String>) -> Result<Vec<ApprovalRequest>> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let mut query = String::from(
             "SELECT id, requester_id, team_id, action_type, resource_type,
                     resource_id, risk_level, justification, status,
                     created_at, reviewed_by, reviewed_at, decision_reason, expires_at
-             FROM approval_requests WHERE status = 'pending'"
+             FROM approval_requests WHERE status = 'pending'",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -259,28 +267,29 @@ impl ApprovalWorkflow {
         let mut stmt = conn.prepare(&query)?;
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let requests = stmt.query_map(param_refs.as_slice(), |row| {
-            Ok(ApprovalRequest {
-                id: row.get(0)?,
-                requester_id: row.get(1)?,
-                team_id: row.get(2)?,
-                action: ApprovalAction {
-                    action_type: row.get(3)?,
-                    resource_type: row.get(4)?,
-                    resource_id: row.get(5)?,
-                    parameters: serde_json::json!({}),
-                },
-                risk_level: RiskLevel::from_str(&row.get::<_, String>(6)?),
-                justification: row.get(7)?,
-                status: ApprovalStatus::from_str(&row.get::<_, String>(8)?),
-                created_at: row.get(9)?,
-                reviewed_by: row.get(10)?,
-                reviewed_at: row.get(11)?,
-                decision_reason: row.get(12)?,
-                expires_at: row.get(13)?,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+        let requests = stmt
+            .query_map(param_refs.as_slice(), |row| {
+                Ok(ApprovalRequest {
+                    id: row.get(0)?,
+                    requester_id: row.get(1)?,
+                    team_id: row.get(2)?,
+                    action: ApprovalAction {
+                        action_type: row.get(3)?,
+                        resource_type: row.get(4)?,
+                        resource_id: row.get(5)?,
+                        parameters: serde_json::json!({}),
+                    },
+                    risk_level: RiskLevel::from_str(&row.get::<_, String>(6)?),
+                    justification: row.get(7)?,
+                    status: ApprovalStatus::from_str(&row.get::<_, String>(8)?),
+                    created_at: row.get(9)?,
+                    reviewed_by: row.get(10)?,
+                    reviewed_at: row.get(11)?,
+                    decision_reason: row.get(12)?,
+                    expires_at: row.get(13)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(requests)
     }
@@ -316,7 +325,9 @@ impl ApprovalWorkflow {
 
     /// Expire timed-out requests
     pub fn expire_timed_out_requests(&self) -> Result<usize> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let now = Utc::now().timestamp();
@@ -333,7 +344,9 @@ impl ApprovalWorkflow {
 
     /// Get approval statistics
     pub fn get_statistics(&self, team_id: Option<String>) -> Result<ApprovalStatistics> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let mut query = String::from(
@@ -343,7 +356,7 @@ impl ApprovalWorkflow {
                 SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN status = 'timed_out' THEN 1 ELSE 0 END) as timed_out
-             FROM approval_requests WHERE 1=1"
+             FROM approval_requests WHERE 1=1",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();

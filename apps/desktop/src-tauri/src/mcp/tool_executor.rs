@@ -177,8 +177,7 @@ impl McpToolExecutor {
             }
 
             // Update average duration
-            stat.avg_duration_ms = ((stat.avg_duration_ms
-                * (stat.total_executions - 1) as f64)
+            stat.avg_duration_ms = ((stat.avg_duration_ms * (stat.total_executions - 1) as f64)
                 + result.duration_ms as f64)
                 / stat.total_executions as f64;
 
