@@ -85,11 +85,17 @@ pub mod agent;
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 
+// Workflow Orchestration System
+pub mod orchestration;
+
 // Model Context Protocol (MCP) integration
 pub mod mcp;
 
 // Cache system for LLM responses and tool results
 pub mod cache;
+
+// Team collaboration system
+pub mod teams;
 
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
