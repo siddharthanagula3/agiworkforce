@@ -15,18 +15,20 @@ use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use futures_util::StreamExt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 use tokio::time::{sleep, Duration as TokioDuration};
 use tracing::{info, warn};
 
 /// Shared database connection wrapper exposed to Tauri commands.
-pub struct AppDatabase(pub Mutex<Connection>);
+pub struct AppDatabase {
+    pub conn: Arc<Mutex<Connection>>,
+}
 
 /// Auto-compact conversation history if needed (like Cursor/Claude Code)
 async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Result<(), String> {
     let messages = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -64,7 +66,7 @@ async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Re
                 let old_count = messages.len() - keep_count;
 
                 if old_count > 0 {
-                    let conn = db.0.lock().map_err(|e| e.to_string())?;
+                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
                     // Delete old messages (except recent ones)
                     let old_messages: Vec<i64> =
@@ -180,7 +182,7 @@ pub fn chat_create_conversation(
     db: State<AppDatabase>,
     request: CreateConversationRequest,
 ) -> Result<Conversation, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let id = repository::create_conversation(&conn, request.title)
         .map_err(|e| format!("Failed to create conversation: {}", e))?;
     repository::get_conversation(&conn, id)
@@ -189,14 +191,14 @@ pub fn chat_create_conversation(
 
 #[tauri::command]
 pub fn chat_get_conversations(db: State<AppDatabase>) -> Result<Vec<Conversation>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::list_conversations(&conn, 1000, 0)
         .map_err(|e| format!("Failed to list conversations: {}", e))
 }
 
 #[tauri::command]
 pub fn chat_get_conversation(db: State<AppDatabase>, id: i64) -> Result<Conversation, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::get_conversation(&conn, id)
         .map_err(|e| format!("Failed to get conversation: {}", e))
 }
@@ -207,14 +209,14 @@ pub fn chat_update_conversation(
     id: i64,
     request: UpdateConversationRequest,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::update_conversation_title(&conn, id, request.title)
         .map_err(|e| format!("Failed to update conversation: {}", e))
 }
 
 #[tauri::command]
 pub fn chat_delete_conversation(db: State<AppDatabase>, id: i64) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::delete_conversation(&conn, id)
         .map_err(|e| format!("Failed to delete conversation: {}", e))
 }
@@ -224,7 +226,7 @@ pub fn chat_create_message(
     db: State<AppDatabase>,
     request: CreateMessageRequest,
 ) -> Result<Message, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let role = match request.role.as_str() {
         "user" => MessageRole::User,
@@ -255,7 +257,7 @@ pub fn chat_get_messages(
     db: State<AppDatabase>,
     conversation_id: i64,
 ) -> Result<Vec<Message>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::list_messages(&conn, conversation_id)
         .map_err(|e| format!("Failed to list messages: {}", e))
 }
@@ -266,14 +268,14 @@ pub fn chat_update_message(
     id: i64,
     content: String,
 ) -> Result<Message, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::update_message_content(&conn, id, content)
         .map_err(|e| format!("Failed to update message: {}", e))
 }
 
 #[tauri::command]
 pub fn chat_delete_message(db: State<AppDatabase>, id: i64) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     repository::delete_message(&conn, id).map_err(|e| format!("Failed to delete message: {}", e))
 }
 
@@ -282,7 +284,7 @@ pub fn chat_get_conversation_stats(
     db: State<AppDatabase>,
     conversation_id: i64,
 ) -> Result<ConversationStats, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let messages = repository::list_messages(&conn, conversation_id)
         .map_err(|e| format!("Failed to list messages: {}", e))?;
 
@@ -309,9 +311,37 @@ async fn chat_send_message_streaming(
         return Err("Message cannot be empty".to_string());
     }
 
+    // Security: Check for prompt injection attempts
+    use crate::security::{PromptInjectionDetector, SecurityRecommendation};
+    let detector = PromptInjectionDetector::new();
+    let security_analysis = detector.analyze(&trimmed_content);
+
+    if !security_analysis.is_safe {
+        warn!(
+            "Potential prompt injection detected in streaming! Risk: {:.2}, Patterns: {:?}",
+            security_analysis.risk_score, security_analysis.detected_patterns
+        );
+
+        match security_analysis.recommendation {
+            SecurityRecommendation::Block => {
+                return Err(format!(
+                    "Message blocked due to security concerns. Detected patterns: {}",
+                    security_analysis.detected_patterns.join(", ")
+                ));
+            }
+            SecurityRecommendation::FlagForReview => {
+                info!(
+                    "Message flagged for review but allowed. Risk: {:.2}",
+                    security_analysis.risk_score
+                );
+            }
+            SecurityRecommendation::Allow => {}
+        }
+    }
+
     // Create conversation and user message
     let (conversation_id, _user_message_id, assistant_message_id) = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
         let conversation_id = match request.conversation_id {
             Some(id) => {
@@ -342,7 +372,7 @@ async fn chat_send_message_streaming(
 
     // Get conversation history (after compaction)
     let history = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -443,14 +473,14 @@ async fn chat_send_message_streaming(
 
     // Update assistant message with final content
     let assistant_msg = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
         repository::update_message_content(&conn, assistant_message_id, accumulated_content.clone())
             .map_err(|e| format!("Failed to update assistant message: {}", e))?
     };
 
     // Fetch final conversation state
     let (conversation, user_msg, messages) = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let conversation = repository::get_conversation(&conn, conversation_id)
             .map_err(|e| format!("Failed to get conversation: {}", e))?;
         let user_msg = repository::get_message(&conn, _user_message_id)
@@ -494,8 +524,36 @@ pub async fn chat_send_message(
         return Err("Message cannot be empty".to_string());
     }
 
+    // Security: Check for prompt injection attempts
+    use crate::security::{PromptInjectionDetector, SecurityRecommendation};
+    let detector = PromptInjectionDetector::new();
+    let security_analysis = detector.analyze(&trimmed_content);
+
+    if !security_analysis.is_safe {
+        warn!(
+            "Potential prompt injection detected! Risk: {:.2}, Patterns: {:?}",
+            security_analysis.risk_score, security_analysis.detected_patterns
+        );
+
+        match security_analysis.recommendation {
+            SecurityRecommendation::Block => {
+                return Err(format!(
+                    "Message blocked due to security concerns. Detected patterns: {}",
+                    security_analysis.detected_patterns.join(", ")
+                ));
+            }
+            SecurityRecommendation::FlagForReview => {
+                info!(
+                    "Message flagged for review but allowed. Risk: {:.2}",
+                    security_analysis.risk_score
+                );
+            }
+            SecurityRecommendation::Allow => {}
+        }
+    }
+
     let (conversation_id, user_message) = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
         let conversation_id = match request.conversation_id {
             Some(id) => {
@@ -523,7 +581,7 @@ pub async fn chat_send_message(
 
     // Get conversation history (after compaction)
     let history = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -621,7 +679,7 @@ pub async fn chat_send_message(
         );
 
         if let Some(entry) = {
-            let conn = db.0.lock().map_err(|e| e.to_string())?;
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
             llm_state
                 .cache_manager
                 .fetch(&conn, &cache_key)
@@ -660,7 +718,7 @@ pub async fn chat_send_message(
             Ok(mut route_outcome) => {
                 route_outcome.response.cached = false;
                 {
-                    let conn = db.0.lock().map_err(|e| e.to_string())?;
+                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
                     let expires_at = llm_state.cache_manager.default_expiry();
                     llm_state
                         .cache_manager
@@ -685,7 +743,7 @@ pub async fn chat_send_message(
                     if let Some(ref executor) = _tool_executor {
                         // Save assistant message with tool calls
                         let _assistant_msg_with_tools = {
-                            let conn = db.0.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
                             let mut assistant = Message::new(
                                 conversation_id,
                                 MessageRole::Assistant,
@@ -737,7 +795,7 @@ pub async fn chat_send_message(
 
                         // Add tool results to conversation
                         for (tool_call_id, result_content) in tool_results {
-                            let conn = db.0.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
                             let tool_result_msg = Message::new(
                                 conversation_id,
                                 MessageRole::System, // Tool results as system messages
@@ -754,7 +812,7 @@ pub async fn chat_send_message(
                         );
 
                         let updated_history = {
-                            let conn = db.0.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
                             repository::list_messages(&conn, conversation_id)
                                 .map_err(|e| format!("Failed to list messages: {}", e))?
                         };
@@ -810,7 +868,7 @@ pub async fn chat_send_message(
     })?;
 
     let (conversation, assistant_message, stats, last_message) = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
         let mut assistant = Message::new(
             conversation_id,
@@ -981,7 +1039,7 @@ pub struct CostOverviewResponse {
 
 #[tauri::command]
 pub fn chat_get_cost_overview(db: State<AppDatabase>) -> Result<CostOverviewResponse, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let now = Utc::now();
     let today_start = Utc
@@ -1025,7 +1083,7 @@ pub fn chat_get_cost_analytics(
     provider: Option<String>,
     model: Option<String>,
 ) -> Result<CostAnalyticsResponse, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let window = days.unwrap_or(30).max(1);
 
     let provider_clean = provider
@@ -1072,7 +1130,7 @@ pub fn chat_get_cost_analytics(
 
 #[tauri::command]
 pub fn chat_set_monthly_budget(db: State<AppDatabase>, amount: Option<f64>) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     match amount {
         Some(value) => repository::set_setting(
