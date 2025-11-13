@@ -13,6 +13,8 @@ export function DiscoverTab() {
     workflows,
     featuredWorkflows,
     trendingWorkflows,
+    categoryCounts,
+    popularTags,
     isLoading,
     filters,
     setFilter,
@@ -83,13 +85,38 @@ export function DiscoverTab() {
         <section>
           <h2 className="text-3xl font-bold mb-6">Browse by Category</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {WORKFLOW_CATEGORIES.map((category) => (
-              <CategoryCard
-                key={category.value}
-                label={category.label}
-                description={category.description}
-                onClick={() => setFilter('category', category.value)}
-              />
+            {WORKFLOW_CATEGORIES.map((category) => {
+              const count = categoryCounts.find((c) => c.category === category.value)?.count || 0;
+              return (
+                <CategoryCard
+                  key={category.value}
+                  label={category.label}
+                  description={category.description}
+                  count={count}
+                  onClick={() => setFilter('category', category.value)}
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Popular Tags Section */}
+      {filters.category === 'all' && popularTags.length > 0 && (
+        <section>
+          <h2 className="text-3xl font-bold mb-4">Popular Tags</h2>
+          <div className="flex flex-wrap gap-2">
+            {popularTags.map((tagObj) => (
+              <button
+                key={tagObj.tag}
+                onClick={() => {
+                  setFilter('tags', [...filters.tags, tagObj.tag]);
+                  fetchWorkflows();
+                }}
+                className="px-4 py-2 rounded-full bg-secondary hover:bg-secondary/80 text-sm font-medium transition-colors"
+              >
+                #{tagObj.tag} ({tagObj.count})
+              </button>
             ))}
           </div>
         </section>
@@ -129,19 +156,23 @@ export function DiscoverTab() {
 interface CategoryCardProps {
   label: string;
   description: string;
+  count: number;
   onClick: () => void;
 }
 
-function CategoryCard({ label, description, onClick }: CategoryCardProps) {
+function CategoryCard({ label, description, count, onClick }: CategoryCardProps) {
   return (
     <button
       onClick={onClick}
       className="group p-6 rounded-lg border-2 border-border hover:border-primary hover:bg-primary/5 transition-all text-left"
     >
       <div className="flex items-start justify-between mb-2">
-        <h3 className="text-lg font-semibold group-hover:text-primary transition-colors">
-          {label}
-        </h3>
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold group-hover:text-primary transition-colors">
+            {label}
+          </h3>
+          {count > 0 && <span className="text-xs text-muted-foreground">{count} workflows</span>}
+        </div>
         <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
       </div>
       <p className="text-sm text-muted-foreground">{description}</p>
@@ -172,9 +203,7 @@ function EmptyState() {
       <p className="text-muted-foreground mb-6">
         Try adjusting your search or filters to find more workflows
       </p>
-      <Button onClick={() => useMarketplaceStore.getState().resetFilters()}>
-        Clear Filters
-      </Button>
+      <Button onClick={() => useMarketplaceStore.getState().resetFilters()}>Clear Filters</Button>
     </div>
   );
 }
