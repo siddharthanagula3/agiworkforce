@@ -15,7 +15,6 @@ import {
   RefreshCw,
   Copy,
   Search,
-  AlertCircle,
   Info,
   AlertTriangle,
   XCircle,

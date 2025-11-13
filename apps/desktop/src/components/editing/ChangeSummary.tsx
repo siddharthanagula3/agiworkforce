@@ -12,7 +12,7 @@ import {
   Info,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { Tooltip } from '../ui/Tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/Tooltip';
 
 interface ChangeSummaryProps {
   className?: string;
@@ -20,7 +20,6 @@ interface ChangeSummaryProps {
 
 export function ChangeSummary({ className }: ChangeSummaryProps) {
   const {
-    pendingChanges,
     getChangesSummary,
     getChangedFiles,
     acceptAllChanges,
@@ -138,26 +137,32 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
 
       {/* Actions */}
       <div className="flex gap-2 pt-2 border-t border-border">
-        <Tooltip content="Accept all pending changes and write to files">
-          <Button
-            variant="default"
-            className="flex-1 gap-2"
-            onClick={() => acceptAllChanges()}
-          >
-            <CheckCircle className="h-4 w-4" />
-            Accept All
-          </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              className="flex-1 gap-2"
+              onClick={() => acceptAllChanges()}
+            >
+              <CheckCircle className="h-4 w-4" />
+              Accept All
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Accept all pending changes and write to files</TooltipContent>
         </Tooltip>
 
-        <Tooltip content="Reject all pending changes and discard them">
-          <Button
-            variant="outline"
-            className="flex-1 gap-2"
-            onClick={() => rejectAllChanges()}
-          >
-            <XCircle className="h-4 w-4" />
-            Reject All
-          </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              className="flex-1 gap-2"
+              onClick={() => rejectAllChanges()}
+            >
+              <XCircle className="h-4 w-4" />
+              Reject All
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Reject all pending changes and discard them</TooltipContent>
         </Tooltip>
       </div>
     </Card>

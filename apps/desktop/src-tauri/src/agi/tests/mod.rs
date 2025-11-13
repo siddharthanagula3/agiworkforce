@@ -7,3 +7,6 @@ pub mod knowledge_tests;
 pub mod learning_tests;
 pub mod memory_tests;
 pub mod resources_tests;
+pub mod security_tests;
+pub mod process_reasoning_tests;
+pub mod outcome_tracker_tests;
