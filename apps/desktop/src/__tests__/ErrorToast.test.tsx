@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorToastContainer, useErrorToast } from '../components/errors/ErrorToast';
 import useErrorStore from '../stores/errorStore';
@@ -153,8 +153,8 @@ describe('ErrorToast', () => {
 
       const errors = useErrorStore.getState().errors;
       expect(errors).toHaveLength(1);
-      expect(errors[0].severity).toBe('info');
-      expect(errors[0].message).toBe('Info message');
+      expect(errors[0]?.severity).toBe('info');
+      expect(errors[0]?.message).toBe('Info message');
     });
 
     it('should add warning toast', () => {
@@ -172,8 +172,8 @@ describe('ErrorToast', () => {
 
       const errors = useErrorStore.getState().errors;
       expect(errors).toHaveLength(1);
-      expect(errors[0].severity).toBe('warning');
-      expect(errors[0].type).toBe('WARNING_TYPE');
+      expect(errors[0]?.severity).toBe('warning');
+      expect(errors[0]?.type).toBe('WARNING_TYPE');
     });
 
     it('should add error toast', () => {
@@ -191,8 +191,8 @@ describe('ErrorToast', () => {
 
       const errors = useErrorStore.getState().errors;
       expect(errors).toHaveLength(1);
-      expect(errors[0].severity).toBe('error');
-      expect(errors[0].details).toBe('Details');
+      expect(errors[0]?.severity).toBe('error');
+      expect(errors[0]?.details).toBe('Details');
     });
 
     it('should add critical toast', () => {
@@ -214,8 +214,8 @@ describe('ErrorToast', () => {
 
       const errors = useErrorStore.getState().errors;
       expect(errors).toHaveLength(1);
-      expect(errors[0].severity).toBe('critical');
-      expect(errors[0].stack).toBe('Stack trace');
+      expect(errors[0]?.severity).toBe('critical');
+      expect(errors[0]?.stack).toBe('Stack trace');
     });
   });
 });
