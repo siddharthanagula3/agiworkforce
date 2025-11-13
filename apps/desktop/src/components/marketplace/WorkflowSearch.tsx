@@ -1,14 +1,7 @@
-import React from 'react';
 import { X, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
 import { WORKFLOW_CATEGORIES } from '../../types/marketplace';
 
@@ -39,12 +32,7 @@ export function WorkflowSearch() {
         <SlidersHorizontal className="h-5 w-5 text-muted-foreground" />
         <h3 className="text-lg font-semibold">Filters & Sort</h3>
         {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={resetFilters}
-            className="ml-auto"
-          >
+          <Button variant="ghost" size="sm" onClick={resetFilters} className="ml-auto">
             <X className="h-4 w-4 mr-1" />
             Clear All
           </Button>
@@ -208,10 +196,7 @@ function ActiveFilterBadge({ label, onRemove }: ActiveFilterBadgeProps) {
   return (
     <Badge variant="secondary" className="gap-2 pr-1">
       <span>{label}</span>
-      <button
-        onClick={onRemove}
-        className="hover:bg-secondary-foreground/20 rounded-full p-0.5"
-      >
+      <button onClick={onRemove} className="hover:bg-secondary-foreground/20 rounded-full p-0.5">
         <X className="h-3 w-3" />
       </button>
     </Badge>

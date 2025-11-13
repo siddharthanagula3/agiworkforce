@@ -28,7 +28,7 @@ export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({ teamId }) 
 
     // Subscribe to presence updates
     const unsubscribe = websocketClient.on('UserPresenceChanged', (event) => {
-      updatePresenceState(event as { user_id: string; status: UserPresence['status'] });
+      updatePresenceState(event as unknown as { user_id: string; status: UserPresence['status'] });
     });
 
     // Refresh presence every 30 seconds
