@@ -147,6 +147,24 @@ pub struct CacheEntry {
     pub created_at: DateTime<Utc>,
     pub last_used_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    pub hit_count: i32,
+    pub tokens_saved: i32,
+    pub cost_saved: f64,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheStatistics {
+    pub provider: String,
+    pub model: String,
+    pub entry_count: i64,
+    pub total_hits: i64,
+    pub total_tokens_saved: i64,
+    pub total_cost_saved: f64,
+    pub avg_hits_per_entry: f64,
+    pub oldest_entry: DateTime<Utc>,
+    pub most_recent_use: DateTime<Utc>,
 }
 
 /// Application settings key-value store
