@@ -1,5 +1,7 @@
 use super::*;
 use crate::agi::knowledge::KnowledgeEntry;
+use crate::agi::process_ontology::ProcessOntology;
+use crate::agi::process_reasoning::ProcessReasoning;
 use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::Result;
 use serde_json::json;
@@ -12,6 +14,8 @@ pub struct AGIPlanner {
     router: Arc<Mutex<LLMRouter>>,
     tool_registry: Arc<ToolRegistry>,
     knowledge_base: Arc<KnowledgeBase>,
+    process_reasoning: Option<Arc<ProcessReasoning>>,
+    process_ontology: Option<Arc<ProcessOntology>>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +46,25 @@ impl AGIPlanner {
             router,
             tool_registry,
             knowledge_base,
+            process_reasoning: None,
+            process_ontology: None,
+        })
+    }
+
+    /// Create planner with process reasoning capabilities
+    pub fn with_process_reasoning(
+        router: Arc<Mutex<LLMRouter>>,
+        tool_registry: Arc<ToolRegistry>,
+        knowledge_base: Arc<KnowledgeBase>,
+        process_reasoning: Arc<ProcessReasoning>,
+        process_ontology: Arc<ProcessOntology>,
+    ) -> Result<Self> {
+        Ok(Self {
+            router,
+            tool_registry,
+            knowledge_base,
+            process_reasoning: Some(process_reasoning),
+            process_ontology: Some(process_ontology),
         })
     }
 
@@ -49,15 +72,38 @@ impl AGIPlanner {
     pub async fn create_plan(&self, goal: &Goal, context: &ExecutionContext) -> Result<Plan> {
         tracing::info!("[Planner] Creating plan for goal: {}", goal.description);
 
+        // Identify process type if process reasoning is available
+        let process_type = if let Some(ref pr) = self.process_reasoning {
+            match pr.identify_process_type(goal).await {
+                Ok(pt) => {
+                    tracing::info!("[Planner] Identified process type: {:?}", pt);
+                    Some(pt)
+                }
+                Err(e) => {
+                    tracing::warn!("[Planner] Failed to identify process type: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // Get process-specific best practices
+        let best_practices = if let (Some(pt), Some(ref po)) = (process_type, &self.process_ontology) {
+            po.get_best_practices(pt)
+        } else {
+            vec![]
+        };
+
         // Get relevant knowledge
         let knowledge = self.knowledge_base.get_relevant_knowledge(goal, 10).await?;
 
         // Suggest tools
         let suggested_tools: Vec<_> = self.tool_registry.suggest_tools(&goal.description);
 
-        // Use LLM to create plan
+        // Use LLM to create plan with process-aware context
         let plan_json = self
-            .plan_with_llm(goal, context, &knowledge, &suggested_tools)
+            .plan_with_llm(goal, context, &knowledge, &suggested_tools, &best_practices)
             .await?;
 
         // Parse plan
@@ -70,6 +116,7 @@ impl AGIPlanner {
         context: &ExecutionContext,
         knowledge: &[KnowledgeEntry],
         tools: &[Tool],
+        best_practices: &[String],
     ) -> Result<String> {
         let knowledge_summary: Vec<String> = knowledge
             .iter()
@@ -83,6 +130,13 @@ impl AGIPlanner {
             .take(10)
             .collect();
 
+        let best_practices_section = if !best_practices.is_empty() {
+            format!("\nBest Practices for this Process:\n{}\n",
+                best_practices.iter().map(|p| format!("- {}", p)).collect::<Vec<_>>().join("\n"))
+        } else {
+            String::new()
+        };
+
         let prompt = format!(
             r#"You are an AGI (Artificial General Intelligence) planning system. Create a detailed execution plan to achieve the following goal.
 
@@ -95,7 +149,7 @@ Available Tools:
 
 Relevant Knowledge:
 {}
-
+{}
 Current Context:
 - CPU Usage: {}%
 - Memory Usage: {}MB
@@ -142,6 +196,7 @@ Return ONLY the JSON array."#,
             goal.success_criteria.join(", "),
             tools_summary.join("\n"),
             knowledge_summary.join("\n"),
+            best_practices_section,
             context.available_resources.cpu_usage_percent,
             context.available_resources.memory_usage_mb,
             context.tool_results.len()
@@ -182,10 +237,10 @@ Return ONLY the JSON array."#,
         }
 
         // Fallback to basic plan
-        self.generate_basic_plan(goal, tools).await
+        self.generate_basic_plan(goal, tools, best_practices).await
     }
 
-    async fn generate_basic_plan(&self, goal: &Goal, tools: &[Tool]) -> Result<String> {
+    async fn generate_basic_plan(&self, goal: &Goal, tools: &[Tool], _best_practices: &[String]) -> Result<String> {
         // Generate basic plan without LLM (fallback)
         let mut steps = Vec::new();
 
@@ -738,6 +793,6 @@ Return ONLY a JSON array of steps with this structure:
             }
         }
 
-        self.generate_basic_plan(goal, tools).await
+        self.generate_basic_plan(goal, tools, &[]).await
     }
 }

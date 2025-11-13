@@ -10,6 +10,9 @@ import { VisualizationLayer } from './components/Overlay/VisualizationLayer';
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import { useTheme } from './hooks/useTheme';
 import { useChatStore } from './stores/chatStore';
+import { useTemplateStore } from './stores/templateStore';
+import { useOrchestrationStore } from './stores/orchestrationStore';
+import { useTeamStore } from './stores/teamStore';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -28,6 +31,12 @@ import {
   Maximize2,
   RefreshCcw,
 } from 'lucide-react';
+import { TemplateMarketplace } from './components/templates/TemplateMarketplace';
+import { WorkflowBuilder } from './components/orchestration/WorkflowBuilder';
+import { TeamDashboard } from './components/teams/TeamDashboard';
+import { GovernanceDashboard } from './components/governance/GovernanceDashboard';
+
+export type AppView = 'chat' | 'templates' | 'workflows' | 'teams' | 'governance';
 
 const DesktopShell = () => {
   const { state, actions } = useWindowManager();
@@ -37,11 +46,17 @@ const DesktopShell = () => {
   const [agentChatPosition] = useState<'left' | 'right'>('right');
   const [agentChatVisible, setAgentChatVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [currentView, setCurrentView] = useState<AppView>('chat');
   const { theme, toggleTheme } = useTheme();
 
   const createConversation = useChatStore((store) => store.createConversation);
   const selectConversation = useChatStore((store) => store.selectConversation);
   const addError = useErrorStore((store) => store.addError);
+
+  const fetchTemplates = useTemplateStore((store) => store.fetchTemplates);
+  const fetchInstalledTemplates = useTemplateStore((store) => store.fetchInstalledTemplates);
+  const loadWorkflows = useOrchestrationStore((store) => store.loadWorkflows);
+  const getUserTeams = useTeamStore((store) => store.getUserTeams);
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
@@ -128,6 +143,41 @@ const DesktopShell = () => {
     };
     void checkOnboarding();
   }, [addError]);
+
+  // Initialize stores on mount
+  useEffect(() => {
+    const initializeStores = async () => {
+      try {
+        // Initialize templates
+        await Promise.all([fetchTemplates(), fetchInstalledTemplates()]);
+
+        // Initialize workflows (using default user ID for now)
+        await loadWorkflows('default-user');
+
+        // Initialize teams (using default user ID for now)
+        await getUserTeams('default-user');
+      } catch (error) {
+        console.error('Failed to initialize stores:', error);
+        addError({
+          type: 'INITIALIZATION_ERROR',
+          severity: 'warning',
+          message: 'Failed to initialize some features',
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    if (onboardingComplete) {
+      void initializeStores();
+    }
+  }, [
+    onboardingComplete,
+    fetchTemplates,
+    fetchInstalledTemplates,
+    loadWorkflows,
+    getUserTeams,
+    addError,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -254,6 +304,61 @@ const DesktopShell = () => {
     return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
+  const renderMainContent = () => {
+    switch (currentView) {
+      case 'templates':
+        return <TemplateMarketplace />;
+      case 'workflows':
+        return <WorkflowBuilder />;
+      case 'teams':
+        return <TeamDashboard />;
+      case 'governance':
+        return <GovernanceDashboard />;
+      case 'chat':
+      default:
+        return (
+          <div className="flex flex-1 overflow-hidden min-w-0">
+            {/* Agent Chat (Left) */}
+            {agentChatVisible && agentChatPosition === 'left' && (
+              <>
+                <AgentChatInterface className="w-96 shrink-0" position="left" />
+                <div className="w-px bg-border shrink-0" />
+              </>
+            )}
+
+            {/* Main Chat Interface */}
+            <div className="flex-1 overflow-hidden min-w-0">
+              <ChatInterface className="h-full" />
+            </div>
+
+            {/* Agent Chat (Right) */}
+            {agentChatVisible && agentChatPosition === 'right' && (
+              <>
+                <div className="w-px bg-border shrink-0" />
+                <AgentChatInterface className="w-96 shrink-0" position="right" />
+              </>
+            )}
+
+            {/* Toggle Button */}
+            {!agentChatVisible && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute bottom-4 right-4 z-10"
+                onClick={() => setAgentChatVisible(true)}
+              >
+                {agentChatPosition === 'right' ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       <TitleBar
@@ -264,46 +369,14 @@ const DesktopShell = () => {
       />
       <main className="flex flex-1 overflow-hidden min-h-0 min-w-0">
         {!sidebarCollapsed && (
-          <Sidebar className="shrink-0" onOpenSettings={() => setSettingsPanelOpen(true)} />
+          <Sidebar
+            className="shrink-0"
+            onOpenSettings={() => setSettingsPanelOpen(true)}
+            currentView={currentView}
+            onViewChange={setCurrentView}
+          />
         )}
-        <div className="flex flex-1 overflow-hidden min-w-0">
-          {/* Agent Chat (Left) */}
-          {agentChatVisible && agentChatPosition === 'left' && (
-            <>
-              <AgentChatInterface className="w-96 shrink-0" position="left" />
-              <div className="w-px bg-border shrink-0" />
-            </>
-          )}
-
-          {/* Main Chat Interface */}
-          <div className="flex-1 overflow-hidden min-w-0">
-            <ChatInterface className="h-full" />
-          </div>
-
-          {/* Agent Chat (Right) */}
-          {agentChatVisible && agentChatPosition === 'right' && (
-            <>
-              <div className="w-px bg-border shrink-0" />
-              <AgentChatInterface className="w-96 shrink-0" position="right" />
-            </>
-          )}
-
-          {/* Toggle Button */}
-          {!agentChatVisible && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute bottom-4 right-4 z-10"
-              onClick={() => setAgentChatVisible(true)}
-            >
-              {agentChatPosition === 'right' ? (
-                <ChevronLeft className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-        </div>
+        {renderMainContent()}
       </main>
       <CommandPalette
         open={commandPaletteOpen}
