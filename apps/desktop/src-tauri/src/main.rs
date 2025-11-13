@@ -6,6 +6,7 @@
 use agiworkforce_desktop::agent::code_generator::CodeGenerator;
 use agiworkforce_desktop::agent::context_manager::ContextManager;
 use agiworkforce_desktop::agent::runtime::AgentRuntime;
+use agiworkforce_desktop::billing::BillingStateWrapper;
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
@@ -228,6 +229,11 @@ fn main() {
             app.manage(agiworkforce_desktop::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
 
             tracing::info!("Codebase cache initialized");
+
+            // Initialize Billing state (Stripe integration)
+            app.manage(BillingStateWrapper::new());
+
+            tracing::info!("Billing state initialized");
 
             // Initialize window state
             let state = AppState::load(app.handle())?;
@@ -719,7 +725,21 @@ fn main() {
             agiworkforce_desktop::commands::get_session_info,
             agiworkforce_desktop::commands::update_session_activity,
             agiworkforce_desktop::commands::get_user_preference,
-            agiworkforce_desktop::commands::set_user_preference
+            agiworkforce_desktop::commands::set_user_preference,
+            // Billing commands (Stripe integration)
+            agiworkforce_desktop::billing::billing_initialize,
+            agiworkforce_desktop::billing::stripe_create_customer,
+            agiworkforce_desktop::billing::stripe_get_customer_by_email,
+            agiworkforce_desktop::billing::stripe_create_subscription,
+            agiworkforce_desktop::billing::stripe_get_subscription,
+            agiworkforce_desktop::billing::stripe_update_subscription,
+            agiworkforce_desktop::billing::stripe_cancel_subscription,
+            agiworkforce_desktop::billing::stripe_get_invoices,
+            agiworkforce_desktop::billing::stripe_get_usage,
+            agiworkforce_desktop::billing::stripe_track_usage,
+            agiworkforce_desktop::billing::stripe_create_portal_session,
+            agiworkforce_desktop::billing::stripe_get_active_subscription,
+            agiworkforce_desktop::billing::stripe_process_webhook
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
