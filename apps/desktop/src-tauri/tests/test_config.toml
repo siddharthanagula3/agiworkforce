@@ -1,0 +1,173 @@
+[test]
+# Test execution timeout in seconds
+timeout_seconds = 30
+
+# Enable parallel test execution
+parallel_tests = true
+
+# Verbose test output
+verbose = true
+
+# Fail fast on first error
+fail_fast = false
+
+[llm]
+# Use mock LLM responses for testing
+use_mock = true
+
+# Path to mock responses file (relative to test directory)
+mock_responses = "fixtures/mock_responses.json"
+
+# Default mock response if no specific response is configured
+default_response = "Mock LLM response for testing"
+
+[database]
+# Use in-memory database for tests
+use_in_memory = true
+
+# Run migrations on test database
+run_migrations = true
+
+# Reset database between tests
+reset_between_tests = true
+
+[security]
+# Skip approval workflows in tests (for automated testing)
+skip_approval_workflows = false
+
+# Enable all security validations even in test mode
+enable_all_validations = true
+
+# Test dangerous operations
+allow_dangerous_operations_in_tests = true
+
+[filesystem]
+# Use temporary directory for file operations
+use_temp_directory = true
+
+# Clean up test files after execution
+cleanup_after_tests = true
+
+# Maximum file size for test operations (MB)
+max_file_size_mb = 100
+
+[browser]
+# Use headless browser for tests
+headless = true
+
+# Browser timeout in seconds
+timeout_seconds = 30
+
+# Enable browser automation in tests
+enabled = true
+
+[network]
+# Use mock HTTP client for tests
+use_mock = true
+
+# Allow real network requests (disable for isolated tests)
+allow_real_requests = false
+
+# Network timeout in seconds
+timeout_seconds = 10
+
+[performance]
+# Enable performance profiling during tests
+enable_profiling = false
+
+# Track memory allocations
+track_memory = true
+
+# Maximum allowed memory usage (MB)
+max_memory_mb = 512
+
+# Maximum allowed CPU usage (percent)
+max_cpu_percent = 80
+
+[coverage]
+# Enable code coverage tracking
+enabled = true
+
+# Minimum coverage threshold (percent)
+min_threshold = 70
+
+# Generate HTML coverage report
+generate_html = true
+
+# Output directory for coverage reports
+output_dir = "target/coverage"
+
+[fixtures]
+# Path to test fixtures directory
+fixtures_dir = "tests/fixtures"
+
+# Load fixtures before tests
+auto_load = true
+
+[logging]
+# Log level for tests (trace, debug, info, warn, error)
+level = "debug"
+
+# Log output destination (stdout, file, or both)
+output = "stdout"
+
+# Log file path (if output includes file)
+file_path = "target/test-logs/test.log"
+
+[agi]
+# Enable AGI system in tests
+enabled = true
+
+# Use fast execution mode (skip delays)
+fast_execution = true
+
+# Maximum planning depth for tests
+max_planning_depth = 10
+
+# Enable learning system in tests
+enable_learning = false
+
+# Maximum concurrent tool executions
+max_concurrent_tools = 5
+
+[integration]
+# Enable integration tests
+enabled = true
+
+# Test against real services (if false, use mocks)
+use_real_services = false
+
+# API endpoints for integration testing
+test_api_endpoint = "http://localhost:8080"
+
+# Database connection for integration tests
+test_db_url = "sqlite::memory:"
+
+[e2e]
+# Enable end-to-end tests
+enabled = true
+
+# Application URL for E2E tests
+app_url = "http://localhost:1420"
+
+# Screenshot on failure
+screenshot_on_failure = true
+
+# Video recording
+record_video = false
+
+# Retry failed tests
+retry_failed_tests = 1
+
+[benchmarks]
+# Enable benchmark tests
+enabled = true
+
+# Benchmark iterations
+iterations = 100
+
+# Warm-up iterations before measuring
+warmup_iterations = 10
+
+# Measurement time in seconds
+measurement_time = 5

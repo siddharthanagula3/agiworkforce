@@ -170,7 +170,7 @@ export function AutomationDashboard() {
           />
         </div>
         {allTags.length > 0 && (
-          <Select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+          <Select value={tagFilter} onValueChange={setTagFilter}>
             <option value="">All Tags</option>
             {allTags.map((tag) => (
               <option key={tag} value={tag}>
@@ -307,10 +307,10 @@ export function AutomationDashboard() {
             <div className="flex gap-2">
               <Select
                 value={codeLanguage}
-                onChange={(e) => {
-                  setCodeLanguage(e.target.value as CodeLanguage);
+                onValueChange={(value) => {
+                  setCodeLanguage(value as CodeLanguage);
                   if (selectedScript) {
-                    handleGenerateCode(selectedScript, e.target.value as CodeLanguage);
+                    handleGenerateCode(selectedScript, value as CodeLanguage);
                   }
                 }}
               >

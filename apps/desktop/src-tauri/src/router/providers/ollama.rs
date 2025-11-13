@@ -7,12 +7,14 @@
  * - codellama:70b - Specialized for code
  * - mistral:latest - Mistral 7B
  * - mixtral:8x7b - Mixture of Experts
+ * - llava:latest - Vision-capable model for image analysis
+ * - bakllava:latest - Alternative vision model
  *
- * Install models: `ollama pull llama3.1:405b`
+ * Install models: `ollama pull llama3.1:405b` or `ollama pull llava`
  * Note: Larger models (405B) require significant VRAM/RAM
  */
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use crate::router::{ContentPart, LLMProvider, LLMRequest, LLMResponse};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -33,6 +35,8 @@ struct OllamaRequest {
     stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<OllamaOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    images: Option<Vec<String>>, // base64 encoded images
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,6 +71,35 @@ impl OllamaProvider {
             base_url: base_url.unwrap_or_else(|| "http://localhost:11434".to_string()),
         }
     }
+
+    /// Extract images from multimodal content as base64 strings
+    fn extract_images(multimodal: Option<&Vec<ContentPart>>) -> Option<Vec<String>> {
+        multimodal.and_then(|parts| {
+            let images: Vec<String> = parts
+                .iter()
+                .filter_map(|part| match part {
+                    ContentPart::Image { image } => Some(base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &image.data,
+                    )),
+                    _ => None,
+                })
+                .collect();
+
+            if images.is_empty() {
+                None
+            } else {
+                Some(images)
+            }
+        })
+    }
+
+    /// Check if model supports vision (llava models)
+    fn model_supports_vision(model: &str) -> bool {
+        model.to_lowercase().contains("llava")
+            || model.to_lowercase().contains("bakllava")
+            || model.to_lowercase().contains("vision")
+    }
 }
 
 #[async_trait::async_trait]
@@ -75,6 +108,14 @@ impl LLMProvider for OllamaProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        // Extract images from the last user message (Ollama uses images at request level)
+        let images = request
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == "user")
+            .and_then(|m| Self::extract_images(m.multimodal_content.as_ref()));
+
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
             messages: request
@@ -90,6 +131,7 @@ impl LLMProvider for OllamaProvider {
                 temperature: request.temperature,
                 num_predict: request.max_tokens,
             }),
+            images,
         };
 
         let response = self
@@ -140,6 +182,14 @@ impl LLMProvider for OllamaProvider {
         "Ollama"
     }
 
+    fn supports_vision(&self) -> bool {
+        true // Ollama supports vision via llava models
+    }
+
+    fn supports_function_calling(&self) -> bool {
+        true // Some Ollama models support function calling via prompt engineering
+    }
+
     async fn send_message_streaming(
         &self,
         request: &LLMRequest,
@@ -147,6 +197,14 @@ impl LLMProvider for OllamaProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
+        // Extract images from the last user message (Ollama uses images at request level)
+        let images = request
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == "user")
+            .and_then(|m| Self::extract_images(m.multimodal_content.as_ref()));
+
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
             messages: request
@@ -162,6 +220,7 @@ impl LLMProvider for OllamaProvider {
                 temperature: request.temperature,
                 num_predict: request.max_tokens,
             }),
+            images,
         };
 
         tracing::debug!(
