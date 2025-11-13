@@ -38,11 +38,7 @@ export enum Permission {
 
 // Permission matrix: defines which roles have which permissions
 const PERMISSION_MATRIX: Record<UserRole, Permission[]> = {
-  [UserRole.Viewer]: [
-    Permission.FILE_READ,
-    Permission.SETTINGS_READ,
-    Permission.API_KEY_READ,
-  ],
+  [UserRole.Viewer]: [Permission.FILE_READ, Permission.SETTINGS_READ, Permission.API_KEY_READ],
   [UserRole.Editor]: [
     Permission.FILE_READ,
     Permission.FILE_WRITE,
@@ -75,18 +71,14 @@ export class PermissionManager {
    * Check if a user role has all of the specified permissions
    */
   static hasAllPermissions(role: UserRole, permissions: Permission[]): boolean {
-    return permissions.every((permission) =>
-      this.hasPermission(role, permission)
-    );
+    return permissions.every((permission) => this.hasPermission(role, permission));
   }
 
   /**
    * Check if a user role has any of the specified permissions
    */
   static hasAnyPermission(role: UserRole, permissions: Permission[]): boolean {
-    return permissions.some((permission) =>
-      this.hasPermission(role, permission)
-    );
+    return permissions.some((permission) => this.hasPermission(role, permission));
   }
 
   /**
@@ -155,8 +147,9 @@ export function usePermission(permission: Permission, userRole?: UserRole): bool
 
 /**
  * Higher-order component for permission-based rendering
+ * TODO: Move to .tsx file to enable JSX syntax
  */
-export function withPermission<P extends object>(
+/* export function withPermission<P extends object>(
   Component: React.ComponentType<P>,
   permission: Permission
 ): React.FC<P & { userRole?: UserRole }> {
@@ -169,4 +162,4 @@ export function withPermission<P extends object>(
 
     return <Component {...(restProps as P)} />;
   };
-}
+} */
