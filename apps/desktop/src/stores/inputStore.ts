@@ -252,7 +252,7 @@ export const useInputStore = create<InputState>()(
       }),
       merge: (persistedState: any, currentState) => {
         // Restore drafts from array to Map
-        const drafts = new Map(persistedState?.drafts || []);
+        const drafts = new Map<number | null, DraftMessage>(persistedState?.drafts || []);
         const cleanedDrafts = cleanOldDrafts(drafts);
 
         return {

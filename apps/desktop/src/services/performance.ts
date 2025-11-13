@@ -18,7 +18,6 @@ class PerformanceMonitoringService {
   private marks: Map<string, PerformanceMark> = new Map();
   private measures: PerformanceMeasure[] = [];
   private appStartTime: number;
-  private webVitalsObserver?: PerformanceObserver;
 
   constructor() {
     this.appStartTime = Date.now();
@@ -82,14 +81,13 @@ class PerformanceMonitoringService {
       // Track Navigation Timing
       window.addEventListener('load', () => {
         const perfData = performance.getEntriesByType(
-          'navigation'
+          'navigation',
         )[0] as PerformanceNavigationTiming;
 
         if (perfData) {
           const pageLoadTime = perfData.loadEventEnd - perfData.fetchStart;
           const ttfb = perfData.responseStart - perfData.requestStart;
-          const domContentLoaded =
-            perfData.domContentLoadedEventEnd - perfData.fetchStart;
+          const domContentLoaded = perfData.domContentLoadedEventEnd - perfData.fetchStart;
 
           analytics.track('app_opened', {
             page_load_time_ms: pageLoadTime,
@@ -163,10 +161,7 @@ class PerformanceMonitoringService {
   /**
    * Time an async operation
    */
-  public async timeOperation<T>(
-    operationName: string,
-    operation: () => Promise<T>
-  ): Promise<T> {
+  public async timeOperation<T>(operationName: string, operation: () => Promise<T>): Promise<T> {
     const startMark = `${operationName}-start`;
     const endMark = `${operationName}-end`;
 
@@ -217,11 +212,7 @@ class PerformanceMonitoringService {
   /**
    * Track automation execution time
    */
-  public trackAutomationExecution(
-    automationId: string,
-    duration: number,
-    success: boolean
-  ) {
+  public trackAutomationExecution(automationId: string, duration: number, success: boolean) {
     analytics.track('automation_executed', {
       automation_id: automationId,
       duration_ms: duration,
@@ -236,7 +227,7 @@ class PerformanceMonitoringService {
     goalId: string,
     duration: number,
     success: boolean,
-    stepsCount?: number
+    stepsCount?: number,
   ) {
     analytics.track('goal_completed', {
       goal_id: goalId,
@@ -309,14 +300,11 @@ class PerformanceMonitoringService {
     setInterval(async () => {
       try {
         const metrics = await this.getSystemMetrics();
-        const memoryUsagePercent =
-          (metrics.memory_used_mb / metrics.memory_total_mb) * 100;
+        const memoryUsagePercent = (metrics.memory_used_mb / metrics.memory_total_mb) * 100;
 
         // Alert if memory usage is high
         if (memoryUsagePercent > 80) {
-          console.warn(
-            `High memory usage: ${memoryUsagePercent.toFixed(2)}%`
-          );
+          console.warn(`High memory usage: ${memoryUsagePercent.toFixed(2)}%`);
           analytics.track('error_occurred', {
             error_type: 'high_memory_usage',
             memory_usage_percent: memoryUsagePercent,
@@ -335,8 +323,7 @@ class PerformanceMonitoringService {
   public getPerformanceSummary() {
     const avgMeasureDuration =
       this.measures.length > 0
-        ? this.measures.reduce((sum, m) => sum + m.duration, 0) /
-          this.measures.length
+        ? this.measures.reduce((sum, m) => sum + m.duration, 0) / this.measures.length
         : 0;
 
     return {
@@ -345,7 +332,7 @@ class PerformanceMonitoringService {
       avg_measure_duration_ms: avgMeasureDuration,
       slowest_measure: this.measures.reduce(
         (slowest, m) => (m.duration > slowest.duration ? m : slowest),
-        { name: '', duration: 0, startMark: '', endMark: '' }
+        { name: '', duration: 0, startMark: '', endMark: '' },
       ),
     };
   }

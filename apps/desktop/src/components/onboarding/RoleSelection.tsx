@@ -8,7 +8,7 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Check } from 'lucide-react';
-import type { UserRole, _RoleOption } from '../../types/onboarding';
+import type { UserRole } from '../../types/onboarding';
 import { ROLE_OPTIONS } from '../../data/onboardingDemos';
 
 interface RoleSelectionProps {
@@ -30,9 +30,7 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({
     <div className="w-full max-w-5xl mx-auto space-y-8 py-8 px-4">
       {/* Header */}
       <div className="text-center space-y-4">
-        <h2 className="text-4xl font-bold tracking-tight">
-          What best describes you?
-        </h2>
+        <h2 className="text-4xl font-bold tracking-tight">What best describes you?</h2>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           We'll recommend the perfect AI employees for your needs
         </p>
@@ -78,30 +76,21 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({
                   )}
                 </div>
 
-                <CardDescription className="text-sm mt-2">
-                  {role.description}
-                </CardDescription>
+                <CardDescription className="text-sm mt-2">{role.description}</CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
                 {/* Perfect for */}
                 <div className="text-xs text-muted-foreground">
-                  <span className="font-semibold">Perfect for:</span>{' '}
-                  {role.perfectFor}
+                  <span className="font-semibold">Perfect for:</span> {role.perfectFor}
                 </div>
 
                 {/* Recommended employees */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-foreground">
-                    Recommended Employees:
-                  </p>
+                  <p className="text-xs font-semibold text-foreground">Recommended Employees:</p>
                   <div className="flex flex-wrap gap-1.5">
                     {role.recommendedEmployees.slice(0, 3).map((employee, index) => (
-                      <Badge
-                        key={index}
-                        variant="secondary"
-                        className="text-xs px-2 py-0.5"
-                      >
+                      <Badge key={index} variant="secondary" className="text-xs px-2 py-0.5">
                         {employee}
                       </Badge>
                     ))}
@@ -128,9 +117,7 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({
 
       {/* Help text */}
       <div className="text-center text-sm text-muted-foreground pt-4">
-        <p>
-          Don't worry, you can explore all employees regardless of your role
-        </p>
+        <p>Don't worry, you can explore all employees regardless of your role</p>
       </div>
     </div>
   );
