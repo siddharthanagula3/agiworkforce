@@ -1,26 +1,41 @@
 pub mod api_tools_impl;
 pub mod audio_processing;
+pub mod comparator;
 pub mod context_manager;
 pub mod core;
 pub mod executor;
 pub mod knowledge;
 pub mod learning;
 pub mod memory;
+pub mod outcome_tracker;
 pub mod planner;
+pub mod process_ontology;
+pub mod process_reasoning;
 pub mod resources;
+pub mod sandbox;
+pub mod templates;
 pub mod tools;
 
 #[cfg(test)]
 mod tests;
 
+pub use comparator::{ExecutionResult, ResultComparator, ScoredResult};
 pub use context_manager::{CompactionResult, CompactionStats, ContextManager};
 pub use core::AGICore;
 pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
 pub use memory::AGIMemory;
+pub use outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
 pub use planner::AGIPlanner;
+pub use process_ontology::{ProcessOntology, ProcessTemplate};
+pub use process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
 pub use resources::ResourceManager;
+pub use sandbox::{Sandbox, SandboxManager};
+pub use templates::{
+    get_builtin_templates, AgentTemplate, DifficultyLevel, TemplateCategory, TemplateManager,
+    WorkflowDefinition, WorkflowStep,
+};
 pub use tools::{Tool, ToolCapability, ToolRegistry, ToolResult};
 
 use serde::{Deserialize, Serialize};

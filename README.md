@@ -10,7 +10,7 @@ _Built with Tauri 2.0, Rust, React 18, and TypeScript_
 
 **Status:** ✅ **Production Ready (November 2025)**
 **Grade:** **A+ (100/100)**
-**Latest Update:** ✨ **Claude Code/Cursor-Like Features Complete** (9 new features added!)
+**Latest Update:** 🚀 **Now powered by GPT-5, Claude 4.5, and Gemini 2.5 Pro!** (November 2025 models)
 
 ---
 

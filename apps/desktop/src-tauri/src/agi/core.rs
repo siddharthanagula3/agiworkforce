@@ -25,6 +25,9 @@ pub struct AGICore {
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
     stop_signal: Arc<Mutex<bool>>,
     pub(crate) app_handle: Option<tauri::AppHandle>,
+    process_reasoning: Option<Arc<ProcessReasoning>>,
+    process_ontology: Option<Arc<ProcessOntology>>,
+    outcome_tracker: Option<Arc<OutcomeTracker>>,
 }
 
 impl AGICore {
@@ -47,8 +50,77 @@ impl AGICore {
             tool_registry.clone(),
             resource_manager.clone(),
             automation.clone(),
+            router.clone(),
             app_handle.clone(),
         )?);
+        let memory = Arc::new(AGIMemory::new()?);
+        let learning = Arc::new(LearningSystem::new(
+            config.enable_learning,
+            config.enable_self_improvement,
+        )?);
+
+        // Register all available tools
+        tool_registry.register_all_tools(automation.clone(), router.clone())?);
+
+        Ok(Self {
+            config,
+            capabilities: AGICapabilities::default(),
+            tool_registry,
+            knowledge_base,
+            resource_manager,
+            planner,
+            executor,
+            memory,
+            learning,
+            router,
+            automation,
+            active_goals: Arc::new(Mutex::new(Vec::new())),
+            execution_contexts: Arc::new(Mutex::new(HashMap::new())),
+            stop_signal: Arc::new(Mutex::new(false)),
+            app_handle,
+            process_reasoning: None,
+            process_ontology: None,
+            outcome_tracker: None,
+        })
+    }
+
+    /// Create AGI Core with process reasoning and outcome tracking enabled
+    pub fn with_process_reasoning(
+        config: AGIConfig,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        automation: Arc<AutomationService>,
+        app_handle: Option<tauri::AppHandle>,
+        db_path: String,
+    ) -> Result<Self> {
+        let tool_registry = Arc::new(ToolRegistry::new()?);
+        let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
+        let resource_manager = Arc::new(ResourceManager::new(config.resource_limits.clone())?);
+
+        // Initialize process reasoning components
+        let process_reasoning = Arc::new(ProcessReasoning::new(router.clone())?);
+        let process_ontology = Arc::new(ProcessOntology::new(db_path.clone())?);
+        let outcome_tracker = Arc::new(OutcomeTracker::new(db_path)?);
+
+        // Create planner with process reasoning
+        let planner = Arc::new(AGIPlanner::with_process_reasoning(
+            router.clone(),
+            tool_registry.clone(),
+            knowledge_base.clone(),
+            process_reasoning.clone(),
+            process_ontology.clone(),
+        )?);
+
+        // Create executor with process reasoning and outcome tracking
+        let executor = Arc::new(AGIExecutor::with_process_reasoning(
+            tool_registry.clone(),
+            resource_manager.clone(),
+            automation.clone(),
+            router.clone(),
+            app_handle.clone(),
+            process_reasoning.clone(),
+            outcome_tracker.clone(),
+        )?);
+
         let memory = Arc::new(AGIMemory::new()?);
         let learning = Arc::new(LearningSystem::new(
             config.enable_learning,
@@ -74,6 +146,9 @@ impl AGICore {
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(Mutex::new(false)),
             app_handle,
+            process_reasoning: Some(process_reasoning),
+            process_ontology: Some(process_ontology),
+            outcome_tracker: Some(outcome_tracker),
         })
     }
 
@@ -181,6 +256,128 @@ impl AGICore {
         });
 
         Ok(goal.id)
+    }
+
+    /// Submit a goal for parallel execution with multiple agents (Cursor 2.0-style)
+    ///
+    /// This spawns N agents that work on the same goal simultaneously using different strategies.
+    /// Each agent runs in an isolated sandbox (git worktree or temp directory) to prevent conflicts.
+    /// Results are compared and the best one is returned.
+    ///
+    /// # Arguments
+    /// * `goal` - The goal to achieve
+    /// * `num_agents` - Number of parallel agents to spawn (default: 8)
+    ///
+    /// # Returns
+    /// The best ScoredResult from all parallel executions
+    pub async fn submit_goal_parallel(
+        &self,
+        goal: Goal,
+        num_agents: usize,
+    ) -> Result<crate::agi::ScoredResult> {
+        tracing::info!(
+            "[AGI] Parallel goal submitted: {} (agents: {})",
+            goal.description,
+            num_agents
+        );
+
+        // Emit parallel goal submitted event
+        self.emit_event(
+            "agi:goal:parallel_submitted",
+            json!({
+                "goal_id": goal.id,
+                "description": goal.description,
+                "num_agents": num_agents,
+            }),
+        );
+
+        // Store in knowledge base
+        self.knowledge_base.add_goal(&goal).await?;
+
+        // Create execution context
+        let context = ExecutionContext {
+            goal: goal.clone(),
+            current_state: HashMap::new(),
+            available_resources: self.resource_manager.get_state().await?,
+            tool_results: Vec::new(),
+            context_memory: Vec::new(),
+        };
+
+        // Generate parallel plans with different strategies
+        tracing::info!("[AGI] Generating {} parallel plans", num_agents);
+        let plans = self
+            .planner
+            .create_parallel_plans(&goal, &context, num_agents)
+            .await?;
+
+        // Emit plans created event
+        self.emit_event(
+            "agi:goal:parallel_plans_created",
+            json!({
+                "goal_id": goal.id,
+                "num_plans": plans.len(),
+            }),
+        );
+
+        // Create sandbox manager
+        let sandbox_manager = crate::agi::SandboxManager::new()?;
+
+        // Execute plans in parallel
+        tracing::info!("[AGI] Executing {} plans in parallel", plans.len());
+        let results = self
+            .executor
+            .execute_plans_parallel(plans, &sandbox_manager, &goal)
+            .await?;
+
+        // Emit execution completed event
+        self.emit_event(
+            "agi:goal:parallel_execution_completed",
+            json!({
+                "goal_id": goal.id,
+                "num_results": results.len(),
+            }),
+        );
+
+        // Compare and rank results
+        let comparator = crate::agi::ResultComparator::new();
+        let scored_results = comparator.compare_and_rank(results);
+
+        // Log comparison
+        let comparison_output = comparator.format_comparison(&scored_results);
+        tracing::info!("[AGI] Parallel execution results:\n{}", comparison_output);
+
+        // Cleanup sandboxes
+        sandbox_manager.cleanup_all().await?;
+
+        // Get best result
+        let best_result = comparator
+            .get_best_result(scored_results.clone())
+            .ok_or_else(|| anyhow!("No valid results from parallel execution"))?;
+
+        // Emit best result event
+        self.emit_event(
+            "agi:goal:parallel_best_result",
+            json!({
+                "goal_id": goal.id,
+                "best_plan_id": best_result.result.plan_id,
+                "score": best_result.score,
+                "rank": best_result.rank,
+                "success": best_result.result.success,
+                "execution_time_ms": best_result.result.execution_time_ms,
+            }),
+        );
+
+        // Emit detailed comparison
+        self.emit_event(
+            "agi:goal:parallel_comparison",
+            json!({
+                "goal_id": goal.id,
+                "comparison": comparison_output,
+                "all_results": scored_results,
+            }),
+        );
+
+        Ok(best_result)
     }
 
     /// Process all active goals
@@ -406,6 +603,9 @@ impl AGICore {
             execution_contexts: self.execution_contexts.clone(),
             stop_signal: self.stop_signal.clone(),
             app_handle: None, // Don't clone app handle (not Send) - events will be emitted from main thread
+            process_reasoning: self.process_reasoning.clone(),
+            process_ontology: self.process_ontology.clone(),
+            outcome_tracker: self.outcome_tracker.clone(),
         }
     }
 

@@ -1,8 +1,12 @@
+pub mod analytics_metrics;
+pub mod collector;
 pub mod logging;
 pub mod metrics;
 pub mod tracing;
 
 // Re-export commonly used types
+pub use analytics_metrics::{AnalyticsMetricsCollector, AppMetrics, SystemMetrics};
+pub use collector::{CollectorConfig, EventBatch, TelemetryCollector, TelemetryEvent};
 pub use logging::{get_current_log_path, LogConfig};
 pub use metrics::{MetricsCollector, OperationMetrics, Timer};
 pub use tracing::{capture_error, init_tracing};

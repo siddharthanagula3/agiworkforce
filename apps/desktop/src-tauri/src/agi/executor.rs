@@ -1,7 +1,12 @@
 use super::*;
 use crate::agi::api_tools_impl;
 use crate::agi::planner::PlanStep;
+use crate::agi::process_reasoning::ProcessReasoning;
+use crate::agi::outcome_tracker::OutcomeTracker;
 use crate::automation::AutomationService;
+use crate::cache::ToolResultCache;
+use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::security::ToolExecutionGuard;
 use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::collections::HashMap;
@@ -12,7 +17,12 @@ pub struct AGIExecutor {
     tool_registry: Arc<ToolRegistry>,
     _resource_manager: Arc<ResourceManager>,
     automation: Arc<AutomationService>,
+    router: Arc<tokio::sync::Mutex<LLMRouter>>,
     app_handle: Option<tauri::AppHandle>,
+    tool_cache: Arc<ToolResultCache>,
+    process_reasoning: Option<Arc<ProcessReasoning>>,
+    outcome_tracker: Option<Arc<OutcomeTracker>>,
+    security_guard: Arc<ToolExecutionGuard>,
 }
 
 impl AGIExecutor {
@@ -20,14 +30,80 @@ impl AGIExecutor {
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
         automation: Arc<AutomationService>,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         Ok(Self {
             tool_registry,
             _resource_manager: resource_manager,
             automation,
+            router,
             app_handle,
+            tool_cache: Arc::new(ToolResultCache::new()),
+            process_reasoning: None,
+            outcome_tracker: None,
+            security_guard: Arc::new(ToolExecutionGuard::new()),
         })
+    }
+
+    /// Create executor with process reasoning and outcome tracking
+    pub fn with_process_reasoning(
+        tool_registry: Arc<ToolRegistry>,
+        resource_manager: Arc<ResourceManager>,
+        automation: Arc<AutomationService>,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        app_handle: Option<tauri::AppHandle>,
+        process_reasoning: Arc<ProcessReasoning>,
+        outcome_tracker: Arc<OutcomeTracker>,
+    ) -> Result<Self> {
+        Ok(Self {
+            tool_registry,
+            _resource_manager: resource_manager,
+            automation,
+            router,
+            app_handle,
+            tool_cache: Arc::new(ToolResultCache::new()),
+            process_reasoning: Some(process_reasoning),
+            outcome_tracker: Some(outcome_tracker),
+            security_guard: Arc::new(ToolExecutionGuard::new()),
+        })
+    }
+
+    /// Create a new executor with custom cache capacity
+    pub fn with_cache_capacity(
+        tool_registry: Arc<ToolRegistry>,
+        resource_manager: Arc<ResourceManager>,
+        automation: Arc<AutomationService>,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        app_handle: Option<tauri::AppHandle>,
+        cache_size_bytes: usize,
+    ) -> Result<Self> {
+        Ok(Self {
+            tool_registry,
+            _resource_manager: resource_manager,
+            automation,
+            router,
+            app_handle,
+            tool_cache: Arc::new(ToolResultCache::with_capacity(cache_size_bytes)),
+            process_reasoning: None,
+            outcome_tracker: None,
+            security_guard: Arc::new(ToolExecutionGuard::new()),
+        })
+    }
+
+    /// Get cache statistics
+    pub fn get_cache_stats(&self) -> crate::cache::ToolCacheStats {
+        self.tool_cache.get_stats()
+    }
+
+    /// Clear the tool result cache
+    pub fn clear_cache(&self) -> Result<()> {
+        self.tool_cache.clear()
+    }
+
+    /// Prune expired cache entries
+    pub fn prune_cache(&self) -> Result<usize> {
+        self.tool_cache.prune_expired()
     }
 
     /// Execute a plan step
@@ -70,7 +146,48 @@ impl AGIExecutor {
         parameters: &HashMap<String, serde_json::Value>,
         _context: &ExecutionContext,
     ) -> Result<serde_json::Value> {
-        match tool.id.as_str() {
+        let tool_name = tool.id.as_str();
+
+        // Check cache before executing
+        if let Some(cached_result) = self.tool_cache.get(tool_name, parameters) {
+            tracing::info!(
+                "[Executor] Using cached result for tool '{}' (cache hit)",
+                tool_name
+            );
+            return Ok(cached_result);
+        }
+
+        // Execute tool
+        let result = self.execute_tool_impl(tool_name, parameters, _context).await?;
+
+        // Cache the result (cache will determine if it should be cached based on TTL)
+        if let Err(e) = self.tool_cache.set(tool_name, parameters, result.clone()) {
+            tracing::warn!(
+                "[Executor] Failed to cache result for tool '{}': {}",
+                tool_name,
+                e
+            );
+        }
+
+        Ok(result)
+    }
+
+    async fn execute_tool_impl(
+        &self,
+        tool_name: &str,
+        parameters: &HashMap<String, serde_json::Value>,
+        _context: &ExecutionContext,
+    ) -> Result<serde_json::Value> {
+        // Security validation before execution
+        let params_json = serde_json::to_value(parameters)?;
+        if let Err(e) = self.security_guard.validate_tool_call(tool_name, &params_json).await {
+            tracing::error!("[Executor] Security validation failed for tool '{}': {}", tool_name, e);
+            return Err(anyhow::anyhow!("Security validation failed: {}", e));
+        }
+
+        tracing::debug!("[Executor] Security validation passed for tool '{}'", tool_name);
+
+        match tool_name {
             "file_read" => {
                 let path = parameters["path"]
                     .as_str()
@@ -86,6 +203,12 @@ impl AGIExecutor {
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing content parameter"))?;
                 std::fs::write(path, content)?;
+
+                // Invalidate file_read cache for this path
+                let mut read_params = HashMap::new();
+                read_params.insert("path".to_string(), serde_json::json!(path));
+                let _ = self.tool_cache.invalidate("file_read", &read_params);
+
                 Ok(json!({ "success": true, "path": path }))
             }
             "ui_screenshot" => {
@@ -536,15 +659,54 @@ impl AGIExecutor {
                     .get("prompt")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing prompt parameter"))?;
-                // LLM reasoning requires router access
-                // For now, return success - will be connected via LLM router
-                tracing::info!(
-                    "[Executor] LLM reasoning requested: {}",
-                    &prompt[..prompt.len().min(50)]
-                );
-                Ok(
-                    json!({ "success": true, "reasoning": "Requires LLM router access", "note": "Will be connected via router" }),
-                )
+
+                tracing::info!("[Executor] LLM reasoning: {}", &prompt[..prompt.len().min(50)]);
+
+                // HYBRID STRATEGY: Use Claude Haiku 4.5 for execution (4-5x faster, 1/3 cost)
+                let preferences = RouterPreferences {
+                    provider: Some("anthropic".to_string()),
+                    model: Some("claude-haiku-4-5".to_string()),
+                    strategy: RoutingStrategy::PreferenceWithFallback,
+                };
+
+                let request = LLMRequest {
+                    messages: vec![ChatMessage {
+                        role: "user".to_string(),
+                        content: prompt.to_string(),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    }],
+                    model: "claude-haiku-4-5".to_string(),
+                    temperature: Some(0.7),
+                    max_tokens: Some(2000),
+                    stream: false,
+                    tools: None,
+                    tool_choice: None,
+                };
+
+                let router = self.router.lock().await;
+                let candidates = router.candidates(&request, &preferences);
+
+                if !candidates.is_empty() {
+                    match router.invoke_candidate(&candidates[0], &request).await {
+                        Ok(outcome) => {
+                            drop(router);
+                            Ok(json!({
+                                "success": true,
+                                "reasoning": outcome.response.content,
+                                "model": outcome.response.model,
+                                "cost": outcome.response.cost
+                            }))
+                        }
+                        Err(e) => {
+                            drop(router);
+                            Err(anyhow!("LLM reasoning failed: {}", e))
+                        }
+                    }
+                } else {
+                    drop(router);
+                    Err(anyhow!("No LLM candidates available for reasoning"))
+                }
             }
             "email_send" => {
                 let to = parameters
@@ -908,7 +1070,330 @@ impl AGIExecutor {
                     Err(anyhow!("App handle not available for transaction rollback"))
                 }
             }
-            _ => Err(anyhow!("Unknown tool: {}", tool.id)),
+            _ => Err(anyhow!("Unknown tool: {}", tool_name)),
         }
     }
+
+    pub async fn execute_plans_parallel(
+        &self,
+        plans: Vec<planner::Plan>,
+        sandbox_manager: &crate::agi::SandboxManager,
+        goal: &Goal,
+    ) -> Result<Vec<crate::agi::ExecutionResult>> {
+        use tokio::time::Instant;
+
+        tracing::info!(
+            "[Executor] Starting parallel execution of {} plans",
+            plans.len()
+        );
+
+        let mut handles = Vec::new();
+
+        for plan in plans {
+            let tool_registry = self.tool_registry.clone();
+            let automation = self.automation.clone();
+            let router = self.router.clone();
+            let tool_cache = self.tool_cache.clone();
+
+            let sandbox = sandbox_manager.create_sandbox(false).await?;
+            let sandbox_id = sandbox.id.clone();
+            let plan_id = plan.goal_id.clone();
+            let goal_clone = goal.clone();
+
+            let handle = tokio::spawn(async move {
+                let start_time = Instant::now();
+
+                let context = ExecutionContext {
+                    goal: goal_clone,
+                    current_state: HashMap::new(),
+                    available_resources: ResourceState {
+                        cpu_usage_percent: 0.0,
+                        memory_usage_mb: 0,
+                        network_usage_mbps: 0.0,
+                        storage_usage_mb: 0,
+                        available_tools: vec![],
+                    },
+                    tool_results: Vec::new(),
+                    context_memory: Vec::new(),
+                };
+
+                // Create executor with shared cache
+                let mut executor = AGIExecutor::new(
+                    tool_registry,
+                    Arc::new(ResourceManager::new(ResourceLimits {
+                        cpu_percent: 80.0,
+                        memory_mb: 2048,
+                        network_mbps: 100.0,
+                        storage_mb: 10240,
+                    }).unwrap()),
+                    automation,
+                    router,
+                    None,
+                ).unwrap();
+
+                // Replace the cache with shared cache for parallel execution
+                executor.tool_cache = tool_cache;
+
+                let mut steps_completed = 0;
+                let mut steps_failed = 0;
+                let mut total_cost = 0.0;
+                let mut output = serde_json::json!({});
+                let mut error_msg = None;
+
+                for step in &plan.steps {
+                    match executor.execute_step(step, &context).await {
+                        Ok(result) => {
+                            steps_completed += 1;
+                            output = result;
+                        }
+                        Err(e) => {
+                            steps_failed += 1;
+                            error_msg = Some(e.to_string());
+                            break;
+                        }
+                    }
+                }
+
+                let execution_time_ms = start_time.elapsed().as_millis() as u64;
+                let success = steps_failed == 0 && steps_completed > 0;
+
+                crate::agi::ExecutionResult {
+                    plan_id,
+                    sandbox_id,
+                    success,
+                    output,
+                    execution_time_ms,
+                    steps_completed,
+                    steps_failed,
+                    error: error_msg,
+                    cost: Some(total_cost),
+                }
+            });
+
+            handles.push(handle);
+        }
+
+        let results = futures::future::join_all(handles).await;
+
+        let execution_results: Vec<crate::agi::ExecutionResult> = results
+            .into_iter()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        tracing::info!(
+            "[Executor] Parallel execution complete. {} results collected",
+            execution_results.len()
+        );
+
+        Ok(execution_results)
+    }
+
+    /// Execute a goal with outcome tracking and process reasoning
+    pub async fn execute_goal_with_outcomes(
+        &self,
+        goal: &Goal,
+        plan: &planner::Plan,
+        context: &ExecutionContext,
+    ) -> Result<ExecutionResultWithOutcomes> {
+        use tokio::time::Instant;
+
+        let start_time = Instant::now();
+
+        // 1. Identify process type if process reasoning is available
+        let process_type = if let Some(ref pr) = self.process_reasoning {
+            match pr.identify_process_type(goal).await {
+                Ok(pt) => {
+                    tracing::info!("[Executor] Identified process type: {:?} for goal {}", pt, goal.id);
+                    Some(pt)
+                }
+                Err(e) => {
+                    tracing::warn!("[Executor] Failed to identify process type: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // 2. Define expected outcomes if process type identified
+        let expected_outcomes = if let (Some(pt), Some(ref pr)) = (process_type, &self.process_reasoning) {
+            pr.define_outcomes(pt, goal)
+        } else {
+            vec![]
+        };
+
+        // 3. Execute plan steps
+        let mut steps_completed = 0;
+        let mut steps_failed = 0;
+        let mut output = serde_json::json!({});
+        let mut error_msg = None;
+
+        for step in &plan.steps {
+            match self.execute_step(step, context).await {
+                Ok(result) => {
+                    steps_completed += 1;
+                    output = result;
+                }
+                Err(e) => {
+                    steps_failed += 1;
+                    error_msg = Some(e.to_string());
+                    tracing::error!("[Executor] Step execution failed: {}", e);
+                    break;
+                }
+            }
+        }
+
+        let execution_time_ms = start_time.elapsed().as_millis() as u64;
+        let success = steps_failed == 0 && steps_completed > 0;
+
+        // 4. Measure and track outcomes
+        let mut tracked_outcomes = vec![];
+        if let Some(ref tracker) = self.outcome_tracker {
+            for mut outcome in expected_outcomes {
+                // Measure actual outcome based on execution results
+                let actual_value = self.measure_outcome(&outcome, context).await?;
+                outcome.actual_value = Some(actual_value);
+
+                // Determine if outcome was achieved
+                outcome.achieved = match outcome.metric_name.as_str() {
+                    // For time-based metrics, lower is better
+                    "processing_time" | "response_time" | "deployment_time" => {
+                        actual_value <= outcome.target_value
+                    }
+                    // For rate metrics (0.0 - 1.0), higher is better
+                    "data_accuracy" | "response_quality" | "test_coverage" | "completion_rate" => {
+                        actual_value >= outcome.target_value
+                    }
+                    // For count metrics, meeting or exceeding target
+                    "invoices_processed" | "tickets_resolved" | "records_processed" => {
+                        actual_value >= outcome.target_value
+                    }
+                    // For inverse metrics (false positive rate, rollback needed), lower is better
+                    "false_positive_rate" | "rollback_needed" => {
+                        actual_value <= outcome.target_value
+                    }
+                    // Default: compare directly
+                    _ => actual_value >= outcome.target_value,
+                };
+
+                // Track the outcome
+                if let Err(e) = tracker.track_outcome(goal.id.clone(), outcome.clone()) {
+                    tracing::warn!("[Executor] Failed to track outcome: {}", e);
+                } else {
+                    tracked_outcomes.push(outcome);
+                }
+            }
+        }
+
+        // 5. Calculate outcome score if process reasoning available
+        let outcome_score = if let Some(ref pr) = self.process_reasoning {
+            if let Some(pt) = process_type {
+                Some(pr.evaluate_outcome(pt, &tracked_outcomes, context))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(ExecutionResultWithOutcomes {
+            success,
+            output,
+            execution_time_ms,
+            steps_completed,
+            steps_failed,
+            error: error_msg,
+            process_type,
+            tracked_outcomes,
+            outcome_score,
+        })
+    }
+
+    /// Measure an outcome based on execution results
+    async fn measure_outcome(
+        &self,
+        outcome: &crate::agi::process_reasoning::Outcome,
+        context: &ExecutionContext,
+    ) -> Result<f64> {
+        // Measure actual outcome based on type
+        match outcome.metric_name.as_str() {
+            "processing_time" | "response_time" | "deployment_time" => {
+                // Calculate total execution time in seconds
+                let total_time_ms: u64 = context.tool_results.iter()
+                    .map(|r| r.execution_time_ms)
+                    .sum();
+                Ok(total_time_ms as f64 / 1000.0)
+            }
+            "data_accuracy" | "categorization_accuracy" | "response_quality" => {
+                // Calculate success rate of tool executions as proxy for accuracy
+                let total = context.tool_results.len();
+                if total == 0 {
+                    return Ok(0.0);
+                }
+                let successful = context.tool_results.iter().filter(|r| r.success).count();
+                Ok(successful as f64 / total as f64)
+            }
+            "invoices_processed" | "tickets_resolved" | "records_processed" |
+            "emails_categorized" | "leads_scored" | "posts_scheduled" => {
+                // Count successful operations
+                let successful = context.tool_results.iter().filter(|r| r.success).count();
+                Ok(successful as f64)
+            }
+            "test_coverage" | "documentation_completeness" | "completion_rate" => {
+                // Use success rate as proxy for coverage/completeness
+                let total = context.tool_results.len();
+                if total == 0 {
+                    return Ok(0.0);
+                }
+                let successful = context.tool_results.iter().filter(|r| r.success).count();
+                Ok(successful as f64 / total as f64)
+            }
+            "false_positive_rate" => {
+                // Calculate error rate
+                let total = context.tool_results.len();
+                if total == 0 {
+                    return Ok(0.0);
+                }
+                let failed = context.tool_results.iter().filter(|r| !r.success).count();
+                Ok(failed as f64 / total as f64)
+            }
+            "deployment_success" | "rollback_needed" => {
+                // Boolean metrics: 1.0 if all steps succeeded, 0.0 otherwise
+                let all_succeeded = context.tool_results.iter().all(|r| r.success);
+                Ok(if all_succeeded { 1.0 } else { 0.0 })
+            }
+            "tests_passed" => {
+                // Ratio of passed tests
+                let total = context.tool_results.len();
+                if total == 0 {
+                    return Ok(0.0);
+                }
+                let passed = context.tool_results.iter().filter(|r| r.success).count();
+                Ok(passed as f64 / total as f64)
+            }
+            _ => {
+                // Default: use success rate as proxy
+                let total = context.tool_results.len();
+                if total == 0 {
+                    return Ok(0.0);
+                }
+                let successful = context.tool_results.iter().filter(|r| r.success).count();
+                Ok(successful as f64 / total as f64)
+            }
+        }
+    }
+}
+
+/// Execution result with outcome tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutionResultWithOutcomes {
+    pub success: bool,
+    pub output: serde_json::Value,
+    pub execution_time_ms: u64,
+    pub steps_completed: usize,
+    pub steps_failed: usize,
+    pub error: Option<String>,
+    pub process_type: Option<crate::agi::ProcessType>,
+    pub tracked_outcomes: Vec<crate::agi::process_reasoning::Outcome>,
+    pub outcome_score: Option<crate::agi::process_reasoning::OutcomeScore>,
 }

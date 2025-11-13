@@ -22,9 +22,18 @@ import type {
   OverlayRegionPayload,
   OverlayTypePayload,
 } from '../types/automation';
+import type {
+  AutomationScript,
+  ExecutionHistory,
+  ExecutionResult,
+  InspectorState,
+  Recording,
+  RecordingSession,
+} from '../types/automation-enhanced';
 import type { CaptureResult } from '../types/capture';
 
 interface AutomationState {
+  // Existing state
   windows: AutomationElementInfo[];
   elements: AutomationElementInfo[];
   loadingWindows: boolean;
@@ -34,6 +43,26 @@ interface AutomationState {
   lastScreenshot: CaptureResult | null;
   lastOcr: AutomationOcrResult | null;
 
+  // Recording state
+  isRecording: boolean;
+  currentRecording: RecordingSession | null;
+  recordings: Recording[];
+
+  // Script library state
+  scripts: AutomationScript[];
+  selectedScript: AutomationScript | null;
+  loadingScripts: boolean;
+
+  // Execution state
+  isExecuting: boolean;
+  executionProgress: number;
+  executionHistory: ExecutionHistory[];
+  currentExecution: ExecutionResult | null;
+
+  // Inspector state
+  inspector: InspectorState;
+
+  // Existing actions
   loadWindows: () => Promise<void>;
   searchElements: (query: AutomationQuery) => Promise<void>;
   click: (request: AutomationClickRequest) => Promise<void>;
@@ -50,6 +79,31 @@ interface AutomationState {
   replayOverlay: (limit?: number) => Promise<void>;
   clearError: () => void;
   reset: () => void;
+
+  // Recording actions
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<Recording | null>;
+  saveRecordingAsScript: (
+    recording: Recording,
+    name: string,
+    description: string,
+    tags: string[],
+  ) => Promise<AutomationScript | null>;
+
+  // Script library actions
+  loadScripts: () => Promise<void>;
+  saveScript: (script: AutomationScript) => Promise<void>;
+  deleteScript: (scriptId: string) => Promise<void>;
+  selectScript: (script: AutomationScript | null) => void;
+
+  // Execution actions
+  executeScript: (script: AutomationScript) => Promise<ExecutionResult | null>;
+  stopExecution: () => void;
+
+  // Inspector actions
+  activateInspector: () => void;
+  deactivateInspector: () => void;
+  inspectElementAt: (x: number, y: number) => Promise<void>;
 }
 
 export const useAutomationStore = create<AutomationState>((set, get) => ({
