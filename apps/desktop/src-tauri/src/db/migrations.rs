@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 18;
+const CURRENT_VERSION: i32 = 25;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -118,6 +118,41 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 18 {
         apply_migration_v18(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [18])?;
+    }
+
+    if current_version < 19 {
+        apply_migration_v19(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [19])?;
+    }
+
+    if current_version < 20 {
+        apply_migration_v20(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [20])?;
+    }
+
+    if current_version < 21 {
+        apply_migration_v21(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [21])?;
+    }
+
+    if current_version < 22 {
+        apply_migration_v22(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [22])?;
+    }
+
+    if current_version < 23 {
+        apply_migration_v23(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [23])?;
+    }
+
+    if current_version < 24 {
+        apply_migration_v24(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [24])?;
+    }
+
+    if current_version < 25 {
+        apply_migration_v25(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [25])?;
     }
 
     Ok(())
@@ -1753,6 +1788,615 @@ fn apply_migration_v18(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_billing_webhook_events_stripe_id
          ON billing_webhook_events(stripe_event_id)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v19: Workflow definitions table
+fn apply_migration_v19(conn: &Connection) -> Result<()> {
+    // Workflow definitions table - stores workflow structure and metadata
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_definitions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            nodes TEXT NOT NULL,
+            edges TEXT NOT NULL,
+            triggers TEXT,
+            metadata TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflows_user
+         ON workflow_definitions(user_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflows_created
+         ON workflow_definitions(created_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workflows_updated
+         ON workflow_definitions(updated_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v20: Workflow executions table
+fn apply_migration_v20(conn: &Connection) -> Result<()> {
+    // Workflow executions table - stores workflow execution instances
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_executions (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            current_node_id TEXT,
+            inputs TEXT,
+            outputs TEXT,
+            error TEXT,
+            started_at INTEGER,
+            completed_at INTEGER,
+            FOREIGN KEY (workflow_id) REFERENCES workflow_definitions(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_executions_workflow
+         ON workflow_executions(workflow_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_executions_status
+         ON workflow_executions(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_executions_started
+         ON workflow_executions(started_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v21: Workflow execution logs table
+fn apply_migration_v21(conn: &Connection) -> Result<()> {
+    // Workflow execution logs table - stores detailed execution logs
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workflow_execution_logs (
+            id TEXT PRIMARY KEY,
+            execution_id TEXT NOT NULL,
+            node_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            data TEXT,
+            timestamp INTEGER DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (execution_id) REFERENCES workflow_executions(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_execution_logs_execution
+         ON workflow_execution_logs(execution_id, timestamp)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_execution_logs_node
+         ON workflow_execution_logs(node_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_execution_logs_event_type
+         ON workflow_execution_logs(event_type)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v22: Process Reasoning (Process-Aware Planning Layer / Outcome Engine)
+fn apply_migration_v22(conn: &Connection) -> Result<()> {
+    // Process templates table - stores business process templates with steps, criteria, and best practices
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS process_templates (
+            id TEXT PRIMARY KEY,
+            process_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            typical_steps TEXT, -- JSON array of ProcessStep objects
+            success_criteria TEXT, -- JSON array of SuccessCriterion objects
+            required_tools TEXT, -- JSON array of tool IDs
+            expected_duration_ms INTEGER,
+            risk_factors TEXT, -- JSON array of RiskFactor objects
+            best_practices TEXT, -- JSON array of strings
+            created_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )",
+        [],
+    )?;
+
+    // Index for process type lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_process_templates_type
+         ON process_templates(process_type)",
+        [],
+    )?;
+
+    // Outcome tracking table - stores measurable outcomes for each goal execution
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS outcome_tracking (
+            id TEXT PRIMARY KEY,
+            goal_id TEXT NOT NULL,
+            process_type TEXT NOT NULL,
+            metric_name TEXT NOT NULL,
+            target_value REAL,
+            actual_value REAL,
+            achieved INTEGER DEFAULT 0,
+            tracked_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )",
+        [],
+    )?;
+
+    // Index for goal lookup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outcome_tracking_goal
+         ON outcome_tracking(goal_id)",
+        [],
+    )?;
+
+    // Index for process type analytics
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outcome_tracking_process
+         ON outcome_tracking(process_type)",
+        [],
+    )?;
+
+    // Index for time-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outcome_tracking_tracked_at
+         ON outcome_tracking(tracked_at DESC)",
+        [],
+    )?;
+
+    // Index for metric analysis
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outcome_tracking_metric
+         ON outcome_tracking(metric_name, achieved)",
+        [],
+    )?;
+
+    // Composite index for process success rate queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outcome_tracking_process_achieved
+         ON outcome_tracking(process_type, achieved, tracked_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v23: Agent templates and template installs
+fn apply_migration_v23(conn: &Connection) -> Result<()> {
+    // Agent templates table - stores pre-built agent templates
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS agent_templates (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            description TEXT NOT NULL,
+            icon TEXT NOT NULL,
+            tools TEXT NOT NULL,
+            workflow TEXT NOT NULL,
+            default_prompts TEXT NOT NULL,
+            success_criteria TEXT NOT NULL,
+            estimated_duration_ms INTEGER NOT NULL,
+            difficulty_level TEXT NOT NULL CHECK(difficulty_level IN ('easy', 'medium', 'hard')),
+            install_count INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // Create indexes for agent templates
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_templates_category
+         ON agent_templates(category)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_templates_install_count
+         ON agent_templates(install_count DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_templates_difficulty
+         ON agent_templates(difficulty_level)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_templates_name
+         ON agent_templates(name)",
+        [],
+    )?;
+
+    // Template installs table - tracks which templates users have installed
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS template_installs (
+            user_id TEXT NOT NULL,
+            template_id TEXT NOT NULL,
+            installed_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, template_id),
+            FOREIGN KEY (template_id) REFERENCES agent_templates(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Create indexes for template installs
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_template_installs_user
+         ON template_installs(user_id, installed_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_template_installs_template
+         ON template_installs(template_id, installed_at DESC)",
+        [],
+    )?;
+
+    // Full-text search on template names and descriptions
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS agent_templates_fts USING fts5(
+            template_id UNINDEXED,
+            name,
+            description,
+            content=agent_templates,
+            content_rowid=rowid
+        )",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v24: Team collaboration tables
+fn apply_migration_v24(conn: &Connection) -> Result<()> {
+    // Teams table - stores team information
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS teams (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            owner_id TEXT NOT NULL,
+            settings TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_teams_owner
+         ON teams(owner_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_teams_created
+         ON teams(created_at DESC)",
+        [],
+    )?;
+
+    // Team members table - stores team membership information
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_members (
+            team_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('viewer', 'editor', 'admin', 'owner')),
+            joined_at INTEGER DEFAULT (strftime('%s', 'now')),
+            invited_by TEXT,
+            PRIMARY KEY (team_id, user_id),
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_members_user
+         ON team_members(user_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_members_role
+         ON team_members(role)",
+        [],
+    )?;
+
+    // Team invitations table - stores pending team invitations
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_invitations (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL,
+            email TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('viewer', 'editor', 'admin')),
+            invited_by TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            accepted INTEGER DEFAULT 0,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_invitations_email
+         ON team_invitations(email)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_invitations_token
+         ON team_invitations(token)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_invitations_team
+         ON team_invitations(team_id, accepted)",
+        [],
+    )?;
+
+    // Team resources table - stores shared team resources
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_resources (
+            team_id TEXT NOT NULL,
+            resource_type TEXT NOT NULL CHECK(resource_type IN ('workflow', 'template', 'knowledge', 'automation', 'document', 'dataset')),
+            resource_id TEXT NOT NULL,
+            resource_name TEXT NOT NULL,
+            resource_description TEXT,
+            shared_by TEXT NOT NULL,
+            shared_at INTEGER DEFAULT (strftime('%s', 'now')),
+            access_count INTEGER DEFAULT 0,
+            last_accessed INTEGER,
+            PRIMARY KEY (team_id, resource_type, resource_id),
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_resources_team
+         ON team_resources(team_id, shared_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_resources_type
+         ON team_resources(resource_type)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_resources_shared_by
+         ON team_resources(shared_by)",
+        [],
+    )?;
+
+    // Team activity table - stores team activity log
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_activity (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL,
+            user_id TEXT,
+            action TEXT NOT NULL,
+            resource_type TEXT,
+            resource_id TEXT,
+            metadata TEXT,
+            timestamp INTEGER DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_activity_team
+         ON team_activity(team_id, timestamp DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_activity_user
+         ON team_activity(user_id, timestamp DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_activity_action
+         ON team_activity(action)",
+        [],
+    )?;
+
+    // Team billing table - stores team billing and subscription information
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS team_billing (
+            team_id TEXT PRIMARY KEY,
+            plan_tier TEXT NOT NULL CHECK(plan_tier IN ('team', 'enterprise')),
+            billing_cycle TEXT NOT NULL CHECK(billing_cycle IN ('monthly', 'annual')),
+            seat_count INTEGER NOT NULL DEFAULT 1,
+            stripe_subscription_id TEXT,
+            usage_metrics TEXT,
+            next_billing_date INTEGER,
+            current_period_start INTEGER,
+            current_period_end INTEGER,
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_billing_subscription
+         ON team_billing(stripe_subscription_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_team_billing_next_date
+         ON team_billing(next_billing_date)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v25: Governance and audit system for enterprise compliance
+fn apply_migration_v25(conn: &Connection) -> Result<()> {
+    // Audit events table - comprehensive tamper-resistant audit logging
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS audit_events (
+            id TEXT PRIMARY KEY,
+            timestamp INTEGER NOT NULL,
+            user_id TEXT,
+            team_id TEXT,
+            event_type TEXT NOT NULL,
+            resource_type TEXT,
+            resource_id TEXT,
+            action TEXT NOT NULL,
+            status TEXT NOT NULL,
+            metadata TEXT,
+            hmac_signature TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_timestamp
+         ON audit_events(timestamp DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_user
+         ON audit_events(user_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_team
+         ON audit_events(team_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_event_type
+         ON audit_events(event_type)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_status
+         ON audit_events(status)",
+        [],
+    )?;
+
+    // Approval requests table - workflow approval system
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS approval_requests (
+            id TEXT PRIMARY KEY,
+            requester_id TEXT NOT NULL,
+            team_id TEXT,
+            action_type TEXT NOT NULL,
+            resource_type TEXT,
+            resource_id TEXT,
+            risk_level TEXT NOT NULL CHECK(risk_level IN ('low', 'medium', 'high', 'critical')),
+            justification TEXT,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'timed_out')),
+            created_at INTEGER NOT NULL,
+            reviewed_by TEXT,
+            reviewed_at INTEGER,
+            decision_reason TEXT,
+            expires_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_status
+         ON approval_requests(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_team
+         ON approval_requests(team_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_requester
+         ON approval_requests(requester_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_risk_level
+         ON approval_requests(risk_level)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_expires_at
+         ON approval_requests(expires_at)",
+        [],
+    )?;
+
+    // Approval workflow rules table - configurable approval rules
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS approval_rules (
+            id TEXT PRIMARY KEY,
+            team_id TEXT,
+            rule_name TEXT NOT NULL,
+            condition_type TEXT NOT NULL,
+            condition_value TEXT NOT NULL,
+            required_approvals INTEGER NOT NULL DEFAULT 1,
+            approver_roles TEXT NOT NULL,
+            timeout_minutes INTEGER NOT NULL DEFAULT 30,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_rules_team
+         ON approval_rules(team_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_approval_rules_enabled
+         ON approval_rules(enabled)",
         [],
     )?;
 
