@@ -3,7 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   PublishedWorkflow,
   WorkflowReview,
-  WorkflowCategory,
   WorkflowAnalytics,
   WorkflowStats,
   MarketplaceFilters,
@@ -11,6 +10,25 @@ import type {
   PublishWorkflowRequest,
   RateWorkflowRequest,
 } from '../types/marketplace';
+
+interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+interface PopularTag {
+  tag: string;
+  count: number;
+}
+
+interface WorkflowComment {
+  id: string;
+  workflow_id: string;
+  user_id: string;
+  user_name: string;
+  comment: string;
+  created_at: number;
+}
 
 interface MarketplaceStore {
   // State
@@ -20,8 +38,11 @@ interface MarketplaceStore {
   myPublishedWorkflows: PublishedWorkflow[];
   selectedWorkflow: PublishedWorkflow | null;
   workflowReviews: WorkflowReview[];
+  workflowComments: WorkflowComment[];
   workflowAnalytics: WorkflowAnalytics | null;
   marketplaceStats: WorkflowStats | null;
+  categoryCounts: CategoryCount[];
+  popularTags: PopularTag[];
 
   // Filters
   filters: MarketplaceFilters;
@@ -46,8 +67,11 @@ interface MarketplaceStore {
   fetchMyWorkflows: (userId: string) => Promise<void>;
   fetchWorkflowById: (workflowId: string) => Promise<void>;
   fetchWorkflowReviews: (workflowId: string) => Promise<void>;
+  fetchWorkflowComments: (workflowId: string) => Promise<void>;
   fetchWorkflowAnalytics: (workflowId: string) => Promise<void>;
   fetchMarketplaceStats: () => Promise<void>;
+  fetchCategoryCounts: () => Promise<void>;
+  fetchPopularTags: () => Promise<void>;
 
   // Actions - Search & Filter
   searchWorkflows: (query: string) => Promise<void>;
@@ -61,6 +85,16 @@ interface MarketplaceStore {
   unpublishWorkflow: (workflowId: string) => Promise<void>;
   rateWorkflow: (request: RateWorkflowRequest) => Promise<void>;
   favoriteWorkflow: (workflowId: string, userId: string) => Promise<void>;
+  unfavoriteWorkflow: (workflowId: string, userId: string) => Promise<void>;
+  isFavorited: (workflowId: string, userId: string) => Promise<boolean>;
+  getUserRating: (workflowId: string, userId: string) => Promise<number | null>;
+  commentOnWorkflow: (
+    workflowId: string,
+    userId: string,
+    userName: string,
+    comment: string,
+  ) => Promise<void>;
+  deleteComment: (commentId: string) => Promise<void>;
 
   // Actions - Sharing
   getShareUrl: (workflowId: string) => Promise<string>;
@@ -101,8 +135,11 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
   myPublishedWorkflows: [],
   selectedWorkflow: null,
   workflowReviews: [],
+  workflowComments: [],
   workflowAnalytics: null,
   marketplaceStats: null,
+  categoryCounts: [],
+  popularTags: [],
 
   filters: defaultFilters,
 
@@ -184,6 +221,15 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
     }
   },
 
+  fetchWorkflowComments: async (workflowId: string) => {
+    try {
+      const comments = await invoke<WorkflowComment[]>('get_workflow_comments', { workflowId });
+      set({ workflowComments: comments });
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    }
+  },
+
   fetchWorkflowAnalytics: async (workflowId: string) => {
     try {
       const analytics = await invoke<WorkflowAnalytics>('get_workflow_analytics', { workflowId });
@@ -195,10 +241,28 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
 
   fetchMarketplaceStats: async () => {
     try {
-      const stats = await invoke<WorkflowStats>('get_marketplace_stats');
+      const stats = await invoke<WorkflowStats>('get_workflow_stats');
       set({ marketplaceStats: stats });
     } catch (error) {
       console.error('Failed to fetch marketplace stats:', error);
+    }
+  },
+
+  fetchCategoryCounts: async () => {
+    try {
+      const counts = await invoke<CategoryCount[]>('get_category_counts');
+      set({ categoryCounts: counts });
+    } catch (error) {
+      console.error('Failed to fetch category counts:', error);
+    }
+  },
+
+  fetchPopularTags: async () => {
+    try {
+      const tags = await invoke<PopularTag[]>('get_popular_tags', { limit: 20 });
+      set({ popularTags: tags });
+    } catch (error) {
+      console.error('Failed to fetch popular tags:', error);
     }
   },
 
@@ -323,6 +387,67 @@ export const useMarketplaceStore = create<MarketplaceStore>((set, get) => ({
       await invoke('favorite_workflow', { workflowId, userId });
     } catch (error) {
       console.error('Failed to favorite workflow:', error);
+      throw error;
+    }
+  },
+
+  unfavoriteWorkflow: async (workflowId: string, userId: string) => {
+    try {
+      await invoke('unfavorite_workflow', { workflowId, userId });
+    } catch (error) {
+      console.error('Failed to unfavorite workflow:', error);
+      throw error;
+    }
+  },
+
+  isFavorited: async (workflowId: string, userId: string) => {
+    try {
+      const favorited = await invoke<boolean>('is_workflow_favorited', { workflowId, userId });
+      return favorited;
+    } catch (error) {
+      console.error('Failed to check favorite status:', error);
+      return false;
+    }
+  },
+
+  getUserRating: async (workflowId: string, userId: string) => {
+    try {
+      const rating = await invoke<number | null>('get_user_workflow_rating', {
+        workflowId,
+        userId,
+      });
+      return rating;
+    } catch (error) {
+      console.error('Failed to get user rating:', error);
+      return null;
+    }
+  },
+
+  commentOnWorkflow: async (
+    workflowId: string,
+    userId: string,
+    userName: string,
+    comment: string,
+  ) => {
+    try {
+      await invoke('comment_on_workflow', { workflowId, userId, userName, comment });
+      // Refresh comments
+      await get().fetchWorkflowComments(workflowId);
+    } catch (error) {
+      console.error('Failed to comment on workflow:', error);
+      throw error;
+    }
+  },
+
+  deleteComment: async (commentId: string) => {
+    try {
+      await invoke('delete_workflow_comment', { commentId });
+      // Remove comment from state
+      set((state) => ({
+        workflowComments: state.workflowComments.filter((c) => c.id !== commentId),
+      }));
+    } catch (error) {
+      console.error('Failed to delete comment:', error);
       throw error;
     }
   },

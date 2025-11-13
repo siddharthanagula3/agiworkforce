@@ -4,6 +4,8 @@ import { MarketplaceHero } from '../components/marketplace/MarketplaceHero';
 import { DiscoverTab } from '../components/marketplace/DiscoverTab';
 import { MyWorkflowsTab } from '../components/marketplace/MyWorkflowsTab';
 import { PublishWorkflowTab } from '../components/marketplace/PublishWorkflowTab';
+import { MyFavoritesTab } from '../components/marketplace/MyFavoritesTab';
+import { MyClonesTab } from '../components/marketplace/MyClonesTab';
 import { WorkflowDetailModal } from '../components/marketplace/WorkflowDetailModal';
 import { ShareModal } from '../components/marketplace/ShareModal';
 import { CloneSuccessModal } from '../components/marketplace/CloneSuccessModal';
@@ -14,6 +16,8 @@ export function MarketplacePage() {
     fetchFeatured,
     fetchTrending,
     fetchMarketplaceStats,
+    fetchCategoryCounts,
+    fetchPopularTags,
     showDetailModal,
     showShareModal,
     showCloneSuccessModal,
@@ -24,7 +28,9 @@ export function MarketplacePage() {
     fetchFeatured();
     fetchTrending();
     fetchMarketplaceStats();
-  }, [fetchFeatured, fetchTrending, fetchMarketplaceStats]);
+    fetchCategoryCounts();
+    fetchPopularTags();
+  }, [fetchFeatured, fetchTrending, fetchMarketplaceStats, fetchCategoryCounts, fetchPopularTags]);
 
   return (
     <div className="flex h-full flex-col bg-background overflow-hidden">
@@ -43,6 +49,12 @@ export function MarketplacePage() {
                 <TabsTrigger value="my-workflows" className="text-base">
                   My Workflows
                 </TabsTrigger>
+                <TabsTrigger value="favorites" className="text-base">
+                  My Favorites
+                </TabsTrigger>
+                <TabsTrigger value="clones" className="text-base">
+                  My Clones
+                </TabsTrigger>
                 <TabsTrigger value="publish" className="text-base">
                   Publish New
                 </TabsTrigger>
@@ -57,6 +69,14 @@ export function MarketplacePage() {
 
             <TabsContent value="my-workflows" className="mt-0">
               <MyWorkflowsTab />
+            </TabsContent>
+
+            <TabsContent value="favorites" className="mt-0">
+              <MyFavoritesTab />
+            </TabsContent>
+
+            <TabsContent value="clones" className="mt-0">
+              <MyClonesTab />
             </TabsContent>
 
             <TabsContent value="publish" className="mt-0">
