@@ -360,3 +360,194 @@ pub async fn set_user_preference(
 
     Ok(())
 }
+
+// ===== First-Run Experience Commands =====
+
+use crate::onboarding::{FirstRunExperience, FirstRunSession, DemoResult, AIEmployeeRecommendation, FirstRunStatistics};
+use crate::onboarding::instant_demo::InstantDemo;
+
+/// Start first-run experience
+#[tauri::command]
+pub async fn start_first_run_experience(
+    db: State<'_, AppDatabase>,
+    user_id: String,
+    user_role: Option<String>,
+) -> Result<FirstRunSession, String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .start(&user_id, user_role.as_deref())
+        .map_err(|e| format!("Failed to start first-run experience: {}", e))
+}
+
+/// Check if user has completed first run
+#[tauri::command]
+pub async fn has_completed_first_run(
+    db: State<'_, AppDatabase>,
+    user_id: String,
+) -> Result<bool, String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    Ok(first_run.has_completed_first_run(&user_id))
+}
+
+/// Get recommended employees for user role
+#[tauri::command]
+pub async fn get_recommended_employees_for_role(
+    user_role: String,
+) -> Result<Vec<AIEmployeeRecommendation>, String> {
+    // Create a temporary first-run instance to access recommendations
+    // In production, this would be refactored to not need DB access
+    let recommendations = match user_role.as_str() {
+        "founder" | "ceo" | "executive" => vec![
+            AIEmployeeRecommendation {
+                id: "inbox_manager".to_string(),
+                name: "Inbox Manager".to_string(),
+                description: "Categorizes emails, drafts responses, and escalates urgent items".to_string(),
+                estimated_time_saved_per_run: 150,
+                estimated_cost_saved_per_run: 75.0,
+                demo_duration_seconds: 30,
+                match_score: 95,
+            },
+        ],
+        "developer" | "engineer" => vec![
+            AIEmployeeRecommendation {
+                id: "code_reviewer".to_string(),
+                name: "Code Reviewer".to_string(),
+                description: "Reviews PRs, suggests improvements, finds bugs and style issues".to_string(),
+                estimated_time_saved_per_run: 30,
+                estimated_cost_saved_per_run: 25.0,
+                demo_duration_seconds: 20,
+                match_score: 98,
+            },
+        ],
+        _ => vec![
+            AIEmployeeRecommendation {
+                id: "data_entry_specialist".to_string(),
+                name: "Data Entry Specialist".to_string(),
+                description: "Processes documents, extracts data, enters into databases".to_string(),
+                estimated_time_saved_per_run: 90,
+                estimated_cost_saved_per_run: 45.0,
+                demo_duration_seconds: 25,
+                match_score: 85,
+            },
+        ],
+    };
+
+    Ok(recommendations)
+}
+
+/// Run instant demo for employee
+#[tauri::command]
+pub async fn run_instant_demo(
+    db: State<'_, AppDatabase>,
+    employee_id: String,
+    user_id: Option<String>,
+) -> Result<DemoResult, String> {
+    let demo = InstantDemo::new(db.0.clone());
+    demo.run_demo(&employee_id, user_id.as_deref())
+        .await
+        .map_err(|e| format!("Failed to run demo: {}", e))
+}
+
+/// Update first-run session step
+#[tauri::command]
+pub async fn update_first_run_step(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+    step: String,
+) -> Result<(), String> {
+    use crate::onboarding::OnboardingStep;
+
+    let first_run = FirstRunExperience::new(db.0.clone());
+    let onboarding_step: OnboardingStep = serde_json::from_str(&step)
+        .map_err(|e| format!("Invalid step format: {}", e))?;
+
+    first_run
+        .update_step(&session_id, onboarding_step)
+        .map_err(|e| format!("Failed to update step: {}", e))
+}
+
+/// Select employee for demo
+#[tauri::command]
+pub async fn select_demo_employee(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+    employee_id: String,
+) -> Result<(), String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .select_employee(&session_id, &employee_id)
+        .map_err(|e| format!("Failed to select employee: {}", e))
+}
+
+/// Record demo results
+#[tauri::command]
+pub async fn record_demo_results(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+    results: DemoResult,
+) -> Result<(), String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .record_demo_results(&session_id, &results)
+        .map_err(|e| format!("Failed to record demo results: {}", e))
+}
+
+/// Mark employee as hired
+#[tauri::command]
+pub async fn mark_employee_hired(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+) -> Result<(), String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .mark_employee_hired(&session_id)
+        .map_err(|e| format!("Failed to mark employee hired: {}", e))
+}
+
+/// Complete first-run experience
+#[tauri::command]
+pub async fn complete_first_run(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+) -> Result<(), String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .complete(&session_id)
+        .map_err(|e| format!("Failed to complete first-run: {}", e))
+}
+
+/// Get first-run session
+#[tauri::command]
+pub async fn get_first_run_session(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+) -> Result<FirstRunSession, String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .get_session(&session_id)
+        .map_err(|e| format!("Failed to get session: {}", e))
+}
+
+/// Get first-run statistics
+#[tauri::command]
+pub async fn get_first_run_statistics(
+    db: State<'_, AppDatabase>,
+) -> Result<FirstRunStatistics, String> {
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .get_statistics()
+        .map_err(|e| format!("Failed to get statistics: {}", e))
+}
+
+/// Skip onboarding (allow user to skip first-run)
+#[tauri::command]
+pub async fn skip_first_run(
+    db: State<'_, AppDatabase>,
+    session_id: String,
+) -> Result<(), String> {
+    // Mark session as completed but without hiring
+    let first_run = FirstRunExperience::new(db.0.clone());
+    first_run
+        .complete(&session_id)
+        .map_err(|e| format!("Failed to skip first-run: {}", e))
+}

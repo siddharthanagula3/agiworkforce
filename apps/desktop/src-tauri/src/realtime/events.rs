@@ -59,4 +59,12 @@ pub enum RealtimeEvent {
     MessageSent {
         message: serde_json::Value,
     },
+
+    MetricsUpdated {
+        metrics: serde_json::Value,
+    },
+
+    MilestoneReached {
+        milestone: serde_json::Value,
+    },
 }
