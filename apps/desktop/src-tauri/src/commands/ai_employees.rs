@@ -14,7 +14,7 @@ pub struct AIEmployeeState {
 #[tauri::command]
 pub async fn ai_employees_get_all(
     state: State<'_, AIEmployeeState>,
-) -> Result<Vec<AIEmployee>, String> {
+) -> std::result::Result<Vec<AIEmployee>, String> {
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     registry.get_all().map_err(|e| e.to_string())
 }
@@ -24,7 +24,7 @@ pub async fn ai_employees_get_all(
 pub async fn ai_employees_get_by_id(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<AIEmployee, String> {
+) -> std::result::Result<AIEmployee, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .get_employee_by_id(&employee_id)
@@ -37,7 +37,7 @@ pub async fn ai_employees_search(
     query: String,
     filters: EmployeeFilters,
     state: State<'_, AIEmployeeState>,
-) -> Result<Vec<AIEmployee>, String> {
+) -> std::result::Result<Vec<AIEmployee>, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .search_employees(&query, filters)
@@ -48,7 +48,7 @@ pub async fn ai_employees_search(
 #[tauri::command]
 pub async fn ai_employees_get_featured(
     state: State<'_, AIEmployeeState>,
-) -> Result<Vec<AIEmployee>, String> {
+) -> std::result::Result<Vec<AIEmployee>, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .get_featured_employees()
@@ -60,7 +60,7 @@ pub async fn ai_employees_get_featured(
 pub async fn ai_employees_get_by_category(
     category: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<Vec<AIEmployee>, String> {
+) -> std::result::Result<Vec<AIEmployee>, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .get_employees_by_category(&category)
@@ -73,7 +73,7 @@ pub async fn ai_employees_hire(
     employee_id: String,
     user_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<String, String> {
+) -> std::result::Result<String, String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .hire(&employee_id, &user_id)
@@ -86,7 +86,7 @@ pub async fn ai_employees_hire(
 pub async fn ai_employees_fire(
     user_employee_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<(), String> {
+) -> std::result::Result<(), String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .fire(&user_employee_id)
@@ -99,7 +99,7 @@ pub async fn ai_employees_fire(
 pub async fn ai_employees_get_user_employees(
     user_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<Vec<UserEmployee>, String> {
+) -> std::result::Result<Vec<UserEmployee>, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .get_user_employees(&user_id)
@@ -113,7 +113,7 @@ pub async fn ai_employees_assign_task(
     task_type: String,
     input_data: HashMap<String, serde_json::Value>,
     state: State<'_, AIEmployeeState>,
-) -> Result<EmployeeTask, String> {
+) -> std::result::Result<EmployeeTask, String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .assign_task(&user_employee_id, task_type, input_data)
@@ -126,7 +126,7 @@ pub async fn ai_employees_assign_task(
 pub async fn ai_employees_execute_task(
     task_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<TaskResult, String> {
+) -> std::result::Result<TaskResult, String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .execute_task(&task_id)
@@ -139,7 +139,7 @@ pub async fn ai_employees_execute_task(
 pub async fn ai_employees_get_task_status(
     task_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<EmployeeTask, String> {
+) -> std::result::Result<EmployeeTask, String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .get_task_status(&task_id)
@@ -152,7 +152,7 @@ pub async fn ai_employees_get_task_status(
 pub async fn ai_employees_list_tasks(
     user_employee_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<Vec<EmployeeTask>, String> {
+) -> std::result::Result<Vec<EmployeeTask>, String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .list_tasks(&user_employee_id)
@@ -165,7 +165,7 @@ pub async fn ai_employees_list_tasks(
 pub async fn ai_employees_run_demo(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<DemoResult, String> {
+) -> std::result::Result<DemoResult, String> {
     let executor = state.executor.lock().map_err(|e| e.to_string())?;
     executor
         .run_demo(&employee_id)
@@ -178,7 +178,7 @@ pub async fn ai_employees_run_demo(
 pub async fn ai_employees_get_stats(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<EmployeeStats, String> {
+) -> std::result::Result<EmployeeStats, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .get_employee_stats(&employee_id)
@@ -191,7 +191,7 @@ pub async fn ai_employees_publish(
     employee: AIEmployee,
     creator_id: String,
     state: State<'_, AIEmployeeState>,
-) -> Result<String, String> {
+) -> std::result::Result<String, String> {
     let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
     marketplace
         .publish_employee(employee, &creator_id)
@@ -202,7 +202,7 @@ pub async fn ai_employees_publish(
 #[tauri::command]
 pub async fn ai_employees_initialize(
     state: State<'_, AIEmployeeState>,
-) -> Result<usize, String> {
+) -> std::result::Result<usize, String> {
     let registry = state.registry.lock().map_err(|e| e.to_string())?;
     registry.initialize().map_err(|e| e.to_string())?;
     registry.count().map_err(|e| e.to_string())

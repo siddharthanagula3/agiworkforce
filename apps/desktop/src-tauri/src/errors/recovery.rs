@@ -202,7 +202,6 @@ pub async fn create_if_not_found(
 /// Prompt for elevation if permission denied
 #[cfg(target_os = "windows")]
 pub async fn prompt_for_elevation(operation_name: &str) -> Result<(), String> {
-    use std::process::Command;
 
     tracing::info!("Permission denied, requesting elevation for: {}", operation_name);
 

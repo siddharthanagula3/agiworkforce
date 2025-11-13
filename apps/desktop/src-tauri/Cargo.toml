@@ -194,7 +194,7 @@ ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
 webrtc-support = ["webrtc"]
 sentry = ["dep:sentry"]
-# billing = ["stripe"]  # Disabled until stripe dependency is resolved
+billing = []  # Billing feature enabled (stripe dependency removed, using custom implementation)
 # Windows builds typically enable webrtc-support, Linux builds may skip it to avoid GTK dependencies
 
 [build-dependencies]

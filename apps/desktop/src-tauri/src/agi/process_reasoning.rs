@@ -1,6 +1,6 @@
 use super::*;
 use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -280,9 +280,9 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
         );
 
         let preferences = RouterPreferences {
-            provider: Some("anthropic".to_string()),
+            provider: Some(crate::router::Provider::Anthropic),
             model: Some("claude-haiku-4-5".to_string()),
-            strategy: RoutingStrategy::PreferenceWithFallback,
+            strategy: RoutingStrategy::Auto,
         };
 
         let request = LLMRequest {
@@ -291,6 +291,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
                 content: prompt,
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             }],
             model: "claude-haiku-4-5".to_string(),
             temperature: Some(0.1),
