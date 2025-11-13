@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod process_reasoning_tests {
-    use crate::agi::process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
+    use crate::agi::process_reasoning::{
+        Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy,
+    };
     use serde_json::json;
 
     #[test]
@@ -402,7 +404,12 @@ mod process_reasoning_tests {
             },
             Strategy {
                 name: "Unoptimized".to_string(),
-                steps: vec!["step1".to_string(), "step2".to_string(), "step3".to_string(), "step4".to_string()],
+                steps: vec![
+                    "step1".to_string(),
+                    "step2".to_string(),
+                    "step3".to_string(),
+                    "step4".to_string(),
+                ],
                 expected_outcome: Outcome {
                     description: "Done slow".to_string(),
                     probability: 0.85,

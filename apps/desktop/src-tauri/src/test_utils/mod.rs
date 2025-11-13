@@ -56,7 +56,8 @@ pub fn create_test_database() -> Arc<Mutex<Connection>> {
             metadata TEXT
         );
         "#,
-    ).expect("Failed to initialize test database schema");
+    )
+    .expect("Failed to initialize test database schema");
 
     Arc::new(Mutex::new(conn))
 }
@@ -67,7 +68,11 @@ pub fn create_test_directory() -> std::io::Result<tempfile::TempDir> {
 }
 
 /// Creates a test file with content
-pub fn create_test_file(dir: &std::path::Path, name: &str, content: &str) -> std::io::Result<std::path::PathBuf> {
+pub fn create_test_file(
+    dir: &std::path::Path,
+    name: &str,
+    content: &str,
+) -> std::io::Result<std::path::PathBuf> {
     use std::io::Write;
 
     let file_path = dir.join(name);

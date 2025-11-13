@@ -106,7 +106,9 @@ impl WorkflowExecutor {
         let start_node = self.find_start_node(&workflow)?;
 
         // Execute from start node
-        let result = self.execute_node(&workflow, &start_node, &mut context).await;
+        let result = self
+            .execute_node(&workflow, &start_node, &mut context)
+            .await;
 
         // Update final status
         match result {
@@ -178,9 +180,15 @@ impl WorkflowExecutor {
         // Execute node based on type
         let result = match node {
             WorkflowNode::AgentNode { data, .. } => self.execute_agent_node(data, context).await,
-            WorkflowNode::DecisionNode { data, .. } => self.execute_decision_node(workflow, data, context).await,
-            WorkflowNode::LoopNode { data, .. } => self.execute_loop_node(workflow, node, data, context).await,
-            WorkflowNode::ParallelNode { data, .. } => self.execute_parallel_node(workflow, data, context).await,
+            WorkflowNode::DecisionNode { data, .. } => {
+                self.execute_decision_node(workflow, data, context).await
+            }
+            WorkflowNode::LoopNode { data, .. } => {
+                self.execute_loop_node(workflow, node, data, context).await
+            }
+            WorkflowNode::ParallelNode { data, .. } => {
+                self.execute_parallel_node(workflow, data, context).await
+            }
             WorkflowNode::WaitNode { data, .. } => self.execute_wait_node(data, context).await,
             WorkflowNode::ScriptNode { data, .. } => self.execute_script_node(data, context).await,
             WorkflowNode::ToolNode { data, .. } => self.execute_tool_node(data, context).await,
@@ -450,7 +458,11 @@ impl WorkflowExecutor {
     }
 
     /// Evaluate a condition
-    fn evaluate_condition(&self, condition: &str, context: &ExecutionContext) -> Result<bool, String> {
+    fn evaluate_condition(
+        &self,
+        condition: &str,
+        context: &ExecutionContext,
+    ) -> Result<bool, String> {
         // Placeholder: Simple condition evaluation
         // In real implementation, would use a proper expression evaluator
 
@@ -468,12 +480,8 @@ impl WorkflowExecutor {
 
     /// Pause a workflow execution
     pub fn pause_execution(&self, execution_id: &str) -> Result<(), String> {
-        self.engine.update_execution_status(
-            execution_id,
-            WorkflowStatus::Paused,
-            None,
-            None,
-        )?;
+        self.engine
+            .update_execution_status(execution_id, WorkflowStatus::Paused, None, None)?;
 
         Ok(())
     }
@@ -517,12 +525,8 @@ impl WorkflowExecutor {
 
     /// Cancel a workflow execution
     pub fn cancel_execution(&self, execution_id: &str) -> Result<(), String> {
-        self.engine.update_execution_status(
-            execution_id,
-            WorkflowStatus::Cancelled,
-            None,
-            None,
-        )?;
+        self.engine
+            .update_execution_status(execution_id, WorkflowStatus::Cancelled, None, None)?;
 
         Ok(())
     }

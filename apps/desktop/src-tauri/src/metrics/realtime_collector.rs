@@ -138,7 +138,10 @@ impl RealtimeMetricsCollector {
     }
 
     /// Record automation run and broadcast metrics update
-    pub async fn record_automation_run(&self, run: AutomationRun) -> Result<MetricsSnapshot, String> {
+    pub async fn record_automation_run(
+        &self,
+        run: AutomationRun,
+    ) -> Result<MetricsSnapshot, String> {
         // Calculate metrics immediately
         let metrics = self.calculate_metrics(&run);
 
@@ -232,8 +235,13 @@ impl RealtimeMetricsCollector {
                 if all_time.total_time_saved_hours >= threshold {
                     // Check if milestone already recorded
                     if !self.is_milestone_recorded(user_id, title).unwrap_or(true) {
-                        self.record_milestone(user_id, title, threshold, all_time.total_cost_saved_usd)
-                            .ok();
+                        self.record_milestone(
+                            user_id,
+                            title,
+                            threshold,
+                            all_time.total_cost_saved_usd,
+                        )
+                        .ok();
 
                         // Broadcast milestone event
                         use crate::realtime::RealtimeEvent;

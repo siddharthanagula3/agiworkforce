@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -87,7 +87,10 @@ impl TeamResourceManager {
         resource_description: Option<String>,
         shared_by: &str,
     ) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         // Check if resource is already shared
@@ -121,8 +124,16 @@ impl TeamResourceManager {
     }
 
     /// Unshare a resource from a team
-    pub fn unshare_resource(&self, team_id: &str, resource_type: ResourceType, resource_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn unshare_resource(
+        &self,
+        team_id: &str,
+        resource_type: ResourceType,
+        resource_id: &str,
+    ) -> Result<(), String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let rows_affected = conn
             .execute(
@@ -140,7 +151,10 @@ impl TeamResourceManager {
 
     /// Get all resources shared with a team
     pub fn get_team_resources(&self, team_id: &str) -> Result<Vec<TeamResource>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -148,15 +162,15 @@ impl TeamResourceManager {
                         shared_by, shared_at, access_count, last_accessed
                  FROM team_resources
                  WHERE team_id = ?1
-                 ORDER BY shared_at DESC"
+                 ORDER BY shared_at DESC",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let resources = stmt
             .query_map(params![team_id], |row| {
                 let resource_type_str: String = row.get(1)?;
-                let resource_type = ResourceType::from_str(&resource_type_str)
-                    .unwrap_or(ResourceType::Document);
+                let resource_type =
+                    ResourceType::from_str(&resource_type_str).unwrap_or(ResourceType::Document);
 
                 Ok(TeamResource {
                     team_id: row.get(0)?,
@@ -178,8 +192,15 @@ impl TeamResourceManager {
     }
 
     /// Get resources by type
-    pub fn get_team_resources_by_type(&self, team_id: &str, resource_type: ResourceType) -> Result<Vec<TeamResource>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_team_resources_by_type(
+        &self,
+        team_id: &str,
+        resource_type: ResourceType,
+    ) -> Result<Vec<TeamResource>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -187,15 +208,15 @@ impl TeamResourceManager {
                         shared_by, shared_at, access_count, last_accessed
                  FROM team_resources
                  WHERE team_id = ?1 AND resource_type = ?2
-                 ORDER BY shared_at DESC"
+                 ORDER BY shared_at DESC",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let resources = stmt
             .query_map(params![team_id, resource_type.as_str()], |row| {
                 let resource_type_str: String = row.get(1)?;
-                let resource_type = ResourceType::from_str(&resource_type_str)
-                    .unwrap_or(ResourceType::Document);
+                let resource_type =
+                    ResourceType::from_str(&resource_type_str).unwrap_or(ResourceType::Document);
 
                 Ok(TeamResource {
                     team_id: row.get(0)?,
@@ -217,8 +238,16 @@ impl TeamResourceManager {
     }
 
     /// Check if a resource is shared with a team
-    pub fn is_resource_shared(&self, team_id: &str, resource_type: ResourceType, resource_id: &str) -> Result<bool, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn is_resource_shared(
+        &self,
+        team_id: &str,
+        resource_type: ResourceType,
+        resource_id: &str,
+    ) -> Result<bool, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let exists: bool = conn
             .query_row(
@@ -238,35 +267,41 @@ impl TeamResourceManager {
         resource_type: ResourceType,
         resource_id: &str,
     ) -> Result<Option<TeamResource>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
                 "SELECT team_id, resource_type, resource_id, resource_name, resource_description,
                         shared_by, shared_at, access_count, last_accessed
                  FROM team_resources
-                 WHERE team_id = ?1 AND resource_type = ?2 AND resource_id = ?3"
+                 WHERE team_id = ?1 AND resource_type = ?2 AND resource_id = ?3",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let resource = stmt
-            .query_row(params![team_id, resource_type.as_str(), resource_id], |row| {
-                let resource_type_str: String = row.get(1)?;
-                let resource_type = ResourceType::from_str(&resource_type_str)
-                    .unwrap_or(ResourceType::Document);
+            .query_row(
+                params![team_id, resource_type.as_str(), resource_id],
+                |row| {
+                    let resource_type_str: String = row.get(1)?;
+                    let resource_type = ResourceType::from_str(&resource_type_str)
+                        .unwrap_or(ResourceType::Document);
 
-                Ok(TeamResource {
-                    team_id: row.get(0)?,
-                    resource_type,
-                    resource_id: row.get(2)?,
-                    resource_name: row.get(3)?,
-                    resource_description: row.get(4)?,
-                    shared_by: row.get(5)?,
-                    shared_at: row.get(6)?,
-                    access_count: row.get(7)?,
-                    last_accessed: row.get(8)?,
-                })
-            })
+                    Ok(TeamResource {
+                        team_id: row.get(0)?,
+                        resource_type,
+                        resource_id: row.get(2)?,
+                        resource_name: row.get(3)?,
+                        resource_description: row.get(4)?,
+                        shared_by: row.get(5)?,
+                        shared_at: row.get(6)?,
+                        access_count: row.get(7)?,
+                        last_accessed: row.get(8)?,
+                    })
+                },
+            )
             .optional()
             .map_err(|e| format!("Failed to get resource: {}", e))?;
 
@@ -274,8 +309,16 @@ impl TeamResourceManager {
     }
 
     /// Record resource access
-    pub fn record_resource_access(&self, team_id: &str, resource_type: ResourceType, resource_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn record_resource_access(
+        &self,
+        team_id: &str,
+        resource_type: ResourceType,
+        resource_id: &str,
+    ) -> Result<(), String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         conn.execute(
@@ -283,14 +326,18 @@ impl TeamResourceManager {
              SET access_count = access_count + 1, last_accessed = ?1
              WHERE team_id = ?2 AND resource_type = ?3 AND resource_id = ?4",
             params![now, team_id, resource_type.as_str(), resource_id],
-        ).map_err(|e| format!("Failed to record access: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to record access: {}", e))?;
 
         Ok(())
     }
 
     /// Get resource access statistics
     pub fn get_resource_stats(&self, team_id: &str) -> Result<ResourceStats, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let total_resources: i64 = conn
             .query_row(
@@ -342,8 +389,15 @@ impl TeamResourceManager {
     }
 
     /// Search team resources
-    pub fn search_resources(&self, team_id: &str, query: &str) -> Result<Vec<TeamResource>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn search_resources(
+        &self,
+        team_id: &str,
+        query: &str,
+    ) -> Result<Vec<TeamResource>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let search_pattern = format!("%{}%", query);
 
         let mut stmt = conn
@@ -352,15 +406,15 @@ impl TeamResourceManager {
                         shared_by, shared_at, access_count, last_accessed
                  FROM team_resources
                  WHERE team_id = ?1 AND (resource_name LIKE ?2 OR resource_description LIKE ?2)
-                 ORDER BY shared_at DESC"
+                 ORDER BY shared_at DESC",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let resources = stmt
             .query_map(params![team_id, search_pattern], |row| {
                 let resource_type_str: String = row.get(1)?;
-                let resource_type = ResourceType::from_str(&resource_type_str)
-                    .unwrap_or(ResourceType::Document);
+                let resource_type =
+                    ResourceType::from_str(&resource_type_str).unwrap_or(ResourceType::Document);
 
                 Ok(TeamResource {
                     team_id: row.get(0)?,
@@ -382,8 +436,15 @@ impl TeamResourceManager {
     }
 
     /// Get most accessed resources
-    pub fn get_most_accessed_resources(&self, team_id: &str, limit: usize) -> Result<Vec<TeamResource>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_most_accessed_resources(
+        &self,
+        team_id: &str,
+        limit: usize,
+    ) -> Result<Vec<TeamResource>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -392,15 +453,15 @@ impl TeamResourceManager {
                  FROM team_resources
                  WHERE team_id = ?1
                  ORDER BY access_count DESC
-                 LIMIT ?2"
+                 LIMIT ?2",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let resources = stmt
             .query_map(params![team_id, limit as i64], |row| {
                 let resource_type_str: String = row.get(1)?;
-                let resource_type = ResourceType::from_str(&resource_type_str)
-                    .unwrap_or(ResourceType::Document);
+                let resource_type =
+                    ResourceType::from_str(&resource_type_str).unwrap_or(ResourceType::Document);
 
                 Ok(TeamResource {
                     team_id: row.get(0)?,
@@ -422,8 +483,15 @@ impl TeamResourceManager {
     }
 
     /// Get recently accessed resources
-    pub fn get_recently_accessed_resources(&self, team_id: &str, limit: usize) -> Result<Vec<TeamResource>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_recently_accessed_resources(
+        &self,
+        team_id: &str,
+        limit: usize,
+    ) -> Result<Vec<TeamResource>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -432,15 +500,15 @@ impl TeamResourceManager {
                  FROM team_resources
                  WHERE team_id = ?1 AND last_accessed IS NOT NULL
                  ORDER BY last_accessed DESC
-                 LIMIT ?2"
+                 LIMIT ?2",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let resources = stmt
             .query_map(params![team_id, limit as i64], |row| {
                 let resource_type_str: String = row.get(1)?;
-                let resource_type = ResourceType::from_str(&resource_type_str)
-                    .unwrap_or(ResourceType::Document);
+                let resource_type =
+                    ResourceType::from_str(&resource_type_str).unwrap_or(ResourceType::Document);
 
                 Ok(TeamResource {
                     team_id: row.get(0)?,
@@ -494,7 +562,8 @@ mod tests {
                 PRIMARY KEY (team_id, resource_type, resource_id)
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         Arc::new(Mutex::new(conn))
     }

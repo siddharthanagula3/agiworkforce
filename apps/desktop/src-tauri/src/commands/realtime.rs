@@ -1,4 +1,4 @@
-use crate::realtime::{PresenceManager, UserPresence, UserActivity};
+use crate::realtime::{PresenceManager, UserActivity, UserPresence};
 use std::sync::Arc;
 use tauri::State;
 
