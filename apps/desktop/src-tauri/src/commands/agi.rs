@@ -1,4 +1,4 @@
-use crate::agi::{AGIConfig, AGICore, ExecutionContext, Goal, Priority};
+use crate::agi::{AGIConfig, AGICore, ExecutionContext, Goal, Priority, ScoredResult};
 use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
 use crate::router::LLMRouter;
@@ -25,6 +25,20 @@ pub struct SubmitGoalResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GoalStatusResponse {
     pub context: ExecutionContext,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitParallelGoalRequest {
+    pub description: String,
+    pub priority: Option<String>,
+    pub deadline: Option<u64>,
+    pub success_criteria: Option<Vec<String>>,
+    pub num_agents: Option<usize>, // Number of parallel agents (default: 8)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitParallelGoalResponse {
+    pub best_result: ScoredResult,
 }
 
 // Global AGI instance - use parking_lot::Mutex for outer, Arc<TokioMutex> for inner
@@ -114,6 +128,51 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
         .map_err(|e| format!("Failed to submit goal: {}", e))?;
 
     Ok(SubmitGoalResponse { goal_id })
+}
+
+/// Submit a goal for parallel execution with multiple agents (Cursor 2.0-style)
+///
+/// Spawns N agents that work on the same goal with different strategies in isolated sandboxes.
+/// Returns the best result after comparing all executions.
+#[tauri::command]
+pub async fn agi_submit_goal_parallel(
+    request: SubmitParallelGoalRequest,
+) -> Result<SubmitParallelGoalResponse, String> {
+    let agi_arc = {
+        let agi_guard = AGI_CORE.lock();
+        agi_guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    }; // Drop the guard immediately
+
+    let priority = match request.priority.as_deref() {
+        Some("low") => Priority::Low,
+        Some("medium") => Priority::Medium,
+        Some("high") => Priority::High,
+        Some("critical") => Priority::Critical,
+        _ => Priority::Medium,
+    };
+
+    let goal = Goal {
+        id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
+        description: request.description,
+        priority,
+        deadline: request.deadline,
+        constraints: vec![],
+        success_criteria: request.success_criteria.unwrap_or_default(),
+    };
+
+    let num_agents = request.num_agents.unwrap_or(8); // Default: 8 agents
+
+    // Now we can safely await with tokio::Mutex
+    let agi = agi_arc.lock().await;
+    let best_result = agi
+        .submit_goal_parallel(goal, num_agents)
+        .await
+        .map_err(|e| format!("Failed to execute parallel goal: {}", e))?;
+
+    Ok(SubmitParallelGoalResponse { best_result })
 }
 
 /// Get goal status
