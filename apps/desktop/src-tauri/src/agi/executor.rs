@@ -2,6 +2,7 @@ use super::*;
 use crate::agi::api_tools_impl;
 use crate::agi::planner::PlanStep;
 use crate::automation::AutomationService;
+use crate::cache::ToolResultCache;
 use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use anyhow::{anyhow, Result};
 use serde_json::json;
@@ -15,6 +16,7 @@ pub struct AGIExecutor {
     automation: Arc<AutomationService>,
     router: Arc<tokio::sync::Mutex<LLMRouter>>,
     app_handle: Option<tauri::AppHandle>,
+    tool_cache: Arc<ToolResultCache>,
 }
 
 impl AGIExecutor {
@@ -31,7 +33,42 @@ impl AGIExecutor {
             automation,
             router,
             app_handle,
+            tool_cache: Arc::new(ToolResultCache::new()),
         })
+    }
+
+    /// Create a new executor with custom cache capacity
+    pub fn with_cache_capacity(
+        tool_registry: Arc<ToolRegistry>,
+        resource_manager: Arc<ResourceManager>,
+        automation: Arc<AutomationService>,
+        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        app_handle: Option<tauri::AppHandle>,
+        cache_size_bytes: usize,
+    ) -> Result<Self> {
+        Ok(Self {
+            tool_registry,
+            _resource_manager: resource_manager,
+            automation,
+            router,
+            app_handle,
+            tool_cache: Arc::new(ToolResultCache::with_capacity(cache_size_bytes)),
+        })
+    }
+
+    /// Get cache statistics
+    pub fn get_cache_stats(&self) -> crate::cache::ToolCacheStats {
+        self.tool_cache.get_stats()
+    }
+
+    /// Clear the tool result cache
+    pub fn clear_cache(&self) -> Result<()> {
+        self.tool_cache.clear()
+    }
+
+    /// Prune expired cache entries
+    pub fn prune_cache(&self) -> Result<usize> {
+        self.tool_cache.prune_expired()
     }
 
     /// Execute a plan step
@@ -74,7 +111,39 @@ impl AGIExecutor {
         parameters: &HashMap<String, serde_json::Value>,
         _context: &ExecutionContext,
     ) -> Result<serde_json::Value> {
-        match tool.id.as_str() {
+        let tool_name = tool.id.as_str();
+
+        // Check cache before executing
+        if let Some(cached_result) = self.tool_cache.get(tool_name, parameters) {
+            tracing::info!(
+                "[Executor] Using cached result for tool '{}' (cache hit)",
+                tool_name
+            );
+            return Ok(cached_result);
+        }
+
+        // Execute tool
+        let result = self.execute_tool_impl(tool_name, parameters, _context).await?;
+
+        // Cache the result (cache will determine if it should be cached based on TTL)
+        if let Err(e) = self.tool_cache.set(tool_name, parameters, result.clone()) {
+            tracing::warn!(
+                "[Executor] Failed to cache result for tool '{}': {}",
+                tool_name,
+                e
+            );
+        }
+
+        Ok(result)
+    }
+
+    async fn execute_tool_impl(
+        &self,
+        tool_name: &str,
+        parameters: &HashMap<String, serde_json::Value>,
+        _context: &ExecutionContext,
+    ) -> Result<serde_json::Value> {
+        match tool_name {
             "file_read" => {
                 let path = parameters["path"]
                     .as_str()
@@ -90,6 +159,12 @@ impl AGIExecutor {
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing content parameter"))?;
                 std::fs::write(path, content)?;
+
+                // Invalidate file_read cache for this path
+                let mut read_params = HashMap::new();
+                read_params.insert("path".to_string(), serde_json::json!(path));
+                let _ = self.tool_cache.invalidate("file_read", &read_params);
+
                 Ok(json!({ "success": true, "path": path }))
             }
             "ui_screenshot" => {
@@ -951,7 +1026,7 @@ impl AGIExecutor {
                     Err(anyhow!("App handle not available for transaction rollback"))
                 }
             }
-            _ => Err(anyhow!("Unknown tool: {}", tool.id)),
+            _ => Err(anyhow!("Unknown tool: {}", tool_name)),
         }
     }
 
@@ -974,6 +1049,7 @@ impl AGIExecutor {
             let tool_registry = self.tool_registry.clone();
             let automation = self.automation.clone();
             let router = self.router.clone();
+            let tool_cache = self.tool_cache.clone();
 
             let sandbox = sandbox_manager.create_sandbox(false).await?;
             let sandbox_id = sandbox.id.clone();
@@ -997,7 +1073,8 @@ impl AGIExecutor {
                     context_memory: Vec::new(),
                 };
 
-                let executor = AGIExecutor::new(
+                // Create executor with shared cache
+                let mut executor = AGIExecutor::new(
                     tool_registry,
                     Arc::new(ResourceManager::new(ResourceLimits {
                         cpu_percent: 80.0,
@@ -1009,6 +1086,9 @@ impl AGIExecutor {
                     router,
                     None,
                 ).unwrap();
+
+                // Replace the cache with shared cache for parallel execution
+                executor.tool_cache = tool_cache;
 
                 let mut steps_completed = 0;
                 let mut steps_failed = 0;

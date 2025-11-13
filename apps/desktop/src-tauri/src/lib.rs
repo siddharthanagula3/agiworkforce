@@ -81,6 +81,9 @@ pub mod agi;
 // Model Context Protocol (MCP) integration
 pub mod mcp;
 
+// Cache system for LLM responses and tool results
+pub mod cache;
+
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use tray::build_system_tray;
