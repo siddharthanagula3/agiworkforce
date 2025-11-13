@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Button } from '../ui/button';
+import { Button } from '../ui/Button';
 import { ChevronLeft, X } from 'lucide-react';
 
 interface ProgressIndicatorProps {

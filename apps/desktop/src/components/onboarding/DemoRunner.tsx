@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Progress } from '../ui/Progress';
 import { Check, Loader2, Zap } from 'lucide-react';
 import type { OnboardingDemo, DemoProgress } from '../../types/onboarding';

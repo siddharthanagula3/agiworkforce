@@ -17,7 +17,7 @@ import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
-import { OnboardingWizard } from './components/Onboarding/OnboardingWizard';
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import ErrorToastContainer from './components/errors/ErrorToast';
 import useErrorStore from './stores/errorStore';
 import { errorReportingService } from './services/errorReporting';
@@ -302,7 +302,7 @@ const DesktopShell = () => {
 
   // Show onboarding if not complete
   if (!onboardingComplete) {
-    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
+    return <OnboardingWizard userId="default-user" onComplete={() => setOnboardingComplete(true)} />;
   }
 
   const renderMainContent = () => {

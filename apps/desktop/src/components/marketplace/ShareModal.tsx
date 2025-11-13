@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Twitter, Linkedin, Mail, Link, MessageSquare, Newspaper, Code } from 'lucide-react';
+import { Copy, Check, Twitter, Linkedin, Mail, Link, MessageSquare, Newspaper } from 'lucide-react';
 import {
   Dialog,
   DialogContent,

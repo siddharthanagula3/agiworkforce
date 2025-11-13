@@ -59,6 +59,7 @@ export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({ teamId }) 
       if (index >= 0) {
         updated[index] = {
           ...updated[index],
+          user_id: event.user_id,
           status: event.status,
           last_seen: Date.now(),
         };
