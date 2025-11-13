@@ -20,7 +20,12 @@ import { Label } from '../ui/Label';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { useSettingsStore, type Provider } from '../../stores/settingsStore';
+import {
+  useSettingsStore,
+  type Provider,
+  createDefaultLLMConfig,
+  createDefaultWindowPreferences,
+} from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 
 interface SettingsPanelProps {
@@ -149,6 +154,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     error,
   } = useSettingsStore();
 
+  const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
+  const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
+
   useEffect(() => {
     if (open) {
       loadSettings().catch((err) => {
@@ -263,7 +271,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <div className="space-y-2">
                     <Label htmlFor="defaultProvider">Default Provider</Label>
                     <Select
-                      value={llmConfig.defaultProvider}
+                      value={resolvedLLMConfig.defaultProvider}
                       onValueChange={(value) => setDefaultProvider(value as Provider)}
                     >
                       <SelectTrigger id="defaultProvider">
@@ -289,7 +297,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="openaiModel">OpenAI Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.openai}
+                        value={resolvedLLMConfig.defaultModels.openai}
                         onValueChange={(value) => setDefaultModel('openai', value)}
                       >
                         <SelectTrigger id="openaiModel">
@@ -307,7 +315,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="anthropicModel">Anthropic Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.anthropic}
+                        value={resolvedLLMConfig.defaultModels.anthropic}
                         onValueChange={(value) => setDefaultModel('anthropic', value)}
                       >
                         <SelectTrigger id="anthropicModel">
@@ -326,7 +334,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="googleModel">Google AI Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.google}
+                        value={resolvedLLMConfig.defaultModels.google}
                         onValueChange={(value) => setDefaultModel('google', value)}
                       >
                         <SelectTrigger id="googleModel">
@@ -342,7 +350,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="ollamaModel">Ollama Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.ollama}
+                        value={resolvedLLMConfig.defaultModels.ollama}
                         onValueChange={(value) => setDefaultModel('ollama', value)}
                       >
                         <SelectTrigger id="ollamaModel">
@@ -361,7 +369,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="xaiModel">XAI Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.xai}
+                        value={resolvedLLMConfig.defaultModels.xai}
                         onValueChange={(value) => setDefaultModel('xai', value)}
                       >
                         <SelectTrigger id="xaiModel">
@@ -378,7 +386,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="deepseekModel">DeepSeek Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.deepseek}
+                        value={resolvedLLMConfig.defaultModels.deepseek}
                         onValueChange={(value) => setDefaultModel('deepseek', value)}
                       >
                         <SelectTrigger id="deepseekModel">
@@ -395,7 +403,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="qwenModel">Qwen Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.qwen}
+                        value={resolvedLLMConfig.defaultModels.qwen}
                         onValueChange={(value) => setDefaultModel('qwen', value)}
                       >
                         <SelectTrigger id="qwenModel">
@@ -412,7 +420,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <div className="space-y-2">
                       <Label htmlFor="mistralModel">Mistral Model</Label>
                       <Select
-                        value={llmConfig.defaultModels.mistral}
+                        value={resolvedLLMConfig.defaultModels.mistral}
                         onValueChange={(value) => setDefaultModel('mistral', value)}
                       >
                         <SelectTrigger id="mistralModel">
@@ -429,7 +437,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
                   <div className="space-y-2">
                     <Label htmlFor="temperature">
-                      Temperature: {llmConfig.temperature.toFixed(1)}
+                      Temperature: {resolvedLLMConfig.temperature.toFixed(1)}
                     </Label>
                     <input
                       id="temperature"
@@ -437,7 +445,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       min="0"
                       max="2"
                       step="0.1"
-                      value={llmConfig.temperature}
+                      value={resolvedLLMConfig.temperature}
                       onChange={(e) => setTemperature(parseFloat(e.target.value))}
                       className="w-full"
                     />
@@ -455,7 +463,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       min="256"
                       max="32768"
                       step="256"
-                      value={llmConfig.maxTokens}
+                      value={resolvedLLMConfig.maxTokens}
                       onChange={(e) => setMaxTokens(parseInt(e.target.value))}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -477,7 +485,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <div className="space-y-2">
                     <Label htmlFor="theme">Theme</Label>
                     <Select
-                      value={windowPreferences.theme}
+                      value={resolvedWindowPreferences.theme}
                       onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
                     >
                       <SelectTrigger id="theme">
@@ -494,7 +502,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <div className="space-y-2">
                     <Label htmlFor="startupPosition">Startup Position</Label>
                     <Select
-                      value={windowPreferences.startupPosition}
+                      value={resolvedWindowPreferences.startupPosition}
                       onValueChange={(value) => setStartupPosition(value as 'center' | 'remember')}
                     >
                       <SelectTrigger id="startupPosition">
@@ -510,7 +518,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <div className="space-y-2">
                     <Label htmlFor="dockOnStartup">Dock on Startup</Label>
                     <Select
-                      value={windowPreferences.dockOnStartup || 'none'}
+                      value={resolvedWindowPreferences.dockOnStartup || 'none'}
                       onValueChange={(value) =>
                         setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
                       }
