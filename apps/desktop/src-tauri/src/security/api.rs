@@ -1,10 +1,9 @@
 use crate::security::rate_limit::{RateLimiter, RateLimitConfig};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 const SIGNATURE_HEADER: &str = "X-Signature";
 const TIMESTAMP_HEADER: &str = "X-Timestamp";

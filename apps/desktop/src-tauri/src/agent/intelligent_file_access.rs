@@ -266,6 +266,7 @@ Provide your analysis in a clear, structured format."#
                 content: full_prompt,
                 tool_calls: None,
                 tool_call_id: None,
+                multimodal_content: None,
             }],
             model: "".to_string(),
             temperature: Some(0.3), // Lower temperature for more factual analysis

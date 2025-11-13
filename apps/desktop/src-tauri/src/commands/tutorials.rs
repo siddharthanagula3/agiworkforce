@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use tauri::State;
 use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
@@ -269,7 +268,7 @@ pub async fn submit_tutorial_feedback(
     feedback_text: Option<String>,
     helpful: bool,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     let feedback_id = uuid::Uuid::new_v4().to_string();
 

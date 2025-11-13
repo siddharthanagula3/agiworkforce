@@ -224,7 +224,7 @@ pub async fn ocr_process_image(
         serde_json::to_string(&words).map_err(|e| format!("Failed to serialize words: {}", e))?;
 
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Update capture with OCR text
@@ -416,7 +416,7 @@ pub async fn ocr_get_result(
     tracing::info!("Getting OCR result for capture: {}", capture_id);
 
     let conn =
-        db.0.lock()
+        db.conn.lock()
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let result = conn
