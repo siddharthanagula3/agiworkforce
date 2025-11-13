@@ -484,6 +484,9 @@ fn main() {
             agiworkforce_desktop::commands::llm_send_message,
             agiworkforce_desktop::commands::llm_configure_provider,
             agiworkforce_desktop::commands::llm_set_default_provider,
+            agiworkforce_desktop::commands::llm_get_available_models,
+            agiworkforce_desktop::commands::llm_check_provider_status,
+            agiworkforce_desktop::commands::llm_get_usage_stats,
             // Cache management commands
             agiworkforce_desktop::commands::cache_get_stats,
             agiworkforce_desktop::commands::cache_clear_all,
@@ -559,6 +562,7 @@ fn main() {
             agiworkforce_desktop::filesystem::fs_search_files,
             agiworkforce_desktop::filesystem::fs_search_folders,
             agiworkforce_desktop::filesystem::fs_read_file_content,
+            agiworkforce_desktop::commands::fs_get_workspace_files,
             // File watcher commands
             agiworkforce_desktop::commands::file_watch_start,
             agiworkforce_desktop::commands::file_watch_stop,
@@ -663,6 +667,10 @@ fn main() {
             agiworkforce_desktop::commands::composer_start_session,
             agiworkforce_desktop::commands::composer_apply_session,
             agiworkforce_desktop::commands::composer_get_session,
+            // Enhanced code editing commands (visual diff)
+            agiworkforce_desktop::commands::get_file_diff,
+            agiworkforce_desktop::commands::apply_changes,
+            agiworkforce_desktop::commands::revert_changes,
             // Voice input commands
             agiworkforce_desktop::commands::voice_transcribe_file,
             agiworkforce_desktop::commands::voice_transcribe_blob,
