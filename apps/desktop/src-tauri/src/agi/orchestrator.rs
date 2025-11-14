@@ -166,9 +166,7 @@ impl AgentOrchestrator {
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         // Create shared knowledge base with RwLock for thread-safe concurrent access
-        let knowledge_base = Arc::new(RwLock::new(KnowledgeBase::new(
-            config.knowledge_memory_mb,
-        )?));
+        let knowledge_base = Arc::new(RwLock::new(KnowledgeBase::new(config.knowledge_memory_mb)?));
 
         Ok(Self {
             max_agents,
@@ -397,8 +395,7 @@ impl AgentOrchestrator {
             // Check status of each agent
             for agent_id in &agent_ids {
                 if let Some(status) = self.get_agent_status(agent_id).await {
-                    if status.status == AgentState::Completed
-                        || status.status == AgentState::Failed
+                    if status.status == AgentState::Completed || status.status == AgentState::Failed
                     {
                         // Collect result
                         let result = AgentResult {
