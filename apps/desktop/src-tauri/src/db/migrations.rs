@@ -3729,7 +3729,11 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
         ("chat:write", "Create and send messages", "chat"),
         ("chat:delete", "Delete conversations", "chat"),
         ("automation:read", "View automations", "automation"),
-        ("automation:write", "Create and edit automations", "automation"),
+        (
+            "automation:write",
+            "Create and edit automations",
+            "automation",
+        ),
         ("automation:execute", "Execute automations", "automation"),
         ("automation:delete", "Delete automations", "automation"),
         ("browser:control", "Control browser sessions", "browser"),
@@ -3752,7 +3756,12 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
         conn.execute(
             "INSERT OR IGNORE INTO permissions (id, name, description, category, created_at)
              VALUES (?1, ?2, ?3, ?4, datetime('now'))",
-            [&uuid::Uuid::new_v4().to_string(), name, description, category],
+            [
+                &uuid::Uuid::new_v4().to_string(),
+                name,
+                description,
+                category,
+            ],
         )?;
     }
 

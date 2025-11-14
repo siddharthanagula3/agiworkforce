@@ -79,9 +79,9 @@ impl McpClient {
 
         let session_arc = {
             let mut sessions = self.sessions.write();
-            sessions.remove(name).ok_or_else(|| {
-                McpError::ServerNotFound(format!("Server '{}' not found", name))
-            })?
+            sessions
+                .remove(name)
+                .ok_or_else(|| McpError::ServerNotFound(format!("Server '{}' not found", name)))?
         };
 
         // Shutdown session

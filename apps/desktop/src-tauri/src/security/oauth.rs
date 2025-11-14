@@ -225,19 +225,15 @@ impl OAuthManager {
 
         Ok(OAuthTokenResult {
             access_token: token_result.access_token().secret().clone(),
-            refresh_token: token_result
-                .refresh_token()
-                .map(|t| t.secret().clone()),
+            refresh_token: token_result.refresh_token().map(|t| t.secret().clone()),
             expires_in: token_result.expires_in().map(|d| d.as_secs()),
-            scope: token_result
-                .scopes()
-                .map(|scopes| {
-                    scopes
-                        .iter()
-                        .map(|s| s.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                }),
+            scope: token_result.scopes().map(|scopes| {
+                scopes
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            }),
         })
     }
 
@@ -270,19 +266,15 @@ impl OAuthManager {
 
         Ok(OAuthTokenResult {
             access_token: token_result.access_token().secret().clone(),
-            refresh_token: token_result
-                .refresh_token()
-                .map(|t| t.secret().clone()),
+            refresh_token: token_result.refresh_token().map(|t| t.secret().clone()),
             expires_in: token_result.expires_in().map(|d| d.as_secs()),
-            scope: token_result
-                .scopes()
-                .map(|scopes| {
-                    scopes
-                        .iter()
-                        .map(|s| s.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                }),
+            scope: token_result.scopes().map(|scopes| {
+                scopes
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            }),
         })
     }
 
@@ -307,10 +299,7 @@ impl OAuthManager {
             .map_err(|e| anyhow!("Failed to get user info: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!(
-                "Failed to get user info: {}",
-                response.status()
-            ));
+            return Err(anyhow!("Failed to get user info: {}", response.status()));
         }
 
         let user_data: serde_json::Value = response
@@ -325,15 +314,9 @@ impl OAuthManager {
                     .as_str()
                     .ok_or_else(|| anyhow!("Missing user ID"))?
                     .to_string(),
-                email: user_data["email"]
-                    .as_str()
-                    .map(|s| s.to_string()),
-                name: user_data["name"]
-                    .as_str()
-                    .map(|s| s.to_string()),
-                picture: user_data["picture"]
-                    .as_str()
-                    .map(|s| s.to_string()),
+                email: user_data["email"].as_str().map(|s| s.to_string()),
+                name: user_data["name"].as_str().map(|s| s.to_string()),
+                picture: user_data["picture"].as_str().map(|s| s.to_string()),
             },
             OAuthProvider::GitHub => {
                 let email = if user_data["email"].is_null() {
@@ -368,9 +351,7 @@ impl OAuthManager {
                         .as_str()
                         .or(user_data["login"].as_str())
                         .map(|s| s.to_string()),
-                    picture: user_data["avatar_url"]
-                        .as_str()
-                        .map(|s| s.to_string()),
+                    picture: user_data["avatar_url"].as_str().map(|s| s.to_string()),
                 }
             }
             OAuthProvider::Microsoft => OAuthUserInfo {
@@ -382,9 +363,7 @@ impl OAuthManager {
                     .as_str()
                     .or(user_data["userPrincipalName"].as_str())
                     .map(|s| s.to_string()),
-                name: user_data["displayName"]
-                    .as_str()
-                    .map(|s| s.to_string()),
+                name: user_data["displayName"].as_str().map(|s| s.to_string()),
                 picture: None, // Microsoft Graph doesn't return picture in basic profile
             },
         };

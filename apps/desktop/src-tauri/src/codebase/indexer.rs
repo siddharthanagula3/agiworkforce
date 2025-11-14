@@ -2,7 +2,6 @@
  * Codebase Indexer
  * Fast AST-based indexing of workspace files for semantic search
  */
-
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -49,10 +48,7 @@ impl CodebaseIndexer {
         std::fs::create_dir_all(db_path.parent().unwrap())?;
 
         let db = Connection::open(db_path)?;
-        let indexer = Self {
-            db,
-            workspace_root,
-        };
+        let indexer = Self { db, workspace_root };
 
         indexer.init_schema()?;
         Ok(indexer)
