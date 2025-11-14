@@ -166,7 +166,7 @@ export function JsonViewer({
   data,
   className,
   maxHeight = '400px',
-  defaultExpanded = true,
+  defaultExpanded: _defaultExpanded = true,
   searchable = true,
 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
