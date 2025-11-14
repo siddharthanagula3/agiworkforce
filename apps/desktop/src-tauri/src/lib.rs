@@ -16,6 +16,12 @@ pub mod logging;
 // LLM Router and Cost Management
 pub mod router;
 
+// Prompt Enhancement and API Routing
+pub mod prompt_enhancement;
+
+// API Integrations (Perplexity, Veo3, Image Generation)
+pub mod api_integrations;
+
 // Automation modules
 pub mod automation;
 

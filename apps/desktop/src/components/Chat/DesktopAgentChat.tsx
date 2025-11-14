@@ -20,13 +20,10 @@ import {
   XCircle,
   Clock,
   Send,
-  AlertTriangle,
   Cpu,
   Terminal,
   FileText,
   Zap,
-  Pause,
-  Play,
   StopCircle,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -91,7 +88,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
 
   // Agent state
   const [reasoning, setReasoning] = useState<ReasoningStep[]>([]);
@@ -181,9 +177,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
         console.log(`[AGI] Goal progress: ${progress_percent}%`);
 
         setCurrentGoal((prev) =>
-          prev?.goal_id === goal_id
-            ? { ...prev, progress_percent, current_step }
-            : prev,
+          prev?.goal_id === goal_id ? { ...prev, progress_percent, current_step } : prev,
         );
       }),
     );
@@ -310,9 +304,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
             {
               id: `tool-result-${Date.now()}`,
               type: 'tool',
-              message: success
-                ? `✓ ${tool_name} completed`
-                : `✗ ${tool_name} failed: ${error}`,
+              message: success ? `✓ ${tool_name} completed` : `✗ ${tool_name} failed: ${error}`,
               timestamp: new Date(),
               success,
             },
@@ -378,9 +370,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
             {
               id: `${evt.task_id}-tool-result-${Date.now()}`,
               type: 'tool',
-              message: evt.success
-                ? `✓ ${evt.tool_name}`
-                : `✗ ${evt.tool_name}: ${evt.error}`,
+              message: evt.success ? `✓ ${evt.tool_name}` : `✗ ${evt.tool_name}: ${evt.error}`,
               timestamp: new Date(),
               success: evt.success,
             },
@@ -527,9 +517,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
         <div className="flex items-center gap-3">
           {currentGoal && (
             <div className="flex items-center gap-2">
-              <div className="text-xs text-muted-foreground">
-                {progressPercent.toFixed(0)}%
-              </div>
+              <div className="text-xs text-muted-foreground">{progressPercent.toFixed(0)}%</div>
               <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary transition-all duration-300"
@@ -573,9 +561,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto mt-6">
                     <button
-                      onClick={() =>
-                        setInput('Find all TypeScript files in the current directory')
-                      }
+                      onClick={() => setInput('Find all TypeScript files in the current directory')}
                       className="p-3 text-left border border-border rounded-lg hover:bg-muted transition-colors"
                     >
                       <div className="text-sm font-medium mb-1">Search files</div>
@@ -593,9 +579,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
                       </div>
                     </button>
                     <button
-                      onClick={() =>
-                        setInput('Open Chrome and navigate to github.com/trending')
-                      }
+                      onClick={() => setInput('Open Chrome and navigate to github.com/trending')}
                       className="p-3 text-left border border-border rounded-lg hover:bg-muted transition-colors"
                     >
                       <div className="text-sm font-medium mb-1">Browser automation</div>
@@ -604,9 +588,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
                       </div>
                     </button>
                     <button
-                      onClick={() =>
-                        setInput('Take a screenshot and save it to my desktop')
-                      }
+                      onClick={() => setInput('Take a screenshot and save it to my desktop')}
                       className="p-3 text-left border border-border rounded-lg hover:bg-muted transition-colors"
                     >
                       <div className="text-sm font-medium mb-1">Screen capture</div>

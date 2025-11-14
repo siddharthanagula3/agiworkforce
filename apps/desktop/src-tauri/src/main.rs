@@ -16,7 +16,8 @@ use agiworkforce_desktop::{
         CodeEditingState, CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState,
         DocumentState, EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState,
         McpState, ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
-        TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
+        TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
+        WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -394,6 +395,11 @@ fn main() {
             app.manage(agiworkforce_desktop::commands::HookRegistryState::new());
 
             tracing::info!("Hook registry state initialized");
+
+            // Initialize Prompt Enhancement state for AI routing
+            app.manage(agiworkforce_desktop::commands::PromptEnhancementState::new());
+
+            tracing::info!("Prompt enhancement state initialized");
 
             // Initialize Background Task Manager
             let task_db_conn = Arc::new(Mutex::new(
@@ -1109,7 +1115,17 @@ fn main() {
             agiworkforce_desktop::commands::hooks_import,
             agiworkforce_desktop::commands::hooks_reload,
             agiworkforce_desktop::commands::hooks_get_event_types,
-            agiworkforce_desktop::commands::hooks_get_stats
+            agiworkforce_desktop::commands::hooks_get_stats,
+            // Prompt enhancement and API routing commands
+            agiworkforce_desktop::commands::detect_use_case,
+            agiworkforce_desktop::commands::enhance_prompt,
+            agiworkforce_desktop::commands::route_to_best_api,
+            agiworkforce_desktop::commands::enhance_and_route_prompt,
+            agiworkforce_desktop::commands::get_prompt_enhancement_config,
+            agiworkforce_desktop::commands::set_prompt_enhancement_config,
+            agiworkforce_desktop::commands::get_suggested_provider,
+            agiworkforce_desktop::commands::get_available_use_cases,
+            agiworkforce_desktop::commands::get_available_providers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
