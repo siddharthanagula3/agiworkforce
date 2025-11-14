@@ -7,7 +7,7 @@ export class BasePage {
     this.page = page;
   }
 
-  async goto(url: string = 'http://localhost:1420') {
+  async goto(url: string = '/') {
     await this.page.goto(url);
     await this.page.waitForLoadState('networkidle');
   }

@@ -7,13 +7,15 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Chat Workflow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
   test('should create a new conversation', async ({ page }) => {
     // Click "New Chat" button (adjust selector based on actual UI)
-    const newChatButton = page.locator('button:has-text("New Chat"), [data-testid="new-chat"]').first();
+    const newChatButton = page
+      .locator('button:has-text("New Chat"), [data-testid="new-chat"]')
+      .first();
 
     if (await newChatButton.isVisible()) {
       await newChatButton.click();
@@ -25,14 +27,18 @@ test.describe('Chat Workflow', () => {
 
   test('should send a message and receive response', async ({ page }) => {
     // Find chat input (adjust selector based on actual UI)
-    const chatInput = page.locator('textarea[placeholder*="message"], [data-testid="chat-input"]').first();
+    const chatInput = page
+      .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
+      .first();
 
     if (await chatInput.isVisible()) {
       // Type a message
       await chatInput.fill('Hello, how are you?');
 
       // Send message
-      const sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+      const sendButton = page
+        .locator('button:has-text("Send"), [data-testid="send-message"]')
+        .first();
       await sendButton.click();
 
       // Verify user message appears
@@ -45,7 +51,9 @@ test.describe('Chat Workflow', () => {
 
   test('should display conversation history', async ({ page }) => {
     // Check if conversations list exists
-    const conversationsList = page.locator('[data-testid="conversation-list"], .conversation-list').first();
+    const conversationsList = page
+      .locator('[data-testid="conversation-list"], .conversation-list')
+      .first();
 
     if (await conversationsList.isVisible()) {
       // Verify at least one conversation exists or list is empty
@@ -61,7 +69,9 @@ test.describe('Chat Workflow', () => {
 
     if (await conversationItem.isVisible()) {
       // Find pin button
-      const pinButton = conversationItem.locator('button[aria-label*="Pin"], [data-testid="pin-conversation"]').first();
+      const pinButton = conversationItem
+        .locator('button[aria-label*="Pin"], [data-testid="pin-conversation"]')
+        .first();
 
       if (await pinButton.isVisible()) {
         await pinButton.click();
@@ -80,13 +90,17 @@ test.describe('Chat Workflow', () => {
       const initialCount = await page.locator('[data-testid="conversation-item"]').count();
 
       // Find delete button
-      const deleteButton = conversationItem.locator('button[aria-label*="Delete"], [data-testid="delete-conversation"]').first();
+      const deleteButton = conversationItem
+        .locator('button[aria-label*="Delete"], [data-testid="delete-conversation"]')
+        .first();
 
       if (await deleteButton.isVisible()) {
         await deleteButton.click();
 
         // Confirm deletion if modal appears
-        const confirmButton = page.locator('button:has-text("Delete"), button:has-text("Confirm")').first();
+        const confirmButton = page
+          .locator('button:has-text("Delete"), button:has-text("Confirm")')
+          .first();
         if (await confirmButton.isVisible()) {
           await confirmButton.click();
         }
@@ -99,7 +113,9 @@ test.describe('Chat Workflow', () => {
   });
 
   test('should search conversations', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search"], [data-testid="search-conversations"]').first();
+    const searchInput = page
+      .locator('input[placeholder*="Search"], [data-testid="search-conversations"]')
+      .first();
 
     if (await searchInput.isVisible()) {
       await searchInput.fill('test');
@@ -116,12 +132,16 @@ test.describe('Chat Workflow', () => {
   });
 
   test('should display streaming response', async ({ page }) => {
-    const chatInput = page.locator('textarea[placeholder*="message"], [data-testid="chat-input"]').first();
+    const chatInput = page
+      .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
+      .first();
 
     if (await chatInput.isVisible()) {
       await chatInput.fill('Tell me a long story');
 
-      const sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+      const sendButton = page
+        .locator('button:has-text("Send"), [data-testid="send-message"]')
+        .first();
       await sendButton.click();
 
       // Wait for streaming to start
@@ -140,7 +160,9 @@ test.describe('Chat Workflow', () => {
       // Hover to show edit button
       await messageItem.hover();
 
-      const editButton = messageItem.locator('button[aria-label*="Edit"], [data-testid="edit-message"]').first();
+      const editButton = messageItem
+        .locator('button[aria-label*="Edit"], [data-testid="edit-message"]')
+        .first();
 
       if (await editButton.isVisible()) {
         await editButton.click();
@@ -151,7 +173,9 @@ test.describe('Chat Workflow', () => {
         await editInput.fill('Edited message content');
 
         // Save edit
-        const saveButton = page.locator('button:has-text("Save"), [data-testid="save-edit"]').first();
+        const saveButton = page
+          .locator('button:has-text("Save"), [data-testid="save-edit"]')
+          .first();
         await saveButton.click();
 
         // Verify message was updated
@@ -161,7 +185,9 @@ test.describe('Chat Workflow', () => {
   });
 
   test('should display message statistics', async ({ page }) => {
-    const statsButton = page.locator('button:has-text("Stats"), [data-testid="show-stats"]').first();
+    const statsButton = page
+      .locator('button:has-text("Stats"), [data-testid="show-stats"]')
+      .first();
 
     if (await statsButton.isVisible()) {
       await statsButton.click();
@@ -179,12 +205,16 @@ test.describe('Chat Workflow', () => {
     // Simulate offline
     await context.setOffline(true);
 
-    const chatInput = page.locator('textarea[placeholder*="message"], [data-testid="chat-input"]').first();
+    const chatInput = page
+      .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
+      .first();
 
     if (await chatInput.isVisible()) {
       await chatInput.fill('This should fail');
 
-      const sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+      const sendButton = page
+        .locator('button:has-text("Send"), [data-testid="send-message"]')
+        .first();
       await sendButton.click();
 
       // Verify error message appears
@@ -199,22 +229,28 @@ test.describe('Chat Workflow', () => {
 
 test.describe('Chat AGI Integration', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
   test('should detect and submit goal-like messages', async ({ page }) => {
-    const chatInput = page.locator('textarea[placeholder*="message"], [data-testid="chat-input"]').first();
+    const chatInput = page
+      .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
+      .first();
 
     if (await chatInput.isVisible()) {
       // Send a goal-like message
       await chatInput.fill('Create a React component for user authentication');
 
-      const sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+      const sendButton = page
+        .locator('button:has-text("Send"), [data-testid="send-message"]')
+        .first();
       await sendButton.click();
 
       // Look for AGI submission indicator
-      const agiIndicator = page.locator('[data-testid="agi-submitted"], .agi-goal-indicator').first();
+      const agiIndicator = page
+        .locator('[data-testid="agi-submitted"], .agi-goal-indicator')
+        .first();
 
       // If visible, verify it appears
       if (await agiIndicator.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -224,17 +260,23 @@ test.describe('Chat AGI Integration', () => {
   });
 
   test('should not submit non-goal messages to AGI', async ({ page }) => {
-    const chatInput = page.locator('textarea[placeholder*="message"], [data-testid="chat-input"]').first();
+    const chatInput = page
+      .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
+      .first();
 
     if (await chatInput.isVisible()) {
       // Send a non-goal message
       await chatInput.fill('Hello');
 
-      const sendButton = page.locator('button:has-text("Send"), [data-testid="send-message"]').first();
+      const sendButton = page
+        .locator('button:has-text("Send"), [data-testid="send-message"]')
+        .first();
       await sendButton.click();
 
       // Verify no AGI indicator appears
-      const agiIndicator = page.locator('[data-testid="agi-submitted"], .agi-goal-indicator').first();
+      const agiIndicator = page
+        .locator('[data-testid="agi-submitted"], .agi-goal-indicator')
+        .first();
       await expect(agiIndicator).not.toBeVisible({ timeout: 3000 });
     }
   });
