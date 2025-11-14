@@ -7,83 +7,116 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: '1.90.0'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9.15.3'
+
 jobs:
   e2e-tests:
     name: Run E2E Tests
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest]
-        node-version: [20.x]
+        node-version: ['20']
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js and pnpm
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.15.3
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: 1.90.0
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        timeout-minutes: 10
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @agiworkforce/desktop exec playwright install --with-deps chromium
+        timeout-minutes: 15
 
       - name: Build application
         run: pnpm --filter @agiworkforce/desktop build:web
-        timeout-minutes: 10
+        timeout-minutes: 15
 
       - name: Run E2E smoke tests
         run: pnpm --filter @agiworkforce/desktop test:smoke
-        timeout-minutes: 5
+        timeout-minutes: 10
         continue-on-error: true
 
       - name: Run full E2E test suite
         run: pnpm --filter @agiworkforce/desktop test:e2e
-        timeout-minutes: 20
+        timeout-minutes: 25
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: playwright-report-${{ matrix.os }}
           path: apps/desktop/playwright-report/
           retention-days: 30
 
-      - name: Upload test screenshots
+      - name: Upload test screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: test-screenshots-${{ matrix.os }}
           path: apps/desktop/e2e/screenshots/
           retention-days: 30
 
-      - name: Upload failure screenshots
+      - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          name: failure-screenshots-${{ matrix.os }}
-          path: apps/desktop/e2e/screenshots/failures/
+          name: failure-diagnostics-${{ matrix.os }}
+          path: |
+            apps/desktop/e2e/screenshots/failures/
+            apps/desktop/test-results/
           retention-days: 30
 
       - name: Publish test report
         if: always()
         uses: daun/playwright-report-comment@v3
+        continue-on-error: true
         with:
           report-path: apps/desktop/playwright-report/
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -93,33 +126,49 @@ jobs:
     runs-on: windows-latest
     needs: e2e-tests
     if: github.event_name == 'pull_request'
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js and pnpm
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.15.3
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        timeout-minutes: 10
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @agiworkforce/desktop exec playwright install --with-deps chromium
+        timeout-minutes: 15
 
       - name: Run visual regression tests
         run: pnpm --filter @agiworkforce/desktop exec playwright test visual-regression
+        timeout-minutes: 20
 
       - name: Upload visual diff
         if: failure()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: visual-regression-diff
           path: apps/desktop/e2e/screenshots/
@@ -129,31 +178,36 @@ jobs:
     name: Performance Tests
     runs-on: windows-latest
     needs: e2e-tests
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js and pnpm
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.15.3
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        timeout-minutes: 10
 
       - name: Run performance benchmarks
         run: |
           echo "Performance tests would run here"
           echo "Measuring app startup time, memory usage, etc."
+        timeout-minutes: 15
 
       - name: Upload performance metrics
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: performance-metrics
           path: apps/desktop/e2e/.test-data/
@@ -164,6 +218,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [e2e-tests, visual-regression, performance]
     if: failure() && github.event_name == 'push'
+    timeout-minutes: 5
 
     steps:
       - name: Send notification

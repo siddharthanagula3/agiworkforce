@@ -5,7 +5,7 @@ import { test, expect } from '../e2e/fixtures';
  */
 test.describe('Browser Automation E2E', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
@@ -13,7 +13,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock browser automation response
     mockLLM.setMockResponse(
       /navigate.*browser|open.*website/i,
-      'Successfully navigated to https://example.com'
+      'Successfully navigated to https://example.com',
     );
 
     await agiPage.navigateToAGI();
@@ -32,7 +32,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock browser click action
     mockLLM.setMockResponse(
       /click.*button|interact.*element/i,
-      'Successfully clicked the submit button'
+      'Successfully clicked the submit button',
     );
 
     await agiPage.navigateToAGI();
@@ -46,7 +46,7 @@ test.describe('Browser Automation E2E', () => {
         const stepsCount = await agiPage.getStepsCount();
         return stepsCount > 0;
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
 
     // Verify steps were generated
@@ -58,7 +58,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock form filling
     mockLLM.setMockResponse(
       /fill.*form|enter.*data/i,
-      'Successfully filled form fields with provided data'
+      'Successfully filled form fields with provided data',
     );
 
     await agiPage.navigateToAGI();
@@ -77,7 +77,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock data extraction
     mockLLM.setMockResponse(
       /extract.*data|scrape.*information/i,
-      'Extracted data:\nTitle: Example Page\nHeading: Welcome\nParagraphs: 5'
+      'Extracted data:\nTitle: Example Page\nHeading: Welcome\nParagraphs: 5',
     );
 
     await agiPage.navigateToAGI();
@@ -96,7 +96,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock screenshot capture
     mockLLM.setMockResponse(
       /screenshot|capture.*page/i,
-      'Successfully captured screenshot of the page'
+      'Successfully captured screenshot of the page',
     );
 
     await agiPage.navigateToAGI();
@@ -115,7 +115,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock browser error
     mockLLM.setMockResponse(
       /navigate.*invalid/i,
-      'ERROR: Failed to navigate - invalid URL or page not found'
+      'ERROR: Failed to navigate - invalid URL or page not found',
     );
 
     await agiPage.navigateToAGI();
@@ -134,7 +134,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock waiting for elements
     mockLLM.setMockResponse(
       /wait.*element|wait.*load/i,
-      'Successfully waited for element to appear on page'
+      'Successfully waited for element to appear on page',
     );
 
     await agiPage.navigateToAGI();
@@ -153,7 +153,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock JavaScript execution
     mockLLM.setMockResponse(
       /execute.*javascript|run.*script/i,
-      'Successfully executed JavaScript: Result = 42'
+      'Successfully executed JavaScript: Result = 42',
     );
 
     await agiPage.navigateToAGI();
@@ -172,7 +172,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock authentication
     mockLLM.setMockResponse(
       /login|authenticate|sign.*in/i,
-      'Successfully logged in to the application'
+      'Successfully logged in to the application',
     );
 
     await agiPage.navigateToAGI();
@@ -191,7 +191,7 @@ test.describe('Browser Automation E2E', () => {
     // Mock multi-step workflow
     mockLLM.setMockResponse(
       /checkout.*process|multi.*step/i,
-      'Completed multi-step workflow:\n1. Added item to cart\n2. Proceeded to checkout\n3. Entered shipping info\n4. Confirmed order'
+      'Completed multi-step workflow:\n1. Added item to cart\n2. Proceeded to checkout\n3. Entered shipping info\n4. Confirmed order',
     );
 
     await agiPage.navigateToAGI();
@@ -205,7 +205,7 @@ test.describe('Browser Automation E2E', () => {
         const stepsCount = await agiPage.getStepsCount();
         return stepsCount >= 3;
       },
-      { timeout: 15000 }
+      { timeout: 15000 },
     );
 
     // Verify multiple steps were created

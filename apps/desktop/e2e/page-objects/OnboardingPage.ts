@@ -1,5 +1,6 @@
 import { Page, Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { createErrorHandler } from '../utils/error-handler';
 
 export class OnboardingPage extends BasePage {
   // Locators
@@ -11,15 +12,29 @@ export class OnboardingPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    this.nextButton = page.locator('button:has-text("Next"), [data-testid="onboarding-next"]').first();
-    this.backButton = page.locator('button:has-text("Back"), [data-testid="onboarding-back"]').first();
-    this.skipButton = page.locator('button:has-text("Skip"), [data-testid="onboarding-skip"]').first();
-    this.finishButton = page.locator('button:has-text("Finish"), button:has-text("Get Started"), [data-testid="onboarding-finish"]').first();
-    this.progressIndicator = page.locator('[data-testid="onboarding-progress"], .onboarding-progress').first();
+    this.nextButton = page
+      .locator('button:has-text("Next"), [data-testid="onboarding-next"]')
+      .first();
+    this.backButton = page
+      .locator('button:has-text("Back"), [data-testid="onboarding-back"]')
+      .first();
+    this.skipButton = page
+      .locator('button:has-text("Skip"), [data-testid="onboarding-skip"]')
+      .first();
+    this.finishButton = page
+      .locator(
+        'button:has-text("Finish"), button:has-text("Get Started"), [data-testid="onboarding-finish"]',
+      )
+      .first();
+    this.progressIndicator = page
+      .locator('[data-testid="onboarding-progress"], .onboarding-progress')
+      .first();
   }
 
   async startOnboarding() {
-    const startButton = this.page.locator('button:has-text("Start"), button:has-text("Get Started")').first();
+    const startButton = this.page
+      .locator('button:has-text("Start"), button:has-text("Get Started")')
+      .first();
     if (await startButton.isVisible()) {
       await startButton.click();
     }
@@ -51,12 +66,16 @@ export class OnboardingPage extends BasePage {
 
   async configureAPIKey(provider: string, apiKey: string) {
     // Fill in API key for the specified provider
-    const apiKeyInput = this.page.locator(`input[name="${provider}-api-key"], [data-testid="${provider}-api-key"]`).first();
+    const apiKeyInput = this.page
+      .locator(`input[name="${provider}-api-key"], [data-testid="${provider}-api-key"]`)
+      .first();
     await apiKeyInput.fill(apiKey);
   }
 
   async selectProvider(provider: 'openai' | 'anthropic' | 'google' | 'ollama') {
-    const providerCard = this.page.locator(`[data-testid="${provider}-card"], button:has-text("${provider}")`).first();
+    const providerCard = this.page
+      .locator(`[data-testid="${provider}-card"], button:has-text("${provider}")`)
+      .first();
     if (await providerCard.isVisible()) {
       await providerCard.click();
     }
@@ -69,10 +88,12 @@ export class OnboardingPage extends BasePage {
   }
 
   async isOnboardingComplete(): Promise<boolean> {
-    return await this.finishButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const errorHandler = createErrorHandler(this.page);
+    return await errorHandler.isElementVisible(this.finishButton, 2000);
   }
 
   async completeFullOnboarding(apiKeys: Record<string, string> = {}) {
+    const errorHandler = createErrorHandler(this.page);
     await this.startOnboarding();
 
     // Navigate through steps
@@ -80,20 +101,22 @@ export class OnboardingPage extends BasePage {
     while (maxSteps > 0) {
       // Check if we're on API key configuration step
       for (const [provider, key] of Object.entries(apiKeys)) {
-        const apiKeyInput = this.page.locator(`input[name="${provider}-api-key"], [data-testid="${provider}-api-key"]`).first();
-        if (await apiKeyInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+        const apiKeyInput = this.page
+          .locator(`input[name="${provider}-api-key"], [data-testid="${provider}-api-key"]`)
+          .first();
+        if (await errorHandler.isElementVisible(apiKeyInput, 1000)) {
           await this.configureAPIKey(provider, key);
         }
       }
 
       // Check if we can finish
-      if (await this.finishButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+      if (await errorHandler.isElementVisible(this.finishButton, 1000)) {
         await this.finishOnboarding();
         break;
       }
 
       // Otherwise, click next
-      if (await this.nextButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+      if (await errorHandler.isElementVisible(this.nextButton, 1000)) {
         await this.clickNext();
       } else {
         break;
