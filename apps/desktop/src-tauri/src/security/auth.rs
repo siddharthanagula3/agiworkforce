@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
-const JWT_SECRET: &str = "REPLACE_WITH_SECURE_SECRET"; // TODO: Load from secure storage
+use super::secret_manager::SecretManager;
+
 const ACCESS_TOKEN_DURATION: i64 = 60; // 1 hour
 const REFRESH_TOKEN_DURATION: i64 = 30 * 24 * 60; // 30 days
 const MAX_FAILED_ATTEMPTS: u32 = 5;
@@ -163,14 +164,52 @@ impl AuthToken {
 pub struct AuthManager {
     users: Arc<parking_lot::RwLock<HashMap<String, User>>>,
     sessions: Arc<parking_lot::RwLock<HashMap<String, Session>>>,
+    secret_manager: Arc<SecretManager>,
 }
 
 impl AuthManager {
-    pub fn new() -> Self {
+    /// Create a new AuthManager with a SecretManager for secure JWT secret handling
+    ///
+    /// # Security
+    /// The SecretManager handles secure generation and storage of JWT secrets
+    /// using OS keyring (primary) and database (fallback) storage.
+    pub fn new(secret_manager: Arc<SecretManager>) -> Self {
         Self {
             users: Arc::new(parking_lot::RwLock::new(HashMap::new())),
             sessions: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            secret_manager,
         }
+    }
+
+    /// Get the JWT secret (used internally for token signing/verification)
+    ///
+    /// # Security Note
+    /// This method should only be used internally. The secret is retrieved
+    /// from secure storage and should never be logged or exposed.
+    fn get_jwt_secret(&self) -> Result<String, String> {
+        self.secret_manager
+            .get_or_create_jwt_secret()
+            .map_err(|e| format!("Failed to retrieve JWT secret: {}", e))
+    }
+
+    /// Rotate the JWT secret (invalidates all existing sessions)
+    ///
+    /// # Warning
+    /// This will force all users to re-authenticate. Use this when:
+    /// - You suspect the secret has been compromised
+    /// - As part of regular security maintenance
+    /// - When implementing security policy changes
+    pub fn rotate_jwt_secret(&self) -> Result<(), String> {
+        // Rotate the secret
+        self.secret_manager
+            .rotate_jwt_secret()
+            .map_err(|e| format!("Failed to rotate JWT secret: {}", e))?;
+
+        // Invalidate all existing sessions
+        let mut sessions = self.sessions.write();
+        sessions.clear();
+
+        Ok(())
     }
 
     /// Register a new user
@@ -316,11 +355,8 @@ impl AuthManager {
     }
 }
 
-impl Default for AuthManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Note: Default implementation removed - AuthManager requires a SecretManager
+// to be constructed securely. Use AuthManager::new(secret_manager) instead.
 
 /// Hash password using Argon2
 fn hash_password(password: &str) -> Result<String, String> {
@@ -356,6 +392,24 @@ fn generate_token() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    fn create_test_auth_manager() -> AuthManager {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+
+        let secret_manager = Arc::new(SecretManager::new(Arc::new(Mutex::new(conn))));
+        AuthManager::new(secret_manager)
+    }
 
     #[test]
     fn test_password_hashing() {
@@ -368,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_user_registration() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         let user = manager
             .register(
                 "test@example.com".to_string(),
@@ -383,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_registration() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -402,7 +456,7 @@ mod tests {
 
     #[test]
     fn test_login_success() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -418,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_login_failure() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -433,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_account_lockout() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -455,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_token_validation() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -472,7 +526,7 @@ mod tests {
 
     #[test]
     fn test_refresh_token() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -490,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_logout() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         manager
             .register(
                 "test@example.com".to_string(),
@@ -509,7 +563,7 @@ mod tests {
 
     #[test]
     fn test_password_change() {
-        let manager = AuthManager::new();
+        let manager = create_test_auth_manager();
         let user = manager
             .register(
                 "test@example.com".to_string(),
@@ -529,5 +583,48 @@ mod tests {
         // New password should work
         let result = manager.login("test@example.com", "new_password");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_jwt_secret_retrieval() {
+        let manager = create_test_auth_manager();
+
+        // Should be able to get the JWT secret
+        let secret = manager.get_jwt_secret().unwrap();
+        assert!(!secret.is_empty());
+        assert!(secret.len() > 80); // Base64 encoded 64 bytes
+
+        // Second call should return the same secret
+        let secret2 = manager.get_jwt_secret().unwrap();
+        assert_eq!(secret, secret2);
+    }
+
+    #[test]
+    fn test_jwt_secret_rotation() {
+        let manager = create_test_auth_manager();
+
+        // Create a session
+        manager
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
+            .unwrap();
+        let _token = manager.login("test@example.com", "password123").unwrap();
+
+        // Get initial secret
+        let secret1 = manager.get_jwt_secret().unwrap();
+
+        // Rotate the secret
+        manager.rotate_jwt_secret().unwrap();
+
+        // Secret should be different
+        let secret2 = manager.get_jwt_secret().unwrap();
+        assert_ne!(secret1, secret2);
+
+        // All sessions should be invalidated
+        let sessions = manager.sessions.read();
+        assert_eq!(sessions.len(), 0);
     }
 }

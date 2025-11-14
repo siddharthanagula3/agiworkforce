@@ -508,7 +508,7 @@ pub async fn get_file_diff(
     let mut j = 0;
 
     while i < original_lines.len() || j < modified_lines.len() {
-        let mut changes = Vec::new();
+        let mut changes: Vec<LineChange> = Vec::new();
         let hunk_start_old = i;
         let hunk_start_new = j;
 

@@ -833,7 +833,7 @@ pub async fn browser_highlight_element(
         .map_err(|e| format!("Failed to get CDP client: {}", e))?;
 
     // Get element state (includes bounds)
-    let element_state = AdvancedBrowserOps::get_element_state(cdp_client.clone(), &selector)
+    let _element_state = AdvancedBrowserOps::get_element_state(cdp_client.clone(), &selector)
         .await
         .map_err(|e| format!("Failed to get element state: {}", e))?;
 
@@ -927,7 +927,7 @@ pub async fn browser_get_console_logs(
     tracing::info!("Getting console logs for tab: {}", tab_id);
 
     let browser_state = state.0.lock().await;
-    let cdp_client = browser_state
+    let _cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
         .map_err(|e| format!("Failed to get CDP client: {}", e))?;
@@ -945,7 +945,7 @@ pub async fn browser_get_console_logs(
         })()
     "#;
 
-    let result = DomOperations::evaluate(&tab_id, script)
+    let _result = DomOperations::evaluate(&tab_id, script)
         .await
         .map_err(|e| format!("Failed to get console logs: {}", e))?;
 
@@ -970,7 +970,7 @@ pub async fn browser_get_network_activity(
     tracing::info!("Getting network activity for tab: {}", tab_id);
 
     let browser_state = state.0.lock().await;
-    let cdp_client = browser_state
+    let _cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
         .map_err(|e| format!("Failed to get CDP client: {}", e))?;
