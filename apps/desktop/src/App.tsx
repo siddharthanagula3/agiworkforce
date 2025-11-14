@@ -67,8 +67,11 @@ const GovernanceDashboard = lazy(() =>
 const EmployeesPage = lazy(() =>
   import('./pages/EmployeesPage').then((m) => ({ default: m.EmployeesPage })),
 );
+const DesktopAgentChat = lazy(() =>
+  import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
+);
 
-export type AppView = 'chat' | 'templates' | 'workflows' | 'teams' | 'governance' | 'employees';
+export type AppView = 'chat' | 'agent' | 'templates' | 'workflows' | 'teams' | 'governance' | 'employees';
 
 // Loading fallback component for Suspense
 const LoadingFallback = () => (
@@ -352,6 +355,12 @@ const DesktopShell = () => {
 
   const renderMainContent = () => {
     switch (currentView) {
+      case 'agent':
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <DesktopAgentChat />
+          </Suspense>
+        );
       case 'employees':
         return (
           <Suspense fallback={<LoadingFallback />}>
