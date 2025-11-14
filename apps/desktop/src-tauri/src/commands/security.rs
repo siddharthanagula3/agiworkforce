@@ -1,6 +1,6 @@
 use crate::security::{
-    ApiSecurityManager, AuthManager, AuthToken, SecureStorage, UpdateSecurityManager,
-    UpdateMetadata, UserRole, VerificationResult,
+    ApiSecurityManager, AuthManager, AuthToken, SecureStorage, UpdateMetadata,
+    UpdateSecurityManager, UserRole, VerificationResult,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -126,9 +126,7 @@ pub async fn api_revoke_key(
 }
 
 #[tauri::command]
-pub async fn api_list_keys(
-    state: State<'_, ApiSecurityState>,
-) -> Result<String, String> {
+pub async fn api_list_keys(state: State<'_, ApiSecurityState>) -> Result<String, String> {
     let manager = state.0.read();
     let keys = manager.list_api_keys();
     Ok(serde_json::to_string(&keys).unwrap())
@@ -182,18 +180,14 @@ pub async fn storage_unlock(
 }
 
 #[tauri::command]
-pub async fn storage_lock(
-    state: State<'_, SecureStorageState>,
-) -> Result<(), String> {
+pub async fn storage_lock(state: State<'_, SecureStorageState>) -> Result<(), String> {
     let storage = state.0.read();
     storage.lock();
     Ok(())
 }
 
 #[tauri::command]
-pub async fn storage_is_unlocked(
-    state: State<'_, SecureStorageState>,
-) -> Result<bool, String> {
+pub async fn storage_is_unlocked(state: State<'_, SecureStorageState>) -> Result<bool, String> {
     let storage = state.0.read();
     Ok(storage.is_unlocked())
 }
@@ -255,8 +249,8 @@ pub async fn update_verify_package(
     state: State<'_, UpdateSecurityState>,
 ) -> Result<VerificationResult, String> {
     let manager = state.0.read();
-    let update_metadata: UpdateMetadata = serde_json::from_str(&metadata)
-        .map_err(|e| format!("Invalid metadata: {}", e))?;
+    let update_metadata: UpdateMetadata =
+        serde_json::from_str(&metadata).map_err(|e| format!("Invalid metadata: {}", e))?;
 
     manager.verify_update(&file_path, &update_metadata)
 }
@@ -335,12 +329,9 @@ mod tests {
         assert!(!token.access_token.is_empty());
 
         // Validate
-        let valid = auth_validate_token(
-            token.access_token.clone(),
-            State::from(&state),
-        )
-        .await
-        .unwrap();
+        let valid = auth_validate_token(token.access_token.clone(), State::from(&state))
+            .await
+            .unwrap();
 
         assert!(valid);
 

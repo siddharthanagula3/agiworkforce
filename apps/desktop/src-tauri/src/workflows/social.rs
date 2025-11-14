@@ -1,7 +1,7 @@
+use chrono::Utc;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use rusqlite::Connection;
-use chrono::Utc;
 use uuid::Uuid;
 
 /// Social sharing platform
@@ -73,7 +73,10 @@ impl WorkflowSocial {
             return Err("Rating must be between 1 and 5".to_string());
         }
 
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let now = Utc::now().timestamp();
 
@@ -91,8 +94,15 @@ impl WorkflowSocial {
     }
 
     /// Get user's rating for a workflow
-    pub fn get_user_rating(&self, workflow_id: &str, user_id: &str) -> Result<Option<WorkflowRating>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn get_user_rating(
+        &self,
+        workflow_id: &str,
+        user_id: &str,
+    ) -> Result<Option<WorkflowRating>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let result = conn.query_row(
             "SELECT workflow_id, user_id, rating, comment, created_at
@@ -124,7 +134,10 @@ impl WorkflowSocial {
         user_name: &str,
         comment: String,
     ) -> Result<String, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let comment_id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp();
@@ -139,31 +152,42 @@ impl WorkflowSocial {
     }
 
     /// Get comments for a workflow
-    pub fn get_workflow_comments(&self, workflow_id: &str, limit: usize, offset: usize) -> Result<Vec<WorkflowComment>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn get_workflow_comments(
+        &self,
+        workflow_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<WorkflowComment>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, workflow_id, user_id, user_name, comment, created_at
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, workflow_id, user_id, user_name, comment, created_at
              FROM workflow_comments
              WHERE workflow_id = ?1
              ORDER BY created_at DESC
-             LIMIT ?2 OFFSET ?3"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+             LIMIT ?2 OFFSET ?3",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let comments = stmt.query_map(
-            rusqlite::params![workflow_id, limit as i64, offset as i64],
-            |row| {
-                Ok(WorkflowComment {
-                    id: row.get(0)?,
-                    workflow_id: row.get(1)?,
-                    user_id: row.get(2)?,
-                    user_name: row.get(3)?,
-                    user_avatar: None,
-                    comment: row.get(4)?,
-                    created_at: row.get(5)?,
-                })
-            },
-        )
+        let comments = stmt
+            .query_map(
+                rusqlite::params![workflow_id, limit as i64, offset as i64],
+                |row| {
+                    Ok(WorkflowComment {
+                        id: row.get(0)?,
+                        workflow_id: row.get(1)?,
+                        user_id: row.get(2)?,
+                        user_name: row.get(3)?,
+                        user_avatar: None,
+                        comment: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
             .map_err(|e| format!("Failed to query comments: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect comments: {}", e))?;
@@ -173,12 +197,17 @@ impl WorkflowSocial {
 
     /// Delete a comment (user can only delete their own)
     pub fn delete_comment(&self, comment_id: &str, user_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let rows_affected = conn.execute(
-            "DELETE FROM workflow_comments WHERE id = ?1 AND user_id = ?2",
-            rusqlite::params![comment_id, user_id],
-        ).map_err(|e| format!("Failed to delete comment: {}", e))?;
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM workflow_comments WHERE id = ?1 AND user_id = ?2",
+                rusqlite::params![comment_id, user_id],
+            )
+            .map_err(|e| format!("Failed to delete comment: {}", e))?;
 
         if rows_affected == 0 {
             return Err("Comment not found or not authorized".to_string());
@@ -189,7 +218,10 @@ impl WorkflowSocial {
 
     /// Favorite a workflow
     pub fn favorite_workflow(&self, workflow_id: &str, user_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let now = Utc::now().timestamp();
 
@@ -197,7 +229,8 @@ impl WorkflowSocial {
             "INSERT OR IGNORE INTO workflow_favorites (workflow_id, user_id, favorited_at)
              VALUES (?1, ?2, ?3)",
             rusqlite::params![workflow_id, user_id, now],
-        ).map_err(|e| format!("Failed to favorite workflow: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to favorite workflow: {}", e))?;
 
         // Update favorite count
         conn.execute(
@@ -205,19 +238,24 @@ impl WorkflowSocial {
              SET favorite_count = (SELECT COUNT(*) FROM workflow_favorites WHERE workflow_id = ?1)
              WHERE id = ?1",
             rusqlite::params![workflow_id],
-        ).map_err(|e| format!("Failed to update favorite count: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update favorite count: {}", e))?;
 
         Ok(())
     }
 
     /// Unfavorite a workflow
     pub fn unfavorite_workflow(&self, workflow_id: &str, user_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         conn.execute(
             "DELETE FROM workflow_favorites WHERE workflow_id = ?1 AND user_id = ?2",
             rusqlite::params![workflow_id, user_id],
-        ).map_err(|e| format!("Failed to unfavorite workflow: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to unfavorite workflow: {}", e))?;
 
         // Update favorite count
         conn.execute(
@@ -225,33 +263,43 @@ impl WorkflowSocial {
              SET favorite_count = (SELECT COUNT(*) FROM workflow_favorites WHERE workflow_id = ?1)
              WHERE id = ?1",
             rusqlite::params![workflow_id],
-        ).map_err(|e| format!("Failed to update favorite count: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update favorite count: {}", e))?;
 
         Ok(())
     }
 
     /// Check if user has favorited a workflow
     pub fn is_favorited(&self, workflow_id: &str, user_id: &str) -> Result<bool, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM workflow_favorites WHERE workflow_id = ?1 AND user_id = ?2",
-            rusqlite::params![workflow_id, user_id],
-            |row| row.get(0),
-        ).map_err(|e| format!("Failed to check favorite: {}", e))?;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM workflow_favorites WHERE workflow_id = ?1 AND user_id = ?2",
+                rusqlite::params![workflow_id, user_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Failed to check favorite: {}", e))?;
 
         Ok(count > 0)
     }
 
     /// Get user's favorited workflows
     pub fn get_user_favorites(&self, user_id: &str) -> Result<Vec<String>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let mut stmt = conn.prepare(
             "SELECT workflow_id FROM workflow_favorites WHERE user_id = ?1 ORDER BY favorited_at DESC"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflow_ids = stmt.query_map(rusqlite::params![user_id], |row| row.get(0))
+        let workflow_ids = stmt
+            .query_map(rusqlite::params![user_id], |row| row.get(0))
             .map_err(|e| format!("Failed to query favorites: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect favorites: {}", e))?;
@@ -260,14 +308,23 @@ impl WorkflowSocial {
     }
 
     /// Generate share link for social media
-    pub fn share_workflow(&self, workflow_id: &str, platform: SharePlatform) -> Result<String, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn share_workflow(
+        &self,
+        workflow_id: &str,
+        platform: SharePlatform,
+    ) -> Result<String, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let (title, share_url): (String, String) = conn.query_row(
-            "SELECT title, share_url FROM published_workflows WHERE id = ?1",
-            rusqlite::params![workflow_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).map_err(|e| format!("Workflow not found: {}", e))?;
+        let (title, share_url): (String, String) = conn
+            .query_row(
+                "SELECT title, share_url FROM published_workflows WHERE id = ?1",
+                rusqlite::params![workflow_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|e| format!("Workflow not found: {}", e))?;
 
         let full_url = format!("https://agiworkforce.com/{}", share_url);
 
@@ -303,7 +360,10 @@ impl WorkflowSocial {
                 format!(
                     "mailto:?subject={}&body={}",
                     urlencoding::encode(&format!("Check out this workflow: {}", title)),
-                    urlencoding::encode(&format!("I found this workflow that might interest you:\n\n{}\n\n{}", title, full_url))
+                    urlencoding::encode(&format!(
+                        "I found this workflow that might interest you:\n\n{}\n\n{}",
+                        title, full_url
+                    ))
                 )
             }
             SharePlatform::DirectLink => full_url,
@@ -314,32 +374,48 @@ impl WorkflowSocial {
 
     /// Get workflow statistics
     pub fn get_workflow_stats(&self, workflow_id: &str) -> Result<WorkflowStats, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         // Get main stats from published_workflows
-        let (view_count, clone_count, favorite_count, avg_rating, rating_count, estimated_time_saved, estimated_cost_saved):
-            (i64, i64, i64, f64, i64, i64, f64) = conn.query_row(
-            "SELECT view_count, clone_count, favorite_count, avg_rating, rating_count,
+        let (
+            view_count,
+            clone_count,
+            favorite_count,
+            avg_rating,
+            rating_count,
+            estimated_time_saved,
+            estimated_cost_saved,
+        ): (i64, i64, i64, f64, i64, i64, f64) = conn
+            .query_row(
+                "SELECT view_count, clone_count, favorite_count, avg_rating, rating_count,
                     estimated_time_saved, estimated_cost_saved
              FROM published_workflows WHERE id = ?1",
-            rusqlite::params![workflow_id],
-            |row| Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-                row.get(5)?,
-                row.get(6)?,
-            )),
-        ).map_err(|e| format!("Workflow not found: {}", e))?;
+                rusqlite::params![workflow_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                    ))
+                },
+            )
+            .map_err(|e| format!("Workflow not found: {}", e))?;
 
         // Get comment count
-        let comment_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM workflow_comments WHERE workflow_id = ?1",
-            rusqlite::params![workflow_id],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let comment_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM workflow_comments WHERE workflow_id = ?1",
+                rusqlite::params![workflow_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Calculate total time/cost saved (time_saved * clone_count)
         let total_time_saved = estimated_time_saved as u64 * clone_count as u64;
@@ -359,7 +435,10 @@ impl WorkflowSocial {
 
     /// Update aggregate rating for a workflow
     fn update_aggregate_rating(&self, workflow_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         conn.execute(
             "UPDATE published_workflows
@@ -367,7 +446,8 @@ impl WorkflowSocial {
                  rating_count = (SELECT COUNT(*) FROM workflow_ratings WHERE workflow_id = ?1)
              WHERE id = ?1",
             rusqlite::params![workflow_id],
-        ).map_err(|e| format!("Failed to update aggregate rating: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update aggregate rating: {}", e))?;
 
         Ok(())
     }

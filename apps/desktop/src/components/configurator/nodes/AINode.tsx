@@ -1,6 +1,4 @@
-import * as React from 'react';
 import { NodeProps } from 'reactflow';
-import { Sparkles } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { BaseNode } from './BaseNode';
 import { useConfiguratorStore } from '../../../stores/configuratorStore';

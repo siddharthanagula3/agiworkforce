@@ -269,13 +269,8 @@ mod tests {
 
         assert_eq!(collector.get_user_id().await, None);
 
-        collector
-            .set_user_id(Some("test_user".to_string()))
-            .await;
-        assert_eq!(
-            collector.get_user_id().await,
-            Some("test_user".to_string())
-        );
+        collector.set_user_id(Some("test_user".to_string())).await;
+        assert_eq!(collector.get_user_id().await, Some("test_user".to_string()));
 
         collector.set_user_id(None).await;
         assert_eq!(collector.get_user_id().await, None);
@@ -339,9 +334,7 @@ mod tests {
         };
         let collector = TelemetryCollector::new(config);
 
-        collector
-            .set_user_id(Some("test_user".to_string()))
-            .await;
+        collector.set_user_id(Some("test_user".to_string())).await;
 
         let event = TelemetryEvent {
             name: "test_event".to_string(),

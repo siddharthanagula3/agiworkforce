@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::workflows::publishing::WorkflowCategory;
+use serde::{Deserialize, Serialize};
 
 /// Pre-built workflow template
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1071,9 +1071,8 @@ mod tests {
     #[test]
     fn test_template_categories() {
         let templates = get_all_templates();
-        let categories: std::collections::HashSet<_> = templates.iter()
-            .map(|t| t.category.clone())
-            .collect();
+        let categories: std::collections::HashSet<_> =
+            templates.iter().map(|t| t.category.clone()).collect();
 
         assert!(categories.contains(&WorkflowCategory::CustomerSupport));
         assert!(categories.contains(&WorkflowCategory::SalesMarketing));

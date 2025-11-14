@@ -5,7 +5,6 @@
  * Integrates with the existing filesystem watcher to ensure
  * cache coherency without manual invalidation.
  */
-
 use super::CodebaseCache;
 use anyhow::Result;
 use std::path::Path;
@@ -37,12 +36,18 @@ pub fn handle_file_delete(cache: Arc<CodebaseCache>, file_path: &Path) -> Result
     match cache.invalidate_file(file_path) {
         Ok(deleted) => {
             if deleted > 0 {
-                debug!("Invalidated {} cache entries for deleted file {:?}", deleted, file_path);
+                debug!(
+                    "Invalidated {} cache entries for deleted file {:?}",
+                    deleted, file_path
+                );
             }
             Ok(())
         }
         Err(e) => {
-            warn!("Failed to invalidate cache for deleted file {:?}: {}", file_path, e);
+            warn!(
+                "Failed to invalidate cache for deleted file {:?}: {}",
+                file_path, e
+            );
             Err(e)
         }
     }
@@ -50,17 +55,26 @@ pub fn handle_file_delete(cache: Arc<CodebaseCache>, file_path: &Path) -> Result
 
 /// Handle directory events - invalidate all files in directory
 pub fn handle_directory_change(cache: Arc<CodebaseCache>, dir_path: &Path) -> Result<()> {
-    debug!("Directory changed: {:?}, invalidating project cache", dir_path);
+    debug!(
+        "Directory changed: {:?}, invalidating project cache",
+        dir_path
+    );
 
     match cache.invalidate_project(dir_path) {
         Ok(deleted) => {
             if deleted > 0 {
-                debug!("Invalidated {} cache entries for directory {:?}", deleted, dir_path);
+                debug!(
+                    "Invalidated {} cache entries for directory {:?}",
+                    deleted, dir_path
+                );
             }
             Ok(())
         }
         Err(e) => {
-            warn!("Failed to invalidate cache for directory {:?}: {}", dir_path, e);
+            warn!(
+                "Failed to invalidate cache for directory {:?}: {}",
+                dir_path, e
+            );
             Err(e)
         }
     }
@@ -106,18 +120,24 @@ mod tests {
         let file_path = PathBuf::from("/test/project/file.rs");
 
         // Add cache entry
-        cache.set(CacheType::Symbols, &file_path, None, &crate::cache::SymbolTable {
-            file_path: Some(file_path.clone()),
-            symbols: vec![],
-            imports: vec![],
-            exports: vec![],
-        })?;
+        cache.set(
+            CacheType::Symbols,
+            &file_path,
+            None,
+            &crate::cache::SymbolTable {
+                file_path: Some(file_path.clone()),
+                symbols: vec![],
+                imports: vec![],
+                exports: vec![],
+            },
+        )?;
 
         // Trigger file change
         handle_file_change(cache.clone(), &file_path)?;
 
         // Entry should be gone
-        let result: Option<crate::cache::SymbolTable> = cache.get(CacheType::Symbols, &file_path, None)?;
+        let result: Option<crate::cache::SymbolTable> =
+            cache.get(CacheType::Symbols, &file_path, None)?;
         assert!(result.is_none());
 
         Ok(())
@@ -131,13 +151,18 @@ mod tests {
         let file2 = dir_path.join("file2.rs");
 
         // Add cache entries
-        cache.set(CacheType::FileTree, &dir_path, None, &FileTree {
-            root: dir_path.clone(),
-            entries: vec![],
-            total_files: 2,
-            total_dirs: 1,
-            total_size_bytes: 1024,
-        })?;
+        cache.set(
+            CacheType::FileTree,
+            &dir_path,
+            None,
+            &FileTree {
+                root: dir_path.clone(),
+                entries: vec![],
+                total_files: 2,
+                total_dirs: 1,
+                total_size_bytes: 1024,
+            },
+        )?;
 
         // Trigger directory change
         handle_directory_change(cache.clone(), &dir_path)?;

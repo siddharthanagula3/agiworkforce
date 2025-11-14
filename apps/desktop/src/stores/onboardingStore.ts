@@ -119,14 +119,14 @@ export const useOnboardingStore = create<OnboardingStore>()(
               demoProgress: {
                 currentStep: i,
                 totalSteps: demo.steps.length,
-                currentAction: step.description,
+                currentAction: step?.description ?? 'Processing...',
                 completed: false,
                 timeElapsedMs: timeElapsed,
               },
             });
 
             // Wait for step duration
-            await new Promise((resolve) => setTimeout(resolve, step.durationMs));
+            await new Promise((resolve) => setTimeout(resolve, step?.durationMs ?? 1000));
           }
 
           // Call backend to run actual demo

@@ -60,10 +60,7 @@ impl RetryConfig {
 }
 
 /// Retry an operation with exponential backoff
-pub async fn retry_with_backoff<F, Fut, T, E>(
-    operation: F,
-    config: RetryConfig,
-) -> Result<T, E>
+pub async fn retry_with_backoff<F, Fut, T, E>(operation: F, config: RetryConfig) -> Result<T, E>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, E>>,
@@ -202,8 +199,10 @@ pub async fn create_if_not_found(
 /// Prompt for elevation if permission denied
 #[cfg(target_os = "windows")]
 pub async fn prompt_for_elevation(operation_name: &str) -> Result<(), String> {
-
-    tracing::info!("Permission denied, requesting elevation for: {}", operation_name);
+    tracing::info!(
+        "Permission denied, requesting elevation for: {}",
+        operation_name
+    );
 
     // TODO: Implement actual elevation prompt
     // For now, just return an error with instructions

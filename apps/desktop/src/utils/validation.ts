@@ -78,15 +78,17 @@ export function escapeHtml(text: string): string {
     "'": '&#039;',
   };
 
-  return text.replace(/[&<>"']/g, (char) => map[char]);
+  return text.replace(/[&<>"']/g, (char) => map[char] || char);
 }
 
 /**
  * Validate password strength
  */
-export function validatePassword(
-  password: string
-): { valid: boolean; errors: string[]; strength: 'weak' | 'medium' | 'strong' } {
+export function validatePassword(password: string): {
+  valid: boolean;
+  errors: string[];
+  strength: 'weak' | 'medium' | 'strong';
+} {
   const errors: string[] = [];
   let strength: 'weak' | 'medium' | 'strong' = 'weak';
 

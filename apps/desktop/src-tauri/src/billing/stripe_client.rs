@@ -277,12 +277,10 @@ impl StripeService {
     }
 
     /// Get subscription by Stripe subscription ID
-    pub async fn get_subscription(
-        &self,
-        stripe_subscription_id: &str,
-    ) -> Result<SubscriptionInfo> {
+    pub async fn get_subscription(&self, stripe_subscription_id: &str) -> Result<SubscriptionInfo> {
         let subscription_id = SubscriptionId::from(stripe_subscription_id);
-        let subscription = stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
+        let subscription =
+            stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
 
         // Update database with latest info
         let db = self
@@ -324,28 +322,29 @@ impl StripeService {
              WHERE stripe_subscription_id = ?1",
         )?;
 
-        let subscription_info = stmt.query_row(rusqlite::params![stripe_subscription_id], |row| {
-            Ok(SubscriptionInfo {
-                id: row.get(0)?,
-                customer_id: row.get(1)?,
-                stripe_subscription_id: row.get(2)?,
-                stripe_price_id: row.get(3)?,
-                plan_name: row.get(4)?,
-                billing_interval: row.get(5)?,
-                status: row.get(6)?,
-                current_period_start: row.get(7)?,
-                current_period_end: row.get(8)?,
-                cancel_at_period_end: row.get(9)?,
-                cancel_at: row.get(10)?,
-                canceled_at: row.get(11)?,
-                trial_start: row.get(12)?,
-                trial_end: row.get(13)?,
-                amount: row.get(14)?,
-                currency: row.get(15)?,
-                created_at: row.get(16)?,
-                updated_at: row.get(17)?,
-            })
-        })?;
+        let subscription_info =
+            stmt.query_row(rusqlite::params![stripe_subscription_id], |row| {
+                Ok(SubscriptionInfo {
+                    id: row.get(0)?,
+                    customer_id: row.get(1)?,
+                    stripe_subscription_id: row.get(2)?,
+                    stripe_price_id: row.get(3)?,
+                    plan_name: row.get(4)?,
+                    billing_interval: row.get(5)?,
+                    status: row.get(6)?,
+                    current_period_start: row.get(7)?,
+                    current_period_end: row.get(8)?,
+                    cancel_at_period_end: row.get(9)?,
+                    cancel_at: row.get(10)?,
+                    canceled_at: row.get(11)?,
+                    trial_start: row.get(12)?,
+                    trial_end: row.get(13)?,
+                    amount: row.get(14)?,
+                    currency: row.get(15)?,
+                    created_at: row.get(16)?,
+                    updated_at: row.get(17)?,
+                })
+            })?;
 
         Ok(subscription_info)
     }
@@ -377,8 +376,8 @@ impl StripeService {
             ..Default::default()
         }]);
 
-        subscription = stripe::Subscription::update(&self.client, &subscription_id, update_params)
-            .await?;
+        subscription =
+            stripe::Subscription::update(&self.client, &subscription_id, update_params).await?;
 
         // Update database
         let db = self
@@ -395,7 +394,13 @@ impl StripeService {
                 status = ?3,
                 updated_at = ?4
              WHERE stripe_subscription_id = ?5",
-            rusqlite::params![new_price_id, new_plan_name, subscription.status.to_string(), now, stripe_subscription_id],
+            rusqlite::params![
+                new_price_id,
+                new_plan_name,
+                subscription.status.to_string(),
+                now,
+                stripe_subscription_id
+            ],
         )?;
 
         self.get_subscription(stripe_subscription_id).await
@@ -464,7 +469,10 @@ impl StripeService {
                 amount_paid: invoice.amount_paid.unwrap_or(0),
                 amount_remaining: invoice.amount_remaining.unwrap_or(0),
                 currency: invoice.currency.unwrap_or_else(|| "usd".to_string()),
-                status: invoice.status.map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string()),
+                status: invoice
+                    .status
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
                 invoice_pdf: invoice.invoice_pdf,
                 hosted_invoice_url: invoice.hosted_invoice_url,
                 period_start: invoice.period_start.unwrap_or(0),
@@ -514,7 +522,12 @@ impl StripeService {
     }
 
     /// Get usage statistics for current billing period
-    pub fn get_usage(&self, customer_id: &str, period_start: i64, period_end: i64) -> Result<UsageStats> {
+    pub fn get_usage(
+        &self,
+        customer_id: &str,
+        period_start: i64,
+        period_end: i64,
+    ) -> Result<UsageStats> {
         let db = self
             .db
             .lock()
@@ -596,7 +609,11 @@ impl StripeService {
     }
 
     /// Create Stripe billing portal session URL
-    pub async fn create_portal_session(&self, customer_stripe_id: &str, return_url: &str) -> Result<String> {
+    pub async fn create_portal_session(
+        &self,
+        customer_stripe_id: &str,
+        return_url: &str,
+    ) -> Result<String> {
         let customer_id = CustomerId::from(customer_stripe_id);
 
         let mut params = stripe::CreateBillingPortalSession::new(customer_id);
@@ -686,7 +703,14 @@ mod tests {
 
         // Track usage
         service
-            .track_usage(&customer_id, "automation_execution", 5, now, now + 86400, None)
+            .track_usage(
+                &customer_id,
+                "automation_execution",
+                5,
+                now,
+                now + 86400,
+                None,
+            )
             .unwrap();
 
         // Get usage stats

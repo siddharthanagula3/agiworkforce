@@ -63,36 +63,56 @@ impl CodeGenerator {
 
         // Generate actions
         for (index, action) in script.actions.iter().enumerate() {
-            code.push_str(&format!("    # Action {}: {}\n", index + 1, action.action_type));
+            code.push_str(&format!(
+                "    # Action {}: {}\n",
+                index + 1,
+                action.action_type
+            ));
             code.push_str("    try:\n");
 
             match action.action_type.as_str() {
                 "click" => {
                     if let Some(ref coords) = action.coordinates {
-                        code.push_str(&format!("        pyautogui.click({}, {})\n", coords.x, coords.y));
-                        code.push_str(&format!("        print(\"Clicked at ({}, {})\")\n", coords.x, coords.y));
+                        code.push_str(&format!(
+                            "        pyautogui.click({}, {})\n",
+                            coords.x, coords.y
+                        ));
+                        code.push_str(&format!(
+                            "        print(\"Clicked at ({}, {})\")\n",
+                            coords.x, coords.y
+                        ));
                     }
                 }
                 "type" => {
                     if let Some(ref text) = action.value {
-                        code.push_str(&format!("        pyautogui.write(\"{}\")\n", text.replace("\"", "\\\"")));
+                        code.push_str(&format!(
+                            "        pyautogui.write(\"{}\")\n",
+                            text.replace("\"", "\\\"")
+                        ));
                         code.push_str("        print(\"Typed text\")\n");
                     }
                 }
                 "wait" => {
                     let duration = action.duration.unwrap_or(1000) as f64 / 1000.0;
                     code.push_str(&format!("        time.sleep({:.2})\n", duration));
-                    code.push_str(&format!("        print(\"Waited {:.2} seconds\")\n", duration));
+                    code.push_str(&format!(
+                        "        print(\"Waited {:.2} seconds\")\n",
+                        duration
+                    ));
                 }
                 "screenshot" => {
                     code.push_str("        screenshot = pyautogui.screenshot()\n");
-                    code.push_str(&format!("        screenshot.save('screenshot_{}.png')\n", index));
+                    code.push_str(&format!(
+                        "        screenshot.save('screenshot_{}.png')\n",
+                        index
+                    ));
                     code.push_str("        print(\"Screenshot taken\")\n");
                 }
                 "hotkey" => {
                     if let Some(ref value) = action.value {
                         let keys: Vec<&str> = value.split('+').map(|s| s.trim()).collect();
-                        let keys_str = keys.iter()
+                        let keys_str = keys
+                            .iter()
                             .map(|k| format!("\"{}\"", k.to_lowercase()))
                             .collect::<Vec<_>>()
                             .join(", ");
@@ -103,17 +123,26 @@ impl CodeGenerator {
                 "drag" => {
                     if let Some(ref coords) = action.coordinates {
                         // Parse target from metadata
-                        code.push_str(&format!("        pyautogui.drag({}, {}, duration=0.5)\n", coords.x, coords.y));
+                        code.push_str(&format!(
+                            "        pyautogui.drag({}, {}, duration=0.5)\n",
+                            coords.x, coords.y
+                        ));
                         code.push_str("        print(\"Drag action completed\")\n");
                     }
                 }
                 _ => {
-                    code.push_str(&format!("        # Unsupported action: {}\n", action.action_type));
+                    code.push_str(&format!(
+                        "        # Unsupported action: {}\n",
+                        action.action_type
+                    ));
                 }
             }
 
             code.push_str("    except Exception as e:\n");
-            code.push_str(&format!("        print(f\"Error in action {}: {{e}}\")\n", index + 1));
+            code.push_str(&format!(
+                "        print(f\"Error in action {}: {{e}}\")\n",
+                index + 1
+            ));
             code.push_str("        raise\n\n");
         }
 
@@ -132,10 +161,7 @@ impl CodeGenerator {
         Ok(GeneratedCode {
             language: CodeLanguage::Python,
             code,
-            dependencies: vec![
-                "pyautogui".to_string(),
-                "pywinauto".to_string(),
-            ],
+            dependencies: vec!["pyautogui".to_string(), "pywinauto".to_string()],
         })
     }
 
@@ -156,33 +182,57 @@ impl CodeGenerator {
 
         // Main function
         code.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
-        code.push_str(&format!("    println!(\"Starting automation: {}\");\n\n", script.name));
+        code.push_str(&format!(
+            "    println!(\"Starting automation: {}\");\n\n",
+            script.name
+        ));
 
         // Generate actions
         for (index, action) in script.actions.iter().enumerate() {
-            code.push_str(&format!("    // Action {}: {}\n", index + 1, action.action_type));
+            code.push_str(&format!(
+                "    // Action {}: {}\n",
+                index + 1,
+                action.action_type
+            ));
 
             match action.action_type.as_str() {
                 "click" => {
                     if let Some(ref coords) = action.coordinates {
                         code.push_str("    unsafe {\n");
-                        code.push_str(&format!("        SetCursorPos({}, {});\n", coords.x, coords.y));
+                        code.push_str(&format!(
+                            "        SetCursorPos({}, {});\n",
+                            coords.x, coords.y
+                        ));
                         code.push_str("        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);\n");
                         code.push_str("        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);\n");
                         code.push_str("    }\n");
-                        code.push_str(&format!("    println!(\"Clicked at ({}, {})\");\n\n", coords.x, coords.y));
+                        code.push_str(&format!(
+                            "    println!(\"Clicked at ({}, {})\");\n\n",
+                            coords.x, coords.y
+                        ));
                     }
                 }
                 "type" => {
                     if let Some(ref text) = action.value {
-                        code.push_str(&format!("    // Type text: {}\n", text.replace("\"", "\\\"")));
-                        code.push_str("    // Note: Text input requires more complex implementation\n");
-                        code.push_str(&format!("    println!(\"Typed: {}\");\n\n", text.replace("\"", "\\\"")));
+                        code.push_str(&format!(
+                            "    // Type text: {}\n",
+                            text.replace("\"", "\\\"")
+                        ));
+                        code.push_str(
+                            "    // Note: Text input requires more complex implementation\n",
+                        );
+                        code.push_str(&format!(
+                            "    println!(\"Typed: {}\");\n\n",
+                            text.replace("\"", "\\\"")
+                        ));
                     }
                 }
                 "wait" => {
                     let duration = action.duration.unwrap_or(1000);
-                    code.push_str(&format!("    thread::sleep(Duration::from_millis({}));\n", duration));
+                    code.push_str(&format!(
+                        "    thread::sleep(Duration::from_millis({}));\n",
+                        duration
+                    ));
                     code.push_str(&format!("    println!(\"Waited {} ms\");\n\n", duration));
                 }
                 "screenshot" => {
@@ -190,7 +240,10 @@ impl CodeGenerator {
                     code.push_str("    println!(\"Screenshot taken\");\n\n");
                 }
                 _ => {
-                    code.push_str(&format!("    // Unsupported action: {}\n\n", action.action_type));
+                    code.push_str(&format!(
+                        "    // Unsupported action: {}\n\n",
+                        action.action_type
+                    ));
                 }
             }
         }
@@ -223,33 +276,52 @@ impl CodeGenerator {
 
         // Main function
         code.push_str("async function main() {\n");
-        code.push_str(&format!("  console.log('Starting automation: {}');\n\n", script.name));
+        code.push_str(&format!(
+            "  console.log('Starting automation: {}');\n\n",
+            script.name
+        ));
 
         // Generate actions
         for (index, action) in script.actions.iter().enumerate() {
-            code.push_str(&format!("  // Action {}: {}\n", index + 1, action.action_type));
+            code.push_str(&format!(
+                "  // Action {}: {}\n",
+                index + 1,
+                action.action_type
+            ));
 
             match action.action_type.as_str() {
                 "click" => {
                     if let Some(ref coords) = action.coordinates {
                         code.push_str(&format!("  robot.moveMouse({}, {});\n", coords.x, coords.y));
                         code.push_str("  robot.mouseClick();\n");
-                        code.push_str(&format!("  console.log('Clicked at ({}, {})');\n\n", coords.x, coords.y));
+                        code.push_str(&format!(
+                            "  console.log('Clicked at ({}, {})');\n\n",
+                            coords.x, coords.y
+                        ));
                     }
                 }
                 "type" => {
                     if let Some(ref text) = action.value {
-                        code.push_str(&format!("  robot.typeString('{}');\n", text.replace("'", "\\'")));
+                        code.push_str(&format!(
+                            "  robot.typeString('{}');\n",
+                            text.replace("'", "\\'")
+                        ));
                         code.push_str("  console.log('Typed text');\n\n");
                     }
                 }
                 "wait" => {
                     let duration = action.duration.unwrap_or(1000);
-                    code.push_str(&format!("  await new Promise(resolve => setTimeout(resolve, {}));\n", duration));
+                    code.push_str(&format!(
+                        "  await new Promise(resolve => setTimeout(resolve, {}));\n",
+                        duration
+                    ));
                     code.push_str(&format!("  console.log('Waited {} ms');\n\n", duration));
                 }
                 _ => {
-                    code.push_str(&format!("  // Unsupported action: {}\n\n", action.action_type));
+                    code.push_str(&format!(
+                        "  // Unsupported action: {}\n\n",
+                        action.action_type
+                    ));
                 }
             }
         }
@@ -274,9 +346,16 @@ impl CodeGenerator {
         let mut result = Self::generate_javascript(script)?;
 
         // Add TypeScript type annotations
-        let code = result.code
-            .replace("async function main() {", "async function main(): Promise<void> {")
-            .replace("const robot = require('robotjs');", "import * as robot from 'robotjs';");
+        let code = result
+            .code
+            .replace(
+                "async function main() {",
+                "async function main(): Promise<void> {",
+            )
+            .replace(
+                "const robot = require('robotjs');",
+                "import * as robot from 'robotjs';",
+            );
 
         result.code = code;
         result.language = CodeLanguage::TypeScript;

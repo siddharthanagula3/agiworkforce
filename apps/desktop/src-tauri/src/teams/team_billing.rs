@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -163,7 +163,10 @@ impl TeamBillingManager {
         billing_cycle: BillingCycle,
         seat_count: usize,
     ) -> Result<TeamBilling, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         let usage_metrics = UsageMetrics::default();
@@ -206,14 +209,17 @@ impl TeamBillingManager {
 
     /// Get team billing information
     pub fn get_team_billing(&self, team_id: &str) -> Result<Option<TeamBilling>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
                 "SELECT team_id, plan_tier, billing_cycle, seat_count, stripe_subscription_id,
                         usage_metrics, next_billing_date, current_period_start, current_period_end
                  FROM team_billing
-                 WHERE team_id = ?1"
+                 WHERE team_id = ?1",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
@@ -223,11 +229,12 @@ impl TeamBillingManager {
                 let plan_tier = BillingPlan::from_str(&plan_str).unwrap_or(BillingPlan::Team);
 
                 let cycle_str: String = row.get(2)?;
-                let billing_cycle = BillingCycle::from_str(&cycle_str).unwrap_or(BillingCycle::Monthly);
+                let billing_cycle =
+                    BillingCycle::from_str(&cycle_str).unwrap_or(BillingCycle::Monthly);
 
                 let usage_json: String = row.get(5)?;
-                let usage_metrics: UsageMetrics = serde_json::from_str(&usage_json)
-                    .unwrap_or_default();
+                let usage_metrics: UsageMetrics =
+                    serde_json::from_str(&usage_json).unwrap_or_default();
 
                 Ok(TeamBilling {
                     team_id: row.get(0)?,
@@ -249,7 +256,10 @@ impl TeamBillingManager {
 
     /// Update team plan
     pub fn update_team_plan(&self, team_id: &str, new_plan: BillingPlan) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         // Check max seats limit
         let current_seat_count: i64 = conn
@@ -272,14 +282,22 @@ impl TeamBillingManager {
         conn.execute(
             "UPDATE team_billing SET plan_tier = ?1 WHERE team_id = ?2",
             params![new_plan.as_str(), team_id],
-        ).map_err(|e| format!("Failed to update plan: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update plan: {}", e))?;
 
         Ok(())
     }
 
     /// Update billing cycle
-    pub fn update_billing_cycle(&self, team_id: &str, new_cycle: BillingCycle) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn update_billing_cycle(
+        &self,
+        team_id: &str,
+        new_cycle: BillingCycle,
+    ) -> Result<(), String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         // Calculate new next billing date
@@ -299,7 +317,10 @@ impl TeamBillingManager {
 
     /// Add seats to team
     pub fn add_seats(&self, team_id: &str, count: usize) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         // Get current billing info
         let (current_seats, plan_str): (i64, String) = conn
@@ -326,14 +347,18 @@ impl TeamBillingManager {
         conn.execute(
             "UPDATE team_billing SET seat_count = ?1 WHERE team_id = ?2",
             params![new_seat_count as i64, team_id],
-        ).map_err(|e| format!("Failed to add seats: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to add seats: {}", e))?;
 
         Ok(())
     }
 
     /// Remove seats from team
     pub fn remove_seats(&self, team_id: &str, count: usize) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         // Get current seat count and member count
         let current_seats: i64 = conn
@@ -365,14 +390,18 @@ impl TeamBillingManager {
         conn.execute(
             "UPDATE team_billing SET seat_count = ?1 WHERE team_id = ?2",
             params![new_seat_count as i64, team_id],
-        ).map_err(|e| format!("Failed to remove seats: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to remove seats: {}", e))?;
 
         Ok(())
     }
 
     /// Update usage metrics
     pub fn update_usage_metrics(&self, team_id: &str, metrics: UsageMetrics) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let metrics_json = serde_json::to_string(&metrics)
             .map_err(|e| format!("Failed to serialize metrics: {}", e))?;
@@ -380,14 +409,21 @@ impl TeamBillingManager {
         conn.execute(
             "UPDATE team_billing SET usage_metrics = ?1 WHERE team_id = ?2",
             params![metrics_json, team_id],
-        ).map_err(|e| format!("Failed to update usage metrics: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update usage metrics: {}", e))?;
 
         Ok(())
     }
 
     /// Increment usage metric
-    pub fn increment_usage(&self, team_id: &str, metric: UsageMetricType, amount: i64) -> Result<(), String> {
-        let billing = self.get_team_billing(team_id)?
+    pub fn increment_usage(
+        &self,
+        team_id: &str,
+        metric: UsageMetricType,
+        amount: i64,
+    ) -> Result<(), String> {
+        let billing = self
+            .get_team_billing(team_id)?
             .ok_or_else(|| "Team billing not found".to_string())?;
 
         let mut metrics = billing.usage_metrics;
@@ -404,7 +440,8 @@ impl TeamBillingManager {
 
     /// Calculate team cost
     pub fn calculate_team_cost(&self, team_id: &str) -> Result<f64, String> {
-        let billing = self.get_team_billing(team_id)?
+        let billing = self
+            .get_team_billing(team_id)?
             .ok_or_else(|| "Team billing not found".to_string())?;
 
         let base_price = billing.plan_tier.price_per_seat();
@@ -422,20 +459,29 @@ impl TeamBillingManager {
     }
 
     /// Update Stripe subscription ID
-    pub fn update_stripe_subscription(&self, team_id: &str, subscription_id: String) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn update_stripe_subscription(
+        &self,
+        team_id: &str,
+        subscription_id: String,
+    ) -> Result<(), String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         conn.execute(
             "UPDATE team_billing SET stripe_subscription_id = ?1 WHERE team_id = ?2",
             params![subscription_id, team_id],
-        ).map_err(|e| format!("Failed to update subscription ID: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update subscription ID: {}", e))?;
 
         Ok(())
     }
 
     /// Get usage summary
     pub fn get_usage_summary(&self, team_id: &str) -> Result<UsageSummary, String> {
-        let billing = self.get_team_billing(team_id)?
+        let billing = self
+            .get_team_billing(team_id)?
             .ok_or_else(|| "Team billing not found".to_string())?;
 
         let cost = self.calculate_team_cost(team_id)?;
@@ -492,7 +538,8 @@ mod tests {
                 current_period_end INTEGER
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         conn.execute(
             "CREATE TABLE team_members (
@@ -502,7 +549,8 @@ mod tests {
                 PRIMARY KEY (team_id, user_id)
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         Arc::new(Mutex::new(conn))
     }

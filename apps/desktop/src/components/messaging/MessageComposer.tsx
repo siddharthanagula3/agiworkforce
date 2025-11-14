@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Button } from '../Common/Button';
-import { TextArea } from '../Common/TextArea';
-import { Select } from '../Common/Select';
+import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
 
 interface MessageComposerProps {
   connections: Array<{
@@ -105,7 +104,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           <label className="block text-sm font-medium mb-1">Platform</label>
           <Select
             value={selectedConnection}
-            onChange={(e) => setSelectedConnection(e.target.value)}
+            onValueChange={setSelectedConnection}
           >
             <option value="">Select a platform</option>
             {connections.map((conn) => (

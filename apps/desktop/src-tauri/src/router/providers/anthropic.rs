@@ -1,7 +1,5 @@
 use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
-use crate::router::{
-    ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall,
-};
+use crate::router::{ContentPart, ImageFormat, LLMProvider, LLMRequest, LLMResponse, ToolCall};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -25,20 +23,16 @@ enum AnthropicMessageContent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum AnthropicContentPart {
-    Text {
-        text: String,
-    },
-    Image {
-        source: AnthropicImageSource,
-    },
+    Text { text: String },
+    Image { source: AnthropicImageSource },
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct AnthropicImageSource {
     #[serde(rename = "type")]
     source_type: String, // "base64"
-    media_type: String,  // "image/png", "image/jpeg", "image/webp"
-    data: String,        // base64 encoded image data
+    media_type: String, // "image/png", "image/jpeg", "image/webp"
+    data: String,       // base64 encoded image data
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -126,9 +120,7 @@ impl AnthropicProvider {
             for part in parts {
                 match part {
                     ContentPart::Text { text } => {
-                        anthropic_parts.push(AnthropicContentPart::Text {
-                            text: text.clone(),
-                        });
+                        anthropic_parts.push(AnthropicContentPart::Text { text: text.clone() });
                     }
                     ContentPart::Image { image } => {
                         let media_type = match image.format {

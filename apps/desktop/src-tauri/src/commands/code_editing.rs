@@ -626,9 +626,7 @@ pub async fn get_file_diff(
 
 /// Apply multiple file changes
 #[tauri::command]
-pub async fn apply_changes(
-    changes: Vec<FileChange>,
-) -> Result<ApplyResult, String> {
+pub async fn apply_changes(changes: Vec<FileChange>) -> Result<ApplyResult, String> {
     tracing::info!("Applying {} file changes", changes.len());
 
     let mut files_modified = Vec::new();
@@ -657,9 +655,7 @@ pub async fn apply_changes(
 
 /// Revert changes to files
 #[tauri::command]
-pub async fn revert_changes(
-    file_paths: Vec<String>,
-) -> Result<(), String> {
+pub async fn revert_changes(file_paths: Vec<String>) -> Result<(), String> {
     tracing::info!("Reverting {} files", file_paths.len());
 
     for path in file_paths {

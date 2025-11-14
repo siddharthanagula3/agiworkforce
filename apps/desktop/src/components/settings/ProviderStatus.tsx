@@ -49,7 +49,6 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
   };
 
   const getStatusIcon = (provider: Provider) => {
-    const status = providerStatuses[provider];
     const color = getStatusColor(provider);
 
     if (color === 'green') {

@@ -31,8 +31,8 @@ impl Default for CacheTypeStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
     pub llm_cache: CacheTypeStats,
-    pub tool_cache: CacheTypeStats,      // Placeholder for future implementation
-    pub codebase_cache: CacheTypeStats,  // Placeholder for future implementation
+    pub tool_cache: CacheTypeStats, // Placeholder for future implementation
+    pub codebase_cache: CacheTypeStats, // Placeholder for future implementation
     pub total_size_mb: f64,
     pub total_savings_usd: f64,
 }
@@ -183,7 +183,11 @@ pub async fn cache_clear_by_provider(
         .execute("DELETE FROM cache_entries WHERE provider = ?1", [&provider])
         .map_err(|e| format!("Failed to clear cache for provider {}: {}", provider, e))?;
 
-    tracing::info!("Cleared {} cache entries for provider: {}", deleted, provider);
+    tracing::info!(
+        "Cleared {} cache entries for provider: {}",
+        deleted,
+        provider
+    );
     Ok(())
 }
 

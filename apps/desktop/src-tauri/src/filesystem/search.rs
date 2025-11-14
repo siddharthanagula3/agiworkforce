@@ -205,7 +205,9 @@ fn is_ignored(path: &Path) -> bool {
 ///
 /// Reads the content of a file with size limit for performance.
 /// Returns truncated content if file exceeds 100KB.
-async fn _deprecated_fs_read_file_content(file_path: String) -> Result<FileContentResponse, String> {
+async fn _deprecated_fs_read_file_content(
+    file_path: String,
+) -> Result<FileContentResponse, String> {
     let path = PathBuf::from(&file_path);
 
     // Run file reading in background thread

@@ -14,7 +14,10 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
-    pub fn new(collector: TelemetryCollector, metrics_collector: AnalyticsMetricsCollector) -> Self {
+    pub fn new(
+        collector: TelemetryCollector,
+        metrics_collector: AnalyticsMetricsCollector,
+    ) -> Self {
         Self {
             collector: Arc::new(RwLock::new(collector)),
             metrics_collector: Arc::new(RwLock::new(metrics_collector)),
@@ -76,9 +79,7 @@ pub async fn analytics_set_user_property(
 
 /// Get system metrics
 #[tauri::command]
-pub async fn metrics_get_system(
-    state: State<'_, TelemetryState>,
-) -> Result<SystemMetrics, String> {
+pub async fn metrics_get_system(state: State<'_, TelemetryState>) -> Result<SystemMetrics, String> {
     let mut collector = state.metrics_collector.write().await;
     Ok(collector.collect_system_metrics())
 }
@@ -162,9 +163,7 @@ pub async fn analytics_delete_all_data(state: State<'_, TelemetryState>) -> Resu
 
 /// Increment automation count
 #[tauri::command]
-pub async fn metrics_increment_automations(
-    state: State<'_, TelemetryState>,
-) -> Result<(), String> {
+pub async fn metrics_increment_automations(state: State<'_, TelemetryState>) -> Result<(), String> {
     let mut collector = state.metrics_collector.write().await;
     collector.increment_automations_count();
     Ok(())
@@ -204,28 +203,33 @@ pub async fn metrics_set_cache_hit_rate(
 
 use crate::analytics::{
     MetricsAggregator, ProcessMetrics, ROICalculator, ROIReport, ReportGenerator,
-    ScheduledReportGenerator, TrendPoint, UserMetrics, ToolMetrics,
+    ScheduledReportGenerator, ToolMetrics, TrendPoint, UserMetrics,
 };
 use crate::commands::AppDatabase;
 use rusqlite::Connection;
+use std::sync::Arc;
 
 /// Helper function to create a tokio::sync::Mutex<Connection> for analytics
 /// Note: AppDatabase uses std::sync::Mutex, but analytics module expects tokio::sync::Mutex
 /// This creates a temporary connection for analytics operations
-fn create_analytics_db_connection(app_db: &AppDatabase) -> Result<Arc<tokio::sync::Mutex<Connection>>, String> {
+fn create_analytics_db_connection(
+    app_db: &AppDatabase,
+) -> Result<Arc<tokio::sync::Mutex<Connection>>, String> {
     // Get the connection to verify it exists
-    let _conn = app_db.conn.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    let _conn = app_db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // For now, we'll use an environment variable or default path
     // In production, this should be passed from the app initialization
-    let db_path = std::env::var("AGI_DB_PATH")
-        .unwrap_or_else(|_| {
-            // Try to get app data directory path
-            std::path::PathBuf::from(".")
-                .join("agiworkforce.db")
-                .to_string_lossy()
-                .to_string()
-        });
+    let db_path = std::env::var("AGI_DB_PATH").unwrap_or_else(|_| {
+        // Try to get app data directory path
+        std::path::PathBuf::from(".")
+            .join("agiworkforce.db")
+            .to_string_lossy()
+            .to_string()
+    });
 
     let new_conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open analytics connection: {}", e))?;
@@ -243,7 +247,9 @@ pub async fn analytics_calculate_roi(
     let db = create_analytics_db_connection(&state)?;
     let calculator = ROICalculator::new(db);
 
-    calculator.calculate_roi(start_date, end_date).await
+    calculator
+        .calculate_roi(start_date, end_date)
+        .await
         .map_err(|e| format!("Failed to calculate ROI: {}", e))
 }
 
@@ -257,7 +263,9 @@ pub async fn analytics_get_process_metrics(
     let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
-    aggregator.aggregate_by_process_type(start_date, end_date).await
+    aggregator
+        .aggregate_by_process_type(start_date, end_date)
+        .await
         .map_err(|e| format!("Failed to aggregate process metrics: {}", e))
 }
 
@@ -271,7 +279,9 @@ pub async fn analytics_get_user_metrics(
     let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
-    aggregator.aggregate_by_user(start_date, end_date).await
+    aggregator
+        .aggregate_by_user(start_date, end_date)
+        .await
         .map_err(|e| format!("Failed to aggregate user metrics: {}", e))
 }
 
@@ -285,7 +295,9 @@ pub async fn analytics_get_tool_metrics(
     let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
-    aggregator.aggregate_by_tool(start_date, end_date).await
+    aggregator
+        .aggregate_by_tool(start_date, end_date)
+        .await
         .map_err(|e| format!("Failed to aggregate tool metrics: {}", e))
 }
 
@@ -299,7 +311,9 @@ pub async fn analytics_get_metric_trends(
     let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
-    aggregator.calculate_trends(&metric, days).await
+    aggregator
+        .calculate_trends(&metric, days)
+        .await
         .map_err(|e| format!("Failed to calculate trends: {}", e))
 }
 
@@ -317,32 +331,48 @@ pub async fn analytics_export_report(
     let aggregator = MetricsAggregator::new(db.clone());
     let generator = ReportGenerator::new();
 
-    let roi = calculator.calculate_roi(start_date, end_date).await
+    let roi = calculator
+        .calculate_roi(start_date, end_date)
+        .await
         .map_err(|e| format!("Failed to calculate ROI: {}", e))?;
 
     match format.as_str() {
         "markdown" | "md" => {
-            let process_metrics = aggregator.aggregate_by_process_type(start_date, end_date).await
+            let process_metrics = aggregator
+                .aggregate_by_process_type(start_date, end_date)
+                .await
                 .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
             Ok(generator.generate_executive_summary(&roi, &process_metrics))
-        },
+        }
         "csv" => {
-            let process_metrics = aggregator.aggregate_by_process_type(start_date, end_date).await
+            let process_metrics = aggregator
+                .aggregate_by_process_type(start_date, end_date)
+                .await
                 .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
             Ok(generator.generate_csv_export(&process_metrics))
-        },
+        }
         "json" => {
-            let process_metrics = aggregator.aggregate_by_process_type(start_date, end_date).await
+            let process_metrics = aggregator
+                .aggregate_by_process_type(start_date, end_date)
+                .await
                 .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
-            let user_metrics = aggregator.aggregate_by_user(start_date, end_date).await
+            let user_metrics = aggregator
+                .aggregate_by_user(start_date, end_date)
+                .await
                 .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
-            let tool_metrics = aggregator.aggregate_by_tool(start_date, end_date).await
+            let tool_metrics = aggregator
+                .aggregate_by_tool(start_date, end_date)
+                .await
                 .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
 
-            generator.generate_json_export(&roi, &process_metrics, &user_metrics, &tool_metrics)
+            generator
+                .generate_json_export(&roi, &process_metrics, &user_metrics, &tool_metrics)
                 .map_err(|e| format!("Failed to generate JSON: {}", e))
-        },
-        _ => Err(format!("Unsupported format: {}. Use 'markdown', 'csv', or 'json'", format))
+        }
+        _ => Err(format!(
+            "Unsupported format: {}. Use 'markdown', 'csv', or 'json'",
+            format
+        )),
     }
 }
 
@@ -381,7 +411,9 @@ pub async fn analytics_get_top_processes(
     let db = create_analytics_db_connection(&state)?;
     let aggregator = MetricsAggregator::new(db);
 
-    aggregator.get_top_processes(start_date, end_date, limit).await
+    aggregator
+        .get_top_processes(start_date, end_date, limit)
+        .await
         .map_err(|e| format!("Failed to get top processes: {}", e))
 }
 
@@ -397,10 +429,14 @@ pub async fn analytics_save_snapshot(
     let db = create_analytics_db_connection(&state)?;
     let calculator = ROICalculator::new(db);
 
-    let roi = calculator.calculate_roi(start_date, end_date).await
+    let roi = calculator
+        .calculate_roi(start_date, end_date)
+        .await
         .map_err(|e| format!("Failed to calculate ROI: {}", e))?;
 
-    calculator.save_snapshot(&user_id, team_id.as_deref(), &roi).await
+    calculator
+        .save_snapshot(&user_id, team_id.as_deref(), &roi)
+        .await
         .map_err(|e| format!("Failed to save snapshot: {}", e))
 }
 

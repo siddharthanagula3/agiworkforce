@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Card } from '../Common/Card';
+import { Card } from '../ui/Card';
 import { Loader2 } from 'lucide-react';
-
-interface MetricsSnapshot {
-  id: string;
-  user_id: string;
-  time_saved_minutes: number;
-  cost_saved_usd: number;
-  tasks_completed: number;
-  timestamp: number;
-}
 
 interface PeriodStats {
   total_time_saved_hours: number;
