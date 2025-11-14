@@ -101,13 +101,10 @@ impl TaskManager {
 
                 // Find executor for this task type
                 let executors = self.executors.read().await;
-                
+
                 // For now, use a default executor if no specific one is registered
                 // In a full implementation, you'd extract task type from payload
-                let executor_fn = executors
-                    .values()
-                    .next()
-                    .cloned();
+                let executor_fn = executors.values().next().cloned();
 
                 if let Some(executor_fn) = executor_fn {
                     // Update task status
@@ -163,7 +160,10 @@ impl TaskManager {
             return Ok(());
         }
 
-        Err(anyhow::anyhow!("Task {} not found or already completed", task_id))
+        Err(anyhow::anyhow!(
+            "Task {} not found or already completed",
+            task_id
+        ))
     }
 
     /// Pause a running task
