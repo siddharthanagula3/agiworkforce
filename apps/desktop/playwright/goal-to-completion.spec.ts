@@ -5,15 +5,19 @@ import { test, expect } from '../e2e/fixtures';
  */
 test.describe('Goal to Completion E2E', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
-  test('should submit goal and track it to completion', async ({ agiPage, waitHelper, mockLLM }) => {
+  test('should submit goal and track it to completion', async ({
+    agiPage,
+    waitHelper,
+    mockLLM,
+  }) => {
     // Set up mock LLM responses for plan generation
     mockLLM.setMockResponse(
       /create.*button.*counter/i,
-      'I will create the button counter component with these steps:\n1. Create React component file\n2. Add state management with useState\n3. Implement click handler\n4. Style the component\n5. Test functionality'
+      'I will create the button counter component with these steps:\n1. Create React component file\n2. Add state management with useState\n3. Implement click handler\n4. Style the component\n5. Test functionality',
     );
 
     // Navigate to AGI page
@@ -39,7 +43,7 @@ test.describe('Goal to Completion E2E', () => {
         const stepsCount = await agiPage.getStepsCount();
         return stepsCount > 0;
       },
-      { timeout: 15000 }
+      { timeout: 15000 },
     );
 
     // Verify steps were generated
@@ -174,7 +178,10 @@ test.describe('Goal to Completion E2E', () => {
 
   test('should show error state for failed goals', async ({ page, agiPage, mockLLM }) => {
     // Mock error response
-    mockLLM.setMockResponse(/invalid.*operation/i, 'ERROR: Operation failed due to invalid parameters');
+    mockLLM.setMockResponse(
+      /invalid.*operation/i,
+      'ERROR: Operation failed due to invalid parameters',
+    );
 
     await agiPage.navigateToAGI();
 

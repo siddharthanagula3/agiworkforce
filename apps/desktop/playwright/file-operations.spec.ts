@@ -5,16 +5,13 @@ import { test, expect } from '../e2e/fixtures';
  */
 test.describe('File Operations E2E', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
   test('should read file via AGI tool', async ({ agiPage, mockLLM }) => {
     // Set up mock response for file read
-    mockLLM.setMockResponse(
-      /read.*file/i,
-      'File contents: This is a test file with sample data.'
-    );
+    mockLLM.setMockResponse(/read.*file/i, 'File contents: This is a test file with sample data.');
 
     await agiPage.navigateToAGI();
 
@@ -34,10 +31,7 @@ test.describe('File Operations E2E', () => {
 
   test('should write file via AGI tool', async ({ agiPage, mockLLM, waitHelper }) => {
     // Set up mock response for file write
-    mockLLM.setMockResponse(
-      /write.*file/i,
-      'Successfully wrote data to output.txt'
-    );
+    mockLLM.setMockResponse(/write.*file/i, 'Successfully wrote data to output.txt');
 
     await agiPage.navigateToAGI();
 
@@ -50,7 +44,7 @@ test.describe('File Operations E2E', () => {
         const stepsCount = await agiPage.getStepsCount();
         return stepsCount > 0;
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
 
     // Verify goal was created
@@ -60,10 +54,7 @@ test.describe('File Operations E2E', () => {
 
   test('should handle file not found errors', async ({ page, agiPage, mockLLM }) => {
     // Mock error response for missing file
-    mockLLM.setMockResponse(
-      /read.*non.*existent/i,
-      'ERROR: File not found at the specified path'
-    );
+    mockLLM.setMockResponse(/read.*non.*existent/i, 'ERROR: File not found at the specified path');
 
     await agiPage.navigateToAGI();
 
@@ -85,7 +76,7 @@ test.describe('File Operations E2E', () => {
     // Mock directory listing response
     mockLLM.setMockResponse(
       /list.*files|directory.*contents/i,
-      'Files in directory:\n1. file1.txt\n2. file2.txt\n3. file3.txt'
+      'Files in directory:\n1. file1.txt\n2. file2.txt\n3. file3.txt',
     );
 
     await agiPage.navigateToAGI();
@@ -104,7 +95,7 @@ test.describe('File Operations E2E', () => {
     // Mock directory creation response
     mockLLM.setMockResponse(
       /create.*director/i,
-      'Successfully created directory structure at /test/nested/path'
+      'Successfully created directory structure at /test/nested/path',
     );
 
     await agiPage.navigateToAGI();
@@ -121,10 +112,7 @@ test.describe('File Operations E2E', () => {
 
   test('should copy files', async ({ agiPage, mockLLM }) => {
     // Mock file copy response
-    mockLLM.setMockResponse(
-      /copy.*file/i,
-      'Successfully copied source.txt to destination.txt'
-    );
+    mockLLM.setMockResponse(/copy.*file/i, 'Successfully copied source.txt to destination.txt');
 
     await agiPage.navigateToAGI();
 
@@ -142,7 +130,7 @@ test.describe('File Operations E2E', () => {
     // Mock file deletion with approval required
     mockLLM.setMockResponse(
       /delete.*file/i,
-      'File deletion requires approval. Proceed with caution.'
+      'File deletion requires approval. Proceed with caution.',
     );
 
     await agiPage.navigateToAGI();
@@ -153,7 +141,9 @@ test.describe('File Operations E2E', () => {
     await page.waitForTimeout(2000);
 
     // Check if approval dialog appears
-    const approvalDialog = page.locator('[data-testid="approval-dialog"], .approval-dialog').first();
+    const approvalDialog = page
+      .locator('[data-testid="approval-dialog"], .approval-dialog')
+      .first();
 
     if (await approvalDialog.isVisible({ timeout: 5000 }).catch(() => false)) {
       // Verify approval is required for delete operation
@@ -164,10 +154,7 @@ test.describe('File Operations E2E', () => {
 
   test('should validate file permissions', async ({ agiPage, mockLLM }) => {
     // Mock permission check response
-    mockLLM.setMockResponse(
-      /check.*permission/i,
-      'File permissions: read, write, execute'
-    );
+    mockLLM.setMockResponse(/check.*permission/i, 'File permissions: read, write, execute');
 
     await agiPage.navigateToAGI();
 
@@ -185,7 +172,7 @@ test.describe('File Operations E2E', () => {
     // Mock large file operation
     mockLLM.setMockResponse(
       /large.*file|process.*big/i,
-      'Processing large file in chunks... Progress: 100%'
+      'Processing large file in chunks... Progress: 100%',
     );
 
     await agiPage.navigateToAGI();
@@ -197,9 +184,11 @@ test.describe('File Operations E2E', () => {
     await waitHelper.waitForCondition(
       async () => {
         const status = await agiPage.getGoalStatus(0);
-        return status.toLowerCase().includes('progress') || status.toLowerCase().includes('completed');
+        return (
+          status.toLowerCase().includes('progress') || status.toLowerCase().includes('completed')
+        );
       },
-      { timeout: 15000 }
+      { timeout: 15000 },
     );
 
     // Verify goal is being processed
@@ -211,7 +200,7 @@ test.describe('File Operations E2E', () => {
     // Mock file search response
     mockLLM.setMockResponse(
       /search.*file|find.*in.*file/i,
-      'Found 3 matches for "keyword" in file:\nLine 10: keyword found here\nLine 25: another keyword\nLine 42: final keyword'
+      'Found 3 matches for "keyword" in file:\nLine 10: keyword found here\nLine 25: another keyword\nLine 42: final keyword',
     );
 
     await agiPage.navigateToAGI();
@@ -230,7 +219,7 @@ test.describe('File Operations E2E', () => {
     // Mock file watching response
     mockLLM.setMockResponse(
       /watch.*file|monitor.*change/i,
-      'Started watching file for changes. Will notify on modifications.'
+      'Started watching file for changes. Will notify on modifications.',
     );
 
     await agiPage.navigateToAGI();
