@@ -1,13 +1,13 @@
-use tauri::State;
-use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
+use tauri::State;
 
-use crate::onboarding::{
-    Tutorial, TutorialManager, ProgressTracker, SampleDataGenerator,
-    RewardSystem, Reward, OnboardingProgress, UserTutorialProgress,
-    TutorialStats, SampleDataSummary,
-};
 use crate::commands::AppDatabase;
+use crate::onboarding::{
+    OnboardingProgress, ProgressTracker, Reward, RewardSystem, SampleDataGenerator,
+    SampleDataSummary, Tutorial, TutorialManager, TutorialStats, UserTutorialProgress,
+};
 
 // State wrapper for tutorial system
 pub struct TutorialState {
@@ -30,9 +30,7 @@ impl TutorialState {
 
 /// Get all available tutorials
 #[tauri::command]
-pub async fn get_tutorials(
-    db: State<'_, AppDatabase>,
-) -> Result<Vec<Tutorial>, String> {
+pub async fn get_tutorials(db: State<'_, AppDatabase>) -> Result<Vec<Tutorial>, String> {
     let manager = TutorialManager::new(db.0.clone());
     Ok(manager.get_tutorials())
 }
@@ -216,10 +214,7 @@ pub async fn has_unlocked_feature(
 
 /// Get user's total credits
 #[tauri::command]
-pub async fn get_user_credits(
-    db: State<'_, AppDatabase>,
-    user_id: String,
-) -> Result<i32, String> {
+pub async fn get_user_credits(db: State<'_, AppDatabase>, user_id: String) -> Result<i32, String> {
     let rewards_system = RewardSystem::new(db.0.clone());
     Ok(rewards_system.get_user_credits(&user_id))
 }
@@ -238,20 +233,14 @@ pub async fn populate_sample_data(
 
 /// Check if user has sample data
 #[tauri::command]
-pub async fn has_sample_data(
-    db: State<'_, AppDatabase>,
-    user_id: String,
-) -> Result<bool, String> {
+pub async fn has_sample_data(db: State<'_, AppDatabase>, user_id: String) -> Result<bool, String> {
     let generator = SampleDataGenerator::new(db.0.clone());
     Ok(generator.has_sample_data(&user_id))
 }
 
 /// Clear sample data for user
 #[tauri::command]
-pub async fn clear_sample_data(
-    db: State<'_, AppDatabase>,
-    user_id: String,
-) -> Result<(), String> {
+pub async fn clear_sample_data(db: State<'_, AppDatabase>, user_id: String) -> Result<(), String> {
     let generator = SampleDataGenerator::new(db.0.clone());
     generator
         .clear_sample_data(&user_id)
@@ -268,7 +257,7 @@ pub async fn submit_tutorial_feedback(
     feedback_text: Option<String>,
     helpful: bool,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     let feedback_id = uuid::Uuid::new_v4().to_string();
 

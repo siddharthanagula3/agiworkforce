@@ -271,10 +271,7 @@ impl AuthManager {
         drop(sessions);
 
         let users = self.users.read();
-        let user = users
-            .get(&user_id)
-            .ok_or("User not found")?
-            .clone();
+        let user = users.get(&user_id).ok_or("User not found")?.clone();
 
         Ok(user)
     }
@@ -288,20 +285,21 @@ impl AuthManager {
     /// Update user role
     pub fn update_role(&self, user_id: &str, role: UserRole) -> Result<(), String> {
         let mut users = self.users.write();
-        let user = users
-            .get_mut(user_id)
-            .ok_or("User not found")?;
+        let user = users.get_mut(user_id).ok_or("User not found")?;
 
         user.role = role;
         Ok(())
     }
 
     /// Change password
-    pub fn change_password(&self, user_id: &str, old_password: &str, new_password: &str) -> Result<(), String> {
+    pub fn change_password(
+        &self,
+        user_id: &str,
+        old_password: &str,
+        new_password: &str,
+    ) -> Result<(), String> {
         let mut users = self.users.write();
-        let user = users
-            .get_mut(user_id)
-            .ok_or("User not found")?;
+        let user = users.get_mut(user_id).ok_or("User not found")?;
 
         if !user.verify_password(old_password)? {
             return Err("Invalid current password".to_string());
@@ -337,8 +335,8 @@ fn hash_password(password: &str) -> Result<String, String> {
 
 /// Verify password against hash
 fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
-    let parsed_hash = PasswordHash::new(hash)
-        .map_err(|e| format!("Failed to parse password hash: {}", e))?;
+    let parsed_hash =
+        PasswordHash::new(hash).map_err(|e| format!("Failed to parse password hash: {}", e))?;
 
     Ok(Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
@@ -372,7 +370,11 @@ mod tests {
     fn test_user_registration() {
         let manager = AuthManager::new();
         let user = manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         assert_eq!(user.email, "test@example.com");
@@ -383,10 +385,18 @@ mod tests {
     fn test_duplicate_registration() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
-        let result = manager.register("test@example.com".to_string(), "password456", UserRole::Editor);
+        let result = manager.register(
+            "test@example.com".to_string(),
+            "password456",
+            UserRole::Editor,
+        );
         assert!(result.is_err());
     }
 
@@ -394,7 +404,11 @@ mod tests {
     fn test_login_success() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         let token = manager.login("test@example.com", "password123").unwrap();
@@ -406,7 +420,11 @@ mod tests {
     fn test_login_failure() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         let result = manager.login("test@example.com", "wrong_password");
@@ -417,7 +435,11 @@ mod tests {
     fn test_account_lockout() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         // Attempt failed logins
@@ -435,7 +457,11 @@ mod tests {
     fn test_token_validation() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         let token = manager.login("test@example.com", "password123").unwrap();
@@ -448,7 +474,11 @@ mod tests {
     fn test_refresh_token() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         let token = manager.login("test@example.com", "password123").unwrap();
@@ -462,7 +492,11 @@ mod tests {
     fn test_logout() {
         let manager = AuthManager::new();
         manager
-            .register("test@example.com".to_string(), "password123", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "password123",
+                UserRole::Editor,
+            )
             .unwrap();
 
         let token = manager.login("test@example.com", "password123").unwrap();
@@ -477,7 +511,11 @@ mod tests {
     fn test_password_change() {
         let manager = AuthManager::new();
         let user = manager
-            .register("test@example.com".to_string(), "old_password", UserRole::Editor)
+            .register(
+                "test@example.com".to_string(),
+                "old_password",
+                UserRole::Editor,
+            )
             .unwrap();
 
         manager

@@ -7,7 +7,7 @@ import { LivePreview } from './LivePreview';
 import { ChangeSummary } from './ChangeSummary';
 import { ConflictResolver } from './ConflictResolver';
 import { Button } from '../ui/Button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
+import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
 import {
   Undo,
   Redo,
@@ -16,11 +16,8 @@ import {
   FileText,
   LayoutGrid,
   Maximize2,
-  Minimize2,
 } from 'lucide-react';
-import { Tooltip } from '../ui/Tooltip';
 import { Card } from '../ui/Card';
-import { ScrollArea } from '../ui/ScrollArea';
 
 interface VisualEditorProps {
   rootPath: string;
@@ -31,8 +28,6 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
   const {
     selectedFile,
     setSelectedFile,
-    previewMode,
-    setPreviewMode,
     canUndo,
     canRedo,
     undo,
@@ -77,26 +72,24 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
         <div className="flex items-center gap-2">
           {/* Undo/Redo */}
           <div className="flex gap-1 mr-2">
-            <Tooltip content="Undo (Cmd+Z)">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={undo}
-                disabled={!canUndo()}
-              >
-                <Undo className="h-4 w-4" />
-              </Button>
-            </Tooltip>
-            <Tooltip content="Redo (Cmd+Shift+Z)">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={redo}
-                disabled={!canRedo()}
-              >
-                <Redo className="h-4 w-4" />
-              </Button>
-            </Tooltip>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Undo (Cmd+Z)"
+              onClick={undo}
+              disabled={!canUndo()}
+            >
+              <Undo className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Redo (Cmd+Shift+Z)"
+              onClick={redo}
+              disabled={!canRedo()}
+            >
+              <Redo className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* View Mode */}
@@ -114,19 +107,18 @@ export function VisualEditor({ rootPath, className }: VisualEditorProps) {
           </Tabs>
 
           {/* Layout Toggle */}
-          <Tooltip content={layout === 'split' ? 'Full width' : 'Split view'}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setLayout(layout === 'split' ? 'full' : 'split')}
-            >
-              {layout === 'split' ? (
-                <Maximize2 className="h-4 w-4" />
-              ) : (
-                <LayoutGrid className="h-4 w-4" />
-              )}
-            </Button>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="sm"
+            title={layout === 'split' ? 'Full width' : 'Split view'}
+            onClick={() => setLayout(layout === 'split' ? 'full' : 'split')}
+          >
+            {layout === 'split' ? (
+              <Maximize2 className="h-4 w-4" />
+            ) : (
+              <LayoutGrid className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
 

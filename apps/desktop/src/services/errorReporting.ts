@@ -77,7 +77,7 @@ class ErrorReportingService {
       this.systemInfo = {
         platform: navigator.platform,
         osVersion: navigator.userAgent,
-        appVersion: import.meta.env.VITE_APP_VERSION || 'unknown',
+        appVersion: import.meta.env['VITE_APP_VERSION'] || 'unknown',
         architecture: navigator.userAgent.includes('x64') ? 'x64' : 'x86',
         locale: navigator.language,
       };
@@ -202,12 +202,12 @@ class ErrorReportingService {
 
         // Add system info if enabled
         if (this.options.includeSystemInfo && this.systemInfo) {
-          context.system = this.systemInfo;
+          context['system'] = this.systemInfo;
         }
 
         // Add user actions if enabled
         if (this.options.includeUserActions && this.userActions.length > 0) {
-          context.userActions = this.userActions;
+          context['userActions'] = this.userActions;
         }
 
         return {
@@ -266,11 +266,11 @@ class ErrorReportingService {
     };
 
     if (this.options.includeSystemInfo && this.systemInfo) {
-      context.system = this.systemInfo;
+      context['system'] = this.systemInfo;
     }
 
     if (this.options.includeUserActions && this.userActions.length > 0) {
-      context.userActions = this.userActions;
+      context['userActions'] = this.userActions;
     }
 
     const report = {

@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use chrono::Utc;
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Workflow definition containing all workflow metadata and structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -358,7 +358,11 @@ impl WorkflowEngine {
     }
 
     /// Update an existing workflow
-    pub fn update_workflow(&self, id: &str, mut definition: WorkflowDefinition) -> Result<(), String> {
+    pub fn update_workflow(
+        &self,
+        id: &str,
+        mut definition: WorkflowDefinition,
+    ) -> Result<(), String> {
         let conn = self.get_connection()?;
 
         definition.updated_at = Utc::now().timestamp();
@@ -398,7 +402,8 @@ impl WorkflowEngine {
         conn.execute(
             "DELETE FROM workflow_definitions WHERE id = ?1",
             rusqlite::params![id],
-        ).map_err(|e| format!("Failed to delete workflow: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to delete workflow: {}", e))?;
 
         Ok(())
     }
@@ -412,34 +417,36 @@ impl WorkflowEngine {
              FROM workflow_definitions WHERE id = ?1"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflow = stmt.query_row(rusqlite::params![id], |row| {
-            let nodes_json: String = row.get(4)?;
-            let edges_json: String = row.get(5)?;
-            let triggers_json: String = row.get(6)?;
-            let metadata_json: String = row.get(7)?;
+        let workflow = stmt
+            .query_row(rusqlite::params![id], |row| {
+                let nodes_json: String = row.get(4)?;
+                let edges_json: String = row.get(5)?;
+                let triggers_json: String = row.get(6)?;
+                let metadata_json: String = row.get(7)?;
 
-            let nodes: Vec<WorkflowNode> = serde_json::from_str(&nodes_json)
-                .map_err(|e| rusqlite::Error::InvalidQuery)?;
-            let edges: Vec<WorkflowEdge> = serde_json::from_str(&edges_json)
-                .map_err(|e| rusqlite::Error::InvalidQuery)?;
-            let triggers: Vec<WorkflowTrigger> = serde_json::from_str(&triggers_json)
-                .map_err(|e| rusqlite::Error::InvalidQuery)?;
-            let metadata: HashMap<String, Value> = serde_json::from_str(&metadata_json)
-                .map_err(|e| rusqlite::Error::InvalidQuery)?;
+                let nodes: Vec<WorkflowNode> =
+                    serde_json::from_str(&nodes_json).map_err(|e| rusqlite::Error::InvalidQuery)?;
+                let edges: Vec<WorkflowEdge> =
+                    serde_json::from_str(&edges_json).map_err(|e| rusqlite::Error::InvalidQuery)?;
+                let triggers: Vec<WorkflowTrigger> = serde_json::from_str(&triggers_json)
+                    .map_err(|e| rusqlite::Error::InvalidQuery)?;
+                let metadata: HashMap<String, Value> = serde_json::from_str(&metadata_json)
+                    .map_err(|e| rusqlite::Error::InvalidQuery)?;
 
-            Ok(WorkflowDefinition {
-                id: row.get(0)?,
-                user_id: row.get(1)?,
-                name: row.get(2)?,
-                description: row.get(3)?,
-                nodes,
-                edges,
-                triggers,
-                metadata,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                Ok(WorkflowDefinition {
+                    id: row.get(0)?,
+                    user_id: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    nodes,
+                    edges,
+                    triggers,
+                    metadata,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
+                })
             })
-        }).map_err(|e| format!("Failed to query workflow: {}", e))?;
+            .map_err(|e| format!("Failed to query workflow: {}", e))?;
 
         Ok(workflow)
     }
@@ -453,36 +460,38 @@ impl WorkflowEngine {
              FROM workflow_definitions WHERE user_id = ?1 ORDER BY updated_at DESC"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stmt.query_map(rusqlite::params![user_id], |row| {
-            let nodes_json: String = row.get(4)?;
-            let edges_json: String = row.get(5)?;
-            let triggers_json: String = row.get(6)?;
-            let metadata_json: String = row.get(7)?;
+        let workflows = stmt
+            .query_map(rusqlite::params![user_id], |row| {
+                let nodes_json: String = row.get(4)?;
+                let edges_json: String = row.get(5)?;
+                let triggers_json: String = row.get(6)?;
+                let metadata_json: String = row.get(7)?;
 
-            let nodes: Vec<WorkflowNode> = serde_json::from_str(&nodes_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let edges: Vec<WorkflowEdge> = serde_json::from_str(&edges_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let triggers: Vec<WorkflowTrigger> = serde_json::from_str(&triggers_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let metadata: HashMap<String, Value> = serde_json::from_str(&metadata_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let nodes: Vec<WorkflowNode> =
+                    serde_json::from_str(&nodes_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let edges: Vec<WorkflowEdge> =
+                    serde_json::from_str(&edges_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let triggers: Vec<WorkflowTrigger> = serde_json::from_str(&triggers_json)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let metadata: HashMap<String, Value> = serde_json::from_str(&metadata_json)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
 
-            Ok(WorkflowDefinition {
-                id: row.get(0)?,
-                user_id: row.get(1)?,
-                name: row.get(2)?,
-                description: row.get(3)?,
-                nodes,
-                edges,
-                triggers,
-                metadata,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                Ok(WorkflowDefinition {
+                    id: row.get(0)?,
+                    user_id: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    nodes,
+                    edges,
+                    triggers,
+                    metadata,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
+                })
             })
-        }).map_err(|e| format!("Failed to query workflows: {}", e))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect workflows: {}", e))?;
+            .map_err(|e| format!("Failed to query workflows: {}", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to collect workflows: {}", e))?;
 
         Ok(workflows)
     }
@@ -532,7 +541,10 @@ impl WorkflowEngine {
     ) -> Result<(), String> {
         let conn = self.get_connection()?;
 
-        let completed_at = if status == WorkflowStatus::Completed || status == WorkflowStatus::Failed || status == WorkflowStatus::Cancelled {
+        let completed_at = if status == WorkflowStatus::Completed
+            || status == WorkflowStatus::Failed
+            || status == WorkflowStatus::Cancelled
+        {
             Some(Utc::now().timestamp())
         } else {
             None
@@ -549,7 +561,8 @@ impl WorkflowEngine {
                 completed_at,
                 execution_id,
             ],
-        ).map_err(|e| format!("Failed to update execution: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update execution: {}", e))?;
 
         Ok(())
     }
@@ -563,38 +576,40 @@ impl WorkflowEngine {
              FROM workflow_executions WHERE id = ?1"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let execution = stmt.query_row(rusqlite::params![execution_id], |row| {
-            let status_str: String = row.get(2)?;
-            let status = match status_str.as_str() {
-                "pending" => WorkflowStatus::Pending,
-                "running" => WorkflowStatus::Running,
-                "paused" => WorkflowStatus::Paused,
-                "completed" => WorkflowStatus::Completed,
-                "failed" => WorkflowStatus::Failed,
-                "cancelled" => WorkflowStatus::Cancelled,
-                _ => WorkflowStatus::Pending,
-            };
+        let execution = stmt
+            .query_row(rusqlite::params![execution_id], |row| {
+                let status_str: String = row.get(2)?;
+                let status = match status_str.as_str() {
+                    "pending" => WorkflowStatus::Pending,
+                    "running" => WorkflowStatus::Running,
+                    "paused" => WorkflowStatus::Paused,
+                    "completed" => WorkflowStatus::Completed,
+                    "failed" => WorkflowStatus::Failed,
+                    "cancelled" => WorkflowStatus::Cancelled,
+                    _ => WorkflowStatus::Pending,
+                };
 
-            let inputs_json: String = row.get(4)?;
-            let outputs_json: String = row.get(5)?;
+                let inputs_json: String = row.get(4)?;
+                let outputs_json: String = row.get(5)?;
 
-            let inputs: HashMap<String, Value> = serde_json::from_str(&inputs_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let outputs: HashMap<String, Value> = serde_json::from_str(&outputs_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let inputs: HashMap<String, Value> = serde_json::from_str(&inputs_json)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                let outputs: HashMap<String, Value> = serde_json::from_str(&outputs_json)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
 
-            Ok(WorkflowExecution {
-                id: row.get(0)?,
-                workflow_id: row.get(1)?,
-                status,
-                current_node_id: row.get(3)?,
-                inputs,
-                outputs,
-                error: row.get(6)?,
-                started_at: row.get(7)?,
-                completed_at: row.get(8)?,
+                Ok(WorkflowExecution {
+                    id: row.get(0)?,
+                    workflow_id: row.get(1)?,
+                    status,
+                    current_node_id: row.get(3)?,
+                    inputs,
+                    outputs,
+                    error: row.get(6)?,
+                    started_at: row.get(7)?,
+                    completed_at: row.get(8)?,
+                })
             })
-        }).map_err(|e| format!("Failed to query execution: {}", e))?;
+            .map_err(|e| format!("Failed to query execution: {}", e))?;
 
         Ok(execution)
     }
@@ -613,8 +628,7 @@ impl WorkflowEngine {
         let now = Utc::now().timestamp();
 
         let data_json = if let Some(d) = data {
-            serde_json::to_string(&d)
-                .map_err(|e| format!("Failed to serialize data: {}", e))?
+            serde_json::to_string(&d).map_err(|e| format!("Failed to serialize data: {}", e))?
         } else {
             "null".to_string()
         };
@@ -636,38 +650,45 @@ impl WorkflowEngine {
     }
 
     /// Get execution logs
-    pub fn get_execution_logs(&self, execution_id: &str) -> Result<Vec<WorkflowExecutionLog>, String> {
+    pub fn get_execution_logs(
+        &self,
+        execution_id: &str,
+    ) -> Result<Vec<WorkflowExecutionLog>, String> {
         let conn = self.get_connection()?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, execution_id, node_id, event_type, data, timestamp
-             FROM workflow_execution_logs WHERE execution_id = ?1 ORDER BY timestamp ASC"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, execution_id, node_id, event_type, data, timestamp
+             FROM workflow_execution_logs WHERE execution_id = ?1 ORDER BY timestamp ASC",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let logs = stmt.query_map(rusqlite::params![execution_id], |row| {
-            let event_type_str: String = row.get(3)?;
-            let event_type = match event_type_str.as_str() {
-                "started" => LogEventType::Started,
-                "completed" => LogEventType::Completed,
-                "failed" => LogEventType::Failed,
-                "skipped" => LogEventType::Skipped,
-                _ => LogEventType::Started,
-            };
+        let logs = stmt
+            .query_map(rusqlite::params![execution_id], |row| {
+                let event_type_str: String = row.get(3)?;
+                let event_type = match event_type_str.as_str() {
+                    "started" => LogEventType::Started,
+                    "completed" => LogEventType::Completed,
+                    "failed" => LogEventType::Failed,
+                    "skipped" => LogEventType::Skipped,
+                    _ => LogEventType::Started,
+                };
 
-            let data_json: String = row.get(4)?;
-            let data: Option<Value> = serde_json::from_str(&data_json).ok();
+                let data_json: String = row.get(4)?;
+                let data: Option<Value> = serde_json::from_str(&data_json).ok();
 
-            Ok(WorkflowExecutionLog {
-                id: row.get(0)?,
-                execution_id: row.get(1)?,
-                node_id: row.get(2)?,
-                event_type,
-                data,
-                timestamp: row.get(5)?,
+                Ok(WorkflowExecutionLog {
+                    id: row.get(0)?,
+                    execution_id: row.get(1)?,
+                    node_id: row.get(2)?,
+                    event_type,
+                    data,
+                    timestamp: row.get(5)?,
+                })
             })
-        }).map_err(|e| format!("Failed to query logs: {}", e))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect logs: {}", e))?;
+            .map_err(|e| format!("Failed to query logs: {}", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to collect logs: {}", e))?;
 
         Ok(logs)
     }

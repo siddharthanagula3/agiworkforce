@@ -1,4 +1,4 @@
-use crate::security::rate_limit::{RateLimiter, RateLimitConfig};
+use crate::security::rate_limit::{RateLimitConfig, RateLimiter};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -134,9 +134,7 @@ impl ApiSecurityManager {
     ) -> Result<(), String> {
         // Get API key
         let keys = self.api_keys.read();
-        let key = keys
-            .get(key_id)
-            .ok_or("Invalid API key")?;
+        let key = keys.get(key_id).ok_or("Invalid API key")?;
 
         // Check expiration
         if key.is_expired() {
@@ -144,7 +142,8 @@ impl ApiSecurityManager {
         }
 
         // Validate timestamp (prevent replay attacks)
-        let request_time = timestamp.parse::<i64>()
+        let request_time = timestamp
+            .parse::<i64>()
             .map_err(|_| "Invalid timestamp format")?;
         let now = Utc::now().timestamp();
 
@@ -177,15 +176,9 @@ impl ApiSecurityManager {
     }
 
     /// Validate API key and permissions
-    pub fn validate_request(
-        &self,
-        key_id: &str,
-        permission: &str,
-    ) -> Result<(), String> {
+    pub fn validate_request(&self, key_id: &str, permission: &str) -> Result<(), String> {
         let keys = self.api_keys.read();
-        let key = keys
-            .get(key_id)
-            .ok_or("Invalid API key")?;
+        let key = keys.get(key_id).ok_or("Invalid API key")?;
 
         if key.is_expired() {
             return Err("API key has expired".to_string());
@@ -210,8 +203,8 @@ pub fn compute_hmac(secret: &str, payload: &str) -> String {
     use hmac::{Hmac, Mac};
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(payload.as_bytes());
 
     let result = mac.finalize();
@@ -376,11 +369,7 @@ mod tests {
     #[test]
     fn test_signature_validation() {
         let manager = ApiSecurityManager::new();
-        let key = manager.create_api_key(
-            "Test Key".to_string(),
-            vec!["*".to_string()],
-            None,
-        );
+        let key = manager.create_api_key("Test Key".to_string(), vec!["*".to_string()], None);
 
         let timestamp = Utc::now().timestamp().to_string();
         let body = r#"{"test": "data"}"#;
@@ -424,11 +413,7 @@ mod tests {
     #[test]
     fn test_permission_validation() {
         let manager = ApiSecurityManager::new();
-        let key = manager.create_api_key(
-            "Test".to_string(),
-            vec!["read".to_string()],
-            None,
-        );
+        let key = manager.create_api_key("Test".to_string(), vec!["read".to_string()], None);
 
         assert!(manager.validate_request(&key.key_id, "read").is_ok());
         assert!(manager.validate_request(&key.key_id, "write").is_err());

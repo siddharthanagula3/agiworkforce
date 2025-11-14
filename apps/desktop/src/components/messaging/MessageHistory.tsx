@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Button } from '../Common/Button';
-import { Select } from '../Common/Select';
-import { Card } from '../Common/Card';
+import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
+import { Card } from '../ui/Card';
 
 interface UnifiedMessage {
   id: string;
@@ -88,7 +88,7 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
         <div className="flex-1">
           <Select
             value={selectedConnection}
-            onChange={(e) => setSelectedConnection(e.target.value)}
+            onValueChange={setSelectedConnection}
           >
             <option value="">Select a platform</option>
             {connections.map((conn) => (

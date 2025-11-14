@@ -23,16 +23,16 @@ pub struct ROIReport {
 /// ROI Calculator with multi-factor analysis
 pub struct ROICalculator {
     db: Arc<Mutex<Connection>>,
-    avg_hourly_rate: f64,  // Configurable average hourly rate for cost calculations
-    baseline_error_rate: f64,  // Baseline manual error rate for comparison
+    avg_hourly_rate: f64, // Configurable average hourly rate for cost calculations
+    baseline_error_rate: f64, // Baseline manual error rate for comparison
 }
 
 impl ROICalculator {
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
         Self {
             db,
-            avg_hourly_rate: 50.0,  // Default $50/hour
-            baseline_error_rate: 0.15,  // Default 15% manual error rate
+            avg_hourly_rate: 50.0,     // Default $50/hour
+            baseline_error_rate: 0.15, // Default 15% manual error rate
         }
     }
 
@@ -49,11 +49,18 @@ impl ROICalculator {
     /// Calculate comprehensive ROI for a date range
     pub async fn calculate_roi(&self, start_date: i64, end_date: i64) -> Result<ROIReport> {
         let time_saved = self.calculate_time_saved(start_date, end_date).await?;
-        let cost_savings = self.calculate_cost_savings(start_date, end_date, time_saved).await?;
+        let cost_savings = self
+            .calculate_cost_savings(start_date, end_date, time_saved)
+            .await?;
         let error_reduction = self.calculate_error_reduction(start_date, end_date).await?;
-        let productivity = self.calculate_productivity_gains(start_date, end_date).await?;
-        let (total_automations, successful, failed) = self.count_executions(start_date, end_date).await?;
-        let avg_execution_time = self.calculate_avg_execution_time(start_date, end_date).await?;
+        let productivity = self
+            .calculate_productivity_gains(start_date, end_date)
+            .await?;
+        let (total_automations, successful, failed) =
+            self.count_executions(start_date, end_date).await?;
+        let avg_execution_time = self
+            .calculate_avg_execution_time(start_date, end_date)
+            .await?;
         let (llm_cost, llm_saved) = self.calculate_llm_costs(start_date, end_date).await?;
 
         Ok(ROIReport {
@@ -77,38 +84,48 @@ impl ROICalculator {
         let conn = self.db.lock().await;
 
         // Query outcome_tracking for time-based metrics
-        let time_saved_seconds: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(target_value - actual_value), 0) as time_saved
+        let time_saved_seconds: f64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(target_value - actual_value), 0) as time_saved
              FROM outcome_tracking
              WHERE (metric_name LIKE '%time%' OR metric_name LIKE '%duration%')
              AND timestamp >= ? AND timestamp <= ?
              AND achieved = 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
 
         // Also calculate from automation_history duration vs estimated manual time
-        let automation_time_saved: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(duration_ms), 0) as total_duration_ms
+        let automation_time_saved: f64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(duration_ms), 0) as total_duration_ms
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?
              AND success = 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
 
         // Estimate: automated tasks take 1/10th the time of manual execution
         let estimated_manual_time_ms = automation_time_saved * 10.0;
         let saved_from_automation_ms = estimated_manual_time_ms - automation_time_saved;
 
         // Convert to hours
-        let total_saved_hours = (time_saved_seconds / 3600.0) + (saved_from_automation_ms / 3600000.0);
+        let total_saved_hours =
+            (time_saved_seconds / 3600.0) + (saved_from_automation_ms / 3600000.0);
 
         Ok(total_saved_hours.max(0.0))
     }
 
     /// Calculate cost savings from multiple sources
-    async fn calculate_cost_savings(&self, start: i64, end: i64, time_saved_hours: f64) -> Result<f64> {
+    async fn calculate_cost_savings(
+        &self,
+        start: i64,
+        end: i64,
+        time_saved_hours: f64,
+    ) -> Result<f64> {
         // Cost savings from time saved
         let time_cost_savings = time_saved_hours * self.avg_hourly_rate;
 
@@ -126,13 +143,15 @@ impl ROICalculator {
         let conn = self.db.lock().await;
 
         // Calculate success rate from automation_history
-        let (total_automations, successful): (i64, i64) = conn.query_row(
-            "SELECT COUNT(*), SUM(success)
+        let (total_automations, successful): (i64, i64) = conn
+            .query_row(
+                "SELECT COUNT(*), SUM(success)
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).unwrap_or((0, 0));
+                params![start, end],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap_or((0, 0));
 
         if total_automations == 0 {
             return Ok(0.0);
@@ -142,7 +161,8 @@ impl ROICalculator {
 
         // Compare to baseline manual error rate
         let improvement = ((automation_success_rate - (1.0 - self.baseline_error_rate))
-                          / (1.0 - self.baseline_error_rate)) * 100.0;
+            / (1.0 - self.baseline_error_rate))
+            * 100.0;
 
         Ok(improvement.max(0.0))
     }
@@ -152,13 +172,15 @@ impl ROICalculator {
         let conn = self.db.lock().await;
 
         // Calculate from autonomous sessions completion rate
-        let (total_sessions, completed_sessions): (i64, i64) = conn.query_row(
-            "SELECT COUNT(*), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)
+        let (total_sessions, completed_sessions): (i64, i64) = conn
+            .query_row(
+                "SELECT COUNT(*), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)
              FROM autonomous_sessions
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).unwrap_or((0, 0));
+                params![start, end],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap_or((0, 0));
 
         if total_sessions == 0 {
             return Ok(0.0);
@@ -177,13 +199,15 @@ impl ROICalculator {
     async fn count_executions(&self, start: i64, end: i64) -> Result<(usize, usize, usize)> {
         let conn = self.db.lock().await;
 
-        let (total, successful): (i64, i64) = conn.query_row(
-            "SELECT COUNT(*), SUM(success)
+        let (total, successful): (i64, i64) = conn
+            .query_row(
+                "SELECT COUNT(*), SUM(success)
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).unwrap_or((0, 0));
+                params![start, end],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap_or((0, 0));
 
         let failed = total - successful;
 
@@ -194,14 +218,16 @@ impl ROICalculator {
     async fn calculate_avg_execution_time(&self, start: i64, end: i64) -> Result<f64> {
         let conn = self.db.lock().await;
 
-        let avg_time: f64 = conn.query_row(
-            "SELECT COALESCE(AVG(duration_ms), 0.0)
+        let avg_time: f64 = conn
+            .query_row(
+                "SELECT COALESCE(AVG(duration_ms), 0.0)
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?
              AND success = 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
 
         Ok(avg_time)
     }
@@ -211,24 +237,28 @@ impl ROICalculator {
         let conn = self.db.lock().await;
 
         // Total LLM cost from messages
-        let total_cost: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(cost), 0.0)
+        let total_cost: f64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(cost), 0.0)
              FROM messages
              WHERE created_at >= ? AND created_at <= ?
              AND cost IS NOT NULL",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
 
         // Calculate savings from using Ollama (local models)
-        let ollama_tokens: i64 = conn.query_row(
-            "SELECT COALESCE(SUM(tokens), 0)
+        let ollama_tokens: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(tokens), 0)
              FROM messages
              WHERE created_at >= ? AND created_at <= ?
              AND provider = 'ollama'",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Estimate cost savings (assume $0.002 per 1K tokens for GPT-4 equivalent)
         let cost_saved = (ollama_tokens as f64 / 1000.0) * 0.002;
@@ -241,14 +271,16 @@ impl ROICalculator {
         let conn = self.db.lock().await;
 
         // Count errors prevented by automation
-        let errors_prevented: i64 = conn.query_row(
-            "SELECT COUNT(*)
+        let errors_prevented: i64 = conn
+            .query_row(
+                "SELECT COUNT(*)
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?
              AND success = 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Estimate: each prevented error saves $100 (avg cost of fixing an error)
         let avg_error_cost = 100.0;
@@ -262,32 +294,45 @@ impl ROICalculator {
         let conn = self.db.lock().await;
 
         // Calculate cache hit savings
-        let cache_savings: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(cost_saved), 0.0)
+        let cache_savings: f64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(cost_saved), 0.0)
              FROM cache_entries
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
 
         Ok(cache_savings)
     }
 
     /// Save ROI snapshot to database
-    pub async fn save_snapshot(&self, user_id: &str, team_id: Option<&str>, report: &ROIReport) -> Result<String> {
+    pub async fn save_snapshot(
+        &self,
+        user_id: &str,
+        team_id: Option<&str>,
+        report: &ROIReport,
+    ) -> Result<String> {
         let conn = self.db.lock().await;
         let snapshot_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
 
-        let roi_json = serde_json::to_string(report).map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-        })?;
+        let roi_json = serde_json::to_string(report)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
         conn.execute(
             "INSERT INTO analytics_snapshots
              (id, user_id, team_id, snapshot_date, roi_data, metrics_data, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6)",
-            params![snapshot_id, user_id, team_id, report.report_end_date, roi_json, now],
+            params![
+                snapshot_id,
+                user_id,
+                team_id,
+                report.report_end_date,
+                roi_json,
+                now
+            ],
         )?;
 
         Ok(snapshot_id)

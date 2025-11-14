@@ -38,14 +38,16 @@ impl RateLimiter {
         let now = Instant::now();
         let mut records = self.records.lock();
 
-        let record = records.entry(key.to_string()).or_insert_with(|| RequestRecord {
-            timestamps: Vec::new(),
-        });
+        let record = records
+            .entry(key.to_string())
+            .or_insert_with(|| RequestRecord {
+                timestamps: Vec::new(),
+            });
 
         // Remove timestamps outside the window
-        record.timestamps.retain(|&timestamp| {
-            now.duration_since(timestamp) < self.config.window
-        });
+        record
+            .timestamps
+            .retain(|&timestamp| now.duration_since(timestamp) < self.config.window);
 
         // Check if limit exceeded
         if record.timestamps.len() >= self.config.max_requests {

@@ -50,7 +50,11 @@ impl TutorialManager {
     }
 
     /// Check if user can start a tutorial (prerequisites met)
-    pub fn can_start_tutorial(&self, user_id: &str, tutorial_id: &str) -> Result<bool, TutorialError> {
+    pub fn can_start_tutorial(
+        &self,
+        user_id: &str,
+        tutorial_id: &str,
+    ) -> Result<bool, TutorialError> {
         let tutorial = self.get_tutorial(tutorial_id)?;
 
         if tutorial.prerequisites.is_empty() {
@@ -97,7 +101,9 @@ impl TutorialManager {
                 continue;
             }
 
-            let can_start = self.can_start_tutorial(user_id, &tutorial.id).unwrap_or(false);
+            let can_start = self
+                .can_start_tutorial(user_id, &tutorial.id)
+                .unwrap_or(false);
             if can_start {
                 return Some(tutorial.clone());
             }

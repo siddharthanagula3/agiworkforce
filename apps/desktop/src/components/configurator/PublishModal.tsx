@@ -11,7 +11,6 @@ import {
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Alert, AlertDescription } from '../ui/Alert';
 import { Badge } from '../ui/Badge';

@@ -21,10 +21,9 @@ pub use models::{
 };
 
 pub use repository::{
-    upsert_setting, get_setting, get_settings_by_category, list_all_settings,
-    get_settings_by_prefix, delete_setting, delete_settings_by_category,
-    delete_settings_by_prefix, setting_exists, count_settings_by_category,
-    upsert_settings_batch,
+    count_settings_by_category, delete_setting, delete_settings_by_category,
+    delete_settings_by_prefix, get_setting, get_settings_by_category, get_settings_by_prefix,
+    list_all_settings, setting_exists, upsert_setting, upsert_settings_batch,
 };
 
 pub use service::{SettingsService, SettingsServiceError};

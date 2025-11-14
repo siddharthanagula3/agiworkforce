@@ -35,6 +35,14 @@ interface AnalyticsState {
   isLoadingMetrics: boolean;
   isLoadingStats: boolean;
 
+  // ROI Analytics State
+  roiReport: any | null;
+  processMetrics: any[];
+  userMetrics: any[];
+  toolMetrics: any[];
+  trends: Record<string, any[]>;
+  isLoadingROI: boolean;
+
   // Actions
   loadSystemMetrics: () => Promise<void>;
   loadAppMetrics: () => Promise<void>;
@@ -53,6 +61,15 @@ interface AnalyticsState {
   // Feature flag actions
   isFeatureEnabled: (flagName: string) => boolean;
   trackFeatureUsage: (flagName: string) => void;
+
+  // ROI Analytics Actions
+  calculateROI: (startDate: number, endDate: number) => Promise<any>;
+  loadProcessMetrics: (startDate: number, endDate: number) => Promise<any[]>;
+  loadUserMetrics: (startDate: number, endDate: number) => Promise<any[]>;
+  loadToolMetrics: (startDate: number, endDate: number) => Promise<any[]>;
+  loadTrends: (metric: string, days: number) => Promise<any[]>;
+  exportReport: (format: string, startDate: number, endDate: number) => Promise<string>;
+  loadAllROIData: (startDate: number, endDate: number) => Promise<void>;
 }
 
 export const useAnalyticsStore = create<AnalyticsState>()(
@@ -286,7 +303,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     calculateROI: async (startDate: number, endDate: number) => {
       set({ isLoadingROI: true });
       try {
-        const roi = await invoke('analytics_calculate_roi', {
+        const roi = await invoke<any>('analytics_calculate_roi', {
           startDate,
           endDate,
         });
@@ -310,12 +327,12 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // Load process metrics
     loadProcessMetrics: async (startDate: number, endDate: number) => {
       try {
-        const metrics = await invoke('analytics_get_process_metrics', {
+        const metrics = await invoke<any[]>('analytics_get_process_metrics', {
           startDate,
           endDate,
         });
-        set({ processMetrics: metrics });
-        return metrics;
+        set({ processMetrics: metrics || [] });
+        return metrics || [];
       } catch (error) {
         console.error('Failed to load process metrics:', error);
         throw error;
@@ -325,12 +342,12 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // Load user metrics
     loadUserMetrics: async (startDate: number, endDate: number) => {
       try {
-        const metrics = await invoke('analytics_get_user_metrics', {
+        const metrics = await invoke<any[]>('analytics_get_user_metrics', {
           startDate,
           endDate,
         });
-        set({ userMetrics: metrics });
-        return metrics;
+        set({ userMetrics: metrics || [] });
+        return metrics || [];
       } catch (error) {
         console.error('Failed to load user metrics:', error);
         throw error;
@@ -340,12 +357,12 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // Load tool metrics
     loadToolMetrics: async (startDate: number, endDate: number) => {
       try {
-        const metrics = await invoke('analytics_get_tool_metrics', {
+        const metrics = await invoke<any[]>('analytics_get_tool_metrics', {
           startDate,
           endDate,
         });
-        set({ toolMetrics: metrics });
-        return metrics;
+        set({ toolMetrics: metrics || [] });
+        return metrics || [];
       } catch (error) {
         console.error('Failed to load tool metrics:', error);
         throw error;
@@ -355,14 +372,14 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // Load metric trends
     loadTrends: async (metric: string, days: number) => {
       try {
-        const trends = await invoke('analytics_get_metric_trends', {
+        const trends = await invoke<any[]>('analytics_get_metric_trends', {
           metric,
           days,
         });
         set((state) => {
-          state.trends[metric] = trends;
+          state.trends[metric] = trends || [];
         });
-        return trends;
+        return trends || [];
       } catch (error) {
         console.error('Failed to load trends:', error);
         throw error;
@@ -372,14 +389,14 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // Export analytics report
     exportReport: async (format: string, startDate: number, endDate: number) => {
       try {
-        const report = await invoke('analytics_export_report', {
+        const report = await invoke<string>('analytics_export_report', {
           format,
           startDate,
           endDate,
         });
 
         // Download the report
-        const blob = new Blob([report], {
+        const blob = new Blob([report as string], {
           type: format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/markdown',
         });
         const url = URL.createObjectURL(blob);
