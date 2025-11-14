@@ -106,7 +106,7 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
                   key={artifact.id}
                   artifact={artifact}
                   maxHeight="400px"
-                  ocrText={result.metadata?.ocr_text as string | undefined}
+                  ocrText={result.metadata?.['ocr_text'] as string | undefined}
                 />
               ))}
             </div>
@@ -120,7 +120,7 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
       case 'code': {
         const codeData =
           typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
-        const language = (result.metadata?.language as string) || 'javascript';
+        const language = (result.metadata?.['language'] as string) || 'javascript';
 
         return (
           <div className="relative group">
