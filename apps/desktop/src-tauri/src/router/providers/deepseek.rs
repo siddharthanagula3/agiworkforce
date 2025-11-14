@@ -2,7 +2,7 @@
  * DeepSeek Provider (V3.2, Coder-V2, Reasoner)
  * OpenAI-compatible API at https://api.deepseek.com/v1
  */
-use crate::router::{LLMProvider, LLMRequest, LLMResponse};
+use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,90 @@ impl DeepSeekProvider {
             .as_deref()
             .ok_or_else(|| "DeepSeek API key not configured".into())
     }
+
+    /// Convert ToolDefinition to DeepSeek format (OpenAI-compatible)
+    fn convert_tools(tools: &[ToolDefinition]) -> Vec<DeepSeekTool> {
+        tools
+            .iter()
+            .map(|tool| DeepSeekTool {
+                tool_type: "function".to_string(),
+                function: DeepSeekFunction {
+                    name: tool.name.clone(),
+                    description: tool.description.clone(),
+                    parameters: tool.parameters.clone(),
+                },
+            })
+            .collect()
+    }
+
+    /// Convert ToolChoice to DeepSeek format
+    fn convert_tool_choice(choice: &ToolChoice) -> Option<DeepSeekToolChoiceValue> {
+        match choice {
+            ToolChoice::Auto => Some(DeepSeekToolChoiceValue::String("auto".to_string())),
+            ToolChoice::Required => Some(DeepSeekToolChoiceValue::String("required".to_string())),
+            ToolChoice::None => Some(DeepSeekToolChoiceValue::String("none".to_string())),
+            ToolChoice::Specific(name) => Some(DeepSeekToolChoiceValue::Specific {
+                choice_type: "function".to_string(),
+                function: DeepSeekToolChoiceFunctionName { name: name.clone() },
+            }),
+        }
+    }
+
+    /// Convert DeepSeek tool calls to our format
+    fn convert_tool_calls(deepseek_calls: &[DeepSeekToolCall]) -> Vec<ToolCall> {
+        deepseek_calls
+            .iter()
+            .map(|call| ToolCall {
+                id: call.id.clone(),
+                name: call.function.name.clone(),
+                arguments: call.function.arguments.clone(),
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct DeepSeekTool {
+    #[serde(rename = "type")]
+    tool_type: String, // "function"
+    function: DeepSeekFunction,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct DeepSeekFunction {
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+enum DeepSeekToolChoiceValue {
+    String(String), // "auto", "required", "none"
+    Specific {
+        #[serde(rename = "type")]
+        choice_type: String,
+        function: DeepSeekToolChoiceFunctionName,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct DeepSeekToolChoiceFunctionName {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DeepSeekToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    call_type: String, // "function"
+    function: DeepSeekFunctionCall,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DeepSeekFunctionCall {
+    name: String,
+    arguments: String, // JSON string
 }
 
 #[derive(Debug, Serialize)]
@@ -39,14 +123,23 @@ struct DeepSeekRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<serde_json::Value>>,
+    tools: Option<Vec<DeepSeekTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<DeepSeekToolChoiceValue>,
     stream: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct DeepSeekMessage {
     role: String,
-    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<DeepSeekToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,9 +173,48 @@ impl LLMProvider for DeepSeekProvider {
         let messages: Vec<DeepSeekMessage> = request
             .messages
             .iter()
-            .map(|m| DeepSeekMessage {
-                role: m.role.clone(),
-                content: m.content.clone(),
+            .map(|m| {
+                let mut msg = DeepSeekMessage {
+                    role: m.role.clone(),
+                    content: if m.content.is_empty() {
+                        None
+                    } else {
+                        Some(m.content.clone())
+                    },
+                    tool_calls: None,
+                    tool_call_id: m.tool_call_id.clone(),
+                    name: None,
+                };
+
+                // Convert tool calls if present
+                if let Some(calls) = &m.tool_calls {
+                    msg.tool_calls = Some(
+                        calls
+                            .iter()
+                            .map(|call| DeepSeekToolCall {
+                                id: call.id.clone(),
+                                call_type: "function".to_string(),
+                                function: DeepSeekFunctionCall {
+                                    name: call.name.clone(),
+                                    arguments: call.arguments.clone(),
+                                },
+                            })
+                            .collect(),
+                    );
+                }
+
+                // If role is "tool", set name field
+                if m.role == "tool" {
+                    msg.name = Some(
+                        m.tool_calls
+                            .as_ref()
+                            .and_then(|calls| calls.first())
+                            .map(|call| call.name.clone())
+                            .unwrap_or_default(),
+                    );
+                }
+
+                msg
             })
             .collect();
 
@@ -91,7 +223,11 @@ impl LLMProvider for DeepSeekProvider {
             messages,
             temperature: request.temperature,
             max_tokens: request.max_tokens,
-            tools: None, // TODO: Implement function calling
+            tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .and_then(Self::convert_tool_choice),
             stream: false,
         };
 
@@ -116,20 +252,28 @@ impl LLMProvider for DeepSeekProvider {
             .first()
             .ok_or("No choices in DeepSeek response")?;
 
+        let content = choice.message.content.clone().unwrap_or_default();
+
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .as_ref()
+            .map(|calls| Self::convert_tool_calls(calls));
+
         // Calculate cost ($0.14/$0.28 per million tokens for V3, $0.14/$0.28 for Coder)
         // Using average of $0.14 input / $0.28 output
         let cost = (deepseek_response.usage.prompt_tokens as f64 * 0.00000014)
             + (deepseek_response.usage.completion_tokens as f64 * 0.00000028);
 
         Ok(LLMResponse {
-            content: choice.message.content.clone(),
+            content,
             tokens: Some(deepseek_response.usage.total_tokens),
             prompt_tokens: Some(deepseek_response.usage.prompt_tokens),
             completion_tokens: Some(deepseek_response.usage.completion_tokens),
             cost: Some(cost),
             model: deepseek_response.model,
             cached: false,
-            tool_calls: None,
+            tool_calls,
             finish_reason: choice.finish_reason.clone(),
         })
     }
@@ -140,5 +284,9 @@ impl LLMProvider for DeepSeekProvider {
 
     fn name(&self) -> &str {
         "deepseek"
+    }
+
+    fn supports_function_calling(&self) -> bool {
+        true // DeepSeek supports function calling via OpenAI-compatible API
     }
 }

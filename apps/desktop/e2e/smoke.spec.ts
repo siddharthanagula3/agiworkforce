@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Desktop App Smoke Tests', () => {
   test('app launches and main window renders', async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
 
     // Wait for the main app to load
     await page.waitForSelector('body', { timeout: 10000 });
@@ -21,7 +21,7 @@ test.describe('Desktop App Smoke Tests', () => {
   });
 
   test('main navigation elements are present', async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
 
     // Wait for the app to load
     await page.waitForLoadState('networkidle');
