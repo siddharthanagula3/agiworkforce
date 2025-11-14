@@ -33,6 +33,7 @@
     "allowUnreachableCode": false,
     "useUnknownInCatchVariables": false,
     "allowJs": false,
+    "downlevelIteration": true, // Required for MapIterator and spread operations on ES2020
 
     /* Completeness */
     "skipLibCheck": true,
