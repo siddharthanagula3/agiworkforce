@@ -2,7 +2,6 @@
  * Similarity Search
  * Vector storage and cosine similarity search
  */
-
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -275,11 +274,9 @@ impl SimilaritySearch {
 
     /// Count total embeddings
     pub fn count_embeddings(&self) -> Result<usize> {
-        let count: i64 = self.db.query_row(
-            "SELECT COUNT(*) FROM embeddings",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: i64 = self
+            .db
+            .query_row("SELECT COUNT(*) FROM embeddings", [], |row| row.get(0))?;
 
         Ok(count as usize)
     }

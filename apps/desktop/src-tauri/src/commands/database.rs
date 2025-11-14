@@ -3,8 +3,8 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::database::{
-    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder, QueryValidation,
-    RedisClient, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
+    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder,
+    QueryValidation, RedisClient, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
 };
 
 /// State for managing database clients
@@ -244,8 +244,8 @@ pub async fn db_mysql_bulk_insert(
 
 #[tauri::command]
 pub async fn db_validate_query(sql: String) -> Result<QueryValidation, String> {
-    let validator = SqlSecurityValidator::new()
-        .map_err(|e| format!("Failed to create validator: {}", e))?;
+    let validator =
+        SqlSecurityValidator::new().map_err(|e| format!("Failed to create validator: {}", e))?;
 
     validator
         .validate_query(&sql)

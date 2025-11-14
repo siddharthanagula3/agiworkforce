@@ -32,7 +32,9 @@ pub use audit_logger::{
 pub use auth::{AuthManager, AuthToken, Session, User, UserRole};
 pub use auth_db::{AuthAuditLog, AuthDatabaseManager};
 pub use encryption::{EncryptedSecret, SecretStore};
-pub use oauth::{OAuthAuthorizationUrl, OAuthManager, OAuthProvider, OAuthTokenResult, OAuthUserInfo};
+pub use oauth::{
+    OAuthAuthorizationUrl, OAuthManager, OAuthProvider, OAuthTokenResult, OAuthUserInfo,
+};
 pub use permissions::PermissionManager;
 pub use prompt_injection::{PromptInjectionDetector, SecurityAnalysis, SecurityRecommendation};
 pub use rate_limit::{RateLimitConfig, RateLimiter};

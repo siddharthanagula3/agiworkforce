@@ -18,12 +18,7 @@ impl AuthDatabaseManager {
     }
 
     /// Register a new user
-    pub fn register(
-        &self,
-        email: String,
-        password_hash: String,
-        role: UserRole,
-    ) -> Result<User> {
+    pub fn register(&self, email: String, password_hash: String, role: UserRole) -> Result<User> {
         let db = self.db.lock();
 
         // Check if email already exists
@@ -84,8 +79,7 @@ impl AuthDatabaseManager {
                     id: row.get(0)?,
                     email: row.get(1)?,
                     password_hash: row.get(2)?,
-                    role: UserRole::from_str(&row.get::<_, String>(3)?)
-                        .unwrap_or(UserRole::Viewer),
+                    role: UserRole::from_str(&row.get::<_, String>(3)?).unwrap_or(UserRole::Viewer),
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                         .unwrap()
                         .with_timezone(&Utc),
@@ -119,8 +113,7 @@ impl AuthDatabaseManager {
                     id: row.get(0)?,
                     email: row.get(1)?,
                     password_hash: row.get(2)?,
-                    role: UserRole::from_str(&row.get::<_, String>(3)?)
-                        .unwrap_or(UserRole::Viewer),
+                    role: UserRole::from_str(&row.get::<_, String>(3)?).unwrap_or(UserRole::Viewer),
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                         .unwrap()
                         .with_timezone(&Utc),
@@ -141,7 +134,11 @@ impl AuthDatabaseManager {
     }
 
     /// Update user's failed login attempts
-    pub fn record_failed_login(&self, user_id: &str, locked_until: Option<DateTime<Utc>>) -> Result<()> {
+    pub fn record_failed_login(
+        &self,
+        user_id: &str,
+        locked_until: Option<DateTime<Utc>>,
+    ) -> Result<()> {
         let db = self.db.lock();
 
         db.execute(
@@ -149,10 +146,7 @@ impl AuthDatabaseManager {
              failed_login_attempts = failed_login_attempts + 1,
              locked_until = ?1
              WHERE id = ?2",
-            params![
-                locked_until.map(|t| t.to_rfc3339()),
-                user_id,
-            ],
+            params![locked_until.map(|t| t.to_rfc3339()), user_id,],
         )?;
 
         Ok(())
@@ -168,17 +162,19 @@ impl AuthDatabaseManager {
              failed_login_attempts = 0,
              locked_until = NULL
              WHERE id = ?2",
-            params![
-                Utc::now().to_rfc3339(),
-                user_id,
-            ],
+            params![Utc::now().to_rfc3339(), user_id,],
         )?;
 
         Ok(())
     }
 
     /// Create session
-    pub fn create_session(&self, session: &Session, ip_address: Option<String>, user_agent: Option<String>) -> Result<()> {
+    pub fn create_session(
+        &self,
+        session: &Session,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+    ) -> Result<()> {
         let db = self.db.lock();
 
         db.execute(
@@ -441,11 +437,7 @@ impl AuthDatabaseManager {
     }
 
     /// Get audit logs for a user
-    pub fn get_user_audit_logs(
-        &self,
-        user_id: &str,
-        limit: usize,
-    ) -> Result<Vec<AuthAuditLog>> {
+    pub fn get_user_audit_logs(&self, user_id: &str, limit: usize) -> Result<Vec<AuthAuditLog>> {
         let db = self.db.lock();
 
         let mut stmt = db.prepare(
