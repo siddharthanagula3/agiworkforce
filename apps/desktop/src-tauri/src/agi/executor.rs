@@ -114,6 +114,16 @@ impl AGIExecutor {
     ) -> Result<serde_json::Value> {
         tracing::info!("[Executor] Executing step: {}", step.description);
 
+        // Emit StepStart hook event
+        let session_id = uuid::Uuid::new_v4().to_string();
+        crate::hooks::emit_event(crate::hooks::HookEvent::step_start(
+            session_id.clone(),
+            step.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            step.description.clone(),
+            context.goal.id.clone(),
+        ))
+        .await;
+
         // Get tool
         let tool = self
             .tool_registry
@@ -135,7 +145,32 @@ impl AGIExecutor {
         }
 
         // Execute tool
-        let result = self.execute_tool(&tool, &step.parameters, context).await?;
+        let result = match self.execute_tool(&tool, &step.parameters, context).await {
+            Ok(res) => {
+                // Emit StepCompleted hook event
+                crate::hooks::emit_event(crate::hooks::HookEvent::step_completed(
+                    session_id,
+                    step.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    step.description.clone(),
+                    context.goal.id.clone(),
+                    res.clone(),
+                ))
+                .await;
+                Ok(res)
+            }
+            Err(e) => {
+                // Emit StepError hook event
+                crate::hooks::emit_event(crate::hooks::HookEvent::step_error(
+                    session_id,
+                    step.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    step.description.clone(),
+                    context.goal.id.clone(),
+                    e.to_string(),
+                ))
+                .await;
+                Err(e)
+            }
+        }?;
 
         Ok(result)
     }
@@ -180,6 +215,17 @@ impl AGIExecutor {
         parameters: &HashMap<String, serde_json::Value>,
         _context: &ExecutionContext,
     ) -> Result<serde_json::Value> {
+        // Emit PreToolUse hook event
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let start_time = std::time::Instant::now();
+        crate::hooks::emit_event(crate::hooks::HookEvent::pre_tool_use(
+            session_id.clone(),
+            tool_name.to_string(),
+            tool_name.to_string(),
+            parameters.clone(),
+        ))
+        .await;
+
         // Security validation before execution
         let params_json = serde_json::to_value(parameters)?;
         if let Err(e) = self
@@ -192,6 +238,15 @@ impl AGIExecutor {
                 tool_name,
                 e
             );
+            // Emit ToolError hook event for security validation failure
+            crate::hooks::emit_event(crate::hooks::HookEvent::tool_error(
+                session_id,
+                tool_name.to_string(),
+                tool_name.to_string(),
+                parameters.clone(),
+                format!("Security validation failed: {}", e),
+            ))
+            .await;
             return Err(anyhow::anyhow!("Security validation failed: {}", e));
         }
 
@@ -1370,7 +1425,35 @@ impl AGIExecutor {
                 }
             }
             _ => Err(anyhow!("Unknown tool: {}", tool_name)),
+        };
+
+        // Emit PostToolUse or ToolError hook event based on result
+        let execution_time_ms = start_time.elapsed().as_millis() as u64;
+        match &result {
+            Ok(res) => {
+                crate::hooks::emit_event(crate::hooks::HookEvent::post_tool_use(
+                    session_id,
+                    tool_name.to_string(),
+                    tool_name.to_string(),
+                    parameters.clone(),
+                    res.clone(),
+                    execution_time_ms,
+                ))
+                .await;
+            }
+            Err(e) => {
+                crate::hooks::emit_event(crate::hooks::HookEvent::tool_error(
+                    session_id,
+                    tool_name.to_string(),
+                    tool_name.to_string(),
+                    parameters.clone(),
+                    e.to_string(),
+                ))
+                .await;
+            }
         }
+
+        result
     }
 
     pub async fn execute_plans_parallel(
