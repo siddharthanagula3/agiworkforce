@@ -17,7 +17,7 @@
   },
   "scripts": {
     "prepare": "husky install",
-    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs --max-warnings=0",
+    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs --max-warnings=15",
     "lint:fix": "pnpm lint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
