@@ -221,9 +221,10 @@ pub async fn capture_get_history(
 
     let limit = limit.unwrap_or(50);
 
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let captures: Result<Vec<CaptureRecord>, String> = if let Some(conv_id) = conversation_id {
         let mut stmt = conn
@@ -292,9 +293,10 @@ pub async fn capture_get_history(
 pub async fn capture_delete(db: State<'_, AppDatabase>, capture_id: String) -> Result<(), String> {
     tracing::info!("Deleting capture: {}", capture_id);
 
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get file paths before deleting
     let (file_path, thumbnail_path): (String, Option<String>) = conn
@@ -331,9 +333,10 @@ pub async fn capture_save_to_clipboard(
 ) -> Result<(), String> {
     tracing::info!("Copying capture to clipboard: {}", capture_id);
 
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let file_path: String = conn
         .query_row(

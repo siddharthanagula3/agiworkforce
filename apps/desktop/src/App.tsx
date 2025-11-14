@@ -302,7 +302,7 @@ const DesktopShell = () => {
 
   // Show onboarding if not complete
   if (!onboardingComplete) {
-    return <OnboardingWizard userId="default-user" onComplete={() => setOnboardingComplete(true)} />;
+    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
   const renderMainContent = () => {
