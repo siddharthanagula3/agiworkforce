@@ -373,10 +373,14 @@ pub async fn get_user_clones(
     user_id: String,
     state: State<'_, MarketplaceState>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let db = state.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let mut stmt = db.prepare(
-        "SELECT
+    let mut stmt = db
+        .prepare(
+            "SELECT
             wc.id as clone_id,
             wc.workflow_id,
             pw.title as workflow_title,
@@ -389,22 +393,25 @@ pub async fn get_user_clones(
          FROM workflow_clones wc
          JOIN published_workflows pw ON wc.workflow_id = pw.id
          WHERE wc.cloner_id = ?1
-         ORDER BY wc.cloned_at DESC"
-    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+         ORDER BY wc.cloned_at DESC",
+        )
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-    let clones = stmt.query_map(rusqlite::params![&user_id], |row| {
-        Ok(serde_json::json!({
-            "clone_id": row.get::<_, String>(0)?,
-            "workflow_id": row.get::<_, String>(1)?,
-            "workflow_title": row.get::<_, String>(2)?,
-            "workflow_description": row.get::<_, String>(3)?,
-            "category": row.get::<_, String>(4)?,
-            "creator_name": row.get::<_, String>(5)?,
-            "cloned_at": row.get::<_, i64>(6)?,
-            "original_clone_count": row.get::<_, i64>(7)?,
-            "original_avg_rating": row.get::<_, f64>(8)?,
-        }))
-    }).map_err(|e| format!("Failed to query clones: {}", e))?
+    let clones = stmt
+        .query_map(rusqlite::params![&user_id], |row| {
+            Ok(serde_json::json!({
+                "clone_id": row.get::<_, String>(0)?,
+                "workflow_id": row.get::<_, String>(1)?,
+                "workflow_title": row.get::<_, String>(2)?,
+                "workflow_description": row.get::<_, String>(3)?,
+                "category": row.get::<_, String>(4)?,
+                "creator_name": row.get::<_, String>(5)?,
+                "cloned_at": row.get::<_, i64>(6)?,
+                "original_clone_count": row.get::<_, i64>(7)?,
+                "original_avg_rating": row.get::<_, f64>(8)?,
+            }))
+        })
+        .map_err(|e| format!("Failed to query clones: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to collect results: {}", e))?;
 
