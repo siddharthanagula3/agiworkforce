@@ -1,4 +1,7 @@
-use crate::agi::{AGIConfig, AGICore, ExecutionContext, Goal, Priority, ScoredResult};
+use crate::agi::{
+    AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, ExecutionContext, Goal,
+    Priority, ScoredResult,
+};
 use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
 use crate::router::LLMRouter;
@@ -224,4 +227,265 @@ pub async fn agi_stop() -> Result<(), String> {
         agi.stop();
     }
     Ok(())
+}
+
+// ============================================================================
+// Parallel Agent Orchestration Commands
+// ============================================================================
+
+// Global orchestrator instance
+static ORCHESTRATOR: Mutex<Option<Arc<TokioMutex<AgentOrchestrator>>>> = Mutex::new(None);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrchestratorInitRequest {
+    pub max_agents: usize, // Maximum number of concurrent agents
+    pub config: AGIConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SpawnAgentRequest {
+    pub description: String,
+    pub priority: Option<String>,
+    pub deadline: Option<u64>,
+    pub success_criteria: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SpawnAgentResponse {
+    pub agent_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SpawnParallelAgentsRequest {
+    pub goals: Vec<SpawnAgentRequest>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SpawnParallelAgentsResponse {
+    pub agent_ids: Vec<String>,
+}
+
+/// Initialize the agent orchestrator
+#[tauri::command]
+pub async fn orchestrator_init(
+    request: OrchestratorInitRequest,
+    automation: State<'_, Arc<AutomationService>>,
+    llm_state: State<'_, LLMState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Get router from LLM state
+    let router = llm_state.router.lock().await;
+    // Create a new router instance for orchestrator
+    let router_for_orchestrator = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
+    drop(router);
+
+    let orchestrator = AgentOrchestrator::new(
+        request.max_agents,
+        request.config,
+        router_for_orchestrator,
+        automation.inner().clone(),
+        Some(app.clone()),
+    )
+    .map_err(|e| format!("Failed to create orchestrator: {}", e))?;
+
+    let orchestrator_arc = Arc::new(TokioMutex::new(orchestrator));
+    *ORCHESTRATOR.lock() = Some(orchestrator_arc);
+
+    tracing::info!(
+        "[Orchestrator] Initialized with max_agents={}",
+        request.max_agents
+    );
+
+    Ok(())
+}
+
+/// Spawn a single agent
+#[tauri::command]
+pub async fn orchestrator_spawn_agent(
+    request: SpawnAgentRequest,
+) -> Result<SpawnAgentResponse, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let priority = match request.priority.as_deref() {
+        Some("low") => Priority::Low,
+        Some("medium") => Priority::Medium,
+        Some("high") => Priority::High,
+        Some("critical") => Priority::Critical,
+        _ => Priority::Medium,
+    };
+
+    let goal = Goal {
+        id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
+        description: request.description,
+        priority,
+        deadline: request.deadline,
+        constraints: vec![],
+        success_criteria: request.success_criteria.unwrap_or_default(),
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let agent_id = orchestrator
+        .spawn_agent(goal)
+        .await
+        .map_err(|e| format!("Failed to spawn agent: {}", e))?;
+
+    Ok(SpawnAgentResponse { agent_id })
+}
+
+/// Spawn multiple agents in parallel
+#[tauri::command]
+pub async fn orchestrator_spawn_parallel(
+    request: SpawnParallelAgentsRequest,
+) -> Result<SpawnParallelAgentsResponse, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let mut goals = Vec::new();
+    for req in request.goals {
+        let priority = match req.priority.as_deref() {
+            Some("low") => Priority::Low,
+            Some("medium") => Priority::Medium,
+            Some("high") => Priority::High,
+            Some("critical") => Priority::Critical,
+            _ => Priority::Medium,
+        };
+
+        let goal = Goal {
+            id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
+            description: req.description,
+            priority,
+            deadline: req.deadline,
+            constraints: vec![],
+            success_criteria: req.success_criteria.unwrap_or_default(),
+        };
+        goals.push(goal);
+    }
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let agent_ids = orchestrator
+        .spawn_parallel(goals)
+        .await
+        .map_err(|e| format!("Failed to spawn parallel agents: {}", e))?;
+
+    Ok(SpawnParallelAgentsResponse { agent_ids })
+}
+
+/// Get status of a specific agent
+#[tauri::command]
+pub async fn orchestrator_get_agent_status(
+    agent_id: String,
+) -> Result<Option<AgentStatus>, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let status = orchestrator.get_agent_status(&agent_id).await;
+
+    Ok(status)
+}
+
+/// List all active agents
+#[tauri::command]
+pub async fn orchestrator_list_agents() -> Result<Vec<AgentStatus>, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let agents = orchestrator.list_active_agents().await;
+
+    Ok(agents)
+}
+
+/// Cancel a specific agent
+#[tauri::command]
+pub async fn orchestrator_cancel_agent(agent_id: String) -> Result<(), String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    orchestrator
+        .cancel_agent(&agent_id)
+        .await
+        .map_err(|e| format!("Failed to cancel agent: {}", e))
+}
+
+/// Cancel all agents
+#[tauri::command]
+pub async fn orchestrator_cancel_all() -> Result<(), String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    orchestrator
+        .cancel_all_agents()
+        .await
+        .map_err(|e| format!("Failed to cancel all agents: {}", e))
+}
+
+/// Wait for all agents to complete and return results
+#[tauri::command]
+pub async fn orchestrator_wait_all() -> Result<Vec<AgentResult>, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let results = orchestrator.wait_for_all().await;
+
+    Ok(results)
+}
+
+/// Cleanup completed agents
+#[tauri::command]
+pub async fn orchestrator_cleanup() -> Result<usize, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let removed = orchestrator
+        .cleanup_completed()
+        .await
+        .map_err(|e| format!("Failed to cleanup: {}", e))?;
+
+    Ok(removed)
 }
