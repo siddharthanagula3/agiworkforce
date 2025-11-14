@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '../ui/Table';
 import { usePricingStore } from '../../stores/pricingStore';
-import { Download, Mail, Eye, TrendingUp, DollarSign, FileText } from 'lucide-react';
+import { Download, Eye, TrendingUp, DollarSign, FileText } from 'lucide-react';
 import type { Invoice, InvoiceStatus } from '../../types/pricing';
 
 export function InvoicesTab() {

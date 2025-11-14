@@ -47,7 +47,7 @@ pub struct ToolMetrics {
 /// Trend data point
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrendPoint {
-    pub date: String,  // ISO 8601 date format
+    pub date: String, // ISO 8601 date format
     pub value: f64,
 }
 
@@ -71,7 +71,11 @@ impl MetricsAggregator {
     }
 
     /// Aggregate metrics by process type
-    pub async fn aggregate_by_process_type(&self, start: i64, end: i64) -> Result<Vec<ProcessMetrics>> {
+    pub async fn aggregate_by_process_type(
+        &self,
+        start: i64,
+        end: i64,
+    ) -> Result<Vec<ProcessMetrics>> {
         let conn = self.db.lock().await;
         let mut stmt = conn.prepare(
             "SELECT
@@ -84,7 +88,7 @@ impl MetricsAggregator {
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?
              GROUP BY task_type
-             ORDER BY total DESC"
+             ORDER BY total DESC",
         )?;
 
         let metrics_iter = stmt.query_map(params![start, end], |row| {
@@ -142,62 +146,74 @@ impl MetricsAggregator {
         let conn = self.db.lock().await;
 
         // Count automations
-        let automation_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM automation_history
+        let automation_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM automation_history
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Count goals
-        let goal_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM autonomous_sessions
+        let goal_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM autonomous_sessions
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Calculate time saved
-        let total_duration_ms: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(duration_ms), 0.0) FROM automation_history
+        let total_duration_ms: f64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(duration_ms), 0.0) FROM automation_history
              WHERE created_at >= ? AND created_at <= ? AND success = 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
 
         let manual_time_ms = total_duration_ms * 10.0;
         let time_saved_hours = (manual_time_ms - total_duration_ms) / 3600000.0;
         let cost_savings_usd = time_saved_hours * self.avg_hourly_rate;
 
         // Find most used tool (from task logs)
-        let most_used_tool: String = conn.query_row(
-            "SELECT COALESCE(tool_name, 'unknown') FROM autonomous_task_logs
+        let most_used_tool: String = conn
+            .query_row(
+                "SELECT COALESCE(tool_name, 'unknown') FROM autonomous_task_logs
              WHERE created_at >= ? AND created_at <= ?
              GROUP BY tool_name
              ORDER BY COUNT(*) DESC
              LIMIT 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or_else(|_| "none".to_string());
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "none".to_string());
 
         // Find most used process
-        let most_used_process: String = conn.query_row(
-            "SELECT task_type FROM automation_history
+        let most_used_process: String = conn
+            .query_row(
+                "SELECT task_type FROM automation_history
              WHERE created_at >= ? AND created_at <= ?
              GROUP BY task_type
              ORDER BY COUNT(*) DESC
              LIMIT 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or_else(|_| "none".to_string());
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "none".to_string());
 
         // Calculate success rate
-        let (total, successful): (i64, i64) = conn.query_row(
-            "SELECT COUNT(*), SUM(success) FROM automation_history
+        let (total, successful): (i64, i64) = conn
+            .query_row(
+                "SELECT COUNT(*), SUM(success) FROM automation_history
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).unwrap_or((0, 0));
+                params![start, end],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap_or((0, 0));
 
         let avg_success_rate = if total > 0 {
             (successful as f64 / total as f64) * 100.0
@@ -231,7 +247,7 @@ impl MetricsAggregator {
              WHERE created_at >= ? AND created_at <= ?
              AND tool_name IS NOT NULL
              GROUP BY tool_name
-             ORDER BY total DESC"
+             ORDER BY total DESC",
         )?;
 
         let metrics_iter = stmt.query_map(params![start, end], |row| {
@@ -248,7 +264,7 @@ impl MetricsAggregator {
             };
 
             // Estimate time saved per tool (5 minutes manual vs automated)
-            let manual_time_per_use_hours = 5.0 / 60.0;  // 5 minutes
+            let manual_time_per_use_hours = 5.0 / 60.0; // 5 minutes
             let automated_time_hours = (avg_duration_ms / 1000.0) / 3600.0;
             let time_saved_per_use = manual_time_per_use_hours - automated_time_hours;
             let total_time_saved_hours = time_saved_per_use * successful as f64;
@@ -285,7 +301,7 @@ impl MetricsAggregator {
                  WHERE created_at >= ? AND created_at <= ?
                  GROUP BY date
                  ORDER BY date"
-            },
+            }
             "success_rate" => {
                 "SELECT DATE(created_at, 'unixepoch') as date,
                         AVG(CAST(success AS FLOAT)) * 100 as value
@@ -293,7 +309,7 @@ impl MetricsAggregator {
                  WHERE created_at >= ? AND created_at <= ?
                  GROUP BY date
                  ORDER BY date"
-            },
+            }
             "time_saved" => {
                 "SELECT DATE(tracked_at, 'unixepoch') as date,
                         SUM(target_value - actual_value) / 3600.0 as value
@@ -302,7 +318,7 @@ impl MetricsAggregator {
                  AND metric_name LIKE '%time%'
                  GROUP BY date
                  ORDER BY date"
-            },
+            }
             "cost_savings" => {
                 // Simplified: time saved * hourly rate
                 "SELECT DATE(created_at, 'unixepoch') as date,
@@ -312,7 +328,7 @@ impl MetricsAggregator {
                  AND success = 1
                  GROUP BY date
                  ORDER BY date"
-            },
+            }
             _ => return Err(rusqlite::Error::InvalidQuery),
         };
 
@@ -333,12 +349,19 @@ impl MetricsAggregator {
     }
 
     /// Get top performing processes
-    pub async fn get_top_processes(&self, start: i64, end: i64, limit: usize) -> Result<Vec<ProcessMetrics>> {
+    pub async fn get_top_processes(
+        &self,
+        start: i64,
+        end: i64,
+        limit: usize,
+    ) -> Result<Vec<ProcessMetrics>> {
         let mut all_metrics = self.aggregate_by_process_type(start, end).await?;
 
         // Sort by cost savings (descending)
         all_metrics.sort_by(|a, b| {
-            b.cost_savings_usd.partial_cmp(&a.cost_savings_usd).unwrap_or(std::cmp::Ordering::Equal)
+            b.cost_savings_usd
+                .partial_cmp(&a.cost_savings_usd)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Take top N
@@ -353,32 +376,38 @@ impl MetricsAggregator {
         let mut summary = HashMap::new();
 
         // Total automations
-        let total: f64 = conn.query_row(
-            "SELECT COUNT(*) FROM automation_history WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+        let total: f64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM automation_history WHERE created_at >= ? AND created_at <= ?",
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
         summary.insert("total_automations".to_string(), total);
 
         // Success rate
-        let success_rate: f64 = conn.query_row(
-            "SELECT AVG(CAST(success AS FLOAT)) * 100
+        let success_rate: f64 = conn
+            .query_row(
+                "SELECT AVG(CAST(success AS FLOAT)) * 100
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ?",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
         summary.insert("success_rate".to_string(), success_rate);
 
         // Total time saved
-        let duration: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(duration_ms), 0)
+        let duration: f64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(duration_ms), 0)
              FROM automation_history
              WHERE created_at >= ? AND created_at <= ? AND success = 1",
-            params![start, end],
-            |row| row.get(0),
-        ).unwrap_or(0.0);
-        let time_saved = (duration * 9.0) / 3600000.0;  // 10x faster, so saved 9x
+                params![start, end],
+                |row| row.get(0),
+            )
+            .unwrap_or(0.0);
+        let time_saved = (duration * 9.0) / 3600000.0; // 10x faster, so saved 9x
         summary.insert("time_saved_hours".to_string(), time_saved);
 
         // Cost savings

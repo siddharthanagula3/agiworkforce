@@ -11,14 +11,15 @@ interface CollaborativeCursorsProps {
   resourceId: string;
 }
 
-const userColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+const userColors: readonly string[] = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+const DEFAULT_COLOR = '#3b82f6';
 
 export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ resourceId }) => {
   const [cursors, setCursors] = useState<Map<string, CursorData>>(new Map());
 
   useEffect(() => {
     const unsubscribe = websocketClient.on('CursorMoved', (event) => {
-      const cursorEvent = event as {
+      const cursorEvent = event as unknown as {
         user_id: string;
         position: CursorPosition;
       };
@@ -54,7 +55,7 @@ export const CollaborativeCursors: React.FC<CollaborativeCursorsProps> = ({ reso
 
   const getUserColor = (userId: string): string => {
     const hash = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return userColors[hash % userColors.length];
+    return userColors[hash % userColors.length] ?? DEFAULT_COLOR;
   };
 
   const getUserName = (userId: string): string => {
@@ -101,14 +102,8 @@ const Cursor: React.FC<CursorProps> = ({ position, color, label }) => {
         xmlns="http://www.w3.org/2000/svg"
         style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
       >
-        <path
-          d="M5.65376 12.3673L8.47618 15.4615L11.6341 10.1551L5.65376 12.3673Z"
-          fill={color}
-        />
-        <path
-          d="M4.5 5.11803L12.545 20.4615L11.6341 10.1551L4.5 5.11803Z"
-          fill={color}
-        />
+        <path d="M5.65376 12.3673L8.47618 15.4615L11.6341 10.1551L5.65376 12.3673Z" fill={color} />
+        <path d="M4.5 5.11803L12.545 20.4615L11.6341 10.1551L4.5 5.11803Z" fill={color} />
       </svg>
 
       {/* User label */}

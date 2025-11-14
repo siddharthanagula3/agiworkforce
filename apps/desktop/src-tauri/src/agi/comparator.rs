@@ -66,8 +66,7 @@ impl ResultComparator {
         }
 
         let completion_rate = if result.steps_completed + result.steps_failed > 0 {
-            result.steps_completed as f64
-                / (result.steps_completed + result.steps_failed) as f64
+            result.steps_completed as f64 / (result.steps_completed + result.steps_failed) as f64
         } else {
             0.0
         };

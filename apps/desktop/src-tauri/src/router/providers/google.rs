@@ -163,9 +163,7 @@ impl GoogleProvider {
             for part in content_parts {
                 match part {
                     ContentPart::Text { text } => {
-                        parts.push(GooglePart::Text {
-                            text: text.clone(),
-                        });
+                        parts.push(GooglePart::Text { text: text.clone() });
                     }
                     ContentPart::Image { image } => {
                         let mime_type = match image.format {

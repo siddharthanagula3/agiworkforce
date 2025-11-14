@@ -363,8 +363,10 @@ pub async fn set_user_preference(
 
 // ===== First-Run Experience Commands =====
 
-use crate::onboarding::{FirstRunExperience, FirstRunSession, DemoResult, AIEmployeeRecommendation, FirstRunStatistics};
 use crate::onboarding::instant_demo::InstantDemo;
+use crate::onboarding::{
+    AIEmployeeRecommendation, DemoResult, FirstRunExperience, FirstRunSession, FirstRunStatistics,
+};
 
 /// Start first-run experience
 #[tauri::command]
@@ -397,39 +399,35 @@ pub async fn get_recommended_employees_for_role(
     // Create a temporary first-run instance to access recommendations
     // In production, this would be refactored to not need DB access
     let recommendations = match user_role.as_str() {
-        "founder" | "ceo" | "executive" => vec![
-            AIEmployeeRecommendation {
-                id: "inbox_manager".to_string(),
-                name: "Inbox Manager".to_string(),
-                description: "Categorizes emails, drafts responses, and escalates urgent items".to_string(),
-                estimated_time_saved_per_run: 150,
-                estimated_cost_saved_per_run: 75.0,
-                demo_duration_seconds: 30,
-                match_score: 95,
-            },
-        ],
-        "developer" | "engineer" => vec![
-            AIEmployeeRecommendation {
-                id: "code_reviewer".to_string(),
-                name: "Code Reviewer".to_string(),
-                description: "Reviews PRs, suggests improvements, finds bugs and style issues".to_string(),
-                estimated_time_saved_per_run: 30,
-                estimated_cost_saved_per_run: 25.0,
-                demo_duration_seconds: 20,
-                match_score: 98,
-            },
-        ],
-        _ => vec![
-            AIEmployeeRecommendation {
-                id: "data_entry_specialist".to_string(),
-                name: "Data Entry Specialist".to_string(),
-                description: "Processes documents, extracts data, enters into databases".to_string(),
-                estimated_time_saved_per_run: 90,
-                estimated_cost_saved_per_run: 45.0,
-                demo_duration_seconds: 25,
-                match_score: 85,
-            },
-        ],
+        "founder" | "ceo" | "executive" => vec![AIEmployeeRecommendation {
+            id: "inbox_manager".to_string(),
+            name: "Inbox Manager".to_string(),
+            description: "Categorizes emails, drafts responses, and escalates urgent items"
+                .to_string(),
+            estimated_time_saved_per_run: 150,
+            estimated_cost_saved_per_run: 75.0,
+            demo_duration_seconds: 30,
+            match_score: 95,
+        }],
+        "developer" | "engineer" => vec![AIEmployeeRecommendation {
+            id: "code_reviewer".to_string(),
+            name: "Code Reviewer".to_string(),
+            description: "Reviews PRs, suggests improvements, finds bugs and style issues"
+                .to_string(),
+            estimated_time_saved_per_run: 30,
+            estimated_cost_saved_per_run: 25.0,
+            demo_duration_seconds: 20,
+            match_score: 98,
+        }],
+        _ => vec![AIEmployeeRecommendation {
+            id: "data_entry_specialist".to_string(),
+            name: "Data Entry Specialist".to_string(),
+            description: "Processes documents, extracts data, enters into databases".to_string(),
+            estimated_time_saved_per_run: 90,
+            estimated_cost_saved_per_run: 45.0,
+            demo_duration_seconds: 25,
+            match_score: 85,
+        }],
     };
 
     Ok(recommendations)
@@ -458,8 +456,8 @@ pub async fn update_first_run_step(
     use crate::onboarding::OnboardingStep;
 
     let first_run = FirstRunExperience::new(db.0.clone());
-    let onboarding_step: OnboardingStep = serde_json::from_str(&step)
-        .map_err(|e| format!("Invalid step format: {}", e))?;
+    let onboarding_step: OnboardingStep =
+        serde_json::from_str(&step).map_err(|e| format!("Invalid step format: {}", e))?;
 
     first_run
         .update_step(&session_id, onboarding_step)
@@ -541,10 +539,7 @@ pub async fn get_first_run_statistics(
 
 /// Skip onboarding (allow user to skip first-run)
 #[tauri::command]
-pub async fn skip_first_run(
-    db: State<'_, AppDatabase>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn skip_first_run(db: State<'_, AppDatabase>, session_id: String) -> Result<(), String> {
     // Mark session as completed but without hiring
     let first_run = FirstRunExperience::new(db.0.clone());
     first_run

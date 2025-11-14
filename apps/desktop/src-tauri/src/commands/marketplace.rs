@@ -1,11 +1,11 @@
-use crate::workflows::{
-    WorkflowPublisher, WorkflowMarketplace, WorkflowSocial, WorkflowCategory,
-    PublishedWorkflow, WorkflowFilters, SortOption, WorkflowStats, WorkflowComment,
-    SharePlatform, get_all_templates, WorkflowTemplate,
-};
 use crate::orchestration::workflow_engine::WorkflowDefinition;
-use std::sync::{Arc, Mutex};
+use crate::workflows::{
+    get_all_templates, PublishedWorkflow, SharePlatform, SortOption, WorkflowCategory,
+    WorkflowComment, WorkflowFilters, WorkflowMarketplace, WorkflowPublisher, WorkflowSocial,
+    WorkflowStats, WorkflowTemplate,
+};
 use rusqlite::Connection;
+use std::sync::{Arc, Mutex};
 use tauri::State;
 
 /// State for marketplace operations
@@ -27,7 +27,10 @@ pub async fn publish_workflow_to_marketplace(
     state: State<'_, MarketplaceState>,
 ) -> Result<PublishedWorkflow, String> {
     // First, get the workflow from workflow_definitions table
-    let db = state.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let workflow: WorkflowDefinition = {
         let mut stmt = db.prepare(
@@ -41,14 +44,14 @@ pub async fn publish_workflow_to_marketplace(
             let triggers_json: String = row.get(6)?;
             let metadata_json: String = row.get(7)?;
 
-            let nodes = serde_json::from_str(&nodes_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let edges = serde_json::from_str(&edges_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let triggers = serde_json::from_str(&triggers_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let metadata = serde_json::from_str(&metadata_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let nodes =
+                serde_json::from_str(&nodes_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let edges =
+                serde_json::from_str(&edges_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let triggers =
+                serde_json::from_str(&triggers_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let metadata =
+                serde_json::from_str(&metadata_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
 
             Ok(WorkflowDefinition {
                 id: row.get(0)?,
@@ -62,7 +65,8 @@ pub async fn publish_workflow_to_marketplace(
                 created_at: row.get(8)?,
                 updated_at: row.get(9)?,
             })
-        }).map_err(|e| format!("Workflow not found: {}", e))?
+        })
+        .map_err(|e| format!("Workflow not found: {}", e))?
     };
 
     drop(db); // Release lock before publishing
@@ -207,7 +211,10 @@ pub async fn get_category_counts(
     let counts = marketplace.get_category_counts()?;
 
     // Convert enum to string
-    Ok(counts.into_iter().map(|(cat, count)| (cat.to_string(), count)).collect())
+    Ok(counts
+        .into_iter()
+        .map(|(cat, count)| (cat.to_string(), count))
+        .collect())
 }
 
 /// Get popular tags
@@ -366,10 +373,14 @@ pub async fn get_user_clones(
     user_id: String,
     state: State<'_, MarketplaceState>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let db = state.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let mut stmt = db.prepare(
-        "SELECT
+    let mut stmt = db
+        .prepare(
+            "SELECT
             wc.id as clone_id,
             wc.workflow_id,
             pw.title as workflow_title,
@@ -382,22 +393,25 @@ pub async fn get_user_clones(
          FROM workflow_clones wc
          JOIN published_workflows pw ON wc.workflow_id = pw.id
          WHERE wc.cloner_id = ?1
-         ORDER BY wc.cloned_at DESC"
-    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+         ORDER BY wc.cloned_at DESC",
+        )
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-    let clones = stmt.query_map(rusqlite::params![&user_id], |row| {
-        Ok(serde_json::json!({
-            "clone_id": row.get::<_, String>(0)?,
-            "workflow_id": row.get::<_, String>(1)?,
-            "workflow_title": row.get::<_, String>(2)?,
-            "workflow_description": row.get::<_, String>(3)?,
-            "category": row.get::<_, String>(4)?,
-            "creator_name": row.get::<_, String>(5)?,
-            "cloned_at": row.get::<_, i64>(6)?,
-            "original_clone_count": row.get::<_, i64>(7)?,
-            "original_avg_rating": row.get::<_, f64>(8)?,
-        }))
-    }).map_err(|e| format!("Failed to query clones: {}", e))?
+    let clones = stmt
+        .query_map(rusqlite::params![&user_id], |row| {
+            Ok(serde_json::json!({
+                "clone_id": row.get::<_, String>(0)?,
+                "workflow_id": row.get::<_, String>(1)?,
+                "workflow_title": row.get::<_, String>(2)?,
+                "workflow_description": row.get::<_, String>(3)?,
+                "category": row.get::<_, String>(4)?,
+                "creator_name": row.get::<_, String>(5)?,
+                "cloned_at": row.get::<_, i64>(6)?,
+                "original_clone_count": row.get::<_, i64>(7)?,
+                "original_avg_rating": row.get::<_, f64>(8)?,
+            }))
+        })
+        .map_err(|e| format!("Failed to query clones: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to collect results: {}", e))?;
 
@@ -442,11 +456,14 @@ pub async fn get_workflow_templates() -> Result<Vec<WorkflowTemplate>, String> {
 
 /// Get workflow templates by category
 #[tauri::command]
-pub async fn get_workflow_templates_by_category(category: String) -> Result<Vec<WorkflowTemplate>, String> {
+pub async fn get_workflow_templates_by_category(
+    category: String,
+) -> Result<Vec<WorkflowTemplate>, String> {
     let category_enum = WorkflowCategory::from_str(&category);
     let all_templates = get_all_templates();
 
-    Ok(all_templates.into_iter()
+    Ok(all_templates
+        .into_iter()
         .filter(|t| t.category == category_enum)
         .collect())
 }
@@ -457,11 +474,14 @@ pub async fn search_workflow_templates(query: String) -> Result<Vec<WorkflowTemp
     let all_templates = get_all_templates();
     let query_lower = query.to_lowercase();
 
-    Ok(all_templates.into_iter()
+    Ok(all_templates
+        .into_iter()
         .filter(|t| {
-            t.title.to_lowercase().contains(&query_lower) ||
-            t.description.to_lowercase().contains(&query_lower) ||
-            t.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
+            t.title.to_lowercase().contains(&query_lower)
+                || t.description.to_lowercase().contains(&query_lower)
+                || t.tags
+                    .iter()
+                    .any(|tag| tag.to_lowercase().contains(&query_lower))
         })
         .collect())
 }

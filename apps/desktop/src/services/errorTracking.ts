@@ -110,19 +110,19 @@ class ErrorTrackingService {
       }
 
       // Load DSN from environment variable
-      const dsn = import.meta.env.VITE_SENTRY_DSN;
+      const dsn = import.meta.env['VITE_SENTRY_DSN'];
       if (dsn) {
         this.config.dsn = dsn;
       }
 
       // Load release version
-      const release = import.meta.env.VITE_APP_VERSION;
+      const release = import.meta.env['VITE_APP_VERSION'];
       if (release) {
         this.config.release = release;
       }
 
       // Load environment
-      const environment = import.meta.env.MODE;
+      const environment = import.meta.env['MODE'];
       if (environment) {
         this.config.environment = environment as any;
       }
@@ -156,7 +156,7 @@ class ErrorTrackingService {
       severity?: ErrorSeverity;
       tags?: Record<string, string>;
       extra?: Record<string, any>;
-    }
+    },
   ) {
     if (!this.config.enabled) {
       console.error(error);
@@ -197,19 +197,16 @@ class ErrorTrackingService {
   /**
    * Capture a message
    */
-  public captureMessage(
-    message: string,
-    severity: ErrorSeverity = ErrorSeverity.LOW
-  ) {
+  public captureMessage(_message: string, _severity: ErrorSeverity = ErrorSeverity.LOW) {
     if (!this.config.enabled) {
-      console.log(message);
+      console.log(_message);
       return;
     }
 
     try {
       /*
-      Sentry.captureMessage(message, {
-        level: this.mapSeverityToLevel(severity),
+      Sentry.captureMessage(_message, {
+        level: this.mapSeverityToLevel(_severity),
       });
       */
     } catch (error) {
@@ -220,11 +217,7 @@ class ErrorTrackingService {
   /**
    * Add breadcrumb for debugging
    */
-  public addBreadcrumb(
-    category: string,
-    message: string,
-    data?: Record<string, any>
-  ) {
+  public addBreadcrumb(_category: string, _message: string, _data?: Record<string, any>) {
     if (!this.config.enabled) {
       return;
     }
@@ -232,9 +225,9 @@ class ErrorTrackingService {
     try {
       /*
       Sentry.addBreadcrumb({
-        category,
-        message,
-        data,
+        category: _category,
+        message: _message,
+        data: _data,
         timestamp: Date.now() / 1000,
       });
       */
@@ -246,7 +239,7 @@ class ErrorTrackingService {
   /**
    * Set user context (non-PII)
    */
-  public setUser(userId?: string, userData?: Record<string, any>) {
+  public setUser(_userId?: string, _userData?: Record<string, any>) {
     if (!this.config.enabled) {
       return;
     }
@@ -266,14 +259,14 @@ class ErrorTrackingService {
   /**
    * Set tags for filtering
    */
-  public setTags(tags: Record<string, string>) {
+  public setTags(_tags: Record<string, string>) {
     if (!this.config.enabled) {
       return;
     }
 
     try {
       /*
-      Sentry.setTags(tags);
+      Sentry.setTags(_tags);
       */
     } catch (error) {
       console.error('Failed to set tags:', error);
@@ -283,7 +276,7 @@ class ErrorTrackingService {
   /**
    * Show user feedback dialog
    */
-  public showFeedbackDialog(eventId?: string) {
+  public showFeedbackDialog(_eventId?: string) {
     if (!this.config.enabled) {
       return;
     }
@@ -291,7 +284,7 @@ class ErrorTrackingService {
     try {
       /*
       Sentry.showReportDialog({
-        eventId,
+        eventId: _eventId,
         title: 'It looks like we encountered an error',
         subtitle: 'Our team has been notified, but you can help us fix it faster.',
         subtitle2: 'If you\'d like to help, tell us what happened below.',
@@ -313,7 +306,7 @@ class ErrorTrackingService {
   /**
    * Start a transaction for performance monitoring
    */
-  public startTransaction(name: string, op: string) {
+  public startTransaction(_name: string, _op: string) {
     if (!this.config.enabled) {
       return null;
     }
@@ -321,8 +314,8 @@ class ErrorTrackingService {
     try {
       /*
       return Sentry.startTransaction({
-        name,
-        op,
+        name: _name,
+        op: _op,
       });
       */
       return null;
@@ -333,9 +326,11 @@ class ErrorTrackingService {
   }
 
   /**
-   * Map severity to Sentry level
+   * Map severity to Sentry level (currently unused but kept for future Sentry integration)
+   * Uncomment the usage in captureError and captureMessage when Sentry is integrated
    */
-  private mapSeverityToLevel(severity?: ErrorSeverity): any {
+  // @ts-expect-error - Kept for future Sentry integration
+  private _mapSeverityToLevel(severity?: ErrorSeverity): any {
     switch (severity) {
       case ErrorSeverity.LOW:
         return 'info';
@@ -374,14 +369,12 @@ export function setupGlobalErrorHandler() {
   window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
     errorTracking.captureError(
-      event.reason instanceof Error
-        ? event.reason
-        : new Error(String(event.reason)),
+      event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
       {
         component: 'global',
         severity: ErrorSeverity.HIGH,
         tags: { type: 'unhandled_promise' },
-      }
+      },
     );
   });
 
@@ -402,10 +395,7 @@ export function setupGlobalErrorHandler() {
 }
 
 // React error boundary handler
-export function captureErrorBoundaryError(
-  error: Error,
-  errorInfo: { componentStack: string }
-) {
+export function captureErrorBoundaryError(error: Error, errorInfo: { componentStack: string }) {
   errorTracking.captureError(error, {
     component: 'react_boundary',
     severity: ErrorSeverity.HIGH,

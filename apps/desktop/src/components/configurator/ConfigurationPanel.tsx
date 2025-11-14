@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ScrollArea } from '../ui/ScrollArea';
 import { cn } from '../../lib/utils';
 import { useConfiguratorStore } from '../../stores/configuratorStore';
-import type { Capability, ConfigField } from '../../types/configurator';
+import type { ConfigField } from '../../types/configurator';
 
 interface ConfigurationPanelProps {
   className?: string;

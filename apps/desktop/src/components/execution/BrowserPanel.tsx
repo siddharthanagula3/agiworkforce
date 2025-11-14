@@ -15,7 +15,6 @@ import {
   Check,
   XCircle,
   ChevronDown,
-  ChevronUp,
   ExternalLink,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -27,7 +26,6 @@ import {
   selectActiveGoal,
 } from '../../stores/executionStore';
 import type { BrowserAction } from '../../stores/executionStore';
-import { Button } from '../ui/Button';
 
 export interface BrowserPanelProps {
   className?: string;

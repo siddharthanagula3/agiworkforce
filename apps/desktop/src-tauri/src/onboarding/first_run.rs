@@ -1,8 +1,8 @@
+use chrono::Utc;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use rusqlite::{Connection, params};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-use chrono::Utc;
 use uuid::Uuid;
 
 use super::sample_data::SampleDataGenerator;
@@ -46,7 +46,11 @@ impl FirstRunExperience {
     }
 
     /// Start a new first-run experience session
-    pub fn start(&self, user_id: &str, user_role: Option<&str>) -> Result<FirstRunSession, FirstRunError> {
+    pub fn start(
+        &self,
+        user_id: &str,
+        user_role: Option<&str>,
+    ) -> Result<FirstRunSession, FirstRunError> {
         let now = Utc::now().timestamp();
         let session_id = Uuid::new_v4().to_string();
 
@@ -88,7 +92,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "inbox_manager".to_string(),
                     name: "Inbox Manager".to_string(),
-                    description: "Categorizes emails, drafts responses, and escalates urgent items".to_string(),
+                    description: "Categorizes emails, drafts responses, and escalates urgent items"
+                        .to_string(),
                     estimated_time_saved_per_run: 150, // 2.5 hours
                     estimated_cost_saved_per_run: 75.0,
                     demo_duration_seconds: 30,
@@ -97,7 +102,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "meeting_scheduler".to_string(),
                     name: "Meeting Scheduler".to_string(),
-                    description: "Finds optimal meeting times, sends invites, handles conflicts".to_string(),
+                    description: "Finds optimal meeting times, sends invites, handles conflicts"
+                        .to_string(),
                     estimated_time_saved_per_run: 45,
                     estimated_cost_saved_per_run: 22.5,
                     demo_duration_seconds: 25,
@@ -106,7 +112,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "report_generator".to_string(),
                     name: "Report Generator".to_string(),
-                    description: "Compiles data from multiple sources into formatted reports".to_string(),
+                    description: "Compiles data from multiple sources into formatted reports"
+                        .to_string(),
                     estimated_time_saved_per_run: 120,
                     estimated_cost_saved_per_run: 60.0,
                     demo_duration_seconds: 35,
@@ -117,7 +124,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "code_reviewer".to_string(),
                     name: "Code Reviewer".to_string(),
-                    description: "Reviews PRs, suggests improvements, finds bugs and style issues".to_string(),
+                    description: "Reviews PRs, suggests improvements, finds bugs and style issues"
+                        .to_string(),
                     estimated_time_saved_per_run: 30,
                     estimated_cost_saved_per_run: 25.0,
                     demo_duration_seconds: 20,
@@ -146,7 +154,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "social_media_monitor".to_string(),
                     name: "Social Media Monitor".to_string(),
-                    description: "Tracks mentions, analyzes sentiment, drafts responses".to_string(),
+                    description: "Tracks mentions, analyzes sentiment, drafts responses"
+                        .to_string(),
                     estimated_time_saved_per_run: 120,
                     estimated_cost_saved_per_run: 60.0,
                     demo_duration_seconds: 35,
@@ -164,7 +173,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "analytics_reporter".to_string(),
                     name: "Analytics Reporter".to_string(),
-                    description: "Pulls metrics, creates visualizations, identifies trends".to_string(),
+                    description: "Pulls metrics, creates visualizations, identifies trends"
+                        .to_string(),
                     estimated_time_saved_per_run: 90,
                     estimated_cost_saved_per_run: 45.0,
                     demo_duration_seconds: 30,
@@ -175,7 +185,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "lead_qualifier".to_string(),
                     name: "Lead Qualifier".to_string(),
-                    description: "Researches leads, scores opportunities, drafts outreach".to_string(),
+                    description: "Researches leads, scores opportunities, drafts outreach"
+                        .to_string(),
                     estimated_time_saved_per_run: 60,
                     estimated_cost_saved_per_run: 30.0,
                     demo_duration_seconds: 25,
@@ -184,7 +195,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "crm_updater".to_string(),
                     name: "CRM Updater".to_string(),
-                    description: "Updates contact info, logs interactions, sets reminders".to_string(),
+                    description: "Updates contact info, logs interactions, sets reminders"
+                        .to_string(),
                     estimated_time_saved_per_run: 45,
                     estimated_cost_saved_per_run: 22.5,
                     demo_duration_seconds: 20,
@@ -193,7 +205,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "proposal_writer".to_string(),
                     name: "Proposal Writer".to_string(),
-                    description: "Creates customized proposals, contracts, presentations".to_string(),
+                    description: "Creates customized proposals, contracts, presentations"
+                        .to_string(),
                     estimated_time_saved_per_run: 120,
                     estimated_cost_saved_per_run: 60.0,
                     demo_duration_seconds: 40,
@@ -204,7 +217,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "invoice_processor".to_string(),
                     name: "Invoice Processor".to_string(),
-                    description: "Extracts data from invoices, validates, enters into system".to_string(),
+                    description: "Extracts data from invoices, validates, enters into system"
+                        .to_string(),
                     estimated_time_saved_per_run: 90,
                     estimated_cost_saved_per_run: 45.0,
                     demo_duration_seconds: 25,
@@ -213,7 +227,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "expense_categorizer".to_string(),
                     name: "Expense Categorizer".to_string(),
-                    description: "Reviews receipts, categorizes expenses, flags anomalies".to_string(),
+                    description: "Reviews receipts, categorizes expenses, flags anomalies"
+                        .to_string(),
                     estimated_time_saved_per_run: 60,
                     estimated_cost_saved_per_run: 30.0,
                     demo_duration_seconds: 20,
@@ -222,7 +237,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "reconciliation_assistant".to_string(),
                     name: "Reconciliation Assistant".to_string(),
-                    description: "Matches transactions, identifies discrepancies, suggests fixes".to_string(),
+                    description: "Matches transactions, identifies discrepancies, suggests fixes"
+                        .to_string(),
                     estimated_time_saved_per_run: 120,
                     estimated_cost_saved_per_run: 60.0,
                     demo_duration_seconds: 35,
@@ -233,7 +249,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "data_entry_specialist".to_string(),
                     name: "Data Entry Specialist".to_string(),
-                    description: "Processes documents, extracts data, enters into databases".to_string(),
+                    description: "Processes documents, extracts data, enters into databases"
+                        .to_string(),
                     estimated_time_saved_per_run: 90,
                     estimated_cost_saved_per_run: 45.0,
                     demo_duration_seconds: 25,
@@ -242,7 +259,8 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "inbox_manager".to_string(),
                     name: "Inbox Manager".to_string(),
-                    description: "Categorizes emails, drafts responses, and escalates urgent items".to_string(),
+                    description: "Categorizes emails, drafts responses, and escalates urgent items"
+                        .to_string(),
                     estimated_time_saved_per_run: 150,
                     estimated_cost_saved_per_run: 75.0,
                     demo_duration_seconds: 30,
@@ -251,7 +269,9 @@ impl FirstRunExperience {
                 AIEmployeeRecommendation {
                     id: "file_organizer".to_string(),
                     name: "File Organizer".to_string(),
-                    description: "Organizes files by type, renames consistently, removes duplicates".to_string(),
+                    description:
+                        "Organizes files by type, renames consistently, removes duplicates"
+                            .to_string(),
                     estimated_time_saved_per_run: 45,
                     estimated_cost_saved_per_run: 22.5,
                     demo_duration_seconds: 20,
@@ -266,13 +286,21 @@ impl FirstRunExperience {
         let conn = self.db.lock().unwrap();
         conn.execute(
             "UPDATE first_run_sessions SET step = ?1, updated_at = ?2 WHERE id = ?3",
-            params![serde_json::to_string(&step)?, Utc::now().timestamp(), session_id],
+            params![
+                serde_json::to_string(&step)?,
+                Utc::now().timestamp(),
+                session_id
+            ],
         )?;
         Ok(())
     }
 
     /// Select an employee for demo
-    pub fn select_employee(&self, session_id: &str, employee_id: &str) -> Result<(), FirstRunError> {
+    pub fn select_employee(
+        &self,
+        session_id: &str,
+        employee_id: &str,
+    ) -> Result<(), FirstRunError> {
         let conn = self.db.lock().unwrap();
         conn.execute(
             "UPDATE first_run_sessions SET selected_employee_id = ?1, updated_at = ?2 WHERE id = ?3",
@@ -282,7 +310,11 @@ impl FirstRunExperience {
     }
 
     /// Record demo results
-    pub fn record_demo_results(&self, session_id: &str, results: &DemoResult) -> Result<(), FirstRunError> {
+    pub fn record_demo_results(
+        &self,
+        session_id: &str,
+        results: &DemoResult,
+    ) -> Result<(), FirstRunError> {
         let started_at = {
             let conn = self.db.lock().unwrap();
             let started_at: i64 = conn.query_row(
@@ -356,7 +388,10 @@ impl FirstRunExperience {
             user_id,
             step: serde_json::from_str(&step_json)?,
             recommended_employees: serde_json::from_str(&recommended_json)?,
-            demo_results: demo_json.as_ref().map(|s| serde_json::from_str(s)).transpose()?,
+            demo_results: demo_json
+                .as_ref()
+                .map(|s| serde_json::from_str(s))
+                .transpose()?,
             time_to_value_seconds: time_to_value as u64,
             selected_employee_id,
             started_at,
@@ -367,23 +402,27 @@ impl FirstRunExperience {
     pub fn get_statistics(&self) -> Result<FirstRunStatistics, FirstRunError> {
         let conn = self.db.lock().unwrap();
 
-        let total_sessions: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM first_run_sessions",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let total_sessions: i64 = conn
+            .query_row("SELECT COUNT(*) FROM first_run_sessions", [], |row| {
+                row.get(0)
+            })
+            .unwrap_or(0);
 
-        let completed_sessions: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM first_run_sessions WHERE completed_at IS NOT NULL",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let completed_sessions: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM first_run_sessions WHERE completed_at IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
-        let hired_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM first_run_sessions WHERE hired_employee = 1",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let hired_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM first_run_sessions WHERE hired_employee = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         let avg_time_to_value: f64 = conn.query_row(
             "SELECT AVG(time_to_value_seconds) FROM first_run_sessions WHERE completed_at IS NOT NULL",

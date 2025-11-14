@@ -1,9 +1,9 @@
+use crate::orchestration::workflow_engine::WorkflowDefinition;
+use chrono::Utc;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use rusqlite::Connection;
-use chrono::Utc;
 use uuid::Uuid;
-use crate::orchestration::workflow_engine::WorkflowDefinition;
 
 /// Published workflow in the marketplace
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,7 +104,10 @@ impl WorkflowPublisher {
         estimated_cost_saved: f64,
         thumbnail_url: Option<String>,
     ) -> Result<PublishedWorkflow, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let published_id = Uuid::new_v4().to_string();
         let share_url = Self::generate_share_url(&published_id);
@@ -115,8 +118,8 @@ impl WorkflowPublisher {
             .map_err(|e| format!("Failed to serialize workflow: {}", e))?;
 
         // Serialize tags
-        let tags_json = serde_json::to_string(&tags)
-            .map_err(|e| format!("Failed to serialize tags: {}", e))?;
+        let tags_json =
+            serde_json::to_string(&tags).map_err(|e| format!("Failed to serialize tags: {}", e))?;
 
         conn.execute(
             "INSERT INTO published_workflows (
@@ -179,14 +182,19 @@ impl WorkflowPublisher {
 
     /// Unpublish a workflow from the marketplace
     pub fn unpublish_workflow(&self, workflow_id: &str, user_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         // Verify ownership
-        let creator_id: String = conn.query_row(
-            "SELECT creator_id FROM published_workflows WHERE id = ?1",
-            rusqlite::params![workflow_id],
-            |row| row.get(0),
-        ).map_err(|e| format!("Workflow not found: {}", e))?;
+        let creator_id: String = conn
+            .query_row(
+                "SELECT creator_id FROM published_workflows WHERE id = ?1",
+                rusqlite::params![workflow_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Workflow not found: {}", e))?;
 
         if creator_id != user_id {
             return Err("Not authorized to unpublish this workflow".to_string());
@@ -195,7 +203,8 @@ impl WorkflowPublisher {
         conn.execute(
             "DELETE FROM published_workflows WHERE id = ?1",
             rusqlite::params![workflow_id],
-        ).map_err(|e| format!("Failed to delete workflow: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to delete workflow: {}", e))?;
 
         Ok(())
     }
@@ -207,14 +216,19 @@ impl WorkflowPublisher {
         user_id: &str,
         user_name: &str,
     ) -> Result<String, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         // Get published workflow
-        let (workflow_json, title): (String, String) = conn.query_row(
-            "SELECT workflow_definition, title FROM published_workflows WHERE id = ?1",
-            rusqlite::params![workflow_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).map_err(|e| format!("Workflow not found: {}", e))?;
+        let (workflow_json, title): (String, String) = conn
+            .query_row(
+                "SELECT workflow_definition, title FROM published_workflows WHERE id = ?1",
+                rusqlite::params![workflow_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|e| format!("Workflow not found: {}", e))?;
 
         // Parse workflow definition
         let mut workflow: WorkflowDefinition = serde_json::from_str(&workflow_json)
@@ -256,20 +270,16 @@ impl WorkflowPublisher {
         conn.execute(
             "INSERT INTO workflow_clones (id, workflow_id, cloner_id, cloner_name, cloned_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                &clone_record_id,
-                workflow_id,
-                user_id,
-                user_name,
-                now,
-            ],
-        ).map_err(|e| format!("Failed to record clone: {}", e))?;
+            rusqlite::params![&clone_record_id, workflow_id, user_id, user_name, now,],
+        )
+        .map_err(|e| format!("Failed to record clone: {}", e))?;
 
         // Increment clone count
         conn.execute(
             "UPDATE published_workflows SET clone_count = clone_count + 1 WHERE id = ?1",
             rusqlite::params![workflow_id],
-        ).map_err(|e| format!("Failed to increment clone count: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to increment clone count: {}", e))?;
 
         Ok(cloned_id)
     }
@@ -285,7 +295,10 @@ impl WorkflowPublisher {
         let cloned_id = self.clone_workflow(workflow_id, user_id, user_name)?;
 
         // Add fork metadata to the cloned workflow
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         conn.execute(
             "UPDATE workflow_definitions SET metadata = json_set(metadata, '$.forked_from', ?1) WHERE id = ?2",
@@ -297,36 +310,50 @@ impl WorkflowPublisher {
 
     /// Get a published workflow by ID
     pub fn get_published_workflow(&self, workflow_id: &str) -> Result<PublishedWorkflow, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let workflow = conn.query_row(
-            "SELECT id, title, description, category, creator_id, creator_name,
+        let workflow = conn
+            .query_row(
+                "SELECT id, title, description, category, creator_id, creator_name,
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
                     is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE id = ?1",
-            rusqlite::params![workflow_id],
-            Self::row_to_published_workflow,
-        ).map_err(|e| format!("Failed to get workflow: {}", e))?;
+                rusqlite::params![workflow_id],
+                Self::row_to_published_workflow,
+            )
+            .map_err(|e| format!("Failed to get workflow: {}", e))?;
 
         Ok(workflow)
     }
 
     /// Get user's published workflows
-    pub fn get_user_published_workflows(&self, user_id: &str) -> Result<Vec<PublishedWorkflow>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn get_user_published_workflows(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<PublishedWorkflow>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, title, description, category, creator_id, creator_name,
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, title, description, category, creator_id, creator_name,
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
                     is_verified, is_featured, created_at, updated_at
-             FROM published_workflows WHERE creator_id = ?1 ORDER BY created_at DESC"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+             FROM published_workflows WHERE creator_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stmt.query_map(rusqlite::params![user_id], Self::row_to_published_workflow)
+        let workflows = stmt
+            .query_map(rusqlite::params![user_id], Self::row_to_published_workflow)
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect workflows: {}", e))?;
@@ -336,12 +363,16 @@ impl WorkflowPublisher {
 
     /// Increment view count for a workflow
     pub fn increment_view_count(&self, workflow_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         conn.execute(
             "UPDATE published_workflows SET view_count = view_count + 1 WHERE id = ?1",
             rusqlite::params![workflow_id],
-        ).map_err(|e| format!("Failed to increment view count: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to increment view count: {}", e))?;
 
         Ok(())
     }
@@ -392,7 +423,10 @@ mod tests {
 
     #[test]
     fn test_workflow_category_display() {
-        assert_eq!(WorkflowCategory::CustomerSupport.to_string(), "customer_support");
+        assert_eq!(
+            WorkflowCategory::CustomerSupport.to_string(),
+            "customer_support"
+        );
         assert_eq!(WorkflowCategory::Development.to_string(), "development");
     }
 

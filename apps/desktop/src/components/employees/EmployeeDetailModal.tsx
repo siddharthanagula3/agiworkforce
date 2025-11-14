@@ -75,8 +75,8 @@ export function EmployeeDetailModal() {
 
   if (!employee) return null;
 
-  const roleConfig = ROLE_CONFIG[employee.role] || ROLE_CONFIG['Personal'];
-  const RoleIcon = roleConfig.icon;
+  const roleConfig = ROLE_CONFIG[employee.role] ?? ROLE_CONFIG['Personal'];
+  const RoleIcon = roleConfig!.icon;
 
   const handleClose = () => {
     setSelectedEmployee(null);
@@ -119,17 +119,19 @@ export function EmployeeDetailModal() {
                     'flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/10'
                   )}
                 >
-                  <RoleIcon className={cn('h-8 w-8', roleConfig.color)} />
+                  <RoleIcon className={cn('h-8 w-8', roleConfig!.color)} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
                     <DialogTitle className="text-2xl">{employee.name}</DialogTitle>
                     {employee.is_verified && (
-                      <Shield className="h-6 w-6 text-primary fill-primary/20" title="Verified Employee" />
+                      <div title="Verified Employee">
+                        <Shield className="h-6 w-6 text-primary fill-primary/20" />
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{roleConfig.label}</Badge>
+                    <Badge variant="secondary">{roleConfig!.label}</Badge>
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
                       <span className="font-medium">{employee.avg_rating.toFixed(1)}</span>
