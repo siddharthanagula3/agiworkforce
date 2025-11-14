@@ -2,7 +2,7 @@
  * Monaco Editor with LSP Integration
  * Provides IDE-quality code editing with language server support
  */
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as monaco from 'monaco-editor';
 import { useLSP } from '../../hooks/useLSP';
 import { invoke } from '@tauri-apps/api/core';
@@ -76,14 +76,15 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
     const completionProvider = monaco.languages.registerCompletionItemProvider(detectedLanguage, {
       triggerCharacters: ['.', ':', '<', '"', '/', '@'],
-      provideCompletionItems: async (model, position) => {
-        const offset = model.getOffsetAt(position);
-        const textUntilPosition = model.getValueInRange({
-          startLineNumber: 1,
-          startColumn: 1,
-          endLineNumber: position.lineNumber,
-          endColumn: position.column,
-        });
+      provideCompletionItems: async (_model, position) => {
+        // offset and textUntilPosition reserved for future use
+        // const _offset = model.getOffsetAt(position);
+        // const _textUntilPosition = model.getValueInRange({
+        //   startLineNumber: 1,
+        //   startColumn: 1,
+        //   endLineNumber: position.lineNumber,
+        //   endColumn: position.column,
+        // });
 
         const items = await lsp.getCompletions(
           fileUri,
@@ -119,7 +120,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
     const hoverProvider = monaco.languages.registerHoverProvider(detectedLanguage, {
-      provideHover: async (model, position) => {
+      provideHover: async (_model, position) => {
         const hover = await lsp.getHover(fileUri, position.lineNumber - 1, position.column - 1);
 
         if (!hover) return null;
@@ -148,7 +149,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
     const definitionProvider = monaco.languages.registerDefinitionProvider(detectedLanguage, {
-      provideDefinition: async (model, position) => {
+      provideDefinition: async (_model, position) => {
         const locations = await lsp.getDefinition(
           fileUri,
           position.lineNumber - 1,
@@ -177,7 +178,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
     const referencesProvider = monaco.languages.registerReferenceProvider(detectedLanguage, {
-      provideReferences: async (model, position, context) => {
+      provideReferences: async (_model, position, _context) => {
         const locations = await lsp.getReferences(
           fileUri,
           position.lineNumber - 1,
@@ -208,7 +209,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     const formattingProvider = monaco.languages.registerDocumentFormattingEditProvider(
       detectedLanguage,
       {
-        provideDocumentFormattingEdits: async (model) => {
+        provideDocumentFormattingEdits: async (_model) => {
           const edits = await lsp.format(fileUri);
 
           return edits.map((edit) => ({
@@ -234,7 +235,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
     const renameProvider = monaco.languages.registerRenameProvider(detectedLanguage, {
-      provideRenameEdits: async (model, position, newName) => {
+      provideRenameEdits: async (_model, position, newName) => {
         const workspaceEdit = await lsp.rename(
           fileUri,
           position.lineNumber - 1,

@@ -14,7 +14,6 @@ import {
   AlertCircle,
   ChevronRight,
   Target,
-  TrendingUp,
 } from 'lucide-react';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolResultCard } from './ToolResultCard';
