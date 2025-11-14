@@ -7,14 +7,15 @@ use agiworkforce_desktop::agent::code_generator::CodeGenerator;
 use agiworkforce_desktop::agent::context_manager::ContextManager;
 use agiworkforce_desktop::agent::runtime::AgentRuntime;
 use agiworkforce_desktop::billing::BillingStateWrapper;
+use agiworkforce_desktop::security::{AuthManager, SecretManager};
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        load_persisted_calendar_accounts, AIEmployeeState, AgentRuntimeState, ApiState,
-        AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
-        CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState, DocumentState,
-        EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState, McpState,
-        ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
+        load_persisted_calendar_accounts, security::AuthManagerState, AIEmployeeState,
+        AgentRuntimeState, ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState,
+        CodeEditingState, CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState,
+        DocumentState, EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState,
+        McpState, ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
         TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
     },
     db::migrations,
@@ -23,6 +24,7 @@ use agiworkforce_desktop::{
     state::AppState,
     telemetry,
 };
+use anyhow::Context;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
@@ -38,26 +40,38 @@ fn main() {
             let db_path = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir")
+                .context("Failed to get app data dir")?
                 .join("agiworkforce.db");
 
             // Ensure parent directory exists
             if let Some(parent) = db_path.parent() {
-                std::fs::create_dir_all(parent).expect("Failed to create data directory");
+                std::fs::create_dir_all(parent).context("Failed to create data directory")?;
             }
 
             // Open database connection
-            let conn = Connection::open(&db_path).expect("Failed to open database");
+            let conn = Connection::open(&db_path).context("Failed to open database")?;
 
             // Run migrations
-            migrations::run_migrations(&conn).expect("Failed to run migrations");
+            migrations::run_migrations(&conn).context("Failed to run migrations")?;
 
             tracing::info!("Database initialized at {:?}", db_path);
 
             // Manage database state
+            let db_conn_arc = Arc::new(Mutex::new(conn));
             app.manage(AppDatabase {
-                conn: Arc::new(Mutex::new(conn)),
+                conn: db_conn_arc.clone(),
             });
+
+            // Initialize security components
+            // SecretManager handles secure JWT secret storage (OS keyring + database fallback)
+            let secret_manager = Arc::new(SecretManager::new(db_conn_arc.clone()));
+            tracing::info!("SecretManager initialized");
+
+            // AuthManager handles user authentication, sessions, and token management
+            // CRITICAL: This must be initialized to enforce authentication on protected commands
+            let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager.clone())));
+            app.manage(AuthManagerState(auth_manager));
+            tracing::info!("AuthManager initialized - authentication system ready");
 
             // Initialize LLM router state
             app.manage(LLMState::new());
@@ -70,9 +84,9 @@ fn main() {
 
             // Initialize new settings service with database connection
             let settings_conn =
-                Connection::open(&db_path).expect("Failed to open settings database");
+                Connection::open(&db_path).context("Failed to open settings database")?;
             let settings_service = SettingsService::new(Arc::new(Mutex::new(settings_conn)))
-                .expect("Failed to initialize settings service");
+                .context("Failed to initialize settings service")?;
             app.manage(SettingsServiceState::new(settings_service));
 
             tracing::info!("Settings service initialized");
@@ -140,7 +154,7 @@ fn main() {
 
             // Initialize automation service
             let automation_service = agiworkforce_desktop::automation::AutomationService::new()
-                .expect("Failed to initialize automation service");
+                .context("Failed to initialize automation service")?;
             app.manage(std::sync::Arc::new(automation_service));
 
             tracing::info!("Automation service initialized");
@@ -188,7 +202,7 @@ fn main() {
             let workspace_dir = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir")
+                .context("Failed to get app data dir")?
                 .join("github_repos");
             std::fs::create_dir_all(&workspace_dir).ok();
             app.manage(Arc::new(TokioMutex::new(GitHubState::new(workspace_dir))));
@@ -227,10 +241,10 @@ fn main() {
 
             // Initialize Codebase Cache
             let cache_conn =
-                Connection::open(&db_path).expect("Failed to open database for codebase cache");
+                Connection::open(&db_path).context("Failed to open database for codebase cache")?;
             let codebase_cache =
                 agiworkforce_desktop::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
-                    .expect("Failed to initialize codebase cache");
+                    .context("Failed to initialize codebase cache")?;
             app.manage(agiworkforce_desktop::commands::cache::CodebaseCacheState(
                 Arc::new(codebase_cache),
             ));
@@ -251,7 +265,7 @@ fn main() {
 
             // Initialize Marketplace state for public workflows
             let marketplace_conn =
-                Connection::open(&db_path).expect("Failed to open database for marketplace");
+                Connection::open(&db_path).context("Failed to open database for marketplace")?;
             app.manage(
                 agiworkforce_desktop::commands::marketplace::MarketplaceState {
                     db: Arc::new(Mutex::new(marketplace_conn)),
@@ -262,7 +276,7 @@ fn main() {
 
             // Initialize Template Manager state
             let template_conn =
-                Connection::open(&db_path).expect("Failed to open database for template manager");
+                Connection::open(&db_path).context("Failed to open database for template manager")?;
             let template_db = Arc::new(Mutex::new(template_conn));
             let template_manager =
                 agiworkforce_desktop::commands::templates::initialize_template_manager(template_db);
@@ -275,7 +289,7 @@ fn main() {
             // Initialize Real-time Metrics and ROI Dashboard
             let realtime_server = Arc::new(agiworkforce_desktop::realtime::RealtimeServer::new());
             let metrics_db = Arc::new(Mutex::new(
-                Connection::open(&db_path).expect("Failed to open database for metrics"),
+                Connection::open(&db_path).context("Failed to open database for metrics")?,
             ));
             let metrics_collector = Arc::new(
                 agiworkforce_desktop::metrics::RealtimeMetricsCollector::new(
@@ -301,7 +315,7 @@ fn main() {
             let workspace_root = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir");
+                .context("Failed to get app data dir")?;
             let embedding_config = agiworkforce_desktop::embeddings::EmbeddingConfig::default();
 
             match agiworkforce_desktop::embeddings::EmbeddingService::new(
@@ -323,14 +337,15 @@ fn main() {
 
             // Initialize AI Employee system
             let employee_db = Arc::new(Mutex::new(
-                Connection::open(&db_path).expect("Failed to open database for AI employees"),
+                Connection::open(&db_path).context("Failed to open database for AI employees")?,
             ));
 
             // Create LLM router for employee executor (reuse existing LLM state)
             let llm_router = Arc::new(Mutex::new(agiworkforce_desktop::router::LLMRouter::new()));
 
             // Create tool registry for employee executor
-            let tools = Arc::new(agiworkforce_desktop::agi::tools::ToolRegistry::new());
+            let tools = Arc::new(agiworkforce_desktop::agi::tools::ToolRegistry::new()
+                .context("Failed to initialize tool registry")?);
 
             // Create employee system components
             let employee_executor = Arc::new(Mutex::new(
@@ -354,8 +369,16 @@ fn main() {
             ));
 
             // Initialize pre-built employees
-            if let Err(e) = employee_registry.lock().unwrap().initialize() {
-                tracing::warn!("Failed to initialize AI employee registry: {}", e);
+            match employee_registry.lock() {
+                Ok(mut registry) => {
+                    if let Err(e) = registry.initialize() {
+                        tracing::warn!("Failed to initialize AI employee registry: {}", e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to lock employee registry: {}", e);
+                    return Err(anyhow::anyhow!("Employee registry lock poisoned: {}", e).into());
+                }
             }
 
             // Manage AI employee state
