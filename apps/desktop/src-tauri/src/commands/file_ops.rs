@@ -103,9 +103,10 @@ async fn check_file_permission(
     }
 
     // Get permission manager
-    let _conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let _conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let pm = PermissionManager::new(
         rusqlite::Connection::open_in_memory()
@@ -146,9 +147,10 @@ async fn log_file_operation(
     error: Option<String>,
     db: &AppDatabase,
 ) -> Result<(), String> {
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let operation_type = format!("FILE_{}", operation.as_str().to_uppercase());
     let details = serde_json::json!({
