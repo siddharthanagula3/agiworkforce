@@ -79,7 +79,7 @@ impl Categorizable for AGIError {
 
     fn retry_delay_ms(&self) -> Option<u64> {
         match self.category() {
-            ErrorCategory::Transient => Some(1000), // 1 second
+            ErrorCategory::Transient => Some(1000),     // 1 second
             ErrorCategory::ResourceLimit => Some(5000), // 5 seconds
             _ => None,
         }
@@ -181,8 +181,13 @@ impl Categorizable for ToolError {
                     "API call failed. Retrying...".to_string()
                 }
             }
-            ToolError::NotFound(tool) => format!("Tool '{}' not found. Please check the tool name or install the required tool.", tool),
-            ToolError::InvalidParameters(msg) => format!("Invalid parameters: {}. Please check your input.", msg),
+            ToolError::NotFound(tool) => format!(
+                "Tool '{}' not found. Please check the tool name or install the required tool.",
+                tool
+            ),
+            ToolError::InvalidParameters(msg) => {
+                format!("Invalid parameters: {}. Please check your input.", msg)
+            }
             _ => "Tool execution failed. Retrying...".to_string(),
         }
     }
@@ -330,9 +335,7 @@ mod tests {
     #[test]
     fn test_agi_error_suggested_actions() {
         let error = AGIError::TransientError("network timeout".to_string());
-        assert!(error
-            .suggested_action()
-            .contains("temporary"));
+        assert!(error.suggested_action().contains("temporary"));
 
         let error = AGIError::PermissionError("access denied".to_string());
         assert!(error.suggested_action().contains("Permission"));

@@ -1019,8 +1019,8 @@ pub async fn browser_get_network_activity(
 // ============================================================================
 
 use crate::browser::semantic::{
-    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, ElementInfo,
-    SemanticElementFinder, SemanticSelector, SelectorResult, SelfHealingFinder,
+    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, ElementInfo, SelectorResult,
+    SelfHealingFinder, SemanticElementFinder, SemanticSelector,
 };
 
 /// Find element using semantic natural language selector
@@ -1220,8 +1220,7 @@ pub async fn get_accessibility_tree(
         .await
         .map_err(|e| format!("Failed to get accessibility tree: {}", e))?;
 
-    serde_json::from_value(result)
-        .map_err(|e| format!("Failed to parse accessibility tree: {}", e))
+    serde_json::from_value(result).map_err(|e| format!("Failed to parse accessibility tree: {}", e))
 }
 
 /// Test all selector strategies for a semantic query

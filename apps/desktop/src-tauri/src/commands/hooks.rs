@@ -82,7 +82,10 @@ pub async fn hooks_add(state: State<'_, HookRegistryState>, hook: Hook) -> Resul
 
 /// Remove a hook
 #[tauri::command]
-pub async fn hooks_remove(state: State<'_, HookRegistryState>, name: String) -> Result<String, String> {
+pub async fn hooks_remove(
+    state: State<'_, HookRegistryState>,
+    name: String,
+) -> Result<String, String> {
     let registry = state
         .get()
         .await
@@ -122,7 +125,10 @@ pub async fn hooks_toggle(
 
 /// Update a hook
 #[tauri::command]
-pub async fn hooks_update(state: State<'_, HookRegistryState>, hook: Hook) -> Result<String, String> {
+pub async fn hooks_update(
+    state: State<'_, HookRegistryState>,
+    hook: Hook,
+) -> Result<String, String> {
     let registry = state
         .get()
         .await
@@ -172,7 +178,10 @@ pub async fn hooks_export(state: State<'_, HookRegistryState>) -> Result<String,
 
 /// Import hooks configuration from YAML
 #[tauri::command]
-pub async fn hooks_import(state: State<'_, HookRegistryState>, yaml: String) -> Result<String, String> {
+pub async fn hooks_import(
+    state: State<'_, HookRegistryState>,
+    yaml: String,
+) -> Result<String, String> {
     let registry = state
         .get()
         .await
@@ -203,11 +212,15 @@ pub async fn hooks_reload(state: State<'_, HookRegistryState>) -> Result<String,
         .await
         .ok_or_else(|| "Hook registry not initialized".to_string())?;
 
-    let config = HookConfig::load_default().map_err(|e| format!("Failed to load configuration: {}", e))?;
+    let config =
+        HookConfig::load_default().map_err(|e| format!("Failed to load configuration: {}", e))?;
 
     registry.executor().load_hooks(config.hooks.clone()).await;
 
-    Ok(format!("Reloaded {} hooks successfully", config.hooks.len()))
+    Ok(format!(
+        "Reloaded {} hooks successfully",
+        config.hooks.len()
+    ))
 }
 
 /// Get all available event types
@@ -232,7 +245,10 @@ pub struct HookStats {
 
 /// Get execution statistics for a hook
 #[tauri::command]
-pub async fn hooks_get_stats(state: State<'_, HookRegistryState>, name: String) -> Result<Option<HookStats>, String> {
+pub async fn hooks_get_stats(
+    state: State<'_, HookRegistryState>,
+    name: String,
+) -> Result<Option<HookStats>, String> {
     let registry = state
         .get()
         .await
