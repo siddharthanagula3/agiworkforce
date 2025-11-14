@@ -182,7 +182,7 @@ async fn log_command_to_db(
 
     // Get the database from app state
     let db_state = app_handle.state::<AppDatabase>();
-    let conn = db_state.0.lock().map_err(|e| {
+    let conn = db_state.inner().conn.lock().map_err(|e| {
         Error::Database(rusqlite::Error::ToSqlConversionFailure(Box::new(
             std::io::Error::other(format!("Lock error: {}", e)),
         )))
@@ -218,7 +218,7 @@ pub async fn get_command_history(
     use rusqlite::params;
 
     let db_state = app_handle.state::<AppDatabase>();
-    let conn = db_state.0.lock().map_err(|e| {
+    let conn = db_state.inner().conn.lock().map_err(|e| {
         Error::Database(rusqlite::Error::ToSqlConversionFailure(Box::new(
             std::io::Error::other(format!("Lock error: {}", e)),
         )))
