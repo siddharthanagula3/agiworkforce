@@ -13,9 +13,9 @@ use agiworkforce_desktop::{
         load_persisted_calendar_accounts, AIEmployeeState, AgentRuntimeState, ApiState,
         AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
         CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState, DocumentState,
-        FileWatcherState, GitHubState, LLMState, LSPState, McpState, ProductivityState,
-        SettingsServiceState, SettingsState, ShortcutsState, TemplateManagerState, VoiceState,
-        WorkflowEngineState, WorkspaceIndexState,
+        EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState, McpState,
+        ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
+        TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -296,6 +296,30 @@ fn main() {
             ));
 
             tracing::info!("Real-time metrics and ROI dashboard initialized");
+
+            // Initialize Embedding Service for semantic code search
+            let workspace_root = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
+            let embedding_config = agiworkforce_desktop::embeddings::EmbeddingConfig::default();
+
+            match agiworkforce_desktop::embeddings::EmbeddingService::new(
+                workspace_root,
+                embedding_config,
+            )
+            .await
+            {
+                Ok(embedding_service) => {
+                    app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(
+                        embedding_service,
+                    ))));
+                    tracing::info!("Embedding service initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize embedding service: {}. Semantic search will be unavailable.", e);
+                }
+            }
 
             // Initialize AI Employee system
             let employee_db = Arc::new(Mutex::new(
@@ -631,6 +655,15 @@ fn main() {
             agiworkforce_desktop::commands::codebase_cache_get_dependencies,
             agiworkforce_desktop::commands::codebase_cache_set_dependencies,
             agiworkforce_desktop::commands::codebase_cache_calculate_hash,
+            // Embedding and semantic search commands
+            agiworkforce_desktop::commands::generate_code_embeddings,
+            agiworkforce_desktop::commands::semantic_search_codebase,
+            agiworkforce_desktop::commands::get_embedding_stats,
+            agiworkforce_desktop::commands::index_workspace,
+            agiworkforce_desktop::commands::index_file,
+            agiworkforce_desktop::commands::get_indexing_progress,
+            agiworkforce_desktop::commands::on_file_changed,
+            agiworkforce_desktop::commands::on_file_deleted,
             // Settings commands (legacy)
             agiworkforce_desktop::commands::settings_save_api_key,
             agiworkforce_desktop::commands::settings_get_api_key,
@@ -660,6 +693,14 @@ fn main() {
             agiworkforce_desktop::commands::ocr_process_region,
             agiworkforce_desktop::commands::ocr_get_languages,
             agiworkforce_desktop::commands::ocr_get_result,
+            // Vision LLM commands
+            agiworkforce_desktop::commands::vision_send_message,
+            agiworkforce_desktop::commands::vision_analyze_screenshot,
+            agiworkforce_desktop::commands::vision_extract_text,
+            agiworkforce_desktop::commands::vision_compare_images,
+            agiworkforce_desktop::commands::vision_locate_element,
+            agiworkforce_desktop::commands::vision_describe_ui_elements,
+            agiworkforce_desktop::commands::vision_answer_question,
             agiworkforce_desktop::commands::ocr_process_with_boxes,
             agiworkforce_desktop::commands::ocr_detect_languages,
             agiworkforce_desktop::commands::ocr_process_multi_language,
@@ -819,10 +860,20 @@ fn main() {
             agiworkforce_desktop::commands::lsp_start_server,
             agiworkforce_desktop::commands::lsp_stop_server,
             agiworkforce_desktop::commands::lsp_did_open,
+            agiworkforce_desktop::commands::lsp_did_change,
+            agiworkforce_desktop::commands::lsp_did_close,
             agiworkforce_desktop::commands::lsp_completion,
             agiworkforce_desktop::commands::lsp_hover,
             agiworkforce_desktop::commands::lsp_definition,
             agiworkforce_desktop::commands::lsp_references,
+            agiworkforce_desktop::commands::lsp_rename,
+            agiworkforce_desktop::commands::lsp_formatting,
+            agiworkforce_desktop::commands::lsp_workspace_symbol,
+            agiworkforce_desktop::commands::lsp_code_action,
+            agiworkforce_desktop::commands::lsp_get_diagnostics,
+            agiworkforce_desktop::commands::lsp_get_all_diagnostics,
+            agiworkforce_desktop::commands::lsp_list_servers,
+            agiworkforce_desktop::commands::lsp_detect_language,
             // Onboarding and data management commands
             agiworkforce_desktop::commands::get_onboarding_status,
             agiworkforce_desktop::commands::complete_onboarding_step,
