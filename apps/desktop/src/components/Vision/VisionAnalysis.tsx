@@ -55,7 +55,6 @@ export const VisionAnalysis: React.FC<VisionAnalysisProps> = ({
 
     try {
       let prompt = customPrompt;
-      let command = 'vision_send_message';
 
       // Set default prompt based on mode
       if (mode === 'describe' && !customPrompt) {
@@ -77,16 +76,18 @@ export const VisionAnalysis: React.FC<VisionAnalysisProps> = ({
       }
 
       // Prepare vision images
-      const visionImages = images.map((img) => ({
-        source_type: img.sourceType === 'file' ? 'base64' : img.sourceType,
-        source:
-          img.sourceType === 'file' && img.file
-            ? await fileToBase64(img.file)
-            : img.sourceType === 'capture'
-            ? img.captureId
-            : img.preview,
-        detail: img.detail,
-      }));
+      const visionImages = await Promise.all(
+        images.map(async (img) => ({
+          source_type: img.sourceType === 'file' ? 'base64' : img.sourceType,
+          source:
+            img.sourceType === 'file' && img.file
+              ? await fileToBase64(img.file)
+              : img.sourceType === 'capture'
+              ? img.captureId || ''
+              : img.preview || '',
+          detail: img.detail,
+        }))
+      );
 
       // Call appropriate Tauri command
       let response: VisionResponse;
@@ -96,7 +97,7 @@ export const VisionAnalysis: React.FC<VisionAnalysisProps> = ({
         response = await invoke<VisionResponse>(
           'vision_extract_text',
           {
-            imagePath: visionImages[0].source,
+            imagePath: visionImages[0]?.source || '',
             provider: null,
           }
         );
@@ -108,8 +109,8 @@ export const VisionAnalysis: React.FC<VisionAnalysisProps> = ({
           model: string;
           cost?: number;
         }>('vision_compare_images', {
-          imagePath1: visionImages[0].source,
-          imagePath2: visionImages[1].source,
+          imagePath1: visionImages[0]?.source || '',
+          imagePath2: visionImages[1]?.source || '',
           comparisonType: 'changes',
           provider: null,
         });
@@ -156,7 +157,7 @@ export const VisionAnalysis: React.FC<VisionAnalysisProps> = ({
       reader.onload = () => {
         const base64 = reader.result as string;
         // Remove data URL prefix (e.g., "data:image/png;base64,")
-        const base64Data = base64.split(',')[1];
+        const base64Data = base64.split(',')[1] || '';
         resolve(base64Data);
       };
       reader.onerror = (error) => reject(error);
