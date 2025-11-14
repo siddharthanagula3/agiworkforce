@@ -42,7 +42,7 @@ describe('retry utility', () => {
         retry(operation, {
           maxAttempts: 3,
           initialDelay: 10,
-        })
+        }),
       ).rejects.toThrow(RetryError);
 
       expect(operation).toHaveBeenCalledTimes(3);
@@ -80,7 +80,7 @@ describe('retry utility', () => {
           maxAttempts: 5,
           initialDelay: 10,
           abortOnErrors: ['404', 'Not Found'],
-        })
+        }),
       ).rejects.toThrow('404 Not Found');
 
       // Should fail immediately, not retry
@@ -88,9 +88,9 @@ describe('retry utility', () => {
     });
 
     it('should respect shouldRetry function', async () => {
-      let attempts = 0;
+      let _attempts = 0;
       const operation = vi.fn().mockImplementation(async () => {
-        attempts++;
+        _attempts++;
         throw new Error('Failure');
       });
 
@@ -101,7 +101,7 @@ describe('retry utility', () => {
           maxAttempts: 5,
           initialDelay: 10,
           shouldRetry,
-        })
+        }),
       ).rejects.toThrow('Failure');
 
       // Should fail immediately because shouldRetry returns false

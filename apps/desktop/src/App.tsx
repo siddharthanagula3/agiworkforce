@@ -70,8 +70,21 @@ const EmployeesPage = lazy(() =>
 const DesktopAgentChat = lazy(() =>
   import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
 );
+const EnhancedChatInterface = lazy(() =>
+  import('./components/chat/EnhancedChatInterface').then((m) => ({
+    default: m.EnhancedChatInterface,
+  })),
+);
 
-export type AppView = 'chat' | 'agent' | 'templates' | 'workflows' | 'teams' | 'governance' | 'employees';
+export type AppView =
+  | 'chat'
+  | 'agent'
+  | 'enhanced-chat'
+  | 'templates'
+  | 'workflows'
+  | 'teams'
+  | 'governance'
+  | 'employees';
 
 // Loading fallback component for Suspense
 const LoadingFallback = () => (
@@ -359,6 +372,12 @@ const DesktopShell = () => {
         return (
           <Suspense fallback={<LoadingFallback />}>
             <DesktopAgentChat />
+          </Suspense>
+        );
+      case 'enhanced-chat':
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <EnhancedChatInterface />
           </Suspense>
         );
       case 'employees':

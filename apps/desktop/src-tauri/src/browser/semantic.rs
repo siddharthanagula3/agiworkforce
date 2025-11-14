@@ -58,7 +58,10 @@ impl SelectorStrategy {
                 )
             }
             SelectorStrategy::Placeholder(placeholder) => {
-                format!("document.querySelector('[placeholder=\"{}\"]')", placeholder)
+                format!(
+                    "document.querySelector('[placeholder=\"{}\"]')",
+                    placeholder
+                )
             }
             SelectorStrategy::Css(selector) => {
                 format!("document.querySelector('{}')", selector)
@@ -127,22 +130,25 @@ impl SemanticSelector {
             ));
 
             // Try aria-label
-            self.strategies.push(SelectorStrategy::AriaLabel(keyword.clone()));
+            self.strategies
+                .push(SelectorStrategy::AriaLabel(keyword.clone()));
 
             // Try role + name combinations
             if let Some(ref elem_type) = element_type {
-                self.strategies.push(SelectorStrategy::Role(
-                    elem_type.clone(),
-                    keyword.clone(),
-                ));
+                self.strategies
+                    .push(SelectorStrategy::Role(elem_type.clone(), keyword.clone()));
             }
 
             // Try text content
-            self.strategies.push(SelectorStrategy::Text(keyword.clone()));
+            self.strategies
+                .push(SelectorStrategy::Text(keyword.clone()));
 
             // Try placeholder
-            if element_type.as_deref() == Some("input") || element_type.as_deref() == Some("textbox") {
-                self.strategies.push(SelectorStrategy::Placeholder(keyword.clone()));
+            if element_type.as_deref() == Some("input")
+                || element_type.as_deref() == Some("textbox")
+            {
+                self.strategies
+                    .push(SelectorStrategy::Placeholder(keyword.clone()));
             }
         }
 
@@ -191,7 +197,9 @@ impl SemanticSelector {
         let mut keywords = Vec::new();
 
         // Remove common words
-        let stop_words = ["the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for"];
+        let stop_words = [
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        ];
         let words: Vec<&str> = text.split_whitespace().collect();
 
         // Extract meaningful phrases
@@ -309,9 +317,10 @@ impl NaturalLanguageParser {
         }
 
         // Extract keywords (remove element type and modifier words)
-        let stop_words = ["the", "a", "an", "button", "link", "input", "field", "textbox",
-                         "checkbox", "radio", "dropdown", "select", "first", "last",
-                         "visible", "enabled"];
+        let stop_words = [
+            "the", "a", "an", "button", "link", "input", "field", "textbox", "checkbox", "radio",
+            "dropdown", "select", "first", "last", "visible", "enabled",
+        ];
         let keywords: Vec<String> = query
             .split_whitespace()
             .filter(|w| !stop_words.contains(&w.to_lowercase().as_str()))
@@ -581,7 +590,10 @@ impl SelfHealingFinder {
             attempts.push_str(&format!("  // Strategy {}: {:?}\n", idx + 1, strat));
             attempts.push_str("  if (!element) {\n");
             attempts.push_str("    try {\n");
-            attempts.push_str(&format!("      element = {};\n", strat.to_selector_script()));
+            attempts.push_str(&format!(
+                "      element = {};\n",
+                strat.to_selector_script()
+            ));
             attempts.push_str(&format!("      if (element) strategy = '{:?}';\n", strat));
             attempts.push_str("    } catch (e) {}\n");
             attempts.push_str("  }\n\n");
@@ -667,7 +679,9 @@ impl SemanticElementFinder {
             script.push_str("      element_info: el ? {\n");
             script.push_str("        selector: el.id ? `#${el.id}` : el.className ? `.${el.className.split(' ')[0]}` : el.tagName.toLowerCase(),\n");
             script.push_str("        role: el.getAttribute('role'),\n");
-            script.push_str("        name: el.getAttribute('aria-label') || el.textContent?.trim(),\n");
+            script.push_str(
+                "        name: el.getAttribute('aria-label') || el.textContent?.trim(),\n",
+            );
             script.push_str("        text: el.textContent?.trim()\n");
             script.push_str("      } : null,\n");
             script.push_str("      error: null\n");
