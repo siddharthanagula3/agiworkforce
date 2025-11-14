@@ -7,6 +7,7 @@ pub mod executor;
 pub mod knowledge;
 pub mod learning;
 pub mod memory;
+pub mod orchestrator;
 pub mod outcome_tracker;
 pub mod planner;
 pub mod process_ontology;
@@ -26,6 +27,10 @@ pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
 pub use learning::LearningSystem;
 pub use memory::AGIMemory;
+pub use orchestrator::{
+    AgentOrchestrator, AgentResult, AgentState, AgentStatus, CoordinationPattern, FileGuard,
+    ResourceLock, UiGuard,
+};
 pub use outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
 pub use planner::AGIPlanner;
 pub use process_ontology::{ProcessOntology, ProcessTemplate};
