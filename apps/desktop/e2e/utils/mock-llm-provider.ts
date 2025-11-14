@@ -84,9 +84,9 @@ export class MockLLMProvider {
 
     // Mock Tauri commands for LLM operations
     await this.page.addInitScript(() => {
-      // @ts-ignore
+      // @ts-expect-error - Mocking Tauri invoke function
       window.__TAURI__ = window.__TAURI__ || {};
-      // @ts-ignore
+      // @ts-expect-error - Mocking Tauri invoke function
       window.__TAURI__.invoke = async (cmd: string, args: any) => {
         console.log('[Mock] Tauri command:', cmd, args);
 
