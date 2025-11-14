@@ -16,7 +16,7 @@ use agiworkforce_desktop::{
         CodeEditingState, CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState,
         DocumentState, EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState,
         McpState, ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
-        TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
+        TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -390,6 +390,39 @@ fn main() {
 
             tracing::info!("AI Employee system initialized");
 
+            // Initialize Hook Registry for event-driven automation
+            app.manage(agiworkforce_desktop::commands::HookRegistryState::new());
+
+            tracing::info!("Hook registry state initialized");
+
+            // Initialize Background Task Manager
+            let task_db_conn = Arc::new(Mutex::new(
+                Connection::open(&db_path).context("Failed to open database for task manager")?,
+            ));
+            let task_manager = Arc::new(agiworkforce_desktop::tasks::TaskManager::new(
+                task_db_conn,
+                app.handle().clone(),
+                4, // Max concurrent tasks
+            ));
+
+            // Restore queued tasks from database
+            let task_manager_clone = task_manager.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = task_manager_clone.restore().await {
+                    tracing::error!("Failed to restore tasks: {}", e);
+                }
+            });
+
+            // Start background task loop
+            let task_manager_loop = task_manager.clone();
+            tauri::async_runtime::spawn(async move {
+                agiworkforce_desktop::tasks::start_task_loop(task_manager_loop).await;
+            });
+
+            app.manage(TaskManagerState(task_manager));
+
+            tracing::info!("Background task manager initialized");
+
             // Initialize window state
             let state = AppState::load(app.handle())?;
             app.manage(state);
@@ -415,6 +448,16 @@ fn main() {
             agiworkforce_desktop::commands::agi_get_goal_status,
             agiworkforce_desktop::commands::agi_list_goals,
             agiworkforce_desktop::commands::agi_stop,
+            // Parallel Agent Orchestration commands
+            agiworkforce_desktop::commands::orchestrator_init,
+            agiworkforce_desktop::commands::orchestrator_spawn_agent,
+            agiworkforce_desktop::commands::orchestrator_spawn_parallel,
+            agiworkforce_desktop::commands::orchestrator_get_agent_status,
+            agiworkforce_desktop::commands::orchestrator_list_agents,
+            agiworkforce_desktop::commands::orchestrator_cancel_agent,
+            agiworkforce_desktop::commands::orchestrator_cancel_all,
+            agiworkforce_desktop::commands::orchestrator_wait_all,
+            agiworkforce_desktop::commands::orchestrator_cleanup,
             // Agent commands
             agiworkforce_desktop::commands::agent_init,
             agiworkforce_desktop::commands::agent_submit_task,
@@ -594,6 +637,16 @@ fn main() {
             agiworkforce_desktop::commands::browser_get_dom_snapshot,
             agiworkforce_desktop::commands::browser_get_console_logs,
             agiworkforce_desktop::commands::browser_get_network_activity,
+            // Semantic browser automation commands
+            agiworkforce_desktop::commands::find_element_semantic,
+            agiworkforce_desktop::commands::find_all_elements_semantic,
+            agiworkforce_desktop::commands::click_semantic,
+            agiworkforce_desktop::commands::type_semantic,
+            agiworkforce_desktop::commands::get_accessibility_tree,
+            agiworkforce_desktop::commands::test_selector_strategies,
+            agiworkforce_desktop::commands::get_dom_semantic_graph,
+            agiworkforce_desktop::commands::get_interactive_elements,
+            agiworkforce_desktop::commands::find_by_role,
             // Git commands
             agiworkforce_desktop::commands::git_init,
             agiworkforce_desktop::commands::git_status,
@@ -1034,7 +1087,29 @@ fn main() {
             agiworkforce_desktop::commands::ai_employees_list_tasks,
             agiworkforce_desktop::commands::ai_employees_run_demo,
             agiworkforce_desktop::commands::ai_employees_get_stats,
-            agiworkforce_desktop::commands::ai_employees_publish
+            agiworkforce_desktop::commands::ai_employees_publish,
+            // Background task management commands
+            agiworkforce_desktop::commands::bg_submit_task,
+            agiworkforce_desktop::commands::bg_cancel_task,
+            agiworkforce_desktop::commands::bg_pause_task,
+            agiworkforce_desktop::commands::bg_resume_task,
+            agiworkforce_desktop::commands::bg_get_task_status,
+            agiworkforce_desktop::commands::bg_list_tasks,
+            agiworkforce_desktop::commands::bg_get_task_stats,
+            // Hook system commands
+            agiworkforce_desktop::commands::hooks_initialize,
+            agiworkforce_desktop::commands::hooks_list,
+            agiworkforce_desktop::commands::hooks_add,
+            agiworkforce_desktop::commands::hooks_remove,
+            agiworkforce_desktop::commands::hooks_toggle,
+            agiworkforce_desktop::commands::hooks_update,
+            agiworkforce_desktop::commands::hooks_get_config_path,
+            agiworkforce_desktop::commands::hooks_create_example,
+            agiworkforce_desktop::commands::hooks_export,
+            agiworkforce_desktop::commands::hooks_import,
+            agiworkforce_desktop::commands::hooks_reload,
+            agiworkforce_desktop::commands::hooks_get_event_types,
+            agiworkforce_desktop::commands::hooks_get_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
