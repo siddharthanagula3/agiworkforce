@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 40;
+const CURRENT_VERSION: i32 = 41;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -228,6 +228,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 40 {
         apply_migration_v40(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [40])?;
+    }
+
+    if current_version < 41 {
+        apply_migration_v41(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [41])?;
     }
 
     Ok(())
@@ -3843,6 +3848,47 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
             [perm_name],
         )?;
     }
+
+    Ok(())
+}
+
+/// Migration v41: Background task management system
+fn apply_migration_v41(conn: &Connection) -> Result<()> {
+    // Tasks table for background task management
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            priority INTEGER NOT NULL DEFAULT 1,
+            status TEXT NOT NULL DEFAULT 'Queued',
+            progress INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            started_at INTEGER,
+            completed_at INTEGER,
+            result TEXT,
+            payload TEXT
+        )",
+        [],
+    )?;
+
+    // Indexes for efficient querying
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)",
+        [],
+    )?;
+
+    tracing::info!("Applied migration v41: Background task management system");
 
     Ok(())
 }
