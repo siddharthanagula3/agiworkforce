@@ -1013,3 +1013,295 @@ pub async fn browser_get_network_activity(
 
     Ok(requests)
 }
+
+// ============================================================================
+// SEMANTIC BROWSER AUTOMATION COMMANDS
+// ============================================================================
+
+use crate::browser::semantic::{
+    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, ElementInfo,
+    SemanticElementFinder, SemanticSelector, SelectorResult, SelfHealingFinder,
+};
+
+/// Find element using semantic natural language selector
+#[tauri::command]
+pub async fn find_element_semantic(
+    tab_id: String,
+    query: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<ElementInfo, String> {
+    tracing::info!("Finding element with semantic query: {}", query);
+
+    // Create semantic selector from natural language
+    let selector = SemanticElementFinder::from_natural_language(&query);
+
+    // Generate JavaScript to find element with self-healing
+    let script = SelfHealingFinder::find_with_healing(&selector);
+
+    // Execute script
+    let result = DomOperations::evaluate(&tab_id, &script)
+        .await
+        .map_err(|e| format!("Failed to find element: {}", e))?;
+
+    // Parse result
+    if let Some(obj) = result.as_object() {
+        if let Some(element) = obj.get("element") {
+            if element.is_null() {
+                return Err(format!("Element not found: {}", query));
+            }
+
+            let strategy = obj
+                .get("strategy")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            // Get element details
+            let details_script = format!(
+                r#"
+                (function() {{
+                    const el = {};
+                    if (!el) return null;
+                    return {{
+                        selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase(),
+                        role: el.getAttribute('role'),
+                        name: el.getAttribute('aria-label') || el.textContent?.trim(),
+                        text: el.textContent?.trim()
+                    }};
+                }})()
+                "#,
+                element
+            );
+
+            let details = DomOperations::evaluate(&tab_id, &details_script)
+                .await
+                .map_err(|e| format!("Failed to get element details: {}", e))?;
+
+            if let Some(details_obj) = details.as_object() {
+                return Ok(ElementInfo {
+                    selector: details_obj
+                        .get("selector")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    strategy,
+                    role: details_obj
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                    name: details_obj
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                    text: details_obj
+                        .get("text")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                });
+            }
+        }
+    }
+
+    Err(format!("Failed to parse element result for: {}", query))
+}
+
+/// Find all elements matching semantic query
+#[tauri::command]
+pub async fn find_all_elements_semantic(
+    tab_id: String,
+    query: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<ElementInfo>, String> {
+    tracing::info!("Finding all elements with semantic query: {}", query);
+
+    // Create semantic selector
+    let selector = SemanticElementFinder::from_natural_language(&query);
+
+    // Try each strategy and collect all found elements
+    let mut all_elements = Vec::new();
+
+    for strategy in &selector.strategies {
+        let script = format!(
+            r#"
+            (function() {{
+                const selector = {};
+                const elements = selector ? (Array.isArray(selector) ? selector : [selector]) : [];
+                return elements.filter(el => el != null).map(el => ({{
+                    selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase(),
+                    role: el.getAttribute('role'),
+                    name: el.getAttribute('aria-label') || el.textContent?.trim(),
+                    text: el.textContent?.trim()
+                }}));
+            }})()
+            "#,
+            strategy.to_selector_script()
+        );
+
+        match DomOperations::evaluate(&tab_id, &script).await {
+            Ok(result) => {
+                if let Some(arr) = result.as_array() {
+                    for elem in arr {
+                        if let Some(obj) = elem.as_object() {
+                            all_elements.push(ElementInfo {
+                                selector: obj
+                                    .get("selector")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                strategy: format!("{:?}", strategy),
+                                role: obj
+                                    .get("role")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string()),
+                                name: obj
+                                    .get("name")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string()),
+                                text: obj
+                                    .get("text")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string()),
+                            });
+                        }
+                    }
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+
+    Ok(all_elements)
+}
+
+/// Click element using semantic selector
+#[tauri::command]
+pub async fn click_semantic(
+    tab_id: String,
+    query: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    tracing::info!("Clicking element with semantic query: {}", query);
+
+    // Find element first
+    let element_info = find_element_semantic(tab_id.clone(), query, state.clone()).await?;
+
+    // Click using the found selector
+    browser_click(tab_id, element_info.selector, state).await
+}
+
+/// Type text into element using semantic selector
+#[tauri::command]
+pub async fn type_semantic(
+    tab_id: String,
+    query: String,
+    text: String,
+    state: State<'_, BrowserStateWrapper>,
+) -> Result<(), String> {
+    tracing::info!("Typing into element with semantic query: {}", query);
+
+    // Find element first
+    let element_info = find_element_semantic(tab_id.clone(), query, state.clone()).await?;
+
+    // Type using the found selector
+    browser_type(tab_id, element_info.selector, text, state).await
+}
+
+/// Get accessibility tree for the current page
+#[tauri::command]
+pub async fn get_accessibility_tree(
+    tab_id: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<AccessibilityTree, String> {
+    tracing::info!("Getting accessibility tree for tab: {}", tab_id);
+
+    let script = AccessibilityAnalyzer::get_accessibility_tree_script();
+
+    let result = DomOperations::evaluate(&tab_id, script)
+        .await
+        .map_err(|e| format!("Failed to get accessibility tree: {}", e))?;
+
+    serde_json::from_value(result)
+        .map_err(|e| format!("Failed to parse accessibility tree: {}", e))
+}
+
+/// Test all selector strategies for a semantic query
+#[tauri::command]
+pub async fn test_selector_strategies(
+    tab_id: String,
+    query: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<SelectorResult>, String> {
+    tracing::info!("Testing selector strategies for query: {}", query);
+
+    // Create semantic selector
+    let selector = SemanticElementFinder::from_natural_language(&query);
+
+    // Generate test script
+    let script = SemanticElementFinder::test_strategies_script(&selector);
+
+    // Execute script
+    let result = DomOperations::evaluate(&tab_id, &script)
+        .await
+        .map_err(|e| format!("Failed to test strategies: {}", e))?;
+
+    serde_json::from_value(result).map_err(|e| format!("Failed to parse results: {}", e))
+}
+
+/// Get DOM semantic graph
+#[tauri::command]
+pub async fn get_dom_semantic_graph(
+    tab_id: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<DOMSemanticGraph, String> {
+    tracing::info!("Getting DOM semantic graph for tab: {}", tab_id);
+
+    let script = DOMSemanticGraph::build_graph_script();
+
+    let result = DomOperations::evaluate(&tab_id, script)
+        .await
+        .map_err(|e| format!("Failed to get semantic graph: {}", e))?;
+
+    serde_json::from_value(result).map_err(|e| format!("Failed to parse semantic graph: {}", e))
+}
+
+/// Get interactive elements from the page
+#[tauri::command]
+pub async fn get_interactive_elements(
+    tab_id: String,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<serde_json::Value>, String> {
+    tracing::info!("Getting interactive elements for tab: {}", tab_id);
+
+    let script = AccessibilityAnalyzer::get_interactive_elements_script();
+
+    let result = DomOperations::evaluate(&tab_id, script)
+        .await
+        .map_err(|e| format!("Failed to get interactive elements: {}", e))?;
+
+    result
+        .as_array()
+        .cloned()
+        .ok_or_else(|| "Result is not an array".to_string())
+}
+
+/// Find elements by ARIA role
+#[tauri::command]
+pub async fn find_by_role(
+    tab_id: String,
+    role: String,
+    name: Option<String>,
+    _state: State<'_, BrowserStateWrapper>,
+) -> Result<Vec<serde_json::Value>, String> {
+    tracing::info!("Finding elements by role: {} (name: {:?})", role, name);
+
+    let script = AccessibilityAnalyzer::find_by_role_script(&role, name.as_deref());
+
+    let result = DomOperations::evaluate(&tab_id, &script)
+        .await
+        .map_err(|e| format!("Failed to find by role: {}", e))?;
+
+    result
+        .as_array()
+        .cloned()
+        .ok_or_else(|| "Result is not an array".to_string())
+}

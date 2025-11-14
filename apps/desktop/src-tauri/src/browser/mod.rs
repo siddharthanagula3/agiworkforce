@@ -4,6 +4,7 @@ pub mod cdp_client;
 pub mod dom_operations;
 pub mod extension_bridge;
 pub mod playwright_bridge;
+pub mod semantic;
 pub mod tab_manager;
 
 // Re-exports for convenience
@@ -13,6 +14,7 @@ pub use cdp_client::CdpClient;
 pub use dom_operations::*;
 pub use extension_bridge::ExtensionBridge;
 pub use playwright_bridge::*;
+pub use semantic::*;
 pub use tab_manager::*;
 
 use std::sync::Arc;

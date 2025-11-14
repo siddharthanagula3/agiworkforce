@@ -94,6 +94,9 @@ pub mod agent;
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 
+// Background Task Management System
+pub mod tasks;
+
 // AI Employee Library - Pre-built AI employees for instant value
 pub mod ai_employees;
 
@@ -114,6 +117,9 @@ pub mod mcp;
 
 // Cache system for LLM responses and tool results
 pub mod cache;
+
+// Hook system for event-driven automation
+pub mod hooks;
 
 // Team collaboration system
 pub mod teams;
