@@ -2,7 +2,6 @@
  * Codebase Analysis Module
  * Workspace indexing, semantic search, and symbol resolution
  */
-
 pub mod indexer;
 
 pub use indexer::{CodebaseIndexer, IndexStats, Symbol, SymbolKind};

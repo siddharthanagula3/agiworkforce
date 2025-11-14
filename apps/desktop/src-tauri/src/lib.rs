@@ -58,6 +58,12 @@ pub mod terminal;
 // Filesystem operations and watching
 pub mod filesystem;
 
+// Codebase indexing and analysis
+pub mod codebase;
+
+// Vector embeddings for semantic search
+pub mod embeddings;
+
 // API client and OAuth
 pub mod api;
 

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('AGI Workflow E2E Tests', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the app (adjust URL based on dev server)
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
 
     // Wait for app to be ready
     await page.waitForLoadState('networkidle');
@@ -16,7 +16,10 @@ test.describe('AGI Workflow E2E Tests', () => {
 
     // Step 2: Create a new goal
     await page.click('[data-testid="create-goal-button"]');
-    await page.fill('[data-testid="goal-description-input"]', 'Process customer emails and generate responses');
+    await page.fill(
+      '[data-testid="goal-description-input"]',
+      'Process customer emails and generate responses',
+    );
 
     // Set priority
     await page.selectOption('[data-testid="goal-priority-select"]', 'High');
@@ -30,13 +33,17 @@ test.describe('AGI Workflow E2E Tests', () => {
 
     // Step 3: Verify goal appears in list
     await expect(page.locator('[data-testid="goal-card"]').first()).toBeVisible();
-    await expect(page.locator('[data-testid="goal-description"]')).toContainText('Process customer emails');
+    await expect(page.locator('[data-testid="goal-description"]')).toContainText(
+      'Process customer emails',
+    );
 
     // Step 4: Execute goal
     await page.click('[data-testid="execute-goal-button"]');
 
     // Step 5: Monitor execution progress
-    await expect(page.locator('[data-testid="execution-status"]')).toContainText('Planning', { timeout: 5000 });
+    await expect(page.locator('[data-testid="execution-status"]')).toContainText('Planning', {
+      timeout: 5000,
+    });
 
     // Wait for execution to start
     await page.waitForSelector('[data-testid="execution-progress"]', { timeout: 10000 });
@@ -102,7 +109,9 @@ test.describe('AGI Workflow E2E Tests', () => {
     await page.click('[data-testid="install-template-button"]');
 
     // Wait for installation
-    await expect(page.locator('[data-testid="installation-success"]')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="installation-success"]')).toBeVisible({
+      timeout: 5000,
+    });
 
     // Customize template
     await page.click('[data-testid="customize-template-button"]');
@@ -120,7 +129,10 @@ test.describe('AGI Workflow E2E Tests', () => {
     // Add new knowledge entry
     await page.click('[data-testid="add-knowledge-button"]');
     await page.selectOption('[data-testid="knowledge-type-select"]', 'fact');
-    await page.fill('[data-testid="knowledge-content"]', 'The company fiscal year ends in December');
+    await page.fill(
+      '[data-testid="knowledge-content"]',
+      'The company fiscal year ends in December',
+    );
     await page.click('[data-testid="save-knowledge"]');
 
     // Verify knowledge saved
@@ -136,7 +148,10 @@ test.describe('AGI Workflow E2E Tests', () => {
     // Create goal that uses knowledge
     await page.click('[data-testid="agi-nav-link"]');
     await page.click('[data-testid="create-goal-button"]');
-    await page.fill('[data-testid="goal-description-input"]', 'Prepare end-of-year financial report');
+    await page.fill(
+      '[data-testid="goal-description-input"]',
+      'Prepare end-of-year financial report',
+    );
     await page.click('[data-testid="submit-goal-button"]');
 
     // Execute and verify knowledge is referenced
@@ -216,7 +231,10 @@ test.describe('AGI Workflow E2E Tests', () => {
     // Create goal with invalid parameters
     await page.click('[data-testid="agi-nav-link"]');
     await page.click('[data-testid="create-goal-button"]');
-    await page.fill('[data-testid="goal-description-input"]', 'Read file from /invalid/path/that/does/not/exist');
+    await page.fill(
+      '[data-testid="goal-description-input"]',
+      'Read file from /invalid/path/that/does/not/exist',
+    );
     await page.click('[data-testid="submit-goal-button"]');
 
     // Execute goal
@@ -246,7 +264,7 @@ test.describe('AGI Workflow E2E Tests', () => {
     await page.click('[data-testid="create-goal-button"]');
     await page.fill(
       '[data-testid="goal-description-input"]',
-      'Analyze sales data, generate charts, and email report to team'
+      'Analyze sales data, generate charts, and email report to team',
     );
     await page.click('[data-testid="submit-goal-button"]');
 
@@ -313,7 +331,10 @@ test.describe('AGI Workflow E2E Tests', () => {
     // Create goal requiring file write
     await page.click('[data-testid="agi-nav-link"]');
     await page.click('[data-testid="create-goal-button"]');
-    await page.fill('[data-testid="goal-description-input"]', 'Create a new document in /tmp/test.txt');
+    await page.fill(
+      '[data-testid="goal-description-input"]',
+      'Create a new document in /tmp/test.txt',
+    );
     await page.click('[data-testid="submit-goal-button"]');
 
     // Execute goal
@@ -330,6 +351,8 @@ test.describe('AGI Workflow E2E Tests', () => {
     await page.click('[data-testid="approve-button"]');
 
     // Verify execution continues
-    await expect(page.locator('[data-testid="approval-dialog"]')).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="approval-dialog"]')).not.toBeVisible({
+      timeout: 5000,
+    });
   });
 });
