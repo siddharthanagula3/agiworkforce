@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Button } from '../Common/Button';
-import { Input } from '../Common/Input';
-import { Card } from '../Common/Card';
-import { Modal } from '../Common/Modal';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Card } from '../ui/Card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog';
 
 interface MessagingConnection {
   id: string;
@@ -270,7 +270,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
                     {connection.is_active ? 'Active' : 'Inactive'}
                   </span>
                   <Button
-                    variant="danger"
+                    variant="destructive"
                     size="sm"
                     onClick={() => handleDisconnect(connection.id)}
                   >
@@ -284,150 +284,153 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
       </div>
 
       {/* Slack Modal */}
-      <Modal
-        isOpen={showSlackModal}
-        onClose={() => setShowSlackModal(false)}
-        title="Connect to Slack"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Bot Token</label>
-            <Input
-              type="password"
-              value={slackBotToken}
-              onChange={(e) => setSlackBotToken(e.target.value)}
-              placeholder="xoxb-..."
-            />
+      <Dialog open={showSlackModal} onOpenChange={setShowSlackModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect to Slack</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Bot Token</label>
+              <Input
+                type="password"
+                value={slackBotToken}
+                onChange={(e) => setSlackBotToken(e.target.value)}
+                placeholder="xoxb-..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">App Token</label>
+              <Input
+                type="password"
+                value={slackAppToken}
+                onChange={(e) => setSlackAppToken(e.target.value)}
+                placeholder="xapp-..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Signing Secret</label>
+              <Input
+                type="password"
+                value={slackSigningSecret}
+                onChange={(e) => setSlackSigningSecret(e.target.value)}
+                placeholder="Enter signing secret"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Workspace Name (optional)
+              </label>
+              <Input
+                value={slackWorkspaceName}
+                onChange={(e) => setSlackWorkspaceName(e.target.value)}
+                placeholder="My Workspace"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">App Token</label>
-            <Input
-              type="password"
-              value={slackAppToken}
-              onChange={(e) => setSlackAppToken(e.target.value)}
-              placeholder="xapp-..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Signing Secret</label>
-            <Input
-              type="password"
-              value={slackSigningSecret}
-              onChange={(e) => setSlackSigningSecret(e.target.value)}
-              placeholder="Enter signing secret"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Workspace Name (optional)
-            </label>
-            <Input
-              value={slackWorkspaceName}
-              onChange={(e) => setSlackWorkspaceName(e.target.value)}
-              placeholder="My Workspace"
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowSlackModal(false)}>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSlackModal(false)}>
               Cancel
             </Button>
             <Button onClick={handleConnectSlack}>Connect</Button>
-          </div>
-        </div>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* WhatsApp Modal */}
-      <Modal
-        isOpen={showWhatsAppModal}
-        onClose={() => setShowWhatsAppModal(false)}
-        title="Connect to WhatsApp Business"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Phone Number ID</label>
-            <Input
-              value={whatsappPhoneNumberId}
-              onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
-              placeholder="Enter phone number ID"
-            />
+      <Dialog open={showWhatsAppModal} onOpenChange={setShowWhatsAppModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect to WhatsApp Business</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Phone Number ID</label>
+              <Input
+                value={whatsappPhoneNumberId}
+                onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
+                placeholder="Enter phone number ID"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Access Token</label>
+              <Input
+                type="password"
+                value={whatsappAccessToken}
+                onChange={(e) => setWhatsappAccessToken(e.target.value)}
+                placeholder="Enter access token"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Webhook Verify Token</label>
+              <Input
+                type="password"
+                value={whatsappVerifyToken}
+                onChange={(e) => setWhatsappVerifyToken(e.target.value)}
+                placeholder="Enter verify token"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Access Token</label>
-            <Input
-              type="password"
-              value={whatsappAccessToken}
-              onChange={(e) => setWhatsappAccessToken(e.target.value)}
-              placeholder="Enter access token"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Webhook Verify Token</label>
-            <Input
-              type="password"
-              value={whatsappVerifyToken}
-              onChange={(e) => setWhatsappVerifyToken(e.target.value)}
-              placeholder="Enter verify token"
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowWhatsAppModal(false)}>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWhatsAppModal(false)}>
               Cancel
             </Button>
             <Button onClick={handleConnectWhatsApp}>Connect</Button>
-          </div>
-        </div>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Teams Modal */}
-      <Modal
-        isOpen={showTeamsModal}
-        onClose={() => setShowTeamsModal(false)}
-        title="Connect to Microsoft Teams"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Tenant ID</label>
-            <Input
-              value={teamsTenantId}
-              onChange={(e) => setTeamsTenantId(e.target.value)}
-              placeholder="Enter tenant ID"
-            />
+      <Dialog open={showTeamsModal} onOpenChange={setShowTeamsModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect to Microsoft Teams</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Tenant ID</label>
+              <Input
+                value={teamsTenantId}
+                onChange={(e) => setTeamsTenantId(e.target.value)}
+                placeholder="Enter tenant ID"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Client ID</label>
+              <Input
+                value={teamsClientId}
+                onChange={(e) => setTeamsClientId(e.target.value)}
+                placeholder="Enter client ID"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Client Secret</label>
+              <Input
+                type="password"
+                value={teamsClientSecret}
+                onChange={(e) => setTeamsClientSecret(e.target.value)}
+                placeholder="Enter client secret"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Workspace Name (optional)
+              </label>
+              <Input
+                value={teamsWorkspaceName}
+                onChange={(e) => setTeamsWorkspaceName(e.target.value)}
+                placeholder="My Organization"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Client ID</label>
-            <Input
-              value={teamsClientId}
-              onChange={(e) => setTeamsClientId(e.target.value)}
-              placeholder="Enter client ID"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Client Secret</label>
-            <Input
-              type="password"
-              value={teamsClientSecret}
-              onChange={(e) => setTeamsClientSecret(e.target.value)}
-              placeholder="Enter client secret"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Workspace Name (optional)
-            </label>
-            <Input
-              value={teamsWorkspaceName}
-              onChange={(e) => setTeamsWorkspaceName(e.target.value)}
-              placeholder="My Organization"
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowTeamsModal(false)}>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTeamsModal(false)}>
               Cancel
             </Button>
             <Button onClick={handleConnectTeams}>Connect</Button>
-          </div>
-        </div>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

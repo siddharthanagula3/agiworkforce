@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { ChevronDown, GraduationCap, Plus, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';

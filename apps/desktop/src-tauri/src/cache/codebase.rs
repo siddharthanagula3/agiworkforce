@@ -17,7 +17,6 @@
  * - Integrates with file watcher for real-time invalidation
  * - Consumed by AGI planner for faster codebase understanding
  */
-
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -45,10 +44,10 @@ impl CacheType {
     /// Get TTL in seconds for this cache type
     pub fn ttl_seconds(&self) -> i64 {
         match self {
-            CacheType::FileTree => 24 * 3600,       // 24 hours
-            CacheType::Symbols => 3600,             // 1 hour
-            CacheType::Dependencies => 3600,         // 1 hour
-            CacheType::FileMetadata => 24 * 3600,   // 24 hours
+            CacheType::FileTree => 24 * 3600,     // 24 hours
+            CacheType::Symbols => 3600,           // 1 hour
+            CacheType::Dependencies => 3600,      // 1 hour
+            CacheType::FileMetadata => 24 * 3600, // 24 hours
         }
     }
 
@@ -222,11 +221,19 @@ impl CodebaseCache {
     }
 
     /// Get a cache entry
-    pub fn get<T>(&self, cache_type: CacheType, project_path: &Path, file_hash: Option<&str>) -> Result<Option<T>>
+    pub fn get<T>(
+        &self,
+        cache_type: CacheType,
+        project_path: &Path,
+        file_hash: Option<&str>,
+    ) -> Result<Option<T>>
     where
         T: for<'de> Deserialize<'de>,
     {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let cache_key = Self::generate_cache_key(project_path, cache_type, file_hash);
         let now = Self::current_timestamp();
@@ -243,31 +250,45 @@ impl CodebaseCache {
 
         if let Some(json_data) = result {
             // Cache hit
-            *self.hit_count.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))? += 1;
+            *self
+                .hit_count
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Lock error: {}", e))? += 1;
 
-            let data: T = serde_json::from_str(&json_data)
-                .context("Failed to deserialize cache data")?;
+            let data: T =
+                serde_json::from_str(&json_data).context("Failed to deserialize cache data")?;
 
             Ok(Some(data))
         } else {
             // Cache miss
-            *self.miss_count.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))? += 1;
+            *self
+                .miss_count
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Lock error: {}", e))? += 1;
             Ok(None)
         }
     }
 
     /// Set a cache entry
-    pub fn set<T>(&self, cache_type: CacheType, project_path: &Path, file_hash: Option<&str>, data: &T) -> Result<()>
+    pub fn set<T>(
+        &self,
+        cache_type: CacheType,
+        project_path: &Path,
+        file_hash: Option<&str>,
+        data: &T,
+    ) -> Result<()>
     where
         T: Serialize,
     {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let cache_key = Self::generate_cache_key(project_path, cache_type, file_hash);
         let now = Self::current_timestamp();
         let expires_at = now + cache_type.ttl_seconds();
-        let json_data = serde_json::to_string(data)
-            .context("Failed to serialize cache data")?;
+        let json_data = serde_json::to_string(data).context("Failed to serialize cache data")?;
 
         db.execute(
             "INSERT OR REPLACE INTO codebase_cache (id, project_path, cache_type, file_hash, data, created_at, expires_at)
@@ -289,97 +310,119 @@ impl CodebaseCache {
 
     /// Invalidate cache entries for a specific file
     pub fn invalidate_file(&self, file_path: &Path) -> Result<usize> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let file_path_str = file_path.to_string_lossy().to_string();
 
         // Delete entries that reference this file (either as project_path or in file_hash)
-        let deleted = db.execute(
-            "DELETE FROM codebase_cache
+        let deleted = db
+            .execute(
+                "DELETE FROM codebase_cache
              WHERE project_path = ?1 OR id LIKE ?2",
-            params![file_path_str, format!("%:{}:%", file_path_str)],
-        )
-        .context("Failed to invalidate file cache")?;
+                params![file_path_str, format!("%:{}:%", file_path_str)],
+            )
+            .context("Failed to invalidate file cache")?;
 
         Ok(deleted)
     }
 
     /// Invalidate all cache entries for a project
     pub fn invalidate_project(&self, project_path: &Path) -> Result<usize> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let project_path_str = project_path.to_string_lossy().to_string();
 
-        let deleted = db.execute(
-            "DELETE FROM codebase_cache WHERE project_path = ?1",
-            params![project_path_str],
-        )
-        .context("Failed to invalidate project cache")?;
+        let deleted = db
+            .execute(
+                "DELETE FROM codebase_cache WHERE project_path = ?1",
+                params![project_path_str],
+            )
+            .context("Failed to invalidate project cache")?;
 
         Ok(deleted)
     }
 
     /// Invalidate cache entries by type
     pub fn invalidate_type(&self, cache_type: CacheType) -> Result<usize> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
-        let deleted = db.execute(
-            "DELETE FROM codebase_cache WHERE cache_type = ?1",
-            params![cache_type.as_str()],
-        )
-        .context("Failed to invalidate cache by type")?;
+        let deleted = db
+            .execute(
+                "DELETE FROM codebase_cache WHERE cache_type = ?1",
+                params![cache_type.as_str()],
+            )
+            .context("Failed to invalidate cache by type")?;
 
         Ok(deleted)
     }
 
     /// Clear all expired entries
     pub fn clear_expired(&self) -> Result<usize> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let now = Self::current_timestamp();
 
-        let deleted = db.execute(
-            "DELETE FROM codebase_cache WHERE expires_at <= ?1",
-            params![now],
-        )
-        .context("Failed to clear expired entries")?;
+        let deleted = db
+            .execute(
+                "DELETE FROM codebase_cache WHERE expires_at <= ?1",
+                params![now],
+            )
+            .context("Failed to clear expired entries")?;
 
         Ok(deleted)
     }
 
     /// Clear all cache entries
     pub fn clear_all(&self) -> Result<usize> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
-        let deleted = db.execute(
-            "DELETE FROM codebase_cache",
-            [],
-        )
-        .context("Failed to clear all cache entries")?;
+        let deleted = db
+            .execute("DELETE FROM codebase_cache", [])
+            .context("Failed to clear all cache entries")?;
 
         // Reset hit/miss counters
-        *self.hit_count.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))? = 0;
-        *self.miss_count.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))? = 0;
+        *self
+            .hit_count
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))? = 0;
+        *self
+            .miss_count
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))? = 0;
 
         Ok(deleted)
     }
 
     /// Get cache statistics
     pub fn get_stats(&self) -> Result<CacheStats> {
-        let db = self.db.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         // Total entries
-        let total_entries: usize = db.query_row(
-            "SELECT COUNT(*) FROM codebase_cache",
-            [],
-            |row| row.get(0),
-        )?;
+        let total_entries: usize =
+            db.query_row("SELECT COUNT(*) FROM codebase_cache", [], |row| row.get(0))?;
 
         // Entries by type
         let mut entries_by_type = HashMap::new();
-        let mut stmt = db.prepare(
-            "SELECT cache_type, COUNT(*) FROM codebase_cache GROUP BY cache_type"
-        )?;
+        let mut stmt =
+            db.prepare("SELECT cache_type, COUNT(*) FROM codebase_cache GROUP BY cache_type")?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, usize>(1)?))
         })?;
@@ -397,21 +440,27 @@ impl CodebaseCache {
         )?;
 
         // Oldest and newest entries
-        let oldest_entry: Option<u64> = db.query_row(
-            "SELECT MIN(created_at) FROM codebase_cache",
-            [],
-            |row| row.get(0),
-        ).optional()?;
+        let oldest_entry: Option<u64> = db
+            .query_row("SELECT MIN(created_at) FROM codebase_cache", [], |row| {
+                row.get(0)
+            })
+            .optional()?;
 
-        let newest_entry: Option<u64> = db.query_row(
-            "SELECT MAX(created_at) FROM codebase_cache",
-            [],
-            |row| row.get(0),
-        ).optional()?;
+        let newest_entry: Option<u64> = db
+            .query_row("SELECT MAX(created_at) FROM codebase_cache", [], |row| {
+                row.get(0)
+            })
+            .optional()?;
 
         // Hit/miss rate
-        let hits = *self.hit_count.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        let misses = *self.miss_count.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let hits = *self
+            .hit_count
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let misses = *self
+            .miss_count
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         let total = hits + misses;
 
         let hit_rate = if total > 0 {
@@ -438,7 +487,11 @@ impl CodebaseCache {
     }
 
     /// Generate a cache key from project path, type, and optional file hash
-    fn generate_cache_key(project_path: &Path, cache_type: CacheType, file_hash: Option<&str>) -> String {
+    fn generate_cache_key(
+        project_path: &Path,
+        cache_type: CacheType,
+        file_hash: Option<&str>,
+    ) -> String {
         let mut hasher = Sha256::new();
         hasher.update(project_path.to_string_lossy().as_bytes());
         hasher.update(b":");
@@ -551,10 +604,7 @@ mod tests {
 
         // Manually expire the entry
         let db = cache.db.lock().unwrap();
-        db.execute(
-            "UPDATE codebase_cache SET expires_at = 0",
-            [],
-        )?;
+        db.execute("UPDATE codebase_cache SET expires_at = 0", [])?;
         drop(db);
 
         // Should not retrieve expired entry
@@ -579,12 +629,17 @@ mod tests {
         };
 
         cache.set(CacheType::FileTree, &project_path, None, &file_tree)?;
-        cache.set(CacheType::Symbols, &project_path, None, &SymbolTable {
-            file_path: None,
-            symbols: vec![],
-            imports: vec![],
-            exports: vec![],
-        })?;
+        cache.set(
+            CacheType::Symbols,
+            &project_path,
+            None,
+            &SymbolTable {
+                file_path: None,
+                symbols: vec![],
+                imports: vec![],
+                exports: vec![],
+            },
+        )?;
 
         // Invalidate project
         let deleted = cache.invalidate_project(&project_path)?;
@@ -603,20 +658,30 @@ mod tests {
         let project_path = PathBuf::from("/test/project");
 
         // Add entries
-        cache.set(CacheType::FileTree, &project_path, None, &FileTree {
-            root: project_path.clone(),
-            entries: vec![],
-            total_files: 10,
-            total_dirs: 5,
-            total_size_bytes: 1024,
-        })?;
+        cache.set(
+            CacheType::FileTree,
+            &project_path,
+            None,
+            &FileTree {
+                root: project_path.clone(),
+                entries: vec![],
+                total_files: 10,
+                total_dirs: 5,
+                total_size_bytes: 1024,
+            },
+        )?;
 
-        cache.set(CacheType::Symbols, &project_path, None, &SymbolTable {
-            file_path: None,
-            symbols: vec![],
-            imports: vec![],
-            exports: vec![],
-        })?;
+        cache.set(
+            CacheType::Symbols,
+            &project_path,
+            None,
+            &SymbolTable {
+                file_path: None,
+                symbols: vec![],
+                imports: vec![],
+                exports: vec![],
+            },
+        )?;
 
         // Get stats
         let stats = cache.get_stats()?;
@@ -649,19 +714,25 @@ mod tests {
         let project_path = PathBuf::from("/test/project");
 
         // Add entry
-        cache.set(CacheType::FileTree, &project_path, None, &FileTree {
-            root: project_path.clone(),
-            entries: vec![],
-            total_files: 10,
-            total_dirs: 5,
-            total_size_bytes: 1024,
-        })?;
+        cache.set(
+            CacheType::FileTree,
+            &project_path,
+            None,
+            &FileTree {
+                root: project_path.clone(),
+                entries: vec![],
+                total_files: 10,
+                total_dirs: 5,
+                total_size_bytes: 1024,
+            },
+        )?;
 
         // Hit
         let _: Option<FileTree> = cache.get(CacheType::FileTree, &project_path, None)?;
 
         // Miss
-        let _: Option<FileTree> = cache.get(CacheType::FileTree, &PathBuf::from("/nonexistent"), None)?;
+        let _: Option<FileTree> =
+            cache.get(CacheType::FileTree, &PathBuf::from("/nonexistent"), None)?;
 
         let stats = cache.get_stats()?;
         assert!(stats.hit_rate > 0.0);

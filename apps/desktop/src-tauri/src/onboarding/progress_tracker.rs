@@ -1,8 +1,8 @@
 use super::*;
-use rusqlite::{Connection, params};
+use chrono::Utc;
+use rusqlite::{params, Connection, Result as SqliteResult};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-use chrono::Utc;
 
 #[derive(Debug, Error)]
 pub enum ProgressError {
@@ -26,7 +26,11 @@ impl ProgressTracker {
     }
 
     /// Start a new tutorial for a user
-    pub fn start_tutorial(&self, user_id: &str, tutorial_id: &str) -> Result<OnboardingProgress, ProgressError> {
+    pub fn start_tutorial(
+        &self,
+        user_id: &str,
+        tutorial_id: &str,
+    ) -> Result<OnboardingProgress, ProgressError> {
         let conn = self.db.lock().unwrap();
         let now = Utc::now().timestamp();
 
@@ -52,22 +56,26 @@ impl ProgressTracker {
     }
 
     /// Complete a step in the tutorial
-    pub fn complete_step(&self, user_id: &str, tutorial_id: &str, step_id: &str) -> Result<OnboardingProgress, ProgressError> {
+    pub fn complete_step(
+        &self,
+        user_id: &str,
+        tutorial_id: &str,
+        step_id: &str,
+    ) -> Result<OnboardingProgress, ProgressError> {
         let conn = self.db.lock().unwrap();
         let now = Utc::now().timestamp();
 
         // Get current progress
-        let (current_step, completed_steps_json): (usize, String) = conn
-            .query_row(
-                "SELECT current_step, completed_steps FROM tutorial_progress
+        let (current_step, completed_steps_json): (usize, String) = conn.query_row(
+            "SELECT current_step, completed_steps FROM tutorial_progress
                  WHERE user_id = ?1 AND tutorial_id = ?2",
-                params![user_id, tutorial_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )?;
+            params![user_id, tutorial_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
 
         // Parse completed steps
-        let mut completed_steps: Vec<String> = serde_json::from_str(&completed_steps_json)
-            .unwrap_or_default();
+        let mut completed_steps: Vec<String> =
+            serde_json::from_str(&completed_steps_json).unwrap_or_default();
 
         // Add step if not already completed
         if !completed_steps.contains(&step_id.to_string()) {
@@ -79,7 +87,13 @@ impl ProgressTracker {
                 "UPDATE tutorial_progress
                  SET current_step = ?1, completed_steps = ?2, last_updated = ?3
                  WHERE user_id = ?4 AND tutorial_id = ?5",
-                params![current_step + 1, completed_steps_json, now, user_id, tutorial_id],
+                params![
+                    current_step + 1,
+                    completed_steps_json,
+                    now,
+                    user_id,
+                    tutorial_id
+                ],
             )?;
         }
 
@@ -106,7 +120,12 @@ impl ProgressTracker {
     }
 
     /// Skip a step (mark as completed but track that it was skipped)
-    pub fn skip_step(&self, user_id: &str, tutorial_id: &str, step_id: &str) -> Result<OnboardingProgress, ProgressError> {
+    pub fn skip_step(
+        &self,
+        user_id: &str,
+        tutorial_id: &str,
+        step_id: &str,
+    ) -> Result<OnboardingProgress, ProgressError> {
         // For now, treat skip as complete
         self.complete_step(user_id, tutorial_id, step_id)
     }
@@ -125,7 +144,11 @@ impl ProgressTracker {
     }
 
     /// Get progress for a specific tutorial
-    pub fn get_progress(&self, user_id: &str, tutorial_id: &str) -> Result<OnboardingProgress, ProgressError> {
+    pub fn get_progress(
+        &self,
+        user_id: &str,
+        tutorial_id: &str,
+    ) -> Result<OnboardingProgress, ProgressError> {
         let conn = self.db.lock().unwrap();
 
         let result = conn.query_row(
@@ -164,13 +187,11 @@ impl ProgressTracker {
         // Get completed tutorials
         let mut stmt = conn.prepare(
             "SELECT tutorial_id, completed_at FROM tutorial_progress
-             WHERE user_id = ?1 AND completed_at IS NOT NULL"
+             WHERE user_id = ?1 AND completed_at IS NOT NULL",
         )?;
 
         let completed_tutorials: HashMap<String, i64> = stmt
-            .query_map([user_id], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })?
+            .query_map([user_id], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(Result::ok)
             .collect();
 
@@ -184,8 +205,8 @@ impl ProgressTracker {
         let in_progress: Vec<OnboardingProgress> = stmt
             .query_map([user_id], |row| {
                 let completed_steps_json: String = row.get(3)?;
-                let completed_steps: Vec<String> = serde_json::from_str(&completed_steps_json)
-                    .unwrap_or_default();
+                let completed_steps: Vec<String> =
+                    serde_json::from_str(&completed_steps_json).unwrap_or_default();
 
                 Ok(OnboardingProgress {
                     user_id: row.get(0)?,
@@ -206,9 +227,7 @@ impl ProgressTracker {
         }
 
         // Get earned rewards
-        let mut stmt = conn.prepare(
-            "SELECT reward_id FROM user_rewards WHERE user_id = ?1"
-        )?;
+        let mut stmt = conn.prepare("SELECT reward_id FROM user_rewards WHERE user_id = ?1")?;
 
         let earned_rewards: Vec<String> = stmt
             .query_map([user_id], |row| row.get(0))?
@@ -290,7 +309,12 @@ impl ProgressTracker {
     }
 
     /// Record tutorial step view (for analytics)
-    pub fn record_step_view(&self, user_id: &str, tutorial_id: &str, step_id: &str) -> Result<(), ProgressError> {
+    pub fn record_step_view(
+        &self,
+        user_id: &str,
+        tutorial_id: &str,
+        step_id: &str,
+    ) -> Result<(), ProgressError> {
         let conn = self.db.lock().unwrap();
         let now = Utc::now().timestamp();
 
@@ -298,7 +322,8 @@ impl ProgressTracker {
             "INSERT INTO tutorial_step_views (user_id, tutorial_id, step_id, viewed_at)
              VALUES (?1, ?2, ?3, ?4)",
             params![user_id, tutorial_id, step_id, now],
-        ).ok(); // Ignore errors (table might not exist or duplicate entries)
+        )
+        .ok(); // Ignore errors (table might not exist or duplicate entries)
 
         Ok(())
     }

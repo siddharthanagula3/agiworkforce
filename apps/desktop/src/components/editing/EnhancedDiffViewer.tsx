@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
@@ -13,7 +13,6 @@ import {
   Code,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Tooltip } from '../ui/Tooltip';
 import { Badge } from '../ui/Badge';
 
 interface EnhancedDiffViewerProps {
@@ -135,37 +134,42 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
         </div>
 
         <div className="flex items-center gap-1">
-          <Tooltip content={viewMode === 'diff' ? 'Switch to inline view' : 'Switch to side-by-side view'}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const newMode = viewMode === 'diff' ? 'inline' : 'diff';
-                setViewMode(newMode);
-                toggleInlineMode();
-              }}
-            >
-              {viewMode === 'diff' ? (
-                <ArrowLeftRight className="h-4 w-4" />
-              ) : (
-                <Code className="h-4 w-4" />
-              )}
-            </Button>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="sm"
+            title={viewMode === 'diff' ? 'Switch to inline view' : 'Switch to side-by-side view'}
+            onClick={() => {
+              const newMode = viewMode === 'diff' ? 'inline' : 'diff';
+              setViewMode(newMode);
+              toggleInlineMode();
+            }}
+          >
+            {viewMode === 'diff' ? (
+              <ArrowLeftRight className="h-4 w-4" />
+            ) : (
+              <Code className="h-4 w-4" />
+            )}
+          </Button>
 
-          <Tooltip content="Accept all changes in this file">
-            <Button variant="default" size="sm" onClick={handleAccept}>
-              <Check className="h-4 w-4 mr-1" />
-              Accept
-            </Button>
-          </Tooltip>
+          <Button
+            variant="default"
+            size="sm"
+            title="Accept all changes in this file"
+            onClick={handleAccept}
+          >
+            <Check className="h-4 w-4 mr-1" />
+            Accept
+          </Button>
 
-          <Tooltip content="Reject all changes in this file">
-            <Button variant="ghost" size="sm" onClick={handleReject}>
-              <X className="h-4 w-4 mr-1" />
-              Reject
-            </Button>
-          </Tooltip>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Reject all changes in this file"
+            onClick={handleReject}
+          >
+            <X className="h-4 w-4 mr-1" />
+            Reject
+          </Button>
         </div>
       </div>
 
@@ -214,28 +218,26 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
                         </div>
 
                         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Tooltip content="Accept this hunk">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2"
-                              onClick={() => handleAcceptHunk(index)}
-                              disabled={hunk.accepted}
-                            >
-                              <Check className="h-3 w-3" />
-                            </Button>
-                          </Tooltip>
-                          <Tooltip content="Reject this hunk">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2"
-                              onClick={() => handleRejectHunk(index)}
-                              disabled={hunk.rejected}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </Tooltip>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2"
+                            title="Accept this hunk"
+                            onClick={() => handleAcceptHunk(index)}
+                            disabled={hunk.accepted}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2"
+                            title="Reject this hunk"
+                            onClick={() => handleRejectHunk(index)}
+                            disabled={hunk.rejected}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
 

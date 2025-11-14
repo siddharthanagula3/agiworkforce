@@ -1,8 +1,8 @@
 use super::*;
 use crate::agi::api_tools_impl;
+use crate::agi::outcome_tracker::OutcomeTracker;
 use crate::agi::planner::PlanStep;
 use crate::agi::process_reasoning::ProcessReasoning;
-use crate::agi::outcome_tracker::OutcomeTracker;
 use crate::automation::AutomationService;
 use crate::cache::ToolResultCache;
 use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
@@ -158,7 +158,9 @@ impl AGIExecutor {
         }
 
         // Execute tool
-        let result = self.execute_tool_impl(tool_name, parameters, _context).await?;
+        let result = self
+            .execute_tool_impl(tool_name, parameters, _context)
+            .await?;
 
         // Cache the result (cache will determine if it should be cached based on TTL)
         if let Err(e) = self.tool_cache.set(tool_name, parameters, result.clone()) {
@@ -180,12 +182,23 @@ impl AGIExecutor {
     ) -> Result<serde_json::Value> {
         // Security validation before execution
         let params_json = serde_json::to_value(parameters)?;
-        if let Err(e) = self.security_guard.validate_tool_call(tool_name, &params_json).await {
-            tracing::error!("[Executor] Security validation failed for tool '{}': {}", tool_name, e);
+        if let Err(e) = self
+            .security_guard
+            .validate_tool_call(tool_name, &params_json)
+            .await
+        {
+            tracing::error!(
+                "[Executor] Security validation failed for tool '{}': {}",
+                tool_name,
+                e
+            );
             return Err(anyhow::anyhow!("Security validation failed: {}", e));
         }
 
-        tracing::debug!("[Executor] Security validation passed for tool '{}'", tool_name);
+        tracing::debug!(
+            "[Executor] Security validation passed for tool '{}'",
+            tool_name
+        );
 
         match tool_name {
             "file_read" => {
@@ -660,7 +673,10 @@ impl AGIExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing prompt parameter"))?;
 
-                tracing::info!("[Executor] LLM reasoning: {}", &prompt[..prompt.len().min(50)]);
+                tracing::info!(
+                    "[Executor] LLM reasoning: {}",
+                    &prompt[..prompt.len().min(50)]
+                );
 
                 // HYBRID STRATEGY: Use Claude Haiku 4.5 for execution (4-5x faster, 1/3 cost)
                 let preferences = RouterPreferences {
@@ -1121,16 +1137,20 @@ impl AGIExecutor {
                 // Create executor with shared cache
                 let mut executor = AGIExecutor::new(
                     tool_registry,
-                    Arc::new(ResourceManager::new(ResourceLimits {
-                        cpu_percent: 80.0,
-                        memory_mb: 2048,
-                        network_mbps: 100.0,
-                        storage_mb: 10240,
-                    }).unwrap()),
+                    Arc::new(
+                        ResourceManager::new(ResourceLimits {
+                            cpu_percent: 80.0,
+                            memory_mb: 2048,
+                            network_mbps: 100.0,
+                            storage_mb: 10240,
+                        })
+                        .unwrap(),
+                    ),
                     automation,
                     router,
                     None,
-                ).unwrap();
+                )
+                .unwrap();
 
                 // Replace the cache with shared cache for parallel execution
                 executor.tool_cache = tool_cache;
@@ -1176,10 +1196,8 @@ impl AGIExecutor {
 
         let results = futures::future::join_all(handles).await;
 
-        let execution_results: Vec<crate::agi::ExecutionResult> = results
-            .into_iter()
-            .filter_map(|r| r.ok())
-            .collect();
+        let execution_results: Vec<crate::agi::ExecutionResult> =
+            results.into_iter().filter_map(|r| r.ok()).collect();
 
         tracing::info!(
             "[Executor] Parallel execution complete. {} results collected",
@@ -1204,7 +1222,11 @@ impl AGIExecutor {
         let process_type = if let Some(ref pr) = self.process_reasoning {
             match pr.identify_process_type(goal).await {
                 Ok(pt) => {
-                    tracing::info!("[Executor] Identified process type: {:?} for goal {}", pt, goal.id);
+                    tracing::info!(
+                        "[Executor] Identified process type: {:?} for goal {}",
+                        pt,
+                        goal.id
+                    );
                     Some(pt)
                 }
                 Err(e) => {
@@ -1217,11 +1239,12 @@ impl AGIExecutor {
         };
 
         // 2. Define expected outcomes if process type identified
-        let expected_outcomes = if let (Some(pt), Some(ref pr)) = (process_type, &self.process_reasoning) {
-            pr.define_outcomes(pt, goal)
-        } else {
-            vec![]
-        };
+        let expected_outcomes =
+            if let (Some(pt), Some(ref pr)) = (process_type, &self.process_reasoning) {
+                pr.define_outcomes(pt, goal)
+            } else {
+                vec![]
+            };
 
         // 3. Execute plan steps
         let mut steps_completed = 0;
@@ -1320,7 +1343,9 @@ impl AGIExecutor {
         match outcome.metric_name.as_str() {
             "processing_time" | "response_time" | "deployment_time" => {
                 // Calculate total execution time in seconds
-                let total_time_ms: u64 = context.tool_results.iter()
+                let total_time_ms: u64 = context
+                    .tool_results
+                    .iter()
                     .map(|r| r.execution_time_ms)
                     .sum();
                 Ok(total_time_ms as f64 / 1000.0)
@@ -1334,8 +1359,8 @@ impl AGIExecutor {
                 let successful = context.tool_results.iter().filter(|r| r.success).count();
                 Ok(successful as f64 / total as f64)
             }
-            "invoices_processed" | "tickets_resolved" | "records_processed" |
-            "emails_categorized" | "leads_scored" | "posts_scheduled" => {
+            "invoices_processed" | "tickets_resolved" | "records_processed"
+            | "emails_categorized" | "leads_scored" | "posts_scheduled" => {
                 // Count successful operations
                 let successful = context.tool_results.iter().filter(|r| r.success).count();
                 Ok(successful as f64)

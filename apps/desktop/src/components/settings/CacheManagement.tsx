@@ -106,7 +106,6 @@ export const CacheManagement: React.FC = () => {
   };
 
   const formatMB = (mb: number) => mb.toFixed(2);
-  const formatPercent = (rate: number) => (rate * 100).toFixed(1);
   const formatCurrency = (usd: number) => `$${usd.toFixed(4)}`;
 
   if (loading && !stats) {

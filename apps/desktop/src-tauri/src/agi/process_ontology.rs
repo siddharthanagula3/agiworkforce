@@ -487,7 +487,7 @@ impl ProcessOntology {
         let mut stmt = conn.prepare(
             "SELECT id, process_type, name, description, typical_steps, success_criteria,
                     required_tools, expected_duration_ms, risk_factors, best_practices, created_at
-             FROM process_templates"
+             FROM process_templates",
         )?;
 
         let templates = stmt.query_map([], |row| {
@@ -500,8 +500,9 @@ impl ProcessOntology {
                 .map_err(|_| rusqlite::Error::InvalidQuery)?;
 
             let success_criteria_json: String = row.get(5)?;
-            let success_criteria: Vec<SuccessCriterion> = serde_json::from_str(&success_criteria_json)
-                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let success_criteria: Vec<SuccessCriterion> =
+                serde_json::from_str(&success_criteria_json)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
 
             let required_tools_json: String = row.get(6)?;
             let required_tools: Vec<String> = serde_json::from_str(&required_tools_json)
@@ -591,7 +592,10 @@ mod tests {
 
     #[test]
     fn test_comparison_operator() {
-        assert!(matches!(ComparisonOperator::GreaterThan, ComparisonOperator::GreaterThan));
+        assert!(matches!(
+            ComparisonOperator::GreaterThan,
+            ComparisonOperator::GreaterThan
+        ));
     }
 
     #[test]

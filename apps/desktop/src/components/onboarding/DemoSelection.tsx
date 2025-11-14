@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Clock, DollarSign, Play, TrendingUp, Sparkles } from 'lucide-react';
 import type { OnboardingDemo, UserRole } from '../../types/onboarding';

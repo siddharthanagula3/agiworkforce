@@ -1,4 +1,4 @@
-use reqwest::{Client, header};
+use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -56,7 +56,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -103,7 +106,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -145,7 +151,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -196,7 +205,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -252,7 +264,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -288,7 +303,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
@@ -307,7 +325,10 @@ impl WhatsAppClient {
     }
 
     /// Handle incoming webhook events
-    pub fn handle_webhook(&self, payload: WhatsAppWebhook) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_webhook(
+        &self,
+        payload: WhatsAppWebhook,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Process webhook payload
         for entry in payload.entry {
             for change in entry.changes {
@@ -315,20 +336,14 @@ impl WhatsAppClient {
                     // Process messages
                     if let Some(messages) = value.messages {
                         for message in messages {
-                            println!(
-                                "Received message from {}: {:?}",
-                                message.from, message.text
-                            );
+                            println!("Received message from {}: {:?}", message.from, message.text);
                         }
                     }
 
                     // Process statuses
                     if let Some(statuses) = value.statuses {
                         for status in statuses {
-                            println!(
-                                "Message {} status: {}",
-                                status.id, status.status
-                            );
+                            println!("Message {} status: {}", status.id, status.status);
                         }
                     }
                 }
@@ -348,7 +363,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .get(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .send()
             .await?;
 
@@ -369,7 +387,10 @@ impl WhatsAppClient {
         let response = self
             .client
             .get(media_url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.access_token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", self.access_token),
+            )
             .send()
             .await?;
 

@@ -291,7 +291,7 @@ export function MCPToolExplorer() {
     if (!acc[tool.server]) {
       acc[tool.server] = [];
     }
-    acc[tool.server].push(tool);
+    acc[tool.server]!.push(tool);
     return acc;
   }, {} as Record<string, McpToolInfo[]>);
 

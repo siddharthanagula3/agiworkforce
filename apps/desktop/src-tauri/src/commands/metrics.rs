@@ -133,7 +133,6 @@ pub async fn get_milestones(
     user_id: String,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<Vec<MilestoneData>, String> {
-
     // Access the database directly from the collector
     // This is a bit of a hack - in production you'd want to add a proper method to the collector
     let conn = &collector.0.db;

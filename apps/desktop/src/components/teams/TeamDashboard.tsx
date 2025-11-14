@@ -32,7 +32,10 @@ export const TeamDashboard: React.FC = () => {
 
   useEffect(() => {
     if (teams.length > 0 && !currentTeam) {
-      setCurrentTeam(teams[0]);
+      const firstTeam = teams[0];
+      if (firstTeam) {
+        setCurrentTeam(firstTeam);
+      }
     }
   }, [teams, currentTeam, setCurrentTeam]);
 

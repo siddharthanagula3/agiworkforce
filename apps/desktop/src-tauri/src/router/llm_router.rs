@@ -204,9 +204,7 @@ impl LLMRouter {
         request: &LLMRequest,
     ) -> Result<RouteOutcome> {
         // Check cache if available
-        if let (Some(cache_manager), Some(db_conn)) =
-            (&self.cache_manager, &self.db_connection)
-        {
+        if let (Some(cache_manager), Some(db_conn)) = (&self.cache_manager, &self.db_connection) {
             let cache_key = CacheManager::compute_cache_key(
                 candidate.provider,
                 &candidate.model,
@@ -304,9 +302,7 @@ impl LLMRouter {
         let total_cost = response.cost.unwrap_or(0.0);
 
         // Store in cache if available
-        if let (Some(cache_manager), Some(db_conn)) =
-            (&self.cache_manager, &self.db_connection)
-        {
+        if let (Some(cache_manager), Some(db_conn)) = (&self.cache_manager, &self.db_connection) {
             if let Ok(conn) = db_conn.lock() {
                 let cache_key = CacheManager::compute_cache_key(
                     candidate.provider,
@@ -317,8 +313,7 @@ impl LLMRouter {
                 );
 
                 let prompt_hash = CacheManager::compute_hash(&request.messages);
-                let expires_at =
-                    cache_manager.temperature_aware_expiry(request.temperature);
+                let expires_at = cache_manager.temperature_aware_expiry(request.temperature);
 
                 if let Ok(response_json) = serde_json::to_string(&response) {
                     let cache_record = crate::router::cache_manager::CacheRecord {

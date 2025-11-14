@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
+
 import { Check, Sparkles } from 'lucide-react';
 import { usePricingStore } from '../../stores/pricingStore';
 import { PricingCalculator } from './PricingCalculator';

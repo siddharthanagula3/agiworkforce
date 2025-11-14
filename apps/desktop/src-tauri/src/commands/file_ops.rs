@@ -103,9 +103,10 @@ async fn check_file_permission(
     }
 
     // Get permission manager
-    let _conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let _conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let pm = PermissionManager::new(
         rusqlite::Connection::open_in_memory()
@@ -146,9 +147,10 @@ async fn log_file_operation(
     error: Option<String>,
     db: &AppDatabase,
 ) -> Result<(), String> {
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let operation_type = format!("FILE_{}", operation.as_str().to_uppercase());
     let details = serde_json::json!({
@@ -734,15 +736,21 @@ pub async fn fs_read_file_content(
         Ok(content) => content,
         Err(e) => {
             let error = format!("Failed to read file: {}", e);
-            log_file_operation(&file_path, FileOperation::Read, false, Some(error.clone()), &state)
-                .await?;
+            log_file_operation(
+                &file_path,
+                FileOperation::Read,
+                false,
+                Some(error.clone()),
+                &state,
+            )
+            .await?;
             return Err(error);
         }
     };
 
     // Get file size
-    let metadata = fs::metadata(&file_path)
-        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(&file_path).map_err(|e| format!("Failed to get file metadata: {}", e))?;
     let size = metadata.len();
 
     // Count lines
@@ -795,8 +803,8 @@ pub async fn fs_get_workspace_files(
     }
 
     // Read directory
-    let entries = fs::read_dir(&workspace_path)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    let entries =
+        fs::read_dir(&workspace_path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     let mut files = Vec::new();
 
@@ -811,7 +819,8 @@ pub async fn fs_get_workspace_files(
             || name == "node_modules"
             || name == "target"
             || name == "dist"
-            || name == "build" {
+            || name == "build"
+        {
             continue;
         }
 
