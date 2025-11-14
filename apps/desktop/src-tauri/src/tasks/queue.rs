@@ -1,6 +1,6 @@
 use super::types::{Priority, Task};
-use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
 use tokio::sync::RwLock;
 
 /// Queue item with priority ordering
@@ -110,7 +110,10 @@ impl TaskQueue {
 
         if let Some(task) = index.remove(task_id) {
             // Rebuild heap without the removed task
-            let items: Vec<_> = heap.drain().filter(|item| item.task.id != task_id).collect();
+            let items: Vec<_> = heap
+                .drain()
+                .filter(|item| item.task.id != task_id)
+                .collect();
             *heap = items.into_iter().collect();
             Some(task)
         } else {

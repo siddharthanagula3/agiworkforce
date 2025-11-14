@@ -55,11 +55,7 @@ impl TaskExecutor {
     }
 
     /// Execute a task asynchronously
-    pub async fn execute<F>(
-        &self,
-        mut task: Task,
-        executor_fn: F,
-    ) -> anyhow::Result<()>
+    pub async fn execute<F>(&self, mut task: Task, executor_fn: F) -> anyhow::Result<()>
     where
         F: Future<Output = anyhow::Result<String>> + Send + 'static,
     {
@@ -186,10 +182,8 @@ impl TaskExecutor {
                                 completed.push((task_id, result));
                             }
                             Err(e) => {
-                                completed.push((
-                                    task_id,
-                                    Err(anyhow::anyhow!("Task panicked: {}", e)),
-                                ));
+                                completed
+                                    .push((task_id, Err(anyhow::anyhow!("Task panicked: {}", e))));
                             }
                         }
                     }

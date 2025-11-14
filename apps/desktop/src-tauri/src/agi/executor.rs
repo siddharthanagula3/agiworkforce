@@ -118,7 +118,9 @@ impl AGIExecutor {
         let session_id = uuid::Uuid::new_v4().to_string();
         crate::hooks::emit_event(crate::hooks::HookEvent::step_start(
             session_id.clone(),
-            step.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            step.id
+                .clone()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             step.description.clone(),
             context.goal.id.clone(),
         ))
@@ -150,7 +152,9 @@ impl AGIExecutor {
                 // Emit StepCompleted hook event
                 crate::hooks::emit_event(crate::hooks::HookEvent::step_completed(
                     session_id,
-                    step.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    step.id
+                        .clone()
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
                     step.description.clone(),
                     context.goal.id.clone(),
                     res.clone(),
@@ -162,7 +166,9 @@ impl AGIExecutor {
                 // Emit StepError hook event
                 crate::hooks::emit_event(crate::hooks::HookEvent::step_error(
                     session_id,
-                    step.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    step.id
+                        .clone()
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
                     step.description.clone(),
                     context.goal.id.clone(),
                     e.to_string(),

@@ -1,9 +1,8 @@
 /// This module provides integration examples for enhanced error handling
 /// with the AGI executor, tools, and router.
-
 use super::{
-    retry_with_policy, AGIError, Categorizable, ErrorContext, RecoveryManager, Result,
-    RetryPolicy, ToolError,
+    retry_with_policy, AGIError, Categorizable, ErrorContext, RecoveryManager, Result, RetryPolicy,
+    ToolError,
 };
 use std::sync::Arc;
 
@@ -78,9 +77,7 @@ pub fn convert_tool_error(tool_name: &str, error: impl std::error::Error) -> AGI
         "calendar_create_event" | "calendar_list_events" => {
             AGIError::ToolError(ToolError::CalendarError(error_msg))
         }
-        "cloud_upload" | "cloud_download" => {
-            AGIError::ToolError(ToolError::CloudError(error_msg))
-        }
+        "cloud_upload" | "cloud_download" => AGIError::ToolError(ToolError::CloudError(error_msg)),
         "code_execute" => AGIError::ToolError(ToolError::CodeExecutionError(error_msg)),
         "image_ocr" => AGIError::ToolError(ToolError::OCRError(error_msg)),
         _ => AGIError::ToolError(ToolError::BrowserError(error_msg)),
@@ -147,8 +144,7 @@ impl EnhancedExecutionContext {
         F: Fn() -> Fut + Clone,
         Fut: std::future::Future<Output = Result<T>>,
     {
-        let result =
-            execute_tool_with_recovery(tool_name, operation, &self.recovery_manager).await;
+        let result = execute_tool_with_recovery(tool_name, operation, &self.recovery_manager).await;
 
         // If error occurred, create context and emit event
         if let Err(ref error) = result {
@@ -207,8 +203,7 @@ mod tests {
         };
 
         let recovery_manager = RecoveryManager::new();
-        let result =
-            execute_tool_with_recovery("test_tool", operation, &recovery_manager).await;
+        let result = execute_tool_with_recovery("test_tool", operation, &recovery_manager).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "success");
