@@ -14,16 +14,10 @@ pub enum BackoffStrategy {
     Linear(Duration),
 
     /// Exponential increase: delay = base * 2^attempt, capped at max
-    Exponential {
-        base: Duration,
-        max: Duration,
-    },
+    Exponential { base: Duration, max: Duration },
 
     /// Exponential with jitter to avoid thundering herd
-    ExponentialWithJitter {
-        base: Duration,
-        max: Duration,
-    },
+    ExponentialWithJitter { base: Duration, max: Duration },
 }
 
 impl BackoffStrategy {
@@ -128,7 +122,9 @@ impl RetryPolicy {
             retry_on: |e| {
                 matches!(
                     e,
-                    AGIError::ToolError(_) | AGIError::TransientError(_) | AGIError::TimeoutError(_)
+                    AGIError::ToolError(_)
+                        | AGIError::TransientError(_)
+                        | AGIError::TimeoutError(_)
                 )
             },
         }
@@ -159,10 +155,7 @@ impl RetryPolicy {
 }
 
 /// Retry an async operation with the given policy
-pub async fn retry_with_policy<F, Fut, T>(
-    policy: &RetryPolicy,
-    mut operation: F,
-) -> Result<T>
+pub async fn retry_with_policy<F, Fut, T>(policy: &RetryPolicy, mut operation: F) -> Result<T>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T>>,
@@ -219,13 +212,9 @@ where
         }
     }
 
-    warn!(
-        "All {} retry attempts exhausted",
-        policy.max_attempts
-    );
-    Err(last_error.unwrap_or_else(|| {
-        AGIError::FatalError("All retry attempts exhausted".to_string())
-    }))
+    warn!("All {} retry attempts exhausted", policy.max_attempts);
+    Err(last_error
+        .unwrap_or_else(|| AGIError::FatalError("All retry attempts exhausted".to_string())))
 }
 
 /// Retry with timeout wrapper
@@ -248,11 +237,7 @@ where
 }
 
 /// Conditional retry - only retry if condition is met
-pub async fn retry_if<F, Fut, T, C>(
-    policy: &RetryPolicy,
-    operation: F,
-    condition: C,
-) -> Result<T>
+pub async fn retry_if<F, Fut, T, C>(policy: &RetryPolicy, operation: F, condition: C) -> Result<T>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T>>,
@@ -345,9 +330,7 @@ mod tests {
             let counter = counter_clone.clone();
             async move {
                 counter.fetch_add(1, Ordering::SeqCst);
-                Err::<(), AGIError>(AGIError::TransientError(
-                    "Simulated failure".to_string(),
-                ))
+                Err::<(), AGIError>(AGIError::TransientError("Simulated failure".to_string()))
             }
         };
 

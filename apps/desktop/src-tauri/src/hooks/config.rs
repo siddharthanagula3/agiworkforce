@@ -38,8 +38,8 @@ impl HookConfig {
                 .with_context(|| format!("Failed to create directory {:?}", parent))?;
         }
 
-        let yaml = serde_yaml::to_string(&self)
-            .context("Failed to serialize hooks config to YAML")?;
+        let yaml =
+            serde_yaml::to_string(&self).context("Failed to serialize hooks config to YAML")?;
 
         std::fs::write(path, yaml)
             .with_context(|| format!("Failed to write hooks config to {:?}", path))?;
@@ -69,7 +69,10 @@ impl HookConfig {
     pub fn add_hook(&mut self, hook: Hook) -> Result<()> {
         // Check for duplicate names
         if self.hooks.iter().any(|h| h.name == hook.name) {
-            return Err(anyhow::anyhow!("Hook with name '{}' already exists", hook.name));
+            return Err(anyhow::anyhow!(
+                "Hook with name '{}' already exists",
+                hook.name
+            ));
         }
 
         self.hooks.push(hook);
@@ -135,9 +138,11 @@ impl HookConfig {
                     events: vec![HookEventType::SessionStart, HookEventType::SessionEnd],
                     priority: 5,
                     command: if cfg!(windows) {
-                        "echo [%date% %time%] Session event: %HOOK_EVENT_TYPE% >> session.log".to_string()
+                        "echo [%date% %time%] Session event: %HOOK_EVENT_TYPE% >> session.log"
+                            .to_string()
                     } else {
-                        "echo \"[$(date)] Session event: $HOOK_EVENT_TYPE\" >> session.log".to_string()
+                        "echo \"[$(date)] Session event: $HOOK_EVENT_TYPE\" >> session.log"
+                            .to_string()
                     },
                     enabled: true,
                     timeout_secs: 10,

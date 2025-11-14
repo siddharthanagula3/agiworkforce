@@ -10,7 +10,9 @@ pub mod retry;
 
 pub use categorization::{Categorizable, ErrorCategory};
 pub use commands::{ErrorContextResponse, ErrorContextStore};
-pub use integration::{convert_tool_error, emit_error_event, execute_tool_with_recovery, EnhancedExecutionContext};
+pub use integration::{
+    convert_tool_error, emit_error_event, execute_tool_with_recovery, EnhancedExecutionContext,
+};
 pub use recovery::{RecoveryAction, RecoveryManager, RecoveryStrategy};
 pub use retry::{retry_with_policy, BackoffStrategy, RetryPolicy};
 
@@ -217,9 +219,9 @@ impl From<anyhow::Error> for AGIError {
 impl From<std::io::Error> for AGIError {
     fn from(err: std::io::Error) -> Self {
         match err.kind() {
-            std::io::ErrorKind::NotFound => {
-                AGIError::ToolError(ToolError::FileSystemError(format!("File not found: {}", err)))
-            }
+            std::io::ErrorKind::NotFound => AGIError::ToolError(ToolError::FileSystemError(
+                format!("File not found: {}", err),
+            )),
             std::io::ErrorKind::PermissionDenied => AGIError::PermissionError(err.to_string()),
             std::io::ErrorKind::TimedOut => AGIError::TimeoutError(err.to_string()),
             std::io::ErrorKind::WouldBlock => AGIError::TransientError(err.to_string()),
@@ -287,9 +289,7 @@ mod tests {
         let error = AGIError::FatalError("test".to_string());
         assert!(!error.is_retryable());
 
-        let error = AGIError::ResourceError(ResourceError::MemoryLimitExceeded(
-            "test".to_string(),
-        ));
+        let error = AGIError::ResourceError(ResourceError::MemoryLimitExceeded("test".to_string()));
         assert!(error.is_retryable());
     }
 }

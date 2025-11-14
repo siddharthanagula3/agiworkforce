@@ -347,7 +347,12 @@ impl HookEvent {
     }
 
     /// Create a new goal start event
-    pub fn goal_start(session_id: String, goal_id: String, description: String, priority: String) -> Self {
+    pub fn goal_start(
+        session_id: String,
+        goal_id: String,
+        description: String,
+        priority: String,
+    ) -> Self {
         Self {
             event_type: HookEventType::GoalStart,
             timestamp: Utc::now(),
@@ -407,7 +412,11 @@ impl HookEvent {
     }
 
     /// Create a new user prompt submit event
-    pub fn user_prompt_submit(session_id: String, prompt: String, conversation_id: Option<String>) -> Self {
+    pub fn user_prompt_submit(
+        session_id: String,
+        prompt: String,
+        conversation_id: Option<String>,
+    ) -> Self {
         Self {
             event_type: HookEventType::UserPromptSubmit,
             timestamp: Utc::now(),
