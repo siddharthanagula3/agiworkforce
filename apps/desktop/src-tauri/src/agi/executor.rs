@@ -734,42 +734,117 @@ impl AGIExecutor {
                     .get("subject")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'subject' parameter"))?;
-                let _body = parameters
+                let body = parameters
                     .get("body")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'body' parameter"))?;
 
-                // Note: Email sending requires account setup via email_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!(
-                    "[Executor] Email send requested: to={}, subject={}",
-                    to,
-                    subject
-                );
-                Ok(
-                    json!({ "success": true, "note": "Email sending requires account configuration via email_connect command. Use Tauri command 'email_send' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::email::email_list_accounts;
+                    use crate::commands::email::SendEmailRequest;
+                    use crate::communications::EmailAddress;
+
+                    // Get available email accounts
+                    let accounts = email_list_accounts(app.clone()).await
+                        .map_err(|e| anyhow!("Failed to list email accounts: {}. Please connect an email account first using email_connect.", e))?;
+
+                    if accounts.is_empty() {
+                        return Err(anyhow!("No email accounts configured. Please connect an email account first using email_connect command."));
+                    }
+
+                    // Use the first account (or could be parameterized)
+                    let account = &accounts[0];
+
+                    // Parse recipient email
+                    let to_addresses = to
+                        .split(',')
+                        .map(|addr| EmailAddress::new(addr.trim().to_string(), None))
+                        .collect();
+
+                    // Create send request
+                    let send_request = SendEmailRequest {
+                        account_id: account.id,
+                        to: to_addresses,
+                        cc: vec![],
+                        bcc: vec![],
+                        reply_to: None,
+                        subject: subject.to_string(),
+                        body_text: Some(body.to_string()),
+                        body_html: None,
+                        attachments: vec![],
+                    };
+
+                    // Send via email_send command
+                    use crate::commands::email::email_send;
+                    let message_id = email_send(app.clone(), send_request)
+                        .await
+                        .map_err(|e| anyhow!("Email send failed: {}", e))?;
+
+                    tracing::info!(
+                        "[Executor] Email sent successfully: message_id={}",
+                        message_id
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "message_id": message_id,
+                        "to": to,
+                        "subject": subject,
+                        "from": account.email
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for email send"))
+                }
             }
             "email_fetch" => {
-                let account_id = parameters
+                let account_id_str = parameters
                     .get("account_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
                 let limit = parameters
                     .get("limit")
                     .and_then(|v| v.as_u64())
-                    .unwrap_or(10);
+                    .unwrap_or(10) as usize;
 
-                // Note: Email fetching requires account setup via email_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!(
-                    "[Executor] Email fetch requested: account_id={}, limit={}",
-                    account_id,
-                    limit
-                );
-                Ok(
-                    json!({ "success": true, "note": "Email fetching requires account configuration via email_connect command. Use Tauri command 'email_fetch_inbox' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::email::email_fetch_inbox;
+
+                    // Parse account_id as i64
+                    let account_id: i64 = account_id_str
+                        .parse()
+                        .map_err(|_| anyhow!("Invalid account_id format. Must be a number."))?;
+
+                    // Fetch emails from inbox
+                    let emails = email_fetch_inbox(
+                        app.clone(),
+                        account_id,
+                        None, // folder (defaults to INBOX)
+                        Some(limit),
+                        None, // filter
+                    )
+                    .await
+                    .map_err(|e| {
+                        anyhow!(
+                            "Failed to fetch emails: {}. Ensure the account is connected.",
+                            e
+                        )
+                    })?;
+
+                    tracing::info!(
+                        "[Executor] Fetched {} emails for account_id={}",
+                        emails.len(),
+                        account_id
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "account_id": account_id,
+                        "count": emails.len(),
+                        "emails": serde_json::to_value(&emails).map_err(|e| anyhow!("Failed to serialize emails: {}", e))?
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for email fetch"))
+                }
             }
             "calendar_create_event" => {
                 let account_id = parameters
@@ -780,21 +855,68 @@ impl AGIExecutor {
                     .get("title")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'title' parameter"))?;
-                let _start_time = parameters
+                let start_time = parameters
                     .get("start_time")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'start_time' parameter"))?;
+                let end_time = parameters
+                    .get("end_time")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing 'end_time' parameter"))?;
+                let calendar_id = parameters
+                    .get("calendar_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("primary"); // Default to primary calendar
 
-                // Note: Calendar event creation requires account setup via calendar_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!(
-                    "[Executor] Calendar event creation requested: account_id={}, title={}",
-                    account_id,
-                    title
-                );
-                Ok(
-                    json!({ "success": true, "note": "Calendar event creation requires account configuration via calendar_connect command. Use Tauri command 'calendar_create_event' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use crate::calendar::CreateEventRequest;
+                    use tauri::Manager;
+
+                    let calendar_state = app.state::<crate::commands::CalendarState>();
+
+                    // Create event request
+                    let request = CreateEventRequest {
+                        calendar_id: calendar_id.to_string(),
+                        title: title.to_string(),
+                        description: parameters
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        start: start_time.to_string(),
+                        end: end_time.to_string(),
+                        location: parameters
+                            .get("location")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        attendees: vec![], // Could be extended to parse attendees from parameters
+                        timezone: None,    // Will use default timezone
+                    };
+
+                    // Create event via CalendarState
+                    let event = calendar_state.manager
+                        .create_event(account_id, &request)
+                        .await
+                        .map_err(|e| anyhow!("Failed to create calendar event: {}. Ensure the calendar account is connected via calendar_connect.", e))?;
+
+                    tracing::info!(
+                        "[Executor] Calendar event created: id={}, title={}",
+                        event.id,
+                        event.title
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "event_id": event.id,
+                        "title": event.title,
+                        "start": event.start,
+                        "end": event.end,
+                        "calendar_id": calendar_id
+                    }))
+                } else {
+                    Err(anyhow!(
+                        "App handle not available for calendar event creation"
+                    ))
+                }
             }
             "calendar_list_events" => {
                 let account_id = parameters
@@ -802,15 +924,56 @@ impl AGIExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'account_id' parameter"))?;
 
-                // Note: Calendar listing requires account setup via calendar_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!(
-                    "[Executor] Calendar list events requested: account_id={}",
-                    account_id
-                );
-                Ok(
-                    json!({ "success": true, "note": "Calendar listing requires account configuration via calendar_connect command. Use Tauri command 'calendar_list_events' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use crate::calendar::ListEventsRequest;
+                    use tauri::Manager;
+
+                    let calendar_state = app.state::<crate::commands::CalendarState>();
+
+                    // Build list events request
+                    let request = ListEventsRequest {
+                        calendar_id: parameters
+                            .get("calendar_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("primary")
+                            .to_string(),
+                        time_min: parameters
+                            .get("time_min")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        time_max: parameters
+                            .get("time_max")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        max_results: parameters
+                            .get("max_results")
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as usize),
+                        page_token: None,
+                    };
+
+                    // List events via CalendarState
+                    let response = calendar_state.manager
+                        .list_events(account_id, &request)
+                        .await
+                        .map_err(|e| anyhow!("Failed to list calendar events: {}. Ensure the calendar account is connected via calendar_connect.", e))?;
+
+                    tracing::info!(
+                        "[Executor] Listed {} calendar events for account_id={}",
+                        response.events.len(),
+                        account_id
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "account_id": account_id,
+                        "count": response.events.len(),
+                        "events": serde_json::to_value(&response.events).map_err(|e| anyhow!("Failed to serialize events: {}", e))?,
+                        "next_page_token": response.next_page_token
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for calendar list events"))
+                }
             }
             "cloud_upload" => {
                 let account_id = parameters
@@ -826,12 +989,37 @@ impl AGIExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'remote_path' parameter"))?;
 
-                // Note: Cloud upload requires account setup via cloud_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Cloud upload requested: account_id={}, local_path={}, remote_path={}", account_id, local_path, remote_path);
-                Ok(
-                    json!({ "success": true, "note": "Cloud upload requires account configuration via cloud_connect command. Use Tauri command 'cloud_upload' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use tauri::Manager;
+
+                    let cloud_state = app.state::<crate::commands::CloudState>();
+
+                    // Upload file via CloudState
+                    let account_id_clone = account_id.to_string();
+                    let remote_path_clone = remote_path.to_string();
+                    let local_path_clone = local_path.to_string();
+
+                    let file_id = cloud_state.manager
+                        .with_client(&account_id_clone, move |client| {
+                            let remote = remote_path_clone.clone();
+                            let local = local_path_clone.clone();
+                            Box::pin(async move { client.upload(&local, &remote).await })
+                        })
+                        .await
+                        .map_err(|e| anyhow!("Cloud upload failed: {}. Ensure the cloud account is connected via cloud_connect.", e))?;
+
+                    tracing::info!("[Executor] Cloud upload successful: file_id={}, local_path={}, remote_path={}", file_id, local_path, remote_path);
+
+                    Ok(json!({
+                        "success": true,
+                        "file_id": file_id,
+                        "account_id": account_id,
+                        "local_path": local_path,
+                        "remote_path": remote_path
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for cloud upload"))
+                }
             }
             "cloud_download" => {
                 let account_id = parameters
@@ -847,15 +1035,43 @@ impl AGIExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'local_path' parameter"))?;
 
-                // Note: Cloud download requires account setup via cloud_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!("[Executor] Cloud download requested: account_id={}, remote_path={}, local_path={}", account_id, remote_path, local_path);
-                Ok(
-                    json!({ "success": true, "note": "Cloud download requires account configuration via cloud_connect command. Use Tauri command 'cloud_download' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use tauri::Manager;
+
+                    let cloud_state = app.state::<crate::commands::CloudState>();
+
+                    // Download file via CloudState
+                    let account_id_clone = account_id.to_string();
+                    let remote_path_clone = remote_path.to_string();
+                    let local_path_clone = local_path.to_string();
+
+                    cloud_state.manager
+                        .with_client(&account_id_clone, move |client| {
+                            let remote = remote_path_clone.clone();
+                            let local = local_path_clone.clone();
+                            Box::pin(async move { client.download(&remote, &local).await })
+                        })
+                        .await
+                        .map_err(|e| anyhow!("Cloud download failed: {}. Ensure the cloud account is connected via cloud_connect.", e))?;
+
+                    tracing::info!(
+                        "[Executor] Cloud download successful: remote_path={}, local_path={}",
+                        remote_path,
+                        local_path
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "account_id": account_id,
+                        "remote_path": remote_path,
+                        "local_path": local_path
+                    }))
+                } else {
+                    Err(anyhow!("App handle not available for cloud download"))
+                }
             }
             "productivity_create_task" => {
-                let provider = parameters
+                let provider_str = parameters
                     .get("provider")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'provider' parameter"))?;
@@ -864,16 +1080,82 @@ impl AGIExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing 'title' parameter"))?;
 
-                // Note: Productivity task creation requires account setup via productivity_connect command
-                // This tool is registered but requires Tauri command invocation
-                tracing::info!(
-                    "[Executor] Productivity task creation requested: provider={}, title={}",
-                    provider,
-                    title
-                );
-                Ok(
-                    json!({ "success": true, "note": "Productivity task creation requires account configuration via productivity_connect command. Use Tauri command 'productivity_create_task' directly." }),
-                )
+                if let Some(ref app) = self.app_handle {
+                    use crate::productivity::{Provider, Task};
+                    use tauri::Manager;
+
+                    let productivity_state = app.state::<crate::commands::ProductivityState>();
+
+                    // Parse provider
+                    let provider = match provider_str.to_lowercase().as_str() {
+                        "notion" => Provider::Notion,
+                        "trello" => Provider::Trello,
+                        "asana" => Provider::Asana,
+                        _ => {
+                            return Err(anyhow!(
+                            "Unknown productivity provider: {}. Supported: notion, trello, asana",
+                            provider_str
+                        ))
+                        }
+                    };
+
+                    // Build task
+                    let task = Task {
+                        id: String::new(), // Will be assigned by the service
+                        title: title.to_string(),
+                        description: parameters
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        status: parameters
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("todo")
+                            .to_string(),
+                        priority: parameters
+                            .get("priority")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        due_date: parameters
+                            .get("due_date")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        assignee: parameters
+                            .get("assignee")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        project_id: parameters
+                            .get("project_id")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        labels: vec![],
+                        created_at: None,
+                        updated_at: None,
+                    };
+
+                    // Create task via ProductivityState
+                    let manager = productivity_state.manager.lock().await;
+                    let task_id = manager.create_task(provider, task).await
+                        .map_err(|e| anyhow!("Failed to create productivity task: {}. Ensure the provider account is connected via productivity_connect.", e))?;
+
+                    tracing::info!(
+                        "[Executor] Productivity task created: provider={}, task_id={}, title={}",
+                        provider_str,
+                        task_id,
+                        title
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "task_id": task_id,
+                        "provider": provider_str,
+                        "title": title
+                    }))
+                } else {
+                    Err(anyhow!(
+                        "App handle not available for productivity task creation"
+                    ))
+                }
             }
             "document_read" => {
                 let file_path = parameters

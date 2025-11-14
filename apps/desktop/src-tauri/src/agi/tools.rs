@@ -1063,7 +1063,10 @@ impl ToolRegistry {
 
     fn register_tool(&self, tool: Tool) -> Result<()> {
         // Index by capabilities
-        let mut capabilities_index = self.capabilities_index.lock().unwrap();
+        let mut capabilities_index = self
+            .capabilities_index
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Tool capabilities index lock poisoned: {}", e))?;
         for capability in &tool.capabilities {
             capabilities_index
                 .entry(capability.clone())
@@ -1072,15 +1075,31 @@ impl ToolRegistry {
         }
         drop(capabilities_index);
 
-        let mut tools = self.tools.lock().unwrap();
+        let mut tools = self
+            .tools
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Tool registry lock poisoned: {}", e))?;
         tools.insert(tool.id.clone(), tool);
         Ok(())
     }
 
     /// Find tools by capability
     pub fn find_tools_by_capability(&self, capability: &ToolCapability) -> Vec<Tool> {
-        let capabilities_index = self.capabilities_index.lock().unwrap();
-        let tools = self.tools.lock().unwrap();
+        let capabilities_index = match self.capabilities_index.lock() {
+            Ok(index) => index,
+            Err(e) => {
+                tracing::error!("Tool capabilities index lock poisoned: {}", e);
+                return Vec::new();
+            }
+        };
+
+        let tools = match self.tools.lock() {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!("Tool registry lock poisoned: {}", e);
+                return Vec::new();
+            }
+        };
 
         capabilities_index
             .get(capability)
@@ -1090,12 +1109,24 @@ impl ToolRegistry {
 
     /// Get tool by ID
     pub fn get_tool(&self, id: &str) -> Option<Tool> {
-        self.tools.lock().unwrap().get(id).cloned()
+        match self.tools.lock() {
+            Ok(tools) => tools.get(id).cloned(),
+            Err(e) => {
+                tracing::error!("Tool registry lock poisoned: {}", e);
+                None
+            }
+        }
     }
 
     /// List all tools
     pub fn list_tools(&self) -> Vec<Tool> {
-        self.tools.lock().unwrap().values().cloned().collect()
+        match self.tools.lock() {
+            Ok(tools) => tools.values().cloned().collect(),
+            Err(e) => {
+                tracing::error!("Tool registry lock poisoned: {}", e);
+                Vec::new()
+            }
+        }
     }
 
     /// Get tools that can help achieve a goal
