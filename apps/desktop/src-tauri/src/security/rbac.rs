@@ -50,10 +50,7 @@ impl RBACManager {
         )?;
 
         let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-            ))
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
 
         for row in rows {
@@ -92,14 +89,11 @@ impl RBACManager {
         }
 
         // Get user's role
-        let role: UserRole = db.query_row(
-            "SELECT role FROM users WHERE id = ?1",
-            [user_id],
-            |row| {
+        let role: UserRole =
+            db.query_row("SELECT role FROM users WHERE id = ?1", [user_id], |row| {
                 let role_str: String = row.get(0)?;
                 Ok(UserRole::from_str(&role_str).unwrap_or(UserRole::Viewer))
-            },
-        )?;
+            })?;
 
         // Check role permissions from cache
         let cache = self.role_permissions_cache.read();
@@ -136,14 +130,11 @@ impl RBACManager {
         let db = self.db.lock();
 
         // Get user's role
-        let role: UserRole = db.query_row(
-            "SELECT role FROM users WHERE id = ?1",
-            [user_id],
-            |row| {
+        let role: UserRole =
+            db.query_row("SELECT role FROM users WHERE id = ?1", [user_id], |row| {
                 let role_str: String = row.get(0)?;
                 Ok(UserRole::from_str(&role_str).unwrap_or(UserRole::Viewer))
-            },
-        )?;
+            })?;
 
         // Get role permissions
         let mut permissions = HashSet::new();
@@ -161,10 +152,7 @@ impl RBACManager {
         )?;
 
         let overrides = stmt.query_map([user_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, i32>(1)? != 0,
-            ))
+            Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
         })?;
 
         for override_result in overrides {
@@ -224,7 +212,11 @@ impl RBACManager {
     }
 
     /// Remove user permission override (revert to role default)
-    pub fn remove_user_permission_override(&self, user_id: &str, permission_name: &str) -> Result<()> {
+    pub fn remove_user_permission_override(
+        &self,
+        user_id: &str,
+        permission_name: &str,
+    ) -> Result<()> {
         let db = self.db.lock();
 
         db.execute(
@@ -297,14 +289,11 @@ impl RBACManager {
     pub fn is_admin(&self, user_id: &str) -> Result<bool> {
         let db = self.db.lock();
 
-        let role: UserRole = db.query_row(
-            "SELECT role FROM users WHERE id = ?1",
-            [user_id],
-            |row| {
+        let role: UserRole =
+            db.query_row("SELECT role FROM users WHERE id = ?1", [user_id], |row| {
                 let role_str: String = row.get(0)?;
                 Ok(UserRole::from_str(&role_str).unwrap_or(UserRole::Viewer))
-            },
-        )?;
+            })?;
 
         Ok(role == UserRole::Admin)
     }
@@ -378,7 +367,9 @@ mod tests {
         assert!(rbac.has_permission(user_id, "chat:write").unwrap());
 
         // Editor should NOT have admin:user_management permission
-        assert!(!rbac.has_permission(user_id, "admin:user_management").unwrap());
+        assert!(!rbac
+            .has_permission(user_id, "admin:user_management")
+            .unwrap());
     }
 
     #[test]
@@ -448,7 +439,11 @@ mod tests {
         assert!(rbac.is_admin(admin_id).unwrap());
 
         // Should have admin permissions
-        assert!(rbac.has_permission(admin_id, "admin:user_management").unwrap());
-        assert!(rbac.has_permission(admin_id, "admin:system_config").unwrap());
+        assert!(rbac
+            .has_permission(admin_id, "admin:user_management")
+            .unwrap());
+        assert!(rbac
+            .has_permission(admin_id, "admin:system_config")
+            .unwrap());
     }
 }

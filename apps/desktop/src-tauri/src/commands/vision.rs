@@ -69,7 +69,10 @@ pub async fn vision_send_message(
     db: State<'_, AppDatabase>,
 ) -> Result<VisionResponse, String> {
     let start = std::time::Instant::now();
-    tracing::info!("Processing vision request with {} images", request.images.len());
+    tracing::info!(
+        "Processing vision request with {} images",
+        request.images.len()
+    );
 
     // Load and optimize images
     let mut content_parts = Vec::new();
@@ -100,9 +103,7 @@ pub async fn vision_send_message(
             detail: detail_enum,
         };
 
-        content_parts.push(ContentPart::Image {
-            image: image_input,
-        });
+        content_parts.push(ContentPart::Image { image: image_input });
 
         tracing::debug!(
             "Image {} optimized: {} bytes, format: {:?}, detail: {:?}",
@@ -243,7 +244,10 @@ pub async fn vision_extract_text(
     state: State<'_, LLMState>,
     db: State<'_, AppDatabase>,
 ) -> Result<VisionResponse, String> {
-    tracing::info!("Extracting text from image using vision model: {}", image_path);
+    tracing::info!(
+        "Extracting text from image using vision model: {}",
+        image_path
+    );
 
     let prompt = "Extract all visible text from this image. Maintain the original formatting and structure as much as possible. Output only the extracted text without any additional commentary.".to_string();
 
@@ -256,7 +260,7 @@ pub async fn vision_extract_text(
         }],
         provider,
         model: Some("gpt-4o".to_string()), // GPT-4o has excellent OCR capabilities
-        temperature: Some(0.0), // Deterministic for OCR
+        temperature: Some(0.0),            // Deterministic for OCR
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),
     };
@@ -387,10 +391,12 @@ pub async fn vision_describe_ui_elements(
 ) -> Result<VisionResponse, String> {
     tracing::info!("Describing UI elements in capture: {}", capture_id);
 
-    let prompt = "Analyze this screenshot and provide a structured description of all visible UI elements. \
+    let prompt =
+        "Analyze this screenshot and provide a structured description of all visible UI elements. \
                   For each element, describe: type (button, textbox, label, etc.), text content, \
                   approximate location (top-left, center, bottom-right, etc.), and visual state \
-                  (enabled, disabled, selected, etc.). Format as a structured list.".to_string();
+                  (enabled, disabled, selected, etc.). Format as a structured list."
+            .to_string();
 
     let request = VisionRequest {
         prompt,
@@ -453,8 +459,7 @@ fn decode_base64_image(base64_str: &str) -> Result<DynamicImage, String> {
     )
     .map_err(|e| format!("Failed to decode base64 image: {}", e))?;
 
-    image::load_from_memory(&bytes)
-        .map_err(|e| format!("Failed to load image from base64: {}", e))
+    image::load_from_memory(&bytes).map_err(|e| format!("Failed to load image from base64: {}", e))
 }
 
 /// Load image from capture ID (database)
@@ -586,16 +591,12 @@ fn extract_similarity_score(text: &str) -> f32 {
 }
 
 /// Parse element location from JSON response
-fn parse_element_location(
-    text: &str,
-    description: &str,
-) -> Result<VisualElementLocation, String> {
+fn parse_element_location(text: &str, description: &str) -> Result<VisualElementLocation, String> {
     // Try to extract JSON from the response
     use regex::Regex;
 
     // Look for JSON pattern
-    let re = Regex::new(r"\{[^}]+\}")
-        .map_err(|e| format!("Failed to create regex: {}", e))?;
+    let re = Regex::new(r"\{[^}]+\}").map_err(|e| format!("Failed to create regex: {}", e))?;
 
     if let Some(json_match) = re.find(text) {
         let json_str = json_match.as_str();

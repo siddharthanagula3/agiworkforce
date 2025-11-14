@@ -2,7 +2,6 @@
  * Incremental Indexer
  * Background indexing service that watches for file changes
  */
-
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

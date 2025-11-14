@@ -9,7 +9,6 @@
 /// - Database fallback with encrypted storage
 /// - Automatic secret rotation support
 /// - No secrets logged or exposed in error messages
-
 use base64::{engine::general_purpose, Engine as _};
 use keyring::Entry;
 use rand::RngCore;
@@ -88,7 +87,10 @@ impl SecretManager {
                 info!("JWT secret retrieved from database (fallback)");
                 // Try to migrate to keyring for better security
                 if let Err(e) = self.store_secret_in_keyring(&secret) {
-                    warn!("Failed to migrate secret to keyring: {}", sanitize_error(&e));
+                    warn!(
+                        "Failed to migrate secret to keyring: {}",
+                        sanitize_error(&e)
+                    );
                 } else {
                     info!("Successfully migrated secret to keyring");
                 }
@@ -146,13 +148,19 @@ impl SecretManager {
         let mut stored = false;
 
         if let Err(e) = self.store_secret_in_keyring(&new_secret) {
-            warn!("Failed to store rotated secret in keyring: {}", sanitize_error(&e));
+            warn!(
+                "Failed to store rotated secret in keyring: {}",
+                sanitize_error(&e)
+            );
         } else {
             stored = true;
         }
 
         if let Err(e) = self.store_secret_in_database(&new_secret) {
-            error!("Failed to store rotated secret in database: {}", sanitize_error(&e));
+            error!(
+                "Failed to store rotated secret in database: {}",
+                sanitize_error(&e)
+            );
             if !stored {
                 return Err(e);
             }
@@ -182,8 +190,8 @@ impl SecretManager {
 
     /// Store secret in OS keyring (primary storage)
     fn store_secret_in_keyring(&self, secret: &str) -> Result<(), SecretError> {
-        let entry = Entry::new(SERVICE_NAME, JWT_SECRET_KEY)
-            .map_err(SecretError::KeyringStoreError)?;
+        let entry =
+            Entry::new(SERVICE_NAME, JWT_SECRET_KEY).map_err(SecretError::KeyringStoreError)?;
 
         entry
             .set_password(secret)
@@ -194,8 +202,8 @@ impl SecretManager {
 
     /// Retrieve secret from OS keyring
     fn get_secret_from_keyring(&self) -> Result<String, SecretError> {
-        let entry = Entry::new(SERVICE_NAME, JWT_SECRET_KEY)
-            .map_err(SecretError::KeyringRetrieveError)?;
+        let entry =
+            Entry::new(SERVICE_NAME, JWT_SECRET_KEY).map_err(SecretError::KeyringRetrieveError)?;
 
         entry
             .get_password()
