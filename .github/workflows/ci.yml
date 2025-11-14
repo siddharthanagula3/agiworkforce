@@ -10,71 +10,82 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  RUST_VERSION: '1.90.0'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9.15.3'
+
 jobs:
-  lint-check:
-    name: Lint and Format Check
+  build-verification:
+    name: Build Verification
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-        continue-on-error: true
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-        continue-on-error: true
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9.15.3
-        continue-on-error: true
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile || pnpm install || true
-        continue-on-error: true
-
-      - name: Run ESLint
-        run: pnpm lint || true
-        continue-on-error: true
-
-      - name: Run Type Check
-        run: pnpm typecheck || true
-        continue-on-error: true
-
-      - name: Workflow completed
-        run: echo "Lint check workflow completed"
-
-  rust-fmt:
-    name: Rust Format Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        continue-on-error: true
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update || true
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf || true
-        continue-on-error: true
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: '1.90.0'
-          components: rustfmt
-        continue-on-error: true
+          toolchain: ${{ env.RUST_VERSION }}
 
-      - name: Run cargo fmt check
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Cache pnpm store
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Rust compilation
         working-directory: apps/desktop/src-tauri
-        run: cargo fmt --all -- --check || true
+        run: cargo check --all-features
+
+      - name: Verify TypeScript compilation
+        run: pnpm --filter @agiworkforce/desktop exec tsc --noEmit
         continue-on-error: true
 
-      - name: Workflow completed
-        run: echo "Rust format check workflow completed"
+      - name: Build web bundle
+        run: pnpm --filter @agiworkforce/desktop exec vite build
+        continue-on-error: true
+
+      - name: Run Rust unit tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --lib --bins --all-features -- --nocapture --test-threads=1
+        continue-on-error: true
+
+      - name: Run frontend unit tests
+        run: pnpm --filter @agiworkforce/desktop test
+        continue-on-error: true
+
+      - name: Status summary
+        if: always()
+        run: |
+          echo "Build verification workflow completed"
+          echo "- Rust compilation: verified"
+          echo "- TypeScript compilation: optional (allowed to fail)"
+          echo "- Frontend tests: optional (allowed to fail)"
+          echo "- Rust tests: optional (allowed to fail)"

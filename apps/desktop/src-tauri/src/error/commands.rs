@@ -98,11 +98,8 @@ pub async fn get_all_error_contexts(
     store: State<'_, ErrorContextStore>,
 ) -> Result<Vec<ErrorContextResponse>, String> {
     let contexts = store.contexts.read().await;
-    let responses: Vec<ErrorContextResponse> = contexts
-        .values()
-        .cloned()
-        .map(|ctx| ctx.into())
-        .collect();
+    let responses: Vec<ErrorContextResponse> =
+        contexts.values().cloned().map(|ctx| ctx.into()).collect();
 
     Ok(responses)
 }
