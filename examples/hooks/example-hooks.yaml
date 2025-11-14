@@ -1,0 +1,67 @@
+# Example hooks configuration file
+# Copy this to ~/.agiworkforce/hooks.yaml and customize as needed
+
+hooks:
+  # Log all events to a file
+  - name: "Event Logger"
+    events: [SessionStart, SessionEnd, GoalCompleted, StepCompleted]
+    priority: 5
+    command: "bash examples/hooks/log-all-events.sh"
+    enabled: true
+    timeout_secs: 10
+    continue_on_error: true
+
+  # Track tool usage statistics
+  - name: "Tool Usage Tracker"
+    events: [PreToolUse, PostToolUse, ToolError]
+    priority: 10
+    command: "node examples/hooks/track-tool-usage.js"
+    enabled: true
+    timeout_secs: 15
+    continue_on_error: true
+
+  # Generate session reports
+  - name: "Session Report Generator"
+    events: [SessionEnd]
+    priority: 20
+    command: "bash examples/hooks/session-report.sh"
+    enabled: true
+    timeout_secs: 30
+    continue_on_error: true
+
+  # Send Slack notifications for errors
+  - name: "Slack Error Notifier"
+    events: [GoalError, StepError, ToolError]
+    priority: 15
+    command: "node examples/hooks/notify-slack.js"
+    enabled: false  # Disabled by default - requires configuration
+    timeout_secs: 20
+    continue_on_error: true
+    env:
+      SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+  # Run validation on session end
+  - name: "Pre-commit Validation"
+    events: [SessionEnd]
+    priority: 50
+    command: "bash examples/hooks/pre-commit-hook.sh"
+    enabled: false  # Disabled by default - may be slow
+    timeout_secs: 120
+    continue_on_error: true
+
+  # Simple echo examples for testing
+  - name: "Session Start Echo"
+    events: [SessionStart]
+    priority: 100
+    command: "echo 'Session started at $(date)'"
+    enabled: true
+    timeout_secs: 5
+    continue_on_error: true
+
+  - name: "Goal Completion Echo"
+    events: [GoalCompleted]
+    priority: 100
+    command: "echo 'Goal completed successfully!'"
+    enabled: true
+    timeout_secs: 5
+    continue_on_error: true
