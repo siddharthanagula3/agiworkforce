@@ -51,6 +51,8 @@ class ErrorTrackingService {
     };
 
     this.loadConfig();
+    // Ensure _mapSeverityToLevel method is kept for future Sentry integration
+    void this._mapSeverityToLevel;
   }
 
   /**
@@ -328,9 +330,9 @@ class ErrorTrackingService {
   /**
    * Map severity to Sentry level (currently unused but kept for future Sentry integration)
    * Uncomment the usage in captureError and captureMessage when Sentry is integrated
+   * @internal
    */
-  // @ts-expect-error - Kept for future Sentry integration
-  private _mapSeverityToLevel(severity?: ErrorSeverity): any {
+  private _mapSeverityToLevel(severity?: ErrorSeverity): 'info' | 'warning' | 'error' | 'fatal' {
     switch (severity) {
       case ErrorSeverity.LOW:
         return 'info';
