@@ -8,9 +8,8 @@
 import { analytics } from './analytics';
 import { ErrorEventProperties } from '../types/analytics';
 
-// Import Sentry (will need to be installed)
-// import * as Sentry from '@sentry/react';
-// import { BrowserTracing } from '@sentry/tracing';
+// Import Sentry
+import * as Sentry from '@sentry/react';
 
 /**
  * Error severity levels
@@ -51,8 +50,6 @@ class ErrorTrackingService {
     };
 
     this.loadConfig();
-    // Ensure _mapSeverityToLevel method is kept for future Sentry integration
-    void this._mapSeverityToLevel;
   }
 
   /**
@@ -64,8 +61,6 @@ class ErrorTrackingService {
     }
 
     try {
-      // Uncomment when Sentry is installed:
-      /*
       Sentry.init({
         dsn: this.config.dsn,
         environment: this.config.environment,
@@ -74,10 +69,8 @@ class ErrorTrackingService {
         tracesSampleRate: this.config.tracesSampleRate,
         attachStacktrace: this.config.attachStacktrace,
         sendDefaultPii: this.config.sendDefaultPii,
-        integrations: [
-          new BrowserTracing(),
-        ],
-        beforeSend(event, hint) {
+        integrations: [Sentry.browserTracingIntegration()],
+        beforeSend(event, _hint) {
           // Filter out sensitive information
           if (event.request) {
             delete event.request.cookies;
@@ -92,7 +85,6 @@ class ErrorTrackingService {
           return event;
         },
       });
-      */
 
       this.initialized = true;
       console.log('Error tracking initialized');
@@ -179,7 +171,6 @@ class ErrorTrackingService {
       analytics.track('error_occurred', eventProps);
 
       // Send to Sentry
-      /*
       Sentry.captureException(error, {
         level: this.mapSeverityToLevel(context?.severity),
         tags: context?.tags,
@@ -190,7 +181,6 @@ class ErrorTrackingService {
           },
         },
       });
-      */
     } catch (err) {
       console.error('Failed to capture error:', err);
     }
@@ -199,18 +189,16 @@ class ErrorTrackingService {
   /**
    * Capture a message
    */
-  public captureMessage(_message: string, _severity: ErrorSeverity = ErrorSeverity.LOW) {
+  public captureMessage(message: string, severity: ErrorSeverity = ErrorSeverity.LOW) {
     if (!this.config.enabled) {
-      console.log(_message);
+      console.log(message);
       return;
     }
 
     try {
-      /*
-      Sentry.captureMessage(_message, {
-        level: this.mapSeverityToLevel(_severity),
+      Sentry.captureMessage(message, {
+        level: this.mapSeverityToLevel(severity),
       });
-      */
     } catch (error) {
       console.error('Failed to capture message:', error);
     }
@@ -219,20 +207,18 @@ class ErrorTrackingService {
   /**
    * Add breadcrumb for debugging
    */
-  public addBreadcrumb(_category: string, _message: string, _data?: Record<string, any>) {
+  public addBreadcrumb(category: string, message: string, data?: Record<string, any>) {
     if (!this.config.enabled) {
       return;
     }
 
     try {
-      /*
       Sentry.addBreadcrumb({
-        category: _category,
-        message: _message,
-        data: _data,
+        category: category,
+        message: message,
+        data: data,
         timestamp: Date.now() / 1000,
       });
-      */
     } catch (error) {
       console.error('Failed to add breadcrumb:', error);
     }
@@ -241,18 +227,16 @@ class ErrorTrackingService {
   /**
    * Set user context (non-PII)
    */
-  public setUser(_userId?: string, _userData?: Record<string, any>) {
+  public setUser(userId?: string, userData?: Record<string, any>) {
     if (!this.config.enabled) {
       return;
     }
 
     try {
-      /*
       Sentry.setUser({
         id: userId,
         ...userData,
       });
-      */
     } catch (error) {
       console.error('Failed to set user context:', error);
     }
@@ -261,15 +245,13 @@ class ErrorTrackingService {
   /**
    * Set tags for filtering
    */
-  public setTags(_tags: Record<string, string>) {
+  public setTags(tags: Record<string, string>) {
     if (!this.config.enabled) {
       return;
     }
 
     try {
-      /*
-      Sentry.setTags(_tags);
-      */
+      Sentry.setTags(tags);
     } catch (error) {
       console.error('Failed to set tags:', error);
     }
@@ -278,18 +260,17 @@ class ErrorTrackingService {
   /**
    * Show user feedback dialog
    */
-  public showFeedbackDialog(_eventId?: string) {
+  public showFeedbackDialog(eventId?: string) {
     if (!this.config.enabled) {
       return;
     }
 
     try {
-      /*
       Sentry.showReportDialog({
-        eventId: _eventId,
+        eventId: eventId,
         title: 'It looks like we encountered an error',
         subtitle: 'Our team has been notified, but you can help us fix it faster.',
-        subtitle2: 'If you\'d like to help, tell us what happened below.',
+        subtitle2: "If you'd like to help, tell us what happened below.",
         labelName: 'Name',
         labelEmail: 'Email',
         labelComments: 'What happened?',
@@ -299,7 +280,6 @@ class ErrorTrackingService {
         errorFormEntry: 'Some fields were invalid. Please correct them and try again.',
         successMessage: 'Your feedback has been sent. Thank you!',
       });
-      */
     } catch (error) {
       console.error('Failed to show feedback dialog:', error);
     }
@@ -308,19 +288,19 @@ class ErrorTrackingService {
   /**
    * Start a transaction for performance monitoring
    */
-  public startTransaction(_name: string, _op: string) {
+  public startTransaction(name: string, op: string) {
     if (!this.config.enabled) {
       return null;
     }
 
     try {
-      /*
-      return Sentry.startTransaction({
-        name: _name,
-        op: _op,
-      });
-      */
-      return null;
+      return Sentry.startSpan(
+        {
+          name: name,
+          op: op,
+        },
+        () => null,
+      );
     } catch (error) {
       console.error('Failed to start transaction:', error);
       return null;
@@ -328,11 +308,10 @@ class ErrorTrackingService {
   }
 
   /**
-   * Map severity to Sentry level (currently unused but kept for future Sentry integration)
-   * Uncomment the usage in captureError and captureMessage when Sentry is integrated
+   * Map severity to Sentry level
    * @internal
    */
-  private _mapSeverityToLevel(severity?: ErrorSeverity): 'info' | 'warning' | 'error' | 'fatal' {
+  private mapSeverityToLevel(severity?: ErrorSeverity): 'info' | 'warning' | 'error' | 'fatal' {
     switch (severity) {
       case ErrorSeverity.LOW:
         return 'info';

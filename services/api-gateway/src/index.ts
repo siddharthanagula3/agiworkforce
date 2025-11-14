@@ -13,6 +13,14 @@ import { mobileRouter } from './routes/mobile';
 
 dotenv.config();
 
+// Critical security check: Ensure JWT_SECRET is set before starting server
+if (!process.env['JWT_SECRET']) {
+  console.error('FATAL: JWT_SECRET environment variable is required but not set.');
+  console.error('Please set JWT_SECRET in your .env file with a secure random value.');
+  console.error('Example: JWT_SECRET=your-randomly-generated-secret-key-here');
+  process.exit(1);
+}
+
 const app = express();
 const port = Number(process.env['PORT'] ?? '3000');
 
