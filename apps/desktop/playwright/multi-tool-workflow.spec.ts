@@ -5,7 +5,7 @@ import { test, expect } from '../e2e/fixtures';
  */
 test.describe('Multi-Tool Workflow E2E', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:1420');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 

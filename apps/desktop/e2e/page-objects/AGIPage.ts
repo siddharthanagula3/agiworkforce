@@ -1,5 +1,6 @@
 import { Page, Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { createErrorHandler } from '../utils/error-handler';
 
 export class AGIPage extends BasePage {
   // Locators
@@ -12,16 +13,28 @@ export class AGIPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    this.goalInput = page.locator('textarea[placeholder*="goal"], [data-testid="goal-input"]').first();
-    this.submitButton = page.locator('button:has-text("Submit"), [data-testid="submit-goal"]').first();
+    this.goalInput = page
+      .locator('textarea[placeholder*="goal"], [data-testid="goal-input"]')
+      .first();
+    this.submitButton = page
+      .locator('button:has-text("Submit"), [data-testid="submit-goal"]')
+      .first();
     this.goalsList = page.locator('[data-testid="goals-list"], .goals-list').first();
-    this.statusFilter = page.locator('select[name="status"], [data-testid="status-filter"]').first();
-    this.searchInput = page.locator('input[placeholder*="Search"], [data-testid="search-goals"]').first();
-    this.resourcePanel = page.locator('[data-testid="resource-monitor"], .resource-monitor').first();
+    this.statusFilter = page
+      .locator('select[name="status"], [data-testid="status-filter"]')
+      .first();
+    this.searchInput = page
+      .locator('input[placeholder*="Search"], [data-testid="search-goals"]')
+      .first();
+    this.resourcePanel = page
+      .locator('[data-testid="resource-monitor"], .resource-monitor')
+      .first();
   }
 
   async navigateToAGI() {
-    const agiLink = this.page.locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")').first();
+    const agiLink = this.page
+      .locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")')
+      .first();
     if (await agiLink.isVisible()) {
       await agiLink.click();
       await this.waitForNetworkIdle();
@@ -42,7 +55,7 @@ export class AGIPage extends BasePage {
   async getGoalStatus(index: number = 0): Promise<string> {
     const goalItem = this.page.locator('[data-testid="goal-item"]').nth(index);
     const statusBadge = goalItem.locator('[data-testid="goal-status"], .status-badge').first();
-    return await statusBadge.textContent() || '';
+    return (await statusBadge.textContent()) || '';
   }
 
   async viewGoalDetails(index: number = 0) {
@@ -53,40 +66,47 @@ export class AGIPage extends BasePage {
   }
 
   async getStepsCount(): Promise<number> {
+    const errorHandler = createErrorHandler(this.page);
     const stepsList = this.page.locator('[data-testid="steps-list"], .steps-list').first();
-    if (await stepsList.isVisible({ timeout: 2000 }).catch(() => false)) {
-      return await stepsList.locator('li, [data-testid="step-item"]').count();
+    if (await errorHandler.isElementVisible(stepsList, 2000)) {
+      return await errorHandler.getElementCount(stepsList.locator('li, [data-testid="step-item"]'));
     }
     return 0;
   }
 
   async cancelGoal(index: number = 0) {
+    const errorHandler = createErrorHandler(this.page);
     const goalItem = this.page.locator('[data-testid="goal-item"]').nth(index);
-    const cancelButton = goalItem.locator('button[aria-label*="Cancel"], [data-testid="cancel-goal"]').first();
+    const cancelButton = goalItem
+      .locator('button[aria-label*="Cancel"], [data-testid="cancel-goal"]')
+      .first();
 
-    if (await cancelButton.isVisible()) {
-      await cancelButton.click();
+    if (await errorHandler.isElementVisible(cancelButton)) {
+      await errorHandler.safeClick(cancelButton);
 
       // Handle confirmation
-      const confirmButton = this.page.locator('button:has-text("Cancel Goal"), button:has-text("Confirm")').first();
-      if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmButton.click();
-      }
+      const confirmButton = this.page
+        .locator('button:has-text("Cancel Goal"), button:has-text("Confirm")')
+        .first();
+      await errorHandler.handleOptionalDialog(confirmButton, 2000);
     }
   }
 
   async deleteGoal(index: number = 0) {
+    const errorHandler = createErrorHandler(this.page);
     const goalItem = this.page.locator('[data-testid="goal-item"]').nth(index);
-    const deleteButton = goalItem.locator('button[aria-label*="Delete"], [data-testid="delete-goal"]').first();
+    const deleteButton = goalItem
+      .locator('button[aria-label*="Delete"], [data-testid="delete-goal"]')
+      .first();
 
-    if (await deleteButton.isVisible()) {
-      await deleteButton.click();
+    if (await errorHandler.isElementVisible(deleteButton)) {
+      await errorHandler.safeClick(deleteButton);
 
       // Handle confirmation
-      const confirmButton = this.page.locator('button:has-text("Delete"), button:has-text("Confirm")').first();
-      if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmButton.click();
-      }
+      const confirmButton = this.page
+        .locator('button:has-text("Delete"), button:has-text("Confirm")')
+        .first();
+      await errorHandler.handleOptionalDialog(confirmButton, 2000);
     }
   }
 
@@ -101,17 +121,21 @@ export class AGIPage extends BasePage {
   }
 
   async getResourceUsage(): Promise<{ cpu: string; memory: string }> {
+    const errorHandler = createErrorHandler(this.page);
     const cpuIndicator = this.page.locator('[data-testid="cpu-usage"], .cpu-usage').first();
-    const memoryIndicator = this.page.locator('[data-testid="memory-usage"], .memory-usage').first();
+    const memoryIndicator = this.page
+      .locator('[data-testid="memory-usage"], .memory-usage')
+      .first();
 
-    const cpu = await cpuIndicator.textContent().catch(() => 'N/A');
-    const memory = await memoryIndicator.textContent().catch(() => 'N/A');
+    const cpu = await errorHandler.getTextContent(cpuIndicator, 'N/A');
+    const memory = await errorHandler.getTextContent(memoryIndicator, 'N/A');
 
     return { cpu: cpu || 'N/A', memory: memory || 'N/A' };
   }
 
   async isResourceWarningVisible(): Promise<boolean> {
+    const errorHandler = createErrorHandler(this.page);
     const warning = this.page.locator('[data-warning="high"], .resource-warning').first();
-    return await warning.isVisible({ timeout: 1000 }).catch(() => false);
+    return await errorHandler.isElementVisible(warning, 1000);
   }
 }
