@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 
 /// Current schema version
-const CURRENT_VERSION: i32 = 39;
+const CURRENT_VERSION: i32 = 40;
 
 /// Initialize database and run migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -223,6 +223,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 39 {
         apply_migration_v39(conn)?;
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [39])?;
+    }
+
+    if current_version < 40 {
+        apply_migration_v40(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [40])?;
     }
 
     Ok(())
@@ -3554,4 +3559,290 @@ mod tests {
 
         assert_eq!(fk_enabled, 1);
     }
+}
+
+/// Migration v40: Authentication and Authorization system
+fn apply_migration_v40(conn: &Connection) -> Result<()> {
+    // Users table with role-based access control
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('viewer', 'editor', 'admin')),
+            created_at TEXT NOT NULL,
+            last_login_at TEXT,
+            failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+            locked_until TEXT,
+            email_verified INTEGER NOT NULL DEFAULT 0,
+            verification_token TEXT,
+            reset_token TEXT,
+            reset_token_expires_at TEXT,
+            CONSTRAINT email_format CHECK (email LIKE '%@%')
+        )",
+        [],
+    )?;
+
+    // Sessions table for token management
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS auth_sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            access_token TEXT NOT NULL UNIQUE,
+            refresh_token TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            last_activity_at TEXT NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // OAuth providers table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS oauth_providers (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            provider TEXT NOT NULL CHECK(provider IN ('google', 'github', 'microsoft')),
+            provider_user_id TEXT NOT NULL,
+            access_token TEXT,
+            refresh_token TEXT,
+            expires_at TEXT,
+            scope TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(provider, provider_user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Permissions table for fine-grained access control
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS permissions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            category TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Role permissions mapping
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS role_permissions (
+            role TEXT NOT NULL CHECK(role IN ('viewer', 'editor', 'admin')),
+            permission_id TEXT NOT NULL,
+            granted INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (role, permission_id),
+            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // User-specific permission overrides
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_permissions (
+            user_id TEXT NOT NULL,
+            permission_id TEXT NOT NULL,
+            granted INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, permission_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // API keys for LLM providers and external services
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            permissions TEXT,
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            last_used_at TEXT,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Audit log for authentication events
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS auth_audit_log (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            event_type TEXT NOT NULL,
+            event_data TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            success INTEGER NOT NULL,
+            error_message TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )",
+        [],
+    )?;
+
+    // Create indexes for performance
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_auth_sessions_access_token ON auth_sessions(access_token)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_oauth_providers_user_id ON oauth_providers(user_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_auth_audit_log_user_id ON auth_audit_log(user_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_auth_audit_log_created_at ON auth_audit_log(created_at)",
+        [],
+    )?;
+
+    // Insert default permissions
+    let permissions = vec![
+        ("chat:read", "View chat conversations", "chat"),
+        ("chat:write", "Create and send messages", "chat"),
+        ("chat:delete", "Delete conversations", "chat"),
+        ("automation:read", "View automations", "automation"),
+        (
+            "automation:write",
+            "Create and edit automations",
+            "automation",
+        ),
+        ("automation:execute", "Execute automations", "automation"),
+        ("automation:delete", "Delete automations", "automation"),
+        ("browser:control", "Control browser sessions", "browser"),
+        ("file:read", "Read files", "filesystem"),
+        ("file:write", "Write files", "filesystem"),
+        ("file:delete", "Delete files", "filesystem"),
+        ("terminal:execute", "Execute terminal commands", "terminal"),
+        ("api:call", "Make API requests", "api"),
+        ("database:read", "Read from databases", "database"),
+        ("database:write", "Write to databases", "database"),
+        ("settings:read", "View settings", "settings"),
+        ("settings:write", "Modify settings", "settings"),
+        ("llm:use", "Use LLM providers", "llm"),
+        ("llm:configure", "Configure LLM settings", "llm"),
+        ("admin:user_management", "Manage users", "admin"),
+        ("admin:system_config", "Configure system settings", "admin"),
+    ];
+
+    for (name, description, category) in permissions {
+        conn.execute(
+            "INSERT OR IGNORE INTO permissions (id, name, description, category, created_at)
+             VALUES (?1, ?2, ?3, ?4, datetime('now'))",
+            [
+                &uuid::Uuid::new_v4().to_string(),
+                name,
+                description,
+                category,
+            ],
+        )?;
+    }
+
+    // Assign default role permissions
+    // Viewer: read-only access
+    let viewer_permissions = vec![
+        "chat:read",
+        "automation:read",
+        "file:read",
+        "database:read",
+        "settings:read",
+    ];
+
+    // Editor: read-write access (no admin or delete)
+    let editor_permissions = vec![
+        "chat:read",
+        "chat:write",
+        "automation:read",
+        "automation:write",
+        "automation:execute",
+        "browser:control",
+        "file:read",
+        "file:write",
+        "terminal:execute",
+        "api:call",
+        "database:read",
+        "database:write",
+        "settings:read",
+        "settings:write",
+        "llm:use",
+        "llm:configure",
+    ];
+
+    // Admin: full access
+    let admin_permissions = vec![
+        "chat:read",
+        "chat:write",
+        "chat:delete",
+        "automation:read",
+        "automation:write",
+        "automation:execute",
+        "automation:delete",
+        "browser:control",
+        "file:read",
+        "file:write",
+        "file:delete",
+        "terminal:execute",
+        "api:call",
+        "database:read",
+        "database:write",
+        "settings:read",
+        "settings:write",
+        "llm:use",
+        "llm:configure",
+        "admin:user_management",
+        "admin:system_config",
+    ];
+
+    for perm_name in viewer_permissions {
+        conn.execute(
+            "INSERT OR IGNORE INTO role_permissions (role, permission_id, granted, created_at)
+             SELECT 'viewer', id, 1, datetime('now') FROM permissions WHERE name = ?1",
+            [perm_name],
+        )?;
+    }
+
+    for perm_name in editor_permissions {
+        conn.execute(
+            "INSERT OR IGNORE INTO role_permissions (role, permission_id, granted, created_at)
+             SELECT 'editor', id, 1, datetime('now') FROM permissions WHERE name = ?1",
+            [perm_name],
+        )?;
+    }
+
+    for perm_name in admin_permissions {
+        conn.execute(
+            "INSERT OR IGNORE INTO role_permissions (role, permission_id, granted, created_at)
+             SELECT 'admin', id, 1, datetime('now') FROM permissions WHERE name = ?1",
+            [perm_name],
+        )?;
+    }
+
+    Ok(())
 }

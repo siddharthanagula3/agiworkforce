@@ -1,8 +1,9 @@
-use crate::security::rate_limit::RateLimiter;
+use crate::security::rate_limit::{RateLimitConfig, RateLimiter};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
@@ -264,11 +265,14 @@ impl ToolExecutionGuard {
     ) -> std::result::Result<(), SecurityError> {
         let mut limiters = self.rate_limiters.lock().await;
 
-        let limiter = limiters
-            .entry(tool_name.to_string())
-            .or_insert_with(|| RateLimiter::new(policy.max_rate_per_minute, 60));
+        let limiter = limiters.entry(tool_name.to_string()).or_insert_with(|| {
+            RateLimiter::new(RateLimitConfig {
+                max_requests: policy.max_rate_per_minute,
+                window: Duration::from_secs(60),
+            })
+        });
 
-        if !limiter.check() {
+        if let Err(e) = limiter.check_rate_limit(tool_name) {
             warn!("Rate limit exceeded for tool: {}", tool_name);
             return Err(SecurityError::RateLimitExceeded(tool_name.to_string()));
         }
