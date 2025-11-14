@@ -6,3 +6,6 @@ pub mod ollama;
 pub mod openai;
 pub mod qwen;
 pub mod xai;
+
+#[cfg(test)]
+mod tests;

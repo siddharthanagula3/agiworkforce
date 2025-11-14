@@ -1,23 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 import TitleBar from './components/Layout/TitleBar';
 import { Sidebar } from './components/Layout/Sidebar';
-import { ChatInterface } from './components/Chat/ChatInterface';
-import { AgentChatInterface } from './components/Chat/AgentChatInterface';
 import { useWindowManager } from './hooks/useWindowManager';
-import { VisualizationLayer } from './components/Overlay/VisualizationLayer';
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import { useTheme } from './hooks/useTheme';
 import { useChatStore } from './stores/chatStore';
 import { useTemplateStore } from './stores/templateStore';
 import { useOrchestrationStore } from './stores/orchestrationStore';
 import { useTeamStore } from './stores/teamStore';
-import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import ErrorToastContainer from './components/errors/ErrorToast';
 import useErrorStore from './stores/errorStore';
 import { errorReportingService } from './services/errorReporting';
@@ -31,13 +26,59 @@ import {
   Maximize2,
   RefreshCcw,
 } from 'lucide-react';
-import { TemplateMarketplace } from './components/templates/TemplateMarketplace';
-import { WorkflowBuilder } from './components/orchestration/WorkflowBuilder';
-import { TeamDashboard } from './components/teams/TeamDashboard';
-import { GovernanceDashboard } from './components/governance/GovernanceDashboard';
-import { EmployeesPage } from './pages/EmployeesPage';
+import { Spinner } from './components/ui/Spinner';
+
+// Lazy load heavy components for better bundle splitting
+const ChatInterface = lazy(() =>
+  import('./components/Chat/ChatInterface').then((m) => ({ default: m.ChatInterface })),
+);
+const AgentChatInterface = lazy(() =>
+  import('./components/Chat/AgentChatInterface').then((m) => ({ default: m.AgentChatInterface })),
+);
+const VisualizationLayer = lazy(() =>
+  import('./components/Overlay/VisualizationLayer').then((m) => ({
+    default: m.VisualizationLayer,
+  })),
+);
+const OnboardingWizard = lazy(() =>
+  import('./components/onboarding/OnboardingWizard').then((m) => ({ default: m.OnboardingWizard })),
+);
+const SettingsPanel = lazy(() =>
+  import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
+);
+const TemplateMarketplace = lazy(() =>
+  import('./components/templates/TemplateMarketplace').then((m) => ({
+    default: m.TemplateMarketplace,
+  })),
+);
+const WorkflowBuilder = lazy(() =>
+  import('./components/orchestration/WorkflowBuilder').then((m) => ({
+    default: m.WorkflowBuilder,
+  })),
+);
+const TeamDashboard = lazy(() =>
+  import('./components/teams/TeamDashboard').then((m) => ({ default: m.TeamDashboard })),
+);
+const GovernanceDashboard = lazy(() =>
+  import('./components/governance/GovernanceDashboard').then((m) => ({
+    default: m.GovernanceDashboard,
+  })),
+);
+const EmployeesPage = lazy(() =>
+  import('./pages/EmployeesPage').then((m) => ({ default: m.EmployeesPage })),
+);
 
 export type AppView = 'chat' | 'templates' | 'workflows' | 'teams' | 'governance' | 'employees';
+
+// Loading fallback component for Suspense
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-full w-full">
+    <div className="flex flex-col items-center gap-3">
+      <Spinner size="lg" className="text-primary" />
+      <p className="text-sm text-muted-foreground">Loading...</p>
+    </div>
+  </div>
+);
 
 const DesktopShell = () => {
   const { state, actions } = useWindowManager();
@@ -302,62 +343,88 @@ const DesktopShell = () => {
 
   // Show onboarding if not complete
   if (!onboardingComplete) {
-    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />
+      </Suspense>
+    );
   }
 
   const renderMainContent = () => {
     switch (currentView) {
       case 'employees':
-        return <EmployeesPage />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <EmployeesPage />
+          </Suspense>
+        );
       case 'templates':
-        return <TemplateMarketplace />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <TemplateMarketplace />
+          </Suspense>
+        );
       case 'workflows':
-        return <WorkflowBuilder />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <WorkflowBuilder />
+          </Suspense>
+        );
       case 'teams':
-        return <TeamDashboard />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <TeamDashboard />
+          </Suspense>
+        );
       case 'governance':
-        return <GovernanceDashboard />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <GovernanceDashboard />
+          </Suspense>
+        );
       case 'chat':
       default:
         return (
-          <div className="flex flex-1 overflow-hidden min-w-0">
-            {/* Agent Chat (Left) */}
-            {agentChatVisible && agentChatPosition === 'left' && (
-              <>
-                <AgentChatInterface className="w-96 shrink-0" position="left" />
-                <div className="w-px bg-border shrink-0" />
-              </>
-            )}
+          <Suspense fallback={<LoadingFallback />}>
+            <div className="flex flex-1 overflow-hidden min-w-0">
+              {/* Agent Chat (Left) */}
+              {agentChatVisible && agentChatPosition === 'left' && (
+                <>
+                  <AgentChatInterface className="w-96 shrink-0" position="left" />
+                  <div className="w-px bg-border shrink-0" />
+                </>
+              )}
 
-            {/* Main Chat Interface */}
-            <div className="flex-1 overflow-hidden min-w-0">
-              <ChatInterface className="h-full" />
+              {/* Main Chat Interface */}
+              <div className="flex-1 overflow-hidden min-w-0">
+                <ChatInterface className="h-full" />
+              </div>
+
+              {/* Agent Chat (Right) */}
+              {agentChatVisible && agentChatPosition === 'right' && (
+                <>
+                  <div className="w-px bg-border shrink-0" />
+                  <AgentChatInterface className="w-96 shrink-0" position="right" />
+                </>
+              )}
+
+              {/* Toggle Button */}
+              {!agentChatVisible && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute bottom-4 right-4 z-10"
+                  onClick={() => setAgentChatVisible(true)}
+                >
+                  {agentChatPosition === 'right' ? (
+                    <ChevronLeft className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
-
-            {/* Agent Chat (Right) */}
-            {agentChatVisible && agentChatPosition === 'right' && (
-              <>
-                <div className="w-px bg-border shrink-0" />
-                <AgentChatInterface className="w-96 shrink-0" position="right" />
-              </>
-            )}
-
-            {/* Toggle Button */}
-            {!agentChatVisible && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute bottom-4 right-4 z-10"
-                onClick={() => setAgentChatVisible(true)}
-              >
-                {agentChatPosition === 'right' ? (
-                  <ChevronLeft className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-            )}
-          </div>
+          </Suspense>
         );
     }
   };
@@ -386,7 +453,9 @@ const DesktopShell = () => {
         onOpenChange={setCommandPaletteOpen}
         options={commandOptions}
       />
-      <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+      <Suspense fallback={null}>
+        <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+      </Suspense>
       <ErrorToastContainer position="top-right" />
     </div>
   );
@@ -396,7 +465,13 @@ const App = () => {
   const isOverlayMode =
     typeof window !== 'undefined' && window.location.search.includes('mode=overlay');
 
-  return <ErrorBoundary>{isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}</ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<LoadingFallback />}>
+        {isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}
+      </Suspense>
+    </ErrorBoundary>
+  );
 };
 
 export default App;
