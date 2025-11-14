@@ -48,9 +48,10 @@ pub async fn checkpoint_create(
     request: CreateCheckpointRequest,
     db: State<'_, AppDatabase>,
 ) -> Result<Checkpoint, String> {
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get all messages for this conversation
     let messages = get_conversation_messages(&conn, request.conversation_id)
@@ -108,9 +109,10 @@ pub async fn checkpoint_restore(
     request: RestoreCheckpointRequest,
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     // Get checkpoint
     let checkpoint = get_checkpoint(&conn, &request.checkpoint_id)
@@ -200,9 +202,10 @@ pub async fn checkpoint_list(
     conversation_id: i64,
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<Checkpoint>, String> {
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let mut stmt = conn
         .prepare(
@@ -244,9 +247,10 @@ pub async fn checkpoint_delete(
     checkpoint_id: String,
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let conn =
-        db.conn.lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     conn.execute(
         "DELETE FROM conversation_checkpoints WHERE id = ?1",
