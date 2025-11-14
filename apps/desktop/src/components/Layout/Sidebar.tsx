@@ -9,6 +9,7 @@ import {
   Workflow,
   Users,
   Shield,
+  Zap,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -42,6 +43,7 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
 
   const navigationItems = [
     { id: 'chat' as AppView, label: 'Chat', icon: MessageCircle },
+    { id: 'agent' as AppView, label: 'Desktop Agent', icon: Zap },
     { id: 'employees' as AppView, label: 'AI Employees', icon: Users },
     { id: 'templates' as AppView, label: 'Templates', icon: Package },
     { id: 'workflows' as AppView, label: 'Workflows', icon: Workflow },
