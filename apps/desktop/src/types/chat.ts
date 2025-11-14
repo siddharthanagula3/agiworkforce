@@ -1,5 +1,7 @@
 // Types matching Rust backend models
 
+import type { ToolCallUI, ToolResultUI, ToolExecutionWorkflow } from './toolCalling';
+
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface Message {
@@ -12,6 +14,9 @@ export interface Message {
   created_at: string; // ISO date string from Rust
   artifacts?: Artifact[];
   attachments?: FileAttachment[];
+  tool_calls?: ToolCallUI[]; // AI function/tool calls
+  tool_results?: ToolResultUI[]; // Results from tool executions
+  workflow?: ToolExecutionWorkflow; // Multi-step agent workflow
 }
 
 export interface Conversation {
@@ -112,6 +117,7 @@ export interface ChatSendMessageResponse {
 export interface MessageUI extends Message {
   timestamp: Date; // Converted from created_at
   streaming?: boolean;
+  // tool_calls, tool_results, and workflow inherited from Message
 }
 
 export interface ConversationUI extends Conversation {

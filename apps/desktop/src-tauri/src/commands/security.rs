@@ -1,5 +1,5 @@
 use crate::security::{
-    ApiSecurityManager, AuthManager, AuthToken, SecureStorage, UpdateMetadata,
+    ApiSecurityManager, AuthManager, AuthToken, SecretManager, SecureStorage, UpdateMetadata,
     UpdateSecurityManager, UserRole, VerificationResult,
 };
 use serde::{Deserialize, Serialize};
@@ -299,10 +299,25 @@ pub async fn update_restore_backup(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
 
     #[tokio::test]
     async fn test_auth_flow() {
-        let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new()));
+        // Create in-memory database for testing
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+
+        let secret_manager = Arc::new(SecretManager::new(Arc::new(Mutex::new(conn))));
+        let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager)));
         let state = AuthManagerState(auth_manager);
 
         // Register

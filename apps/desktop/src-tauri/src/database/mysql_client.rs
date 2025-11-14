@@ -201,6 +201,244 @@ impl MySqlClient {
         pools.keys().cloned().collect()
     }
 
+    /// Test connection health
+    pub async fn test_connection(&self, connection_id: &str) -> Result<bool> {
+        let pool = self.get_pool(connection_id).await?;
+
+        match pool.get_conn().await {
+            Ok(mut conn) => {
+                match conn.query_drop("SELECT 1").await {
+                    Ok(_) => Ok(true),
+                    Err(_) => Ok(false),
+                }
+            }
+            Err(_) => Ok(false),
+        }
+    }
+
+    /// Get list of all tables in the database
+    pub async fn list_tables(&self, connection_id: &str) -> Result<Vec<String>> {
+        let pool = self.get_pool(connection_id).await?;
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
+
+        let rows: Vec<Row> = conn
+            .query("SHOW TABLES")
+            .await
+            .map_err(|e| Error::Other(format!("Failed to list tables: {}", e)))?;
+
+        let mut tables = Vec::new();
+        for row in rows {
+            if let Some(Value::Bytes(ref bytes)) = row.as_ref(0) {
+                tables.push(String::from_utf8_lossy(bytes).to_string());
+            }
+        }
+
+        Ok(tables)
+    }
+
+    /// Get table schema (columns and their types)
+    pub async fn describe_table(
+        &self,
+        connection_id: &str,
+        table_name: &str,
+    ) -> Result<Vec<HashMap<String, JsonValue>>> {
+        let pool = self.get_pool(connection_id).await?;
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
+
+        let query = format!("DESCRIBE `{}`", table_name.replace('`', "``"));
+        let rows: Vec<Row> = conn
+            .query(&query)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to describe table: {}", e)))?;
+
+        let mut columns = Vec::new();
+        for row in rows {
+            let mut column = HashMap::new();
+
+            if let Some(Value::Bytes(ref bytes)) = row.as_ref(0) {
+                column.insert("Field".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+            }
+            if let Some(Value::Bytes(ref bytes)) = row.as_ref(1) {
+                column.insert("Type".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+            }
+            if let Some(Value::Bytes(ref bytes)) = row.as_ref(2) {
+                column.insert("Null".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+            }
+            if let Some(Value::Bytes(ref bytes)) = row.as_ref(3) {
+                column.insert("Key".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+            }
+            if let Some(value) = row.as_ref(4) {
+                match value {
+                    Value::Bytes(ref bytes) => {
+                        column.insert("Default".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                    }
+                    Value::NULL => {
+                        column.insert("Default".to_string(), JsonValue::Null);
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(Value::Bytes(ref bytes)) = row.as_ref(5) {
+                column.insert("Extra".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+            }
+
+            columns.push(column);
+        }
+
+        Ok(columns)
+    }
+
+    /// Get table indexes
+    pub async fn list_indexes(
+        &self,
+        connection_id: &str,
+        table_name: &str,
+    ) -> Result<Vec<HashMap<String, JsonValue>>> {
+        let pool = self.get_pool(connection_id).await?;
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
+
+        let query = format!("SHOW INDEX FROM `{}`", table_name.replace('`', "``"));
+        let rows: Vec<Row> = conn
+            .query(&query)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to list indexes: {}", e)))?;
+
+        let result = Self::rows_to_query_result(rows, 0)?;
+        Ok(result.rows)
+    }
+
+    /// Execute a stored procedure
+    pub async fn call_procedure(
+        &self,
+        connection_id: &str,
+        procedure_name: &str,
+        params: &[JsonValue],
+    ) -> Result<Vec<QueryResult>> {
+        let pool = self.get_pool(connection_id).await?;
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
+
+        // Convert JSON params to MySQL Value
+        let mysql_params = Self::json_params_to_mysql(params)?;
+
+        // Build CALL statement with placeholders
+        let placeholders: Vec<&str> = params.iter().map(|_| "?").collect();
+        let call_sql = format!("CALL {}({})", procedure_name, placeholders.join(", "));
+
+        tracing::debug!("Calling procedure: {}", call_sql);
+
+        // Execute the stored procedure
+        let query_result: Vec<Vec<Row>> = conn
+            .exec(&call_sql, mysql_params)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to call procedure: {}", e)))?;
+
+        // Convert all result sets
+        let mut results = Vec::new();
+        for rows in query_result {
+            let result = Self::rows_to_query_result(rows, 0)?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Bulk insert multiple rows efficiently
+    pub async fn bulk_insert(
+        &self,
+        connection_id: &str,
+        table_name: &str,
+        columns: &[&str],
+        rows: &[Vec<JsonValue>],
+    ) -> Result<u64> {
+        if rows.is_empty() {
+            return Ok(0);
+        }
+
+        let pool = self.get_pool(connection_id).await?;
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
+
+        // Build bulk INSERT statement
+        let column_list = columns.join("`, `");
+        let placeholders: Vec<String> = rows
+            .iter()
+            .map(|row| {
+                let params: Vec<&str> = row.iter().map(|_| "?").collect();
+                format!("({})", params.join(", "))
+            })
+            .collect();
+
+        let sql = format!(
+            "INSERT INTO `{}` (`{}`) VALUES {}",
+            table_name.replace('`', "``"),
+            column_list,
+            placeholders.join(", ")
+        );
+
+        // Flatten all row values into a single parameter list
+        let mut all_params = Vec::new();
+        for row in rows {
+            let mysql_params = Self::json_params_to_mysql(row)?;
+            all_params.extend(mysql_params);
+        }
+
+        tracing::debug!("Bulk insert: {} rows into {}", rows.len(), table_name);
+
+        // Execute bulk insert
+        let result = conn
+            .exec_drop(&sql, all_params)
+            .await
+            .map_err(|e| Error::Other(format!("Bulk insert failed: {}", e)))?;
+
+        // Get affected rows
+        Ok(conn.affected_rows())
+    }
+
+    /// Stream large query results
+    pub async fn stream_query(
+        &self,
+        connection_id: &str,
+        sql: &str,
+        batch_size: usize,
+    ) -> Result<Vec<QueryResult>> {
+        let pool = self.get_pool(connection_id).await?;
+        let mut conn = pool
+            .get_conn()
+            .await
+            .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
+
+        tracing::debug!("Streaming query with batch size {}: {}", batch_size, sql);
+
+        // Execute query
+        let rows: Vec<Row> = conn
+            .query(sql)
+            .await
+            .map_err(|e| Error::Other(format!("MySQL query failed: {}", e)))?;
+
+        // Split results into batches
+        let mut results = Vec::new();
+        for chunk in rows.chunks(batch_size) {
+            let result = Self::rows_to_query_result(chunk.to_vec(), 0)?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
     /// Convert MySQL rows to QueryResult
     fn rows_to_query_result(rows: Vec<Row>, execution_time_ms: u128) -> Result<QueryResult> {
         let mut result_rows = Vec::new();

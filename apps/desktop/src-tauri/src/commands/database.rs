@@ -3,8 +3,8 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::database::{
-    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder, RedisClient,
-    SelectQuery, SqlClient, UpdateQuery,
+    ConnectionConfig, DeleteQuery, InsertQuery, MongoClient, PoolConfig, QueryBuilder, QueryValidation,
+    RedisClient, SelectQuery, SqlClient, SqlSecurityValidator, UpdateQuery,
 };
 
 /// State for managing database clients
@@ -135,6 +135,121 @@ pub async fn db_get_pool_stats(
         .await
         .map(|stats| serde_json::to_value(stats).unwrap())
         .map_err(|e| format!("Failed to get pool stats: {}", e))
+}
+
+// MySQL-specific Commands
+
+#[tauri::command]
+pub async fn db_mysql_test_connection(
+    connection_id: String,
+    state: State<'_, Mutex<DatabaseState>>,
+) -> Result<bool, String> {
+    let state = state.lock().await;
+
+    state
+        .sql_client
+        .mysql_test_connection(&connection_id)
+        .await
+        .map_err(|e| format!("MySQL connection test failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn db_mysql_list_tables(
+    connection_id: String,
+    state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Vec<String>, String> {
+    let state = state.lock().await;
+
+    state
+        .sql_client
+        .mysql_list_tables(&connection_id)
+        .await
+        .map_err(|e| format!("MySQL list tables failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn db_mysql_describe_table(
+    connection_id: String,
+    table_name: String,
+    state: State<'_, Mutex<DatabaseState>>,
+) -> Result<serde_json::Value, String> {
+    let state = state.lock().await;
+
+    state
+        .sql_client
+        .mysql_describe_table(&connection_id, &table_name)
+        .await
+        .map(|result| serde_json::to_value(result).unwrap())
+        .map_err(|e| format!("MySQL describe table failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn db_mysql_list_indexes(
+    connection_id: String,
+    table_name: String,
+    state: State<'_, Mutex<DatabaseState>>,
+) -> Result<serde_json::Value, String> {
+    let state = state.lock().await;
+
+    state
+        .sql_client
+        .mysql_list_indexes(&connection_id, &table_name)
+        .await
+        .map(|result| serde_json::to_value(result).unwrap())
+        .map_err(|e| format!("MySQL list indexes failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn db_mysql_call_procedure(
+    connection_id: String,
+    procedure_name: String,
+    params: Vec<serde_json::Value>,
+    state: State<'_, Mutex<DatabaseState>>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let state = state.lock().await;
+
+    state
+        .sql_client
+        .mysql_call_procedure(&connection_id, &procedure_name, &params)
+        .await
+        .map(|results| {
+            results
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap())
+                .collect()
+        })
+        .map_err(|e| format!("MySQL call procedure failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn db_mysql_bulk_insert(
+    connection_id: String,
+    table_name: String,
+    columns: Vec<String>,
+    rows: Vec<Vec<serde_json::Value>>,
+    state: State<'_, Mutex<DatabaseState>>,
+) -> Result<u64, String> {
+    let state = state.lock().await;
+
+    let column_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+
+    state
+        .sql_client
+        .mysql_bulk_insert(&connection_id, &table_name, &column_refs, &rows)
+        .await
+        .map_err(|e| format!("MySQL bulk insert failed: {}", e))
+}
+
+// Security Commands
+
+#[tauri::command]
+pub async fn db_validate_query(sql: String) -> Result<QueryValidation, String> {
+    let validator = SqlSecurityValidator::new()
+        .map_err(|e| format!("Failed to create validator: {}", e))?;
+
+    validator
+        .validate_query(&sql)
+        .map_err(|e| format!("Query validation failed: {}", e))
 }
 
 // Query Builder Commands
