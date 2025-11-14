@@ -33,7 +33,11 @@ pub struct StdioTransport {
 
 impl StdioTransport {
     /// Create a new STDIO transport and spawn the server process
-    pub async fn new(command: &str, args: &[String], env: &HashMap<String, String>) -> McpResult<Self> {
+    pub async fn new(
+        command: &str,
+        args: &[String],
+        env: &HashMap<String, String>,
+    ) -> McpResult<Self> {
         tracing::info!("[MCP Transport] Starting server: {} {:?}", command, args);
 
         // Spawn the child process
@@ -44,20 +48,23 @@ impl StdioTransport {
             .stderr(Stdio::piped())
             .envs(env);
 
-        let mut child = cmd.spawn().map_err(|e| {
-            McpError::ConnectionError(format!("Failed to spawn process: {}", e))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| McpError::ConnectionError(format!("Failed to spawn process: {}", e)))?;
 
         // Get stdin/stdout handles
-        let mut stdin = child.stdin.take().ok_or_else(|| {
-            McpError::ConnectionError("Failed to get stdin handle".to_string())
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            McpError::ConnectionError("Failed to get stdout handle".to_string())
-        })?;
-        let stderr = child.stderr.take().ok_or_else(|| {
-            McpError::ConnectionError("Failed to get stderr handle".to_string())
-        })?;
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| McpError::ConnectionError("Failed to get stdin handle".to_string()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| McpError::ConnectionError("Failed to get stdout handle".to_string()))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| McpError::ConnectionError("Failed to get stderr handle".to_string()))?;
 
         // Create channels
         let (tx, mut rx) = mpsc::unbounded_channel::<JsonRpcRequest>();
@@ -125,7 +132,10 @@ impl StdioTransport {
                         if let Some(sender) = pending.remove(&response.id) {
                             let _ = sender.send(Ok(response));
                         } else {
-                            tracing::warn!("[MCP Transport] Received response for unknown request: {:?}", response.id);
+                            tracing::warn!(
+                                "[MCP Transport] Received response for unknown request: {:?}",
+                                response.id
+                            );
                         }
                     }
                     Ok(McpMessage::Error(error)) => {
@@ -133,7 +143,10 @@ impl StdioTransport {
                         if let Some(sender) = pending.remove(&error.id) {
                             let _ = sender.send(Err(McpError::RmcpError(error.error.message)));
                         } else {
-                            tracing::warn!("[MCP Transport] Received error for unknown request: {:?}", error.id);
+                            tracing::warn!(
+                                "[MCP Transport] Received error for unknown request: {:?}",
+                                error.id
+                            );
                         }
                     }
                     Ok(McpMessage::Notification(notif)) => {

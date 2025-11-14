@@ -206,12 +206,10 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
 
         match pool.get_conn().await {
-            Ok(mut conn) => {
-                match conn.query_drop("SELECT 1").await {
-                    Ok(_) => Ok(true),
-                    Err(_) => Ok(false),
-                }
-            }
+            Ok(mut conn) => match conn.query_drop("SELECT 1").await {
+                Ok(_) => Ok(true),
+                Err(_) => Ok(false),
+            },
             Err(_) => Ok(false),
         }
     }
@@ -262,21 +260,36 @@ impl MySqlClient {
             let mut column = HashMap::new();
 
             if let Some(Value::Bytes(ref bytes)) = row.as_ref(0) {
-                column.insert("Field".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                column.insert(
+                    "Field".to_string(),
+                    JsonValue::String(String::from_utf8_lossy(bytes).to_string()),
+                );
             }
             if let Some(Value::Bytes(ref bytes)) = row.as_ref(1) {
-                column.insert("Type".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                column.insert(
+                    "Type".to_string(),
+                    JsonValue::String(String::from_utf8_lossy(bytes).to_string()),
+                );
             }
             if let Some(Value::Bytes(ref bytes)) = row.as_ref(2) {
-                column.insert("Null".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                column.insert(
+                    "Null".to_string(),
+                    JsonValue::String(String::from_utf8_lossy(bytes).to_string()),
+                );
             }
             if let Some(Value::Bytes(ref bytes)) = row.as_ref(3) {
-                column.insert("Key".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                column.insert(
+                    "Key".to_string(),
+                    JsonValue::String(String::from_utf8_lossy(bytes).to_string()),
+                );
             }
             if let Some(value) = row.as_ref(4) {
                 match value {
                     Value::Bytes(ref bytes) => {
-                        column.insert("Default".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                        column.insert(
+                            "Default".to_string(),
+                            JsonValue::String(String::from_utf8_lossy(bytes).to_string()),
+                        );
                     }
                     Value::NULL => {
                         column.insert("Default".to_string(), JsonValue::Null);
@@ -285,7 +298,10 @@ impl MySqlClient {
                 }
             }
             if let Some(Value::Bytes(ref bytes)) = row.as_ref(5) {
-                column.insert("Extra".to_string(), JsonValue::String(String::from_utf8_lossy(bytes).to_string()));
+                column.insert(
+                    "Extra".to_string(),
+                    JsonValue::String(String::from_utf8_lossy(bytes).to_string()),
+                );
             }
 
             columns.push(column);

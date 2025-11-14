@@ -45,7 +45,8 @@ mod tests {
 
     #[test]
     fn test_error_message() {
-        let json = r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}"#;
+        let json =
+            r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}"#;
         let msg = McpMessage::from_str(json).unwrap();
 
         match msg {
@@ -96,9 +97,10 @@ mod tests {
     fn test_tool_call_params() {
         let params = ToolCallParams {
             name: "read_file".to_string(),
-            arguments: Some(HashMap::from([
-                ("path".to_string(), serde_json::json!("/tmp/test.txt")),
-            ])),
+            arguments: Some(HashMap::from([(
+                "path".to_string(),
+                serde_json::json!("/tmp/test.txt"),
+            )])),
         };
 
         let json = serde_json::to_string(&params).unwrap();
@@ -148,7 +150,10 @@ mod tests {
     fn test_server_config_serialization() {
         let config = McpServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
             env: HashMap::from([("KEY".to_string(), "value".to_string())]),
             enabled: true,
         };
@@ -251,8 +256,10 @@ mod tests {
 
         // Should have at least read_file, write_file, list_directory
         let tool_names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
-        assert!(tool_names.contains(&"read_file".to_string())
-            || tool_names.contains(&"readFile".to_string()));
+        assert!(
+            tool_names.contains(&"read_file".to_string())
+                || tool_names.contains(&"readFile".to_string())
+        );
 
         session.shutdown().await.unwrap();
     }

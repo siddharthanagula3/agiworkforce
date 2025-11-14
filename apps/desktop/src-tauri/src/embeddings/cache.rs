@@ -2,14 +2,13 @@
  * Embedding Cache
  * LRU cache for frequently accessed embeddings
  */
-
 use anyhow::Result;
+use parking_lot::RwLock;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 use super::Vector;
 
@@ -225,7 +224,9 @@ mod tests {
 
         // Test put and get
         let embedding = vec![1.0, 2.0, 3.0];
-        cache.put("test_key".to_string(), embedding.clone()).unwrap();
+        cache
+            .put("test_key".to_string(), embedding.clone())
+            .unwrap();
 
         let retrieved = cache.get("test_key");
         assert!(retrieved.is_some());

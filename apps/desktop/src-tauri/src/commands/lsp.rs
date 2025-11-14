@@ -527,10 +527,8 @@ impl LSPClient {
 
         if let Some(result) = response.get("result") {
             if !result.is_null() {
-                let edit: WorkspaceEdit =
-                    serde_json::from_value(result.clone()).unwrap_or(WorkspaceEdit {
-                        changes: None,
-                    });
+                let edit: WorkspaceEdit = serde_json::from_value(result.clone())
+                    .unwrap_or(WorkspaceEdit { changes: None });
                 return Ok(Some(edit));
             }
         }
@@ -660,12 +658,21 @@ fn get_lsp_command(language: &str) -> Result<(String, Vec<String>), String> {
             "typescript-language-server".to_string(),
             vec!["--stdio".to_string()],
         )),
-        "python" => Ok(("pyright-langserver".to_string(), vec!["--stdio".to_string()])),
+        "python" => Ok((
+            "pyright-langserver".to_string(),
+            vec!["--stdio".to_string()],
+        )),
         "go" => Ok(("gopls".to_string(), vec![])),
         "java" => Ok(("jdtls".to_string(), vec![])),
         "cpp" | "c" => Ok(("clangd".to_string(), vec![])),
-        "json" => Ok(("vscode-json-language-server".to_string(), vec!["--stdio".to_string()])),
-        "html" => Ok(("vscode-html-language-server".to_string(), vec!["--stdio".to_string()])),
+        "json" => Ok((
+            "vscode-json-language-server".to_string(),
+            vec!["--stdio".to_string()],
+        )),
+        "html" => Ok((
+            "vscode-html-language-server".to_string(),
+            vec!["--stdio".to_string()],
+        )),
         "css" | "scss" | "less" => Ok((
             "vscode-css-language-server".to_string(),
             vec!["--stdio".to_string()],
@@ -794,7 +801,9 @@ pub async fn lsp_did_change(
     let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
-    client.text_document_did_change(&uri, version, &content).await
+    client
+        .text_document_did_change(&uri, version, &content)
+        .await
 }
 
 #[tauri::command]
@@ -823,7 +832,9 @@ pub async fn lsp_rename(
     let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
-    client.text_document_rename(&uri, line, character, &new_name).await
+    client
+        .text_document_rename(&uri, line, character, &new_name)
+        .await
 }
 
 #[tauri::command]
@@ -864,7 +875,9 @@ pub async fn lsp_code_action(
     let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
-    client.text_document_code_action(&uri, range, diagnostics).await
+    client
+        .text_document_code_action(&uri, range, diagnostics)
+        .await
 }
 
 #[tauri::command]
