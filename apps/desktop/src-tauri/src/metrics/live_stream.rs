@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::realtime::{RealtimeEvent, RealtimeServer};
 use super::{MetricsSnapshot, PeriodStats, RealtimeMetricsCollector};
+use crate::realtime::{RealtimeEvent, RealtimeServer};
 
 /// Type of metrics update
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,11 +58,7 @@ impl LiveMetricsStream {
         user_id: &str,
         delta: MetricsSnapshot,
     ) -> Result<(), String> {
-        let new_totals = self
-            .collector
-            .get_realtime_stats(user_id)
-            .await?
-            .today;
+        let new_totals = self.collector.get_realtime_stats(user_id).await?.today;
 
         let update = MetricsUpdate {
             update_type: UpdateType::AutomationCompleted,

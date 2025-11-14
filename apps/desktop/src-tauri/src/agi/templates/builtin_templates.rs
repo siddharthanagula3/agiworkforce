@@ -47,7 +47,10 @@ fn create_accounts_payable_agent() -> AgentTemplate {
                 name: "Read Invoice File".to_string(),
                 description: "Read the invoice PDF or image file".to_string(),
                 tool_id: "file_read".to_string(),
-                parameters: HashMap::from([("path".to_string(), serde_json::json!("{{invoice_path}}"))]),
+                parameters: HashMap::from([(
+                    "path".to_string(),
+                    serde_json::json!("{{invoice_path}}"),
+                )]),
                 expected_output: "File content or image data".to_string(),
                 retry_on_failure: true,
                 max_retries: 3,
@@ -58,7 +61,10 @@ fn create_accounts_payable_agent() -> AgentTemplate {
                 name: "Extract Invoice Data".to_string(),
                 description: "Use OCR to extract text and data from invoice".to_string(),
                 tool_id: "image_ocr".to_string(),
-                parameters: HashMap::from([("image_path".to_string(), serde_json::json!("{{invoice_path}}"))]),
+                parameters: HashMap::from([(
+                    "image_path".to_string(),
+                    serde_json::json!("{{invoice_path}}"),
+                )]),
                 expected_output: "Extracted invoice data (JSON)".to_string(),
                 retry_on_failure: true,
                 max_retries: 2,
@@ -70,7 +76,10 @@ fn create_accounts_payable_agent() -> AgentTemplate {
                 description: "Look up matching purchase order in database".to_string(),
                 tool_id: "db_query".to_string(),
                 parameters: HashMap::from([
-                    ("query".to_string(), serde_json::json!("SELECT * FROM purchase_orders WHERE po_number = ?")),
+                    (
+                        "query".to_string(),
+                        serde_json::json!("SELECT * FROM purchase_orders WHERE po_number = ?"),
+                    ),
                     ("params".to_string(), serde_json::json!(["{{po_number}}"])),
                 ]),
                 expected_output: "Purchase order details".to_string(),
@@ -83,7 +92,10 @@ fn create_accounts_payable_agent() -> AgentTemplate {
                 name: "Validate Invoice".to_string(),
                 description: "Compare invoice against PO for discrepancies".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{validate_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{validate_prompt}}"),
+                )]),
                 expected_output: "Validation result with any discrepancies".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -96,8 +108,14 @@ fn create_accounts_payable_agent() -> AgentTemplate {
                 tool_id: "email_send".to_string(),
                 parameters: HashMap::from([
                     ("to".to_string(), serde_json::json!("{{approver_email}}")),
-                    ("subject".to_string(), serde_json::json!("Invoice Approval Required: {{invoice_number}}")),
-                    ("body".to_string(), serde_json::json!("{{approval_email_body}}")),
+                    (
+                        "subject".to_string(),
+                        serde_json::json!("Invoice Approval Required: {{invoice_number}}"),
+                    ),
+                    (
+                        "body".to_string(),
+                        serde_json::json!("{{approval_email_body}}"),
+                    ),
                 ]),
                 expected_output: "Email sent confirmation".to_string(),
                 retry_on_failure: true,
@@ -258,7 +276,8 @@ fn create_data_entry_agent() -> AgentTemplate {
     );
     prompts.insert(
         "extract".to_string(),
-        "Extract structured data from this document: {{document_content}}. Return as JSON.".to_string(),
+        "Extract structured data from this document: {{document_content}}. Return as JSON."
+            .to_string(),
     );
 
     let workflow = WorkflowDefinition {
@@ -380,7 +399,8 @@ fn create_email_management_agent() -> AgentTemplate {
     );
     prompts.insert(
         "draft".to_string(),
-        "Draft a professional response to this email: {{email_content}}. Context: {{context}}".to_string(),
+        "Draft a professional response to this email: {{email_content}}. Context: {{context}}"
+            .to_string(),
     );
 
     let workflow = WorkflowDefinition {
@@ -404,7 +424,10 @@ fn create_email_management_agent() -> AgentTemplate {
                 name: "Prioritize Emails".to_string(),
                 description: "Use LLM to prioritize emails by urgency".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{prioritize_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{prioritize_prompt}}"),
+                )]),
                 expected_output: "Prioritized email list".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -415,7 +438,10 @@ fn create_email_management_agent() -> AgentTemplate {
                 name: "Draft Responses".to_string(),
                 description: "Draft responses for high-priority emails".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{draft_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{draft_prompt}}"),
+                )]),
                 expected_output: "Draft responses".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -428,7 +454,10 @@ fn create_email_management_agent() -> AgentTemplate {
                 tool_id: "email_send".to_string(),
                 parameters: HashMap::from([
                     ("to".to_string(), serde_json::json!("{{recipient_email}}")),
-                    ("subject".to_string(), serde_json::json!("Re: {{original_subject}}")),
+                    (
+                        "subject".to_string(),
+                        serde_json::json!("Re: {{original_subject}}"),
+                    ),
                     ("body".to_string(), serde_json::json!("{{draft_body}}")),
                 ]),
                 expected_output: "Emails sent".to_string(),
@@ -443,7 +472,10 @@ fn create_email_management_agent() -> AgentTemplate {
                 tool_id: "email_move".to_string(),
                 parameters: HashMap::from([
                     ("folder".to_string(), serde_json::json!("Archive")),
-                    ("email_ids".to_string(), serde_json::json!("{{processed_ids}}")),
+                    (
+                        "email_ids".to_string(),
+                        serde_json::json!("{{processed_ids}}"),
+                    ),
                 ]),
                 expected_output: "Emails archived".to_string(),
                 retry_on_failure: false,
@@ -501,7 +533,10 @@ fn create_social_media_agent() -> AgentTemplate {
                 tool_id: "browser_extract".to_string(),
                 parameters: HashMap::from([
                     ("url".to_string(), serde_json::json!("{{research_url}}")),
-                    ("selector".to_string(), serde_json::json!("article, .content")),
+                    (
+                        "selector".to_string(),
+                        serde_json::json!("article, .content"),
+                    ),
                 ]),
                 expected_output: "Research content".to_string(),
                 retry_on_failure: true,
@@ -513,7 +548,10 @@ fn create_social_media_agent() -> AgentTemplate {
                 name: "Generate Post".to_string(),
                 description: "Create engaging social media post".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{generate_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{generate_prompt}}"),
+                )]),
                 expected_output: "Social media post text".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -525,9 +563,15 @@ fn create_social_media_agent() -> AgentTemplate {
                 description: "Schedule post via social media API".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{social_api_url}}/posts")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{social_api_url}}/posts"),
+                    ),
                     ("method".to_string(), serde_json::json!("POST")),
-                    ("body".to_string(), serde_json::json!({"text": "{{post_text}}", "scheduled_at": "{{schedule_time}}"})),
+                    (
+                        "body".to_string(),
+                        serde_json::json!({"text": "{{post_text}}", "scheduled_at": "{{schedule_time}}"}),
+                    ),
                 ]),
                 expected_output: "Post scheduled".to_string(),
                 retry_on_failure: true,
@@ -540,7 +584,10 @@ fn create_social_media_agent() -> AgentTemplate {
                 description: "Check post engagement metrics".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{social_api_url}}/posts/{{post_id}}/metrics")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{social_api_url}}/posts/{{post_id}}/metrics"),
+                    ),
                     ("method".to_string(), serde_json::json!("GET")),
                 ]),
                 expected_output: "Engagement metrics".to_string(),
@@ -597,7 +644,10 @@ fn create_lead_qualification_agent() -> AgentTemplate {
                 description: "Get new leads from CRM via API".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{crm_api_url}}/leads?status=new")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{crm_api_url}}/leads?status=new"),
+                    ),
                     ("method".to_string(), serde_json::json!("GET")),
                 ]),
                 expected_output: "List of new leads".to_string(),
@@ -610,7 +660,10 @@ fn create_lead_qualification_agent() -> AgentTemplate {
                 name: "Score Lead".to_string(),
                 description: "Calculate lead score using LLM".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{score_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{score_prompt}}"),
+                )]),
                 expected_output: "Lead score (0-100)".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -622,7 +675,10 @@ fn create_lead_qualification_agent() -> AgentTemplate {
                 description: "Fetch additional company data from enrichment API".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{enrichment_api_url}}/companies/{{company_domain}}")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{enrichment_api_url}}/companies/{{company_domain}}"),
+                    ),
                     ("method".to_string(), serde_json::json!("GET")),
                 ]),
                 expected_output: "Enriched company data".to_string(),
@@ -636,9 +692,15 @@ fn create_lead_qualification_agent() -> AgentTemplate {
                 description: "Update lead record with score and enriched data".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{crm_api_url}}/leads/{{lead_id}}")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{crm_api_url}}/leads/{{lead_id}}"),
+                    ),
                     ("method".to_string(), serde_json::json!("PATCH")),
-                    ("body".to_string(), serde_json::json!({"score": "{{lead_score}}", "enriched_data": "{{enriched_data}}"})),
+                    (
+                        "body".to_string(),
+                        serde_json::json!({"score": "{{lead_score}}", "enriched_data": "{{enriched_data}}"}),
+                    ),
                 ]),
                 expected_output: "CRM updated".to_string(),
                 retry_on_failure: true,
@@ -651,9 +713,15 @@ fn create_lead_qualification_agent() -> AgentTemplate {
                 description: "Assign high-score leads to sales rep".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{crm_api_url}}/leads/{{lead_id}}/assign")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{crm_api_url}}/leads/{{lead_id}}/assign"),
+                    ),
                     ("method".to_string(), serde_json::json!("POST")),
-                    ("body".to_string(), serde_json::json!({"sales_rep_id": "{{rep_id}}"})),
+                    (
+                        "body".to_string(),
+                        serde_json::json!({"sales_rep_id": "{{rep_id}}"}),
+                    ),
                 ]),
                 expected_output: "Lead assigned".to_string(),
                 retry_on_failure: true,
@@ -820,7 +888,10 @@ fn create_testing_agent() -> AgentTemplate {
                 name: "Read Source Code".to_string(),
                 description: "Read the file to be tested".to_string(),
                 tool_id: "file_read".to_string(),
-                parameters: HashMap::from([("path".to_string(), serde_json::json!("{{source_path}}"))]),
+                parameters: HashMap::from([(
+                    "path".to_string(),
+                    serde_json::json!("{{source_path}}"),
+                )]),
                 expected_output: "Source code content".to_string(),
                 retry_on_failure: true,
                 max_retries: 2,
@@ -831,7 +902,10 @@ fn create_testing_agent() -> AgentTemplate {
                 name: "Generate Tests".to_string(),
                 description: "Use LLM to generate comprehensive tests".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{generate_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{generate_prompt}}"),
+                )]),
                 expected_output: "Test code".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -857,7 +931,10 @@ fn create_testing_agent() -> AgentTemplate {
                 description: "Execute test suite".to_string(),
                 tool_id: "code_execute".to_string(),
                 parameters: HashMap::from([
-                    ("command".to_string(), serde_json::json!("npm test -- {{test_file}}")),
+                    (
+                        "command".to_string(),
+                        serde_json::json!("npm test -- {{test_file}}"),
+                    ),
                     ("cwd".to_string(), serde_json::json!("{{project_path}}")),
                 ]),
                 expected_output: "Test results".to_string(),
@@ -871,7 +948,10 @@ fn create_testing_agent() -> AgentTemplate {
                 description: "Generate coverage report".to_string(),
                 tool_id: "code_execute".to_string(),
                 parameters: HashMap::from([
-                    ("command".to_string(), serde_json::json!("npm test -- --coverage")),
+                    (
+                        "command".to_string(),
+                        serde_json::json!("npm test -- --coverage"),
+                    ),
                     ("cwd".to_string(), serde_json::json!("{{project_path}}")),
                 ]),
                 expected_output: "Coverage report".to_string(),
@@ -928,7 +1008,10 @@ fn create_documentation_agent() -> AgentTemplate {
                 name: "Read Source Files".to_string(),
                 description: "Read all source files in directory".to_string(),
                 tool_id: "file_read".to_string(),
-                parameters: HashMap::from([("path".to_string(), serde_json::json!("{{source_dir}}"))]),
+                parameters: HashMap::from([(
+                    "path".to_string(),
+                    serde_json::json!("{{source_dir}}"),
+                )]),
                 expected_output: "Source code files".to_string(),
                 retry_on_failure: true,
                 max_retries: 2,
@@ -939,9 +1022,10 @@ fn create_documentation_agent() -> AgentTemplate {
                 name: "Analyze API".to_string(),
                 description: "Extract functions, classes, and their signatures".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([
-                    ("prompt".to_string(), serde_json::json!("Extract all public APIs from this code: {{code}}")),
-                ]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("Extract all public APIs from this code: {{code}}"),
+                )]),
                 expected_output: "API structure".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -952,7 +1036,10 @@ fn create_documentation_agent() -> AgentTemplate {
                 name: "Generate Documentation".to_string(),
                 description: "Create markdown documentation".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{document_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{document_prompt}}"),
+                )]),
                 expected_output: "Markdown documentation".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -964,8 +1051,14 @@ fn create_documentation_agent() -> AgentTemplate {
                 description: "Save documentation to README.md".to_string(),
                 tool_id: "file_write".to_string(),
                 parameters: HashMap::from([
-                    ("path".to_string(), serde_json::json!("{{output_path}}/README.md")),
-                    ("content".to_string(), serde_json::json!("{{documentation}}")),
+                    (
+                        "path".to_string(),
+                        serde_json::json!("{{output_path}}/README.md"),
+                    ),
+                    (
+                        "content".to_string(),
+                        serde_json::json!("{{documentation}}"),
+                    ),
                 ]),
                 expected_output: "Documentation file created".to_string(),
                 retry_on_failure: true,
@@ -1045,9 +1138,15 @@ fn create_deployment_agent() -> AgentTemplate {
                 description: "Deploy via cloud provider API".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{deploy_api_url}}/deployments")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{deploy_api_url}}/deployments"),
+                    ),
                     ("method".to_string(), serde_json::json!("POST")),
-                    ("body".to_string(), serde_json::json!({"project": "{{project_id}}", "files": "{{build_dir}}"})),
+                    (
+                        "body".to_string(),
+                        serde_json::json!({"project": "{{project_id}}", "files": "{{build_dir}}"}),
+                    ),
                 ]),
                 expected_output: "Deployment ID and URL".to_string(),
                 retry_on_failure: true,
@@ -1060,7 +1159,10 @@ fn create_deployment_agent() -> AgentTemplate {
                 description: "Check that deployed site is responding".to_string(),
                 tool_id: "api_call".to_string(),
                 parameters: HashMap::from([
-                    ("url".to_string(), serde_json::json!("{{production_url}}/health")),
+                    (
+                        "url".to_string(),
+                        serde_json::json!("{{production_url}}/health"),
+                    ),
                     ("method".to_string(), serde_json::json!("GET")),
                 ]),
                 expected_output: "Health check response".to_string(),
@@ -1117,8 +1219,14 @@ fn create_meeting_scheduler_agent() -> AgentTemplate {
                 description: "Fetch calendar data for all attendees".to_string(),
                 tool_id: "calendar_query".to_string(),
                 parameters: HashMap::from([
-                    ("attendees".to_string(), serde_json::json!("{{attendee_emails}}")),
-                    ("start_date".to_string(), serde_json::json!("{{search_start}}")),
+                    (
+                        "attendees".to_string(),
+                        serde_json::json!("{{attendee_emails}}"),
+                    ),
+                    (
+                        "start_date".to_string(),
+                        serde_json::json!("{{search_start}}"),
+                    ),
                     ("end_date".to_string(), serde_json::json!("{{search_end}}")),
                 ]),
                 expected_output: "Availability data for all attendees".to_string(),
@@ -1131,7 +1239,10 @@ fn create_meeting_scheduler_agent() -> AgentTemplate {
                 name: "Propose Meeting Times".to_string(),
                 description: "Find optimal times when all are available".to_string(),
                 tool_id: "llm_reason".to_string(),
-                parameters: HashMap::from([("prompt".to_string(), serde_json::json!("{{propose_times_prompt}}"))]),
+                parameters: HashMap::from([(
+                    "prompt".to_string(),
+                    serde_json::json!("{{propose_times_prompt}}"),
+                )]),
                 expected_output: "3 proposed meeting times".to_string(),
                 retry_on_failure: false,
                 max_retries: 1,
@@ -1144,10 +1255,19 @@ fn create_meeting_scheduler_agent() -> AgentTemplate {
                 tool_id: "calendar_create".to_string(),
                 parameters: HashMap::from([
                     ("title".to_string(), serde_json::json!("{{meeting_title}}")),
-                    ("start_time".to_string(), serde_json::json!("{{selected_time}}")),
+                    (
+                        "start_time".to_string(),
+                        serde_json::json!("{{selected_time}}"),
+                    ),
                     ("duration".to_string(), serde_json::json!("{{duration}}")),
-                    ("attendees".to_string(), serde_json::json!("{{attendee_emails}}")),
-                    ("description".to_string(), serde_json::json!("{{meeting_description}}")),
+                    (
+                        "attendees".to_string(),
+                        serde_json::json!("{{attendee_emails}}"),
+                    ),
+                    (
+                        "description".to_string(),
+                        serde_json::json!("{{meeting_description}}"),
+                    ),
                 ]),
                 expected_output: "Event ID and calendar link".to_string(),
                 retry_on_failure: true,
@@ -1161,7 +1281,10 @@ fn create_meeting_scheduler_agent() -> AgentTemplate {
                 tool_id: "email_send".to_string(),
                 parameters: HashMap::from([
                     ("to".to_string(), serde_json::json!("{{attendee_emails}}")),
-                    ("subject".to_string(), serde_json::json!("Meeting Invitation: {{meeting_title}}")),
+                    (
+                        "subject".to_string(),
+                        serde_json::json!("Meeting Invitation: {{meeting_title}}"),
+                    ),
                     ("body".to_string(), serde_json::json!("{{invite_body}}")),
                 ]),
                 expected_output: "Invites sent".to_string(),

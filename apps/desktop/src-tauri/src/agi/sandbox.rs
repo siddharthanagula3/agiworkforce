@@ -42,7 +42,8 @@ impl SandboxManager {
         };
 
         if use_git_worktree {
-            self.setup_git_worktree(&workspace_path, &sandbox_id).await?;
+            self.setup_git_worktree(&workspace_path, &sandbox_id)
+                .await?;
         }
 
         let mut sandboxes = self.active_sandboxes.lock().await;
@@ -116,7 +117,12 @@ impl SandboxManager {
         let current_dir = std::env::current_dir()?;
 
         let output = tokio::process::Command::new("git")
-            .args(["worktree", "remove", workspace_path.to_str().unwrap(), "--force"])
+            .args([
+                "worktree",
+                "remove",
+                workspace_path.to_str().unwrap(),
+                "--force",
+            ])
             .current_dir(&current_dir)
             .output()
             .await?;

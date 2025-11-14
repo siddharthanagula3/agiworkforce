@@ -36,10 +36,12 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
       }
     };
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (!isOpen) {
+      return;
     }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
   const handleModelSelect = async (modelId: string, provider: Provider) => {

@@ -1,5 +1,5 @@
-use super::*;
 use super::employees::get_pre_built_employees;
+use super::*;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 
@@ -22,15 +22,19 @@ impl AIEmployeeRegistry {
             self.register_employee(employee)?;
         }
 
-        tracing::info!("Initialized AI Employee Registry with {} pre-built employees", self.count()?);
+        tracing::info!(
+            "Initialized AI Employee Registry with {} pre-built employees",
+            self.count()?
+        );
         Ok(())
     }
 
     /// Register a single employee
     fn register_employee(&self, employee: AIEmployee) -> Result<()> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         // Check if already exists
         let exists: bool = conn
@@ -43,12 +47,14 @@ impl AIEmployeeRegistry {
 
         if exists {
             // Update existing employee
-            let capabilities_json = serde_json::to_string(&employee.capabilities).unwrap_or_default();
+            let capabilities_json =
+                serde_json::to_string(&employee.capabilities).unwrap_or_default();
             let demo_json = employee
                 .demo_workflow
                 .as_ref()
                 .and_then(|d| serde_json::to_string(d).ok());
-            let integrations_json = serde_json::to_string(&employee.required_integrations).unwrap_or_default();
+            let integrations_json =
+                serde_json::to_string(&employee.required_integrations).unwrap_or_default();
             let tags_json = serde_json::to_string(&employee.tags).unwrap_or_default();
 
             conn.execute(
@@ -83,12 +89,14 @@ impl AIEmployeeRegistry {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
         } else {
             // Insert new employee
-            let capabilities_json = serde_json::to_string(&employee.capabilities).unwrap_or_default();
+            let capabilities_json =
+                serde_json::to_string(&employee.capabilities).unwrap_or_default();
             let demo_json = employee
                 .demo_workflow
                 .as_ref()
                 .and_then(|d| serde_json::to_string(d).ok());
-            let integrations_json = serde_json::to_string(&employee.required_integrations).unwrap_or_default();
+            let integrations_json =
+                serde_json::to_string(&employee.required_integrations).unwrap_or_default();
             let tags_json = serde_json::to_string(&employee.tags).unwrap_or_default();
 
             conn.execute(
@@ -121,9 +129,10 @@ impl AIEmployeeRegistry {
 
     /// Get count of registered employees
     pub fn count(&self) -> Result<usize> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM ai_employees", [], |row| row.get(0))
@@ -134,9 +143,10 @@ impl AIEmployeeRegistry {
 
     /// Get all employees
     pub fn get_all(&self) -> Result<Vec<AIEmployee>> {
-        let conn = self.db.lock().map_err(|e| {
-            EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut stmt = conn
             .prepare(
@@ -156,9 +166,12 @@ impl AIEmployeeRegistry {
                 let tags_json: String = row.get(14)?;
 
                 let role = parse_role(&role_str);
-                let capabilities: Vec<String> = serde_json::from_str(&capabilities_json).unwrap_or_default();
-                let demo_workflow: Option<DemoWorkflow> = demo_json.and_then(|json| serde_json::from_str(&json).ok());
-                let required_integrations: Vec<String> = serde_json::from_str(&integrations_json).unwrap_or_default();
+                let capabilities: Vec<String> =
+                    serde_json::from_str(&capabilities_json).unwrap_or_default();
+                let demo_workflow: Option<DemoWorkflow> =
+                    demo_json.and_then(|json| serde_json::from_str(&json).ok());
+                let required_integrations: Vec<String> =
+                    serde_json::from_str(&integrations_json).unwrap_or_default();
                 let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
 
                 Ok(AIEmployee {

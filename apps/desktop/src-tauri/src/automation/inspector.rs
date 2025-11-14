@@ -138,7 +138,11 @@ impl InspectorService {
 
         // Try automation ID (best selector)
         if let Some(automation_id) = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_AutomationIdPropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_AutomationIdPropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         }) {
             if !automation_id.is_empty() {
                 selectors.push(ElementSelector {
@@ -150,7 +154,11 @@ impl InspectorService {
 
         // Try name (second best)
         if let Some(name) = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_NamePropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_NamePropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         }) {
             if !name.is_empty() {
                 selectors.push(ElementSelector {
@@ -162,7 +170,11 @@ impl InspectorService {
 
         // Try class name (less reliable)
         if let Some(class_name) = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_ClassNamePropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_ClassNamePropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         }) {
             if !class_name.is_empty() {
                 selectors.push(ElementSelector {
@@ -186,7 +198,10 @@ impl InspectorService {
     }
 
     /// Get element tree (parent and children)
-    pub fn get_element_tree(&self, element_id: &str) -> Result<(Option<BasicElementInfo>, Vec<BasicElementInfo>)> {
+    pub fn get_element_tree(
+        &self,
+        element_id: &str,
+    ) -> Result<(Option<BasicElementInfo>, Vec<BasicElementInfo>)> {
         let element = self.uia.get_element(element_id)?;
 
         // Get parent
@@ -203,12 +218,20 @@ impl InspectorService {
         let id = self.uia.register_element(element)?;
 
         let name = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_NamePropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_NamePropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         })
         .unwrap_or_default();
 
         let class_name = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_ClassNamePropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_ClassNamePropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         })
         .unwrap_or_default();
 
@@ -222,7 +245,11 @@ impl InspectorService {
         };
 
         let automation_id = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_AutomationIdPropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_AutomationIdPropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         });
 
         let bounding_rect = self.uia.bounding_rect(&id).ok().flatten();
@@ -264,7 +291,10 @@ impl InspectorService {
         }
         properties.insert("is_enabled".to_string(), serde_json::json!(is_enabled));
         properties.insert("is_offscreen".to_string(), serde_json::json!(is_offscreen));
-        properties.insert("has_keyboard_focus".to_string(), serde_json::json!(has_keyboard_focus));
+        properties.insert(
+            "has_keyboard_focus".to_string(),
+            serde_json::json!(has_keyboard_focus),
+        );
 
         let parent = self.get_parent(element).ok();
         let children = self.get_children(element).unwrap_or_default();
@@ -341,12 +371,20 @@ impl InspectorService {
         let id = self.uia.register_element(element)?;
 
         let name = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_NamePropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_NamePropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         })
         .unwrap_or_default();
 
         let class_name = read_bstr(|| unsafe {
-            element.GetCurrentPropertyValue(UIA_ClassNamePropertyId).ok()?.try_into().ok()
+            element
+                .GetCurrentPropertyValue(UIA_ClassNamePropertyId)
+                .ok()?
+                .try_into()
+                .ok()
         })
         .unwrap_or_default();
 

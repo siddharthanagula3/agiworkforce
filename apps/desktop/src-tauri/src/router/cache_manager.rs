@@ -272,10 +272,7 @@ impl CacheManager {
     }
 
     /// Get cache statistics grouped by provider and model
-    pub fn get_provider_stats(
-        &self,
-        conn: &Connection,
-    ) -> SqlResult<Vec<ProviderCacheStats>> {
+    pub fn get_provider_stats(&self, conn: &Connection) -> SqlResult<Vec<ProviderCacheStats>> {
         let mut stmt = conn.prepare(
             "SELECT
                 provider,
@@ -320,10 +317,7 @@ impl CacheManager {
 
     /// Clear cache entries for a specific model
     pub fn clear_model(&self, conn: &Connection, model: &str) -> SqlResult<usize> {
-        conn.execute(
-            "DELETE FROM cache_entries WHERE model = ?1",
-            params![model],
-        )
+        conn.execute("DELETE FROM cache_entries WHERE model = ?1", params![model])
     }
 }
 

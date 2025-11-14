@@ -59,8 +59,8 @@ impl WorkflowScheduler {
         timezone: Option<String>,
     ) -> Result<(), String> {
         // Validate cron expression
-        let schedule = Schedule::from_str(cron_expr)
-            .map_err(|e| format!("Invalid cron expression: {}", e))?;
+        let schedule =
+            Schedule::from_str(cron_expr).map_err(|e| format!("Invalid cron expression: {}", e))?;
 
         println!(
             "Scheduled workflow {} with cron: {} (timezone: {:?})",
@@ -176,8 +176,8 @@ impl WorkflowScheduler {
 
     /// Get next scheduled execution time for a cron expression
     pub fn get_next_execution_time(&self, cron_expr: &str) -> Result<i64, String> {
-        let schedule = Schedule::from_str(cron_expr)
-            .map_err(|e| format!("Invalid cron expression: {}", e))?;
+        let schedule =
+            Schedule::from_str(cron_expr).map_err(|e| format!("Invalid cron expression: {}", e))?;
 
         let next = schedule
             .upcoming(chrono::Utc)
@@ -188,7 +188,10 @@ impl WorkflowScheduler {
     }
 
     /// List all scheduled workflows
-    pub fn list_scheduled_workflows(&self, user_id: &str) -> Result<Vec<ScheduledWorkflow>, String> {
+    pub fn list_scheduled_workflows(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<ScheduledWorkflow>, String> {
         // Placeholder: In real implementation, would query database
         Ok(Vec::new())
     }

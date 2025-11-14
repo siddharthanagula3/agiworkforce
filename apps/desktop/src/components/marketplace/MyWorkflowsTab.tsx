@@ -3,20 +3,21 @@ import { Upload, Eye, Copy, Star, Share2, Edit, Trash2, TrendingUp } from 'lucid
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/AlertDialog';
-import { WorkflowCard } from './WorkflowCard';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
 
 export function MyWorkflowsTab() {
-  const {
-    myPublishedWorkflows,
-    isLoading,
-    fetchMyWorkflows,
-    openShareModal,
-    unpublishWorkflow,
-    fetchWorkflowAnalytics,
-    workflowAnalytics,
-  } = useMarketplaceStore();
+  const { myPublishedWorkflows, isLoading, fetchMyWorkflows, openShareModal, unpublishWorkflow } =
+    useMarketplaceStore();
 
   const [selectedForDelete, setSelectedForDelete] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -53,7 +54,7 @@ export function MyWorkflowsTab() {
         acc.avgRating +
         (workflow.total_reviews > 0 ? workflow.avg_rating : 0) / myPublishedWorkflows.length,
     }),
-    { views: 0, clones: 0, avgRating: 0 }
+    { views: 0, clones: 0, avgRating: 0 },
   );
 
   if (isLoading) {
@@ -74,9 +75,7 @@ export function MyWorkflowsTab() {
       <Card>
         <CardHeader>
           <CardTitle>Your Publishing Stats</CardTitle>
-          <CardDescription>
-            Performance overview of your published workflows
-          </CardDescription>
+          <CardDescription>Performance overview of your published workflows</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -169,11 +168,7 @@ export function MyWorkflowsTab() {
 
                   {/* Actions */}
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openShareModal(workflow)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => openShareModal(workflow)}>
                       <Share2 className="mr-2 h-4 w-4" />
                       Share
                     </Button>
@@ -207,11 +202,7 @@ export function MyWorkflowsTab() {
                       value={Math.floor(workflow.clone_count * 0.2).toString()}
                       change="+8%"
                     />
-                    <AnalyticItem
-                      label="Favorites"
-                      value="0"
-                      change="-"
-                    />
+                    <AnalyticItem label="Favorites" value="0" change="-" />
                     <div className="pt-4 border-t">
                       <p className="text-xs text-muted-foreground mb-1">Published</p>
                       <p className="text-sm font-medium">

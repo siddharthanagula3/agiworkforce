@@ -1,9 +1,7 @@
-import React from 'react';
 import { CheckCircle, Play, Settings, Share2, Sparkles, ArrowRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from '../ui/Dialog';

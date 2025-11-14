@@ -1,11 +1,14 @@
-use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
-use futures::{StreamExt, SinkExt, stream::{SplitSink, SplitStream}};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::net::SocketAddr;
-use tokio::sync::Mutex as TokioMutex;
 use super::{PresenceManager, RealtimeEvent};
+use futures::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex as TokioMutex;
+use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
 
 pub struct WebSocketClient {
     pub id: String,
@@ -42,7 +45,11 @@ impl RealtimeServer {
                     let presence = self.presence.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection_wrapper(stream, peer, clients, senders, presence).await {
+                        if let Err(e) = Self::handle_connection_wrapper(
+                            stream, peer, clients, senders, presence,
+                        )
+                        .await
+                        {
                             tracing::error!("Connection error: {}", e);
                         }
                     });

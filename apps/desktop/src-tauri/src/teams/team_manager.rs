@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -112,7 +112,12 @@ impl TeamManager {
     }
 
     /// Create a new team
-    pub fn create_team(&self, name: String, description: Option<String>, owner_id: String) -> Result<Team, String> {
+    pub fn create_team(
+        &self,
+        name: String,
+        description: Option<String>,
+        owner_id: String,
+    ) -> Result<Team, String> {
         let team_id = Uuid::new_v4().to_string();
         let settings = TeamSettings::default();
         let settings_json = serde_json::to_string(&settings)
@@ -120,20 +125,33 @@ impl TeamManager {
 
         let now = chrono::Utc::now().timestamp();
 
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         conn.execute(
             "INSERT INTO teams (id, name, description, owner_id, settings, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![team_id, name, description, owner_id, settings_json, now, now],
-        ).map_err(|e| format!("Failed to create team: {}", e))?;
+            params![
+                team_id,
+                name,
+                description,
+                owner_id,
+                settings_json,
+                now,
+                now
+            ],
+        )
+        .map_err(|e| format!("Failed to create team: {}", e))?;
 
         // Add owner as team member
         conn.execute(
             "INSERT INTO team_members (team_id, user_id, role, joined_at)
              VALUES (?1, ?2, ?3, ?4)",
             params![team_id, owner_id, TeamRole::Owner.as_str(), now],
-        ).map_err(|e| format!("Failed to add owner as member: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to add owner as member: {}", e))?;
 
         Ok(Team {
             id: team_id,
@@ -148,7 +166,10 @@ impl TeamManager {
 
     /// Get a team by ID
     pub fn get_team(&self, team_id: &str) -> Result<Option<Team>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare("SELECT id, name, description, owner_id, settings, created_at, updated_at FROM teams WHERE id = ?1")
@@ -157,8 +178,8 @@ impl TeamManager {
         let team = stmt
             .query_row(params![team_id], |row| {
                 let settings_json: String = row.get(4)?;
-                let settings: TeamSettings = serde_json::from_str(&settings_json)
-                    .unwrap_or_default();
+                let settings: TeamSettings =
+                    serde_json::from_str(&settings_json).unwrap_or_default();
 
                 Ok(Team {
                     id: row.get(0)?,
@@ -178,21 +199,26 @@ impl TeamManager {
 
     /// Update a team
     pub fn update_team(&self, team_id: &str, updates: TeamUpdates) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         if let Some(name) = updates.name {
             conn.execute(
                 "UPDATE teams SET name = ?1, updated_at = ?2 WHERE id = ?3",
                 params![name, now, team_id],
-            ).map_err(|e| format!("Failed to update team name: {}", e))?;
+            )
+            .map_err(|e| format!("Failed to update team name: {}", e))?;
         }
 
         if let Some(description) = updates.description {
             conn.execute(
                 "UPDATE teams SET description = ?1, updated_at = ?2 WHERE id = ?3",
                 params![description, now, team_id],
-            ).map_err(|e| format!("Failed to update team description: {}", e))?;
+            )
+            .map_err(|e| format!("Failed to update team description: {}", e))?;
         }
 
         if let Some(settings) = updates.settings {
@@ -202,7 +228,8 @@ impl TeamManager {
             conn.execute(
                 "UPDATE teams SET settings = ?1, updated_at = ?2 WHERE id = ?3",
                 params![settings_json, now, team_id],
-            ).map_err(|e| format!("Failed to update team settings: {}", e))?;
+            )
+            .map_err(|e| format!("Failed to update team settings: {}", e))?;
         }
 
         Ok(())
@@ -210,12 +237,13 @@ impl TeamManager {
 
     /// Delete a team
     pub fn delete_team(&self, team_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
-        conn.execute(
-            "DELETE FROM teams WHERE id = ?1",
-            params![team_id],
-        ).map_err(|e| format!("Failed to delete team: {}", e))?;
+        conn.execute("DELETE FROM teams WHERE id = ?1", params![team_id])
+            .map_err(|e| format!("Failed to delete team: {}", e))?;
 
         // CASCADE delete will remove members, resources, activity, etc.
 
@@ -224,7 +252,10 @@ impl TeamManager {
 
     /// Get all teams for a user
     pub fn get_user_teams(&self, user_id: &str) -> Result<Vec<Team>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -239,8 +270,8 @@ impl TeamManager {
         let teams = stmt
             .query_map(params![user_id], |row| {
                 let settings_json: String = row.get(4)?;
-                let settings: TeamSettings = serde_json::from_str(&settings_json)
-                    .unwrap_or_default();
+                let settings: TeamSettings =
+                    serde_json::from_str(&settings_json).unwrap_or_default();
 
                 Ok(Team {
                     id: row.get(0)?,
@@ -260,12 +291,22 @@ impl TeamManager {
     }
 
     /// Add a member to a team
-    pub fn add_member(&self, team_id: &str, user_id: &str, role: TeamRole, inviter_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn add_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        role: TeamRole,
+        inviter_id: &str,
+    ) -> Result<(), String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         // Check if team exists and get max_members setting
-        let team = self.get_team(team_id)?
+        let team = self
+            .get_team(team_id)?
             .ok_or_else(|| "Team not found".to_string())?;
 
         // Check member limit
@@ -300,14 +341,18 @@ impl TeamManager {
             "INSERT INTO team_members (team_id, user_id, role, joined_at, invited_by)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![team_id, user_id, role.as_str(), now, inviter_id],
-        ).map_err(|e| format!("Failed to add member: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to add member: {}", e))?;
 
         Ok(())
     }
 
     /// Remove a member from a team
     pub fn remove_member(&self, team_id: &str, user_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         // Check if user is the owner
         let is_owner: bool = conn
@@ -319,20 +364,32 @@ impl TeamManager {
             .map_err(|e| format!("Failed to check owner status: {}", e))?;
 
         if is_owner {
-            return Err("Cannot remove team owner. Transfer ownership first or delete the team.".to_string());
+            return Err(
+                "Cannot remove team owner. Transfer ownership first or delete the team."
+                    .to_string(),
+            );
         }
 
         conn.execute(
             "DELETE FROM team_members WHERE team_id = ?1 AND user_id = ?2",
             params![team_id, user_id],
-        ).map_err(|e| format!("Failed to remove member: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to remove member: {}", e))?;
 
         Ok(())
     }
 
     /// Update a member's role
-    pub fn update_member_role(&self, team_id: &str, user_id: &str, new_role: TeamRole) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn update_member_role(
+        &self,
+        team_id: &str,
+        user_id: &str,
+        new_role: TeamRole,
+    ) -> Result<(), String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         // Check if user is a member
         let exists: bool = conn
@@ -349,7 +406,10 @@ impl TeamManager {
 
         // Cannot change owner role this way
         if new_role == TeamRole::Owner {
-            return Err("Cannot directly assign owner role. Use transfer_ownership method instead.".to_string());
+            return Err(
+                "Cannot directly assign owner role. Use transfer_ownership method instead."
+                    .to_string(),
+            );
         }
 
         let current_role: String = conn
@@ -361,27 +421,33 @@ impl TeamManager {
             .map_err(|e| format!("Failed to get current role: {}", e))?;
 
         if current_role == "owner" {
-            return Err("Cannot change owner role. Use transfer_ownership method instead.".to_string());
+            return Err(
+                "Cannot change owner role. Use transfer_ownership method instead.".to_string(),
+            );
         }
 
         conn.execute(
             "UPDATE team_members SET role = ?1 WHERE team_id = ?2 AND user_id = ?3",
             params![new_role.as_str(), team_id, user_id],
-        ).map_err(|e| format!("Failed to update member role: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update member role: {}", e))?;
 
         Ok(())
     }
 
     /// Get all members of a team
     pub fn get_team_members(&self, team_id: &str) -> Result<Vec<TeamMember>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
                 "SELECT team_id, user_id, role, joined_at, invited_by
                  FROM team_members
                  WHERE team_id = ?1
-                 ORDER BY joined_at ASC"
+                 ORDER BY joined_at ASC",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
@@ -406,14 +472,21 @@ impl TeamManager {
     }
 
     /// Get a team member
-    pub fn get_team_member(&self, team_id: &str, user_id: &str) -> Result<Option<TeamMember>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pub fn get_team_member(
+        &self,
+        team_id: &str,
+        user_id: &str,
+    ) -> Result<Option<TeamMember>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
                 "SELECT team_id, user_id, role, joined_at, invited_by
                  FROM team_members
-                 WHERE team_id = ?1 AND user_id = ?2"
+                 WHERE team_id = ?1 AND user_id = ?2",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
@@ -437,13 +510,22 @@ impl TeamManager {
     }
 
     /// Create an invitation token
-    pub fn create_invitation(&self, team_id: &str, email: String, role: TeamRole, invited_by: &str) -> Result<TeamInvitation, String> {
+    pub fn create_invitation(
+        &self,
+        team_id: &str,
+        email: String,
+        role: TeamRole,
+        invited_by: &str,
+    ) -> Result<TeamInvitation, String> {
         let invitation_id = Uuid::new_v4().to_string();
         let token = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
         let expires_at = now + (7 * 24 * 60 * 60); // 7 days
 
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         conn.execute(
             "INSERT INTO team_invitations (id, team_id, email, role, invited_by, token, expires_at, created_at)
@@ -466,7 +548,10 @@ impl TeamManager {
 
     /// Accept an invitation
     pub fn accept_invitation(&self, token: &str, user_id: &str) -> Result<Team, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
         let now = chrono::Utc::now().timestamp();
 
         // Get invitation
@@ -474,7 +559,7 @@ impl TeamManager {
             .prepare(
                 "SELECT id, team_id, email, role, invited_by, expires_at, accepted
                  FROM team_invitations
-                 WHERE token = ?1"
+                 WHERE token = ?1",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
@@ -484,13 +569,13 @@ impl TeamManager {
                 let role = TeamRole::from_str(&role_str).unwrap_or(TeamRole::Viewer);
 
                 Ok((
-                    row.get::<_, String>(0)?,  // id
-                    row.get::<_, String>(1)?,  // team_id
-                    row.get::<_, String>(2)?,  // email
-                    role,                       // role
-                    row.get::<_, String>(4)?,  // invited_by
-                    row.get::<_, i64>(5)?,     // expires_at
-                    row.get::<_, bool>(6)?,    // accepted
+                    row.get::<_, String>(0)?, // id
+                    row.get::<_, String>(1)?, // team_id
+                    row.get::<_, String>(2)?, // email
+                    role,                     // role
+                    row.get::<_, String>(4)?, // invited_by
+                    row.get::<_, i64>(5)?,    // expires_at
+                    row.get::<_, bool>(6)?,   // accepted
                 ))
             })
             .map_err(|e| format!("Invitation not found: {}", e))?;
@@ -515,7 +600,8 @@ impl TeamManager {
         conn.execute(
             "UPDATE team_invitations SET accepted = 1 WHERE id = ?1",
             params![invitation_id],
-        ).map_err(|e| format!("Failed to mark invitation as accepted: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to mark invitation as accepted: {}", e))?;
 
         // Get and return the team
         self.get_team(&team_id)?
@@ -524,7 +610,10 @@ impl TeamManager {
 
     /// Get pending invitations for a team
     pub fn get_team_invitations(&self, team_id: &str) -> Result<Vec<TeamInvitation>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         let mut stmt = conn
             .prepare(
@@ -561,7 +650,10 @@ impl TeamManager {
 
     /// Transfer team ownership
     pub fn transfer_ownership(&self, team_id: &str, new_owner_id: &str) -> Result<(), String> {
-        let conn = self.db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
 
         // Check if new owner is a member
         let is_member: bool = conn
@@ -589,19 +681,22 @@ impl TeamManager {
         conn.execute(
             "UPDATE team_members SET role = 'admin' WHERE team_id = ?1 AND user_id = ?2",
             params![team_id, current_owner_id],
-        ).map_err(|e| format!("Failed to demote current owner: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to demote current owner: {}", e))?;
 
         // Promote new owner
         conn.execute(
             "UPDATE team_members SET role = 'owner' WHERE team_id = ?1 AND user_id = ?2",
             params![team_id, new_owner_id],
-        ).map_err(|e| format!("Failed to promote new owner: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to promote new owner: {}", e))?;
 
         // Update team owner_id
         conn.execute(
             "UPDATE teams SET owner_id = ?1 WHERE id = ?2",
             params![new_owner_id, team_id],
-        ).map_err(|e| format!("Failed to update team owner: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to update team owner: {}", e))?;
 
         Ok(())
     }
@@ -627,7 +722,8 @@ mod tests {
                 updated_at INTEGER
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         conn.execute(
             "CREATE TABLE team_members (
@@ -639,7 +735,8 @@ mod tests {
                 PRIMARY KEY (team_id, user_id)
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         conn.execute(
             "CREATE TABLE team_invitations (
@@ -654,7 +751,8 @@ mod tests {
                 created_at INTEGER
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         Arc::new(Mutex::new(conn))
     }
@@ -665,7 +763,11 @@ mod tests {
         let manager = TeamManager::new(db);
 
         let team = manager
-            .create_team("Test Team".to_string(), Some("Test description".to_string()), "user123".to_string())
+            .create_team(
+                "Test Team".to_string(),
+                Some("Test description".to_string()),
+                "user123".to_string(),
+            )
             .unwrap();
 
         assert_eq!(team.name, "Test Team");
@@ -721,7 +823,10 @@ mod tests {
             .update_member_role(&team.id, "user456", TeamRole::Admin)
             .unwrap();
 
-        let member = manager.get_team_member(&team.id, "user456").unwrap().unwrap();
+        let member = manager
+            .get_team_member(&team.id, "user456")
+            .unwrap()
+            .unwrap();
         assert_eq!(member.role, TeamRole::Admin);
     }
 }

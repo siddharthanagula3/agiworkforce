@@ -179,7 +179,10 @@ impl MockDatabase {
 
     pub fn insert(&self, table: &str, record: HashMap<String, Value>) -> Result<(), String> {
         let mut records = self.records.lock().unwrap();
-        records.entry(table.to_string()).or_insert_with(Vec::new).push(record);
+        records
+            .entry(table.to_string())
+            .or_insert_with(Vec::new)
+            .push(record);
         Ok(())
     }
 
@@ -296,10 +299,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_llm_router_with_responses() {
-        let router = MockLLMRouter::with_responses(vec![
-            "Response 1".to_string(),
-            "Response 2".to_string(),
-        ]);
+        let router =
+            MockLLMRouter::with_responses(vec!["Response 1".to_string(), "Response 2".to_string()]);
 
         let resp1 = router.complete("prompt1", 100).await.unwrap();
         let resp2 = router.complete("prompt2", 100).await.unwrap();
@@ -372,7 +373,10 @@ mod tests {
         let client = MockApiClient::new();
         client.set_response("https://api.test.com/data", json!({"status": "ok"}));
 
-        let response = client.request("GET", "https://api.test.com/data").await.unwrap();
+        let response = client
+            .request("GET", "https://api.test.com/data")
+            .await
+            .unwrap();
         assert_eq!(response["status"], "ok");
 
         let requests = client.get_requests();

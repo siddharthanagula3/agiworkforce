@@ -17,6 +17,6 @@ pub use config::{McpServerConfig, McpServersConfig};
 pub use error::{McpError, McpResult};
 pub use events::{emit_mcp_event, McpEvent};
 pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
-pub use manager::{McpServerManager, ManagedServer, ServerStatus};
+pub use manager::{ManagedServer, McpServerManager, ServerStatus};
 pub use registry::McpToolRegistry;
 pub use tool_executor::{McpToolExecutor, ToolExecutionResult, ToolStats};
