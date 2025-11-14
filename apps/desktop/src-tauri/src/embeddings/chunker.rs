@@ -2,7 +2,6 @@
  * Code Chunker
  * Intelligent chunking of code files for embedding generation
  */
-
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::path::Path;
@@ -58,9 +57,7 @@ impl CodeChunker {
             ChunkStrategy::Fixed { size, overlap } => {
                 self.chunk_fixed(file_path, content, &language, *size, *overlap)
             }
-            ChunkStrategy::Semantic => {
-                self.chunk_semantic(file_path, content, &language)
-            }
+            ChunkStrategy::Semantic => self.chunk_semantic(file_path, content, &language),
             ChunkStrategy::Hybrid { max_size } => {
                 self.chunk_hybrid(file_path, content, &language, *max_size)
             }
@@ -151,13 +148,8 @@ impl CodeChunker {
                 final_chunks.push(chunk);
             } else {
                 // Split large chunk into fixed-size pieces
-                let sub_chunks = self.chunk_fixed(
-                    file_path,
-                    &chunk.content,
-                    language,
-                    max_size,
-                    10,
-                )?;
+                let sub_chunks =
+                    self.chunk_fixed(file_path, &chunk.content, language, max_size, 10)?;
                 final_chunks.extend(sub_chunks);
             }
         }
@@ -166,20 +158,17 @@ impl CodeChunker {
     }
 
     /// Chunk TypeScript/JavaScript
-    fn chunk_typescript(
-        &self,
-        file_path: &str,
-        content: &str,
-        language: &str,
-    ) -> Vec<CodeChunk> {
+    fn chunk_typescript(&self, file_path: &str, content: &str, language: &str) -> Vec<CodeChunk> {
         let mut chunks = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
 
         // Regex patterns for TypeScript/JavaScript
         let function_re = Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+\w+").unwrap();
         let class_re = Regex::new(r"^\s*(?:export\s+)?class\s+\w+").unwrap();
-        let const_fn_re = Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?\(").unwrap();
-        let arrow_fn_re = Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?.*=>").unwrap();
+        let const_fn_re =
+            Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?\(").unwrap();
+        let arrow_fn_re =
+            Regex::new(r"^\s*(?:export\s+)?const\s+\w+\s*=\s*(?:async\s+)?.*=>").unwrap();
 
         let mut current_chunk: Option<(usize, Vec<&str>, ChunkType)> = None;
         let mut brace_depth = 0;
@@ -187,7 +176,10 @@ impl CodeChunker {
         for (line_idx, line) in lines.iter().enumerate() {
             // Detect function/class starts
             if current_chunk.is_none() {
-                if function_re.is_match(line) || const_fn_re.is_match(line) || arrow_fn_re.is_match(line) {
+                if function_re.is_match(line)
+                    || const_fn_re.is_match(line)
+                    || arrow_fn_re.is_match(line)
+                {
                     current_chunk = Some((line_idx, vec![*line], ChunkType::Function));
                     brace_depth = count_braces(line);
                     continue;
@@ -342,7 +334,8 @@ impl CodeChunker {
 
             if current_chunk.is_none() {
                 if def_re.is_match(line) {
-                    current_chunk = Some((line_idx, vec![*line], ChunkType::Function, indent_level));
+                    current_chunk =
+                        Some((line_idx, vec![*line], ChunkType::Function, indent_level));
                     continue;
                 } else if class_re.is_match(line) {
                     current_chunk = Some((line_idx, vec![*line], ChunkType::Class, indent_level));
@@ -367,9 +360,11 @@ impl CodeChunker {
 
                     // Check if current line starts a new chunk
                     if def_re.is_match(line) {
-                        current_chunk = Some((line_idx, vec![*line], ChunkType::Function, indent_level));
+                        current_chunk =
+                            Some((line_idx, vec![*line], ChunkType::Function, indent_level));
                     } else if class_re.is_match(line) {
-                        current_chunk = Some((line_idx, vec![*line], ChunkType::Class, indent_level));
+                        current_chunk =
+                            Some((line_idx, vec![*line], ChunkType::Class, indent_level));
                     }
                 } else {
                     chunk_lines.push(*line);

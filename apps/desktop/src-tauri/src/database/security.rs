@@ -4,18 +4,18 @@ use serde::{Deserialize, Serialize};
 
 /// SQL injection detection patterns
 static DANGEROUS_PATTERNS: &[&str] = &[
-    r"(?i)(\bUNION\b.*\bSELECT\b)",                    // UNION-based injection
-    r"(?i)(\bOR\b\s+\d+\s*=\s*\d+)",                   // Boolean-based injection
-    r"(?i)(\bAND\b\s+\d+\s*=\s*\d+)",                  // Boolean-based injection
-    r"(?i)(;\s*(DROP|DELETE|TRUNCATE|ALTER)\b)",       // Stacked queries
-    r"(?i)(\bEXEC\b.*\()",                             // Stored procedure execution
-    r"(?i)(\bINTO\s+OUTFILE\b)",                       // File operations
-    r"(?i)(\bLOAD_FILE\b)",                            // File operations
-    r"(?i)(/\*.*\*/)",                                 // SQL comments (can hide injection)
-    r"(?i)(--[^\n]*)",                                 // SQL line comments
-    r"(?i)(\bSLEEP\b\s*\()",                           // Time-based injection
-    r"(?i)(\bBENCHMARK\b\s*\()",                       // Time-based injection
-    r"(?i)(0x[0-9a-f]+)",                              // Hex encoding bypass
+    r"(?i)(\bUNION\b.*\bSELECT\b)",              // UNION-based injection
+    r"(?i)(\bOR\b\s+\d+\s*=\s*\d+)",             // Boolean-based injection
+    r"(?i)(\bAND\b\s+\d+\s*=\s*\d+)",            // Boolean-based injection
+    r"(?i)(;\s*(DROP|DELETE|TRUNCATE|ALTER)\b)", // Stacked queries
+    r"(?i)(\bEXEC\b.*\()",                       // Stored procedure execution
+    r"(?i)(\bINTO\s+OUTFILE\b)",                 // File operations
+    r"(?i)(\bLOAD_FILE\b)",                      // File operations
+    r"(?i)(/\*.*\*/)",                           // SQL comments (can hide injection)
+    r"(?i)(--[^\n]*)",                           // SQL line comments
+    r"(?i)(\bSLEEP\b\s*\()",                     // Time-based injection
+    r"(?i)(\bBENCHMARK\b\s*\()",                 // Time-based injection
+    r"(?i)(0x[0-9a-f]+)",                        // Hex encoding bypass
 ];
 
 /// Query approval levels
@@ -170,10 +170,7 @@ impl SqlSecurityValidator {
     /// Sanitize table/column names (prevent SQL injection in identifiers)
     pub fn sanitize_identifier(identifier: &str) -> Result<String> {
         // Only allow alphanumeric characters and underscores
-        if identifier
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_')
-        {
+        if identifier.chars().all(|c| c.is_alphanumeric() || c == '_') {
             Ok(identifier.to_string())
         } else {
             Err(Error::Other(format!(

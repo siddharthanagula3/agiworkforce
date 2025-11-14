@@ -1,3 +1,5 @@
+pub mod cache;
+pub mod chunker;
 /**
  * Embeddings Module
  * Vector embeddings for semantic code search
@@ -7,18 +9,15 @@
  * - Fallback: fastembed-rs (all-MiniLM-L6-v2) for offline support
  * - Storage: SQLite with custom vector similarity search
  */
-
 pub mod generator;
-pub mod similarity;
-pub mod chunker;
-pub mod cache;
 pub mod indexer;
+pub mod similarity;
 
-pub use generator::{EmbeddingGenerator, EmbeddingModel, EmbeddingConfig};
-pub use similarity::{SimilaritySearch, SearchResult, cosine_similarity};
-pub use chunker::{CodeChunker, CodeChunk, ChunkStrategy};
-pub use cache::{EmbeddingCache, CacheStats};
+pub use cache::{CacheStats, EmbeddingCache};
+pub use chunker::{ChunkStrategy, CodeChunk, CodeChunker};
+pub use generator::{EmbeddingConfig, EmbeddingGenerator, EmbeddingModel};
 pub use indexer::{IncrementalIndexer, IndexingProgress};
+pub use similarity::{cosine_similarity, SearchResult, SimilaritySearch};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -108,12 +107,7 @@ impl EmbeddingMetadata {
         start_line: u32,
         end_line: u32,
     ) -> Self {
-        let id = format!(
-            "{}:{}:{}",
-            file_path,
-            chunk_index,
-            start_line
-        );
+        let id = format!("{}:{}:{}", file_path, chunk_index, start_line);
 
         Self {
             id,
@@ -140,7 +134,8 @@ pub async fn generate_code_embeddings(
 
     // Chunk the code
     let chunker = CodeChunker::new(ChunkStrategy::Semantic);
-    let chunks = chunker.chunk_file(&file_path, &content)
+    let chunks = chunker
+        .chunk_file(&file_path, &content)
         .map_err(|e| format!("Failed to chunk file: {}", e))?;
 
     let generator = service.generator();
@@ -152,7 +147,8 @@ pub async fn generate_code_embeddings(
     // Generate embeddings for each chunk
     let mut count = 0;
     for chunk in chunks {
-        let embedding = generator_guard.generate(&chunk.content)
+        let embedding = generator_guard
+            .generate(&chunk.content)
             .await
             .map_err(|e| format!("Failed to generate embedding: {}", e))?;
 
@@ -165,7 +161,8 @@ pub async fn generate_code_embeddings(
             chunk.end_line,
         );
 
-        similarity_guard.add_embedding(&metadata.id, embedding, metadata)
+        similarity_guard
+            .add_embedding(&metadata.id, embedding, metadata)
             .map_err(|e| format!("Failed to store embedding: {}", e))?;
 
         count += 1;
@@ -186,7 +183,8 @@ pub async fn semantic_search_codebase(
     let generator_guard = generator.lock().await;
 
     // Generate embedding for query
-    let query_embedding = generator_guard.generate(&query)
+    let query_embedding = generator_guard
+        .generate(&query)
         .await
         .map_err(|e| format!("Failed to generate query embedding: {}", e))?;
 
@@ -196,7 +194,8 @@ pub async fn semantic_search_codebase(
     let similarity_guard = similarity.lock().await;
 
     // Search for similar embeddings
-    let results = similarity_guard.search(query_embedding, limit.unwrap_or(10))
+    let results = similarity_guard
+        .search(query_embedding, limit.unwrap_or(10))
         .map_err(|e| format!("Failed to search: {}", e))?;
 
     Ok(results)
@@ -211,12 +210,14 @@ pub async fn get_embedding_stats(
     let similarity = service.similarity();
     let similarity_guard = similarity.lock().await;
 
-    let total_embeddings = similarity_guard.count_embeddings()
+    let total_embeddings = similarity_guard
+        .count_embeddings()
         .map_err(|e| format!("Failed to get embedding count: {}", e))?;
 
     let cache = service.cache();
     let cache_guard = cache.lock().await;
-    let cache_stats = cache_guard.get_stats()
+    let cache_stats = cache_guard
+        .get_stats()
         .map_err(|e| format!("Failed to get cache stats: {}", e))?;
 
     Ok(EmbeddingStats {
@@ -243,7 +244,8 @@ pub async fn index_workspace(
     let indexer = service.indexer();
     let indexer_guard = indexer.lock().await;
 
-    indexer_guard.index_workspace()
+    indexer_guard
+        .index_workspace()
         .await
         .map_err(|e| format!("Failed to index workspace: {}", e))
 }
@@ -258,7 +260,8 @@ pub async fn index_file(
     let indexer_guard = indexer.lock().await;
 
     let path = PathBuf::from(file_path);
-    indexer_guard.index_file(&path)
+    indexer_guard
+        .index_file(&path)
         .await
         .map_err(|e| format!("Failed to index file: {}", e))
 }
@@ -284,7 +287,8 @@ pub async fn on_file_changed(
     let indexer_guard = indexer.lock().await;
 
     let path = PathBuf::from(file_path);
-    indexer_guard.on_file_changed(&path)
+    indexer_guard
+        .on_file_changed(&path)
         .await
         .map_err(|e| format!("Failed to handle file change: {}", e))
 }
@@ -299,7 +303,8 @@ pub async fn on_file_deleted(
     let indexer_guard = indexer.lock().await;
 
     let path = PathBuf::from(file_path);
-    indexer_guard.on_file_deleted(&path)
+    indexer_guard
+        .on_file_deleted(&path)
         .await
         .map_err(|e| format!("Failed to handle file deletion: {}", e))
 }

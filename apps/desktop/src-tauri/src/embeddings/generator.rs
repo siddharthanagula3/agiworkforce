@@ -2,7 +2,6 @@
  * Embedding Generator
  * Generates vector embeddings using Ollama (primary) or fastembed-rs (fallback)
  */
-
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -68,16 +67,17 @@ pub struct EmbeddingGenerator {
 impl EmbeddingGenerator {
     /// Create a new generator
     pub async fn new(config: EmbeddingConfig) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(config.timeout)
-            .build()?;
+        let client = Client::builder().timeout(config.timeout).build()?;
 
         let generator = Self { config, client };
 
         // Test Ollama connection if using Ollama model
         if generator.config.model.ollama_model_name().is_some() {
             if let Err(e) = generator.test_ollama_connection().await {
-                tracing::warn!("Ollama connection test failed: {}. Will use fallback if enabled.", e);
+                tracing::warn!(
+                    "Ollama connection test failed: {}. Will use fallback if enabled.",
+                    e
+                );
 
                 if !generator.config.enable_fallback {
                     return Err(anyhow!("Ollama unavailable and fallback disabled"));
@@ -135,7 +135,8 @@ impl EmbeddingGenerator {
             input: text.to_string(),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&request)
             .send()
@@ -148,11 +149,16 @@ impl EmbeddingGenerator {
             return Err(anyhow!("Ollama error {}: {}", status, body));
         }
 
-        let result: OllamaEmbedResponse = response.json().await
+        let result: OllamaEmbedResponse = response
+            .json()
+            .await
             .context("Failed to parse Ollama response")?;
 
         // Ollama returns embeddings, take the first one
-        result.embeddings.into_iter().next()
+        result
+            .embeddings
+            .into_iter()
+            .next()
             .ok_or_else(|| anyhow!("No embeddings in Ollama response"))
     }
 
@@ -226,7 +232,10 @@ mod tests {
                     println!("Generated embedding with {} dimensions", embedding.len());
                 }
                 Err(e) => {
-                    println!("Embedding generation failed (Ollama may not be running): {}", e);
+                    println!(
+                        "Embedding generation failed (Ollama may not be running): {}",
+                        e
+                    );
                 }
             }
         }
