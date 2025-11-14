@@ -32,7 +32,10 @@ impl HookRegistry {
     pub async fn initialize(&self) -> Result<()> {
         let config = HookConfig::load_from_file(&self.config_path)?;
         self.executor.load_hooks(config.hooks).await;
-        tracing::info!("Hook registry initialized with {} hooks", self.executor.list_hooks().await.len());
+        tracing::info!(
+            "Hook registry initialized with {} hooks",
+            self.executor.list_hooks().await.len()
+        );
         Ok(())
     }
 
@@ -43,11 +46,7 @@ impl HookRegistry {
             let results = executor.execute_hooks(event).await;
             for result in results {
                 if !result.success {
-                    tracing::warn!(
-                        "Hook '{}' failed: {:?}",
-                        result.hook_name,
-                        result.error
-                    );
+                    tracing::warn!("Hook '{}' failed: {:?}", result.hook_name, result.error);
                 }
             }
         });

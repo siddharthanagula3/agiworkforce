@@ -46,7 +46,10 @@ impl HookExecutor {
 
         // Check for duplicate names
         if hook_list.iter().any(|h| h.name == hook.name) {
-            return Err(anyhow::anyhow!("Hook with name '{}' already exists", hook.name));
+            return Err(anyhow::anyhow!(
+                "Hook with name '{}' already exists",
+                hook.name
+            ));
         }
 
         hook_list.push(hook);
@@ -73,7 +76,11 @@ impl HookExecutor {
 
         if let Some(hook) = hook_list.iter_mut().find(|h| h.name == name) {
             hook.enabled = enabled;
-            info!("Hook '{}' {} ", name, if enabled { "enabled" } else { "disabled" });
+            info!(
+                "Hook '{}' {} ",
+                name,
+                if enabled { "enabled" } else { "disabled" }
+            );
             Ok(())
         } else {
             Err(anyhow::anyhow!("Hook '{}' not found", name))
@@ -147,7 +154,11 @@ impl HookExecutor {
     }
 
     /// Execute a single hook
-    async fn execute_single_hook(&self, hook: &Hook, event: &HookEvent) -> Result<HookExecutionResult> {
+    async fn execute_single_hook(
+        &self,
+        hook: &Hook,
+        event: &HookEvent,
+    ) -> Result<HookExecutionResult> {
         let start_time = Instant::now();
 
         // Prepare event JSON to pass as environment variable
@@ -265,7 +276,10 @@ impl HookExecutor {
                 stdout: String::new(),
                 stderr: String::new(),
                 execution_time_ms,
-                error: Some(format!("Hook timed out after {} seconds", hook.timeout_secs)),
+                error: Some(format!(
+                    "Hook timed out after {} seconds",
+                    hook.timeout_secs
+                )),
             },
         };
 

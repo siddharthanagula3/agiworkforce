@@ -40,7 +40,11 @@ pub struct RecoveryStrategy {
 }
 
 impl RecoveryStrategy {
-    pub fn new<F, Fut>(name: impl Into<String>, condition: F, handler: impl Fn(&AGIError) -> Fut + Send + Sync + 'static) -> Self
+    pub fn new<F, Fut>(
+        name: impl Into<String>,
+        condition: F,
+        handler: impl Fn(&AGIError) -> Fut + Send + Sync + 'static,
+    ) -> Self
     where
         F: Fn(&AGIError) -> bool + Send + Sync + 'static,
         Fut: Future<Output = Result<RecoveryAction>> + Send + 'static,
@@ -60,9 +64,7 @@ pub struct RecoveryManager {
 
 impl RecoveryManager {
     pub fn new() -> Self {
-        let mut manager = Self {
-            strategies: vec![],
-        };
+        let mut manager = Self { strategies: vec![] };
 
         // Register default recovery strategies
         manager.register_browser_recovery();
@@ -349,9 +351,7 @@ impl RecoveryManager {
                 }
                 RecoveryAction::Skip => {
                     info!("Skipping failed operation");
-                    return Err(AGIError::TransientError(
-                        "Operation skipped".to_string(),
-                    ));
+                    return Err(AGIError::TransientError("Operation skipped".to_string()));
                 }
                 RecoveryAction::Abort => {
                     warn!("Recovery aborted");
@@ -384,9 +384,7 @@ mod tests {
     #[tokio::test]
     async fn test_recovery_manager_browser_element_not_found() {
         let manager = RecoveryManager::new();
-        let error = AGIError::ToolError(ToolError::BrowserError(
-            "element not found".to_string(),
-        ));
+        let error = AGIError::ToolError(ToolError::BrowserError("element not found".to_string()));
 
         let action = manager.recover(&error).await.unwrap();
         assert!(matches!(action, RecoveryAction::Fallback(_)));
@@ -395,9 +393,7 @@ mod tests {
     #[tokio::test]
     async fn test_recovery_manager_llm_rate_limit() {
         let manager = RecoveryManager::new();
-        let error = AGIError::LLMError(LLMError::RateLimitError(
-            "Rate limit exceeded".to_string(),
-        ));
+        let error = AGIError::LLMError(LLMError::RateLimitError("Rate limit exceeded".to_string()));
 
         let action = manager.recover(&error).await.unwrap();
         assert!(matches!(action, RecoveryAction::Fallback(_)));
