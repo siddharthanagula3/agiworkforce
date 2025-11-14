@@ -9,7 +9,6 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
-import { Tabs } from '../ui/Tabs';
 
 interface LivePreviewProps {
   filePath: string;
@@ -56,7 +55,12 @@ export function LivePreview({ filePath, className }: LivePreviewProps) {
   const content = diff.modifiedContent;
 
   return (
-    <div className={cn('flex flex-col h-full border border-border rounded-lg overflow-hidden', className)}>
+    <div
+      className={cn(
+        'flex flex-col h-full border border-border rounded-lg overflow-hidden',
+        className,
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/20 border-b border-border">
         <div className="flex items-center gap-2">
@@ -90,18 +94,12 @@ export function LivePreview({ filePath, className }: LivePreviewProps) {
           <div className="flex flex-col items-center justify-center h-full p-8 gap-4">
             <AlertTriangle className="h-12 w-12 text-red-500" />
             <div className="text-center space-y-2">
-              <p className="text-sm font-medium text-red-600 dark:text-red-400">
-                Preview Error
-              </p>
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">Preview Error</p>
               <p className="text-xs text-muted-foreground max-w-md">{error}</p>
             </div>
           </div>
         ) : previewMode === 'preview' ? (
-          <PreviewRenderer
-            content={content}
-            fileType={fileExtension}
-            onError={setError}
-          />
+          <PreviewRenderer content={content} fileType={fileExtension} onError={setError} />
         ) : (
           <SourceRenderer content={content} language={diff.language} />
         )}
@@ -144,14 +142,12 @@ function PreviewRenderer({ content, fileType, onError }: PreviewRendererProps) {
 
       case 'jsx':
       case 'tsx':
-        return <ComponentPreview content={content} onError={onError} />;
+        return <ComponentPreview />;
 
       default:
         return (
           <div className="flex items-center justify-center h-full p-8">
-            <p className="text-sm text-muted-foreground">
-              Preview not implemented for {fileType}
-            </p>
+            <p className="text-sm text-muted-foreground">Preview not implemented for {fileType}</p>
           </div>
         );
     }
@@ -185,7 +181,13 @@ function HtmlPreview({ content }: { content: string }) {
   );
 }
 
-function JsonPreview({ content, onError }: { content: string; onError: (error: string | null) => void }) {
+function JsonPreview({
+  content,
+  onError,
+}: {
+  content: string;
+  onError: (error: string | null) => void;
+}) {
   try {
     const parsed = JSON.parse(content);
     const formatted = JSON.stringify(parsed, null, 2);
@@ -203,7 +205,7 @@ function JsonPreview({ content, onError }: { content: string; onError: (error: s
   }
 }
 
-function ComponentPreview({ content, onError }: { content: string; onError: (error: string | null) => void }) {
+function ComponentPreview() {
   // For React components, we'd need to transpile and render them
   // This is a placeholder that shows the component will be rendered in an iframe
   return (
@@ -212,14 +214,12 @@ function ComponentPreview({ content, onError }: { content: string; onError: (err
       <div className="text-center space-y-2 max-w-md">
         <p className="text-sm font-medium">Component Preview</p>
         <p className="text-xs text-muted-foreground">
-          React component preview requires runtime transpilation.
-          This feature will render the component in an isolated iframe sandbox.
+          React component preview requires runtime transpilation. This feature will render the
+          component in an isolated iframe sandbox.
         </p>
       </div>
       <div className="mt-4 p-4 rounded-lg border border-border bg-background max-w-md">
-        <p className="text-xs font-mono text-muted-foreground">
-          Preview coming soon...
-        </p>
+        <p className="text-xs font-mono text-muted-foreground">Preview coming soon...</p>
       </div>
     </div>
   );

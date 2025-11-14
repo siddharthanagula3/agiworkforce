@@ -1,8 +1,8 @@
+use chrono::Utc;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use chrono::Utc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPresence {
@@ -56,7 +56,10 @@ impl PresenceManager {
             current_activity: None,
         };
 
-        self.online_users.lock().unwrap().insert(user_id.to_string(), presence.clone());
+        self.online_users
+            .lock()
+            .unwrap()
+            .insert(user_id.to_string(), presence.clone());
         let _ = self.persist_presence(&presence);
     }
 
@@ -79,7 +82,12 @@ impl PresenceManager {
     pub fn get_team_presence(&self, _team_id: &str) -> Vec<UserPresence> {
         // For now, return all online users
         // In a real implementation, filter by team_id from database
-        self.online_users.lock().unwrap().values().cloned().collect()
+        self.online_users
+            .lock()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect()
     }
 
     pub fn get_user_presence(&self, user_id: &str) -> Option<UserPresence> {
@@ -88,7 +96,9 @@ impl PresenceManager {
 
     fn persist_presence(&self, presence: &UserPresence) -> Result<(), rusqlite::Error> {
         let db = self.db.lock().unwrap();
-        let activity_json = presence.current_activity.as_ref()
+        let activity_json = presence
+            .current_activity
+            .as_ref()
             .map(|a| serde_json::to_string(a).unwrap_or_default());
 
         db.execute(

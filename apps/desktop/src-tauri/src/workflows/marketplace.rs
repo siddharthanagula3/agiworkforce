@@ -1,7 +1,7 @@
+use crate::workflows::publishing::{PublishedWorkflow, WorkflowCategory};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use rusqlite::Connection;
-use crate::workflows::publishing::{PublishedWorkflow, WorkflowCategory};
 
 /// Workflow filters for search
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,10 +62,14 @@ impl WorkflowMarketplace {
 
     /// Get featured workflows (editor's picks and top-rated)
     pub fn get_featured_workflows(&self, limit: usize) -> Result<Vec<PublishedWorkflow>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, title, description, category, creator_id, creator_name,
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, title, description, category, creator_id, creator_name,
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
@@ -73,10 +77,15 @@ impl WorkflowMarketplace {
              FROM published_workflows
              WHERE is_featured = 1 OR (avg_rating >= 4.5 AND rating_count >= 10)
              ORDER BY is_featured DESC, avg_rating DESC, clone_count DESC
-             LIMIT ?1"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+             LIMIT ?1",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stmt.query_map(rusqlite::params![limit as i64], Self::row_to_published_workflow)
+        let workflows = stmt
+            .query_map(
+                rusqlite::params![limit as i64],
+                Self::row_to_published_workflow,
+            )
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect workflows: {}", e))?;
@@ -86,7 +95,10 @@ impl WorkflowMarketplace {
 
     /// Get trending workflows (most cloned in last 7 days)
     pub fn get_trending_workflows(&self, limit: usize) -> Result<Vec<PublishedWorkflow>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let seven_days_ago = chrono::Utc::now().timestamp() - (7 * 24 * 60 * 60);
 
@@ -104,9 +116,10 @@ impl WorkflowMarketplace {
              LIMIT ?2"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stmt.query_map(rusqlite::params![seven_days_ago, limit as i64], |row| {
-            Self::row_to_published_workflow(row)
-        })
+        let workflows = stmt
+            .query_map(rusqlite::params![seven_days_ago, limit as i64], |row| {
+                Self::row_to_published_workflow(row)
+            })
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect workflows: {}", e))?;
@@ -115,8 +128,16 @@ impl WorkflowMarketplace {
     }
 
     /// Search workflows with filters
-    pub fn search_workflows(&self, filters: WorkflowFilters, limit: usize, offset: usize) -> Result<Vec<PublishedWorkflow>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn search_workflows(
+        &self,
+        filters: WorkflowFilters,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<PublishedWorkflow>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         // Build dynamic query
         let mut query = String::from(
@@ -125,7 +146,7 @@ impl WorkflowMarketplace {
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
                     is_verified, is_featured, created_at, updated_at
-             FROM published_workflows WHERE 1=1"
+             FROM published_workflows WHERE 1=1",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -167,12 +188,14 @@ impl WorkflowMarketplace {
         params.push(Box::new(limit as i64));
         params.push(Box::new(offset as i64));
 
-        let mut stmt = conn.prepare(&query)
+        let mut stmt = conn
+            .prepare(&query)
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let workflows = stmt.query_map(&*param_refs, Self::row_to_published_workflow)
+        let workflows = stmt
+            .query_map(&*param_refs, Self::row_to_published_workflow)
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect workflows: {}", e))?;
@@ -182,38 +205,55 @@ impl WorkflowMarketplace {
 
     /// Get workflow by share URL
     pub fn get_workflow_by_share_url(&self, share_url: &str) -> Result<PublishedWorkflow, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let workflow = conn.query_row(
-            "SELECT id, title, description, category, creator_id, creator_name,
+        let workflow = conn
+            .query_row(
+                "SELECT id, title, description, category, creator_id, creator_name,
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
                     is_verified, is_featured, created_at, updated_at
              FROM published_workflows WHERE share_url = ?1",
-            rusqlite::params![share_url],
-            Self::row_to_published_workflow,
-        ).map_err(|e| format!("Workflow not found: {}", e))?;
+                rusqlite::params![share_url],
+                Self::row_to_published_workflow,
+            )
+            .map_err(|e| format!("Workflow not found: {}", e))?;
 
         Ok(workflow)
     }
 
     /// Get workflows by creator
-    pub fn get_creator_workflows(&self, creator_id: &str) -> Result<Vec<PublishedWorkflow>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn get_creator_workflows(
+        &self,
+        creator_id: &str,
+    ) -> Result<Vec<PublishedWorkflow>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, title, description, category, creator_id, creator_name,
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, title, description, category, creator_id, creator_name,
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
                     is_verified, is_featured, created_at, updated_at
              FROM published_workflows
              WHERE creator_id = ?1
-             ORDER BY created_at DESC"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+             ORDER BY created_at DESC",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stmt.query_map(rusqlite::params![creator_id], Self::row_to_published_workflow)
+        let workflows = stmt
+            .query_map(
+                rusqlite::params![creator_id],
+                Self::row_to_published_workflow,
+            )
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect workflows: {}", e))?;
@@ -222,11 +262,19 @@ impl WorkflowMarketplace {
     }
 
     /// Get workflows by category
-    pub fn get_workflows_by_category(&self, category: WorkflowCategory, limit: usize) -> Result<Vec<PublishedWorkflow>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+    pub fn get_workflows_by_category(
+        &self,
+        category: WorkflowCategory,
+        limit: usize,
+    ) -> Result<Vec<PublishedWorkflow>, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, title, description, category, creator_id, creator_name,
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, title, description, category, creator_id, creator_name,
                     workflow_definition, thumbnail_url, share_url, clone_count,
                     view_count, favorite_count, avg_rating, rating_count,
                     tags, estimated_time_saved, estimated_cost_saved,
@@ -234,10 +282,15 @@ impl WorkflowMarketplace {
              FROM published_workflows
              WHERE category = ?1
              ORDER BY clone_count DESC, avg_rating DESC
-             LIMIT ?2"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+             LIMIT ?2",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stmt.query_map(rusqlite::params![category.to_string(), limit as i64], Self::row_to_published_workflow)
+        let workflows = stmt
+            .query_map(
+                rusqlite::params![category.to_string(), limit as i64],
+                Self::row_to_published_workflow,
+            )
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect workflows: {}", e))?;
@@ -247,17 +300,23 @@ impl WorkflowMarketplace {
 
     /// Get category counts for navigation
     pub fn get_category_counts(&self) -> Result<Vec<(WorkflowCategory, u64)>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT category, COUNT(*) as count FROM published_workflows GROUP BY category"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT category, COUNT(*) as count FROM published_workflows GROUP BY category",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let counts = stmt.query_map([], |row| {
-            let category_str: String = row.get(0)?;
-            let count: i64 = row.get(1)?;
-            Ok((WorkflowCategory::from_str(&category_str), count as u64))
-        })
+        let counts = stmt
+            .query_map([], |row| {
+                let category_str: String = row.get(0)?;
+                let count: i64 = row.get(1)?;
+                Ok((WorkflowCategory::from_str(&category_str), count as u64))
+            })
             .map_err(|e| format!("Failed to query counts: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Failed to collect counts: {}", e))?;
@@ -267,19 +326,24 @@ impl WorkflowMarketplace {
 
     /// Get popular tags
     pub fn get_popular_tags(&self, limit: usize) -> Result<Vec<(String, u64)>, String> {
-        let conn = self.db.lock().map_err(|e| format!("Failed to lock database: {}", e))?;
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         // This is a simplified approach - in production, you'd want a separate tags table
-        let mut stmt = conn.prepare(
-            "SELECT tags FROM published_workflows"
-        ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        let mut stmt = conn
+            .prepare("SELECT tags FROM published_workflows")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let mut tag_counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+        let mut tag_counts: std::collections::HashMap<String, u64> =
+            std::collections::HashMap::new();
 
-        let rows = stmt.query_map([], |row| {
-            let tags_json: String = row.get(0)?;
-            Ok(tags_json)
-        })
+        let rows = stmt
+            .query_map([], |row| {
+                let tags_json: String = row.get(0)?;
+                Ok(tags_json)
+            })
             .map_err(|e| format!("Failed to query tags: {}", e))?;
 
         for row_result in rows {
@@ -338,7 +402,10 @@ mod tests {
     #[test]
     fn test_sort_option_display() {
         assert_eq!(SortOption::MostCloned.to_string(), "clone_count DESC");
-        assert_eq!(SortOption::HighestRated.to_string(), "avg_rating DESC, rating_count DESC");
+        assert_eq!(
+            SortOption::HighestRated.to_string(),
+            "avg_rating DESC, rating_count DESC"
+        );
     }
 
     #[test]

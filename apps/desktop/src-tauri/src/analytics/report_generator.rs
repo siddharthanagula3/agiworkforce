@@ -1,4 +1,4 @@
-use crate::analytics::{ProcessMetrics, ROIReport, TrendPoint, UserMetrics, ToolMetrics};
+use crate::analytics::{ProcessMetrics, ROIReport, ToolMetrics, TrendPoint, UserMetrics};
 use serde_json;
 use std::collections::HashMap;
 
@@ -96,8 +96,11 @@ impl ReportGenerator {
             return "No process data available.".to_string();
         }
 
-        let mut result = String::from("| Process Type | Executions | Success Rate | Time Saved | Cost Savings |\n");
-        result.push_str("|--------------|------------|--------------|------------|-------------|\n");
+        let mut result = String::from(
+            "| Process Type | Executions | Success Rate | Time Saved | Cost Savings |\n",
+        );
+        result
+            .push_str("|--------------|------------|--------------|------------|-------------|\n");
 
         for (i, metric) in metrics.iter().take(5).enumerate() {
             result.push_str(&format!(
@@ -118,7 +121,7 @@ impl ReportGenerator {
     pub fn generate_csv_export(&self, metrics: &[ProcessMetrics]) -> String {
         let mut csv = String::from(
             "Process Type,Execution Count,Success Count,Failure Count,Success Rate %,\
-             Avg Duration (s),Total Duration (s),Time Saved (h),Cost Savings ($),Error Rate %\n"
+             Avg Duration (s),Total Duration (s),Time Saved (h),Cost Savings ($),Error Rate %\n",
         );
 
         for metric in metrics {
@@ -144,7 +147,7 @@ impl ReportGenerator {
     pub fn generate_user_csv(&self, users: &[UserMetrics]) -> String {
         let mut csv = String::from(
             "User ID,Automation Count,Goal Count,Time Saved (h),Cost Savings ($),\
-             Most Used Tool,Most Used Process,Avg Success Rate %\n"
+             Most Used Tool,Most Used Process,Avg Success Rate %\n",
         );
 
         for user in users {
@@ -168,7 +171,7 @@ impl ReportGenerator {
     pub fn generate_tool_csv(&self, tools: &[ToolMetrics]) -> String {
         let mut csv = String::from(
             "Tool Name,Usage Count,Success Count,Failure Count,Success Rate %,\
-             Avg Execution Time (ms),Time Saved (h)\n"
+             Avg Execution Time (ms),Time Saved (h)\n",
         );
 
         for tool in tools {
@@ -200,7 +203,10 @@ impl ReportGenerator {
         data.insert("process_metrics", serde_json::to_value(process_metrics)?);
         data.insert("user_metrics", serde_json::to_value(user_metrics)?);
         data.insert("tool_metrics", serde_json::to_value(tool_metrics)?);
-        data.insert("generated_at", serde_json::to_value(chrono::Utc::now().to_rfc3339())?);
+        data.insert(
+            "generated_at",
+            serde_json::to_value(chrono::Utc::now().to_rfc3339())?,
+        );
 
         serde_json::to_string_pretty(&data)
     }
@@ -228,7 +234,13 @@ impl ReportGenerator {
 
             report.push_str(&format!(
                 "\n**Trend Direction**: {} ({:+.2}%)\n",
-                if change > 0.0 { "↑ Increasing" } else if change < 0.0 { "↓ Decreasing" } else { "→ Stable" },
+                if change > 0.0 {
+                    "↑ Increasing"
+                } else if change < 0.0 {
+                    "↓ Decreasing"
+                } else {
+                    "→ Stable"
+                },
                 change_percent
             ));
         }
@@ -263,7 +275,11 @@ impl ReportGenerator {
             process.total_duration_seconds,
             process.time_saved_hours,
             process.cost_savings_usd,
-            if process.execution_count > 0 { process.cost_savings_usd / process.execution_count as f64 } else { 0.0 },
+            if process.execution_count > 0 {
+                process.cost_savings_usd / process.execution_count as f64
+            } else {
+                0.0
+            },
             process.success_count,
             process.failure_count,
             process.success_rate
@@ -290,12 +306,14 @@ impl ReportGenerator {
         let time_saved_change = period2_roi.time_saved_hours - period1_roi.time_saved_hours;
         let cost_change = period2_roi.cost_savings_usd - period1_roi.cost_savings_usd;
         let success_rate1 = if period1_roi.total_automations > 0 {
-            (period1_roi.successful_executions as f64 / period1_roi.total_automations as f64) * 100.0
+            (period1_roi.successful_executions as f64 / period1_roi.total_automations as f64)
+                * 100.0
         } else {
             0.0
         };
         let success_rate2 = if period2_roi.total_automations > 0 {
-            (period2_roi.successful_executions as f64 / period2_roi.total_automations as f64) * 100.0
+            (period2_roi.successful_executions as f64 / period2_roi.total_automations as f64)
+                * 100.0
         } else {
             0.0
         };
@@ -318,25 +336,45 @@ impl ReportGenerator {
              - {}: {} executions\n\
              - {}: {} executions\n\
              - **Change**: {:+} executions ({:+.1}%)\n",
-            period1_name, period2_name,
-            period1_name, period1_roi.time_saved_hours,
-            period2_name, period2_roi.time_saved_hours,
+            period1_name,
+            period2_name,
+            period1_name,
+            period1_roi.time_saved_hours,
+            period2_name,
+            period2_roi.time_saved_hours,
             time_saved_change,
-            if period1_roi.time_saved_hours > 0.0 { (time_saved_change / period1_roi.time_saved_hours) * 100.0 } else { 0.0 },
-            period1_name, period1_roi.cost_savings_usd,
-            period2_name, period2_roi.cost_savings_usd,
+            if period1_roi.time_saved_hours > 0.0 {
+                (time_saved_change / period1_roi.time_saved_hours) * 100.0
+            } else {
+                0.0
+            },
+            period1_name,
+            period1_roi.cost_savings_usd,
+            period2_name,
+            period2_roi.cost_savings_usd,
             cost_change,
-            if period1_roi.cost_savings_usd > 0.0 { (cost_change / period1_roi.cost_savings_usd) * 100.0 } else { 0.0 },
-            period1_name, success_rate1,
-            period2_name, success_rate2,
+            if period1_roi.cost_savings_usd > 0.0 {
+                (cost_change / period1_roi.cost_savings_usd) * 100.0
+            } else {
+                0.0
+            },
+            period1_name,
+            success_rate1,
+            period2_name,
+            success_rate2,
             success_rate2 - success_rate1,
-            period1_name, period1_roi.total_automations,
-            period2_name, period2_roi.total_automations,
+            period1_name,
+            period1_roi.total_automations,
+            period2_name,
+            period2_roi.total_automations,
             period2_roi.total_automations as i64 - period1_roi.total_automations as i64,
             if period1_roi.total_automations > 0 {
                 ((period2_roi.total_automations as f64 - period1_roi.total_automations as f64)
-                    / period1_roi.total_automations as f64) * 100.0
-            } else { 0.0 }
+                    / period1_roi.total_automations as f64)
+                    * 100.0
+            } else {
+                0.0
+            }
         )
     }
 }
@@ -360,20 +398,18 @@ mod tests {
     #[test]
     fn test_csv_generation() {
         let generator = ReportGenerator::new();
-        let metrics = vec![
-            ProcessMetrics {
-                process_type: "browser_automation".to_string(),
-                execution_count: 100,
-                success_count: 95,
-                failure_count: 5,
-                success_rate: 95.0,
-                avg_duration_seconds: 2.5,
-                total_duration_seconds: 250.0,
-                time_saved_hours: 10.0,
-                cost_savings_usd: 500.0,
-                error_rate: 5.0,
-            },
-        ];
+        let metrics = vec![ProcessMetrics {
+            process_type: "browser_automation".to_string(),
+            execution_count: 100,
+            success_count: 95,
+            failure_count: 5,
+            success_rate: 95.0,
+            avg_duration_seconds: 2.5,
+            total_duration_seconds: 250.0,
+            time_saved_hours: 10.0,
+            cost_savings_usd: 500.0,
+            error_rate: 5.0,
+        }];
 
         let csv = generator.generate_csv_export(&metrics);
         assert!(csv.contains("browser_automation"));

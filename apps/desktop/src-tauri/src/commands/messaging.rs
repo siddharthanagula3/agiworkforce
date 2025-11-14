@@ -162,8 +162,8 @@ pub async fn connect_teams(
         client_secret: request.client_secret.clone(),
     };
 
-    let mut client = TeamsClient::new(config)
-        .map_err(|e| format!("Failed to create Teams client: {}", e))?;
+    let mut client =
+        TeamsClient::new(config).map_err(|e| format!("Failed to create Teams client: {}", e))?;
 
     // Test authentication
     client
@@ -390,7 +390,8 @@ pub async fn get_messaging_history(
     let messages = stmt
         .query_map(params![connection_id, channel_id, limit], |row| {
             let platform_str: String = row.get(8).unwrap_or_else(|_| String::from("slack"));
-            let platform = MessagingPlatform::from_str(&platform_str).unwrap_or(MessagingPlatform::Slack);
+            let platform =
+                MessagingPlatform::from_str(&platform_str).unwrap_or(MessagingPlatform::Slack);
 
             Ok(UnifiedMessage {
                 id: row.get(0)?,
@@ -452,7 +453,8 @@ pub async fn list_messaging_connections(
     let connections = stmt
         .query_map(params![user_id], |row| {
             let platform_str: String = row.get(2)?;
-            let platform = MessagingPlatform::from_str(&platform_str).unwrap_or(MessagingPlatform::Slack);
+            let platform =
+                MessagingPlatform::from_str(&platform_str).unwrap_or(MessagingPlatform::Slack);
 
             Ok(MessagingConnection {
                 id: row.get(0)?,

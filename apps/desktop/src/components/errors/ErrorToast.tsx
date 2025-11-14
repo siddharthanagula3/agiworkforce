@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle, Info, X, RefreshCw } from 'lucide-react';
 import useErrorStore, { type AppError, type ErrorSeverity } from '../../stores/errorStore';
 import { getErrorMessage } from '../../constants/errorMessages';

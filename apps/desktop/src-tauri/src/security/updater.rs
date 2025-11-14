@@ -77,11 +77,8 @@ impl UpdateSecurityManager {
 
         // Verify signature if public key is available
         if let Some(ref public_key) = self.public_key {
-            let signature_valid = self.verify_signature(
-                &actual_checksum,
-                &metadata.signature,
-                public_key,
-            )?;
+            let signature_valid =
+                self.verify_signature(&actual_checksum, &metadata.signature, public_key)?;
 
             if !signature_valid {
                 return Ok(VerificationResult {
@@ -98,8 +95,7 @@ impl UpdateSecurityManager {
 
     /// Compute SHA-256 checksum of a file
     pub fn compute_file_checksum(&self, file_path: &str) -> Result<String, String> {
-        let data = fs::read(file_path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
+        let data = fs::read(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
         let mut hasher = Sha256::new();
         hasher.update(&data);
@@ -143,16 +139,11 @@ impl UpdateSecurityManager {
         }
 
         // Additional validation: check domain whitelist
-        let allowed_domains = vec![
-            "releases.agiworkforce.com",
-            "github.com",
-        ];
+        let allowed_domains = vec!["releases.agiworkforce.com", "github.com"];
 
-        let url_parsed = url::Url::parse(url)
-            .map_err(|e| format!("Invalid URL: {}", e))?;
+        let url_parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
 
-        let domain = url_parsed.host_str()
-            .ok_or("URL has no host")?;
+        let domain = url_parsed.host_str().ok_or("URL has no host")?;
 
         if !allowed_domains.iter().any(|d| domain.ends_with(d)) {
             return Err(format!(
@@ -175,11 +166,7 @@ impl UpdateSecurityManager {
         }
 
         // Copy important files (simplified - should include all app files)
-        let important_files = vec![
-            "agiworkforce.db",
-            "config.toml",
-            "settings.json",
-        ];
+        let important_files = vec!["agiworkforce.db", "config.toml", "settings.json"];
 
         for file in important_files {
             let source = Path::new(source_dir).join(file);
@@ -249,7 +236,10 @@ pub async fn download_update(
         .map_err(|e| format!("Failed to download update: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let total_size = response.content_length().unwrap_or(0);

@@ -35,10 +35,7 @@ pub struct WebhookEvent {
 impl WebhookHandler {
     /// Create a new webhook handler
     pub fn new(webhook_secret: String, db: Arc<Mutex<Connection>>) -> Self {
-        Self {
-            webhook_secret,
-            db,
-        }
+        Self { webhook_secret, db }
     }
 
     /// Verify webhook signature
@@ -332,7 +329,11 @@ impl WebhookHandler {
             // Get customer DB ID
             let customer_db_id: Result<String, rusqlite::Error> = db.query_row(
                 "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
-                rusqlite::params![invoice.customer.as_ref().map(|c| c.to_string()).unwrap_or_default()],
+                rusqlite::params![invoice
+                    .customer
+                    .as_ref()
+                    .map(|c| c.to_string())
+                    .unwrap_or_default()],
                 |row| row.get(0),
             );
 

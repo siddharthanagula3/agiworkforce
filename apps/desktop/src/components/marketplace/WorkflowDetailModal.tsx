@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState} from 'react';
 import { X, Copy, Share2, Star, Eye, Clock, DollarSign, Calendar, ThumbsUp } from 'lucide-react';
 import {
   Dialog,
@@ -277,7 +277,7 @@ export function WorkflowDetailModal() {
                             </div>
                             <div className="flex-1">
                               <h4 className="font-semibold mb-1">
-                                {'data' in node ? node.data.label : node.type}
+                                {node.data?.label || node.type}
                               </h4>
                               <p className="text-sm text-muted-foreground">
                                 Type: <Badge variant="secondary">{node.type}</Badge>

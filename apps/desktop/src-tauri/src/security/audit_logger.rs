@@ -117,7 +117,9 @@ impl AuditLogger {
 
     /// Log an audit event
     pub fn log(&self, event: AuditEvent) -> Result<()> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         // Serialize event data for signing
@@ -154,7 +156,9 @@ impl AuditLogger {
                 event.resource_id,
                 event.action,
                 event.status.as_str(),
-                event.metadata.map(|m| serde_json::to_string(&m).unwrap_or_default()),
+                event
+                    .metadata
+                    .map(|m| serde_json::to_string(&m).unwrap_or_default()),
                 signature,
             ],
         )?;
@@ -164,7 +168,9 @@ impl AuditLogger {
 
     /// Verify an audit event's integrity
     pub fn verify_event(&self, event_id: &str) -> Result<bool> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let (
@@ -236,8 +242,8 @@ impl AuditLogger {
 
     /// Generate HMAC-SHA256 signature
     fn generate_signature(&self, data: &str) -> String {
-        let mut mac = HmacSha256::new_from_slice(&self.hmac_key)
-            .expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(&self.hmac_key).expect("HMAC can take key of any size");
         mac.update(data.as_bytes());
         let result = mac.finalize();
         hex::encode(result.into_bytes())
@@ -245,13 +251,15 @@ impl AuditLogger {
 
     /// Get audit events with filtering
     pub fn get_events(&self, filters: AuditFilters) -> Result<Vec<AuditEvent>> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let mut query = String::from(
             "SELECT id, timestamp, user_id, team_id, event_type,
                     resource_type, resource_id, action, status, metadata
-             FROM audit_events WHERE 1=1"
+             FROM audit_events WHERE 1=1",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -295,38 +303,40 @@ impl AuditLogger {
         let mut stmt = conn.prepare(&query)?;
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let events = stmt.query_map(param_refs.as_slice(), |row| {
-            let metadata_str: Option<String> = row.get(9)?;
-            let metadata = metadata_str
-                .and_then(|s| serde_json::from_str(&s).ok());
+        let events = stmt
+            .query_map(param_refs.as_slice(), |row| {
+                let metadata_str: Option<String> = row.get(9)?;
+                let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
 
-            Ok(AuditEvent {
-                id: row.get(0)?,
-                timestamp: row.get(1)?,
-                user_id: row.get(2)?,
-                team_id: row.get(3)?,
-                event_type: AuditEventType::Other(row.get(4)?),
-                resource_type: row.get(5)?,
-                resource_id: row.get(6)?,
-                action: row.get(7)?,
-                status: match row.get::<_, String>(8)?.as_str() {
-                    "success" => AuditStatus::Success,
-                    "failure" => AuditStatus::Failure,
-                    "blocked" => AuditStatus::Blocked,
-                    "pending" => AuditStatus::Pending,
-                    _ => AuditStatus::Pending,
-                },
-                metadata,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(AuditEvent {
+                    id: row.get(0)?,
+                    timestamp: row.get(1)?,
+                    user_id: row.get(2)?,
+                    team_id: row.get(3)?,
+                    event_type: AuditEventType::Other(row.get(4)?),
+                    resource_type: row.get(5)?,
+                    resource_id: row.get(6)?,
+                    action: row.get(7)?,
+                    status: match row.get::<_, String>(8)?.as_str() {
+                        "success" => AuditStatus::Success,
+                        "failure" => AuditStatus::Failure,
+                        "blocked" => AuditStatus::Blocked,
+                        "pending" => AuditStatus::Pending,
+                        _ => AuditStatus::Pending,
+                    },
+                    metadata,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(events)
     }
 
     /// Verify integrity of all audit events (for compliance audits)
     pub fn verify_all_events(&self) -> Result<AuditIntegrityReport> {
-        let conn = self.db.lock()
+        let conn = self
+            .db
+            .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
         let mut stmt = conn.prepare("SELECT id FROM audit_events")?;
@@ -496,10 +506,12 @@ mod tests {
         assert_eq!(events.len(), 5);
 
         // Filter by status
-        let events = logger.get_events(AuditFilters {
-            status: Some("success".to_string()),
-            ..Default::default()
-        }).unwrap();
+        let events = logger
+            .get_events(AuditFilters {
+                status: Some("success".to_string()),
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(events.len(), 3);
     }
 
