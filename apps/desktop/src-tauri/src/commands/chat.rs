@@ -678,6 +678,8 @@ pub async fn chat_send_message(
             candidate.provider,
             &candidate.model,
             &llm_request.messages,
+            llm_request.temperature,
+            llm_request.max_tokens,
         );
 
         if let Some(entry) = {
@@ -734,6 +736,8 @@ pub async fn chat_send_message(
                                 response: &route_outcome.response.content,
                                 tokens: route_outcome.response.tokens,
                                 cost: route_outcome.response.cost,
+                                temperature: llm_request.temperature,
+                                max_tokens: llm_request.max_tokens,
                                 expires_at,
                             },
                         )
