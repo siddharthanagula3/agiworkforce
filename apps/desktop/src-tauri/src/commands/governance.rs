@@ -1,9 +1,10 @@
 use crate::db::Database;
 use crate::error::Result;
+use crate::security::audit_logger::AuditFilters;
 use crate::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
     ApprovalRequest, ApprovalStatistics, ApprovalStatus, ApprovalWorkflow, AuditEvent,
-    AuditEventType, AuditFilters, AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
+    AuditEventType, AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,7 @@ pub async fn get_audit_events(
     filters: AuditFilters,
     db: State<'_, Database>,
 ) -> Result<Vec<AuditEvent>> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let logger = EnhancedAuditLogger::new(conn)?;
 
     logger.get_events(filters)
@@ -26,7 +27,7 @@ pub async fn get_audit_events(
 /// Verify audit event integrity
 #[tauri::command]
 pub async fn verify_audit_event(event_id: String, db: State<'_, Database>) -> Result<bool> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let logger = EnhancedAuditLogger::new(conn)?;
 
     logger.verify_event(&event_id)
@@ -35,7 +36,7 @@ pub async fn verify_audit_event(event_id: String, db: State<'_, Database>) -> Re
 /// Verify all audit events integrity (for compliance audits)
 #[tauri::command]
 pub async fn verify_audit_integrity(db: State<'_, Database>) -> Result<AuditIntegrityReport> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let logger = EnhancedAuditLogger::new(conn)?;
 
     logger.verify_all_events()
@@ -51,7 +52,7 @@ pub async fn log_tool_execution(
     metadata: Option<serde_json::Value>,
     db: State<'_, Database>,
 ) -> Result<()> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let logger = EnhancedAuditLogger::new(conn)?;
 
     let event = create_tool_execution_event(user_id, team_id, tool_name, success, metadata);
@@ -69,7 +70,7 @@ pub async fn log_workflow_execution(
     metadata: Option<serde_json::Value>,
     db: State<'_, Database>,
 ) -> Result<()> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let logger = EnhancedAuditLogger::new(conn)?;
 
     let audit_status = match status.as_str() {
@@ -97,7 +98,7 @@ pub async fn create_approval_request(
     timeout_minutes: i64,
     db: State<'_, Database>,
 ) -> Result<String> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     let risk = match risk_level.as_str() {
@@ -124,7 +125,7 @@ pub async fn get_pending_approvals(
     team_id: Option<String>,
     db: State<'_, Database>,
 ) -> Result<Vec<ApprovalRequest>> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.get_pending_approvals(team_id)
@@ -136,7 +137,7 @@ pub async fn get_approval_request(
     request_id: String,
     db: State<'_, Database>,
 ) -> Result<ApprovalRequest> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.get_request(&request_id)
@@ -150,7 +151,7 @@ pub async fn approve_request(
     reason: Option<String>,
     db: State<'_, Database>,
 ) -> Result<()> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     let decision = ApprovalDecision::Approved { reason };
@@ -166,7 +167,7 @@ pub async fn reject_request(
     reason: String,
     db: State<'_, Database>,
 ) -> Result<()> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     let decision = ApprovalDecision::Rejected { reason };
@@ -177,7 +178,7 @@ pub async fn reject_request(
 /// Check if action requires approval
 #[tauri::command]
 pub async fn requires_approval(action: ApprovalAction, db: State<'_, Database>) -> Result<bool> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     Ok(workflow.requires_approval(&action))
@@ -189,7 +190,7 @@ pub async fn calculate_risk_level(
     action: ApprovalAction,
     db: State<'_, Database>,
 ) -> Result<String> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     let risk = workflow.calculate_risk_level(&action);
@@ -203,7 +204,7 @@ pub async fn get_approval_statistics(
     team_id: Option<String>,
     db: State<'_, Database>,
 ) -> Result<ApprovalStatistics> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.get_statistics(team_id)
@@ -212,7 +213,7 @@ pub async fn get_approval_statistics(
 /// Expire timed-out approval requests
 #[tauri::command]
 pub async fn expire_timed_out_requests(db: State<'_, Database>) -> Result<usize> {
-    let conn = Arc::new(std::sync::Mutex::new(db.conn()?));
+    let conn = db.get_connection();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.expire_timed_out_requests()

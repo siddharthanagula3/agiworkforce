@@ -36,13 +36,20 @@ impl ResourceManager {
     /// Get current resource state
     pub async fn get_state(&self) -> Result<ResourceState> {
         self.update_usage().await?;
-        Ok(self.current_usage.lock().unwrap().clone())
+        let usage = self
+            .current_usage
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
+        Ok(usage.clone())
     }
 
     /// Check if resources are available
     pub async fn check_availability(&self) -> Result<bool> {
         self.update_usage().await?;
-        let usage = self.current_usage.lock().unwrap();
+        let usage = self
+            .current_usage
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
 
         Ok(usage.cpu_usage_percent < self.limits.cpu_percent
             && usage.memory_usage_mb < self.limits.memory_mb
@@ -52,7 +59,10 @@ impl ResourceManager {
 
     /// Reserve resources for a task
     pub async fn reserve_resources(&self, resources: &ResourceUsage) -> Result<bool> {
-        let mut usage = self.current_usage.lock().unwrap();
+        let mut usage = self
+            .current_usage
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
         self.update_usage_internal(&mut usage)?;
 
         // Check if we can reserve
@@ -72,7 +82,10 @@ impl ResourceManager {
 
     /// Release reserved resources
     pub async fn release_resources(&self, resources: &ResourceUsage) -> Result<()> {
-        let mut usage = self.current_usage.lock().unwrap();
+        let mut usage = self
+            .current_usage
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
         usage.cpu_usage_percent = (usage.cpu_usage_percent - resources.cpu_percent).max(0.0);
         usage.memory_usage_mb = usage.memory_usage_mb.saturating_sub(resources.memory_mb);
         usage.network_usage_mbps = (usage.network_usage_mbps - resources.network_mb).max(0.0);
@@ -81,18 +94,27 @@ impl ResourceManager {
 
     /// Update resource usage (called periodically)
     async fn update_usage(&self) -> Result<()> {
-        let mut usage = self.current_usage.lock().unwrap();
+        let mut usage = self
+            .current_usage
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
         self.update_usage_internal(&mut usage)
     }
 
     fn update_usage_internal(&self, usage: &mut ResourceState) -> Result<()> {
-        let mut system = self.system.lock().unwrap();
+        let mut system = self
+            .system
+            .lock()
+            .map_err(|e| anyhow::anyhow!("System monitor lock poisoned: {}", e))?;
         system.refresh_cpu();
         system.refresh_memory();
 
         // Update CPU usage using sysinfo
         let cpu_usage = system.global_cpu_info().cpu_usage() as f64;
-        let reservations = self.reservations.lock().unwrap();
+        let reservations = self
+            .reservations
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Resource reservations lock poisoned: {}", e))?;
         let reserved_cpu: f64 = reservations.values().map(|r| r.cpu_percent).sum();
         usage.cpu_usage_percent = cpu_usage + reserved_cpu;
 

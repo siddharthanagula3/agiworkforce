@@ -177,11 +177,10 @@ pub async fn automation_load_script(
 ) -> Result<AutomationScript, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
-    let script_json = repository::get_setting(&conn, &format!("automation_script_{}", script_id))
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Script not found".to_string())?;
+    let setting = repository::get_setting(&conn, &format!("automation_script_{}", script_id))
+        .map_err(|e| e.to_string())?;
 
-    serde_json::from_str(&script_json).map_err(|e| e.to_string())
+    serde_json::from_str(&setting.value).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -194,9 +193,9 @@ pub async fn automation_list_scripts(
     let settings = repository::list_settings(&conn).map_err(|e| e.to_string())?;
 
     let mut scripts = Vec::new();
-    for (key, value) in settings {
-        if key.starts_with("automation_script_") {
-            if let Ok(script) = serde_json::from_str::<AutomationScript>(&value) {
+    for setting in settings {
+        if setting.key.starts_with("automation_script_") {
+            if let Ok(script) = serde_json::from_str::<AutomationScript>(&setting.value) {
                 scripts.push(script);
             }
         }

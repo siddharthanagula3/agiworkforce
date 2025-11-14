@@ -3,11 +3,14 @@
  * OpenAI-compatible API at https://api.x.ai/v1
  * With full function calling support
  */
+use crate::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::router::{LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition};
 use async_trait::async_trait;
+use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::pin::Pin;
 
 const XAI_API_BASE: &str = "https://api.x.ai/v1";
 
@@ -284,5 +287,114 @@ impl LLMProvider for XAIProvider {
 
     fn name(&self) -> &str {
         "xai"
+    }
+
+    fn supports_vision(&self) -> bool {
+        true // Grok models support vision
+    }
+
+    fn supports_function_calling(&self) -> bool {
+        true // XAI supports function calling
+    }
+
+    async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        let api_key = self.get_api_key()?;
+
+        let messages: Vec<XAIMessage> = request
+            .messages
+            .iter()
+            .map(|m| {
+                let mut msg = XAIMessage {
+                    role: m.role.clone(),
+                    content: if m.content.is_empty() {
+                        None
+                    } else {
+                        Some(m.content.clone())
+                    },
+                    tool_calls: None,
+                    tool_call_id: m.tool_call_id.clone(),
+                    name: None,
+                };
+
+                // Convert tool calls if present
+                if let Some(calls) = &m.tool_calls {
+                    msg.tool_calls = Some(
+                        calls
+                            .iter()
+                            .map(|call| XAIToolCall {
+                                id: call.id.clone(),
+                                call_type: "function".to_string(),
+                                function: XAIFunctionCall {
+                                    name: call.name.clone(),
+                                    arguments: call.arguments.clone(),
+                                },
+                            })
+                            .collect(),
+                    );
+                }
+
+                // If role is "tool", set name field
+                if m.role == "tool" {
+                    msg.name = Some(
+                        m.tool_calls
+                            .as_ref()
+                            .and_then(|calls| calls.first())
+                            .map(|call| call.name.clone())
+                            .unwrap_or_default(),
+                    );
+                }
+
+                msg
+            })
+            .collect();
+
+        let xai_request = XAIRequest {
+            model: request.model.clone(),
+            messages,
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .and_then(Self::convert_tool_choice),
+            stream: true,
+        };
+
+        tracing::debug!(
+            "Starting XAI streaming request for model: {}",
+            request.model
+        );
+
+        let response = self
+            .client
+            .post(format!("{}/chat/completions", XAI_API_BASE))
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&xai_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("XAI API error {}: {}", status, error_text).into());
+        }
+
+        tracing::debug!("XAI streaming response received, starting SSE parsing");
+
+        Ok(Box::pin(parse_sse_stream(
+            response,
+            crate::router::Provider::XAI,
+        )))
     }
 }

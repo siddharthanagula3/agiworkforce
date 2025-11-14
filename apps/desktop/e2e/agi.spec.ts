@@ -1,8 +1,15 @@
 import { test, expect } from '@playwright/test';
+import { SettingsSnapshot } from './page-objects/SettingsPage';
+import { createErrorHandler } from './utils/error-handler';
 
 /**
  * End-to-end tests for AGI functionality
  * Tests goal submission, planning, execution, and progress tracking
+ *
+ * Test Isolation Strategy:
+ * - AGI settings are captured and restored for each test
+ * - Resource limits, autonomous mode, and auto-approval settings are reset
+ * - Prevents test state from affecting subsequent tests
  */
 
 test.describe('AGI Goal Management', () => {
@@ -10,8 +17,9 @@ test.describe('AGI Goal Management', () => {
     await page.goto('http://localhost:1420');
     await page.waitForLoadState('networkidle');
 
-    // Navigate to AGI page if not already there
-    const agiLink = page.locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")').first();
+    const agiLink = page
+      .locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")')
+      .first();
     if (await agiLink.isVisible()) {
       await agiLink.click();
       await page.waitForLoadState('networkidle');
@@ -19,22 +27,22 @@ test.describe('AGI Goal Management', () => {
   });
 
   test('should submit a new goal', async ({ page }) => {
-    const goalInput = page.locator('textarea[placeholder*="goal"], [data-testid="goal-input"]').first();
-    const submitButton = page.locator('button:has-text("Submit"), [data-testid="submit-goal"]').first();
+    const goalInput = page
+      .locator('textarea[placeholder*="goal"], [data-testid="goal-input"]')
+      .first();
+    const submitButton = page
+      .locator('button:has-text("Submit"), [data-testid="submit-goal"]')
+      .first();
 
-    if (await goalInput.isVisible() && await submitButton.isVisible()) {
-      // Enter a goal
+    if ((await goalInput.isVisible()) && (await submitButton.isVisible())) {
       await goalInput.fill('Create a simple React component with a button that counts clicks');
 
-      // Submit the goal
       await submitButton.click();
 
-      // Verify goal appears in the list
       await page.waitForTimeout(1000);
       const goalsList = page.locator('[data-testid="goals-list"], .goals-list').first();
       await expect(goalsList).toBeVisible();
 
-      // Verify the goal is listed
       const goalItem = page.locator('[data-testid="goal-item"]').last();
       await expect(goalItem).toContainText('React component');
     }
@@ -44,11 +52,9 @@ test.describe('AGI Goal Management', () => {
     const goalItem = page.locator('[data-testid="goal-item"]').first();
 
     if (await goalItem.isVisible()) {
-      // Verify status badge is visible
       const statusBadge = goalItem.locator('[data-testid="goal-status"], .status-badge').first();
       await expect(statusBadge).toBeVisible();
 
-      // Verify status is one of: Pending, InProgress, Completed, Failed, Cancelled
       const statusText = await statusBadge.textContent();
       expect(statusText).toMatch(/pending|in progress|completed|failed|cancelled/i);
     }
@@ -60,11 +66,9 @@ test.describe('AGI Goal Management', () => {
     if (await goalItem.isVisible()) {
       await goalItem.click();
 
-      // Verify details panel appears
       const detailsPanel = page.locator('[data-testid="goal-details"], .goal-details').first();
       await expect(detailsPanel).toBeVisible();
 
-      // Verify details include description, status, steps
       await expect(detailsPanel).toContainText(/description|status|steps/i);
     }
   });
@@ -75,11 +79,9 @@ test.describe('AGI Goal Management', () => {
     if (await goalItem.isVisible()) {
       await goalItem.click();
 
-      // Find steps list
       const stepsList = page.locator('[data-testid="steps-list"], .steps-list').first();
 
       if (await stepsList.isVisible()) {
-        // Verify steps are displayed
         const stepItems = stepsList.locator('li, [data-testid="step-item"]');
         const count = await stepItems.count();
         expect(count).toBeGreaterThanOrEqual(0);
@@ -91,11 +93,9 @@ test.describe('AGI Goal Management', () => {
     const stepItem = page.locator('[data-testid="step-item"]').first();
 
     if (await stepItem.isVisible()) {
-      // Verify step has a status
       const stepStatus = stepItem.locator('[data-testid="step-status"], .step-status').first();
       await expect(stepStatus).toBeVisible();
 
-      // Verify status is valid
       const statusText = await stepStatus.textContent();
       expect(statusText).toMatch(/pending|in progress|completed|failed/i);
     }
@@ -105,11 +105,9 @@ test.describe('AGI Goal Management', () => {
     const goalItem = page.locator('[data-testid="goal-item"]').first();
 
     if (await goalItem.isVisible()) {
-      // Find progress indicator
       const progressBar = goalItem.locator('[role="progressbar"], .progress-bar').first();
 
       if (await progressBar.isVisible()) {
-        // Verify progress has a value
         const ariaValue = await progressBar.getAttribute('aria-valuenow');
         expect(ariaValue).toBeTruthy();
       }
@@ -117,22 +115,22 @@ test.describe('AGI Goal Management', () => {
   });
 
   test('should cancel a goal', async ({ page }) => {
+    const errorHandler = createErrorHandler(page);
     const goalItem = page.locator('[data-testid="goal-item"][data-status="Pending"]').first();
 
     if (await goalItem.isVisible()) {
-      // Find cancel button
-      const cancelButton = goalItem.locator('button[aria-label*="Cancel"], [data-testid="cancel-goal"]').first();
+      const cancelButton = goalItem
+        .locator('button[aria-label*="Cancel"], [data-testid="cancel-goal"]')
+        .first();
 
       if (await cancelButton.isVisible()) {
         await cancelButton.click();
 
-        // Confirm if modal appears
-        const confirmButton = page.locator('button:has-text("Cancel Goal"), button:has-text("Confirm")').first();
-        if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await confirmButton.click();
-        }
+        const confirmButton = page
+          .locator('button:has-text("Cancel Goal"), button:has-text("Confirm")')
+          .first();
+        await errorHandler.handleOptionalDialog(confirmButton, 1000);
 
-        // Verify goal status changed to Cancelled
         await page.waitForTimeout(1000);
         const status = goalItem.locator('[data-testid="goal-status"]').first();
         await expect(status).toContainText('Cancelled');
@@ -141,25 +139,24 @@ test.describe('AGI Goal Management', () => {
   });
 
   test('should delete a completed goal', async ({ page }) => {
+    const errorHandler = createErrorHandler(page);
     const goalItem = page.locator('[data-testid="goal-item"][data-status="Completed"]').first();
 
     if (await goalItem.isVisible()) {
-      // Get initial count
       const initialCount = await page.locator('[data-testid="goal-item"]').count();
 
-      // Find delete button
-      const deleteButton = goalItem.locator('button[aria-label*="Delete"], [data-testid="delete-goal"]').first();
+      const deleteButton = goalItem
+        .locator('button[aria-label*="Delete"], [data-testid="delete-goal"]')
+        .first();
 
       if (await deleteButton.isVisible()) {
         await deleteButton.click();
 
-        // Confirm deletion
-        const confirmButton = page.locator('button:has-text("Delete"), button:has-text("Confirm")').first();
-        if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await confirmButton.click();
-        }
+        const confirmButton = page
+          .locator('button:has-text("Delete"), button:has-text("Confirm")')
+          .first();
+        await errorHandler.handleOptionalDialog(confirmButton, 1000);
 
-        // Verify goal is deleted
         await page.waitForTimeout(1000);
         const newCount = await page.locator('[data-testid="goal-item"]').count();
         expect(newCount).toBeLessThan(initialCount);
@@ -168,19 +165,18 @@ test.describe('AGI Goal Management', () => {
   });
 
   test('should filter goals by status', async ({ page }) => {
-    const statusFilter = page.locator('select[name="status"], [data-testid="status-filter"]').first();
+    const statusFilter = page
+      .locator('select[name="status"], [data-testid="status-filter"]')
+      .first();
 
     if (await statusFilter.isVisible()) {
-      // Filter by Completed
       await statusFilter.selectOption('Completed');
 
       await page.waitForTimeout(500);
 
-      // Verify only completed goals are shown
       const visibleGoals = page.locator('[data-testid="goal-item"]:visible');
       const count = await visibleGoals.count();
 
-      // All visible goals should have Completed status
       for (let i = 0; i < count; i++) {
         const goal = visibleGoals.nth(i);
         const status = await goal.getAttribute('data-status');
@@ -190,18 +186,18 @@ test.describe('AGI Goal Management', () => {
   });
 
   test('should search goals by description', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search"], [data-testid="search-goals"]').first();
+    const searchInput = page
+      .locator('input[placeholder*="Search"], [data-testid="search-goals"]')
+      .first();
 
     if (await searchInput.isVisible()) {
       await searchInput.fill('React');
 
-      await page.waitForTimeout(500); // Wait for debounce
+      await page.waitForTimeout(500);
 
-      // Verify filtered results
       const visibleGoals = page.locator('[data-testid="goal-item"]:visible');
       const count = await visibleGoals.count();
 
-      // Should show only matching goals
       expect(count).toBeGreaterThanOrEqual(0);
     }
   });
@@ -212,8 +208,9 @@ test.describe('AGI Resource Monitoring', () => {
     await page.goto('http://localhost:1420');
     await page.waitForLoadState('networkidle');
 
-    // Navigate to AGI page
-    const agiLink = page.locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")').first();
+    const agiLink = page
+      .locator('a[href*="agi"], button:has-text("AGI"), button:has-text("Goals")')
+      .first();
     if (await agiLink.isVisible()) {
       await agiLink.click();
       await page.waitForLoadState('networkidle');
@@ -221,10 +218,11 @@ test.describe('AGI Resource Monitoring', () => {
   });
 
   test('should display resource usage', async ({ page }) => {
-    const resourcePanel = page.locator('[data-testid="resource-monitor"], .resource-monitor').first();
+    const resourcePanel = page
+      .locator('[data-testid="resource-monitor"], .resource-monitor')
+      .first();
 
     if (await resourcePanel.isVisible()) {
-      // Verify resource metrics are displayed
       await expect(resourcePanel).toContainText(/cpu|memory|network|storage/i);
     }
   });
@@ -248,10 +246,10 @@ test.describe('AGI Resource Monitoring', () => {
   });
 
   test('should warn when resources are high', async ({ page }) => {
+    const errorHandler = createErrorHandler(page);
     const warningIndicator = page.locator('[data-warning="high"], .resource-warning').first();
 
-    // If resources are high, warning should be visible
-    if (await warningIndicator.isVisible({ timeout: 1000 }).catch(() => false)) {
+    if (await errorHandler.isElementVisible(warningIndicator, 1000)) {
       await expect(warningIndicator).toBeVisible();
       await expect(warningIndicator).toContainText(/high|warning|throttle/i);
     }
@@ -263,8 +261,9 @@ test.describe('AGI Knowledge Base', () => {
     await page.goto('http://localhost:1420');
     await page.waitForLoadState('networkidle');
 
-    // Navigate to knowledge base or AGI page
-    const knowledgeLink = page.locator('a[href*="knowledge"], button:has-text("Knowledge")').first();
+    const knowledgeLink = page
+      .locator('a[href*="knowledge"], button:has-text("Knowledge")')
+      .first();
     if (await knowledgeLink.isVisible()) {
       await knowledgeLink.click();
       await page.waitForLoadState('networkidle');
@@ -272,10 +271,11 @@ test.describe('AGI Knowledge Base', () => {
   });
 
   test('should display past experiences', async ({ page }) => {
-    const experiencesList = page.locator('[data-testid="experiences-list"], .experiences-list').first();
+    const experiencesList = page
+      .locator('[data-testid="experiences-list"], .experiences-list')
+      .first();
 
     if (await experiencesList.isVisible()) {
-      // Verify experiences are listed
       const experienceItems = experiencesList.locator('li, [data-testid="experience-item"]');
       const count = await experienceItems.count();
       expect(count).toBeGreaterThanOrEqual(0);
@@ -288,24 +288,25 @@ test.describe('AGI Knowledge Base', () => {
     if (await experienceItem.isVisible()) {
       await experienceItem.click();
 
-      // Verify details appear
-      const detailsPanel = page.locator('[data-testid="experience-details"], .experience-details').first();
+      const detailsPanel = page
+        .locator('[data-testid="experience-details"], .experience-details')
+        .first();
       await expect(detailsPanel).toBeVisible();
 
-      // Verify details include goal, outcome, lessons learned
       await expect(detailsPanel).toContainText(/goal|outcome|lesson/i);
     }
   });
 
   test('should search experiences', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search"], [data-testid="search-experiences"]').first();
+    const searchInput = page
+      .locator('input[placeholder*="Search"], [data-testid="search-experiences"]')
+      .first();
 
     if (await searchInput.isVisible()) {
       await searchInput.fill('component');
 
       await page.waitForTimeout(500);
 
-      // Verify filtered results
       const visibleExperiences = page.locator('[data-testid="experience-item"]:visible');
       const count = await visibleExperiences.count();
       expect(count).toBeGreaterThanOrEqual(0);
@@ -313,14 +314,15 @@ test.describe('AGI Knowledge Base', () => {
   });
 
   test('should filter by outcome', async ({ page }) => {
-    const outcomeFilter = page.locator('select[name="outcome"], [data-testid="outcome-filter"]').first();
+    const outcomeFilter = page
+      .locator('select[name="outcome"], [data-testid="outcome-filter"]')
+      .first();
 
     if (await outcomeFilter.isVisible()) {
       await outcomeFilter.selectOption('Success');
 
       await page.waitForTimeout(500);
 
-      // Verify only successful experiences are shown
       const visibleExperiences = page.locator('[data-testid="experience-item"]:visible');
       const count = await visibleExperiences.count();
       expect(count).toBeGreaterThanOrEqual(0);
@@ -329,15 +331,37 @@ test.describe('AGI Knowledge Base', () => {
 });
 
 test.describe('AGI Settings', () => {
-  test.beforeEach(async ({ page }) => {
+  let settingsSnapshot: SettingsSnapshot;
+
+  test.beforeEach(async ({ page, settingsPage }) => {
     await page.goto('http://localhost:1420');
     await page.waitForLoadState('networkidle');
 
-    // Navigate to settings
-    const settingsLink = page.locator('a[href*="settings"], button[aria-label*="Settings"]').first();
+    const settingsLink = page
+      .locator('a[href*="settings"], button[aria-label*="Settings"]')
+      .first();
     if (await settingsLink.isVisible()) {
       await settingsLink.click();
       await page.waitForLoadState('networkidle');
+    }
+
+    try {
+      settingsSnapshot = await settingsPage.captureCurrentSettings();
+      console.log('AGI settings snapshot captured:', settingsSnapshot);
+    } catch (error) {
+      console.warn('Failed to capture AGI settings:', error);
+      settingsSnapshot = {};
+    }
+  });
+
+  test.afterEach(async ({ settingsPage }) => {
+    try {
+      if (settingsSnapshot && Object.keys(settingsSnapshot).length > 0) {
+        console.log('Restoring AGI settings...');
+        await settingsPage.restoreFromSnapshot(settingsSnapshot);
+      }
+    } catch (error) {
+      console.error('Error during AGI settings cleanup:', error);
     }
   });
 
@@ -348,43 +372,44 @@ test.describe('AGI Settings', () => {
       await cpuLimitInput.clear();
       await cpuLimitInput.fill('70');
 
-      // Save settings
-      const saveButton = page.locator('button:has-text("Save"), [data-testid="save-settings"]').first();
+      const saveButton = page
+        .locator('button:has-text("Save"), [data-testid="save-settings"]')
+        .first();
       await saveButton.click();
 
-      // Verify settings saved
       const successMessage = page.locator('[role="status"], .success-message').first();
       await expect(successMessage).toBeVisible({ timeout: 3000 });
     }
   });
 
   test('should enable/disable autonomous mode', async ({ page }) => {
-    const autonomousToggle = page.locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]').first();
+    const autonomousToggle = page
+      .locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]')
+      .first();
 
     if (await autonomousToggle.isVisible()) {
       const initialState = await autonomousToggle.isChecked();
 
-      // Toggle the setting
       await autonomousToggle.click();
 
-      // Verify state changed
       const newState = await autonomousToggle.isChecked();
       expect(newState).not.toBe(initialState);
     }
   });
 
   test('should configure auto-approval settings', async ({ page }) => {
-    const autoApprovalCheckbox = page.locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]').first();
+    const autoApprovalCheckbox = page
+      .locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]')
+      .first();
 
     if (await autoApprovalCheckbox.isVisible()) {
-      // Toggle auto-approval
       await autoApprovalCheckbox.click();
 
-      // Save settings
-      const saveButton = page.locator('button:has-text("Save"), [data-testid="save-settings"]').first();
+      const saveButton = page
+        .locator('button:has-text("Save"), [data-testid="save-settings"]')
+        .first();
       await saveButton.click();
 
-      // Verify saved
       await page.waitForTimeout(1000);
       const successIndicator = page.locator('.success, [data-status="success"]').first();
       await expect(successIndicator).toBeVisible({ timeout: 3000 });
@@ -392,18 +417,19 @@ test.describe('AGI Settings', () => {
   });
 
   test('should reset settings to defaults', async ({ page }) => {
-    const resetButton = page.locator('button:has-text("Reset"), [data-testid="reset-settings"]').first();
+    const errorHandler = createErrorHandler(page);
+    const resetButton = page
+      .locator('button:has-text("Reset"), [data-testid="reset-settings"]')
+      .first();
 
     if (await resetButton.isVisible()) {
       await resetButton.click();
 
-      // Confirm reset
-      const confirmButton = page.locator('button:has-text("Reset"), button:has-text("Confirm")').first();
-      if (await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await confirmButton.click();
-      }
+      const confirmButton = page
+        .locator('button:has-text("Reset"), button:has-text("Confirm")')
+        .first();
+      await errorHandler.handleOptionalDialog(confirmButton, 1000);
 
-      // Verify settings were reset
       await page.waitForTimeout(1000);
       const successMessage = page.locator('[role="status"], .success-message').first();
       await expect(successMessage).toBeVisible({ timeout: 3000 });
