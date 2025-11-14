@@ -184,7 +184,12 @@ impl RealtimeMetricsCollector {
 
     /// Store metrics in database
     fn store_metrics(&self, metrics: &MetricsSnapshot) -> SqliteResult<()> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Database lock poisoned: {}", e),
+            )))
+        })?;
         conn.execute(
             "INSERT INTO realtime_metrics (
                 id, user_id, automation_id, employee_id,
@@ -211,8 +216,16 @@ impl RealtimeMetricsCollector {
     async fn broadcast_update(&self, user_id: &str, metrics: MetricsSnapshot) {
         use crate::realtime::RealtimeEvent;
 
+        let metrics_value = match serde_json::to_value(metrics) {
+            Ok(value) => value,
+            Err(e) => {
+                tracing::error!("Failed to serialize metrics for broadcast: {}", e);
+                return;
+            }
+        };
+
         let event = RealtimeEvent::MetricsUpdated {
-            metrics: serde_json::to_value(metrics).unwrap(),
+            metrics: metrics_value,
         };
 
         // Broadcast to user's connections
@@ -261,7 +274,12 @@ impl RealtimeMetricsCollector {
 
     /// Check if milestone has been recorded
     fn is_milestone_recorded(&self, user_id: &str, milestone_type: &str) -> SqliteResult<bool> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Database lock poisoned: {}", e),
+            )))
+        })?;
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM user_milestones WHERE user_id = ?1 AND milestone_type = ?2",
             rusqlite::params![user_id, milestone_type],
@@ -278,7 +296,12 @@ impl RealtimeMetricsCollector {
         threshold_value: f64,
         _cost_saved: f64,
     ) -> SqliteResult<()> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Database lock poisoned: {}", e),
+            )))
+        })?;
         conn.execute(
             "INSERT INTO user_milestones (id, user_id, milestone_type, threshold_value, achieved_at, shared)
              VALUES (?1, ?2, ?3, ?4, ?5, 0)",
@@ -322,7 +345,12 @@ impl RealtimeMetricsCollector {
 
     /// Aggregate metrics for a specific time period (in days)
     async fn aggregate_period(&self, user_id: &str, days: i64) -> SqliteResult<PeriodStats> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Database lock poisoned: {}", e),
+            )))
+        })?;
         let cutoff = Utc::now().timestamp() - (days * 24 * 60 * 60);
 
         let (total_time_minutes, total_cost, count): (Option<i64>, Option<f64>, i64) = conn
@@ -361,7 +389,12 @@ impl RealtimeMetricsCollector {
 
     /// Aggregate all-time metrics
     async fn aggregate_all_time(&self, user_id: &str) -> SqliteResult<PeriodStats> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Database lock poisoned: {}", e),
+            )))
+        })?;
 
         let (total_time_minutes, total_cost, count): (Option<i64>, Option<f64>, i64) = conn
             .query_row(
@@ -403,7 +436,12 @@ impl RealtimeMetricsCollector {
         user_id: &str,
         cutoff_timestamp: Option<i64>,
     ) -> SqliteResult<Vec<EmployeePerformance>> {
-        let conn = self.db.lock().unwrap();
+        let conn = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Database lock poisoned: {}", e),
+            )))
+        })?;
 
         let query = if let Some(cutoff) = cutoff_timestamp {
             "SELECT
@@ -476,7 +514,10 @@ impl RealtimeMetricsCollector {
         user_id: &str,
         days: i64,
     ) -> Result<Vec<MetricsSnapshot>, String> {
-        let conn = self.db.lock().unwrap();
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock poisoned: {}", e))?;
         let cutoff = Utc::now().timestamp() - (days * 24 * 60 * 60);
 
         let mut stmt = conn

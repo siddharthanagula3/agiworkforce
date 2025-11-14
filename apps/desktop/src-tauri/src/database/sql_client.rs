@@ -293,6 +293,77 @@ impl SqlClient {
         Ok(pool.get_stats().await)
     }
 
+    // MySQL-specific operations
+
+    /// Test MySQL connection health
+    pub async fn mysql_test_connection(&self, connection_id: &str) -> Result<bool> {
+        self.mysql_client.test_connection(connection_id).await
+    }
+
+    /// List all tables in MySQL database
+    pub async fn mysql_list_tables(&self, connection_id: &str) -> Result<Vec<String>> {
+        self.mysql_client.list_tables(connection_id).await
+    }
+
+    /// Describe MySQL table schema
+    pub async fn mysql_describe_table(
+        &self,
+        connection_id: &str,
+        table_name: &str,
+    ) -> Result<Vec<HashMap<String, JsonValue>>> {
+        self.mysql_client
+            .describe_table(connection_id, table_name)
+            .await
+    }
+
+    /// List MySQL table indexes
+    pub async fn mysql_list_indexes(
+        &self,
+        connection_id: &str,
+        table_name: &str,
+    ) -> Result<Vec<HashMap<String, JsonValue>>> {
+        self.mysql_client
+            .list_indexes(connection_id, table_name)
+            .await
+    }
+
+    /// Call MySQL stored procedure
+    pub async fn mysql_call_procedure(
+        &self,
+        connection_id: &str,
+        procedure_name: &str,
+        params: &[JsonValue],
+    ) -> Result<Vec<QueryResult>> {
+        self.mysql_client
+            .call_procedure(connection_id, procedure_name, params)
+            .await
+    }
+
+    /// Bulk insert rows into MySQL table
+    pub async fn mysql_bulk_insert(
+        &self,
+        connection_id: &str,
+        table_name: &str,
+        columns: &[&str],
+        rows: &[Vec<JsonValue>],
+    ) -> Result<u64> {
+        self.mysql_client
+            .bulk_insert(connection_id, table_name, columns, rows)
+            .await
+    }
+
+    /// Stream large MySQL query results
+    pub async fn mysql_stream_query(
+        &self,
+        connection_id: &str,
+        sql: &str,
+        batch_size: usize,
+    ) -> Result<Vec<QueryResult>> {
+        self.mysql_client
+            .stream_query(connection_id, sql, batch_size)
+            .await
+    }
+
     // Database-specific query execution methods
     // PostgreSQL is handled by postgres_client, these are for MySQL and SQLite
 
