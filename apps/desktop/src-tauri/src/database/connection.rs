@@ -39,6 +39,18 @@ pub struct ConnectionConfig {
     pub database: Option<String>,
     pub connection_string: Option<String>,
     pub options: HashMap<String, String>,
+    pub ssl_config: Option<SslConfig>,
+}
+
+/// SSL/TLS configuration for database connections
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SslConfig {
+    pub enabled: bool,
+    pub ca_cert_path: Option<String>,
+    pub client_cert_path: Option<String>,
+    pub client_key_path: Option<String>,
+    pub verify_ca: bool,
+    pub verify_identity: bool,
 }
 
 impl ConnectionConfig {
@@ -54,6 +66,7 @@ impl ConnectionConfig {
             database: Some(database.to_string()),
             connection_string: None,
             options: HashMap::new(),
+            ssl_config: None,
         }
     }
 
@@ -69,6 +82,7 @@ impl ConnectionConfig {
             database: Some(database.to_string()),
             connection_string: None,
             options: HashMap::new(),
+            ssl_config: None,
         }
     }
 
@@ -84,6 +98,7 @@ impl ConnectionConfig {
             database: Some(path.to_string()),
             connection_string: None,
             options: HashMap::new(),
+            ssl_config: None,
         }
     }
 
@@ -105,6 +120,7 @@ impl ConnectionConfig {
             database: Some(database.to_string()),
             connection_string: None,
             options: HashMap::new(),
+            ssl_config: None,
         }
     }
 
@@ -125,6 +141,7 @@ impl ConnectionConfig {
             database: None,
             connection_string: None,
             options,
+            ssl_config: None,
         }
     }
 
@@ -142,6 +159,7 @@ impl ConnectionConfig {
             database: None,
             connection_string: Some(connection_string.to_string()),
             options: HashMap::new(),
+            ssl_config: None,
         })
     }
 
@@ -410,6 +428,7 @@ mod tests {
             database: None,
             connection_string: None,
             options: HashMap::new(),
+            ssl_config: None,
         };
         assert!(invalid_config.validate().is_err());
     }

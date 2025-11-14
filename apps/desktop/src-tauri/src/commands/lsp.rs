@@ -59,6 +59,34 @@ pub struct Diagnostic {
     pub severity: u32, // 1=Error, 2=Warning, 3=Info, 4=Hint
     pub message: String,
     pub source: Option<String>,
+    pub code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSymbol {
+    pub name: String,
+    pub kind: u32,
+    pub location: Location,
+    pub container_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextEdit {
+    pub range: Range,
+    pub new_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeAction {
+    pub title: String,
+    pub kind: Option<String>,
+    pub diagnostics: Option<Vec<Diagnostic>>,
+    pub edit: Option<WorkspaceEdit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceEdit {
+    pub changes: Option<HashMap<String, Vec<TextEdit>>>,
 }
 
 pub struct LSPClient {
@@ -67,6 +95,7 @@ pub struct LSPClient {
     stdout: BufReader<ChildStdout>,
     request_id: u32,
     server_info: LSPServer,
+    diagnostics: Arc<Mutex<HashMap<String, Vec<Diagnostic>>>>,
 }
 
 impl LSPClient {
@@ -96,6 +125,7 @@ impl LSPClient {
                 root_uri: root_uri.to_string(),
                 initialized: false,
             },
+            diagnostics: Arc::new(Mutex::new(HashMap::new())),
         };
 
         // Initialize LSP server
@@ -430,6 +460,185 @@ impl LSPClient {
 
         Ok(Vec::new())
     }
+
+    pub async fn text_document_did_change(
+        &mut self,
+        uri: &str,
+        version: u32,
+        content: &str,
+    ) -> Result<(), String> {
+        let notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": [{
+                    "text": content
+                }]
+            }
+        });
+
+        self.send_notification(&notification).await
+    }
+
+    pub async fn text_document_did_close(&mut self, uri: &str) -> Result<(), String> {
+        let notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                }
+            }
+        });
+
+        self.send_notification(&notification).await
+    }
+
+    pub async fn text_document_rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Option<WorkspaceEdit>, String> {
+        self.request_id += 1;
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": self.request_id,
+            "method": "textDocument/rename",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                },
+                "position": {
+                    "line": line,
+                    "character": character
+                },
+                "newName": new_name
+            }
+        });
+
+        self.send_request(&request).await?;
+        let response = self.read_response().await?;
+
+        if let Some(result) = response.get("result") {
+            if !result.is_null() {
+                let edit: WorkspaceEdit =
+                    serde_json::from_value(result.clone()).unwrap_or(WorkspaceEdit {
+                        changes: None,
+                    });
+                return Ok(Some(edit));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub async fn text_document_formatting(&mut self, uri: &str) -> Result<Vec<TextEdit>, String> {
+        self.request_id += 1;
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": self.request_id,
+            "method": "textDocument/formatting",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                },
+                "options": {
+                    "tabSize": 4,
+                    "insertSpaces": true
+                }
+            }
+        });
+
+        self.send_request(&request).await?;
+        let response = self.read_response().await?;
+
+        if let Some(result) = response.get("result") {
+            if result.is_array() {
+                let edits: Vec<TextEdit> =
+                    serde_json::from_value(result.clone()).unwrap_or_default();
+                return Ok(edits);
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub async fn workspace_symbol(&mut self, query: &str) -> Result<Vec<WorkspaceSymbol>, String> {
+        self.request_id += 1;
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": self.request_id,
+            "method": "workspace/symbol",
+            "params": {
+                "query": query
+            }
+        });
+
+        self.send_request(&request).await?;
+        let response = self.read_response().await?;
+
+        if let Some(result) = response.get("result") {
+            if result.is_array() {
+                let symbols: Vec<WorkspaceSymbol> =
+                    serde_json::from_value(result.clone()).unwrap_or_default();
+                return Ok(symbols);
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub async fn text_document_code_action(
+        &mut self,
+        uri: &str,
+        range: Range,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Result<Vec<CodeAction>, String> {
+        self.request_id += 1;
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": self.request_id,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                },
+                "range": range,
+                "context": {
+                    "diagnostics": diagnostics
+                }
+            }
+        });
+
+        self.send_request(&request).await?;
+        let response = self.read_response().await?;
+
+        if let Some(result) = response.get("result") {
+            if result.is_array() {
+                let actions: Vec<CodeAction> =
+                    serde_json::from_value(result.clone()).unwrap_or_default();
+                return Ok(actions);
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub async fn get_diagnostics(&self, uri: &str) -> Result<Vec<Diagnostic>, String> {
+        let diagnostics = self.diagnostics.lock().await;
+        Ok(diagnostics.get(uri).cloned().unwrap_or_default())
+    }
+
+    pub async fn get_all_diagnostics(&self) -> Result<HashMap<String, Vec<Diagnostic>>, String> {
+        let diagnostics = self.diagnostics.lock().await;
+        Ok(diagnostics.clone())
+    }
 }
 
 pub struct LSPState {
@@ -447,14 +656,20 @@ impl LSPState {
 fn get_lsp_command(language: &str) -> Result<(String, Vec<String>), String> {
     match language {
         "rust" => Ok(("rust-analyzer".to_string(), vec![])),
-        "typescript" | "javascript" => Ok((
+        "typescript" | "javascript" | "typescriptreact" | "javascriptreact" => Ok((
             "typescript-language-server".to_string(),
             vec!["--stdio".to_string()],
         )),
-        "python" => Ok(("pylsp".to_string(), vec![])),
+        "python" => Ok(("pyright-langserver".to_string(), vec!["--stdio".to_string()])),
         "go" => Ok(("gopls".to_string(), vec![])),
         "java" => Ok(("jdtls".to_string(), vec![])),
         "cpp" | "c" => Ok(("clangd".to_string(), vec![])),
+        "json" => Ok(("vscode-json-language-server".to_string(), vec!["--stdio".to_string()])),
+        "html" => Ok(("vscode-html-language-server".to_string(), vec!["--stdio".to_string()])),
+        "css" | "scss" | "less" => Ok((
+            "vscode-css-language-server".to_string(),
+            vec!["--stdio".to_string()],
+        )),
         _ => Err(format!("Unsupported language: {}", language)),
     }
 }
@@ -565,4 +780,150 @@ pub async fn lsp_references(
     let mut client = client_arc.lock().await;
 
     client.text_document_references(&uri, line, character).await
+}
+
+#[tauri::command]
+pub async fn lsp_did_change(
+    language: String,
+    uri: String,
+    version: u32,
+    content: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<(), String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let mut client = client_arc.lock().await;
+
+    client.text_document_did_change(&uri, version, &content).await
+}
+
+#[tauri::command]
+pub async fn lsp_did_close(
+    language: String,
+    uri: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<(), String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let mut client = client_arc.lock().await;
+
+    client.text_document_did_close(&uri).await
+}
+
+#[tauri::command]
+pub async fn lsp_rename(
+    language: String,
+    uri: String,
+    line: u32,
+    character: u32,
+    new_name: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<Option<WorkspaceEdit>, String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let mut client = client_arc.lock().await;
+
+    client.text_document_rename(&uri, line, character, &new_name).await
+}
+
+#[tauri::command]
+pub async fn lsp_formatting(
+    language: String,
+    uri: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<Vec<TextEdit>, String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let mut client = client_arc.lock().await;
+
+    client.text_document_formatting(&uri).await
+}
+
+#[tauri::command]
+pub async fn lsp_workspace_symbol(
+    language: String,
+    query: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<Vec<WorkspaceSymbol>, String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let mut client = client_arc.lock().await;
+
+    client.workspace_symbol(&query).await
+}
+
+#[tauri::command]
+pub async fn lsp_code_action(
+    language: String,
+    uri: String,
+    range: Range,
+    diagnostics: Vec<Diagnostic>,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<Vec<CodeAction>, String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let mut client = client_arc.lock().await;
+
+    client.text_document_code_action(&uri, range, diagnostics).await
+}
+
+#[tauri::command]
+pub async fn lsp_get_diagnostics(
+    language: String,
+    uri: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<Vec<Diagnostic>, String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let client = client_arc.lock().await;
+
+    client.get_diagnostics(&uri).await
+}
+
+#[tauri::command]
+pub async fn lsp_get_all_diagnostics(
+    language: String,
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<HashMap<String, Vec<Diagnostic>>, String> {
+    let clients = state.clients.lock().await;
+    let client_arc = clients.get(&language).ok_or("LSP server not started")?;
+    let client = client_arc.lock().await;
+
+    client.get_all_diagnostics().await
+}
+
+#[tauri::command]
+pub async fn lsp_list_servers(
+    state: tauri::State<'_, Arc<LSPState>>,
+) -> Result<Vec<String>, String> {
+    let clients = state.clients.lock().await;
+    Ok(clients.keys().cloned().collect())
+}
+
+#[tauri::command]
+pub async fn lsp_detect_language(file_path: String) -> Result<String, String> {
+    let path = std::path::Path::new(&file_path);
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or("Could not determine file extension")?;
+
+    let language = match extension {
+        "rs" => "rust",
+        "ts" | "tsx" => "typescript",
+        "js" | "jsx" => "javascript",
+        "py" => "python",
+        "go" => "go",
+        "java" => "java",
+        "cpp" | "cc" | "cxx" => "cpp",
+        "c" | "h" => "c",
+        "json" => "json",
+        "html" | "htm" => "html",
+        "css" => "css",
+        "scss" => "scss",
+        "less" => "less",
+        _ => return Err(format!("Unsupported file extension: {}", extension)),
+    };
+
+    Ok(language.to_string())
 }
