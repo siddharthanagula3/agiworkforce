@@ -59,6 +59,12 @@ impl Database {
         f(&conn)
     }
 
+    /// Get a clone of the Arc<Mutex<Connection>> for external use
+    /// This is useful when you need to pass the connection to other components
+    pub fn get_connection(&self) -> Arc<Mutex<Connection>> {
+        Arc::clone(&self.conn)
+    }
+
     // Conversation methods
     pub fn create_conversation(&self, title: String) -> Result<i64> {
         self.with_connection(|conn| repository::create_conversation(conn, title))
