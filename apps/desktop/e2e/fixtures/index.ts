@@ -50,7 +50,7 @@ export const test = base.extend<CustomFixtures>({
   },
 
   // Test database fixture
-  testDb: async ({}, use) => {
+  testDb: async ({ page: _page }, use) => {
     const db = new TestDatabase();
     await db.initialize();
     await use(db);

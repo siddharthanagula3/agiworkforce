@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test } from './fixtures';
 
 /**
  * Visual regression tests using screenshot comparison
@@ -34,7 +34,11 @@ test.describe('Visual Regression Tests', () => {
     await page.waitForTimeout(500);
   });
 
-  test('should match automation interface baseline', async ({ page, screenshot, automationPage }) => {
+  test('should match automation interface baseline', async ({
+    page,
+    screenshot,
+    automationPage,
+  }) => {
     await automationPage.navigateToAutomation();
 
     // Capture screenshot
@@ -98,7 +102,10 @@ test.describe('Visual Regression Tests', () => {
     }
   });
 
-  test('should match responsive layout on different viewport sizes', async ({ page, screenshot }) => {
+  test('should match responsive layout on different viewport sizes', async ({
+    page,
+    screenshot,
+  }) => {
     // Test desktop viewport (default)
     await screenshot.captureViewport('layout-desktop-1920x1080');
 
