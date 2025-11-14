@@ -1,282 +1,416 @@
-import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Progress } from '../ui/progress';
-import { InstantDemo } from './InstantDemo';
-import { Sparkles, Rocket, Target } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { Button } from '../ui/Button';
+import { CheckCircle2, Circle } from 'lucide-react';
+import { SettingsPanel } from '../Settings/SettingsPanel';
 
-interface AIEmployee {
-  id: string;
-  name: string;
-  description: string;
-  estimatedTimeSavedPerRun: number;
-  estimatedCostSavedPerRun: number;
-  demoDurationSeconds: number;
-  matchScore: number;
+interface OnboardingStep {
+  id: number;
+  stepId: string;
+  stepName: string;
+  completed: boolean;
+  skipped: boolean;
+  completedAt: number | null;
+  data: string | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
-interface FirstRunSession {
-  id: string;
-  userId: string;
-  step: string;
-  recommendedEmployees: AIEmployee[];
-  demoResults: any;
-  timeToValueSeconds: number;
-  selectedEmployeeId: string | null;
-  startedAt: number;
+interface OnboardingStatus {
+  completed: boolean;
+  progressPercent: number;
+  totalSteps: number;
+  completedSteps: number;
+  steps: OnboardingStep[];
 }
 
 interface OnboardingWizardProps {
-  userId: string;
-  userRole?: string;
+  onComplete: () => void;
 }
 
-export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
-  userId,
-  userRole = 'general',
-}) => {
-  const [session, setSession] = useState<FirstRunSession | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [selectedEmployee, setSelectedEmployee] = useState<AIEmployee | null>(null);
+export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
+  const [status, setStatus] = useState<OnboardingStatus | null>(null);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
 
-  useEffect(() => {
-    initializeSession();
+  const loadStatus = useCallback(async (): Promise<OnboardingStatus | null> => {
+    try {
+      const result = await invoke<OnboardingStatus>('get_onboarding_status');
+      setStatus(result);
+
+      // Find first incomplete step
+      const firstIncomplete = result.steps.findIndex((s) => !s.completed && !s.skipped);
+      if (firstIncomplete >= 0) {
+        setCurrentStepIndex(firstIncomplete);
+      }
+
+      setLoading(false);
+      return result;
+    } catch (error) {
+      console.error('Failed to load onboarding status:', error);
+      setLoading(false);
+      return null;
+    }
   }, []);
 
-  const initializeSession = async () => {
-    try {
-      const newSession = await invoke<FirstRunSession>('start_first_run_experience', {
-        userId,
-        userRole,
-      });
-      setSession(newSession);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to start first-run:', error);
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    void loadStatus();
+  }, [loadStatus]);
 
-  const handleEmployeeSelect = async (employee: AIEmployee) => {
-    setSelectedEmployee(employee);
-    if (session) {
-      await invoke('select_demo_employee', {
-        sessionId: session.id,
-        employeeId: employee.id,
-      });
-    }
-    setCurrentStep(2); // Move to demo step
-  };
+  const completeStep = useCallback(
+    async (stepId: string, data?: string) => {
+      try {
+        await invoke('complete_onboarding_step', { stepId, data: data || null });
+        const updated = await loadStatus();
+        if (updated?.completed) {
+          onComplete();
+        }
+      } catch (error) {
+        console.error('Failed to complete step:', error);
+      }
+    },
+    [loadStatus, onComplete],
+  );
 
-  const handleDemoComplete = async (results: any) => {
-    setCurrentStep(3); // Move to results viewing
-  };
+  const skipStep = useCallback(
+    async (stepId: string) => {
+      try {
+        await invoke('skip_onboarding_step', { stepId });
+        const updated = await loadStatus();
+        if (updated?.completed) {
+          onComplete();
+        }
+      } catch (error) {
+        console.error('Failed to skip step:', error);
+      }
+    },
+    [loadStatus, onComplete],
+  );
 
-  const handleHireEmployee = async () => {
-    if (session) {
-      await invoke('mark_employee_hired', {
-        sessionId: session.id,
-      });
-      await invoke('complete_first_run', {
-        sessionId: session.id,
-      });
-    }
-    // Navigate to main app
-  };
-
-  const handleSkip = async () => {
-    if (session) {
-      await invoke('skip_first_run', {
-        sessionId: session.id,
-      });
-    }
-    // Navigate to main app
-  };
-
-  const steps = [
-    { title: 'Welcome', icon: Sparkles },
-    { title: 'Choose Employee', icon: Target },
-    { title: 'See Demo', icon: Rocket },
-    { title: 'Get Started', icon: Sparkles },
-  ];
-
-  if (loading || !session) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
   }
 
+  if (!status || status.completed) {
+    onComplete();
+    return null;
+  }
+
+  const currentStep = status.steps[currentStepIndex];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-primary/5 py-12 px-4">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Progress Header */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            {steps.map((step, idx) => {
-              const Icon = step.icon;
-              return (
-                <div
-                  key={idx}
-                  className={`flex items-center ${idx <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}
-                >
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                      idx <= currentStep
-                        ? 'border-primary bg-primary/10'
-                        : 'border-muted-foreground/30'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  {idx < steps.length - 1 && (
-                    <div
-                      className={`h-0.5 w-20 mx-2 ${idx < currentStep ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <Progress value={(currentStep / (steps.length - 1)) * 100} className="h-2" />
+    <>
+      <div className="flex h-screen flex-col bg-background">
+        {/* Header */}
+        <div className="border-b border-border bg-card px-8 py-4">
+          <h1 className="text-2xl font-bold">Welcome to AGI Workforce</h1>
+          <p className="text-muted-foreground">Let's get you started in just a few steps</p>
         </div>
 
-        {/* Step Content */}
-        {currentStep === 0 && (
-          <Card className="border-2">
-            <CardHeader className="text-center">
-              <CardTitle className="text-4xl mb-4">
-                Welcome to AGI Workforce! 🎉
-              </CardTitle>
-              <CardDescription className="text-lg">
-                Let's get you started with your first AI employee in under 5 minutes
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="bg-primary/10 rounded-lg p-6 space-y-4">
-                <h3 className="font-semibold text-lg">Here's what will happen:</h3>
-                <ol className="space-y-3 text-sm">
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                      1
-                    </span>
-                    <span>We'll recommend 3 AI employees perfect for your role</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                      2
-                    </span>
-                    <span>Run a 30-second demo with real sample data</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                      3
-                    </span>
-                    <span>See exactly how much time and money you'll save</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                      4
-                    </span>
-                    <span>Hire your first employee and start automating!</span>
-                  </li>
-                </ol>
-              </div>
+        {/* Progress bar */}
+        <div className="border-b border-border bg-card px-8 py-4">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-medium">
+              Step {currentStepIndex + 1} of {status.totalSteps}
+            </span>
+            <span className="text-muted-foreground">
+              {Math.round(status.progressPercent)}% complete
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${status.progressPercent}%` }}
+            />
+          </div>
+        </div>
 
-              <div className="flex gap-4">
-                <Button size="lg" className="flex-1" onClick={() => setCurrentStep(1)}>
-                  Get Started →
-                </Button>
-                <Button size="lg" variant="outline" onClick={handleSkip}>
-                  Skip for Now
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Steps list */}
+        <div className="flex flex-1 overflow-hidden">
+          <div className="w-64 border-r border-border bg-card p-6">
+            <div className="space-y-2">
+              {status.steps.map((step, index) => (
+                <button
+                  key={step.stepId}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                    index === currentStepIndex
+                      ? 'bg-primary/10 text-primary'
+                      : step.completed || step.skipped
+                        ? 'text-muted-foreground hover:bg-secondary'
+                        : 'text-foreground hover:bg-secondary'
+                  }`}
+                  onClick={() => setCurrentStepIndex(index)}
+                >
+                  {step.completed || step.skipped ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+                  ) : (
+                    <Circle className="h-5 w-5 shrink-0" />
+                  )}
+                  <span className="truncate text-sm font-medium">{step.stepName}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-        {currentStep === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Choose Your First AI Employee</CardTitle>
-              <CardDescription>
-                Based on your role as a {userRole}, we recommend:
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4">
-                {session.recommendedEmployees.map((employee) => (
-                  <Card
-                    key={employee.id}
-                    className="cursor-pointer hover:border-primary transition-colors"
-                    onClick={() => handleEmployeeSelect(employee)}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg">{employee.name}</h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {employee.description}
-                          </p>
-                          <div className="mt-4 flex gap-4 text-sm">
-                            <span className="font-semibold text-blue-600">
-                              Saves {employee.estimatedTimeSavedPerRun} min
-                            </span>
-                            <span className="font-semibold text-green-600">
-                              ${employee.estimatedCostSavedPerRun}/run
-                            </span>
-                          </div>
-                        </div>
-                        <div className="bg-primary/10 rounded-full px-3 py-1 text-sm font-semibold text-primary">
-                          {employee.matchScore}% match
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {currentStep === 2 && selectedEmployee && (
-          <InstantDemo
-            employee={selectedEmployee}
-            sessionId={session.id}
-            onComplete={handleDemoComplete}
-          />
-        )}
-
-        {currentStep === 3 && (
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl">Ready to Get Started?</CardTitle>
-              <CardDescription>
-                Start saving time and money today with {selectedEmployee?.name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="text-center space-y-4">
-                <p className="text-lg">
-                  Join thousands of teams already automating with AGI Workforce
-                </p>
-                <Button size="lg" onClick={handleHireEmployee}>
-                  Hire {selectedEmployee?.name} - Start Free Trial
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  14-day free trial • No credit card required • Cancel anytime
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+          {/* Content area */}
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="mx-auto max-w-2xl">
+              {currentStep && currentStep.stepId === 'welcome' && (
+                <WelcomeStep onNext={() => void completeStep(currentStep.stepId)} />
+              )}
+              {currentStep && currentStep.stepId === 'api_keys' && (
+                <ApiKeysStep
+                  onNext={() => void completeStep(currentStep.stepId)}
+                  onSkip={() => void skipStep(currentStep.stepId)}
+                  onConfigure={openSettings}
+                />
+              )}
+              {currentStep && currentStep.stepId === 'first_task' && (
+                <FirstTaskStep
+                  onNext={() => void completeStep(currentStep.stepId)}
+                  onSkip={() => void skipStep(currentStep.stepId)}
+                />
+              )}
+              {currentStep && currentStep.stepId === 'explore_features' && (
+                <ExploreStep onNext={() => void completeStep(currentStep.stepId)} />
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+      <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   );
 };
+
+const WelcomeStep = ({ onNext }: { onNext: () => void }) => (
+  <div className="space-y-6">
+    <div>
+      <h2 className="mb-2 text-3xl font-bold">Welcome to AGI Workforce</h2>
+      <p className="text-lg text-muted-foreground">Your AI-powered desktop automation assistant</p>
+    </div>
+
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-2 text-xl font-semibold">What can AGI Workforce do?</h3>
+        <ul className="space-y-2 text-muted-foreground">
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-green-500" />
+            <span>Automate repetitive desktop tasks</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-green-500" />
+            <span>Control browsers and applications</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-green-500" />
+            <span>Process documents and data</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-green-500" />
+            <span>Integrate with APIs and databases</span>
+          </li>
+        </ul>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-2 text-xl font-semibold">Privacy First</h3>
+        <p className="text-muted-foreground">
+          Your data stays on your device. We use local models when possible and give you full
+          control over which AI providers to use.
+        </p>
+      </div>
+    </div>
+
+    <div className="flex justify-end">
+      <Button size="lg" onClick={onNext}>
+        Get Started
+      </Button>
+    </div>
+  </div>
+);
+
+const ApiKeysStep = ({
+  onNext,
+  onSkip,
+  onConfigure,
+}: {
+  onNext: () => void;
+  onSkip: () => void;
+  onConfigure: () => void;
+}) => (
+  <div className="space-y-6">
+    <div>
+      <h2 className="mb-2 text-3xl font-bold">Configure AI Providers</h2>
+      <p className="text-lg text-muted-foreground">
+        Add your API keys to enable AI-powered automation
+      </p>
+    </div>
+
+    <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+      <p className="text-sm text-yellow-600 dark:text-yellow-400">
+        <strong>Note:</strong> You can configure this later in Settings if you don't have API keys
+        ready.
+      </p>
+    </div>
+
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-4 text-xl font-semibold">Supported Providers</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">OpenAI</p>
+              <p className="text-sm text-muted-foreground">GPT-4, GPT-3.5</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onConfigure}>
+              Configure
+            </Button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Anthropic</p>
+              <p className="text-sm text-muted-foreground">Claude 3.5 Sonnet</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onConfigure}>
+              Configure
+            </Button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Google</p>
+              <p className="text-sm text-muted-foreground">Gemini 1.5 Pro</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onConfigure}>
+              Configure
+            </Button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Ollama (Local)</p>
+              <p className="text-sm text-muted-foreground">Free, runs on your computer</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onConfigure}>
+              Configure
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div className="flex justify-between">
+      <Button variant="outline" onClick={onSkip}>
+        Skip for Now
+      </Button>
+      <Button onClick={onNext}>Continue</Button>
+    </div>
+  </div>
+);
+
+const FirstTaskStep = ({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) => (
+  <div className="space-y-6">
+    <div>
+      <h2 className="mb-2 text-3xl font-bold">Create Your First Task</h2>
+      <p className="text-lg text-muted-foreground">
+        Try creating a simple automation to see how it works
+      </p>
+    </div>
+
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-4 text-xl font-semibold">Example Tasks</h3>
+        <div className="space-y-3">
+          <button className="w-full rounded-lg border border-border bg-background p-4 text-left transition-colors hover:bg-accent">
+            <p className="font-medium">Open a website and take a screenshot</p>
+            <p className="text-sm text-muted-foreground">Navigate to a URL and capture the page</p>
+          </button>
+          <button className="w-full rounded-lg border border-border bg-background p-4 text-left transition-colors hover:bg-accent">
+            <p className="font-medium">Extract text from an image</p>
+            <p className="text-sm text-muted-foreground">Use OCR to read text from screenshots</p>
+          </button>
+          <button className="w-full rounded-lg border border-border bg-background p-4 text-left transition-colors hover:bg-accent">
+            <p className="font-medium">Search files on your computer</p>
+            <p className="text-sm text-muted-foreground">Find files by name or content</p>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div className="flex justify-between">
+      <Button variant="outline" onClick={onSkip}>
+        Skip Tutorial
+      </Button>
+      <Button onClick={onNext}>Continue</Button>
+    </div>
+  </div>
+);
+
+const ExploreStep = ({ onNext }: { onNext: () => void }) => (
+  <div className="space-y-6">
+    <div>
+      <h2 className="mb-2 text-3xl font-bold">You're All Set!</h2>
+      <p className="text-lg text-muted-foreground">
+        Here are some tips to help you get the most out of AGI Workforce
+      </p>
+    </div>
+
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-2 text-lg font-semibold">Keyboard Shortcuts</h3>
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          <li className="flex items-center justify-between">
+            <span>Open command palette</span>
+            <kbd className="rounded bg-secondary px-2 py-1 text-xs font-semibold">Ctrl+K</kbd>
+          </li>
+          <li className="flex items-center justify-between">
+            <span>New conversation</span>
+            <kbd className="rounded bg-secondary px-2 py-1 text-xs font-semibold">Ctrl+N</kbd>
+          </li>
+          <li className="flex items-center justify-between">
+            <span>Toggle theme</span>
+            <kbd className="rounded bg-secondary px-2 py-1 text-xs font-semibold">Ctrl+Shift+L</kbd>
+          </li>
+        </ul>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h3 className="mb-2 text-lg font-semibold">Helpful Resources</h3>
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          <li>
+            <a href="#" className="text-primary hover:underline">
+              Documentation
+            </a>{' '}
+            - Learn about all features
+          </li>
+          <li>
+            <a href="#" className="text-primary hover:underline">
+              Community Discord
+            </a>{' '}
+            - Get help from other users
+          </li>
+          <li>
+            <a href="#" className="text-primary hover:underline">
+              GitHub Issues
+            </a>{' '}
+            - Report bugs or request features
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div className="flex justify-end">
+      <Button size="lg" onClick={onNext}>
+        Start Using AGI Workforce
+      </Button>
+    </div>
+  </div>
+);
