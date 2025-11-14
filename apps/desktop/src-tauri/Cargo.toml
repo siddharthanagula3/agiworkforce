@@ -141,6 +141,7 @@ cron = "0.12"
 # Configuration
 config = "0.14"
 toml = "0.8"
+serde_yaml = "0.9"
 
 # File System
 notify = "6.1"
