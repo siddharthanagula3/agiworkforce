@@ -63,7 +63,6 @@ export const VisionAnalysis: React.FC<VisionAnalysisProps> = ({
             ? 'Describe this image in detail. What do you see?'
             : 'Describe these images in detail. What do you see in each?';
       } else if (mode === 'extract_text') {
-        command = 'vision_extract_text';
         prompt = '';
       } else if (mode === 'compare') {
         if (images.length < 2) {
