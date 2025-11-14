@@ -13,9 +13,9 @@ test.describe('Rust Backend Integration', () => {
     // Test basic Tauri IPC communication
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('ping');
         }
         return null;
@@ -32,9 +32,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle database operations', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('get_conversations');
         }
         return [];
@@ -50,9 +50,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle file system operations', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('list_files', { path: '.' });
         }
         return [];
@@ -67,9 +67,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle LLM provider operations', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('get_provider_status');
         }
         return null;
@@ -84,9 +84,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle automation commands', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('list_windows');
         }
         return [];
@@ -101,9 +101,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle AGI core operations', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('get_goals');
         }
         return [];
@@ -118,9 +118,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle settings operations', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('get_settings');
         }
         return {};
@@ -135,9 +135,9 @@ test.describe('Rust Backend Integration', () => {
   test('should handle browser automation commands', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('get_browser_state');
         }
         return null;
@@ -153,11 +153,11 @@ test.describe('Rust Backend Integration', () => {
     // Set up event listener
     const eventReceived = await page.evaluate(async () => {
       return new Promise((resolve) => {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
           let received = false;
 
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           window.__TAURI__.event.listen('test-event', () => {
             received = true;
           });
@@ -166,7 +166,7 @@ test.describe('Rust Backend Integration', () => {
           setTimeout(() => resolve(received), 1000);
 
           // Try to emit an event
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           window.__TAURI__.event.emit('test-event', { data: 'test' }).catch(() => {});
         } else {
           resolve(false);
@@ -181,10 +181,10 @@ test.describe('Rust Backend Integration', () => {
   test('should handle errors from backend gracefully', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
           // Invoke non-existent command
-          // @ts-ignore
+          // @ts-expect-error - Tauri global may not be available in test environment
           return await window.__TAURI__.invoke('non_existent_command');
         }
         return null;
@@ -204,15 +204,15 @@ test.describe('Rust Backend Integration', () => {
   test('should handle concurrent backend calls', async ({ page }) => {
     const results = await page.evaluate(async () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error - Tauri global may not be available in test environment
         if (window.__TAURI__) {
           // Make multiple concurrent calls
           const promises = [
-            // @ts-ignore
+            // @ts-expect-error - Tauri global may not be available in test environment
             window.__TAURI__.invoke('ping'),
-            // @ts-ignore
+            // @ts-expect-error - Tauri global may not be available in test environment
             window.__TAURI__.invoke('get_settings'),
-            // @ts-ignore
+            // @ts-expect-error - Tauri global may not be available in test environment
             window.__TAURI__.invoke('get_conversations'),
           ];
 

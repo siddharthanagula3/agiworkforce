@@ -68,7 +68,9 @@ test.describe('Onboarding Flow', () => {
 
       // Verify we're past onboarding
       await page.waitForTimeout(1000);
-      const skipButtonStillVisible = await onboardingPage.skipButton.isVisible({ timeout: 2000 }).catch(() => false);
+      const skipButtonStillVisible = await onboardingPage.skipButton
+        .isVisible({ timeout: 2000 })
+        .catch(() => false);
       expect(skipButtonStillVisible).toBe(false);
     }
   });
@@ -151,7 +153,9 @@ test.describe('Onboarding Flow', () => {
     await page.waitForLoadState('networkidle');
 
     // Onboarding should not restart
-    const isOnboardingVisible = await onboardingPage.nextButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const isOnboardingVisible = await onboardingPage.nextButton
+      .isVisible({ timeout: 2000 })
+      .catch(() => false);
     expect(isOnboardingVisible).toBe(false);
   });
 
@@ -165,8 +169,8 @@ test.describe('Onboarding Flow', () => {
     if (await onboardingPage.nextButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await onboardingPage.clickNext();
 
-      // Check for validation errors
-      const errorMessage = page.locator('[role="alert"], .error-message, .field-error').first();
+      // Check for validation errors (not used, but checked for presence)
+      const _errorMessage = page.locator('[role="alert"], .error-message, .field-error').first();
 
       // May show validation error or allow proceeding
       await page.waitForTimeout(500);

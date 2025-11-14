@@ -28,7 +28,9 @@ test.describe('Provider Switching E2E', () => {
     await settingsPage.navigateToSettings();
 
     // Check providers tab
-    const providerTab = page.locator('button:has-text("Providers"), [data-testid="providers-tab"]').first();
+    const providerTab = page
+      .locator('button:has-text("Providers"), [data-testid="providers-tab"]')
+      .first();
 
     if (await providerTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await providerTab.click();
@@ -63,11 +65,15 @@ test.describe('Provider Switching E2E', () => {
     expect(saved).toBe(true);
   });
 
-  test('should fallback to alternative provider on failure', async ({ page, chatPage, mockLLM }) => {
+  test('should fallback to alternative provider on failure', async ({
+    page: _page,
+    chatPage,
+    mockLLM,
+  }) => {
     // Mock primary provider failure and fallback success
     mockLLM.setMockResponse(
       /fallback|backup|alternative/i,
-      'Primary provider unavailable. Falling back to alternative provider. Response successful.'
+      'Primary provider unavailable. Falling back to alternative provider. Response successful.',
     );
 
     await chatPage.goto();
@@ -89,13 +95,17 @@ test.describe('Provider Switching E2E', () => {
     await settingsPage.navigateToSettings();
 
     // Navigate to providers tab
-    const providerTab = page.locator('button:has-text("Providers"), [data-testid="providers-tab"]').first();
+    const providerTab = page
+      .locator('button:has-text("Providers"), [data-testid="providers-tab"]')
+      .first();
 
     if (await providerTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await providerTab.click();
 
       // Check for Ollama provider
-      const ollamaProvider = page.locator('[data-testid="ollama-provider"], button:has-text("Ollama")').first();
+      const ollamaProvider = page
+        .locator('[data-testid="ollama-provider"], button:has-text("Ollama")')
+        .first();
 
       if (await ollamaProvider.isVisible({ timeout: 2000 }).catch(() => false)) {
         // Verify Ollama can be enabled
@@ -108,7 +118,9 @@ test.describe('Provider Switching E2E', () => {
     await settingsPage.navigateToSettings();
 
     // Navigate to providers section
-    const providerTab = page.locator('button:has-text("Providers"), [data-testid="providers-tab"]').first();
+    const providerTab = page
+      .locator('button:has-text("Providers"), [data-testid="providers-tab"]')
+      .first();
 
     if (await providerTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await providerTab.click();
@@ -128,7 +140,9 @@ test.describe('Provider Switching E2E', () => {
     await settingsPage.navigateToSettings();
 
     // Navigate to usage/analytics section
-    const analyticsTab = page.locator('button:has-text("Analytics"), button:has-text("Usage")').first();
+    const analyticsTab = page
+      .locator('button:has-text("Analytics"), button:has-text("Usage")')
+      .first();
 
     if (await analyticsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await analyticsTab.click();
@@ -160,7 +174,11 @@ test.describe('Provider Switching E2E', () => {
     }
   });
 
-  test('should switch provider mid-conversation', async ({ page, chatPage, settingsPage }) => {
+  test('should switch provider mid-conversation', async ({
+    page: _page,
+    chatPage,
+    settingsPage,
+  }) => {
     // Start a conversation
     await chatPage.goto();
 

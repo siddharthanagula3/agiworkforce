@@ -23,9 +23,9 @@ test.describe('Settings and Configuration', () => {
 
       // Check if dark theme is applied
       const htmlElement = page.locator('html');
-      const theme = await htmlElement.getAttribute('class');
+      const _theme = await htmlElement.getAttribute('class');
       // Theme might be applied via class or data attribute
-      // This is a basic check
+      // This is a basic check (theme variable reserved for future assertions)
     }
   });
 
@@ -118,7 +118,9 @@ test.describe('Settings and Configuration', () => {
     await settingsPage.navigateToSettings();
 
     // Navigate to keyboard shortcuts section
-    const keyboardTab = page.locator('button:has-text("Keyboard"), button:has-text("Shortcuts")').first();
+    const keyboardTab = page
+      .locator('button:has-text("Keyboard"), button:has-text("Shortcuts")')
+      .first();
 
     if (await keyboardTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await keyboardTab.click();
@@ -167,7 +169,9 @@ test.describe('Settings and Configuration', () => {
       await privacyTab.click();
 
       // Configure retention period
-      const retentionSelect = page.locator('select[name*="retention"], [data-testid="retention-period"]').first();
+      const retentionSelect = page
+        .locator('select[name*="retention"], [data-testid="retention-period"]')
+        .first();
 
       if (await retentionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         await retentionSelect.selectOption('30'); // 30 days
@@ -186,7 +190,9 @@ test.describe('Settings and Configuration', () => {
     await settingsPage.navigateToSettings();
 
     // Look for export button
-    const exportButton = page.locator('button:has-text("Export"), [data-testid="export-settings"]').first();
+    const exportButton = page
+      .locator('button:has-text("Export"), [data-testid="export-settings"]')
+      .first();
 
     if (await exportButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Click export
@@ -204,7 +210,9 @@ test.describe('Settings and Configuration', () => {
     await settingsPage.navigateToSettings();
 
     // Look for import button
-    const importButton = page.locator('button:has-text("Import"), [data-testid="import-settings"]').first();
+    const importButton = page
+      .locator('button:has-text("Import"), [data-testid="import-settings"]')
+      .first();
 
     if (await importButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Import functionality would require file upload
@@ -261,7 +269,9 @@ test.describe('Settings and Configuration', () => {
     await settingsPage.navigateToSettings();
 
     // Look for update check button
-    const checkUpdatesButton = page.locator('button:has-text("Check for Updates"), [data-testid="check-updates"]').first();
+    const checkUpdatesButton = page
+      .locator('button:has-text("Check for Updates"), [data-testid="check-updates"]')
+      .first();
 
     if (await checkUpdatesButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await checkUpdatesButton.click();
