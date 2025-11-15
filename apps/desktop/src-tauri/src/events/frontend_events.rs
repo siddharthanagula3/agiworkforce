@@ -5,7 +5,7 @@
 /// useAgenticEvents hook in the React application.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// File operation types matching frontend TypeScript enum
 #[derive(Debug, Clone, Serialize, Deserialize)]
