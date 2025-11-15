@@ -34,10 +34,10 @@ describe('unifiedChatStore', () => {
 
     const state = useUnifiedChatStore.getState();
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0].content).toBe('Hello, world!');
-    expect(state.messages[0].role).toBe('user');
-    expect(state.messages[0].id).toBeDefined();
-    expect(state.messages[0].timestamp).toBeInstanceOf(Date);
+    expect(state.messages[0]?.content).toBe('Hello, world!');
+    expect(state.messages[0]?.role).toBe('user');
+    expect(state.messages[0]?.id).toBeDefined();
+    expect(state.messages[0]?.timestamp).toBeInstanceOf(Date);
   });
 
   it('should update a message', () => {
@@ -48,12 +48,13 @@ describe('unifiedChatStore', () => {
     });
 
     const state = useUnifiedChatStore.getState();
-    const messageId = state.messages[0].id;
+    const messageId = state.messages[0]?.id;
+    expect(messageId).toBeDefined();
 
-    updateMessage(messageId, { content: 'Updated content' });
+    updateMessage(messageId!, { content: 'Updated content' });
 
     const updatedState = useUnifiedChatStore.getState();
-    expect(updatedState.messages[0].content).toBe('Updated content');
+    expect(updatedState.messages[0]?.content).toBe('Updated content');
   });
 
   it('should delete a message', () => {
@@ -64,9 +65,10 @@ describe('unifiedChatStore', () => {
     });
 
     const state = useUnifiedChatStore.getState();
-    const messageId = state.messages[0].id;
+    const messageId = state.messages[0]?.id;
+    expect(messageId).toBeDefined();
 
-    deleteMessage(messageId);
+    deleteMessage(messageId!);
 
     const updatedState = useUnifiedChatStore.getState();
     expect(updatedState.messages).toHaveLength(0);
@@ -97,8 +99,8 @@ describe('unifiedChatStore', () => {
 
     const state = useUnifiedChatStore.getState();
     expect(state.fileOperations).toHaveLength(1);
-    expect(state.fileOperations[0].type).toBe('write');
-    expect(state.fileOperations[0].filePath).toBe('/test/file.txt');
+    expect(state.fileOperations[0]?.type).toBe('write');
+    expect(state.fileOperations[0]?.filePath).toBe('/test/file.txt');
   });
 
   it('should manage sidecar state', () => {
