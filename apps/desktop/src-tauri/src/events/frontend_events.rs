@@ -211,3 +211,43 @@ pub fn create_tool_execution_event(
         success,
     }
 }
+
+/// Approval request event payload matching frontend ApprovalRequest interface
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalRequestPayload {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub request_type: String,
+    pub description: String,
+    pub impact: Option<String>,
+    #[serde(rename = "riskLevel")]
+    pub risk_level: String,
+    pub status: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "approvedAt")]
+    pub approved_at: Option<String>,
+    #[serde(rename = "rejectedAt")]
+    pub rejected_at: Option<String>,
+    #[serde(rename = "rejectionReason")]
+    pub rejection_reason: Option<String>,
+    #[serde(rename = "timeoutSeconds")]
+    pub timeout_seconds: Option<i64>,
+    pub details: Option<serde_json::Value>,
+}
+
+/// Emit approval request event to frontend
+pub fn emit_approval_request(app_handle: &AppHandle, approval: ApprovalRequestPayload) {
+    if let Err(e) = app_handle.emit_all(
+        "agi:approval_required",
+        serde_json::json!({ "approval": approval }),
+    ) {
+        tracing::error!("[Events] Failed to emit approval request event: {}", e);
+    } else {
+        tracing::debug!(
+            "[Events] Emitted approval request: {} ({})",
+            approval.id,
+            approval.request_type
+        );
+    }
+}
