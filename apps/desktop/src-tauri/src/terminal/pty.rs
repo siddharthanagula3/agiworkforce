@@ -73,7 +73,7 @@ impl PtySession {
             .take_writer()
             .map_err(|e| Error::Other(format!("Failed to get writer: {}", e)))?
             .write_all(data.as_bytes())
-            .map_err(Error::Io)?;
+            .map_err(|e| Error::from(e))?;
         Ok(())
     }
 
@@ -101,7 +101,7 @@ impl PtySession {
         match result {
             Ok(n) => Ok(n),
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
-            Err(e) => Err(Error::Io(e)),
+            Err(e) => Err(Error::from(e)),
         }
     }
 
@@ -131,21 +131,21 @@ fn get_shell_command(shell_type: &ShellType) -> Result<CommandBuilder> {
             } else if which::which("powershell.exe").is_ok() {
                 "powershell.exe"
             } else {
-                return Err(Error::CommandNotFound("PowerShell not found".to_string()));
+                return Err(Error::Generic("PowerShell not found".to_string()));
             }
         }
         ShellType::Cmd => {
             if which::which("cmd.exe").is_ok() {
                 "cmd.exe"
             } else {
-                return Err(Error::CommandNotFound("cmd.exe not found".to_string()));
+                return Err(Error::Generic("cmd.exe not found".to_string()));
             }
         }
         ShellType::Wsl => {
             if which::which("wsl.exe").is_ok() {
                 "wsl.exe"
             } else {
-                return Err(Error::CommandNotFound("WSL not found".to_string()));
+                return Err(Error::Generic("WSL not found".to_string()));
             }
         }
         ShellType::GitBash => {
@@ -163,7 +163,7 @@ fn get_shell_command(shell_type: &ShellType) -> Result<CommandBuilder> {
                 }
             }
 
-            found.ok_or_else(|| Error::CommandNotFound("Git Bash not found".to_string()))?
+            found.ok_or_else(|| Error::Generic("Git Bash not found".to_string()))?
         }
     };
 

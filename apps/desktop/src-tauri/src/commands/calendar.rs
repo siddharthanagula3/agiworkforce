@@ -352,7 +352,7 @@ fn open_connection(app_handle: &AppHandle) -> Result<Connection> {
         .map_err(|e| Error::Generic(format!("Failed to get app data dir: {}", e)))?
         .join("agiworkforce.db");
 
-    Connection::open(db_path).map_err(Error::Database)
+    Connection::open(db_path).map_err(|e| Error::Generic(format!("Database error: {}", e)))
 }
 
 fn insert_calendar_account(
@@ -387,7 +387,7 @@ fn insert_calendar_account(
             created_at
         ],
     )
-    .map_err(Error::Database)?;
+    .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     Ok(())
 }
@@ -449,7 +449,7 @@ fn fetch_calendar_account(
             ))
         },
     )
-    .map_err(Error::Database)
+    .map_err(|e| Error::Generic(format!("Database error: {}", e)))
 }
 
 fn list_calendar_accounts(
@@ -461,7 +461,7 @@ fn list_calendar_accounts(
              FROM calendar_accounts
              ORDER BY created_at DESC",
         )
-        .map_err(Error::Database)?;
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let accounts = stmt
         .query_map([], |row| {
@@ -512,9 +512,9 @@ fn list_calendar_accounts(
                 connected_at,
             ))
         })
-        .map_err(Error::Database)?
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(Error::Database)?;
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     Ok(accounts)
 }
@@ -530,7 +530,7 @@ fn delete_calendar_account(conn: &Connection, account_id: &str) -> Result<()> {
         "DELETE FROM calendar_accounts WHERE id = ?1",
         params![account_id],
     )
-    .map_err(Error::Database)?;
+    .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
     Ok(())
 }
 
