@@ -33,7 +33,7 @@ impl MySqlClient {
 
         // Configure pool constraints (5 min, 100 max connections)
         let pool_opts = PoolOpts::default().with_constraints(
-            PoolConstraints::new(5, 100).unwrap_or_else(|| PoolConstraints::new(1, 10).unwrap()),
+            PoolConstraints::new(5, 100).unwrap_or_else(|_| PoolConstraints::new(1, 10).expect("Failed to create fallback pool constraints")),
         );
 
         // Create the pool with connection string and pool options

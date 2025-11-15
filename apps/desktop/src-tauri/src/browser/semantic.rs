@@ -1,4 +1,3 @@
-use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -623,7 +622,7 @@ Format: {{"strategy": "css"|"xpath"|"text", "value": "..."}}"#,
 
 /// Element information returned from semantic find operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElementInfo {
+pub struct SemanticElementInfo {
     pub selector: String,
     pub strategy: String,
     pub role: Option<String>,
@@ -636,7 +635,7 @@ pub struct ElementInfo {
 pub struct SelectorResult {
     pub strategy: SelectorStrategy,
     pub found: bool,
-    pub element_info: Option<ElementInfo>,
+    pub element_info: Option<SemanticElementInfo>,
     pub error: Option<String>,
 }
 

@@ -18,7 +18,7 @@ pub async fn ai_analyze_project(
     state: State<'_, ContextManagerState>,
     project_root: String,
 ) -> Result<String, String> {
-    let mut manager = state.0.lock().await;
+    let mut manager = state.inner().lock().await;
     manager.set_project_root(PathBuf::from(project_root));
     manager
         .analyze_project()
@@ -139,7 +139,7 @@ pub async fn ai_add_constraint(
         enforced,
     };
 
-    let mut manager = state.0.lock().await;
+    let mut manager = state.inner().lock().await;
     manager.add_constraint(constraint.clone());
 
     Ok(format!("Constraint added: {}", constraint.description))
@@ -154,7 +154,7 @@ pub async fn ai_generate_code(
     target_files: Vec<String>,
     context: Option<String>,
 ) -> Result<CodeGenResult, String> {
-    let generator = state.0.lock().await;
+    let generator = state.inner().lock().await;
 
     // Get constraints from context manager
     let constraints = Vec::new(); // TODO: Get from context manager
@@ -180,7 +180,7 @@ pub async fn ai_refactor_code(
     files: Vec<String>,
     description: String,
 ) -> Result<CodeGenResult, String> {
-    let generator = state.0.lock().await;
+    let generator = state.inner().lock().await;
 
     generator
         .refactor_code(
@@ -199,7 +199,7 @@ pub async fn ai_generate_tests(
     source_files: Vec<String>,
     test_framework: Option<String>,
 ) -> Result<Vec<crate::agent::code_generator::GeneratedFile>, String> {
-    let generator = state.0.lock().await;
+    let generator = state.inner().lock().await;
 
     generator
         .generate_tests(
@@ -215,7 +215,7 @@ pub async fn ai_generate_tests(
 pub async fn ai_get_project_context(
     state: State<'_, ContextManagerState>,
 ) -> Result<serde_json::Value, String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     let context = manager.get_project_context();
 
     serde_json::to_value(context).map_err(|e| format!("Serialization failed: {}", e))
@@ -227,7 +227,7 @@ pub async fn ai_generate_context_prompt(
     state: State<'_, ContextManagerState>,
     task_description: String,
 ) -> Result<String, String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     Ok(manager.generate_context_prompt(&task_description))
 }
 
