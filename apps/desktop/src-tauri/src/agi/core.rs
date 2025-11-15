@@ -605,6 +605,7 @@ impl AGICore {
             active_goals: self.active_goals.clone(),
             execution_contexts: self.execution_contexts.clone(),
             stop_signal: self.stop_signal.clone(),
+            pause_signal: self.pause_signal.clone(),
             app_handle: None, // Don't clone app handle (not Send) - events will be emitted from main thread
             process_reasoning: self.process_reasoning.clone(),
             process_ontology: self.process_ontology.clone(),

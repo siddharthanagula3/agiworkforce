@@ -19,7 +19,7 @@ use queue::TaskQueue;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 use types::{Priority, ProgressUpdate, Task, TaskContext, TaskFilter, TaskResult, TaskStatus};
 

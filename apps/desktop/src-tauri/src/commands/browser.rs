@@ -1020,7 +1020,7 @@ pub async fn browser_get_network_activity(
 
 use crate::browser::semantic::{
     AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, ElementInfo, SelectorResult,
-    SelfHealingFinder, SemanticElementFinder, SemanticSelector,
+    SelfHealingFinder, SemanticElementFinder,
 };
 
 /// Find element using semantic natural language selector

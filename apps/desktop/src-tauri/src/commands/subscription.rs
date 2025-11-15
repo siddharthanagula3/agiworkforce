@@ -3,8 +3,6 @@
 //! High-level subscription management wrappers around Stripe integration.
 //! These commands provide a simplified API for managing subscriptions.
 
-use tauri::State;
-
 #[cfg(feature = "billing")]
 use crate::billing::{BillingStateWrapper, SubscriptionInfo};
 
