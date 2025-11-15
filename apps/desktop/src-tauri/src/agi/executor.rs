@@ -662,6 +662,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let session_manager = app.state::<SessionManager>();
+                    let start_time = std::time::Instant::now();
 
                     // Determine shell type based on language
                     let shell_type = match language.to_lowercase().as_str() {
@@ -673,7 +674,7 @@ impl AGIExecutor {
 
                     // Get or create a session
                     let sessions = session_manager.list_sessions().await;
-                    let session_id = if sessions.is_empty() {
+                    let session_id_result = if sessions.is_empty() {
                         session_manager
                             .create_session(shell_type, None)
                             .await
@@ -684,16 +685,46 @@ impl AGIExecutor {
 
                     // Execute the code
                     let command = format!("{}\r\n", code);
-                    session_manager
-                        .send_input(&session_id, &command)
-                        .await
-                        .map_err(|e| anyhow!("Failed to execute code: {}", e))?;
+                    let execution_result = session_manager
+                        .send_input(&session_id_result, &command)
+                        .await;
 
                     // Wait a bit for execution
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
+                    let duration_ms = start_time.elapsed().as_millis() as u64;
+
+                    // Try to get current working directory from session
+                    let cwd = std::env::current_dir()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| "/".to_string());
+
+                    // Emit frontend event for terminal command
+                    let terminal_cmd = crate::events::TerminalCommand {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        command: code.to_string(),
+                        cwd,
+                        exit_code: if execution_result.is_ok() {
+                            Some(0)
+                        } else {
+                            Some(1)
+                        },
+                        stdout: None, // Would need to capture from session output
+                        stderr: if execution_result.is_err() {
+                            Some(execution_result.as_ref().unwrap_err().to_string())
+                        } else {
+                            None
+                        },
+                        duration: Some(duration_ms),
+                        session_id: Some(session_id_result.clone()),
+                        agent_id: None,
+                    };
+                    crate::events::emit_terminal_command(app, terminal_cmd);
+
+                    execution_result.map_err(|e| anyhow!("Failed to execute code: {}", e))?;
+
                     Ok(
-                        json!({ "success": true, "language": language, "session_id": session_id, "code": &code[..code.len().min(100)] }),
+                        json!({ "success": true, "language": language, "session_id": session_id_result, "code": &code[..code.len().min(100)] }),
                     )
                 } else {
                     Err(anyhow!("App handle not available for code execution"))
