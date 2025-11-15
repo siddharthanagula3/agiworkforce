@@ -448,7 +448,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Get or create a tab
@@ -492,7 +492,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Determine which tab to use
@@ -549,7 +549,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Determine which tab to use

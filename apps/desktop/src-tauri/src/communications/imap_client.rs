@@ -30,7 +30,7 @@ impl ImapClient {
         use_tls: bool,
     ) -> Result<Self> {
         if !use_tls {
-            return Err(Error::EmailConnection(
+            return Err(Error::Generic(
                 "Non-TLS IMAP connections are not supported for security reasons".to_string(),
             ));
         }
@@ -39,27 +39,27 @@ impl ImapClient {
         info!("Connecting to IMAP server {}", addr);
 
         let tcp_stream = TcpStream::connect(&addr).await.map_err(|err| {
-            Error::EmailConnection(format!("Failed to connect to {}: {}", addr, err))
+            Error::Generic(format!("Failed to connect to {}: {}", addr, err))
         })?;
         tcp_stream.set_nodelay(true).map_err(|err| {
-            Error::EmailConnection(format!("Failed to optimize TCP stream: {}", err))
+            Error::Generic(format!("Failed to optimize TCP stream: {}", err))
         })?;
 
         let native_connector = native_tls::TlsConnector::new().map_err(|err| {
-            Error::EmailConnection(format!("Failed to create TLS connector: {}", err))
+            Error::Generic(format!("Failed to create TLS connector: {}", err))
         })?;
         let tls_connector = TlsConnector::from(native_connector);
         let tls_stream = tls_connector
             .connect(host, tcp_stream)
             .await
-            .map_err(|err| Error::EmailConnection(format!("TLS handshake failed: {}", err)))?;
+            .map_err(|err| Error::Generic(format!("TLS handshake failed: {}", err)))?;
 
         let client = async_imap::Client::new(tls_stream.compat());
 
         let session = client
             .login(email, password)
             .await
-            .map_err(|(err, _)| Error::EmailAuth(format!("IMAP authentication failed: {}", err)))?;
+            .map_err(|(err, _)| Error::Generic(format!("IMAP authentication failed: {}", err)))?;
 
         info!("IMAP connection established for {}", email);
 
@@ -298,7 +298,7 @@ fn join_uids(uids: &[u32]) -> String {
 }
 
 fn map_imap_error(err: async_imap::error::Error) -> Error {
-    Error::EmailConnection(format!("IMAP error: {}", err))
+    Error::Generic(format!("IMAP error: {}", err))
 }
 
 fn build_search_query(filter: Option<&EmailFilter>) -> Option<String> {
