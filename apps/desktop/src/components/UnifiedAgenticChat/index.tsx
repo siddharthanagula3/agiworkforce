@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputArea, SendOptions } from './ChatInputArea';
 import { SidecarPanel } from './SidecarPanel';
@@ -48,6 +49,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
   const deleteMessage = useUnifiedChatStore((state) => state.deleteMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
+
+  // Setup event listeners for real-time updates from Tauri backend
+  useAgenticEvents();
 
   // Initialize sidecar state
   useEffect(() => {
