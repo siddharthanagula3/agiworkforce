@@ -6,6 +6,10 @@ import rehypeKatex from 'rehype-katex';
 import { Copy, RotateCw, Edit2, Trash2, MoreVertical } from 'lucide-react';
 import { EnhancedMessage } from '../../stores/unifiedChatStore';
 import { CodeBlock } from './Visualizations/CodeBlock';
+import { FileOperationCard } from './Cards/FileOperationCard';
+import { TerminalCommandCard } from './Cards/TerminalCommandCard';
+import { ToolExecutionCard } from './Cards/ToolExecutionCard';
+import { ApprovalRequestCard } from './Cards/ApprovalRequestCard';
 import 'katex/dist/katex.min.css';
 
 export interface MessageBubbleProps {
@@ -171,6 +175,50 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Operations (File, Terminal, Tool, Approval, Screenshot) */}
+        {message.operations && message.operations.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {message.operations.map((operation) => {
+              if (operation.type === 'file' && operation.data) {
+                return (
+                  <FileOperationCard
+                    key={operation.data.id || operation.timestamp.toISOString()}
+                    operation={operation.data}
+                    showDiff={true}
+                  />
+                );
+              }
+              if (operation.type === 'terminal' && operation.data) {
+                return (
+                  <TerminalCommandCard
+                    key={operation.data.id || operation.timestamp.toISOString()}
+                    command={operation.data}
+                    showOutput={true}
+                  />
+                );
+              }
+              if (operation.type === 'tool' && operation.data) {
+                return (
+                  <ToolExecutionCard
+                    key={operation.data.id || operation.timestamp.toISOString()}
+                    execution={operation.data}
+                    showInputOutput={true}
+                  />
+                );
+              }
+              if (operation.type === 'approval' && operation.data) {
+                return (
+                  <ApprovalRequestCard
+                    key={operation.data.id || operation.timestamp.toISOString()}
+                    approval={operation.data}
+                  />
+                );
+              }
+              return null;
+            })}
           </div>
         )}
 
