@@ -314,8 +314,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       updateMessage: (id, updates) =>
         set((state) => {
           const index = state.messages.findIndex((m) => m.id === id);
-          if (index !== -1) {
-            state.messages[index] = { ...state.messages[index], ...updates };
+          if (index !== -1 && state.messages[index]) {
+            Object.assign(state.messages[index], updates);
           }
         }),
 
@@ -335,7 +335,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const { currentStreamingMessageId } = state;
           if (currentStreamingMessageId) {
             const index = state.messages.findIndex((m) => m.id === currentStreamingMessageId);
-            if (index !== -1) {
+            if (index !== -1 && state.messages[index]) {
               state.messages[index].content += content;
             }
           }
@@ -355,7 +355,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       updateTerminalOutput: (payload) =>
         set((state) => {
           const index = state.terminalCommands.findIndex((cmd) => cmd.id === payload.command_id);
-          if (index !== -1) {
+          if (index !== -1 && state.terminalCommands[index]) {
             state.terminalCommands[index].stdout = payload.stdout;
             state.terminalCommands[index].stderr = payload.stderr;
             state.terminalCommands[index].exitCode = payload.exit_code;
@@ -377,8 +377,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       updateAgentStatus: (id, status) =>
         set((state) => {
           const index = state.agents.findIndex((a) => a.id === id);
-          if (index !== -1) {
-            state.agents[index] = { ...state.agents[index], ...status };
+          if (index !== -1 && state.agents[index]) {
+            Object.assign(state.agents[index], status);
           }
         }),
 
@@ -395,7 +395,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       updateTaskProgress: (id, progress) =>
         set((state) => {
           const index = state.backgroundTasks.findIndex((t) => t.id === id);
-          if (index !== -1) {
+          if (index !== -1 && state.backgroundTasks[index]) {
             state.backgroundTasks[index].progress = progress;
           }
         }),
@@ -408,8 +408,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       updateBackgroundTask: (id, updates) =>
         set((state) => {
           const index = state.backgroundTasks.findIndex((t) => t.id === id);
-          if (index !== -1) {
-            state.backgroundTasks[index] = { ...state.backgroundTasks[index], ...updates };
+          if (index !== -1 && state.backgroundTasks[index]) {
+            Object.assign(state.backgroundTasks[index], updates);
           }
         }),
 
@@ -426,7 +426,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       approveOperation: (id) =>
         set((state) => {
           const index = state.pendingApprovals.findIndex((a) => a.id === id);
-          if (index !== -1) {
+          if (index !== -1 && state.pendingApprovals[index]) {
             state.pendingApprovals[index].status = 'approved';
             state.pendingApprovals[index].approvedAt = new Date();
           }
@@ -435,7 +435,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       rejectOperation: (id, reason) =>
         set((state) => {
           const index = state.pendingApprovals.findIndex((a) => a.id === id);
-          if (index !== -1) {
+          if (index !== -1 && state.pendingApprovals[index]) {
             state.pendingApprovals[index].status = 'rejected';
             state.pendingApprovals[index].rejectedAt = new Date();
             state.pendingApprovals[index].rejectionReason = reason;
