@@ -2,7 +2,7 @@
  * Code Chunker
  * Intelligent chunking of code files for embedding generation
  */
-use anyhow::{Context, Result};
+use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
 

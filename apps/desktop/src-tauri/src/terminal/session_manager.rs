@@ -182,9 +182,11 @@ async fn log_command_to_db(
 
     // Get the database from app state
     let db_state = app_handle.state::<AppDatabase>();
-    let conn = db_state.inner().conn.lock().map_err(|e| {
-        Error::Generic(format!("Database lock error: {}", e))
-    })?;
+    let conn = db_state
+        .inner()
+        .conn
+        .lock()
+        .map_err(|e| Error::Generic(format!("Database lock error: {}", e)))?;
 
     let working_dir = std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
@@ -216,9 +218,11 @@ pub async fn get_command_history(
     use rusqlite::params;
 
     let db_state = app_handle.state::<AppDatabase>();
-    let conn = db_state.inner().conn.lock().map_err(|e| {
-        Error::Generic(format!("Database lock error: {}", e))
-    })?;
+    let conn = db_state
+        .inner()
+        .conn
+        .lock()
+        .map_err(|e| Error::Generic(format!("Database lock error: {}", e)))?;
 
     let mut stmt = conn
         .prepare("SELECT command FROM command_history ORDER BY created_at DESC LIMIT ?1")
