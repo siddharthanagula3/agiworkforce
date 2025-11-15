@@ -1,5 +1,5 @@
 use crate::security::{
-    ApiSecurityManager, AuthManager, AuthToken, SecretManager, SecureStorage, UpdateMetadata,
+    ApiSecurityManager, AuthManager, AuthToken, SecureStorage, UpdateMetadata,
     UpdateSecurityManager, UserRole, VerificationResult,
 };
 use serde::{Deserialize, Serialize};
