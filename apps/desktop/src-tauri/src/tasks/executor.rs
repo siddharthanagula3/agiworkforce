@@ -1,5 +1,4 @@
-use super::types::{ProgressUpdate, Task, TaskContext, TaskResult, TaskStatus};
-use anyhow::Context;
+use super::types::{ProgressUpdate, Task, TaskContext};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;

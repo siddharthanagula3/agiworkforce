@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
-use types::{Priority, ProgressUpdate, Task, TaskContext, TaskFilter, TaskResult, TaskStatus};
+use types::{Priority, Task, TaskFilter, TaskResult, TaskStatus};
 
 /// Central task manager coordinating queue, executor, and persistence
 pub struct TaskManager {
