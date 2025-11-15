@@ -52,7 +52,7 @@ impl SmtpClient {
 
         let builder = if use_tls {
             AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host).map_err(|err| {
-                Error::EmailConnection(format!("Failed to configure STARTTLS: {}", err))
+                Error::Generic(format!("Failed to configure STARTTLS: {}", err))
             })?
         } else {
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
@@ -67,7 +67,7 @@ impl SmtpClient {
         transport
             .test_connection()
             .await
-            .map_err(|err| Error::EmailConnection(format!("SMTP connection failed: {}", err)))?;
+            .map_err(|err| Error::Generic(format!("SMTP connection failed: {}", err)))?;
 
         info!("SMTP transport ready for {}", email);
 
