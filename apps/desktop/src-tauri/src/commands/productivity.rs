@@ -38,9 +38,9 @@ pub struct ConnectResponse {
     pub success: bool,
 }
 
-/// Request to list tasks
+/// Request to list tasks from productivity providers
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ListTasksRequest {
+pub struct ListProductivityTasksRequest {
     pub provider: Provider,
 }
 

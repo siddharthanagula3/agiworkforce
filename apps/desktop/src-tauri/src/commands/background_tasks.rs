@@ -18,9 +18,9 @@ pub struct SubmitTaskRequest {
     pub payload: Option<String>,
 }
 
-/// Task filter request
+/// Task filter request for background tasks
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ListTasksRequest {
+pub struct ListBackgroundTasksRequest {
     pub status: Option<String>,
     pub priority: Option<String>,
     pub limit: Option<usize>,
@@ -101,7 +101,7 @@ pub async fn bg_get_task_status(
 /// List background tasks with optional filtering
 #[tauri::command]
 pub async fn bg_list_tasks(
-    request: ListTasksRequest,
+    request: ListBackgroundTasksRequest,
     state: State<'_, TaskManagerState>,
 ) -> Result<Vec<Task>, String> {
     let status = request.status.and_then(|s| match s.as_str() {
