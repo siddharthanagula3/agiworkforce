@@ -464,6 +464,12 @@ fn main() {
             agiworkforce_desktop::commands::orchestrator_cancel_all,
             agiworkforce_desktop::commands::orchestrator_wait_all,
             agiworkforce_desktop::commands::orchestrator_cleanup,
+            // System monitoring and agent management commands
+            agiworkforce_desktop::commands::get_system_resources,
+            agiworkforce_desktop::commands::pause_agent,
+            agiworkforce_desktop::commands::resume_agent,
+            agiworkforce_desktop::commands::cancel_agent,
+            agiworkforce_desktop::commands::refresh_agent_status,
             // Agent commands
             agiworkforce_desktop::commands::agent_init,
             agiworkforce_desktop::commands::agent_submit_task,
