@@ -378,11 +378,7 @@ impl EmployeeMarketplace {
         // Update the employee to be published (mark as verified if publishing publicly)
         conn.execute(
             "UPDATE ai_employees SET is_verified = ?2, creator_id = ?3 WHERE id = ?1",
-            rusqlite::params![
-                employee_id,
-                if is_public { 1 } else { 0 },
-                creator_id,
-            ],
+            rusqlite::params![employee_id, if is_public { 1 } else { 0 }, creator_id,],
         )
         .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
