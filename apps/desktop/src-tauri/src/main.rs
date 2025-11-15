@@ -470,6 +470,14 @@ fn main() {
             agiworkforce_desktop::commands::resume_agent,
             agiworkforce_desktop::commands::cancel_agent,
             agiworkforce_desktop::commands::refresh_agent_status,
+            // User operation commands
+            agiworkforce_desktop::commands::approve_operation,
+            agiworkforce_desktop::commands::reject_operation,
+            agiworkforce_desktop::commands::cancel_background_task,
+            agiworkforce_desktop::commands::pause_background_task,
+            agiworkforce_desktop::commands::resume_background_task,
+            agiworkforce_desktop::commands::list_background_tasks,
+            agiworkforce_desktop::commands::list_active_agents,
             // Knowledge base commands
             agiworkforce_desktop::commands::query_knowledge,
             agiworkforce_desktop::commands::get_recent_knowledge,
