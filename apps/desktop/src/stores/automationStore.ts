@@ -27,10 +27,19 @@ import type {
   ExecutionHistory,
   ExecutionResult,
   InspectorState,
+  RecordedAction,
   Recording,
   RecordingSession,
 } from '../types/automation-enhanced';
 import type { CaptureResult } from '../types/capture';
+
+interface Shortcut {
+  id: string;
+  key: string;
+  description: string;
+  action: string;
+  enabled: boolean;
+}
 
 interface AutomationState {
   // Existing state
@@ -61,6 +70,10 @@ interface AutomationState {
 
   // Inspector state
   inspector: InspectorState;
+
+  // Shortcuts state
+  shortcuts: Shortcut[];
+  lastTriggeredShortcut: string | null;
 
   // Existing actions
   loadWindows: () => Promise<void>;
@@ -104,6 +117,18 @@ interface AutomationState {
   activateInspector: () => void;
   deactivateInspector: () => void;
   inspectElementAt: (x: number, y: number) => Promise<void>;
+
+  // Event handlers for Tauri events
+  handleRecordingStarted: (session: {
+    sessionId: string;
+    startTime: number;
+    isRecording: boolean;
+  }) => void;
+  handleRecordingStopped: (recording: Recording) => void;
+  handleActionRecorded: (action: RecordedAction) => void;
+  handleShortcutAction: (action: string) => void;
+  handleShortcutRegistered: (shortcut: Shortcut) => void;
+  handleShortcutUnregistered: (shortcutId: string) => void;
 }
 
 export const useAutomationStore = create<AutomationState>((set, get) => ({
@@ -136,6 +161,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   inspector: {
     isActive: false,
   },
+
+  // Shortcuts state
+  shortcuts: [],
+  lastTriggeredShortcut: null,
 
   async loadWindows() {
     set({ loadingWindows: true, error: null });
@@ -277,6 +306,8 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       inspector: {
         isActive: false,
       },
+      shortcuts: [],
+      lastTriggeredShortcut: null,
     });
   },
 
@@ -341,5 +372,67 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
   inspectElementAt: async () => {
     // Placeholder
+  },
+
+  // Event handlers for Tauri events
+  handleRecordingStarted: (session) => {
+    const recordingSession: RecordingSession = {
+      sessionId: session.sessionId,
+      startTime: session.startTime,
+      isRecording: session.isRecording,
+    };
+    set({
+      isRecording: true,
+      currentRecording: recordingSession,
+    });
+    console.log('[AutomationStore] Recording started:', recordingSession);
+  },
+
+  handleRecordingStopped: (recording) => {
+    set((state) => ({
+      isRecording: false,
+      currentRecording: null,
+      recordings: [recording, ...state.recordings],
+    }));
+    console.log('[AutomationStore] Recording stopped:', recording);
+  },
+
+  handleActionRecorded: (action) => {
+    set((state) => {
+      if (!state.currentRecording) {
+        console.warn('[AutomationStore] Action recorded but no active recording session');
+        return state;
+      }
+      console.log('[AutomationStore] Action recorded:', action);
+      return state;
+    });
+  },
+
+  handleShortcutAction: (action) => {
+    set({ lastTriggeredShortcut: action });
+    console.log('[AutomationStore] Shortcut action triggered:', action);
+  },
+
+  handleShortcutRegistered: (shortcut) => {
+    set((state) => {
+      const existingIndex = state.shortcuts.findIndex((s) => s.id === shortcut.id);
+      if (existingIndex >= 0) {
+        // Update existing shortcut
+        const updatedShortcuts = [...state.shortcuts];
+        updatedShortcuts[existingIndex] = shortcut;
+        return { shortcuts: updatedShortcuts };
+      } else {
+        // Add new shortcut
+        return { shortcuts: [...state.shortcuts, shortcut] };
+      }
+    });
+    console.log('[AutomationStore] Shortcut registered:', shortcut);
+  },
+
+  handleShortcutUnregistered: (shortcutId) => {
+    set((state) => ({
+      shortcuts: state.shortcuts.filter((s) => s.id !== shortcutId),
+    }));
+    console.log('[AutomationStore] Shortcut unregistered:', shortcutId);
   },
 }));
