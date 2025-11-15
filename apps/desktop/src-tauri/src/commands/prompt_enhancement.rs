@@ -1,7 +1,7 @@
 use crate::prompt_enhancement::{
     api_router::APIRouter, prompt_enhancer::PromptEnhancer, use_case_detector::UseCaseDetector,
-    APIRoute, EnhancedPrompt, PromptContext, PromptEnhancementConfig,
-    PromptEnhancementResult, UseCase, UseCaseDetection,
+    APIRoute, EnhancedPrompt, PromptContext, PromptEnhancementConfig, PromptEnhancementResult,
+    UseCase, UseCaseDetection,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
