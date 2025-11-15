@@ -608,3 +608,120 @@ pub async fn refresh_agent_status() -> Result<Vec<AgentStatus>, String> {
 
     Ok(statuses)
 }
+
+/// Knowledge entry for frontend
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeEntryResponse {
+    pub id: String,
+    pub category: String,
+    pub content: String,
+    pub metadata: std::collections::HashMap<String, String>,
+    pub timestamp: u64,
+    pub importance: f64,
+}
+
+/// Query knowledge base with search term
+#[tauri::command]
+pub async fn query_knowledge(
+    query: String,
+    limit: usize,
+) -> Result<Vec<KnowledgeEntryResponse>, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+    let entries = agi
+        .knowledge
+        .query(&query, limit)
+        .await
+        .map_err(|e| format!("Failed to query knowledge: {}", e))?;
+
+    Ok(entries
+        .into_iter()
+        .map(|e| KnowledgeEntryResponse {
+            id: e.id,
+            category: e.category,
+            content: e.content,
+            metadata: e.metadata,
+            timestamp: e.timestamp,
+            importance: e.importance,
+        })
+        .collect())
+}
+
+/// Get recent knowledge entries
+#[tauri::command]
+pub async fn get_recent_knowledge(limit: usize) -> Result<Vec<KnowledgeEntryResponse>, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+
+    // Query with empty string to get all entries sorted by importance/timestamp
+    let entries = agi
+        .knowledge
+        .query("", limit)
+        .await
+        .map_err(|e| format!("Failed to get recent knowledge: {}", e))?;
+
+    Ok(entries
+        .into_iter()
+        .map(|e| KnowledgeEntryResponse {
+            id: e.id,
+            category: e.category,
+            content: e.content,
+            metadata: e.metadata,
+            timestamp: e.timestamp,
+            importance: e.importance,
+        })
+        .collect())
+}
+
+/// Get knowledge by category
+#[tauri::command]
+pub async fn get_knowledge_by_category(
+    category: String,
+    limit: usize,
+) -> Result<Vec<KnowledgeEntryResponse>, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+    let entries = agi
+        .knowledge
+        .query(&category, limit)
+        .await
+        .map_err(|e| format!("Failed to get knowledge by category: {}", e))?;
+
+    // Filter to exact category matches
+    let filtered: Vec<_> = entries
+        .into_iter()
+        .filter(|e| e.category == category)
+        .map(|e| KnowledgeEntryResponse {
+            id: e.id,
+            category: e.category,
+            content: e.content,
+            metadata: e.metadata,
+            timestamp: e.timestamp,
+            importance: e.importance,
+        })
+        .collect();
+
+    Ok(filtered)
+}
