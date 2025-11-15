@@ -86,10 +86,10 @@ impl TrelloClient {
     pub async fn verify_connection(&mut self) -> Result<String> {
         let url = self.build_url("/members/me");
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let member: TrelloMember = response.json().await.map_err(Error::Http)?;
+            let member: TrelloMember = response.json().await.map_err(|e| Error::from(e))?;
             Ok(member.id)
         } else {
             let status = response.status();
@@ -105,10 +105,10 @@ impl TrelloClient {
     pub async fn list_boards(&self) -> Result<Vec<TrelloBoard>> {
         let url = self.build_url("/members/me/boards");
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let boards: Vec<TrelloBoard> = response.json().await.map_err(Error::Http)?;
+            let boards: Vec<TrelloBoard> = response.json().await.map_err(|e| Error::from(e))?;
             Ok(boards)
         } else {
             Err(Error::Provider(format!(
@@ -122,10 +122,10 @@ impl TrelloClient {
     pub async fn list_board_lists(&self, board_id: &str) -> Result<Vec<TrelloList>> {
         let url = self.build_url(&format!("/boards/{}/lists", board_id));
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let lists: Vec<TrelloList> = response.json().await.map_err(Error::Http)?;
+            let lists: Vec<TrelloList> = response.json().await.map_err(|e| Error::from(e))?;
             Ok(lists)
         } else {
             Err(Error::Provider(format!(
@@ -139,10 +139,10 @@ impl TrelloClient {
     pub async fn list_board_cards(&self, board_id: &str) -> Result<Vec<TrelloCard>> {
         let url = self.build_url(&format!("/boards/{}/cards", board_id));
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let cards: Vec<TrelloCard> = response.json().await.map_err(Error::Http)?;
+            let cards: Vec<TrelloCard> = response.json().await.map_err(|e| Error::from(e))?;
             Ok(cards)
         } else {
             Err(Error::Provider(format!(
@@ -156,10 +156,10 @@ impl TrelloClient {
     pub async fn list_list_cards(&self, list_id: &str) -> Result<Vec<TrelloCard>> {
         let url = self.build_url(&format!("/lists/{}/cards", list_id));
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let cards: Vec<TrelloCard> = response.json().await.map_err(Error::Http)?;
+            let cards: Vec<TrelloCard> = response.json().await.map_err(|e| Error::from(e))?;
             Ok(cards)
         } else {
             Err(Error::Provider(format!(
@@ -192,10 +192,10 @@ impl TrelloClient {
             url.push_str(&format!("&due={}", due_date.to_rfc3339()));
         }
 
-        let response = self.client.post(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.post(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let card: TrelloCard = response.json().await.map_err(Error::Http)?;
+            let card: TrelloCard = response.json().await.map_err(|e| Error::from(e))?;
             Ok(card.id)
         } else {
             let status = response.status();
@@ -212,7 +212,7 @@ impl TrelloClient {
         let mut url = self.build_url(&format!("/cards/{}", card_id));
         url.push_str(&format!("&idList={}", list_id));
 
-        let response = self.client.put(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.put(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             Ok(())
@@ -229,10 +229,10 @@ impl TrelloClient {
         let mut url = self.build_url(&format!("/cards/{}/actions/comments", card_id));
         url.push_str(&format!("&text={}", urlencoding::encode(text)));
 
-        let response = self.client.post(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.post(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let comment: serde_json::Value = response.json().await.map_err(Error::Http)?;
+            let comment: serde_json::Value = response.json().await.map_err(|e| Error::from(e))?;
             let comment_id = comment
                 .get("id")
                 .and_then(|id| id.as_str())
@@ -251,10 +251,10 @@ impl TrelloClient {
     async fn get_list_name(&self, list_id: &str) -> Result<String> {
         let url = self.build_url(&format!("/lists/{}", list_id));
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let list: TrelloList = response.json().await.map_err(Error::Http)?;
+            let list: TrelloList = response.json().await.map_err(|e| Error::from(e))?;
             Ok(list.name)
         } else {
             Ok("Unknown".to_string())
@@ -363,7 +363,7 @@ impl UnifiedTaskProvider for TrelloClient {
     async fn delete_task(&self, card_id: &str) -> Result<()> {
         let url = self.build_url(&format!("/cards/{}", card_id));
 
-        let response = self.client.delete(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.delete(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             Ok(())
@@ -378,10 +378,10 @@ impl UnifiedTaskProvider for TrelloClient {
     async fn get_task(&self, card_id: &str) -> Result<Task> {
         let url = self.build_url(&format!("/cards/{}", card_id));
 
-        let response = self.client.get(&url).send().await.map_err(Error::Http)?;
+        let response = self.client.get(&url).send().await.map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let card: TrelloCard = response.json().await.map_err(Error::Http)?;
+            let card: TrelloCard = response.json().await.map_err(|e| Error::from(e))?;
             Ok(self.card_to_task(&card).await)
         } else {
             Err(Error::Provider(format!(

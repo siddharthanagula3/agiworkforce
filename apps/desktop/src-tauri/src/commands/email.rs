@@ -137,7 +137,7 @@ pub async fn email_connect(
 
     let config = custom_config
         .or_else(|| get_provider_config(&provider))
-        .ok_or_else(|| Error::EmailConnection(format!("Unknown provider: {}", provider)))?;
+        .ok_or_else(|| Error::Generic(format!("Unknown provider: {}", provider)))?;
 
     // Validate IMAP credentials
     let mut imap = ImapClient::connect(
@@ -190,13 +190,13 @@ pub async fn email_list_accounts(app_handle: AppHandle) -> Result<Vec<EmailAccou
              FROM email_accounts
              ORDER BY email",
         )
-        .map_err(Error::Database)?;
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let accounts = stmt
         .query_map([], map_account_row)
-        .map_err(Error::Database)?
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(Error::Database)?
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .into_iter()
         .map(EmailAccountRecord::into_account)
         .collect();
@@ -213,7 +213,7 @@ pub async fn email_remove_account(app_handle: AppHandle, account_id: i64) -> Res
         "DELETE FROM email_accounts WHERE id = ?1",
         params![account_id],
     )
-    .map_err(Error::Database)?;
+    .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
     Ok(())
 }
 
@@ -478,7 +478,7 @@ fn open_connection(app_handle: &AppHandle) -> Result<Connection> {
         .map_err(|err| Error::Generic(format!("Failed to resolve data dir: {}", err)))?
         .join("agiworkforce.db");
 
-    Connection::open(db_path).map_err(Error::Database)
+    Connection::open(db_path).map_err(|e| Error::Generic(format!("Database error: {}", e)))
 }
 
 fn upsert_email_account(
@@ -520,7 +520,7 @@ fn upsert_email_account(
             created_at
         ],
     )
-    .map_err(Error::Database)?;
+    .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let id = conn
         .query_row(
@@ -528,7 +528,7 @@ fn upsert_email_account(
             params![email],
             |row| row.get(0),
         )
-        .map_err(Error::Database)?;
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     Ok(id)
 }
