@@ -495,7 +495,10 @@ pub async fn acknowledge_milestone(
     let mut properties = std::collections::HashMap::new();
     properties.insert("milestone_id".to_string(), serde_json::json!(milestone_id));
     properties.insert("user_id".to_string(), serde_json::json!(user_id));
-    properties.insert("acknowledged_at".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
+    properties.insert(
+        "acknowledged_at".to_string(),
+        serde_json::json!(chrono::Utc::now().to_rfc3339()),
+    );
 
     let event = TelemetryEvent {
         name: "milestone_acknowledged".to_string(),
