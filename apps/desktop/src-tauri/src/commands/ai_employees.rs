@@ -198,6 +198,45 @@ pub async fn ai_employees_publish(
         .map_err(|e| e.to_string())
 }
 
+/// Update a custom employee configuration
+#[tauri::command]
+pub async fn update_custom_employee(
+    employee_id: String,
+    config: AIEmployee,
+    state: State<'_, AIEmployeeState>,
+) -> Result<(), String> {
+    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    marketplace
+        .update_employee(&employee_id, config)
+        .map_err(|e| e.to_string())
+}
+
+/// Delete a custom employee
+#[tauri::command]
+pub async fn delete_custom_employee(
+    employee_id: String,
+    state: State<'_, AIEmployeeState>,
+) -> Result<(), String> {
+    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    marketplace
+        .delete_employee(&employee_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Publish employee to marketplace with metadata
+#[tauri::command]
+pub async fn publish_employee_to_marketplace(
+    employee_id: String,
+    creator_id: String,
+    is_public: bool,
+    state: State<'_, AIEmployeeState>,
+) -> Result<String, String> {
+    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    marketplace
+        .publish_to_marketplace(&employee_id, &creator_id, is_public)
+        .map_err(|e| e.to_string())
+}
+
 /// Initialize the AI employee system
 #[tauri::command]
 pub async fn ai_employees_initialize(state: State<'_, AIEmployeeState>) -> Result<usize, String> {

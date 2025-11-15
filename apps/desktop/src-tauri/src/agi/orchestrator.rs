@@ -328,6 +328,11 @@ impl AgentOrchestrator {
         statuses
     }
 
+    /// Alias for list_active_agents (for backward compatibility)
+    pub async fn list_agents(&self) -> Result<Vec<AgentStatus>> {
+        Ok(self.list_active_agents().await)
+    }
+
     /// Cancel a specific agent
     pub async fn cancel_agent(&self, id: &str) -> Result<()> {
         let mut agents = self.agents.lock().await;
@@ -352,6 +357,82 @@ impl AgentOrchestrator {
             if let Some(ref app) = self.app_handle {
                 let _ = app.emit(
                     "agent:cancelled",
+                    serde_json::json!({
+                        "agent_id": id,
+                    }),
+                );
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!("Agent {} not found", id))
+        }
+    }
+
+    /// Pause a specific agent
+    pub async fn pause_agent(&self, id: &str) -> Result<()> {
+        let mut agents = self.agents.lock().await;
+
+        if let Some(agent) = agents.get_mut(id) {
+            // Check if agent is in a pausable state
+            if agent.status.status != AgentState::Running {
+                return Err(anyhow!(
+                    "Agent {} cannot be paused (current state: {:?})",
+                    id,
+                    agent.status.status
+                ));
+            }
+
+            tracing::info!("[Orchestrator] Pausing agent {}", id);
+
+            // Pause the agent's core
+            agent.core.pause();
+
+            // Update status
+            agent.status.status = AgentState::Paused;
+
+            // Emit paused event
+            if let Some(ref app) = self.app_handle {
+                let _ = app.emit(
+                    "agent:paused",
+                    serde_json::json!({
+                        "agent_id": id,
+                    }),
+                );
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!("Agent {} not found", id))
+        }
+    }
+
+    /// Resume a paused agent
+    pub async fn resume_agent(&self, id: &str) -> Result<()> {
+        let mut agents = self.agents.lock().await;
+
+        if let Some(agent) = agents.get_mut(id) {
+            // Check if agent is paused
+            if agent.status.status != AgentState::Paused {
+                return Err(anyhow!(
+                    "Agent {} is not paused (current state: {:?})",
+                    id,
+                    agent.status.status
+                ));
+            }
+
+            tracing::info!("[Orchestrator] Resuming agent {}", id);
+
+            // Resume the agent's core
+            agent.core.resume();
+
+            // Update status
+            agent.status.status = AgentState::Running;
+
+            // Emit resumed event
+            if let Some(ref app) = self.app_handle {
+                let _ = app.emit(
+                    "agent:resumed",
                     serde_json::json!({
                         "agent_id": id,
                     }),
