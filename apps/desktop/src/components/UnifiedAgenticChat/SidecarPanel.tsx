@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useUnifiedChatStore, SidecarSection } from '../../stores/unifiedChatStore';
+import { ActiveOperationsSection } from './Sidecar/ActiveOperationsSection';
 
 export interface SidecarPanelProps {
   isOpen: boolean;
@@ -185,20 +186,11 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {sidecarSection === 'operations' && (
-          <div className="space-y-4">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Active Operations
-            </h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              No active operations. Operations will appear here when agents are working.
-            </p>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto">
+        {sidecarSection === 'operations' && <ActiveOperationsSection />}
 
         {sidecarSection === 'reasoning' && (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Reasoning</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Reasoning steps will appear here when the agent is thinking.
@@ -207,7 +199,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         )}
 
         {sidecarSection === 'files' && (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               File Operations
             </h4>
@@ -218,7 +210,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         )}
 
         {sidecarSection === 'terminal' && (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Terminal Commands
             </h4>
@@ -229,7 +221,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         )}
 
         {sidecarSection === 'tools' && (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Tool Usage</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Tool execution statistics will appear here.
@@ -238,7 +230,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         )}
 
         {sidecarSection === 'tasks' && (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Background Tasks
             </h4>
@@ -249,7 +241,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         )}
 
         {sidecarSection === 'agents' && (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Multi-Agent Status
             </h4>
