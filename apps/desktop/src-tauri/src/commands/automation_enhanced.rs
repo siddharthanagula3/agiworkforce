@@ -1,4 +1,3 @@
-use anyhow::Result as AnyResult;
 use tauri::{AppHandle, State};
 
 use super::AppDatabase;
