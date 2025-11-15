@@ -1,0 +1,181 @@
+import React, { useState } from 'react';
+import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
+import { Copy, Maximize2, Minimize2 } from 'lucide-react';
+
+export interface DiffViewerProps {
+  oldContent: string;
+  newContent: string;
+  language?: string;
+  fileName?: string;
+  viewMode?: 'split' | 'unified';
+  showLineNumbers?: boolean;
+  highlightChanges?: boolean;
+  className?: string;
+}
+
+export const DiffViewer: React.FC<DiffViewerProps> = ({
+  oldContent,
+  newContent,
+  fileName,
+  viewMode = 'split',
+  showLineNumbers = true,
+  highlightChanges = true,
+  className = '',
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [currentViewMode, setCurrentViewMode] = useState<'split' | 'unified'>(viewMode);
+  const [copied, setCopied] = useState<'old' | 'new' | null>(null);
+
+  const handleCopy = async (content: string, type: 'old' | 'new') => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy content:', err);
+    }
+  };
+
+  // Calculate statistics
+  const oldLines = oldContent.split('\n').length;
+  const newLines = newContent.split('\n').length;
+  const linesAdded = newLines - oldLines;
+  const linesRemoved = oldLines - newLines;
+
+  const styles = {
+    variables: {
+      dark: {
+        diffViewerBackground: '#1e1e1e',
+        diffViewerColor: '#d4d4d4',
+        addedBackground: '#044B53',
+        addedColor: '#d4d4d4',
+        removedBackground: '#5A1E1E',
+        removedColor: '#d4d4d4',
+        wordAddedBackground: '#055d67',
+        wordRemovedBackground: '#7d2727',
+        addedGutterBackground: '#033b42',
+        removedGutterBackground: '#4a1616',
+        gutterBackground: '#2d2d2d',
+        gutterBackgroundDark: '#262626',
+        highlightBackground: '#3d3d3d',
+        highlightGutterBackground: '#2d2d2d',
+        codeFoldGutterBackground: '#262626',
+        codeFoldBackground: '#2d2d2d',
+        emptyLineBackground: '#1e1e1e',
+        gutterColor: '#858585',
+        addedGutterColor: '#4dbb5f',
+        removedGutterColor: '#f85149',
+        codeFoldContentColor: '#858585',
+        diffViewerTitleBackground: '#2d2d2d',
+        diffViewerTitleColor: '#d4d4d4',
+        diffViewerTitleBorderColor: '#3d3d3d',
+      },
+    },
+  };
+
+  return (
+    <div
+      className={`diff-viewer rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 ${className}`}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-3">
+          {fileName && (
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{fileName}</span>
+          )}
+          <div className="flex items-center gap-2 text-xs">
+            {linesAdded > 0 && (
+              <span className="text-green-600 dark:text-green-400">+{linesAdded}</span>
+            )}
+            {linesRemoved > 0 && (
+              <span className="text-red-600 dark:text-red-400">-{linesRemoved}</span>
+            )}
+            {linesAdded === 0 && linesRemoved === 0 && (
+              <span className="text-gray-500">No changes</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded p-1">
+            <button
+              onClick={() => setCurrentViewMode('split')}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                currentViewMode === 'split'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              }`}
+            >
+              Split
+            </button>
+            <button
+              onClick={() => setCurrentViewMode('unified')}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                currentViewMode === 'unified'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              }`}
+            >
+              Unified
+            </button>
+          </div>
+
+          {/* Copy Buttons */}
+          <button
+            onClick={() => handleCopy(oldContent, 'old')}
+            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="Copy old content"
+          >
+            <Copy
+              size={14}
+              className={copied === 'old' ? 'text-green-500' : 'text-gray-600 dark:text-gray-400'}
+            />
+          </button>
+          <button
+            onClick={() => handleCopy(newContent, 'new')}
+            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="Copy new content"
+          >
+            <Copy
+              size={14}
+              className={copied === 'new' ? 'text-green-500' : 'text-gray-600 dark:text-gray-400'}
+            />
+          </button>
+
+          {/* Expand/Collapse */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title={isExpanded ? 'Collapse' : 'Expand'}
+          >
+            {isExpanded ? (
+              <Minimize2 size={14} className="text-gray-600 dark:text-gray-400" />
+            ) : (
+              <Maximize2 size={14} className="text-gray-600 dark:text-gray-400" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Diff Content */}
+      <div className={`overflow-auto ${isExpanded ? 'max-h-[80vh]' : 'max-h-96'}`}>
+        <ReactDiffViewer
+          oldValue={oldContent}
+          newValue={newContent}
+          splitView={currentViewMode === 'split'}
+          showDiffOnly={false}
+          compareMethod={DiffMethod.WORDS}
+          styles={styles}
+          useDarkTheme={true}
+          leftTitle={currentViewMode === 'split' ? 'Old' : undefined}
+          rightTitle={currentViewMode === 'split' ? 'New' : undefined}
+          hideLineNumbers={!showLineNumbers}
+          disableWordDiff={!highlightChanges}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default DiffViewer;
