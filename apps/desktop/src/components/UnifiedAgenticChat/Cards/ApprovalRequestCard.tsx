@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { ApprovalRequest } from '../../../stores/unifiedChatStore';
 import { CodeBlock } from '../Visualizations/CodeBlock';
 
@@ -108,9 +109,34 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     second: '2-digit',
   });
 
-  const handleReject = () => {
+  const handleApprove = async () => {
+    if (onApprove) {
+      onApprove();
+    } else {
+      // Default: call Tauri command
+      try {
+        await invoke('approve_operation', { approvalId: approval.id });
+      } catch (error) {
+        console.error('Failed to approve operation:', error);
+      }
+    }
+  };
+
+  const handleReject = async () => {
     if (showRejectReason) {
-      onReject?.(rejectReason || undefined);
+      if (onReject) {
+        onReject(rejectReason || undefined);
+      } else {
+        // Default: call Tauri command
+        try {
+          await invoke('reject_operation', {
+            approvalId: approval.id,
+            reason: rejectReason || undefined,
+          });
+        } catch (error) {
+          console.error('Failed to reject operation:', error);
+        }
+      }
       setShowRejectReason(false);
       setRejectReason('');
     } else {
@@ -232,7 +258,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
       )}
 
       {/* Actions */}
-      {approval.status === 'pending' && (onApprove || onReject) && (
+      {approval.status === 'pending' && (
         <div className="px-4 py-3 bg-yellow-100 dark:bg-yellow-900/20 border-t border-yellow-200 dark:border-yellow-800">
           {showRejectReason ? (
             <div className="space-y-2">
@@ -263,24 +289,20 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {onApprove && (
-                <button
-                  onClick={onApprove}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                  <Check size={16} />
-                  Approve
-                </button>
-              )}
-              {onReject && (
-                <button
-                  onClick={handleReject}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                  <X size={16} />
-                  Reject
-                </button>
-              )}
+              <button
+                onClick={handleApprove}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                <Check size={16} />
+                Approve
+              </button>
+              <button
+                onClick={handleReject}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                <X size={16} />
+                Reject
+              </button>
             </div>
           )}
         </div>

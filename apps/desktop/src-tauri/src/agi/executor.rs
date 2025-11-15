@@ -336,6 +336,29 @@ impl AGIExecutor {
                     &uuid::Uuid::new_v4().to_string()[..8]
                 ));
                 captured.pixels.save(&temp_path)?;
+
+                // Emit frontend event for screenshot
+                if let Some(ref app_handle) = self.app_handle {
+                    // Convert image to base64
+                    let image_bytes = std::fs::read(&temp_path)?;
+                    let image_base64 = base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &image_bytes,
+                    );
+
+                    let screenshot = crate::events::Screenshot {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        image_base64,
+                        action: parameters
+                            .get("action")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        element_bounds: None, // Future: add element bounds if provided
+                        confidence: None,
+                    };
+                    crate::events::emit_screenshot(app_handle, screenshot);
+                }
+
                 Ok(json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }))
             }
             "ui_click" => {
