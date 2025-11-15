@@ -2,7 +2,6 @@
 ///
 /// This module provides Tauri commands for user actions like
 /// approving/rejecting operations, managing background tasks, etc.
-
 use tauri::{AppHandle, Manager};
 
 /// Approve a pending operation
@@ -10,10 +9,7 @@ use tauri::{AppHandle, Manager};
 /// This command is called when a user clicks the "Approve" button
 /// on an ApprovalRequestCard in the frontend.
 #[tauri::command]
-pub async fn approve_operation(
-    app_handle: AppHandle,
-    approval_id: String,
-) -> Result<(), String> {
+pub async fn approve_operation(app_handle: AppHandle, approval_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Approving operation: {}", approval_id);
 
     // Emit event to frontend
@@ -71,10 +67,7 @@ pub async fn reject_operation(
 
 /// Cancel a background task
 #[tauri::command]
-pub async fn cancel_background_task(
-    app_handle: AppHandle,
-    task_id: String,
-) -> Result<(), String> {
+pub async fn cancel_background_task(app_handle: AppHandle, task_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Cancelling background task: {}", task_id);
 
     // Get task manager state
@@ -112,10 +105,7 @@ pub async fn pause_background_task(app_handle: AppHandle, task_id: String) -> Re
 
 /// Resume a paused background task
 #[tauri::command]
-pub async fn resume_background_task(
-    app_handle: AppHandle,
-    task_id: String,
-) -> Result<(), String> {
+pub async fn resume_background_task(app_handle: AppHandle, task_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Resuming background task: {}", task_id);
 
     let task_manager = app_handle
@@ -190,9 +180,7 @@ pub async fn list_background_tasks(
 
 /// Get list of all active agents
 #[tauri::command]
-pub async fn list_active_agents(
-    app_handle: AppHandle,
-) -> Result<Vec<serde_json::Value>, String> {
+pub async fn list_active_agents(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     if let Some(orchestrator) = app_handle
         .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
     {
