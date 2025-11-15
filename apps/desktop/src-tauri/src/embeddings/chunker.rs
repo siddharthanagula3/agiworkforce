@@ -343,7 +343,9 @@ impl CodeChunker {
                 }
             }
 
-            if let Some((start_idx, ref mut chunk_lines, ref chunk_type, base_indent)) = current_chunk {
+            if let Some((start_idx, ref mut chunk_lines, ref chunk_type, base_indent)) =
+                current_chunk
+            {
                 // End chunk if we encounter a line at or below the base indentation level
                 if !line.trim().is_empty() && indent_level <= base_indent && line_idx > start_idx {
                     chunks.push(CodeChunk {
