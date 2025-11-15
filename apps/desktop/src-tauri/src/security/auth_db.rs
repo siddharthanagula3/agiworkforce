@@ -1,5 +1,5 @@
-use super::auth::{AuthToken, Session, User, UserRole};
-use super::oauth::{OAuthProvider, OAuthUserInfo};
+use super::auth::{Session, User, UserRole};
+use super::oauth::OAuthProvider;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};

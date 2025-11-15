@@ -248,65 +248,75 @@ impl PostgresClient {
         let column = &row.columns()[idx];
         let col_type = column.type_();
 
-        // Handle NULL
-        if row
-            .try_get::<_, Option<String>>(idx)
-            .ok()
-            .flatten()
-            .is_none()
-        {
-            return Ok(JsonValue::Null);
-        }
-
         match *col_type {
-            Type::BOOL => {
-                let val: bool = row.get(idx);
-                Ok(JsonValue::Bool(val))
-            }
-            Type::INT2 | Type::INT4 => {
-                let val: i32 = row.get(idx);
-                Ok(JsonValue::Number(val.into()))
-            }
-            Type::INT8 => {
-                let val: i64 = row.get(idx);
-                Ok(JsonValue::Number(val.into()))
-            }
-            Type::FLOAT4 => {
-                let val: f32 = row.get(idx);
-                Ok(serde_json::Number::from_f64(val as f64)
+            Type::BOOL => match row.try_get::<_, Option<bool>>(idx) {
+                Ok(Some(val)) => Ok(JsonValue::Bool(val)),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
+            Type::INT2 => match row.try_get::<_, Option<i16>>(idx) {
+                Ok(Some(val)) => Ok(JsonValue::Number((val as i64).into())),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
+            Type::INT4 => match row.try_get::<_, Option<i32>>(idx) {
+                Ok(Some(val)) => Ok(JsonValue::Number(val.into())),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
+            Type::INT8 => match row.try_get::<_, Option<i64>>(idx) {
+                Ok(Some(val)) => Ok(JsonValue::Number(val.into())),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
+            Type::FLOAT4 => match row.try_get::<_, Option<f32>>(idx) {
+                Ok(Some(val)) => Ok(serde_json::Number::from_f64(val as f64)
                     .map(JsonValue::Number)
-                    .unwrap_or(JsonValue::Null))
-            }
-            Type::FLOAT8 => {
-                let val: f64 = row.get(idx);
-                Ok(serde_json::Number::from_f64(val)
+                    .unwrap_or(JsonValue::Null)),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
+            Type::FLOAT8 => match row.try_get::<_, Option<f64>>(idx) {
+                Ok(Some(val)) => Ok(serde_json::Number::from_f64(val)
                     .map(JsonValue::Number)
-                    .unwrap_or(JsonValue::Null))
-            }
+                    .unwrap_or(JsonValue::Null)),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
             Type::TEXT | Type::VARCHAR | Type::BPCHAR | Type::NAME => {
-                let val: String = row.get(idx);
-                Ok(JsonValue::String(val))
+                match row.try_get::<_, Option<String>>(idx) {
+                    Ok(Some(val)) => Ok(JsonValue::String(val)),
+                    Ok(None) => Ok(JsonValue::Null),
+                    Err(_) => Ok(JsonValue::Null),
+                }
             }
-            Type::JSON | Type::JSONB => {
-                let val: JsonValue = row.get(idx);
-                Ok(val)
-            }
-            Type::TIMESTAMP => {
-                let val: chrono::NaiveDateTime = row.get(idx);
-                Ok(JsonValue::String(val.to_string()))
-            }
+            Type::JSON | Type::JSONB => match row.try_get::<_, Option<JsonValue>>(idx) {
+                Ok(Some(val)) => Ok(val),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
+            Type::TIMESTAMP => match row.try_get::<_, Option<chrono::NaiveDateTime>>(idx) {
+                Ok(Some(val)) => Ok(JsonValue::String(val.to_string())),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
             Type::TIMESTAMPTZ => {
-                let val: chrono::DateTime<chrono::Utc> = row.get(idx);
-                Ok(JsonValue::String(val.to_rfc3339()))
+                match row.try_get::<_, Option<chrono::DateTime<chrono::Utc>>>(idx) {
+                    Ok(Some(val)) => Ok(JsonValue::String(val.to_rfc3339())),
+                    Ok(None) => Ok(JsonValue::Null),
+                    Err(_) => Ok(JsonValue::Null),
+                }
             }
-            Type::UUID => {
-                let val: uuid::Uuid = row.get(idx);
-                Ok(JsonValue::String(val.to_string()))
-            }
+            Type::UUID => match row.try_get::<_, Option<uuid::Uuid>>(idx) {
+                Ok(Some(val)) => Ok(JsonValue::String(val.to_string())),
+                Ok(None) => Ok(JsonValue::Null),
+                Err(_) => Ok(JsonValue::Null),
+            },
             _ => {
                 // Fallback: try to get as string
-                match row.try_get::<_, String>(idx) {
-                    Ok(val) => Ok(JsonValue::String(val)),
+                match row.try_get::<_, Option<String>>(idx) {
+                    Ok(Some(val)) => Ok(JsonValue::String(val)),
+                    Ok(None) => Ok(JsonValue::Null),
                     Err(_) => Ok(JsonValue::Null),
                 }
             }
