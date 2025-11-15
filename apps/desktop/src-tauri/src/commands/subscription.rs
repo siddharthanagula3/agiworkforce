@@ -56,7 +56,10 @@ pub async fn subscribe_to_plan(
         .map_err(|e| format!("Failed to check existing subscription: {}", e))?;
 
     if existing_subscription.is_some() {
-        return Err("User already has an active subscription. Use upgrade_plan to change plans.".to_string());
+        return Err(
+            "User already has an active subscription. Use upgrade_plan to change plans."
+                .to_string(),
+        );
     }
 
     // Get plan details from database or configuration
@@ -203,30 +206,21 @@ pub async fn cancel_subscription(
 #[cfg(not(feature = "billing"))]
 /// Stub for subscribe_to_plan when billing feature is disabled
 #[tauri::command]
-pub async fn subscribe_to_plan(
-    _user_id: String,
-    _plan_id: String,
-) -> Result<String, String> {
+pub async fn subscribe_to_plan(_user_id: String, _plan_id: String) -> Result<String, String> {
     Err("Billing feature is not enabled".to_string())
 }
 
 #[cfg(not(feature = "billing"))]
 /// Stub for upgrade_plan when billing feature is disabled
 #[tauri::command]
-pub async fn upgrade_plan(
-    _user_id: String,
-    _new_plan_id: String,
-) -> Result<String, String> {
+pub async fn upgrade_plan(_user_id: String, _new_plan_id: String) -> Result<String, String> {
     Err("Billing feature is not enabled".to_string())
 }
 
 #[cfg(not(feature = "billing"))]
 /// Stub for cancel_subscription when billing feature is disabled
 #[tauri::command]
-pub async fn cancel_subscription(
-    _user_id: String,
-    _subscription_id: String,
-) -> Result<(), String> {
+pub async fn cancel_subscription(_user_id: String, _subscription_id: String) -> Result<(), String> {
     Err("Billing feature is not enabled".to_string())
 }
 
