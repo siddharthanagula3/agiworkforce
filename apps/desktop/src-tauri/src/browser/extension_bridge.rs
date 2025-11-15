@@ -111,7 +111,7 @@ impl ExtensionBridge {
     /// Send message to extension
     pub async fn send_message(&self, message: ExtensionMessage) -> Result<ExtensionResponse> {
         if !self.is_connected().await {
-            return Err(Error::Other("Extension not connected".to_string()));
+            return Err(Error::Generic("Extension not connected".to_string()));
         }
 
         tracing::debug!("Sending message to extension: {:?}", message);
@@ -135,7 +135,7 @@ impl ExtensionBridge {
 
         match response {
             ExtensionResponse::Success { data } => Ok(data),
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 
@@ -147,10 +147,10 @@ impl ExtensionBridge {
         match response {
             ExtensionResponse::Success { data } => {
                 let cookies: Vec<Cookie> =
-                    serde_json::from_value(data).map_err(Error::Serialization)?;
+                    serde_json::from_value(data).map_err(|e| Error::from(e))?;
                 Ok(cookies)
             }
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 
@@ -166,7 +166,7 @@ impl ExtensionBridge {
 
         match response {
             ExtensionResponse::Success { .. } => Ok(()),
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 
@@ -177,7 +177,7 @@ impl ExtensionBridge {
 
         match response {
             ExtensionResponse::Success { .. } => Ok(()),
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 
@@ -191,7 +191,7 @@ impl ExtensionBridge {
 
         match response {
             ExtensionResponse::Success { data } => Ok(data),
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 
@@ -206,7 +206,7 @@ impl ExtensionBridge {
 
         match response {
             ExtensionResponse::Success { .. } => Ok(()),
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 
@@ -217,7 +217,7 @@ impl ExtensionBridge {
 
         match response {
             ExtensionResponse::Success { .. } => Ok(()),
-            ExtensionResponse::Error { message } => Err(Error::Other(message)),
+            ExtensionResponse::Error { message } => Err(Error::Generic(message)),
         }
     }
 

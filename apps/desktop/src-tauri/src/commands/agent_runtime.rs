@@ -29,7 +29,7 @@ pub async fn runtime_queue_task(
         task.dependencies = deps;
     }
 
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     runtime
         .queue_task(task)
         .map_err(|e| format!("Failed to queue task: {}", e))
@@ -40,7 +40,7 @@ pub async fn runtime_queue_task(
 pub async fn runtime_get_next_task(
     state: State<'_, AgentRuntimeState>,
 ) -> Result<Option<Task>, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     Ok(runtime.get_next_task())
 }
 
@@ -51,7 +51,7 @@ pub async fn runtime_execute_task(
     task: Task,
 ) -> Result<serde_json::Value, String> {
     // Clone the Arc to avoid holding the lock across await
-    let runtime_arc = state.0.clone();
+    let runtime_arc = state.inner().clone();
 
     // Spawn the execution in a separate task to avoid Send issues
     let handle = tokio::spawn(async move {
@@ -72,7 +72,7 @@ pub async fn runtime_cancel_task(
     task_id: String,
     reason: Option<String>,
 ) -> Result<(), String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     runtime
         .cancel_task(
             &task_id,
@@ -87,7 +87,7 @@ pub async fn runtime_get_task_status(
     state: State<'_, AgentRuntimeState>,
     task_id: String,
 ) -> Result<Option<Task>, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     Ok(runtime.get_task_status(&task_id))
 }
 
@@ -96,7 +96,7 @@ pub async fn runtime_get_task_status(
 pub async fn runtime_get_all_tasks(
     state: State<'_, AgentRuntimeState>,
 ) -> Result<Vec<Task>, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     Ok(runtime.get_all_tasks())
 }
 
@@ -106,7 +106,7 @@ pub async fn runtime_set_auto_approve(
     state: State<'_, AgentRuntimeState>,
     enabled: bool,
 ) -> Result<(), String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     runtime.set_auto_approve(enabled);
     Ok(())
 }
@@ -116,7 +116,7 @@ pub async fn runtime_set_auto_approve(
 pub async fn runtime_is_auto_approve_enabled(
     state: State<'_, AgentRuntimeState>,
 ) -> Result<bool, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     Ok(runtime.is_auto_approve_enabled())
 }
 
@@ -126,7 +126,7 @@ pub async fn runtime_revert_task(
     state: State<'_, AgentRuntimeState>,
     task_id: String,
 ) -> Result<Vec<String>, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     runtime
         .revert_task_changes(&task_id)
         .await
@@ -139,7 +139,7 @@ pub async fn runtime_get_task_changes(
     state: State<'_, AgentRuntimeState>,
     task_id: String,
 ) -> Result<Vec<crate::agent::change_tracker::Change>, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     Ok(runtime.get_task_change_history(&task_id).await)
 }
 
@@ -148,6 +148,6 @@ pub async fn runtime_get_task_changes(
 pub async fn runtime_get_all_changes(
     state: State<'_, AgentRuntimeState>,
 ) -> Result<Vec<crate::agent::change_tracker::Change>, String> {
-    let runtime = state.0.lock().await;
+    let runtime = state.inner().lock().await;
     Ok(runtime.get_all_change_history().await)
 }
