@@ -207,71 +207,8 @@ pub async fn resume_background_task(app_handle: AppHandle, task_id: String) -> R
     Ok(())
 }
 
-/// Cancel an agent
-#[tauri::command]
-pub async fn cancel_agent(app_handle: AppHandle, agent_id: String) -> Result<(), String> {
-    tracing::info!("[Commands] Cancelling agent: {}", agent_id);
-
-    // Get orchestrator state
-    if let Some(orchestrator) = app_handle
-        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
-    {
-        let orchestrator = orchestrator.inner().clone();
-        let orch = orchestrator.lock().await;
-
-        orch.cancel_agent(&agent_id)
-            .await
-            .map_err(|e| format!("Failed to cancel agent: {}", e))?;
-    } else {
-        return Err("Orchestrator not initialized".to_string());
-    }
-
-    Ok(())
-}
-
-/// Pause an agent
-#[tauri::command]
-pub async fn pause_agent(app_handle: AppHandle, agent_id: String) -> Result<(), String> {
-    tracing::info!("[Commands] Pausing agent: {}", agent_id);
-
-    // Get orchestrator state
-    if let Some(orchestrator) = app_handle
-        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
-    {
-        let orchestrator = orchestrator.inner().clone();
-        let orch = orchestrator.lock().await;
-
-        orch.pause_agent(&agent_id)
-            .await
-            .map_err(|e| format!("Failed to pause agent: {}", e))?;
-    } else {
-        return Err("Orchestrator not initialized".to_string());
-    }
-
-    Ok(())
-}
-
-/// Resume a paused agent
-#[tauri::command]
-pub async fn resume_agent(app_handle: AppHandle, agent_id: String) -> Result<(), String> {
-    tracing::info!("[Commands] Resuming agent: {}", agent_id);
-
-    // Get orchestrator state
-    if let Some(orchestrator) = app_handle
-        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
-    {
-        let orchestrator = orchestrator.inner().clone();
-        let orch = orchestrator.lock().await;
-
-        orch.resume_agent(&agent_id)
-            .await
-            .map_err(|e| format!("Failed to resume agent: {}", e))?;
-    } else {
-        return Err("Orchestrator not initialized".to_string());
-    }
-
-    Ok(())
-}
+// NOTE: The cancel_agent, pause_agent, and resume_agent commands have been moved to agi.rs
+// to avoid duplicate command definitions
 
 /// Get list of all background tasks
 #[tauri::command]
@@ -301,7 +238,7 @@ pub async fn list_background_tasks(
 #[tauri::command]
 pub async fn list_active_agents(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     if let Some(orchestrator) = app_handle
-        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
+        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::AgentOrchestrator>>>()
     {
         let orchestrator = orchestrator.inner().clone();
         let orch = orchestrator.lock().await;

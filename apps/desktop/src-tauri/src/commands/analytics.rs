@@ -208,7 +208,6 @@ use crate::analytics::{
 };
 use crate::commands::AppDatabase;
 use rusqlite::Connection;
-use std::sync::Arc;
 
 /// Helper function to create a tokio::sync::Mutex<Connection> for analytics
 /// Note: AppDatabase uses std::sync::Mutex, but analytics module expects tokio::sync::Mutex

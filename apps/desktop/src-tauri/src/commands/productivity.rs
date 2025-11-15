@@ -194,7 +194,7 @@ pub async fn productivity_notion_list_pages(
             .collect();
         Ok(pages_json)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Notion client not connected".to_string(),
         ))
     }
@@ -229,7 +229,7 @@ pub async fn productivity_notion_query_database(
         let results = client.query_database(&database_id, filter, sorts).await?;
         Ok(results)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Notion client not connected".to_string(),
         ))
     }
@@ -267,7 +267,7 @@ pub async fn productivity_notion_create_database_row(
         let page_id = client.create_database_row(&database_id, properties).await?;
         Ok(page_id)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Notion client not connected".to_string(),
         ))
     }
@@ -297,7 +297,7 @@ pub async fn productivity_trello_list_boards(
             .collect();
         Ok(boards_json)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Trello client not connected".to_string(),
         ))
     }
@@ -333,7 +333,7 @@ pub async fn productivity_trello_list_cards(
 
         Ok(tasks)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Trello client not connected".to_string(),
         ))
     }
@@ -368,7 +368,7 @@ pub async fn productivity_trello_create_card(
             .await?;
         Ok(card_id)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Trello client not connected".to_string(),
         ))
     }
@@ -399,7 +399,7 @@ pub async fn productivity_trello_move_card(
         client.move_card(&card_id, &list_id).await?;
         Ok(())
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Trello client not connected".to_string(),
         ))
     }
@@ -430,7 +430,7 @@ pub async fn productivity_trello_add_comment(
         let comment_id = client.add_comment(&card_id, &text).await?;
         Ok(comment_id)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Trello client not connected".to_string(),
         ))
     }
@@ -463,7 +463,7 @@ pub async fn productivity_asana_list_projects(
             .collect();
         Ok(projects_json)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Asana client not connected".to_string(),
         ))
     }
@@ -498,7 +498,7 @@ pub async fn productivity_asana_list_project_tasks(
 
         Ok(tasks)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Asana client not connected".to_string(),
         ))
     }
@@ -543,7 +543,7 @@ pub async fn productivity_asana_create_task(
             .await?;
         Ok(task_id)
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Asana client not connected".to_string(),
         ))
     }
@@ -574,7 +574,7 @@ pub async fn productivity_asana_assign_task(
         client.assign_task(&task_id, &assignee_id).await?;
         Ok(())
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Asana client not connected".to_string(),
         ))
     }
@@ -605,7 +605,7 @@ pub async fn productivity_asana_mark_complete(
         client.mark_task_complete(&task_id, completed).await?;
         Ok(())
     } else {
-        Err(crate::error::Error::Config(
+        Err(crate::error::AGIError::ConfigurationError(
             "Asana client not connected".to_string(),
         ))
     }
