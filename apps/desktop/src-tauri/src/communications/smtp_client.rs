@@ -51,9 +51,8 @@ impl SmtpClient {
         let timeout = Some(Duration::from_secs(30));
 
         let builder = if use_tls {
-            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host).map_err(|err| {
-                Error::Generic(format!("Failed to configure STARTTLS: {}", err))
-            })?
+            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+                .map_err(|err| Error::Generic(format!("Failed to configure STARTTLS: {}", err)))?
         } else {
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
         };
