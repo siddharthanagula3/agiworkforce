@@ -45,6 +45,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   // Estimate row height (used for virtual scrolling)
   const getItemSize = (index: number) => {
     const message = filteredMessages[index];
+    if (!message) return 100; // Fallback height
     // Rough estimation based on content length
     const baseHeight = 100;
     const contentHeight = Math.min(message.content.length / 2, 500);
@@ -76,6 +77,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   // Row renderer for virtual list
   const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
     const message = filteredMessages[index];
+    if (!message) return null;
+
     return (
       <div style={style}>
         <MessageBubble
