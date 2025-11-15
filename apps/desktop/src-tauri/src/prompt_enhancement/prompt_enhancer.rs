@@ -1,5 +1,5 @@
 use super::{
-    APIProvider, Complexity, EnhancedPrompt, EnhancementMetadata, PromptContext, UseCase,
+    Complexity, EnhancedPrompt, EnhancementMetadata, PromptContext, UseCase,
     UseCaseDetection,
 };
 use crate::prompt_enhancement::api_router::APIRouter;

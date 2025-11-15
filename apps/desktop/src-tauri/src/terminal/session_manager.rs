@@ -183,9 +183,7 @@ async fn log_command_to_db(
     // Get the database from app state
     let db_state = app_handle.state::<AppDatabase>();
     let conn = db_state.inner().conn.lock().map_err(|e| {
-        Error::Database(rusqlite::Error::ToSqlConversionFailure(Box::new(
-            std::io::Error::other(format!("Lock error: {}", e)),
-        )))
+        Error::Generic(format!("Database lock error: {}", e))
     })?;
 
     let working_dir = std::env::current_dir()
@@ -219,20 +217,18 @@ pub async fn get_command_history(
 
     let db_state = app_handle.state::<AppDatabase>();
     let conn = db_state.inner().conn.lock().map_err(|e| {
-        Error::Database(rusqlite::Error::ToSqlConversionFailure(Box::new(
-            std::io::Error::other(format!("Lock error: {}", e)),
-        )))
+        Error::Generic(format!("Database lock error: {}", e))
     })?;
 
     let mut stmt = conn
         .prepare("SELECT command FROM command_history ORDER BY created_at DESC LIMIT ?1")
-        .map_err(Error::Database)?;
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let commands = stmt
         .query_map(params![limit], |row| row.get(0))
-        .map_err(Error::Database)?
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .collect::<std::result::Result<Vec<String>, _>>()
-        .map_err(Error::Database)?;
+        .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     Ok(commands)
 }

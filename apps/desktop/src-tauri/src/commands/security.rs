@@ -43,7 +43,7 @@ pub async fn auth_register(
     role: String,
     state: State<'_, AuthManagerState>,
 ) -> Result<String, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     let user_role = UserRole::from_str(&role).ok_or("Invalid role")?;
     let user = manager.register(email, password.as_str(), user_role)?;
     Ok(user.id)
@@ -55,7 +55,7 @@ pub async fn auth_login(
     password: String,
     state: State<'_, AuthManagerState>,
 ) -> Result<AuthToken, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.login(&email, &password)
 }
 
@@ -64,7 +64,7 @@ pub async fn auth_logout(
     access_token: String,
     state: State<'_, AuthManagerState>,
 ) -> Result<(), String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.logout(&access_token)
 }
 
@@ -73,7 +73,7 @@ pub async fn auth_refresh_token(
     refresh_token: String,
     state: State<'_, AuthManagerState>,
 ) -> Result<AuthToken, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.refresh_token(&refresh_token)
 }
 
@@ -82,7 +82,7 @@ pub async fn auth_validate_token(
     access_token: String,
     state: State<'_, AuthManagerState>,
 ) -> Result<bool, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     match manager.validate_token(&access_token) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
@@ -96,7 +96,7 @@ pub async fn auth_change_password(
     new_password: String,
     state: State<'_, AuthManagerState>,
 ) -> Result<(), String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.change_password(&user_id, &old_password, &new_password)
 }
 
@@ -111,7 +111,7 @@ pub async fn api_create_key(
     expires_in_days: Option<i64>,
     state: State<'_, ApiSecurityState>,
 ) -> Result<String, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     let key = manager.create_api_key(name, permissions, expires_in_days);
     Ok(serde_json::to_string(&key).unwrap())
 }
@@ -121,13 +121,13 @@ pub async fn api_revoke_key(
     key_id: String,
     state: State<'_, ApiSecurityState>,
 ) -> Result<(), String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.revoke_api_key(&key_id)
 }
 
 #[tauri::command]
 pub async fn api_list_keys(state: State<'_, ApiSecurityState>) -> Result<String, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     let keys = manager.list_api_keys();
     Ok(serde_json::to_string(&keys).unwrap())
 }
@@ -137,7 +137,7 @@ pub async fn api_rotate_key(
     key_id: String,
     state: State<'_, ApiSecurityState>,
 ) -> Result<String, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     let key = manager.rotate_api_key(&key_id)?;
     Ok(serde_json::to_string(&key).unwrap())
 }
@@ -150,7 +150,7 @@ pub async fn api_validate_signature(
     signature: String,
     state: State<'_, ApiSecurityState>,
 ) -> Result<bool, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     match manager.validate_signature(&key_id, &timestamp, &body, &signature) {
         Ok(_) => Ok(true),
         Err(e) => Err(e),
@@ -166,7 +166,7 @@ pub async fn storage_init_with_password(
     password: String,
     state: State<'_, SecureStorageState>,
 ) -> Result<(), String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     storage.init_with_password(&password)
 }
 
@@ -175,20 +175,20 @@ pub async fn storage_unlock(
     password: String,
     state: State<'_, SecureStorageState>,
 ) -> Result<(), String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     storage.unlock(&password)
 }
 
 #[tauri::command]
 pub async fn storage_lock(state: State<'_, SecureStorageState>) -> Result<(), String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     storage.lock();
     Ok(())
 }
 
 #[tauri::command]
 pub async fn storage_is_unlocked(state: State<'_, SecureStorageState>) -> Result<bool, String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     Ok(storage.is_unlocked())
 }
 
@@ -198,7 +198,7 @@ pub async fn storage_store_api_key(
     api_key: String,
     state: State<'_, SecureStorageState>,
 ) -> Result<(), String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     storage.store_api_key(&provider, &api_key)
 }
 
@@ -207,7 +207,7 @@ pub async fn storage_retrieve_api_key(
     provider: String,
     state: State<'_, SecureStorageState>,
 ) -> Result<String, String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     storage.retrieve_api_key(&provider)
 }
 
@@ -216,7 +216,7 @@ pub async fn storage_delete_api_key(
     provider: String,
     state: State<'_, SecureStorageState>,
 ) -> Result<(), String> {
-    let storage = state.0.read();
+    let storage = state.inner().read();
     storage.delete_api_key(&provider)
 }
 
@@ -248,7 +248,7 @@ pub async fn update_verify_package(
     metadata: String,
     state: State<'_, UpdateSecurityState>,
 ) -> Result<VerificationResult, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     let update_metadata: UpdateMetadata =
         serde_json::from_str(&metadata).map_err(|e| format!("Invalid metadata: {}", e))?;
 
@@ -260,7 +260,7 @@ pub async fn update_compute_checksum(
     file_path: String,
     state: State<'_, UpdateSecurityState>,
 ) -> Result<String, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.compute_file_checksum(&file_path)
 }
 
@@ -269,7 +269,7 @@ pub async fn update_validate_url(
     url: String,
     state: State<'_, UpdateSecurityState>,
 ) -> Result<bool, String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     match manager.validate_download_url(&url) {
         Ok(_) => Ok(true),
         Err(e) => Err(e),
@@ -282,7 +282,7 @@ pub async fn update_create_backup(
     backup_dir: String,
     state: State<'_, UpdateSecurityState>,
 ) -> Result<(), String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.create_backup(&source_dir, &backup_dir)
 }
 
@@ -292,7 +292,7 @@ pub async fn update_restore_backup(
     target_dir: String,
     state: State<'_, UpdateSecurityState>,
 ) -> Result<(), String> {
-    let manager = state.0.read();
+    let manager = state.inner().read();
     manager.restore_backup(&backup_dir, &target_dir)
 }
 

@@ -456,7 +456,7 @@ impl ToolExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     match tab_manager.list_tabs().await {
