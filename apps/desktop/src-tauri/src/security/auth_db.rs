@@ -2,7 +2,7 @@ use super::auth::{AuthToken, Session, User, UserRole};
 use super::oauth::{OAuthProvider, OAuthUserInfo};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
