@@ -92,7 +92,7 @@ export const useEmployeeStore = create<EmployeeState>((set, get) => ({
     try {
       const stats = await invoke<EmployeeUsageStats[]>('get_employee_stats', { userId });
       const statsMap = new Map<string, EmployeeUsageStats>();
-      stats.forEach(stat => statsMap.set(stat.employee_id, stat));
+      stats.forEach((stat) => statsMap.set(stat.employee_id, stat));
       set({ employeeStats: statsMap });
     } catch (error) {
       console.error('Failed to fetch employee stats:', error);
@@ -115,16 +115,16 @@ export const useEmployeeStore = create<EmployeeState>((set, get) => ({
   hireEmployee: async (employeeId: string, userId: string) => {
     set({ isLoading: true, error: null });
     try {
-      await invoke('hire_employee', { userId, employeeId });
+      await invoke('ai_employees_hire', { userId, employeeId });
 
       // Update local state
       const { employees, myEmployees } = get();
-      const employee = employees.find(e => e.id === employeeId);
+      const employee = employees.find((e) => e.id === employeeId);
 
       if (employee) {
         const updatedEmployee = { ...employee, is_hired: true };
         set({
-          employees: employees.map(e => e.id === employeeId ? updatedEmployee : e),
+          employees: employees.map((e) => (e.id === employeeId ? updatedEmployee : e)),
           myEmployees: [...myEmployees, updatedEmployee],
           isLoading: false,
         });
@@ -145,13 +145,13 @@ export const useEmployeeStore = create<EmployeeState>((set, get) => ({
   fireEmployee: async (employeeId: string, userId: string) => {
     set({ isLoading: true, error: null });
     try {
-      await invoke('fire_employee', { userId, employeeId });
+      await invoke('ai_employees_fire', { userId, employeeId });
 
       // Update local state
       const { employees, myEmployees } = get();
       set({
-        employees: employees.map(e => e.id === employeeId ? { ...e, is_hired: false } : e),
-        myEmployees: myEmployees.filter(e => e.id !== employeeId),
+        employees: employees.map((e) => (e.id === employeeId ? { ...e, is_hired: false } : e)),
+        myEmployees: myEmployees.filter((e) => e.id !== employeeId),
         isLoading: false,
       });
 
@@ -236,16 +236,17 @@ export const selectFilteredEmployees = (state: EmployeeState) => {
 
   // Apply category filter
   if (state.selectedCategory !== 'all') {
-    filtered = filtered.filter(e => e.role === state.selectedCategory);
+    filtered = filtered.filter((e) => e.role === state.selectedCategory);
   }
 
   // Apply search filter
   if (state.searchQuery.trim()) {
     const query = state.searchQuery.toLowerCase();
-    filtered = filtered.filter(e =>
-      e.name.toLowerCase().includes(query) ||
-      e.description.toLowerCase().includes(query) ||
-      e.capabilities.some(c => c.toLowerCase().includes(query))
+    filtered = filtered.filter(
+      (e) =>
+        e.name.toLowerCase().includes(query) ||
+        e.description.toLowerCase().includes(query) ||
+        e.capabilities.some((c) => c.toLowerCase().includes(query)),
     );
   }
 
