@@ -5,7 +5,6 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::db::models::CacheEntry;
 use crate::router::{ChatMessage, LLMResponse, Provider};
 
 /// LLM Response Cache - manages caching of LLM API responses

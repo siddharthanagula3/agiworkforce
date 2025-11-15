@@ -1019,9 +1019,10 @@ pub async fn browser_get_network_activity(
 // ============================================================================
 
 use crate::browser::semantic::{
-    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, ElementInfo, SelectorResult,
-    SelfHealingFinder, SemanticElementFinder,
+    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, SelectorResult, SelfHealingFinder,
+    SemanticElementFinder,
 };
+use crate::browser::ElementInfo;
 
 /// Find element using semantic natural language selector
 #[tauri::command]

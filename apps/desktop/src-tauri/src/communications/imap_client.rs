@@ -38,16 +38,15 @@ impl ImapClient {
         let addr = format!("{}:{}", host, port);
         info!("Connecting to IMAP server {}", addr);
 
-        let tcp_stream = TcpStream::connect(&addr).await.map_err(|err| {
-            Error::Generic(format!("Failed to connect to {}: {}", addr, err))
-        })?;
-        tcp_stream.set_nodelay(true).map_err(|err| {
-            Error::Generic(format!("Failed to optimize TCP stream: {}", err))
-        })?;
+        let tcp_stream = TcpStream::connect(&addr)
+            .await
+            .map_err(|err| Error::Generic(format!("Failed to connect to {}: {}", addr, err)))?;
+        tcp_stream
+            .set_nodelay(true)
+            .map_err(|err| Error::Generic(format!("Failed to optimize TCP stream: {}", err)))?;
 
-        let native_connector = native_tls::TlsConnector::new().map_err(|err| {
-            Error::Generic(format!("Failed to create TLS connector: {}", err))
-        })?;
+        let native_connector = native_tls::TlsConnector::new()
+            .map_err(|err| Error::Generic(format!("Failed to create TLS connector: {}", err)))?;
         let tls_connector = TlsConnector::from(native_connector);
         let tls_stream = tls_connector
             .connect(host, tcp_stream)
