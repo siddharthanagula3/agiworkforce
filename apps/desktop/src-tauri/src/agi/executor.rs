@@ -266,7 +266,31 @@ impl AGIExecutor {
                 let path = parameters["path"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing path parameter"))?;
-                let content = std::fs::read_to_string(path)?;
+
+                let result = std::fs::read_to_string(path);
+
+                // Emit frontend event for file read
+                if let Some(ref app_handle) = self.app_handle {
+                    let file_op = match &result {
+                        Ok(content) => crate::events::create_file_read_event(
+                            path,
+                            content,
+                            true,
+                            None,
+                            Some(session_id.clone()),
+                        ),
+                        Err(e) => crate::events::create_file_read_event(
+                            path,
+                            "",
+                            false,
+                            Some(e.to_string()),
+                            Some(session_id.clone()),
+                        ),
+                    };
+                    crate::events::emit_file_operation(app_handle, file_op);
+                }
+
+                let content = result?;
                 Ok(json!({ "content": content, "path": path }))
             }
             "file_write" => {
@@ -276,7 +300,26 @@ impl AGIExecutor {
                 let content = parameters["content"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing content parameter"))?;
-                std::fs::write(path, content)?;
+
+                // Read old content if file exists
+                let old_content = std::fs::read_to_string(path).ok();
+
+                let result = std::fs::write(path, content);
+
+                // Emit frontend event for file write
+                if let Some(ref app_handle) = self.app_handle {
+                    let file_op = crate::events::create_file_write_event(
+                        path,
+                        old_content.as_deref(),
+                        content,
+                        result.is_ok(),
+                        result.as_ref().err().map(|e| e.to_string()),
+                        Some(session_id.clone()),
+                    );
+                    crate::events::emit_file_operation(app_handle, file_op);
+                }
+
+                result?;
 
                 // Invalidate file_read cache for this path
                 let mut read_params = HashMap::new();
@@ -1438,7 +1481,7 @@ impl AGIExecutor {
         match &result {
             Ok(res) => {
                 crate::hooks::emit_event(crate::hooks::HookEvent::post_tool_use(
-                    session_id,
+                    session_id.clone(),
                     tool_name.to_string(),
                     tool_name.to_string(),
                     parameters.clone(),
@@ -1449,7 +1492,7 @@ impl AGIExecutor {
             }
             Err(e) => {
                 crate::hooks::emit_event(crate::hooks::HookEvent::tool_error(
-                    session_id,
+                    session_id.clone(),
                     tool_name.to_string(),
                     tool_name.to_string(),
                     parameters.clone(),
@@ -1457,6 +1500,19 @@ impl AGIExecutor {
                 ))
                 .await;
             }
+        }
+
+        // Emit frontend event for tool execution
+        if let Some(ref app_handle) = self.app_handle {
+            let tool_execution = crate::events::create_tool_execution_event(
+                tool_name,
+                parameters,
+                result.as_ref().ok().cloned(),
+                result.as_ref().err().map(|e| e.to_string()),
+                execution_time_ms,
+                result.is_ok(),
+            );
+            crate::events::emit_tool_execution(app_handle, tool_execution);
         }
 
         result
