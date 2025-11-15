@@ -1,0 +1,142 @@
+[
+  {
+    "plan_item_id": "T0-01-UnifiedAgenticChat",
+    "task_id": "T0-01",
+    "description": "Create UnifiedAgenticChat main container component with responsive layout and sidecar",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/index.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm install", "pnpm typecheck", "pnpm test"],
+    "tests": ["UnifiedAgenticChat.test.tsx"]
+  },
+  {
+    "plan_item_id": "T0-02-ChatMessageList",
+    "task_id": "T0-02",
+    "description": "Implement ChatMessageList with virtual scrolling using react-window",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/ChatMessageList.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck", "pnpm test"],
+    "tests": ["ChatMessageList.test.tsx"]
+  },
+  {
+    "plan_item_id": "T0-03-MessageBubble",
+    "task_id": "T0-03",
+    "description": "Create MessageBubble with markdown rendering, code blocks, and streaming support",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/MessageBubble.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": ["MessageBubble.test.tsx"]
+  },
+  {
+    "plan_item_id": "T0-04-ChatInputArea",
+    "task_id": "T0-04",
+    "description": "Implement ChatInputArea with auto-resize, token counter, and file attachments",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": ["ChatInputArea.test.tsx"]
+  },
+  {
+    "plan_item_id": "T0-05-unifiedChatStore",
+    "task_id": "T0-05",
+    "description": "Create Zustand store for unified chat state management with persistence",
+    "repo_paths": ["apps/desktop/src/stores/unifiedChatStore.ts"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": ["unifiedChatStore.test.ts"]
+  },
+  {
+    "plan_item_id": "T0-06-SidecarPanel",
+    "task_id": "T0-06",
+    "description": "Create SidecarPanel container with resizable width and section tabs",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/SidecarPanel.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": ["SidecarPanel.test.tsx"]
+  },
+  {
+    "plan_item_id": "T0-07-ActiveOperations",
+    "task_id": "T0-07",
+    "description": "Create ActiveOperationsSection for sidecar showing current goals and steps",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/Sidecar/ActiveOperations.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T0-08-CodeBlock",
+    "task_id": "T0-08",
+    "description": "Create CodeBlock component with syntax highlighting and copy functionality",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/Visualizations/CodeBlock.tsx"],
+    "priority": 0,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T1-01-FileOperationCard",
+    "task_id": "T1-01",
+    "description": "Create FileOperationCard with diff preview and approval buttons",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/Cards/FileOperationCard.tsx"],
+    "priority": 1,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T1-02-TerminalCommandCard",
+    "task_id": "T1-02",
+    "description": "Create TerminalCommandCard with ANSI color support and output viewer",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/Cards/TerminalCommandCard.tsx"],
+    "priority": 1,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T1-03-DiffViewer",
+    "task_id": "T1-03",
+    "description": "Create DiffViewer component with side-by-side and unified views",
+    "repo_paths": ["apps/desktop/src/components/UnifiedAgenticChat/Visualizations/DiffViewer.tsx"],
+    "priority": 1,
+    "estimated_commands": ["pnpm install react-diff-viewer-continued", "pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T1-04-TerminalOutputViewer",
+    "task_id": "T1-04",
+    "description": "Create TerminalOutputViewer with ANSI support",
+    "repo_paths": [
+      "apps/desktop/src/components/UnifiedAgenticChat/Visualizations/TerminalOutputViewer.tsx"
+    ],
+    "priority": 1,
+    "estimated_commands": ["pnpm install ansi-to-react", "pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T2-01-EventSystem",
+    "task_id": "T2-01",
+    "description": "Create useAgenticEvents hook for Tauri event listeners",
+    "repo_paths": ["apps/desktop/src/hooks/useAgenticEvents.ts"],
+    "priority": 2,
+    "estimated_commands": ["pnpm typecheck"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T2-02-TauriCommands",
+    "task_id": "T2-02",
+    "description": "Add Tauri commands for file operations, terminal, and approvals",
+    "repo_paths": [
+      "apps/desktop/src-tauri/src/commands/file_ops.rs",
+      "apps/desktop/src-tauri/src/commands/approval.rs"
+    ],
+    "priority": 2,
+    "estimated_commands": ["cargo check", "cargo test"],
+    "tests": []
+  },
+  {
+    "plan_item_id": "T2-03-DatabaseMigration",
+    "task_id": "T2-03",
+    "description": "Create database migration v42 for unified chat operations",
+    "repo_paths": ["apps/desktop/src-tauri/src/db/migrations/v42_unified_chat_operations.sql"],
+    "priority": 2,
+    "estimated_commands": ["cargo check"],
+    "tests": []
+  }
+]
