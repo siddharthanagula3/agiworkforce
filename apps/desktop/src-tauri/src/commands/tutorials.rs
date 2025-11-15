@@ -4,9 +4,10 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 
 use crate::commands::AppDatabase;
+use crate::onboarding::sample_data::SampleDataSummary;
 use crate::onboarding::{
-    OnboardingProgress, ProgressTracker, Reward, RewardSystem, SampleDataGenerator,
-    SampleDataSummary, Tutorial, TutorialManager, TutorialStats, UserTutorialProgress,
+    OnboardingProgress, ProgressTracker, Reward, RewardSystem, SampleDataGenerator, Tutorial,
+    TutorialManager, TutorialStats, UserTutorialProgress,
 };
 
 // State wrapper for tutorial system
