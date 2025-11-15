@@ -44,8 +44,20 @@ pub enum AGIError {
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
 
+    #[error("Config error: {0}")]
+    Config(String),
+
     #[error("Timeout error: {0}")]
     TimeoutError(String),
+
+    #[error("Provider error: {0}")]
+    Provider(String),
+
+    #[error("HTTP error: {0}")]
+    Http(String),
+
+    #[error("Generic error: {0}")]
+    Generic(String),
 }
 
 /// Tool-specific errors
@@ -179,14 +191,14 @@ impl ErrorContext {
     }
 
     pub fn with_step(mut self, step: String) -> Self {
-        self.step = Some(step);
         self.stacktrace.push(format!("Step: {}", step));
+        self.step = Some(step);
         self
     }
 
     pub fn with_tool(mut self, tool: String) -> Self {
-        self.tool = Some(tool);
         self.stacktrace.push(format!("Tool: {}", tool));
+        self.tool = Some(tool);
         self
     }
 

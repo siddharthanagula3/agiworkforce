@@ -3,14 +3,10 @@ use crate::error::Result;
 use crate::security::audit_logger::AuditFilters;
 use crate::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
-    ApprovalRequest, ApprovalStatistics, ApprovalStatus, ApprovalWorkflow, AuditEvent,
-    AuditEventType, AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
+    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent,
+    AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
 };
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::State;
-use uuid::Uuid;
 
 /// Get audit events with filtering
 #[tauri::command]

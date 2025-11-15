@@ -1,6 +1,5 @@
 use crate::hooks::{global_hooks, Hook, HookConfig, HookRegistry};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;

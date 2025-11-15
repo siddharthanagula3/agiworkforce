@@ -4,7 +4,6 @@ use image::imageops::FilterType;
 use image::{DynamicImage, ImageFormat as ImgFormat};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
-use std::path::Path;
 use tauri::State;
 
 const MAX_IMAGE_DIMENSION: u32 = 2048; // Max dimension to reduce costs
