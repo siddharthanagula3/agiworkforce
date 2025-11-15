@@ -3,8 +3,8 @@ use crate::error::Result;
 use crate::security::audit_logger::AuditFilters;
 use crate::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
-    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent,
-    AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
+    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent, AuditIntegrityReport,
+    AuditStatus, EnhancedAuditLogger,
 };
 use tauri::State;
 
