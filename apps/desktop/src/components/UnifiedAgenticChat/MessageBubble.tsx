@@ -105,7 +105,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex]}
               components={{
-                code({ inline, className, children, ...props }) {
+                code(props) {
+                  const { inline, className, children, ...rest } = props as any;
                   const match = /language-(\w+)/.exec(className || '');
                   const language = match ? match[1] : 'text';
                   const code = String(children).replace(/\n$/, '');
@@ -113,14 +114,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   return !inline ? (
                     <CodeBlock
                       code={code}
-                      language={language}
+                      language={language || 'text'}
                       showLineNumbers={true}
                       enableCopy={true}
                     />
                   ) : (
                     <code
                       className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono"
-                      {...props}
+                      {...rest}
                     >
                       {children}
                     </code>
