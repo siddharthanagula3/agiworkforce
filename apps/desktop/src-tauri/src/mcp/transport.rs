@@ -3,10 +3,7 @@
 // Manages child processes for MCP servers and handles newline-delimited JSON-RPC messages
 // over stdin/stdout according to the MCP specification.
 
-use super::protocol::{
-    ErrorObject, JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId,
-    INTERNAL_ERROR,
-};
+use super::protocol::{JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId};
 use crate::mcp::{McpError, McpResult};
 use parking_lot::Mutex;
 use std::collections::HashMap;
