@@ -41,7 +41,9 @@ const VisualizationLayer = lazy(() =>
   })),
 );
 const OnboardingWizard = lazy(() =>
-  import('./components/onboarding/OnboardingWizard').then((m) => ({ default: m.OnboardingWizard })),
+  import('./components/Onboarding/OnboardingWizardNew').then((m) => ({
+    default: m.OnboardingWizardNew,
+  })),
 );
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
@@ -71,7 +73,7 @@ const DesktopAgentChat = lazy(() =>
   import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
 );
 const EnhancedChatInterface = lazy(() =>
-  import('./components/chat/EnhancedChatInterface').then((m) => ({
+  import('./components/Chat/EnhancedChatInterface').then((m) => ({
     default: m.EnhancedChatInterface,
   })),
 );

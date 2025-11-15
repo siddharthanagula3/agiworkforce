@@ -195,7 +195,7 @@ impl HookExecutor {
 
         // Execute with timeout
         let timeout_duration = Duration::from_secs(hook.timeout_secs);
-        let child_result = timeout(timeout_duration, async {
+        let timeout_result = timeout(timeout_duration, async {
             let mut child = cmd.spawn().context("Failed to spawn hook process")?;
 
             // Capture stdout and stderr concurrently

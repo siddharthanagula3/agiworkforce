@@ -162,10 +162,11 @@ pub async fn automation_save_script(
     // Save script to database as JSON
     let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
 
-    repository::save_setting(
+    repository::set_setting(
         &conn,
-        &format!("automation_script_{}", script.id),
-        &script_json,
+        format!("automation_script_{}", script.id),
+        script_json,
+        false, // not encrypted
     )
     .map_err(|e| e.to_string())
 }
@@ -275,10 +276,11 @@ pub async fn automation_save_recording_as_script(
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
 
-    repository::save_setting(
+    repository::set_setting(
         &conn,
-        &format!("automation_script_{}", script.id),
-        &script_json,
+        format!("automation_script_{}", script.id),
+        script_json,
+        false, // not encrypted
     )
     .map_err(|e| e.to_string())?;
 
