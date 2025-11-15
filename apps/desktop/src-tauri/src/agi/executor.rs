@@ -261,7 +261,7 @@ impl AGIExecutor {
             tool_name
         );
 
-        match tool_name {
+        let result = match tool_name {
             "file_read" => {
                 let path = parameters["path"]
                     .as_str()
