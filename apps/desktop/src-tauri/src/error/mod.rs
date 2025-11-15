@@ -205,6 +205,9 @@ impl ErrorContext {
     }
 }
 
+/// Error type alias for compatibility
+pub type Error = AGIError;
+
 /// Result type alias for AGI operations
 pub type Result<T> = std::result::Result<T, AGIError>;
 
