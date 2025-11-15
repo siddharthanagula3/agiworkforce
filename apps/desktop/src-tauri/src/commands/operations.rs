@@ -2,15 +2,47 @@
 ///
 /// This module provides Tauri commands for user actions like
 /// approving/rejecting operations, managing background tasks, etc.
-use tauri::{AppHandle, Manager};
+use crate::security::{ApprovalDecision, ApprovalWorkflow};
+use tauri::{AppHandle, Manager, State};
+
+use super::AppDatabase;
 
 /// Approve a pending operation
 ///
 /// This command is called when a user clicks the "Approve" button
 /// on an ApprovalRequestCard in the frontend.
 #[tauri::command]
-pub async fn approve_operation(app_handle: AppHandle, approval_id: String) -> Result<(), String> {
+pub async fn approve_operation(
+    app_handle: AppHandle,
+    approval_id: String,
+    db: State<'_, AppDatabase>,
+) -> Result<(), String> {
     tracing::info!("[Commands] Approving operation: {}", approval_id);
+
+    // Get the approval workflow
+    let workflow = {
+        let conn = db
+            .conn
+            .lock()
+            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+        ApprovalWorkflow::new(std::sync::Arc::new(std::sync::Mutex::new(
+            // Clone the connection to avoid lock issues
+            rusqlite::Connection::open(
+                conn.path()
+                    .ok_or_else(|| "Database path not available".to_string())?,
+            )
+            .map_err(|e| format!("Failed to open database: {}", e))?,
+        )))
+    };
+
+    // Approve the request in the workflow
+    // Using "system" as reviewer_id since this is a user-initiated action from the frontend
+    let decision = ApprovalDecision::Approved { reason: None };
+    workflow
+        .approve_request(&approval_id, "system", decision)
+        .map_err(|e| format!("Failed to approve request: {}", e))?;
+
+    tracing::info!("[Commands] Approval {} granted in workflow", approval_id);
 
     // Emit event to frontend
     app_handle
@@ -24,8 +56,20 @@ pub async fn approve_operation(app_handle: AppHandle, approval_id: String) -> Re
         )
         .map_err(|e| format!("Failed to emit approval event: {}", e))?;
 
-    // TODO: Notify the AGI system or executor that approval was granted
-    // This would typically unblock a waiting operation
+    // Emit event for any waiting AGI executor or autonomous agent
+    app_handle
+        .emit_all(
+            "approval:granted",
+            serde_json::json!({
+                "id": approval_id,
+            }),
+        )
+        .map_err(|e| format!("Failed to emit internal approval event: {}", e))?;
+
+    tracing::info!(
+        "[Commands] Approval {} events emitted successfully",
+        approval_id
+    );
 
     Ok(())
 }
@@ -39,12 +83,41 @@ pub async fn reject_operation(
     app_handle: AppHandle,
     approval_id: String,
     reason: Option<String>,
+    db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
     tracing::info!(
         "[Commands] Rejecting operation: {} (reason: {:?})",
         approval_id,
         reason
     );
+
+    let rejection_reason = reason.unwrap_or_else(|| "User rejected operation".to_string());
+
+    // Get the approval workflow
+    let workflow = {
+        let conn = db
+            .conn
+            .lock()
+            .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+        ApprovalWorkflow::new(std::sync::Arc::new(std::sync::Mutex::new(
+            // Clone the connection to avoid lock issues
+            rusqlite::Connection::open(
+                conn.path()
+                    .ok_or_else(|| "Database path not available".to_string())?,
+            )
+            .map_err(|e| format!("Failed to open database: {}", e))?,
+        )))
+    };
+
+    // Reject the request in the workflow
+    let decision = ApprovalDecision::Rejected {
+        reason: rejection_reason.clone(),
+    };
+    workflow
+        .approve_request(&approval_id, "system", decision)
+        .map_err(|e| format!("Failed to reject request: {}", e))?;
+
+    tracing::info!("[Commands] Approval {} rejected in workflow", approval_id);
 
     // Emit event to frontend
     app_handle
@@ -53,14 +126,27 @@ pub async fn reject_operation(
             serde_json::json!({
                 "approval": {
                     "id": approval_id,
-                    "rejectionReason": reason,
+                    "rejectionReason": rejection_reason,
                 }
             }),
         )
         .map_err(|e| format!("Failed to emit rejection event: {}", e))?;
 
-    // TODO: Notify the AGI system that approval was denied
-    // This would typically cancel the blocked operation
+    // Emit event for any waiting AGI executor or autonomous agent to cancel the operation
+    app_handle
+        .emit_all(
+            "approval:denied",
+            serde_json::json!({
+                "id": approval_id,
+                "reason": rejection_reason,
+            }),
+        )
+        .map_err(|e| format!("Failed to emit internal denial event: {}", e))?;
+
+    tracing::info!(
+        "[Commands] Approval {} denial events emitted successfully",
+        approval_id
+    );
 
     Ok(())
 }
@@ -148,10 +234,43 @@ pub async fn cancel_agent(app_handle: AppHandle, agent_id: String) -> Result<(),
 pub async fn pause_agent(app_handle: AppHandle, agent_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Pausing agent: {}", agent_id);
 
-    // TODO: Implement agent pause functionality
-    // This would require adding pause/resume methods to the orchestrator
+    // Get orchestrator state
+    if let Some(orchestrator) = app_handle
+        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
+    {
+        let orchestrator = orchestrator.inner().clone();
+        let orch = orchestrator.lock().await;
 
-    Err("Agent pause not yet implemented".to_string())
+        orch.pause_agent(&agent_id)
+            .await
+            .map_err(|e| format!("Failed to pause agent: {}", e))?;
+    } else {
+        return Err("Orchestrator not initialized".to_string());
+    }
+
+    Ok(())
+}
+
+/// Resume a paused agent
+#[tauri::command]
+pub async fn resume_agent(app_handle: AppHandle, agent_id: String) -> Result<(), String> {
+    tracing::info!("[Commands] Resuming agent: {}", agent_id);
+
+    // Get orchestrator state
+    if let Some(orchestrator) = app_handle
+        .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::agi::orchestrator::Orchestrator>>>()
+    {
+        let orchestrator = orchestrator.inner().clone();
+        let orch = orchestrator.lock().await;
+
+        orch.resume_agent(&agent_id)
+            .await
+            .map_err(|e| format!("Failed to resume agent: {}", e))?;
+    } else {
+        return Err("Orchestrator not initialized".to_string());
+    }
+
+    Ok(())
 }
 
 /// Get list of all background tasks
