@@ -4,6 +4,8 @@ import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputArea, SendOptions } from './ChatInputArea';
 import { SidecarPanel } from './SidecarPanel';
+import { AgentStatusBanner } from './AgentStatusBanner';
+import { ChatInputToolbar } from './ChatInputToolbar';
 import { PanelRightOpen, PanelRightClose } from 'lucide-react';
 
 export interface UnifiedAgenticChatProps {
@@ -177,6 +179,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
             </div>
           </div>
 
+          {/* Agent Status Banner */}
+          <AgentStatusBanner />
+
           {/* Message List */}
           <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
             <ChatMessageList
@@ -185,6 +190,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
               onMessageRegenerate={handleMessageRegenerate}
             />
           </div>
+
+          {/* Chat Input Toolbar */}
+          <ChatInputToolbar />
 
           {/* Input Area */}
           <ChatInputArea
