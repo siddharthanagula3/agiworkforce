@@ -109,7 +109,7 @@ const DesktopShell = () => {
   const [agentChatVisible, setAgentChatVisible] = useState(true);
   const [missionControlVisible, setMissionControlVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
-  const [currentView, setCurrentView] = useState<AppView>('chat');
+  const [currentView, setCurrentView] = useState<AppView>('enhanced-chat');
   const { theme, toggleTheme } = useTheme();
   const resolvedEditorTheme = useMemo<'light' | 'dark'>(() => {
     if (theme === 'system') {
@@ -481,83 +481,10 @@ const DesktopShell = () => {
             <GovernanceDashboard />
           </Suspense>
         );
-      case 'chat':
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <div className="relative flex flex-1 overflow-hidden min-w-0">
-              {/* Agent Chat (Left) */}
-              {agentChatVisible && agentChatPosition === 'left' && (
-                <>
-                  <AgentChatInterface className="w-96 shrink-0" position="left" />
-                  <div className="w-px bg-border shrink-0" />
-                </>
-              )}
-
-              {/* Main Chat Interface */}
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="min-h-0 flex-1">
-                  <ChatInterface className="h-full" />
-                </div>
-                <InlineDiffViewer
-                  baseContent={codePreviewData.baseContent}
-                  modifiedContent={codePreviewData.modifiedContent}
-                  language={codePreviewData.language}
-                  title={codePreviewData.title}
-                  summary={codePreviewData.summary}
-                  theme={resolvedEditorTheme}
-                />
-              </div>
-
-              {/* Agent Chat (Right) */}
-              {agentChatVisible && agentChatPosition === 'right' && (
-                <>
-                  <div className="w-px bg-border shrink-0" />
-                  <AgentChatInterface className="w-96 shrink-0" position="right" />
-                </>
-              )}
-
-              {/* Mission Control */}
-              {missionControlVisible && (
-                <>
-                  <div className="w-px bg-border shrink-0" />
-                  <MissionControlPanel
-                    className="shrink-0"
-                    onClose={() => setMissionControlVisible(false)}
-                  />
-                </>
-              )}
-
-              {/* Toggle buttons */}
-              <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex flex-col gap-2">
-                {!missionControlVisible && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="pointer-events-auto"
-                    onClick={() => setMissionControlVisible(true)}
-                    aria-label="Open mission control"
-                  >
-                    <PanelRightOpen className="h-4 w-4" />
-                  </Button>
-                )}
-                {!agentChatVisible && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="pointer-events-auto"
-                    onClick={() => setAgentChatVisible(true)}
-                    aria-label="Open agent chat"
-                  >
-                    {agentChatPosition === 'right' ? (
-                      <ChevronLeft className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
+            <EnhancedChatInterface />
           </Suspense>
         );
     }
