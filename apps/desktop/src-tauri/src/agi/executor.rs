@@ -1319,10 +1319,12 @@ impl AGIExecutor {
                         "notion" => Provider::Notion,
                         "trello" => Provider::Trello,
                         "asana" => Provider::Asana,
-                        _ => return Err(anyhow!(
+                        _ => {
+                            return Err(anyhow!(
                             "Unknown productivity provider: {}. Supported: notion, trello, asana",
                             provider_str
-                        )),
+                        ))
+                        }
                     };
 
                     // Build task
