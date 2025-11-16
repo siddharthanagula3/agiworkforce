@@ -96,7 +96,10 @@ impl AsanaClient {
             .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaUser> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaResponse<AsanaUser> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data.gid)
         } else {
             let status = response.status();
@@ -169,7 +172,10 @@ impl AsanaClient {
             .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaListResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaListResponse<AsanaTask> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -210,7 +216,10 @@ impl AsanaClient {
             .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaResponse<AsanaTask> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data.gid)
         } else {
             let status = response.status();
@@ -290,7 +299,10 @@ impl AsanaClient {
             .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaResponse<AsanaTask> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(

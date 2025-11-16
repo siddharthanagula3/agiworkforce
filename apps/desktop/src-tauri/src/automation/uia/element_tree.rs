@@ -1,4 +1,5 @@
 use super::*;
+use serde::{Deserialize, Serialize};
 use windows::Win32::UI::Accessibility::{
     IUIAutomationCondition, TreeScope_Children, TreeScope_Subtree, UIA_AutomationIdPropertyId,
     UIA_ButtonControlTypeId, UIA_CheckBoxControlTypeId, UIA_ClassNamePropertyId,
@@ -8,7 +9,7 @@ use windows::Win32::UI::Accessibility::{
     UIA_PROPERTY_ID,
 };
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BoundingRectangle {
     pub left: f64,
     pub top: f64,
@@ -25,7 +26,7 @@ pub struct UIElementInfo {
     pub bounding_rect: Option<BoundingRectangle>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct ElementQuery {
     #[serde(default)]
     pub window: Option<String>,
@@ -123,9 +124,9 @@ impl UIAutomationService {
 
     fn describe_element(&self, element: &IUIAutomationElement) -> Result<UIElementInfo> {
         let id = self.register_element(element)?;
-        let name = read_bstr(|| unsafe { element.CurrentName() }).unwrap_or_default();
-        let class_name =
-            read_bstr(|| unsafe { element.CurrentClassName() }).unwrap_or_else(|| "Unknown".into());
+        let name = read_bstr(|| unsafe { element.CurrentName().ok() }).unwrap_or_default();
+        let class_name = read_bstr(|| unsafe { element.CurrentClassName().ok() })
+            .unwrap_or_else(|| "Unknown".into());
         let control_type_id = unsafe { element.CurrentControlType() }
             .map_err(|err| anyhow!("CurrentControlType: {err:?}"))?;
         let control_type = self.control_type_to_string(control_type_id);

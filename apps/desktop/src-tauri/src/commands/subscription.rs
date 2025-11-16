@@ -224,6 +224,7 @@ pub async fn cancel_subscription(_user_id: String, _subscription_id: String) -> 
 
 /// Helper function to map plan IDs to plan names and billing intervals
 /// This could be moved to a configuration file or database table
+#[cfg_attr(not(feature = "billing"), allow(dead_code))]
 fn get_plan_details(plan_id: &str) -> (String, String) {
     // Default mapping - in production this would come from a configuration
     // or be looked up from Stripe's API

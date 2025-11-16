@@ -1,4 +1,4 @@
-use super::types::{Hook, HookEvent, HookEventType, HookExecutionResult};
+use super::types::{Hook, HookEvent, HookExecutionResult};
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -14,13 +14,14 @@ pub struct HookExecutor {
     execution_stats: tokio::sync::RwLock<HashMap<String, HookStats>>,
 }
 
+/// Aggregated statistics for a single hook execution pipeline.
 #[derive(Debug, Clone, Default)]
-struct HookStats {
-    total_executions: u64,
-    successful_executions: u64,
-    failed_executions: u64,
-    total_execution_time_ms: u64,
-    last_execution: Option<chrono::DateTime<chrono::Utc>>,
+pub struct HookStats {
+    pub total_executions: u64,
+    pub successful_executions: u64,
+    pub failed_executions: u64,
+    pub total_execution_time_ms: u64,
+    pub last_execution: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl HookExecutor {
@@ -318,6 +319,7 @@ impl Default for HookExecutor {
 
 #[cfg(test)]
 mod tests {
+    use super::types::HookEventType;
     use super::*;
 
     #[tokio::test]

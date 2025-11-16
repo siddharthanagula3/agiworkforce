@@ -31,7 +31,7 @@ impl TutorialState {
 /// Get all available tutorials
 #[tauri::command]
 pub async fn get_tutorials(db: State<'_, AppDatabase>) -> Result<Vec<Tutorial>, String> {
-    let manager = TutorialManager::new(db.0.clone());
+    let manager = TutorialManager::new(db.conn.clone());
     Ok(manager.get_tutorials())
 }
 
@@ -41,7 +41,7 @@ pub async fn get_tutorial(
     db: State<'_, AppDatabase>,
     tutorial_id: String,
 ) -> Result<Tutorial, String> {
-    let manager = TutorialManager::new(db.0.clone());
+    let manager = TutorialManager::new(db.conn.clone());
     manager
         .get_tutorial(&tutorial_id)
         .map_err(|e| e.to_string())
@@ -53,7 +53,7 @@ pub async fn get_recommended_tutorial(
     db: State<'_, AppDatabase>,
     user_id: String,
 ) -> Result<Option<Tutorial>, String> {
-    let manager = TutorialManager::new(db.0.clone());
+    let manager = TutorialManager::new(db.conn.clone());
     Ok(manager.get_recommended_tutorial(&user_id))
 }
 
@@ -64,7 +64,7 @@ pub async fn start_tutorial(
     user_id: String,
     tutorial_id: String,
 ) -> Result<OnboardingProgress, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .start_tutorial(&user_id, &tutorial_id)
         .map_err(|e| e.to_string())
@@ -78,7 +78,7 @@ pub async fn complete_tutorial_step(
     tutorial_id: String,
     step_id: String,
 ) -> Result<OnboardingProgress, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .complete_step(&user_id, &tutorial_id, &step_id)
         .map_err(|e| e.to_string())
@@ -92,7 +92,7 @@ pub async fn skip_tutorial_step(
     tutorial_id: String,
     step_id: String,
 ) -> Result<OnboardingProgress, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .skip_step(&user_id, &tutorial_id, &step_id)
         .map_err(|e| e.to_string())
@@ -105,8 +105,8 @@ pub async fn complete_tutorial(
     user_id: String,
     tutorial_id: String,
 ) -> Result<Vec<Reward>, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
-    let rewards_system = RewardSystem::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
+    let rewards_system = RewardSystem::new(db.conn.clone());
 
     tracker
         .complete_tutorial(&user_id, &tutorial_id)
@@ -123,7 +123,7 @@ pub async fn reset_tutorial(
     user_id: String,
     tutorial_id: String,
 ) -> Result<(), String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .reset_tutorial(&user_id, &tutorial_id)
         .map_err(|e| e.to_string())
@@ -136,7 +136,7 @@ pub async fn get_tutorial_progress(
     user_id: String,
     tutorial_id: String,
 ) -> Result<OnboardingProgress, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .get_progress(&user_id, &tutorial_id)
         .map_err(|e| e.to_string())
@@ -148,7 +148,7 @@ pub async fn get_user_tutorial_progress(
     db: State<'_, AppDatabase>,
     user_id: String,
 ) -> Result<UserTutorialProgress, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .get_user_progress(&user_id)
         .map_err(|e| e.to_string())
@@ -160,7 +160,7 @@ pub async fn get_tutorial_stats(
     db: State<'_, AppDatabase>,
     tutorial_id: String,
 ) -> Result<TutorialStats, String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .get_tutorial_stats(&tutorial_id)
         .map_err(|e| e.to_string())
@@ -174,7 +174,7 @@ pub async fn record_step_view(
     tutorial_id: String,
     step_id: String,
 ) -> Result<(), String> {
-    let tracker = ProgressTracker::new(db.0.clone());
+    let tracker = ProgressTracker::new(db.conn.clone());
     tracker
         .record_step_view(&user_id, &tutorial_id, &step_id)
         .map_err(|e| e.to_string())
@@ -186,7 +186,7 @@ pub async fn get_user_rewards(
     db: State<'_, AppDatabase>,
     user_id: String,
 ) -> Result<Vec<Reward>, String> {
-    let rewards_system = RewardSystem::new(db.0.clone());
+    let rewards_system = RewardSystem::new(db.conn.clone());
     Ok(rewards_system.get_user_rewards(&user_id))
 }
 
@@ -197,7 +197,7 @@ pub async fn has_reward(
     user_id: String,
     reward_id: String,
 ) -> Result<bool, String> {
-    let rewards_system = RewardSystem::new(db.0.clone());
+    let rewards_system = RewardSystem::new(db.conn.clone());
     Ok(rewards_system.has_reward(&user_id, &reward_id))
 }
 
@@ -208,14 +208,14 @@ pub async fn has_unlocked_feature(
     user_id: String,
     feature_id: String,
 ) -> Result<bool, String> {
-    let rewards_system = RewardSystem::new(db.0.clone());
+    let rewards_system = RewardSystem::new(db.conn.clone());
     Ok(rewards_system.has_unlocked_feature(&user_id, &feature_id))
 }
 
 /// Get user's total credits
 #[tauri::command]
 pub async fn get_user_credits(db: State<'_, AppDatabase>, user_id: String) -> Result<i32, String> {
-    let rewards_system = RewardSystem::new(db.0.clone());
+    let rewards_system = RewardSystem::new(db.conn.clone());
     Ok(rewards_system.get_user_credits(&user_id))
 }
 
@@ -225,7 +225,7 @@ pub async fn populate_sample_data(
     db: State<'_, AppDatabase>,
     user_id: String,
 ) -> Result<SampleDataSummary, String> {
-    let generator = SampleDataGenerator::new(db.0.clone());
+    let generator = SampleDataGenerator::new(db.conn.clone());
     generator
         .populate_sample_data(&user_id)
         .map_err(|e| e.to_string())
@@ -234,14 +234,14 @@ pub async fn populate_sample_data(
 /// Check if user has sample data
 #[tauri::command]
 pub async fn has_sample_data(db: State<'_, AppDatabase>, user_id: String) -> Result<bool, String> {
-    let generator = SampleDataGenerator::new(db.0.clone());
+    let generator = SampleDataGenerator::new(db.conn.clone());
     Ok(generator.has_sample_data(&user_id))
 }
 
 /// Clear sample data for user
 #[tauri::command]
 pub async fn clear_sample_data(db: State<'_, AppDatabase>, user_id: String) -> Result<(), String> {
-    let generator = SampleDataGenerator::new(db.0.clone());
+    let generator = SampleDataGenerator::new(db.conn.clone());
     generator
         .clear_sample_data(&user_id)
         .map_err(|e| e.to_string())
@@ -257,7 +257,7 @@ pub async fn submit_tutorial_feedback(
     feedback_text: Option<String>,
     helpful: bool,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     let feedback_id = uuid::Uuid::new_v4().to_string();
 

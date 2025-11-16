@@ -681,7 +681,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
     /// Evaluate outcome achievement
     pub fn evaluate_outcome(
         &self,
-        process_type: ProcessType,
+        _process_type: ProcessType,
         expected_outcomes: &[Outcome],
         actual_results: &ExecutionContext,
     ) -> OutcomeScore {

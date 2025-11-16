@@ -350,7 +350,7 @@ impl RedisClient {
         let mut manager = Self::prepare_manager(&conn.manager, conn.db).await?;
 
         let value: Option<String> = manager
-            .lpop(key)
+            .lpop(key, None)
             .await
             .map_err(|e| Error::Other(format!("Redis LPOP error: {}", e)))?;
 
@@ -369,7 +369,7 @@ impl RedisClient {
         let mut manager = Self::prepare_manager(&conn.manager, conn.db).await?;
 
         let value: Option<String> = manager
-            .rpop(key)
+            .rpop(key, None)
             .await
             .map_err(|e| Error::Other(format!("Redis RPOP error: {}", e)))?;
 

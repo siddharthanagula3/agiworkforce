@@ -68,7 +68,6 @@ impl TaskExecutor {
 
         let task_id = task.id.clone();
         let cancel_token = CancellationToken::new();
-        let progress_tx = self.progress_tx.clone();
 
         // Update task status to running
         task.start();
@@ -139,7 +138,7 @@ impl TaskExecutor {
 
     /// Cancel a running task
     pub async fn cancel(&self, task_id: &str) -> anyhow::Result<()> {
-        let mut running = self.running_tasks.write().await;
+        let running = self.running_tasks.write().await;
 
         if let Some(running_task) = running.get(task_id) {
             // Trigger cancellation
