@@ -6,10 +6,35 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::Manager;
 
+/// Dangerous tools that require user approval in safe mode
+const DANGEROUS_TOOLS: &[&str] = &[
+    "file_write",
+    "file_delete",
+    "terminal_execute",
+    "git_push",
+    "github_create_repo",
+    "api_call",
+    "api_upload",
+    "cloud_upload",
+    "email_send",
+    "db_execute",
+    "db_transaction_begin",
+    "code_execute",
+];
+
+/// Check if a tool is considered dangerous
+fn is_dangerous_tool(tool_id: &str) -> bool {
+    DANGEROUS_TOOLS.contains(&tool_id)
+        || tool_id.starts_with("ui_")
+        || tool_id.starts_with("automation_")
+        || tool_id.starts_with("browser_")
+}
+
 /// Bridges between LLM function calling and AGI tool execution
 pub struct ToolExecutor {
     registry: Arc<ToolRegistry>,
     app_handle: Option<tauri::AppHandle>,
+    conversation_mode: Option<String>, // "safe" or "full_control"
 }
 
 impl ToolExecutor {
@@ -17,6 +42,7 @@ impl ToolExecutor {
         Self {
             registry,
             app_handle: None,
+            conversation_mode: None,
         }
     }
 
@@ -24,7 +50,13 @@ impl ToolExecutor {
         Self {
             registry,
             app_handle: Some(app_handle),
+            conversation_mode: None,
         }
+    }
+
+    /// Set conversation mode for security checks
+    pub fn set_conversation_mode(&mut self, mode: Option<String>) {
+        self.conversation_mode = mode;
     }
 
     /// Convert AGI tools to LLM tool definitions
@@ -115,6 +147,67 @@ impl ToolExecutor {
                     metadata: HashMap::new(),
                 });
             }
+        }
+
+        // 🔒 Security Check: Dangerous operations in safe mode
+        if is_dangerous_tool(&tool_call.name)
+            && self.conversation_mode.as_deref() == Some("safe")
+        {
+            tracing::warn!(
+                "[Security] Dangerous tool '{}' requested in safe mode. Emitting approval request.",
+                tool_call.name
+            );
+
+            // Emit approval request event
+            if let Some(app_handle) = &self.app_handle {
+                let _ = app_handle.emit("approval:request", json!({
+                    "id": uuid::Uuid::new_v4().to_string(),
+                    "type": "tool_execution",
+                    "toolName": tool_call.name,
+                    "description": format!("Agent wants to execute: {}", tool.name),
+                    "riskLevel": "high",
+                    "details": {
+                        "tool": tool.name,
+                        "arguments": args,
+                    },
+                    "status": "pending",
+                }));
+
+                // Also emit agent status update
+                let _ = app_handle.emit("agent:status:update", json!({
+                    "id": "main_agent",
+                    "name": "AGI Workforce Agent",
+                    "status": "paused",
+                    "currentStep": format!("Waiting for approval to execute: {}", tool.name),
+                    "progress": 50
+                }));
+            }
+
+            // TODO: In production, wait for approval response
+            // For now, return a special result indicating approval needed
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "approval_required": true }),
+                error: Some(format!(
+                    "User approval required to execute dangerous tool: {}",
+                    tool.name
+                )),
+                metadata: HashMap::from([
+                    ("requires_approval".to_string(), json!(true)),
+                    ("tool_name".to_string(), json!(tool_call.name)),
+                ]),
+            });
+        }
+
+        // Emit agent status: executing tool
+        if let Some(app_handle) = &self.app_handle {
+            let _ = app_handle.emit("agent:status:update", json!({
+                "id": "main_agent",
+                "name": "AGI Workforce Agent",
+                "status": "running",
+                "currentStep": format!("Executing: {}", tool.name),
+                "progress": 60
+            }));
         }
 
         // Execute the tool based on its ID
