@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::async_runtime::block_on;
 use tauri::State;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 use crate::browser::advanced::Cookie;
 use crate::browser::{
@@ -25,6 +26,10 @@ impl BrowserStateWrapper {
             block_on(BrowserState::new()).expect("Failed to initialize browser automation state");
         Self(Arc::new(Mutex::new(initial_state)))
     }
+
+    pub async fn lock(&self) -> MutexGuard<'_, BrowserState> {
+        self.0.lock().await
+    }
 }
 
 /// Initialize browser automation system
@@ -34,7 +39,7 @@ pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<Strin
 
     match BrowserState::new().await {
         Ok(browser_state) => {
-            *state.0.lock().await = browser_state;
+            *state.inner().lock().await = browser_state;
             Ok("Browser automation initialized".to_string())
         }
         Err(e) => Err(format!("Failed to initialize browser automation: {}", e)),
@@ -54,7 +59,7 @@ pub async fn browser_launch(
         headless
     );
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
 
     let browser_type_enum = match browser_type.to_lowercase().as_str() {
         "chromium" | "chrome" => BrowserType::Chromium,
@@ -87,7 +92,7 @@ pub async fn browser_open_tab(
 ) -> Result<String, String> {
     tracing::info!("Opening tab: {}", url);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     match tab_manager.open_tab(&url).await {
@@ -107,7 +112,7 @@ pub async fn browser_close_tab(
 ) -> Result<(), String> {
     tracing::info!("Closing tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
@@ -123,7 +128,7 @@ pub async fn browser_list_tabs(
 ) -> Result<Vec<serde_json::Value>, String> {
     tracing::info!("Listing all tabs");
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     match tab_manager.list_tabs().await {
@@ -147,7 +152,7 @@ pub async fn browser_navigate(
 ) -> Result<(), String> {
     tracing::info!("Navigating tab {} to {}", tab_id, url);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     let options = NavigationOptions::default();
@@ -166,7 +171,7 @@ pub async fn browser_go_back(
 ) -> Result<(), String> {
     tracing::info!("Going back in tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
@@ -183,7 +188,7 @@ pub async fn browser_go_forward(
 ) -> Result<(), String> {
     tracing::info!("Going forward in tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
@@ -200,7 +205,7 @@ pub async fn browser_reload(
 ) -> Result<(), String> {
     tracing::info!("Reloading tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
@@ -215,7 +220,7 @@ pub async fn browser_get_url(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<String, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
@@ -230,7 +235,7 @@ pub async fn browser_get_title(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<String, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
@@ -248,7 +253,7 @@ pub async fn browser_click(
 ) -> Result<(), String> {
     tracing::info!("Clicking element {} in tab {}", selector, tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -362,7 +367,7 @@ pub async fn browser_screenshot(
 ) -> Result<String, String> {
     tracing::info!("Taking screenshot of tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     let options = ScreenshotOptions {
@@ -460,7 +465,7 @@ pub async fn browser_execute_async_js(
 ) -> Result<serde_json::Value, String> {
     tracing::info!("Executing async JS in tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -484,7 +489,7 @@ pub async fn browser_get_element_state(
     selector: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<ElementState, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -505,7 +510,7 @@ pub async fn browser_wait_for_interactive(
 ) -> Result<(), String> {
     tracing::info!("Waiting for element to be interactive: {}", selector);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -525,7 +530,7 @@ pub async fn browser_fill_form(
 ) -> Result<(), String> {
     tracing::info!("Filling form with {} fields", fields.len());
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -546,7 +551,7 @@ pub async fn browser_drag_and_drop(
 ) -> Result<(), String> {
     tracing::info!("Dragging {} to {}", source_selector, target_selector);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -567,7 +572,7 @@ pub async fn browser_upload_file(
 ) -> Result<(), String> {
     tracing::info!("Uploading file {} to {}", file_path, selector);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -584,7 +589,7 @@ pub async fn browser_get_cookies(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<Cookie>, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -602,7 +607,7 @@ pub async fn browser_set_cookie(
     cookie: Cookie,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<(), String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -619,7 +624,7 @@ pub async fn browser_clear_cookies(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<(), String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -636,7 +641,7 @@ pub async fn browser_get_performance_metrics(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<serde_json::Value, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -656,7 +661,7 @@ pub async fn browser_wait_for_navigation(
     timeout_ms: u64,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<String, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -673,7 +678,7 @@ pub async fn browser_get_frames(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -697,7 +702,7 @@ pub async fn browser_execute_in_frame(
     script: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<serde_json::Value, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -716,7 +721,7 @@ pub async fn browser_call_function(
     args: Vec<serde_json::Value>,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<serde_json::Value, String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -733,7 +738,7 @@ pub async fn browser_enable_request_interception(
     tab_id: String,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<(), String> {
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -788,7 +793,7 @@ pub async fn browser_get_screenshot_stream(
 ) -> Result<String, String> {
     tracing::debug!("Getting screenshot stream for tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     let options = ScreenshotOptions {
@@ -826,7 +831,7 @@ pub async fn browser_highlight_element(
 ) -> Result<ElementBounds, String> {
     tracing::info!("Highlighting element {} in tab {}", selector, tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -926,7 +931,7 @@ pub async fn browser_get_console_logs(
 ) -> Result<Vec<ConsoleLog>, String> {
     tracing::info!("Getting console logs for tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let _cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -969,7 +974,7 @@ pub async fn browser_get_network_activity(
 ) -> Result<Vec<NetworkRequest>, String> {
     tracing::info!("Getting network activity for tab: {}", tab_id);
 
-    let browser_state = state.0.lock().await;
+    let browser_state = state.inner().lock().await;
     let _cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
@@ -1019,9 +1024,10 @@ pub async fn browser_get_network_activity(
 // ============================================================================
 
 use crate::browser::semantic::{
-    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, ElementInfo, SelectorResult,
-    SelfHealingFinder, SemanticElementFinder, SemanticSelector,
+    AccessibilityAnalyzer, AccessibilityTree, DOMSemanticGraph, SelectorResult, SelfHealingFinder,
+    SemanticElementFinder,
 };
+use crate::browser::ElementInfo;
 
 /// Find element using semantic natural language selector
 #[tauri::command]
@@ -1062,7 +1068,8 @@ pub async fn find_element_semantic(
                 (function() {{
                     const el = {};
                     if (!el) return null;
-                    return {{
+                return {{
+                        tag: el.tagName ? el.tagName.toLowerCase() : 'div',
                         selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase(),
                         role: el.getAttribute('role'),
                         name: el.getAttribute('aria-label') || el.textContent?.trim(),
@@ -1078,25 +1085,46 @@ pub async fn find_element_semantic(
                 .map_err(|e| format!("Failed to get element details: {}", e))?;
 
             if let Some(details_obj) = details.as_object() {
+                let mut attributes = HashMap::new();
+                if let Some(selector) = details_obj
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
+                    attributes.insert("selector".to_string(), selector);
+                }
+                if let Some(role) = details_obj
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
+                    attributes.insert("role".to_string(), role);
+                }
+                if let Some(name) = details_obj
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
+                    attributes.insert("name".to_string(), name);
+                }
+                attributes.insert("strategy".to_string(), format!("{:?}", strategy));
+
+                let tag_name = details_obj
+                    .get("tag")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("div")
+                    .to_string();
+                let text = details_obj
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
                 return Ok(ElementInfo {
-                    selector: details_obj
-                        .get("selector")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    strategy,
-                    role: details_obj
-                        .get("role")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
-                    name: details_obj
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
-                    text: details_obj
-                        .get("text")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
+                    tag_name,
+                    text,
+                    attributes,
+                    bounds: None,
                 });
             }
         }
@@ -1127,6 +1155,7 @@ pub async fn find_all_elements_semantic(
                 const selector = {};
                 const elements = selector ? (Array.isArray(selector) ? selector : [selector]) : [];
                 return elements.filter(el => el != null).map(el => ({{
+                    tag: el.tagName ? el.tagName.toLowerCase() : 'div',
                     selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase(),
                     role: el.getAttribute('role'),
                     name: el.getAttribute('aria-label') || el.textContent?.trim(),
@@ -1142,25 +1171,46 @@ pub async fn find_all_elements_semantic(
                 if let Some(arr) = result.as_array() {
                     for elem in arr {
                         if let Some(obj) = elem.as_object() {
+                            let mut attributes = HashMap::new();
+                            if let Some(selector) = obj
+                                .get("selector")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                            {
+                                attributes.insert("selector".to_string(), selector);
+                            }
+                            if let Some(role) = obj
+                                .get("role")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                            {
+                                attributes.insert("role".to_string(), role);
+                            }
+                            if let Some(name) = obj
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                            {
+                                attributes.insert("name".to_string(), name);
+                            }
+                            attributes.insert("strategy".to_string(), format!("{:?}", strategy));
+
+                            let tag_name = obj
+                                .get("tag")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("div")
+                                .to_string();
+                            let text = obj
+                                .get("text")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
                             all_elements.push(ElementInfo {
-                                selector: obj
-                                    .get("selector")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string(),
-                                strategy: format!("{:?}", strategy),
-                                role: obj
-                                    .get("role")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string()),
-                                name: obj
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string()),
-                                text: obj
-                                    .get("text")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string()),
+                                tag_name,
+                                text,
+                                attributes,
+                                bounds: None,
                             });
                         }
                     }
@@ -1171,6 +1221,13 @@ pub async fn find_all_elements_semantic(
     }
 
     Ok(all_elements)
+}
+
+fn selector_from_element(info: &ElementInfo) -> Result<String, String> {
+    info.attributes
+        .get("selector")
+        .cloned()
+        .ok_or_else(|| "Selector metadata not available for element".to_string())
 }
 
 /// Click element using semantic selector
@@ -1186,7 +1243,8 @@ pub async fn click_semantic(
     let element_info = find_element_semantic(tab_id.clone(), query, state.clone()).await?;
 
     // Click using the found selector
-    browser_click(tab_id, element_info.selector, state).await
+    let selector = selector_from_element(&element_info)?;
+    browser_click(tab_id, selector, state).await
 }
 
 /// Type text into element using semantic selector
@@ -1203,7 +1261,8 @@ pub async fn type_semantic(
     let element_info = find_element_semantic(tab_id.clone(), query, state.clone()).await?;
 
     // Type using the found selector
-    browser_type(tab_id, element_info.selector, text, state).await
+    let selector = selector_from_element(&element_info)?;
+    browser_type(tab_id, selector, text, state).await
 }
 
 /// Get accessibility tree for the current page

@@ -226,6 +226,29 @@ impl WorkflowMarketplace {
         Ok(workflow)
     }
 
+    /// Get workflow by id
+    pub fn get_workflow_by_id(&self, workflow_id: &str) -> Result<PublishedWorkflow, String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
+
+        let workflow = conn
+            .query_row(
+                "SELECT id, title, description, category, creator_id, creator_name,
+                    workflow_definition, thumbnail_url, share_url, clone_count,
+                    view_count, favorite_count, avg_rating, rating_count,
+                    tags, estimated_time_saved, estimated_cost_saved,
+                    is_verified, is_featured, created_at, updated_at
+             FROM published_workflows WHERE id = ?1",
+                rusqlite::params![workflow_id],
+                Self::row_to_published_workflow,
+            )
+            .map_err(|e| format!("Workflow not found: {}", e))?;
+
+        Ok(workflow)
+    }
+
     /// Get workflows by creator
     pub fn get_creator_workflows(
         &self,

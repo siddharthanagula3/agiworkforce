@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke, isTauri } from '../lib/tauri-mock';
 
 export type DockPosition = 'left' | 'right';
 
@@ -50,6 +48,8 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
   const [state, setState] = useState<WindowState>(defaultState);
 
   const refresh = useCallback(async () => {
+    if (!isTauri) return; // Skip in web mode
+
     try {
       const payload = await invoke<BackendWindowState>('window_get_state');
       setState((current) => ({
@@ -66,14 +66,18 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   useEffect(() => {
+    if (!isTauri) return; // Skip event listeners in web mode
+
     let isMounted = true;
-    const cleaners: UnlistenFn[] = [];
+    const cleaners: Array<() => void> = [];
 
     (async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+
       const windowStateListener = await listen<BackendWindowState>('window://state', (event) => {
         if (!isMounted) return;
         const payload = event.payload;
@@ -146,7 +150,13 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
   }, [setAlwaysOnTop, state.alwaysOnTop]);
 
   const minimize = useCallback(async () => {
+    if (!isTauri) {
+      console.log('[Web Mock] Window minimize');
+      return;
+    }
+
     try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const window = getCurrentWindow();
       await window.minimize();
     } catch (error) {
@@ -180,7 +190,13 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
   }, []);
 
   const close = useCallback(async () => {
+    if (!isTauri) {
+      console.log('[Web Mock] Window close');
+      return;
+    }
+
     try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const window = getCurrentWindow();
       await window.close();
     } catch (error) {

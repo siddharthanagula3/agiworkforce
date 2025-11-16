@@ -32,9 +32,10 @@ impl MySqlClient {
             .map_err(|e| Error::Other(format!("Failed to parse MySQL connection string: {}", e)))?;
 
         // Configure pool constraints (5 min, 100 max connections)
-        let pool_opts = PoolOpts::default().with_constraints(
-            PoolConstraints::new(5, 100).unwrap_or_else(|| PoolConstraints::new(1, 10).unwrap()),
-        );
+        let pool_opts =
+            PoolOpts::default().with_constraints(PoolConstraints::new(5, 100).unwrap_or_else(
+                || PoolConstraints::new(1, 10).expect("Failed to create fallback pool constraints"),
+            ));
 
         // Create the pool with connection string and pool options
         let pool = Pool::new(OptsBuilder::from_opts(opts).pool_opts(pool_opts));
@@ -355,19 +356,13 @@ impl MySqlClient {
         tracing::debug!("Calling procedure: {}", call_sql);
 
         // Execute the stored procedure
-        let query_result: Vec<Vec<Row>> = conn
+        let query_rows: Vec<Row> = conn
             .exec(&call_sql, mysql_params)
             .await
             .map_err(|e| Error::Other(format!("Failed to call procedure: {}", e)))?;
 
-        // Convert all result sets
-        let mut results = Vec::new();
-        for rows in query_result {
-            let result = Self::rows_to_query_result(rows, 0)?;
-            results.push(result);
-        }
-
-        Ok(results)
+        let result = Self::rows_to_query_result(query_rows, 0)?;
+        Ok(vec![result])
     }
 
     /// Bulk insert multiple rows efficiently
@@ -415,8 +410,7 @@ impl MySqlClient {
         tracing::debug!("Bulk insert: {} rows into {}", rows.len(), table_name);
 
         // Execute bulk insert
-        let result = conn
-            .exec_drop(&sql, all_params)
+        conn.exec_drop(&sql, all_params)
             .await
             .map_err(|e| Error::Other(format!("Bulk insert failed: {}", e)))?;
 

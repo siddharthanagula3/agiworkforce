@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -148,9 +147,9 @@ impl UIAutomationService {
 
 pub(super) fn read_bstr<F>(mut f: F) -> Option<String>
 where
-    F: FnMut() -> windows::core::Result<BSTR>,
+    F: FnMut() -> Option<BSTR>,
 {
-    f().ok().map(|b| b.to_string())
+    f().map(|b| b.to_string())
 }
 
 pub(super) fn safe_array_to_runtime_id(array: *mut SAFEARRAY) -> Result<String> {

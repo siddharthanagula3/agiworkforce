@@ -156,8 +156,6 @@ impl ExecutorService {
 
             // Execute with retry logic
             let mut attempt = 0;
-            let mut last_error = None;
-
             while attempt <= self.config.retry_count {
                 match self.execute_action(action, app_handle).await {
                     Ok(_) => {
@@ -171,7 +169,7 @@ impl ExecutorService {
                         break;
                     }
                     Err(err) => {
-                        last_error = Some(err.to_string());
+                        let err_msg = err.to_string();
                         attempt += 1;
 
                         if attempt <= self.config.retry_count {
@@ -182,7 +180,7 @@ impl ExecutorService {
                                     "Action failed (attempt {}/{}): {}",
                                     attempt,
                                     self.config.retry_count + 1,
-                                    err
+                                    err_msg
                                 ),
                                 Some(&action.id),
                             );
@@ -192,7 +190,7 @@ impl ExecutorService {
                             self.log(
                                 &mut logs,
                                 "error",
-                                &format!("Action failed after {} attempts: {}", attempt, err),
+                                &format!("Action failed after {} attempts: {}", attempt, err_msg),
                                 Some(&action.id),
                             );
 
@@ -209,7 +207,7 @@ impl ExecutorService {
                                 actions_completed,
                                 actions_failed,
                                 duration_ms: start.elapsed().as_millis() as u64,
-                                error: last_error,
+                                error: Some(err_msg),
                                 screenshots,
                                 logs,
                             });
@@ -360,7 +358,7 @@ impl ExecutorService {
 
     /// Execute drag action
     async fn execute_drag(&self, action: &ScriptAction) -> Result<()> {
-        let (from_x, from_y) = self.resolve_coordinates(action)?;
+        let (_from_x, _from_y) = self.resolve_coordinates(action)?;
 
         // Get target coordinates from metadata or value
         // Placeholder for now

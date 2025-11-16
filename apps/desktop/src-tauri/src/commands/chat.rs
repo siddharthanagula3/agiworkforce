@@ -598,11 +598,12 @@ pub async fn chat_send_message(
         })
         .collect();
 
-    // ✅ Add tool definitions from AGI registry + MCP tools
+    // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees
     let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
-        use crate::commands::McpState;
+        use crate::commands::{McpState, AIEmployeeState};
         use crate::router::tool_executor::ToolExecutor;
+        use crate::router::ToolDefinition;
         use std::sync::Arc;
 
         match ToolRegistry::new() {
@@ -621,6 +622,55 @@ pub async fn chat_send_message(
                             mcp_tools.len()
                         );
                         tool_defs.extend(mcp_tools);
+                    }
+                }
+
+                // ✅ Add AI Employees as tools if available
+                if let Some(ai_employee_state) = app_handle.try_state::<AIEmployeeState>() {
+                    // Get user's hired employees (using default-user for now)
+                    if let Ok(marketplace) = ai_employee_state.marketplace.lock() {
+                        if let Ok(user_employees) = marketplace.get_user_employees("default-user") {
+                            if !user_employees.is_empty() {
+                                tracing::info!(
+                                    "[Chat] Adding {} AI Employee tools to function definitions",
+                                    user_employees.len()
+                                );
+
+                                // Convert each hired employee to a tool definition
+                                for user_employee in user_employees.iter() {
+                                    if user_employee.is_active {
+                                        // Get the full employee details
+                                        if let Ok(employee) = marketplace.get_employee_by_id(&user_employee.employee_id) {
+                                            let tool_def = ToolDefinition {
+                                                name: format!("ai_employee_{}", employee.id.replace("-", "_")),
+                                                description: format!(
+                                                    "{} - {}. Capabilities: {}",
+                                                    employee.name,
+                                                    employee.description,
+                                                    employee.capabilities.join(", ")
+                                                ),
+                                                parameters: serde_json::json!({
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "task_description": {
+                                                            "type": "string",
+                                                            "description": "Description of the task to delegate to this AI employee"
+                                                        },
+                                                        "task_data": {
+                                                            "type": "object",
+                                                            "description": "Additional data required for the task",
+                                                            "additionalProperties": true
+                                                        }
+                                                    },
+                                                    "required": ["task_description"]
+                                                }),
+                                            };
+                                            tool_defs.push(tool_def);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

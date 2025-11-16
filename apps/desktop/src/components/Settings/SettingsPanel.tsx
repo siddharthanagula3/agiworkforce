@@ -212,6 +212,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <Users className="h-4 w-4" />
                 Agent Library
               </TabsTrigger>
+              <TabsTrigger value="agent-library" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Agent Library
+              </TabsTrigger>
               <TabsTrigger value="window" className="flex items-center gap-2">
                 <Monitor className="h-4 w-4" />
                 Window
@@ -486,7 +490,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </TabsContent>
 
             <TabsContent value="agent-library" className="space-y-6 pt-6">
-              <AgentLibraryTab />
+              <div className="h-[600px]">
+                <EmployeesPage />
+              </div>
             </TabsContent>
 
             <TabsContent value="window" className="space-y-6 pt-6">

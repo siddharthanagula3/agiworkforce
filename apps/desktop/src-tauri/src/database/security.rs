@@ -162,7 +162,7 @@ impl SqlSecurityValidator {
         Ok(QueryValidation {
             query_type,
             approval_level,
-            injection_warnings,
+            injection_warnings: injection_warnings.clone(),
             safe: injection_warnings.is_empty() && approval_level != ApprovalLevel::Blocked,
         })
     }
