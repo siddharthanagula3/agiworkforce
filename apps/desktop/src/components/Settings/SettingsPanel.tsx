@@ -29,6 +29,7 @@ import {
 } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 import { EmployeesPage } from '../../pages/EmployeesPage';
+import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -475,6 +476,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     <p className="text-xs text-muted-foreground">
                       Maximum number of tokens to generate in responses
                     </p>
+                  </div>
+
+                  {/* Favorite Models Selector */}
+                  <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <FavoriteModelsSelector />
                   </div>
                 </div>
               </div>
