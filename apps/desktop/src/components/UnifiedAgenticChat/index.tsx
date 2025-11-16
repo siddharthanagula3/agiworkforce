@@ -7,6 +7,7 @@ import { ChatInputArea, SendOptions } from './ChatInputArea';
 import { SidecarPanel } from './SidecarPanel';
 import { AgentStatusBanner } from './AgentStatusBanner';
 import { ChatInputToolbar } from './ChatInputToolbar';
+import { ApprovalModal } from './ApprovalModal';
 import { PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
 
@@ -241,6 +242,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
 
       {/* Mission Control Modal (Future) */}
       {/* <MissionControl isOpen={missionControlOpen} onClose={() => setMissionControlOpen(false)} /> */}
+
+      {/* Approval Modal */}
+      <ApprovalModal />
     </div>
   );
 };
