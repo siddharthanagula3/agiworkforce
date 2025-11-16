@@ -157,7 +157,7 @@ impl TeamPermissions {
     }
 
     /// Owner permissions (all permissions)
-    fn owner_permissions(permission: Permission) -> bool {
+    fn owner_permissions(_permission: Permission) -> bool {
         true // Owners have all permissions
     }
 

@@ -65,7 +65,7 @@ pub async fn enhance_prompt(
 #[tauri::command]
 pub async fn route_to_best_api(
     use_case: String,
-    prompt: String,
+    _prompt: String,
     state: tauri::State<'_, PromptEnhancementState>,
 ) -> Result<APIRoute, String> {
     let router = &state.router;

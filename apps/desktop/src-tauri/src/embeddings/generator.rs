@@ -163,7 +163,7 @@ impl EmbeddingGenerator {
     }
 
     /// Generate embedding using fastembed-rs (local)
-    async fn generate_fastembed(&self, text: &str) -> Result<Vector> {
+    async fn generate_fastembed(&self, _text: &str) -> Result<Vector> {
         // NOTE: fastembed-rs requires downloading model files on first use
         // For now, return error indicating fastembed is not yet implemented
         // TODO: Implement fastembed integration in a separate PR

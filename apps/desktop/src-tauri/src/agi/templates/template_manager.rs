@@ -295,6 +295,22 @@ impl TemplateManager {
         }
     }
 
+    pub fn uninstall_template(&self, user_id: &str, template_id: &str) -> Result<()> {
+        let conn = self.db.lock().map_err(|_| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to lock database",
+            )))
+        })?;
+
+        conn.execute(
+            "DELETE FROM template_installs WHERE user_id = ?1 AND template_id = ?2",
+            rusqlite::params![user_id, template_id],
+        )?;
+
+        Ok(())
+    }
+
     /// Get templates by category
     pub fn get_templates_by_category(
         &self,

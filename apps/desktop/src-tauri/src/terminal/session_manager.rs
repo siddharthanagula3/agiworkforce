@@ -201,7 +201,7 @@ async fn log_command_to_db(
         "INSERT INTO command_history (command, working_dir, created_at) VALUES (?1, ?2, ?3)",
         params![command, working_dir, timestamp],
     )
-    .map_err(Error::Database)?;
+    .map_err(|e| Error::Database(e.to_string()))?;
 
     tracing::debug!("Logged command to database: {}", command);
 

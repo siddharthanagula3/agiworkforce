@@ -133,10 +133,10 @@ pub async fn get_milestones(
     user_id: String,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<Vec<MilestoneData>, String> {
-    // Access the database directly from the collector
-    // This is a bit of a hack - in production you'd want to add a proper method to the collector
-    let conn = &collector.0.db;
-    let conn = conn.lock().unwrap();
+    let db_conn = collector.0.db_conn();
+    let conn = db_conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     let mut stmt = conn
         .prepare(
@@ -170,8 +170,10 @@ pub async fn share_milestone(
     milestone_id: String,
     collector: State<'_, MetricsCollectorState>,
 ) -> Result<(), String> {
-    let conn = &collector.0.db;
-    let conn = conn.lock().unwrap();
+    let db_conn = collector.0.db_conn();
+    let conn = db_conn
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
 
     conn.execute(
         "UPDATE user_milestones SET shared = 1 WHERE id = ?1",

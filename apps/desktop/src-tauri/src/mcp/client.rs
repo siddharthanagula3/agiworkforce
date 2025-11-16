@@ -30,7 +30,7 @@ impl From<McpToolDefinition> for McpTool {
 
 /// MCP Client manager that handles multiple MCP servers
 pub struct McpClient {
-    sessions: Arc<RwLock<HashMap<String, Arc<RwLock<McpSession>>>>>,
+    sessions: Arc<RwLock<HashMap<String, Arc<McpSession>>>>,
 }
 
 impl McpClient {
@@ -68,7 +68,7 @@ impl McpClient {
         // Store session
         self.sessions
             .write()
-            .insert(name.clone(), Arc::new(RwLock::new(session)));
+            .insert(name.clone(), Arc::new(session));
 
         Ok(())
     }
@@ -85,8 +85,7 @@ impl McpClient {
         };
 
         // Shutdown session
-        let mut session = session_arc.write();
-        session.shutdown().await?;
+        session_arc.shutdown().await?;
 
         Ok(())
     }
@@ -102,8 +101,7 @@ impl McpClient {
         let mut all_tools = Vec::new();
 
         for (server_name, session_arc) in sessions.iter() {
-            let session = session_arc.read();
-            let tools = session.get_cached_tools();
+            let tools = session_arc.get_cached_tools();
 
             for tool_def in tools {
                 all_tools.push((server_name.clone(), McpTool::from(tool_def)));
@@ -115,13 +113,14 @@ impl McpClient {
 
     /// Get tools from a specific server
     pub fn list_server_tools(&self, server_name: &str) -> McpResult<Vec<McpTool>> {
-        let sessions = self.sessions.read();
-        let session_arc = sessions.get(server_name).ok_or_else(|| {
-            McpError::ServerNotFound(format!("Server '{}' not found", server_name))
-        })?;
+        let session_arc = {
+            let sessions = self.sessions.read();
+            sessions.get(server_name).cloned().ok_or_else(|| {
+                McpError::ServerNotFound(format!("Server '{}' not found", server_name))
+            })?
+        };
 
-        let session = session_arc.read();
-        let tools = session
+        let tools = session_arc
             .get_cached_tools()
             .into_iter()
             .map(McpTool::from)
@@ -132,13 +131,14 @@ impl McpClient {
 
     /// Refresh tools from a server
     pub async fn refresh_server_tools(&self, server_name: &str) -> McpResult<Vec<McpTool>> {
-        let sessions = self.sessions.read();
-        let session_arc = sessions.get(server_name).ok_or_else(|| {
-            McpError::ServerNotFound(format!("Server '{}' not found", server_name))
-        })?;
+        let session_arc = {
+            let sessions = self.sessions.read();
+            sessions.get(server_name).cloned().ok_or_else(|| {
+                McpError::ServerNotFound(format!("Server '{}' not found", server_name))
+            })?
+        };
 
-        let session = session_arc.read();
-        let tools = session.list_tools().await?;
+        let tools = session_arc.list_tools().await?;
 
         Ok(tools.into_iter().map(McpTool::from).collect())
     }
@@ -157,10 +157,12 @@ impl McpClient {
             arguments
         );
 
-        let sessions = self.sessions.read();
-        let session_arc = sessions.get(server_name).ok_or_else(|| {
-            McpError::ServerNotFound(format!("Server '{}' not found", server_name))
-        })?;
+        let session_arc = {
+            let sessions = self.sessions.read();
+            sessions.get(server_name).cloned().ok_or_else(|| {
+                McpError::ServerNotFound(format!("Server '{}' not found", server_name))
+            })?
+        };
 
         // Convert Value to HashMap
         let args_map: HashMap<String, Value> = if arguments.is_object() {
@@ -169,8 +171,7 @@ impl McpClient {
             HashMap::new()
         };
 
-        let session = session_arc.read();
-        let result = session.call_tool(tool_name, args_map).await?;
+        let result = session_arc.call_tool(tool_name, args_map).await?;
 
         // Convert tool result to simple JSON value
         Ok(serde_json::to_value(result)?)
@@ -183,8 +184,7 @@ impl McpClient {
         let query_lower = query.to_lowercase();
 
         for (server_name, session_arc) in sessions.iter() {
-            let session = session_arc.read();
-            let tools = session.get_cached_tools();
+            let tools = session_arc.get_cached_tools();
 
             for tool_def in tools {
                 // Search in name and description
@@ -209,10 +209,7 @@ impl McpClient {
         let sessions = self.sessions.read();
         sessions
             .iter()
-            .map(|(name, session_arc)| {
-                let session = session_arc.read();
-                (name.clone(), session.get_cached_tools().len())
-            })
+            .map(|(name, session_arc)| (name.clone(), session_arc.get_cached_tools().len()))
             .collect()
     }
 
@@ -226,10 +223,7 @@ impl McpClient {
         let sessions = self.sessions.read();
         sessions
             .iter()
-            .map(|(name, session_arc)| {
-                let session = session_arc.read();
-                (name.clone(), session.is_alive())
-            })
+            .map(|(name, session_arc)| (name.clone(), session_arc.is_alive()))
             .collect()
     }
 }

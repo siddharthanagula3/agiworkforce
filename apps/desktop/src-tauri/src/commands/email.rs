@@ -542,7 +542,7 @@ fn fetch_account(conn: &Connection, account_id: i64) -> Result<EmailAccountRecor
         params![account_id],
         map_account_row,
     )
-    .map_err(Error::Database)
+    .map_err(|e| Error::Database(e.to_string()))
 }
 
 fn map_account_row(row: &Row<'_>) -> rusqlite::Result<EmailAccountRecord> {

@@ -272,7 +272,7 @@ impl ToolExecutionGuard {
             })
         });
 
-        if let Err(e) = limiter.check_rate_limit(tool_name) {
+        if let Err(_err) = limiter.check_rate_limit(tool_name) {
             warn!("Rate limit exceeded for tool: {}", tool_name);
             return Err(SecurityError::RateLimitExceeded(tool_name.to_string()));
         }

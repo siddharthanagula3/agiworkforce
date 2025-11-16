@@ -16,6 +16,10 @@ impl ProductivityState {
             manager: Arc::new(Mutex::new(ProductivityManager::new())),
         }
     }
+
+    pub fn manager(&self) -> Arc<Mutex<ProductivityManager>> {
+        Arc::clone(&self.manager)
+    }
 }
 
 impl Default for ProductivityState {

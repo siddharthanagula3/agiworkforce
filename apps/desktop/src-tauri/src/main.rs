@@ -28,7 +28,7 @@ use agiworkforce_desktop::{
 use anyhow::Context;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{async_runtime, Manager};
 use tokio::sync::Mutex as TokioMutex;
 
 fn main() {
@@ -53,7 +53,10 @@ fn main() {
             let conn = Connection::open(&db_path).context("Failed to open database")?;
 
             // Run migrations
-            migrations::run_migrations(&conn).context("Failed to run migrations")?;
+            if let Err(e) = migrations::run_migrations(&conn) {
+                tracing::error!("Failed to run migrations: {}", e);
+                return Err(anyhow::anyhow!("Failed to run migrations: {}", e).into());
+            }
 
             tracing::info!("Database initialized at {:?}", db_path);
 
@@ -303,7 +306,27 @@ fn main() {
             tracing::info!("Template manager state initialized");
 
             // Initialize Real-time Metrics and ROI Dashboard
-            let realtime_server = Arc::new(agiworkforce_desktop::realtime::RealtimeServer::new());
+            let presence_db = Arc::new(Mutex::new(
+                Connection::open(&db_path).context("Failed to open database for presence")?,
+            ));
+            let presence_manager =
+                Arc::new(agiworkforce_desktop::realtime::PresenceManager::new(presence_db));
+            let websocket_port = 8787;
+            let realtime_server = Arc::new(
+                agiworkforce_desktop::realtime::RealtimeServer::new(presence_manager.clone()),
+            );
+            {
+                let server = realtime_server.clone();
+                async_runtime::spawn(async move {
+                    if let Err(e) = server.start(websocket_port).await {
+                        tracing::error!("Realtime server failed: {}", e);
+                    }
+                });
+            }
+            app.manage(agiworkforce_desktop::commands::RealtimeState::new(
+                presence_manager.clone(),
+                websocket_port,
+            ));
             let metrics_db = Arc::new(Mutex::new(
                 Connection::open(&db_path).context("Failed to open database for metrics")?,
             ));
@@ -334,12 +357,12 @@ fn main() {
                 .context("Failed to get app data dir")?;
             let embedding_config = agiworkforce_desktop::embeddings::EmbeddingConfig::default();
 
-            match agiworkforce_desktop::embeddings::EmbeddingService::new(
-                workspace_root,
-                embedding_config,
-            )
-            .await
-            {
+            match async_runtime::block_on(
+                agiworkforce_desktop::embeddings::EmbeddingService::new(
+                    workspace_root,
+                    embedding_config,
+                ),
+            ) {
                 Ok(embedding_service) => {
                     app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(
                         embedding_service,
@@ -364,13 +387,13 @@ fn main() {
                 .context("Failed to initialize tool registry")?);
 
             // Create employee system components
-            let employee_executor = Arc::new(Mutex::new(
+            let employee_executor = Arc::new(
                 agiworkforce_desktop::ai_employees::executor::AIEmployeeExecutor::new(
                     employee_db.clone(),
                     llm_router,
                     tools,
                 ),
-            ));
+            );
 
             let employee_marketplace = Arc::new(Mutex::new(
                 agiworkforce_desktop::ai_employees::marketplace::EmployeeMarketplace::new(
@@ -386,7 +409,7 @@ fn main() {
 
             // Initialize pre-built employees
             match employee_registry.lock() {
-                Ok(mut registry) => {
+                Ok(registry) => {
                     if let Err(e) = registry.initialize() {
                         tracing::warn!("Failed to initialize AI employee registry: {}", e);
                     }
