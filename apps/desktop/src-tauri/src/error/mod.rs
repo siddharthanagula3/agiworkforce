@@ -1,5 +1,5 @@
+use rusqlite;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use thiserror::Error;
 
 pub mod categorization;
@@ -58,6 +58,30 @@ pub enum AGIError {
 
     #[error("Generic error: {0}")]
     Generic(String),
+
+    #[error("Other error: {0}")]
+    Other(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Command timed out: {0}")]
+    CommandTimeout(String),
+
+    #[error("Email send error: {0}")]
+    EmailSend(String),
+
+    #[error("Email parsing error: {0}")]
+    EmailParse(String),
+
+    #[error("Invalid path: {0}")]
+    InvalidPath(String),
+}
+
+impl From<rusqlite::Error> for AGIError {
+    fn from(err: rusqlite::Error) -> Self {
+        AGIError::Database(err.to_string())
+    }
 }
 
 /// Tool-specific errors

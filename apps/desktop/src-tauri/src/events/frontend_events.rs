@@ -5,7 +5,7 @@
 /// useAgenticEvents hook in the React application.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 /// File operation types matching frontend TypeScript enum
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +95,7 @@ pub struct ElementBounds {
 
 /// Emit file operation event to frontend
 pub fn emit_file_operation(app_handle: &AppHandle, operation: FileOperation) {
-    if let Err(e) = app_handle.emit_all(
+    if let Err(e) = app_handle.emit(
         "agi:file_operation",
         serde_json::json!({ "operation": operation }),
     ) {
@@ -111,7 +111,7 @@ pub fn emit_file_operation(app_handle: &AppHandle, operation: FileOperation) {
 
 /// Emit terminal command event to frontend
 pub fn emit_terminal_command(app_handle: &AppHandle, command: TerminalCommand) {
-    if let Err(e) = app_handle.emit_all(
+    if let Err(e) = app_handle.emit(
         "agi:terminal_command",
         serde_json::json!({ "command": command }),
     ) {
@@ -123,7 +123,7 @@ pub fn emit_terminal_command(app_handle: &AppHandle, command: TerminalCommand) {
 
 /// Emit tool execution event to frontend
 pub fn emit_tool_execution(app_handle: &AppHandle, execution: ToolExecution) {
-    if let Err(e) = app_handle.emit_all(
+    if let Err(e) = app_handle.emit(
         "agi:tool_execution",
         serde_json::json!({ "execution": execution }),
     ) {
@@ -135,7 +135,7 @@ pub fn emit_tool_execution(app_handle: &AppHandle, execution: ToolExecution) {
 
 /// Emit screenshot event to frontend
 pub fn emit_screenshot(app_handle: &AppHandle, screenshot: Screenshot) {
-    if let Err(e) = app_handle.emit_all(
+    if let Err(e) = app_handle.emit(
         "agi:screenshot",
         serde_json::json!({ "screenshot": screenshot }),
     ) {
@@ -238,7 +238,7 @@ pub struct ApprovalRequestPayload {
 
 /// Emit approval request event to frontend
 pub fn emit_approval_request(app_handle: &AppHandle, approval: ApprovalRequestPayload) {
-    if let Err(e) = app_handle.emit_all(
+    if let Err(e) = app_handle.emit(
         "agi:approval_required",
         serde_json::json!({ "approval": approval }),
     ) {

@@ -249,7 +249,7 @@ pub struct ProviderUsage {
 
 #[tauri::command]
 pub async fn llm_get_available_models(
-    state: State<'_, LLMState>,
+    _state: State<'_, LLMState>,
 ) -> Result<Vec<ModelInfo>, String> {
     // Return all supported models
     // In a real implementation, this would query each provider for their available models
@@ -337,17 +337,18 @@ pub async fn llm_check_provider_status(
     let router = state.router.lock().await;
 
     // Check if provider is configured
-    let configured = match provider.as_str() {
-        "openai" => router.openai.is_some(),
-        "anthropic" => router.anthropic.is_some(),
-        "google" => router.google.is_some(),
-        "ollama" => router.ollama.is_some(),
-        "xai" | "grok" => router.xai.is_some(),
-        "deepseek" => router.deepseek.is_some(),
-        "qwen" | "alibaba" => router.qwen.is_some(),
-        "mistral" | "mistralai" => router.mistral.is_some(),
+    let provider_enum = match provider.as_str() {
+        "openai" => Provider::OpenAI,
+        "anthropic" => Provider::Anthropic,
+        "google" => Provider::Google,
+        "ollama" => Provider::Ollama,
+        "xai" | "grok" => Provider::XAI,
+        "deepseek" => Provider::DeepSeek,
+        "qwen" | "alibaba" => Provider::Qwen,
+        "mistral" | "mistralai" => Provider::Mistral,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
+    let configured = router.has_provider(provider_enum);
 
     // For Ollama, check if server is running
     let mut ollama_running = None;

@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 /// Task status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -152,6 +152,10 @@ impl Default for TaskManagerWrapper {
 impl TaskManagerWrapper {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(TaskManager::new())))
+    }
+
+    pub async fn lock(&self) -> MutexGuard<'_, TaskManager> {
+        self.0.lock().await
     }
 }
 
@@ -392,6 +396,10 @@ impl Default for CoordinationStateWrapper {
 impl CoordinationStateWrapper {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(CoordinationState::new())))
+    }
+
+    pub async fn lock(&self) -> MutexGuard<'_, CoordinationState> {
+        self.0.lock().await
     }
 }
 

@@ -398,6 +398,12 @@ impl GoogleDriveClient {
             .await
             .map_err(|e| Error::Other(format!("Failed to parse share metadata: {}", e)))?;
 
+        tracing::debug!(
+            "Google Drive share metadata for {} modified_at={:?}",
+            item.id,
+            payload.modified_time
+        );
+
         Ok(ShareLink {
             url: payload
                 .web_view_link

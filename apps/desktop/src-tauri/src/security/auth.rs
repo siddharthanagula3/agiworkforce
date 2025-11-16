@@ -16,7 +16,7 @@ const MAX_FAILED_ATTEMPTS: u32 = 5;
 const LOCKOUT_DURATION: i64 = 15; // 15 minutes
 const INACTIVITY_TIMEOUT: i64 = 15; // 15 minutes
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum UserRole {
     Viewer,
@@ -186,6 +186,7 @@ impl AuthManager {
     /// # Security Note
     /// This method should only be used internally. The secret is retrieved
     /// from secure storage and should never be logged or exposed.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn get_jwt_secret(&self) -> Result<String, String> {
         self.secret_manager
             .get_or_create_jwt_secret()

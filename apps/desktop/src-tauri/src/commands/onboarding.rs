@@ -375,7 +375,7 @@ pub async fn start_first_run_experience(
     user_id: String,
     user_role: Option<String>,
 ) -> Result<FirstRunSession, String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .start(&user_id, user_role.as_deref())
         .map_err(|e| format!("Failed to start first-run experience: {}", e))
@@ -387,7 +387,7 @@ pub async fn has_completed_first_run(
     db: State<'_, AppDatabase>,
     user_id: String,
 ) -> Result<bool, String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     Ok(first_run.has_completed_first_run(&user_id))
 }
 
@@ -440,7 +440,7 @@ pub async fn run_instant_demo(
     employee_id: String,
     user_id: Option<String>,
 ) -> Result<DemoResult, String> {
-    let demo = InstantDemo::new(db.0.clone());
+    let demo = InstantDemo::new(db.conn.clone());
     demo.run_demo(&employee_id, user_id.as_deref())
         .await
         .map_err(|e| format!("Failed to run demo: {}", e))
@@ -455,7 +455,7 @@ pub async fn update_first_run_step(
 ) -> Result<(), String> {
     use crate::onboarding::OnboardingStep;
 
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     let onboarding_step: OnboardingStep =
         serde_json::from_str(&step).map_err(|e| format!("Invalid step format: {}", e))?;
 
@@ -471,7 +471,7 @@ pub async fn select_demo_employee(
     session_id: String,
     employee_id: String,
 ) -> Result<(), String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .select_employee(&session_id, &employee_id)
         .map_err(|e| format!("Failed to select employee: {}", e))
@@ -484,7 +484,7 @@ pub async fn record_demo_results(
     session_id: String,
     results: DemoResult,
 ) -> Result<(), String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .record_demo_results(&session_id, &results)
         .map_err(|e| format!("Failed to record demo results: {}", e))
@@ -496,7 +496,7 @@ pub async fn mark_employee_hired(
     db: State<'_, AppDatabase>,
     session_id: String,
 ) -> Result<(), String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .mark_employee_hired(&session_id)
         .map_err(|e| format!("Failed to mark employee hired: {}", e))
@@ -508,7 +508,7 @@ pub async fn complete_first_run(
     db: State<'_, AppDatabase>,
     session_id: String,
 ) -> Result<(), String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .complete(&session_id)
         .map_err(|e| format!("Failed to complete first-run: {}", e))
@@ -520,7 +520,7 @@ pub async fn get_first_run_session(
     db: State<'_, AppDatabase>,
     session_id: String,
 ) -> Result<FirstRunSession, String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .get_session(&session_id)
         .map_err(|e| format!("Failed to get session: {}", e))
@@ -531,7 +531,7 @@ pub async fn get_first_run_session(
 pub async fn get_first_run_statistics(
     db: State<'_, AppDatabase>,
 ) -> Result<FirstRunStatistics, String> {
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .get_statistics()
         .map_err(|e| format!("Failed to get statistics: {}", e))
@@ -541,7 +541,7 @@ pub async fn get_first_run_statistics(
 #[tauri::command]
 pub async fn skip_first_run(db: State<'_, AppDatabase>, session_id: String) -> Result<(), String> {
     // Mark session as completed but without hiring
-    let first_run = FirstRunExperience::new(db.0.clone());
+    let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .complete(&session_id)
         .map_err(|e| format!("Failed to skip first-run: {}", e))

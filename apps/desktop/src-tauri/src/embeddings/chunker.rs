@@ -191,7 +191,7 @@ impl CodeChunker {
             }
 
             // Add lines to current chunk
-            if let Some((start_idx, ref mut chunk_lines, ref chunk_type)) = current_chunk {
+            if let Some((start_idx, ref mut chunk_lines, chunk_type)) = current_chunk {
                 chunk_lines.push(*line);
                 brace_depth += count_braces(line);
 
@@ -283,7 +283,7 @@ impl CodeChunker {
                         language: language.to_string(),
                         start_line: (start_idx + 1) as u32,
                         end_line: (line_idx + 1) as u32,
-                        chunk_type,
+                        chunk_type: *chunk_type,
                     });
 
                     current_chunk = None;
@@ -355,7 +355,7 @@ impl CodeChunker {
                         language: language.to_string(),
                         start_line: (start_idx + 1) as u32,
                         end_line: line_idx as u32,
-                        chunk_type,
+                        chunk_type: *chunk_type,
                     });
 
                     current_chunk = None;
@@ -437,7 +437,7 @@ impl CodeChunker {
                         language: language.to_string(),
                         start_line: (start_idx + 1) as u32,
                         end_line: (line_idx + 1) as u32,
-                        chunk_type,
+                        chunk_type: *chunk_type,
                     });
 
                     current_chunk = None;

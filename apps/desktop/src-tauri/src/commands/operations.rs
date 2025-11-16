@@ -3,7 +3,8 @@
 /// This module provides Tauri commands for user actions like
 /// approving/rejecting operations, managing background tasks, etc.
 use crate::security::{ApprovalDecision, ApprovalWorkflow};
-use tauri::{AppHandle, Manager, State};
+use crate::tasks::types::TaskFilter;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::AppDatabase;
 
@@ -46,7 +47,7 @@ pub async fn approve_operation(
 
     // Emit event to frontend
     app_handle
-        .emit_all(
+        .emit(
             "agi:approval_granted",
             serde_json::json!({
                 "approval": {
@@ -58,7 +59,7 @@ pub async fn approve_operation(
 
     // Emit event for any waiting AGI executor or autonomous agent
     app_handle
-        .emit_all(
+        .emit(
             "approval:granted",
             serde_json::json!({
                 "id": approval_id,
@@ -121,7 +122,7 @@ pub async fn reject_operation(
 
     // Emit event to frontend
     app_handle
-        .emit_all(
+        .emit(
             "agi:approval_denied",
             serde_json::json!({
                 "approval": {
@@ -134,7 +135,7 @@ pub async fn reject_operation(
 
     // Emit event for any waiting AGI executor or autonomous agent to cancel the operation
     app_handle
-        .emit_all(
+        .emit(
             "approval:denied",
             serde_json::json!({
                 "id": approval_id,
@@ -221,7 +222,7 @@ pub async fn list_background_tasks(
         .clone();
 
     let tasks = task_manager
-        .list_tasks(None)
+        .list(TaskFilter::default())
         .await
         .map_err(|e| format!("Failed to list tasks: {}", e))?;
 
