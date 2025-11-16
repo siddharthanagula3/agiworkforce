@@ -10,6 +10,7 @@ import {
   Monitor,
   Shield,
   Download,
+  Users,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -27,6 +28,8 @@ import {
   createDefaultWindowPreferences,
 } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
+import { FavoriteModelsSelector } from './FavoriteModelsSelector';
+import { EmployeesPage } from '../../pages/EmployeesPage';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -196,14 +199,18 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           </div>
         ) : (
           <Tabs defaultValue="api-keys" className="mt-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
                 <Key className="h-4 w-4" />
                 API Keys
               </TabsTrigger>
               <TabsTrigger value="llm-config" className="flex items-center gap-2">
                 <Settings2 className="h-4 w-4" />
-                LLM Configuration
+                Models
+              </TabsTrigger>
+              <TabsTrigger value="agent-library" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Agent Library
               </TabsTrigger>
               <TabsTrigger value="window" className="flex items-center gap-2">
                 <Monitor className="h-4 w-4" />
@@ -211,7 +218,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </TabsTrigger>
               <TabsTrigger value="data-privacy" className="flex items-center gap-2">
                 <Shield className="h-4 w-4" />
-                Data & Privacy
+                Privacy
               </TabsTrigger>
             </TabsList>
 
@@ -470,8 +477,16 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       Maximum number of tokens to generate in responses
                     </p>
                   </div>
+
+                  <div className="pt-4 border-t border-border">
+                    <FavoriteModelsSelector />
+                  </div>
                 </div>
               </div>
+            </TabsContent>
+
+            <TabsContent value="agent-library" className="space-y-6 pt-6">
+              <AgentLibraryTab />
             </TabsContent>
 
             <TabsContent value="window" className="space-y-6 pt-6">
@@ -551,6 +566,29 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AgentLibraryTab() {
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">Agent Library</h3>
+      <p className="text-sm text-muted-foreground mb-6">
+        Manage your AI Employees - specialized agents that can be used as tools in chat conversations
+      </p>
+
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-6">
+        <p className="text-sm text-muted-foreground">
+          <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in your conversations.
+          Hire and configure agents here, then reference them by name in chat (e.g., "@CodeReviewer").
+        </p>
+      </div>
+
+      {/* Embed the EmployeesPage component */}
+      <div className="rounded-lg border border-border overflow-hidden">
+        <EmployeesPage />
+      </div>
+    </div>
   );
 }
 
