@@ -10,6 +10,7 @@ import { useChatStore } from './stores/chatStore';
 import { useTemplateStore } from './stores/templateStore';
 import { useOrchestrationStore } from './stores/orchestrationStore';
 import { useTeamStore } from './stores/teamStore';
+import { initializeAgentStatusListener } from './stores/unifiedChatStore';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight, PanelRightOpen } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -246,6 +247,9 @@ const DesktopShell = () => {
 
     // Track important user actions
     trackAction('app_loaded');
+
+    // Initialize agent status listener for unified chat
+    void initializeAgentStatusListener();
 
     return () => {
       // Flush error reports on unmount
