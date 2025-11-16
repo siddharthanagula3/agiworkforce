@@ -1,6 +1,5 @@
 use crate::hooks::{global_hooks, Hook, HookConfig, HookRegistry};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -246,14 +245,9 @@ pub struct HookStats {
 /// Get execution statistics for a hook
 #[tauri::command]
 pub async fn hooks_get_stats(
-    state: State<'_, HookRegistryState>,
-    name: String,
+    _state: State<'_, HookRegistryState>,
+    _name: String,
 ) -> Result<Option<HookStats>, String> {
-    let registry = state
-        .get()
-        .await
-        .ok_or_else(|| "Hook registry not initialized".to_string())?;
-
     // Note: This is a placeholder - the actual stats implementation is internal to the executor
     // You would need to expose a stats API in the HookExecutor to make this fully functional
     Ok(None)

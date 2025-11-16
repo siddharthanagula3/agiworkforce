@@ -19,7 +19,15 @@ export interface BrowserSession {
 
 export type BrowserType = BrowserSession['browserType'];
 
-export type ActionType = 'navigate' | 'click' | 'type' | 'extract' | 'screenshot' | 'scroll' | 'wait' | 'execute';
+export type ActionType =
+  | 'navigate'
+  | 'click'
+  | 'type'
+  | 'extract'
+  | 'screenshot'
+  | 'scroll'
+  | 'wait'
+  | 'execute';
 
 export interface BrowserAction {
   id: string;
@@ -220,7 +228,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   closeBrowser: async (sessionId: string) => {
     try {
-      await invoke('browser_close', { sessionId });
+      // Note: Use closeTab to close individual tabs instead
+      // No backend command for closing entire browser session yet
 
       set((state) => {
         const newSessions = state.sessions.filter((s) => s.id !== sessionId);
@@ -348,7 +357,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   executeScript: async (tabId: string, script: string) => {
     try {
-      const result = await invoke('browser_execute_script', { tabId, script });
+      const result = await invoke('browser_evaluate', { tabId, script });
       return result;
     } catch (error) {
       console.error('Failed to execute script:', error);

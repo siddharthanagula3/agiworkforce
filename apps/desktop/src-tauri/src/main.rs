@@ -28,7 +28,7 @@ use agiworkforce_desktop::{
 use anyhow::Context;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{async_runtime, Manager};
 use tokio::sync::Mutex as TokioMutex;
 
 fn main() {
@@ -53,7 +53,10 @@ fn main() {
             let conn = Connection::open(&db_path).context("Failed to open database")?;
 
             // Run migrations
-            migrations::run_migrations(&conn).context("Failed to run migrations")?;
+            if let Err(e) = migrations::run_migrations(&conn) {
+                tracing::error!("Failed to run migrations: {}", e);
+                return Err(anyhow::anyhow!("Failed to run migrations: {}", e).into());
+            }
 
             tracing::info!("Database initialized at {:?}", db_path);
 
@@ -73,6 +76,21 @@ fn main() {
             let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager.clone())));
             app.manage(AuthManagerState(auth_manager));
             tracing::info!("AuthManager initialized - authentication system ready");
+
+            // Initialize analytics telemetry state
+            use agiworkforce_desktop::commands::analytics::TelemetryState;
+            use agiworkforce_desktop::telemetry::{AnalyticsMetricsCollector, CollectorConfig, TelemetryCollector};
+
+            let telemetry_config = CollectorConfig {
+                enabled: true,
+                batch_size: 50,
+                flush_interval_secs: 30,
+            };
+            let telemetry_collector = TelemetryCollector::new(telemetry_config);
+            let analytics_metrics = AnalyticsMetricsCollector::new();
+            app.manage(TelemetryState::new(telemetry_collector, analytics_metrics));
+
+            tracing::info!("Analytics telemetry state initialized");
 
             // Initialize LLM router state
             app.manage(LLMState::new());
@@ -288,7 +306,27 @@ fn main() {
             tracing::info!("Template manager state initialized");
 
             // Initialize Real-time Metrics and ROI Dashboard
-            let realtime_server = Arc::new(agiworkforce_desktop::realtime::RealtimeServer::new());
+            let presence_db = Arc::new(Mutex::new(
+                Connection::open(&db_path).context("Failed to open database for presence")?,
+            ));
+            let presence_manager =
+                Arc::new(agiworkforce_desktop::realtime::PresenceManager::new(presence_db));
+            let websocket_port = 8787;
+            let realtime_server = Arc::new(
+                agiworkforce_desktop::realtime::RealtimeServer::new(presence_manager.clone()),
+            );
+            {
+                let server = realtime_server.clone();
+                async_runtime::spawn(async move {
+                    if let Err(e) = server.start(websocket_port).await {
+                        tracing::error!("Realtime server failed: {}", e);
+                    }
+                });
+            }
+            app.manage(agiworkforce_desktop::commands::RealtimeState::new(
+                presence_manager.clone(),
+                websocket_port,
+            ));
             let metrics_db = Arc::new(Mutex::new(
                 Connection::open(&db_path).context("Failed to open database for metrics")?,
             ));
@@ -319,12 +357,12 @@ fn main() {
                 .context("Failed to get app data dir")?;
             let embedding_config = agiworkforce_desktop::embeddings::EmbeddingConfig::default();
 
-            match agiworkforce_desktop::embeddings::EmbeddingService::new(
-                workspace_root,
-                embedding_config,
-            )
-            .await
-            {
+            match async_runtime::block_on(
+                agiworkforce_desktop::embeddings::EmbeddingService::new(
+                    workspace_root,
+                    embedding_config,
+                ),
+            ) {
                 Ok(embedding_service) => {
                     app.manage(EmbeddingServiceState(Arc::new(TokioMutex::new(
                         embedding_service,
@@ -349,13 +387,13 @@ fn main() {
                 .context("Failed to initialize tool registry")?);
 
             // Create employee system components
-            let employee_executor = Arc::new(Mutex::new(
+            let employee_executor = Arc::new(
                 agiworkforce_desktop::ai_employees::executor::AIEmployeeExecutor::new(
                     employee_db.clone(),
                     llm_router,
                     tools,
                 ),
-            ));
+            );
 
             let employee_marketplace = Arc::new(Mutex::new(
                 agiworkforce_desktop::ai_employees::marketplace::EmployeeMarketplace::new(
@@ -371,7 +409,7 @@ fn main() {
 
             // Initialize pre-built employees
             match employee_registry.lock() {
-                Ok(mut registry) => {
+                Ok(registry) => {
                     if let Err(e) = registry.initialize() {
                         tracing::warn!("Failed to initialize AI employee registry: {}", e);
                     }
@@ -464,6 +502,24 @@ fn main() {
             agiworkforce_desktop::commands::orchestrator_cancel_all,
             agiworkforce_desktop::commands::orchestrator_wait_all,
             agiworkforce_desktop::commands::orchestrator_cleanup,
+            // System monitoring and agent management commands
+            agiworkforce_desktop::commands::get_system_resources,
+            agiworkforce_desktop::commands::pause_agent,
+            agiworkforce_desktop::commands::resume_agent,
+            agiworkforce_desktop::commands::cancel_agent,
+            agiworkforce_desktop::commands::refresh_agent_status,
+            // User operation commands
+            agiworkforce_desktop::commands::approve_operation,
+            agiworkforce_desktop::commands::reject_operation,
+            agiworkforce_desktop::commands::cancel_background_task,
+            agiworkforce_desktop::commands::pause_background_task,
+            agiworkforce_desktop::commands::resume_background_task,
+            agiworkforce_desktop::commands::list_background_tasks,
+            agiworkforce_desktop::commands::list_active_agents,
+            // Knowledge base commands
+            agiworkforce_desktop::commands::query_knowledge,
+            agiworkforce_desktop::commands::get_recent_knowledge,
+            agiworkforce_desktop::commands::get_knowledge_by_category,
             // Agent commands
             agiworkforce_desktop::commands::agent_init,
             agiworkforce_desktop::commands::agent_submit_task,
@@ -981,6 +1037,10 @@ fn main() {
             agiworkforce_desktop::billing::stripe_create_portal_session,
             agiworkforce_desktop::billing::stripe_get_active_subscription,
             agiworkforce_desktop::billing::stripe_process_webhook,
+            // Subscription management commands
+            agiworkforce_desktop::commands::subscribe_to_plan,
+            agiworkforce_desktop::commands::upgrade_plan,
+            agiworkforce_desktop::commands::cancel_subscription,
             // Workflow Orchestration commands
             agiworkforce_desktop::commands::create_workflow,
             agiworkforce_desktop::commands::update_workflow,
@@ -1077,6 +1137,9 @@ fn main() {
             agiworkforce_desktop::commands::compare_to_industry_benchmark,
             agiworkforce_desktop::commands::get_milestones,
             agiworkforce_desktop::commands::share_milestone,
+            // Analytics and marketplace tracking commands
+            agiworkforce_desktop::commands::track_workflow_view,
+            agiworkforce_desktop::commands::acknowledge_milestone,
             // AI Employee Library commands
             agiworkforce_desktop::commands::ai_employees_initialize,
             agiworkforce_desktop::commands::ai_employees_get_all,
@@ -1094,6 +1157,9 @@ fn main() {
             agiworkforce_desktop::commands::ai_employees_run_demo,
             agiworkforce_desktop::commands::ai_employees_get_stats,
             agiworkforce_desktop::commands::ai_employees_publish,
+            agiworkforce_desktop::commands::update_custom_employee,
+            agiworkforce_desktop::commands::delete_custom_employee,
+            agiworkforce_desktop::commands::publish_employee_to_marketplace,
             // Background task management commands
             agiworkforce_desktop::commands::bg_submit_task,
             agiworkforce_desktop::commands::bg_cancel_task,

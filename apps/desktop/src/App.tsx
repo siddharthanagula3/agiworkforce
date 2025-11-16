@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from './lib/tauri-mock';
 
 import TitleBar from './components/Layout/TitleBar';
 import { Sidebar } from './components/Layout/Sidebar';
@@ -12,7 +12,7 @@ import { useOrchestrationStore } from './stores/orchestrationStore';
 import { useTeamStore } from './stores/teamStore';
 import { initializeAgentStatusListener } from './stores/unifiedChatStore';
 import { Button } from './components/ui/Button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PanelRightOpen } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorToastContainer from './components/errors/ErrorToast';
 import useErrorStore from './stores/errorStore';
@@ -28,6 +28,8 @@ import {
   RefreshCcw,
 } from 'lucide-react';
 import { Spinner } from './components/ui/Spinner';
+import { MissionControlPanel } from './components/MissionControl';
+import { InlineDiffViewer } from './components/CodeWorkbench/InlineDiffViewer';
 
 // Lazy load heavy components for better bundle splitting
 const ChatInterface = lazy(() =>
@@ -42,7 +44,9 @@ const VisualizationLayer = lazy(() =>
   })),
 );
 const OnboardingWizard = lazy(() =>
-  import('./components/onboarding/OnboardingWizard').then((m) => ({ default: m.OnboardingWizard })),
+  import('./components/Onboarding/OnboardingWizardNew').then((m) => ({
+    default: m.OnboardingWizardNew,
+  })),
 );
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
@@ -72,7 +76,7 @@ const DesktopAgentChat = lazy(() =>
   import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
 );
 const EnhancedChatInterface = lazy(() =>
-  import('./components/chat/EnhancedChatInterface').then((m) => ({
+  import('./components/Chat/EnhancedChatInterface').then((m) => ({
     default: m.EnhancedChatInterface,
   })),
 );
@@ -104,12 +108,23 @@ const DesktopShell = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [agentChatPosition] = useState<'left' | 'right'>('right');
   const [agentChatVisible, setAgentChatVisible] = useState(true);
+  const [missionControlVisible, setMissionControlVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('enhanced-chat');
   const { theme, toggleTheme } = useTheme();
+  const resolvedEditorTheme = useMemo<'light' | 'dark'>(() => {
+    if (theme === 'system') {
+      if (typeof window !== 'undefined') {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      return 'light';
+    }
+    return theme;
+  }, [theme]);
 
   const createConversation = useChatStore((store) => store.createConversation);
   const selectConversation = useChatStore((store) => store.selectConversation);
+  const chatMessages = useChatStore((store) => store.messages);
   const addError = useErrorStore((store) => store.addError);
 
   const fetchTemplates = useTemplateStore((store) => store.fetchTemplates);
@@ -119,6 +134,62 @@ const DesktopShell = () => {
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
+  const codePreviewData = useMemo(() => {
+    const lastArtifactMessage = [...chatMessages]
+      .reverse()
+      .find((message) => (message.artifacts ?? []).some((artifact) => artifact.type === 'code'));
+
+    if (lastArtifactMessage) {
+      const artifact = (lastArtifactMessage.artifacts ?? []).find(
+        (item) => item.type === 'code' && item.content,
+      );
+
+      if (artifact) {
+        const metadata = artifact.metadata as Record<string, unknown> | undefined;
+        const baselineCandidate = metadata?.['baseline'];
+        const baseline =
+          (typeof baselineCandidate === 'string' ? baselineCandidate : undefined) ??
+          artifact.content.split('\n').slice(0, 6).join('\n');
+
+        return {
+          title: artifact.title ?? 'Generated snippet',
+          summary:
+            lastArtifactMessage.content.slice(0, 90) ||
+            'AI generated update based on the last request.',
+          baseContent: baseline,
+          modifiedContent: artifact.content,
+          language: artifact.language ?? 'typescript',
+        };
+      }
+    }
+
+    // Sample data for new sessions
+    return {
+      title: 'smartChunk.ts',
+      summary: 'Adaptive chunker refactor suggested by the planning agent.',
+      baseContent: `export function chunkArray<T>(input: T[], size = 100): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < input.length; index += size) {
+    chunks.push(input.slice(index, index + size));
+  }
+  return chunks;
+}`,
+      modifiedContent: `export function chunkArray<T>(input: T[], target = 100): T[][] {
+  if (target <= 0) {
+    throw new Error('Chunk size must be positive');
+  }
+
+  const chunks: T[][] = [];
+  const size = Math.max(16, Math.min(target, Math.ceil(input.length / 32)));
+
+  for (let index = 0; index < input.length; index += size) {
+    chunks.push(input.slice(index, index + size));
+  }
+  return chunks;
+}`,
+      language: 'typescript',
+    };
+  }, [chatMessages]);
 
   // Global error handlers
   useEffect(() => {
@@ -425,6 +496,11 @@ const DesktopShell = () => {
 
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
+      {!isTauri && (
+        <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
+          <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
+        </div>
+      )}
       <TitleBar
         state={{ focused: state.focused, maximized: state.maximized }}
         actions={actions}

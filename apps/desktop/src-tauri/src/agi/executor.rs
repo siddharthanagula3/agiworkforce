@@ -5,9 +5,11 @@ use crate::agi::planner::PlanStep;
 use crate::agi::process_reasoning::ProcessReasoning;
 use crate::automation::AutomationService;
 use crate::cache::ToolResultCache;
+use crate::calendar::EventDateTime;
 use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
 use crate::security::ToolExecutionGuard;
 use anyhow::{anyhow, Result};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -106,6 +108,47 @@ impl AGIExecutor {
         self.tool_cache.prune_expired()
     }
 
+    fn normalized_step_id(step_id: &str) -> String {
+        if step_id.trim().is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            step_id.to_string()
+        }
+    }
+
+    fn parse_event_date_time(value: &str, timezone_hint: Option<&str>) -> Result<EventDateTime> {
+        if value.contains('T') {
+            let parsed = DateTime::parse_from_rfc3339(value)
+                .map_err(|e| anyhow!("Invalid datetime '{}': {}", value, e))?
+                .with_timezone(&Utc);
+            Ok(EventDateTime::DateTime {
+                date_time: parsed,
+                timezone: timezone_hint.unwrap_or("UTC").to_string(),
+            })
+        } else {
+            Ok(EventDateTime::Date {
+                date: value.to_string(),
+            })
+        }
+    }
+
+    fn parse_rfc3339_ts(value: &str) -> Result<DateTime<Utc>> {
+        Ok(DateTime::parse_from_rfc3339(value)
+            .map_err(|e| anyhow!("Invalid datetime '{}': {}", value, e))?
+            .with_timezone(&Utc))
+    }
+
+    fn parse_task_priority(value: &serde_json::Value) -> Option<u8> {
+        if let Some(num) = value.as_u64() {
+            return Some(num.min(u8::MAX as u64) as u8);
+        }
+        value.as_str().and_then(|s| s.parse::<u8>().ok())
+    }
+
+    fn map_task_status(status: &str) -> crate::productivity::TaskStatus {
+        crate::productivity::TaskStatus::from_notion_status(status)
+    }
+
     /// Execute a plan step
     pub async fn execute_step(
         &self,
@@ -116,11 +159,10 @@ impl AGIExecutor {
 
         // Emit StepStart hook event
         let session_id = uuid::Uuid::new_v4().to_string();
+        let normalized_step_id = Self::normalized_step_id(&step.id);
         crate::hooks::emit_event(crate::hooks::HookEvent::step_start(
             session_id.clone(),
-            step.id
-                .clone()
-                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            normalized_step_id.clone(),
             step.description.clone(),
             context.goal.id.clone(),
         ))
@@ -152,9 +194,7 @@ impl AGIExecutor {
                 // Emit StepCompleted hook event
                 crate::hooks::emit_event(crate::hooks::HookEvent::step_completed(
                     session_id,
-                    step.id
-                        .clone()
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    normalized_step_id.clone(),
                     step.description.clone(),
                     context.goal.id.clone(),
                     res.clone(),
@@ -166,9 +206,7 @@ impl AGIExecutor {
                 // Emit StepError hook event
                 crate::hooks::emit_event(crate::hooks::HookEvent::step_error(
                     session_id,
-                    step.id
-                        .clone()
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    normalized_step_id,
                     step.description.clone(),
                     context.goal.id.clone(),
                     e.to_string(),
@@ -261,12 +299,36 @@ impl AGIExecutor {
             tool_name
         );
 
-        match tool_name {
+        let result = match tool_name {
             "file_read" => {
                 let path = parameters["path"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing path parameter"))?;
-                let content = std::fs::read_to_string(path)?;
+
+                let result = std::fs::read_to_string(path);
+
+                // Emit frontend event for file read
+                if let Some(ref app_handle) = self.app_handle {
+                    let file_op = match &result {
+                        Ok(content) => crate::events::create_file_read_event(
+                            path,
+                            content,
+                            true,
+                            None,
+                            Some(session_id.clone()),
+                        ),
+                        Err(e) => crate::events::create_file_read_event(
+                            path,
+                            "",
+                            false,
+                            Some(e.to_string()),
+                            Some(session_id.clone()),
+                        ),
+                    };
+                    crate::events::emit_file_operation(app_handle, file_op);
+                }
+
+                let content = result?;
                 Ok(json!({ "content": content, "path": path }))
             }
             "file_write" => {
@@ -276,7 +338,26 @@ impl AGIExecutor {
                 let content = parameters["content"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing content parameter"))?;
-                std::fs::write(path, content)?;
+
+                // Read old content if file exists
+                let old_content = std::fs::read_to_string(path).ok();
+
+                let result = std::fs::write(path, content);
+
+                // Emit frontend event for file write
+                if let Some(ref app_handle) = self.app_handle {
+                    let file_op = crate::events::create_file_write_event(
+                        path,
+                        old_content.as_deref(),
+                        content,
+                        result.is_ok(),
+                        result.as_ref().err().map(|e| e.to_string()),
+                        Some(session_id.clone()),
+                    );
+                    crate::events::emit_file_operation(app_handle, file_op);
+                }
+
+                result?;
 
                 // Invalidate file_read cache for this path
                 let mut read_params = HashMap::new();
@@ -293,6 +374,29 @@ impl AGIExecutor {
                     &uuid::Uuid::new_v4().to_string()[..8]
                 ));
                 captured.pixels.save(&temp_path)?;
+
+                // Emit frontend event for screenshot
+                if let Some(ref app_handle) = self.app_handle {
+                    // Convert image to base64
+                    let image_bytes = std::fs::read(&temp_path)?;
+                    let image_base64 = base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &image_bytes,
+                    );
+
+                    let screenshot = crate::events::Screenshot {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        image_base64,
+                        action: parameters
+                            .get("action")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                        element_bounds: None, // Future: add element bounds if provided
+                        confidence: None,
+                    };
+                    crate::events::emit_screenshot(app_handle, screenshot);
+                }
+
                 Ok(json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }))
             }
             "ui_click" => {
@@ -382,7 +486,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().0.lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Get or create a tab
@@ -426,7 +530,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().0.lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Determine which tab to use
@@ -483,7 +587,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let browser_state = app.state::<BrowserStateWrapper>();
-                    let browser_guard = browser_state.0.lock().await;
+                    let browser_guard = browser_state.inner().0.lock().await;
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     // Determine which tab to use
@@ -596,6 +700,7 @@ impl AGIExecutor {
                     use tauri::Manager;
 
                     let session_manager = app.state::<SessionManager>();
+                    let start_time = std::time::Instant::now();
 
                     // Determine shell type based on language
                     let shell_type = match language.to_lowercase().as_str() {
@@ -607,7 +712,7 @@ impl AGIExecutor {
 
                     // Get or create a session
                     let sessions = session_manager.list_sessions().await;
-                    let session_id = if sessions.is_empty() {
+                    let session_id_result = if sessions.is_empty() {
                         session_manager
                             .create_session(shell_type, None)
                             .await
@@ -618,16 +723,46 @@ impl AGIExecutor {
 
                     // Execute the code
                     let command = format!("{}\r\n", code);
-                    session_manager
-                        .send_input(&session_id, &command)
-                        .await
-                        .map_err(|e| anyhow!("Failed to execute code: {}", e))?;
+                    let execution_result = session_manager
+                        .send_input(&session_id_result, &command)
+                        .await;
 
                     // Wait a bit for execution
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
+                    let duration_ms = start_time.elapsed().as_millis() as u64;
+
+                    // Try to get current working directory from session
+                    let cwd = std::env::current_dir()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| "/".to_string());
+
+                    // Emit frontend event for terminal command
+                    let terminal_cmd = crate::events::TerminalCommand {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        command: code.to_string(),
+                        cwd,
+                        exit_code: if execution_result.is_ok() {
+                            Some(0)
+                        } else {
+                            Some(1)
+                        },
+                        stdout: None, // Would need to capture from session output
+                        stderr: if execution_result.is_err() {
+                            Some(execution_result.as_ref().unwrap_err().to_string())
+                        } else {
+                            None
+                        },
+                        duration: Some(duration_ms),
+                        session_id: Some(session_id_result.clone()),
+                        agent_id: None,
+                    };
+                    crate::events::emit_terminal_command(app, terminal_cmd);
+
+                    execution_result.map_err(|e| anyhow!("Failed to execute code: {}", e))?;
+
                     Ok(
-                        json!({ "success": true, "language": language, "session_id": session_id, "code": &code[..code.len().min(100)] }),
+                        json!({ "success": true, "language": language, "session_id": session_id_result, "code": &code[..code.len().min(100)] }),
                     )
                 } else {
                     Err(anyhow!("App handle not available for code execution"))
@@ -936,6 +1071,25 @@ impl AGIExecutor {
                     let calendar_state = app.state::<crate::commands::CalendarState>();
 
                     // Create event request
+                    let start_timezone = parameters
+                        .get("start_timezone")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| parameters.get("timezone").and_then(|v| v.as_str()));
+                    let end_timezone = parameters
+                        .get("end_timezone")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| parameters.get("timezone").and_then(|v| v.as_str()));
+
+                    let attendees = parameters
+                        .get("attendees")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                                .collect::<Vec<String>>()
+                        })
+                        .unwrap_or_default();
+
                     let request = CreateEventRequest {
                         calendar_id: calendar_id.to_string(),
                         title: title.to_string(),
@@ -943,14 +1097,15 @@ impl AGIExecutor {
                             .get("description")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
-                        start: start_time.to_string(),
-                        end: end_time.to_string(),
+                        start: Self::parse_event_date_time(start_time, start_timezone)?,
+                        end: Self::parse_event_date_time(end_time, end_timezone)?,
                         location: parameters
                             .get("location")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
-                        attendees: vec![], // Could be extended to parse attendees from parameters
-                        timezone: None,    // Will use default timezone
+                        attendees,
+                        reminders: Vec::new(),
+                        recurrence: None,
                     };
 
                     // Create event via CalendarState
@@ -991,6 +1146,24 @@ impl AGIExecutor {
 
                     let calendar_state = app.state::<crate::commands::CalendarState>();
 
+                    let start_time = parameters
+                        .get("start_time")
+                        .or_else(|| parameters.get("time_min"))
+                        .and_then(|v| v.as_str());
+                    let end_time = parameters
+                        .get("end_time")
+                        .or_else(|| parameters.get("time_max"))
+                        .and_then(|v| v.as_str());
+
+                    let parsed_start = match start_time {
+                        Some(value) => Self::parse_rfc3339_ts(value)?,
+                        None => Utc::now(),
+                    };
+                    let parsed_end = match end_time {
+                        Some(value) => Self::parse_rfc3339_ts(value)?,
+                        None => parsed_start + ChronoDuration::days(7),
+                    };
+
                     // Build list events request
                     let request = ListEventsRequest {
                         calendar_id: parameters
@@ -998,19 +1171,13 @@ impl AGIExecutor {
                             .and_then(|v| v.as_str())
                             .unwrap_or("primary")
                             .to_string(),
-                        time_min: parameters
-                            .get("time_min")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        time_max: parameters
-                            .get("time_max")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
+                        start_time: parsed_start,
+                        end_time: parsed_end,
                         max_results: parameters
                             .get("max_results")
                             .and_then(|v| v.as_u64())
-                            .map(|n| n as usize),
-                        page_token: None,
+                            .map(|n| n as u32),
+                        show_deleted: parameters.get("show_deleted").and_then(|v| v.as_bool()),
                     };
 
                     // List events via CalendarState
@@ -1142,7 +1309,7 @@ impl AGIExecutor {
                     .ok_or_else(|| anyhow::anyhow!("Missing 'title' parameter"))?;
 
                 if let Some(ref app) = self.app_handle {
-                    use crate::productivity::{Provider, Task};
+                    use crate::productivity::{Provider, Task, TaskStatus};
                     use tauri::Manager;
 
                     let productivity_state = app.state::<crate::commands::ProductivityState>();
@@ -1161,43 +1328,69 @@ impl AGIExecutor {
                     };
 
                     // Build task
-                    let task = Task {
-                        id: String::new(), // Will be assigned by the service
-                        title: title.to_string(),
-                        description: parameters
-                            .get("description")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        status: parameters
-                            .get("status")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("todo")
-                            .to_string(),
-                        priority: parameters
-                            .get("priority")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        due_date: parameters
-                            .get("due_date")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        assignee: parameters
-                            .get("assignee")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        project_id: parameters
-                            .get("project_id")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string()),
-                        labels: vec![],
-                        created_at: None,
-                        updated_at: None,
+                    let mut task = Task::new(String::new(), title.to_string());
+                    if let Some(desc) = parameters.get("description").and_then(|v| v.as_str()) {
+                        task.description = Some(desc.to_string());
+                    }
+
+                    let status = parameters
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .map(|s| Self::map_task_status(s))
+                        .unwrap_or(TaskStatus::Todo);
+                    task.status = status;
+
+                    task.priority = parameters
+                        .get("priority")
+                        .and_then(Self::parse_task_priority);
+
+                    task.due_date = match parameters.get("due_date").and_then(|v| v.as_str()) {
+                        Some(raw) => Some(
+                            Self::parse_rfc3339_ts(raw)
+                                .map_err(|e| anyhow!("Invalid 'due_date': {}", e))?,
+                        ),
+                        None => None,
                     };
 
+                    if let Some(assignee) = parameters.get("assignee").and_then(|v| v.as_str()) {
+                        task.assignee = Some(assignee.to_string());
+                    }
+
+                    if let Some(project_id) = parameters.get("project_id").and_then(|v| v.as_str())
+                    {
+                        task.project_id = Some(project_id.to_string());
+                    }
+
+                    if let Some(project_name) =
+                        parameters.get("project_name").and_then(|v| v.as_str())
+                    {
+                        task.project_name = Some(project_name.to_string());
+                    }
+
+                    if let Some(url) = parameters.get("url").and_then(|v| v.as_str()) {
+                        task.url = Some(url.to_string());
+                    }
+
+                    let tags_source = parameters.get("tags").or_else(|| parameters.get("labels"));
+                    task.tags = tags_source
+                        .and_then(|value| value.as_array())
+                        .map(|items| {
+                            items
+                                .iter()
+                                .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                                .collect::<Vec<String>>()
+                        })
+                        .unwrap_or_default();
+
                     // Create task via ProductivityState
-                    let manager = productivity_state.manager.lock().await;
-                    let task_id = manager.create_task(provider, task).await
-                        .map_err(|e| anyhow!("Failed to create productivity task: {}. Ensure the provider account is connected via productivity_connect.", e))?;
+                    let manager_arc = productivity_state.manager();
+                    let manager = manager_arc.lock().await;
+                    let task_id = manager
+                        .create_task(provider, task)
+                        .await
+                        .map_err(|e| {
+                            anyhow!("Failed to create productivity task: {}. Ensure the provider account is connected via productivity_connect.", e)
+                        })?;
 
                     tracing::info!(
                         "[Executor] Productivity task created: provider={}, task_id={}, title={}",
@@ -1438,7 +1631,7 @@ impl AGIExecutor {
         match &result {
             Ok(res) => {
                 crate::hooks::emit_event(crate::hooks::HookEvent::post_tool_use(
-                    session_id,
+                    session_id.clone(),
                     tool_name.to_string(),
                     tool_name.to_string(),
                     parameters.clone(),
@@ -1449,7 +1642,7 @@ impl AGIExecutor {
             }
             Err(e) => {
                 crate::hooks::emit_event(crate::hooks::HookEvent::tool_error(
-                    session_id,
+                    session_id.clone(),
                     tool_name.to_string(),
                     tool_name.to_string(),
                     parameters.clone(),
@@ -1457,6 +1650,19 @@ impl AGIExecutor {
                 ))
                 .await;
             }
+        }
+
+        // Emit frontend event for tool execution
+        if let Some(ref app_handle) = self.app_handle {
+            let tool_execution = crate::events::create_tool_execution_event(
+                tool_name,
+                parameters,
+                result.as_ref().ok().cloned(),
+                result.as_ref().err().map(|e| e.to_string()),
+                execution_time_ms,
+                result.is_ok(),
+            );
+            crate::events::emit_tool_execution(app_handle, tool_execution);
         }
 
         result
@@ -1528,7 +1734,6 @@ impl AGIExecutor {
 
                 let mut steps_completed = 0;
                 let mut steps_failed = 0;
-                let mut total_cost = 0.0;
                 let mut output = serde_json::json!({});
                 let mut error_msg = None;
 
@@ -1558,7 +1763,7 @@ impl AGIExecutor {
                     steps_completed,
                     steps_failed,
                     error: error_msg,
-                    cost: Some(total_cost),
+                    cost: None,
                 }
             });
 

@@ -3625,6 +3625,9 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
     )?;
 
     // Permissions table for fine-grained access control
+    if !table_has_column(conn, "permissions", "name")? {
+        conn.execute("DROP TABLE IF EXISTS permissions", [])?;
+    }
     conn.execute(
         "CREATE TABLE IF NOT EXISTS permissions (
             id TEXT PRIMARY KEY,
@@ -3891,4 +3894,10 @@ fn apply_migration_v41(conn: &Connection) -> Result<()> {
     tracing::info!("Applied migration v41: Background task management system");
 
     Ok(())
+}
+
+fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let mut stmt =
+        conn.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE lower(name) = lower(?2)")?;
+    Ok(stmt.exists([table, column])?)
 }

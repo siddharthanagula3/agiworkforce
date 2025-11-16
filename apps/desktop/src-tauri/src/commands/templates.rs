@@ -95,7 +95,7 @@ pub async fn search_templates(
 #[tauri::command]
 pub async fn execute_template(
     template_id: String,
-    params: HashMap<String, String>,
+    _params: HashMap<String, String>,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<String, String> {
     // Get template
@@ -130,16 +130,8 @@ pub async fn uninstall_template(
     let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
     let user_id = "default_user";
 
-    // Execute delete query
-    let db_ref = mgr.db.lock().map_err(|e| e.to_string())?;
-    db_ref
-        .execute(
-            "DELETE FROM template_installs WHERE user_id = ?1 AND template_id = ?2",
-            rusqlite::params![user_id, template_id],
-        )
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
+    mgr.uninstall_template(user_id, &template_id)
+        .map_err(|e| e.to_string())
 }
 
 /// Get template categories

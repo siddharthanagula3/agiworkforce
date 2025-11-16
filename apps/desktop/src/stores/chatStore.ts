@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { invoke, isTauri } from '../lib/tauri-mock';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type {
@@ -660,13 +659,17 @@ useChatStore.subscribe((state, previous) => {
   }
 });
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && isTauri) {
   void initializeStreamListeners();
   void initializeAGIListeners();
 }
 
 async function initializeAGIListeners() {
+  if (!isTauri) return; // Skip in web mode
+
   try {
+    const { listen } = await import('@tauri-apps/api/event');
+
     // Listen for AGI goal events
     await listen(
       'agi:goal:submitted',
@@ -713,12 +716,14 @@ async function initializeAGIListeners() {
 }
 
 async function initializeStreamListeners() {
-  if (streamListenersInitialized) {
+  if (streamListenersInitialized || !isTauri) {
     return;
   }
   streamListenersInitialized = true;
 
   try {
+    const { listen } = await import('@tauri-apps/api/event');
+
     await listen<ChatStreamStartPayload>('chat:stream-start', ({ payload }) => {
       handleStreamStart(payload);
     });

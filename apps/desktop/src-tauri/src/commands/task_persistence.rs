@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 /// Task status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -153,6 +153,10 @@ impl TaskManagerWrapper {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(TaskManager::new())))
     }
+
+    pub async fn lock(&self) -> MutexGuard<'_, TaskManager> {
+        self.0.lock().await
+    }
 }
 
 // Tauri commands
@@ -188,7 +192,7 @@ pub async fn task_create(
         auto_resume,
     };
 
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     manager.add_task(task).await
 }
 
@@ -198,7 +202,7 @@ pub async fn task_get_status(
     task_id: String,
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<PersistedTask, String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     manager.get_task(&task_id).await
 }
 
@@ -210,7 +214,7 @@ pub async fn task_update_progress(
     current_step: usize,
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<(), String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     let mut task = manager.get_task(&task_id).await?;
 
     task.progress = progress;
@@ -227,7 +231,7 @@ pub async fn task_pause(
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<(), String> {
     tracing::info!("Pausing task: {}", task_id);
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     manager.pause_task(&task_id).await
 }
 
@@ -238,7 +242,7 @@ pub async fn task_resume(
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<(), String> {
     tracing::info!("Resuming task: {}", task_id);
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     manager.resume_task(&task_id).await
 }
 
@@ -249,7 +253,7 @@ pub async fn task_cancel(
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<(), String> {
     tracing::info!("Cancelling task: {}", task_id);
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     manager.cancel_task(&task_id).await
 }
 
@@ -258,7 +262,7 @@ pub async fn task_cancel(
 pub async fn task_list(
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<Vec<PersistedTask>, String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     manager.list_tasks().await
 }
 
@@ -268,7 +272,7 @@ pub async fn task_list_by_status(
     status: String,
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<Vec<PersistedTask>, String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     let all_tasks = manager.list_tasks().await?;
 
     let target_status = match status.as_str() {
@@ -296,7 +300,7 @@ pub async fn task_complete(
 ) -> Result<(), String> {
     tracing::info!("Completing task: {}", task_id);
 
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     let mut task = manager.get_task(&task_id).await?;
 
     task.status = TaskStatus::Completed;
@@ -318,7 +322,7 @@ pub async fn task_save_context(
     context: HashMap<String, serde_json::Value>,
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<(), String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     let mut task = manager.get_task(&task_id).await?;
 
     task.context = context;
@@ -332,7 +336,7 @@ pub async fn task_save_context(
 pub async fn task_get_resumable(
     state: tauri::State<'_, TaskManagerWrapper>,
 ) -> Result<Vec<PersistedTask>, String> {
-    let manager = state.0.lock().await;
+    let manager = state.inner().lock().await;
     let all_tasks = manager.list_tasks().await?;
 
     Ok(all_tasks
@@ -393,6 +397,10 @@ impl CoordinationStateWrapper {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(CoordinationState::new())))
     }
+
+    pub async fn lock(&self) -> MutexGuard<'_, CoordinationState> {
+        self.0.lock().await
+    }
 }
 
 /// Update app state for coordination
@@ -403,7 +411,7 @@ pub async fn coord_update_app_state(
     action: String,
     state: tauri::State<'_, CoordinationStateWrapper>,
 ) -> Result<(), String> {
-    let coord = state.0.lock().await;
+    let coord = state.inner().lock().await;
     let mut app_states = coord.app_states.lock().await;
 
     app_states.insert(
@@ -428,7 +436,7 @@ pub async fn coord_request_approval(
     auto_approve_safe: bool,
     state: tauri::State<'_, CoordinationStateWrapper>,
 ) -> Result<String, String> {
-    let coord = state.0.lock().await;
+    let coord = state.inner().lock().await;
     let mut queue = coord.approval_queue.lock().await;
 
     let request_id = uuid::Uuid::new_v4().to_string();
@@ -449,7 +457,7 @@ pub async fn coord_request_approval(
 pub async fn coord_get_pending_approvals(
     state: tauri::State<'_, CoordinationStateWrapper>,
 ) -> Result<Vec<ApprovalRequest>, String> {
-    let coord = state.0.lock().await;
+    let coord = state.inner().lock().await;
     let queue = coord.approval_queue.lock().await;
     Ok(queue.clone())
 }

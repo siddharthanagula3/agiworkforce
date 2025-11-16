@@ -1,7 +1,7 @@
 use crate::prompt_enhancement::{
     api_router::APIRouter, prompt_enhancer::PromptEnhancer, use_case_detector::UseCaseDetector,
-    APIProvider, APIRoute, EnhancedPrompt, PromptContext, PromptEnhancementConfig,
-    PromptEnhancementResult, UseCase, UseCaseDetection,
+    APIRoute, EnhancedPrompt, PromptContext, PromptEnhancementConfig, PromptEnhancementResult,
+    UseCase, UseCaseDetection,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -65,7 +65,7 @@ pub async fn enhance_prompt(
 #[tauri::command]
 pub async fn route_to_best_api(
     use_case: String,
-    prompt: String,
+    _prompt: String,
     state: tauri::State<'_, PromptEnhancementState>,
 ) -> Result<APIRoute, String> {
     let router = &state.router;

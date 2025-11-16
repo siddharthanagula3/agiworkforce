@@ -63,27 +63,14 @@ impl AnalyticsMetricsCollector {
         let memory_used_mb = self.system.used_memory() / 1024 / 1024;
         let memory_total_mb = self.system.total_memory() / 1024 / 1024;
 
-        // Disk usage (first disk)
-        let (disk_used_gb, disk_total_gb) = if let Some(disk) = self.system.disks().first() {
-            let total = disk.total_space() as f64 / 1024.0 / 1024.0 / 1024.0;
-            let available = disk.available_space() as f64 / 1024.0 / 1024.0 / 1024.0;
-            let used = total - available;
-            (used, total)
-        } else {
-            (0.0, 0.0)
-        };
+        // Disk usage (first disk) - TODO: wire up sysinfo disks API
+        let (disk_used_gb, disk_total_gb) = (0.0, 0.0);
 
-        // Network usage (sum of all interfaces)
-        let (network_rx_bytes, network_tx_bytes) = self
-            .system
-            .networks()
-            .iter()
-            .fold((0u64, 0u64), |(rx, tx), (_, data)| {
-                (rx + data.received(), tx + data.transmitted())
-            });
+        // Network usage (sum of all interfaces) - TODO: wire up sysinfo networks API
+        let (network_rx_bytes, network_tx_bytes) = (0u64, 0u64);
 
-        // System uptime
-        let uptime_seconds = self.system.uptime();
+        // System uptime - TODO: use sysinfo uptime API when available
+        let uptime_seconds = 0;
 
         SystemMetrics {
             cpu_usage,

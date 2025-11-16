@@ -61,9 +61,9 @@ import {
   selectIsStreaming,
 } from '../../stores/chatStore';
 import type { MessageUI } from '../../types/chat';
-import { AgentStatusBanner } from '../UnifiedAgenticChat/AgentStatusBanner';
-import { ChatInputToolbar } from '../UnifiedAgenticChat/ChatInputToolbar';
-import { InlineDiffViewer } from '../UnifiedAgenticChat/InlineDiffViewer';
+import { QuickModelSelector } from './QuickModelSelector';
+import { useModelStore } from '../../stores/modelStore';
+import type { Provider } from '../../stores/settingsStore';
 
 // ============================================================================
 // Types
@@ -618,7 +618,7 @@ function MessageBubble({ message, onRegenerate, onEdit, onDelete }: MessageBubbl
 // ============================================================================
 
 interface EnhancedInputProps {
-  onSend: (content: string, attachments?: File[]) => void;
+  onSend: (content: string, attachments?: File[], provider?: string, model?: string) => void;
   disabled?: boolean;
   isSending?: boolean;
 }
@@ -629,10 +629,21 @@ function EnhancedInput({ onSend, disabled, isSending }: EnhancedInputProps) {
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { selectedModel, selectedProvider, selectModel } = useModelStore();
 
   const charCount = content.length;
   const tokenEstimate = Math.ceil(charCount / 4);
   const canSend = content.trim().length > 0 && !disabled && !isSending;
+
+  // Set Ollama as default if no model is selected
+  useEffect(() => {
+    if (!selectedModel || !selectedProvider) {
+      // Set default to Ollama llama3.3
+      selectModel('llama3.3', 'ollama').catch(err => {
+        console.warn('Failed to set default Ollama model:', err);
+      });
+    }
+  }, [selectedModel, selectedProvider, selectModel]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -644,7 +655,7 @@ function EnhancedInput({ onSend, disabled, isSending }: EnhancedInputProps) {
 
   const handleSend = () => {
     if (canSend) {
-      onSend(content, attachments);
+      onSend(content, attachments, selectedProvider || undefined, selectedModel || undefined);
       setContent('');
       setAttachments([]);
       if (textareaRef.current) {
@@ -688,6 +699,14 @@ function EnhancedInput({ onSend, disabled, isSending }: EnhancedInputProps) {
       }}
     >
       <div className="p-4 space-y-3">
+        {/* Model Selector Toolbar */}
+        <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Model:</span>
+            <QuickModelSelector className="flex-shrink-0" />
+          </div>
+        </div>
+
         {/* Attachments Preview */}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -877,8 +896,8 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
   }, [enhancedMessages, autoScroll]);
 
   const handleSend = useCallback(
-    (content: string, attachments?: File[]) => {
-      sendMessage(content, attachments);
+    (content: string, attachments?: File[], provider?: string, model?: string) => {
+      sendMessage(content, attachments, undefined, { provider, model });
     },
     [sendMessage],
   );

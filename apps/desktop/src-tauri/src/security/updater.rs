@@ -107,7 +107,7 @@ impl UpdateSecurityManager {
     /// Verify signature (simplified - in production, use proper cryptographic signature verification)
     fn verify_signature(
         &self,
-        message: &str,
+        _message: &str,
         signature: &str,
         _public_key: &str,
     ) -> Result<bool, String> {

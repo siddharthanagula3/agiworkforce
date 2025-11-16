@@ -148,7 +148,7 @@ impl MessagingRouter {
     }
 
     pub async fn send_message(
-        &self,
+        &mut self,
         request: SendMessageRequest,
     ) -> MessagingResult<SendMessageResponse> {
         match request.platform {
@@ -197,7 +197,7 @@ impl MessagingRouter {
                 })
             }
             MessagingPlatform::Teams => {
-                let client = self.teams.as_ref().ok_or_else(|| MessagingError {
+                let client = self.teams.as_mut().ok_or_else(|| MessagingError {
                     code: "NOT_CONFIGURED".to_string(),
                     message: "Teams client not configured".to_string(),
                     platform: MessagingPlatform::Teams,
@@ -222,7 +222,7 @@ impl MessagingRouter {
     }
 
     pub async fn get_message_history(
-        &self,
+        &mut self,
         platform: MessagingPlatform,
         channel_id: &str,
         limit: usize,
@@ -268,7 +268,7 @@ impl MessagingRouter {
                 })
             }
             MessagingPlatform::Teams => {
-                let client = self.teams.as_ref().ok_or_else(|| MessagingError {
+                let client = self.teams.as_mut().ok_or_else(|| MessagingError {
                     code: "NOT_CONFIGURED".to_string(),
                     message: "Teams client not configured".to_string(),
                     platform: MessagingPlatform::Teams,

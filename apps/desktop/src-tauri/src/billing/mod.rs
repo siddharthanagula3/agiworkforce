@@ -3,12 +3,27 @@ pub mod stripe_client;
 #[cfg(feature = "billing")]
 pub mod webhooks;
 
+#[cfg(not(feature = "billing"))]
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "billing")]
 pub use stripe_client::{
     CustomerInfo, InvoiceInfo, PaymentMethodInfo, StripeService, SubscriptionInfo, UsageStats,
 };
 #[cfg(feature = "billing")]
 pub use webhooks::{WebhookEvent, WebhookHandler};
+
+#[cfg(not(feature = "billing"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomerInfo;
+#[cfg(not(feature = "billing"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionInfo;
+#[cfg(not(feature = "billing"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InvoiceInfo;
+#[cfg(not(feature = "billing"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageStats;
 
 use std::sync::{Arc, Mutex};
 
@@ -98,11 +113,11 @@ pub async fn billing_initialize(
     db_state: State<'_, crate::commands::AppDatabase>,
 ) -> Result<(), String> {
     let mut billing = state
-        .0
+        .inner()
         .lock()
         .map_err(|e| format!("Failed to lock billing state: {}", e))?;
 
-    let db = Arc::new(db_state.0.clone());
+    let db = Arc::new(db_state.inner().clone());
     billing.initialize(stripe_api_key, webhook_secret, db);
 
     Ok(())
@@ -395,4 +410,142 @@ pub async fn stripe_process_webhook(
         .process_event(&payload, &signature)
         .await
         .map_err(|e| format!("Failed to process webhook: {}", e))
+}
+
+#[cfg(not(feature = "billing"))]
+const BILLING_DISABLED_MSG: &str = "Billing feature is not enabled";
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn billing_initialize(
+    _stripe_api_key: String,
+    _webhook_secret: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+    _db_state: tauri::State<'_, crate::commands::AppDatabase>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_create_customer(
+    _email: String,
+    _name: Option<String>,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<CustomerInfo, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub fn stripe_get_customer_by_email(
+    _email: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<Option<CustomerInfo>, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_create_subscription(
+    _customer_id: String,
+    _price_id: String,
+    _trial_days: Option<u32>,
+    _plan_name: String,
+    _billing_interval: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<SubscriptionInfo, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub fn stripe_get_subscription(
+    _subscription_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<Option<SubscriptionInfo>, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_update_subscription(
+    _subscription_id: String,
+    _new_price_id: String,
+    _proration_behavior: Option<String>,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<SubscriptionInfo, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_cancel_subscription(
+    _subscription_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_get_invoices(
+    _customer_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<Vec<InvoiceInfo>, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub fn stripe_get_usage(
+    _customer_id: String,
+    _period_start: i64,
+    _period_end: i64,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<UsageStats, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub fn stripe_track_usage(
+    _customer_id: String,
+    _usage_type: String,
+    _count: u64,
+    _period_start: i64,
+    _period_end: i64,
+    _metadata: Option<String>,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_create_portal_session(
+    _customer_stripe_id: String,
+    _return_url: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<String, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub fn stripe_get_active_subscription(
+    _customer_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<Option<SubscriptionInfo>, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_process_webhook(
+    _payload: String,
+    _signature: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
 }
