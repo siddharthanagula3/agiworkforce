@@ -74,9 +74,9 @@ const EmployeesPage = lazy(() =>
 const DesktopAgentChat = lazy(() =>
   import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
 );
-const EnhancedChatInterface = lazy(() =>
-  import('./components/Chat/EnhancedChatInterface').then((m) => ({
-    default: m.EnhancedChatInterface,
+const UnifiedAgenticChat = lazy(() =>
+  import('./components/UnifiedAgenticChat').then((m) => ({
+    default: m.UnifiedAgenticChat,
   })),
 );
 
@@ -446,45 +446,10 @@ const DesktopShell = () => {
           </Suspense>
         );
       case 'enhanced-chat':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <EnhancedChatInterface />
-          </Suspense>
-        );
-      case 'employees':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <EmployeesPage />
-          </Suspense>
-        );
-      case 'templates':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <TemplateMarketplace />
-          </Suspense>
-        );
-      case 'workflows':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <WorkflowBuilder />
-          </Suspense>
-        );
-      case 'teams':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <TeamDashboard />
-          </Suspense>
-        );
-      case 'governance':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <GovernanceDashboard />
-          </Suspense>
-        );
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <EnhancedChatInterface />
+            <UnifiedAgenticChat layout="default" sidecarPosition="right" defaultSidecarOpen={true} />
           </Suspense>
         );
     }
