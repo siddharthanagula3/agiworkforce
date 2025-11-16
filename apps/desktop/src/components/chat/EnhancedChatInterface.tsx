@@ -61,6 +61,9 @@ import {
   selectIsStreaming,
 } from '../../stores/chatStore';
 import type { MessageUI } from '../../types/chat';
+import { AgentStatusBanner } from '../UnifiedAgenticChat/AgentStatusBanner';
+import { ChatInputToolbar } from '../UnifiedAgenticChat/ChatInputToolbar';
+import { InlineDiffViewer } from '../UnifiedAgenticChat/InlineDiffViewer';
 
 // ============================================================================
 // Types
@@ -88,12 +91,21 @@ interface ToolExecution {
   duration?: number;
 }
 
+interface CodeDiff {
+  filePath: string;
+  language?: string;
+  oldContent: string;
+  newContent: string;
+  diffLines?: Array<{ type: 'add' | 'remove' | 'context'; content: string; lineNumber?: number }>;
+}
+
 interface EnhancedMessage extends MessageUI {
   processingSteps?: ProcessingStep[];
   toolExecutions?: ToolExecution[];
   reasoning?: string;
   provider?: string;
   model?: string;
+  codeDiffs?: CodeDiff[]; // Code diffs to display inline
 }
 
 // ============================================================================
@@ -522,6 +534,24 @@ function MessageBubble({ message, onRegenerate, onEdit, onDelete }: MessageBubbl
         {/* Tool Executions */}
         {isAssistant && message.toolExecutions && (
           <ToolExecutionDisplay executions={message.toolExecutions} />
+        )}
+
+        {/* Code Diffs - Inline diff viewer for file changes */}
+        {isAssistant && message.codeDiffs && message.codeDiffs.length > 0 && (
+          <div className="mt-3">
+            {message.codeDiffs.map((diff, index) => (
+              <InlineDiffViewer
+                key={index}
+                diff={diff}
+                diffId={`${message.id}-diff-${index}`}
+                onRevert={async (filePath) => {
+                  // TODO: Implement revert via Tauri command
+                  console.log(`Reverting changes to ${filePath}`);
+                  // await invoke('revert_file_changes', { filePath, messageId: message.id });
+                }}
+              />
+            ))}
+          </div>
         )}
 
         {/* Cost Display */}
@@ -980,6 +1010,12 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
           </Button>
         </div>
       )}
+
+      {/* Agent Status Banner - Shows current agent activity */}
+      <AgentStatusBanner />
+
+      {/* Chat Input Toolbar - Model selector and safety controls */}
+      <ChatInputToolbar />
 
       {/* Input Area */}
       <EnhancedInput onSend={handleSend} disabled={loading} isSending={loading} />
