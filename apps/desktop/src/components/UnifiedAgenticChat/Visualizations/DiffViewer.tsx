@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { Copy, Maximize2, Minimize2 } from 'lucide-react';
+import { Copy, Maximize2, Minimize2, Undo2 } from 'lucide-react';
 
 export interface DiffViewerProps {
   oldContent: string;
   newContent: string;
   language?: string;
   fileName?: string;
+  filePath?: string;
   viewMode?: 'split' | 'unified';
   showLineNumbers?: boolean;
   highlightChanges?: boolean;
+  enableRevert?: boolean;
+  onRevert?: () => void;
   className?: string;
 }
 
@@ -17,14 +20,18 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   oldContent,
   newContent,
   fileName,
+  filePath,
   viewMode = 'split',
   showLineNumbers = true,
   highlightChanges = true,
+  enableRevert = false,
+  onRevert,
   className = '',
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentViewMode, setCurrentViewMode] = useState<'split' | 'unified'>(viewMode);
   const [copied, setCopied] = useState<'old' | 'new' | null>(null);
+  const [isReverting, setIsReverting] = useState(false);
 
   const handleCopy = async (content: string, type: 'old' | 'new') => {
     try {
@@ -33,6 +40,24 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       setTimeout(() => setCopied(null), 2000);
     } catch (err) {
       console.error('Failed to copy content:', err);
+    }
+  };
+
+  const handleRevert = async () => {
+    if (!enableRevert || !onRevert) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to revert "${fileName || filePath}" to its previous state?`,
+    );
+    if (!confirmed) return;
+
+    setIsReverting(true);
+    try {
+      await onRevert();
+    } catch (err) {
+      console.error('Failed to revert file:', err);
+    } finally {
+      setIsReverting(false);
     }
   };
 
@@ -97,6 +122,19 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Revert Button */}
+          {enableRevert && onRevert && (
+            <button
+              onClick={handleRevert}
+              disabled={isReverting}
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Revert to previous version"
+            >
+              <Undo2 size={12} />
+              {isReverting ? 'Reverting...' : 'Revert'}
+            </button>
+          )}
+
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded p-1">
             <button
