@@ -86,6 +86,14 @@ impl AGICore {
         })
     }
 
+    pub fn resource_manager(&self) -> Arc<ResourceManager> {
+        Arc::clone(&self.resource_manager)
+    }
+
+    pub fn knowledge_base(&self) -> Arc<KnowledgeBase> {
+        Arc::clone(&self.knowledge_base)
+    }
+
     /// Create AGI Core with process reasoning and outcome tracking enabled
     pub fn with_process_reasoning(
         config: AGIConfig,
@@ -353,8 +361,8 @@ impl AGICore {
         sandbox_manager.cleanup_all().await?;
 
         // Get best result
-        let best_result = comparator
-            .get_best_result(scored_results.clone())
+        let best_result = scored_results
+            .first()
             .ok_or_else(|| anyhow!("No valid results from parallel execution"))?;
 
         // Emit best result event
@@ -380,7 +388,7 @@ impl AGICore {
             }),
         );
 
-        Ok(best_result)
+        Ok(best_result.clone())
     }
 
     /// Process all active goals

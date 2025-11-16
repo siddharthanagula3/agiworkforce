@@ -376,6 +376,13 @@ impl WhatsAppClient {
             return Err(format!("WhatsApp API error: {}", error.message).into());
         }
 
+        tracing::debug!(
+            "Fetched WhatsApp media metadata mime={:?} size={:?} sha256={:?}",
+            result.mime_type.as_deref(),
+            result.file_size,
+            result.sha256.as_deref()
+        );
+
         Ok(result.url.ok_or("No media URL returned")?)
     }
 

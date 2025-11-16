@@ -138,7 +138,7 @@ impl McpToolExecutor {
     ) -> Vec<McpResult<ToolExecutionResult>> {
         let futures: Vec<_> = executions
             .into_iter()
-            .map(|(tool_id, args)| self.execute_tool(&tool_id, args))
+            .map(|(tool_id, args)| async move { self.execute_tool(&tool_id, args).await })
             .collect();
 
         futures::future::join_all(futures).await

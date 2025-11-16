@@ -2,6 +2,7 @@ use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsConfig {
@@ -17,13 +18,12 @@ pub struct TeamsClient {
     client_id: String,
     client_secret: String,
     access_token: Option<String>,
+    token_expires_at: Option<Instant>,
 }
 
 impl TeamsClient {
     pub fn new(config: TeamsConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()?;
+        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
         Ok(Self {
             client,
@@ -31,6 +31,7 @@ impl TeamsClient {
             client_id: config.client_id,
             client_secret: config.client_secret,
             access_token: None,
+            token_expires_at: None,
         })
     }
 
@@ -51,14 +52,28 @@ impl TeamsClient {
         let response = self.client.post(&url).form(&params).send().await?;
 
         let result: TeamsAuthResponse = response.json().await?;
+
+        if !result.token_type.eq_ignore_ascii_case("bearer") {
+            return Err(format!("Unexpected token type: {}", result.token_type).into());
+        }
+
+        let expires_in = result.expires_in.max(60) as u64;
+        let safety_margin = expires_in.saturating_sub(30);
+
         self.access_token = Some(result.access_token);
+        self.token_expires_at = Some(Instant::now() + Duration::from_secs(safety_margin));
 
         Ok(())
     }
 
     /// Ensure we have a valid access token
     async fn ensure_authenticated(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.access_token.is_none() {
+        let token_valid = self
+            .token_expires_at
+            .map(|expiry| expiry > Instant::now())
+            .unwrap_or(false);
+
+        if self.access_token.is_none() || !token_valid {
             self.authenticate().await?;
         }
         Ok(())
@@ -74,10 +89,12 @@ impl TeamsClient {
 
     /// Send a message to a channel
     pub async fn send_message(
-        &self,
+        &mut self,
         channel_id: &str,
         message: &str,
     ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let parts: Vec<&str> = channel_id.split('/').collect();
         if parts.len() < 2 {
             return Err("Invalid channel_id format. Expected: team_id/channel_id".into());
@@ -116,11 +133,13 @@ impl TeamsClient {
 
     /// Send a message with rich formatting (HTML)
     pub async fn send_rich_message(
-        &self,
+        &mut self,
         channel_id: &str,
         content: &str,
         content_type: &str, // "text" or "html"
     ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let parts: Vec<&str> = channel_id.split('/').collect();
         if parts.len() < 2 {
             return Err("Invalid channel_id format. Expected: team_id/channel_id".into());
@@ -160,10 +179,12 @@ impl TeamsClient {
 
     /// Send an Adaptive Card (rich interactive message)
     pub async fn send_adaptive_card(
-        &self,
+        &mut self,
         channel_id: &str,
         card: AdaptiveCard,
     ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let parts: Vec<&str> = channel_id.split('/').collect();
         if parts.len() < 2 {
             return Err("Invalid channel_id format. Expected: team_id/channel_id".into());
@@ -210,11 +231,13 @@ impl TeamsClient {
 
     /// Reply to a message
     pub async fn reply_to_message(
-        &self,
+        &mut self,
         channel_id: &str,
         message_id: &str,
         reply_text: &str,
     ) -> Result<TeamsMessage, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let parts: Vec<&str> = channel_id.split('/').collect();
         if parts.len() < 2 {
             return Err("Invalid channel_id format. Expected: team_id/channel_id".into());
@@ -253,10 +276,12 @@ impl TeamsClient {
 
     /// Get messages from a channel
     pub async fn get_channel_messages(
-        &self,
+        &mut self,
         channel_id: &str,
         limit: usize,
     ) -> Result<Vec<TeamsMessage>, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let parts: Vec<&str> = channel_id.split('/').collect();
         if parts.len() < 2 {
             return Err("Invalid channel_id format. Expected: team_id/channel_id".into());
@@ -287,12 +312,14 @@ impl TeamsClient {
 
     /// Create an online meeting
     pub async fn create_meeting(
-        &self,
+        &mut self,
         title: &str,
         start_time: &str, // ISO 8601 format
         end_time: &str,
         attendees: Vec<String>,
     ) -> Result<TeamsMeeting, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let url = "https://graph.microsoft.com/v1.0/me/onlineMeetings";
 
         let attendee_objects: Vec<_> = attendees
@@ -356,7 +383,9 @@ impl TeamsClient {
     }
 
     /// List teams the bot has access to
-    pub async fn list_teams(&self) -> Result<Vec<Team>, Box<dyn std::error::Error>> {
+    pub async fn list_teams(&mut self) -> Result<Vec<Team>, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let url = "https://graph.microsoft.com/v1.0/me/joinedTeams";
 
         let response = self
@@ -377,9 +406,11 @@ impl TeamsClient {
 
     /// List channels in a team
     pub async fn list_channels(
-        &self,
+        &mut self,
         team_id: &str,
     ) -> Result<Vec<Channel>, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let url = format!(
             "https://graph.microsoft.com/v1.0/teams/{}/channels",
             team_id
@@ -403,9 +434,11 @@ impl TeamsClient {
 
     /// Get user presence status
     pub async fn get_user_presence(
-        &self,
+        &mut self,
         user_id: &str,
     ) -> Result<UserPresence, Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let url = format!(
             "https://graph.microsoft.com/v1.0/users/{}/presence",
             user_id
@@ -429,10 +462,12 @@ impl TeamsClient {
 
     /// Send a notification to a user
     pub async fn send_notification(
-        &self,
+        &mut self,
         user_id: &str,
         notification: ActivityFeedNotification,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        self.ensure_authenticated().await?;
+
         let url = format!(
             "https://graph.microsoft.com/v1.0/users/{}/teamwork/sendActivityNotification",
             user_id

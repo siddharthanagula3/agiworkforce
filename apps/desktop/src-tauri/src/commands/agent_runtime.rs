@@ -50,18 +50,11 @@ pub async fn runtime_execute_task(
     state: State<'_, AgentRuntimeState>,
     task: Task,
 ) -> Result<serde_json::Value, String> {
-    // Clone the Arc to avoid holding the lock across await
-    let runtime_arc = state.inner().clone();
-
-    // Spawn the execution in a separate task to avoid Send issues
-    let handle = tokio::spawn(async move {
-        let runtime = runtime_arc.0.lock().await;
-        runtime.execute_task(task).await
-    });
-
-    handle
+    // Execute directly without spawning to avoid Send issues
+    let runtime = state.inner().0.lock().await;
+    runtime
+        .execute_task(task)
         .await
-        .map_err(|e| format!("Task execution panicked: {}", e))?
         .map_err(|e| format!("Task execution failed: {}", e))
 }
 

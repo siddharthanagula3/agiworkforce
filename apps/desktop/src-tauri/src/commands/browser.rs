@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::async_runtime::block_on;
 use tauri::State;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 use crate::browser::advanced::Cookie;
 use crate::browser::{
@@ -24,6 +25,10 @@ impl BrowserStateWrapper {
         let initial_state =
             block_on(BrowserState::new()).expect("Failed to initialize browser automation state");
         Self(Arc::new(Mutex::new(initial_state)))
+    }
+
+    pub async fn lock(&self) -> MutexGuard<'_, BrowserState> {
+        self.0.lock().await
     }
 }
 
@@ -1063,7 +1068,8 @@ pub async fn find_element_semantic(
                 (function() {{
                     const el = {};
                     if (!el) return null;
-                    return {{
+                return {{
+                        tag: el.tagName ? el.tagName.toLowerCase() : 'div',
                         selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase(),
                         role: el.getAttribute('role'),
                         name: el.getAttribute('aria-label') || el.textContent?.trim(),
@@ -1079,25 +1085,46 @@ pub async fn find_element_semantic(
                 .map_err(|e| format!("Failed to get element details: {}", e))?;
 
             if let Some(details_obj) = details.as_object() {
+                let mut attributes = HashMap::new();
+                if let Some(selector) = details_obj
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
+                    attributes.insert("selector".to_string(), selector);
+                }
+                if let Some(role) = details_obj
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
+                    attributes.insert("role".to_string(), role);
+                }
+                if let Some(name) = details_obj
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                {
+                    attributes.insert("name".to_string(), name);
+                }
+                attributes.insert("strategy".to_string(), format!("{:?}", strategy));
+
+                let tag_name = details_obj
+                    .get("tag")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("div")
+                    .to_string();
+                let text = details_obj
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
                 return Ok(ElementInfo {
-                    selector: details_obj
-                        .get("selector")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    strategy,
-                    role: details_obj
-                        .get("role")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
-                    name: details_obj
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
-                    text: details_obj
-                        .get("text")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string()),
+                    tag_name,
+                    text,
+                    attributes,
+                    bounds: None,
                 });
             }
         }
@@ -1128,6 +1155,7 @@ pub async fn find_all_elements_semantic(
                 const selector = {};
                 const elements = selector ? (Array.isArray(selector) ? selector : [selector]) : [];
                 return elements.filter(el => el != null).map(el => ({{
+                    tag: el.tagName ? el.tagName.toLowerCase() : 'div',
                     selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase(),
                     role: el.getAttribute('role'),
                     name: el.getAttribute('aria-label') || el.textContent?.trim(),
@@ -1143,25 +1171,46 @@ pub async fn find_all_elements_semantic(
                 if let Some(arr) = result.as_array() {
                     for elem in arr {
                         if let Some(obj) = elem.as_object() {
+                            let mut attributes = HashMap::new();
+                            if let Some(selector) = obj
+                                .get("selector")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                            {
+                                attributes.insert("selector".to_string(), selector);
+                            }
+                            if let Some(role) = obj
+                                .get("role")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                            {
+                                attributes.insert("role".to_string(), role);
+                            }
+                            if let Some(name) = obj
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                            {
+                                attributes.insert("name".to_string(), name);
+                            }
+                            attributes.insert("strategy".to_string(), format!("{:?}", strategy));
+
+                            let tag_name = obj
+                                .get("tag")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("div")
+                                .to_string();
+                            let text = obj
+                                .get("text")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
                             all_elements.push(ElementInfo {
-                                selector: obj
-                                    .get("selector")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string(),
-                                strategy: format!("{:?}", strategy),
-                                role: obj
-                                    .get("role")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string()),
-                                name: obj
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string()),
-                                text: obj
-                                    .get("text")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string()),
+                                tag_name,
+                                text,
+                                attributes,
+                                bounds: None,
                             });
                         }
                     }
@@ -1172,6 +1221,13 @@ pub async fn find_all_elements_semantic(
     }
 
     Ok(all_elements)
+}
+
+fn selector_from_element(info: &ElementInfo) -> Result<String, String> {
+    info.attributes
+        .get("selector")
+        .cloned()
+        .ok_or_else(|| "Selector metadata not available for element".to_string())
 }
 
 /// Click element using semantic selector
@@ -1187,7 +1243,8 @@ pub async fn click_semantic(
     let element_info = find_element_semantic(tab_id.clone(), query, state.clone()).await?;
 
     // Click using the found selector
-    browser_click(tab_id, element_info.selector, state).await
+    let selector = selector_from_element(&element_info)?;
+    browser_click(tab_id, selector, state).await
 }
 
 /// Type text into element using semantic selector
@@ -1204,7 +1261,8 @@ pub async fn type_semantic(
     let element_info = find_element_semantic(tab_id.clone(), query, state.clone()).await?;
 
     // Type using the found selector
-    browser_type(tab_id, element_info.selector, text, state).await
+    let selector = selector_from_element(&element_info)?;
+    browser_type(tab_id, selector, text, state).await
 }
 
 /// Get accessibility tree for the current page
