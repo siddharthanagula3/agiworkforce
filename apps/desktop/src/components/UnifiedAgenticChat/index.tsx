@@ -1,10 +1,15 @@
 import React, { useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputArea, SendOptions } from './ChatInputArea';
 import { SidecarPanel } from './SidecarPanel';
+import { AgentStatusBanner } from './AgentStatusBanner';
+import { ChatInputToolbar } from './ChatInputToolbar';
+import { ApprovalModal } from './ApprovalModal';
 import { PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { useModelStore } from '../../stores/modelStore';
 
 export interface UnifiedAgenticChatProps {
   className?: string;
@@ -49,6 +54,8 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
   const deleteMessage = useUnifiedChatStore((state) => state.deleteMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
+  const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
+  const { selectedModel, selectedProvider } = useModelStore();
 
   // Setup event listeners for real-time updates from Tauri backend
   useAgenticEvents();
@@ -83,8 +90,29 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
       if (onSendMessage) {
         await onSendMessage(content, options);
       } else {
-        // Default: simulate a response (in real app, this would call Tauri backend)
-        await simulateAssistantResponse(assistantMessageId);
+        // 🔥 Call actual Tauri backend with conversationMode
+        const response = await invoke<any>('chat_send_message', {
+          request: {
+            content,
+            provider: selectedProvider || undefined,
+            model: selectedModel || undefined,
+            stream: false, // Non-streaming for now
+            enable_tools: true,
+            conversation_mode: conversationMode, // 🔒 Security setting
+          },
+        });
+
+        // Update assistant message with response
+        updateMessage(assistantMessageId, {
+          content: response.assistant_message?.content || 'No response',
+          metadata: {
+            streaming: false,
+            model: response.assistant_message?.model,
+            provider: response.assistant_message?.provider,
+            tokenCount: response.assistant_message?.tokens,
+            cost: response.assistant_message?.cost,
+          },
+        });
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -177,6 +205,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
             </div>
           </div>
 
+          {/* Agent Status Banner */}
+          <AgentStatusBanner />
+
           {/* Message List */}
           <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
             <ChatMessageList
@@ -185,6 +216,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
               onMessageRegenerate={handleMessageRegenerate}
             />
           </div>
+
+          {/* Chat Input Toolbar */}
+          <ChatInputToolbar />
 
           {/* Input Area */}
           <ChatInputArea
@@ -208,6 +242,9 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
 
       {/* Mission Control Modal (Future) */}
       {/* <MissionControl isOpen={missionControlOpen} onClose={() => setMissionControlOpen(false)} /> */}
+
+      {/* Approval Modal */}
+      <ApprovalModal />
     </div>
   );
 };
