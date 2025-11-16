@@ -1,8 +1,0 @@
-All previously recorded Rust compilation errors have been resolved as of 2025-11-15 10:24:43.
-
-Clean commands:
-- cargo check
-- cargo run --bin agiworkforce-desktop
-- pnpm dev:desktop (watchers stay up; remember to kill agiworkforce-desktop.exe afterwards)
-
-Refer to docs/rust_backend_error_report.md for the current root-cause summary.
