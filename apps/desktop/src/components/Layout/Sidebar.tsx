@@ -43,14 +43,7 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
   const [editingTitle, setEditingTitle] = useState('');
 
   const navigationItems = [
-    { id: 'chat' as AppView, label: 'Chat', icon: MessageCircle },
-    { id: 'enhanced-chat' as AppView, label: 'AI Assistant', icon: Sparkles },
-    { id: 'agent' as AppView, label: 'Desktop Agent', icon: Zap },
-    { id: 'employees' as AppView, label: 'AI Employees', icon: Users },
-    { id: 'templates' as AppView, label: 'Templates', icon: Package },
-    { id: 'workflows' as AppView, label: 'Workflows', icon: Workflow },
-    { id: 'teams' as AppView, label: 'Teams', icon: Users },
-    { id: 'governance' as AppView, label: 'Governance', icon: Shield },
+    { id: 'enhanced-chat' as AppView, label: 'Chat', icon: MessageCircle },
   ];
 
   const filtered = useMemo(() => {
@@ -220,30 +213,30 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
         )}
       </div>
 
-      {!collapsed && currentView === 'chat' && (
+      {!collapsed && currentView === 'enhanced-chat' && (
         <div className="space-y-3 px-3 pt-3">
           <Button className="w-full" onClick={handleNewTask}>
             <Plus className="mr-2 h-4 w-4" />
-            New Automation Task
+            New Chat
           </Button>
           <Input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search tasks"
+            placeholder="Search conversations"
             className="h-9 bg-background/80"
           />
         </div>
       )}
 
-      {currentView === 'chat' && (
+      {currentView === 'enhanced-chat' && (
         <ScrollArea className="flex-1 px-2 py-4">
           {filtered.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
               <MessageCircle className="h-5 w-5" />
-              <p>No tasks yet. Start a new automation.</p>
+              <p>No conversations yet. Start a new chat.</p>
               {!collapsed && (
                 <Button variant="link" size="sm" onClick={handleNewTask}>
-                  Start new task
+                  Start new chat
                 </Button>
               )}
             </div>
@@ -253,7 +246,7 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
         </ScrollArea>
       )}
 
-      {currentView !== 'chat' && !collapsed && (
+      {currentView !== 'enhanced-chat' && !collapsed && (
         <div className="flex-1 px-4 py-6 text-center text-sm text-muted-foreground">
           <p>Navigate using the menu above</p>
         </div>
