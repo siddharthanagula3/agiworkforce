@@ -582,6 +582,15 @@ pub async fn chat_send_message(
         .await
         .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
+    // 🔔 Emit agent status: Analyzing request
+    let _ = app_handle.emit("agent:status:update", serde_json::json!({
+        "id": "main_agent",
+        "name": "AGI Workforce Agent",
+        "status": "running",
+        "currentStep": "Analyzing request...",
+        "progress": 10
+    }));
+
     // Get conversation history (after compaction)
     let history = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -689,6 +698,16 @@ pub async fn chat_send_message(
 
     let has_tools = tool_definitions.is_some();
     let tool_defs_for_follow_up = tool_definitions.clone(); // Clone for potential follow-up request
+
+    // 🔔 Emit agent status: Planning
+    let _ = app_handle.emit("agent:status:update", serde_json::json!({
+        "id": "main_agent",
+        "name": "AGI Workforce Agent",
+        "status": "running",
+        "currentStep": "Planning actions...",
+        "progress": 30
+    }));
+
     let llm_request = LLMRequest {
         messages: router_messages,
         model: request
