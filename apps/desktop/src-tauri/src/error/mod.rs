@@ -1,5 +1,5 @@
+use rusqlite;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use thiserror::Error;
 
 pub mod categorization;
@@ -44,8 +44,44 @@ pub enum AGIError {
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
 
+    #[error("Config error: {0}")]
+    Config(String),
+
     #[error("Timeout error: {0}")]
     TimeoutError(String),
+
+    #[error("Provider error: {0}")]
+    Provider(String),
+
+    #[error("HTTP error: {0}")]
+    Http(String),
+
+    #[error("Generic error: {0}")]
+    Generic(String),
+
+    #[error("Other error: {0}")]
+    Other(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Command timed out: {0}")]
+    CommandTimeout(String),
+
+    #[error("Email send error: {0}")]
+    EmailSend(String),
+
+    #[error("Email parsing error: {0}")]
+    EmailParse(String),
+
+    #[error("Invalid path: {0}")]
+    InvalidPath(String),
+}
+
+impl From<rusqlite::Error> for AGIError {
+    fn from(err: rusqlite::Error) -> Self {
+        AGIError::Database(err.to_string())
+    }
 }
 
 /// Tool-specific errors
@@ -179,14 +215,14 @@ impl ErrorContext {
     }
 
     pub fn with_step(mut self, step: String) -> Self {
-        self.step = Some(step);
         self.stacktrace.push(format!("Step: {}", step));
+        self.step = Some(step);
         self
     }
 
     pub fn with_tool(mut self, tool: String) -> Self {
-        self.tool = Some(tool);
         self.stacktrace.push(format!("Tool: {}", tool));
+        self.tool = Some(tool);
         self
     }
 
@@ -204,6 +240,9 @@ impl ErrorContext {
         self.recovery_attempts += 1;
     }
 }
+
+/// Error type alias for compatibility
+pub type Error = AGIError;
 
 /// Result type alias for AGI operations
 pub type Result<T> = std::result::Result<T, AGIError>;

@@ -1,7 +1,7 @@
 use super::workflow_engine::*;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
 /// Context for workflow execution
@@ -49,15 +49,11 @@ impl ExecutionContext {
 /// Workflow executor for running workflow definitions
 pub struct WorkflowExecutor {
     engine: Arc<WorkflowEngine>,
-    paused_executions: Arc<Mutex<HashMap<String, ExecutionContext>>>,
 }
 
 impl WorkflowExecutor {
     pub fn new(engine: Arc<WorkflowEngine>) -> Self {
-        Self {
-            engine,
-            paused_executions: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self { engine }
     }
 
     /// Execute a workflow
@@ -77,7 +73,6 @@ impl WorkflowExecutor {
 
         // Start execution in background
         let engine = Arc::clone(&self.engine);
-        let exec_id = execution_id.clone();
         tokio::spawn(async move {
             let executor = WorkflowExecutor::new(engine);
             if let Err(e) = executor.run_workflow(workflow, context).await {
@@ -111,7 +106,7 @@ impl WorkflowExecutor {
             .await;
 
         // Update final status
-        match result {
+        match &result {
             Ok(_) => {
                 self.engine.update_execution_status(
                     &context.execution_id,
@@ -152,73 +147,79 @@ impl WorkflowExecutor {
     }
 
     /// Execute a single node
-    async fn execute_node(
-        &self,
-        workflow: &WorkflowDefinition,
-        node: &WorkflowNode,
-        context: &mut ExecutionContext,
-    ) -> Result<(), String> {
-        context.current_node_id = Some(node.id().to_string());
-        context.execution_path.push(node.id().to_string());
+    fn execute_node<'a>(
+        &'a self,
+        workflow: &'a WorkflowDefinition,
+        node: &'a WorkflowNode,
+        context: &'a mut ExecutionContext,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
+        Box::pin(async move {
+            context.current_node_id = Some(node.id().to_string());
+            context.execution_path.push(node.id().to_string());
 
-        // Log node started
-        self.engine.add_execution_log(
-            &context.execution_id,
-            node.id(),
-            LogEventType::Started,
-            None,
-        )?;
+            // Log node started
+            self.engine.add_execution_log(
+                &context.execution_id,
+                node.id(),
+                LogEventType::Started,
+                None,
+            )?;
 
-        // Update execution status with current node
-        self.engine.update_execution_status(
-            &context.execution_id,
-            WorkflowStatus::Running,
-            Some(node.id().to_string()),
-            None,
-        )?;
+            // Update execution status with current node
+            self.engine.update_execution_status(
+                &context.execution_id,
+                WorkflowStatus::Running,
+                Some(node.id().to_string()),
+                None,
+            )?;
 
-        // Execute node based on type
-        let result = match node {
-            WorkflowNode::AgentNode { data, .. } => self.execute_agent_node(data, context).await,
-            WorkflowNode::DecisionNode { data, .. } => {
-                self.execute_decision_node(workflow, data, context).await
+            // Execute node based on type
+            let result = match node {
+                WorkflowNode::AgentNode { data, .. } => {
+                    self.execute_agent_node(data, context).await
+                }
+                WorkflowNode::DecisionNode { data, .. } => {
+                    self.execute_decision_node(workflow, data, context).await
+                }
+                WorkflowNode::LoopNode { data, .. } => {
+                    self.execute_loop_node(workflow, node, data, context).await
+                }
+                WorkflowNode::ParallelNode { data, .. } => {
+                    self.execute_parallel_node(workflow, data, context).await
+                }
+                WorkflowNode::WaitNode { data, .. } => self.execute_wait_node(data, context).await,
+                WorkflowNode::ScriptNode { data, .. } => {
+                    self.execute_script_node(data, context).await
+                }
+                WorkflowNode::ToolNode { data, .. } => self.execute_tool_node(data, context).await,
+            };
+
+            match result {
+                Ok(_) => {
+                    // Log node completed
+                    self.engine.add_execution_log(
+                        &context.execution_id,
+                        node.id(),
+                        LogEventType::Completed,
+                        None,
+                    )?;
+
+                    // Execute next nodes
+                    self.execute_next_nodes(workflow, node, context).await
+                }
+                Err(e) => {
+                    // Log node failed
+                    self.engine.add_execution_log(
+                        &context.execution_id,
+                        node.id(),
+                        LogEventType::Failed,
+                        Some(Value::String(e.clone())),
+                    )?;
+
+                    Err(e)
+                }
             }
-            WorkflowNode::LoopNode { data, .. } => {
-                self.execute_loop_node(workflow, node, data, context).await
-            }
-            WorkflowNode::ParallelNode { data, .. } => {
-                self.execute_parallel_node(workflow, data, context).await
-            }
-            WorkflowNode::WaitNode { data, .. } => self.execute_wait_node(data, context).await,
-            WorkflowNode::ScriptNode { data, .. } => self.execute_script_node(data, context).await,
-            WorkflowNode::ToolNode { data, .. } => self.execute_tool_node(data, context).await,
-        };
-
-        match result {
-            Ok(_) => {
-                // Log node completed
-                self.engine.add_execution_log(
-                    &context.execution_id,
-                    node.id(),
-                    LogEventType::Completed,
-                    None,
-                )?;
-
-                // Execute next nodes
-                self.execute_next_nodes(workflow, node, context).await
-            }
-            Err(e) => {
-                // Log node failed
-                self.engine.add_execution_log(
-                    &context.execution_id,
-                    node.id(),
-                    LogEventType::Failed,
-                    Some(Value::String(e.clone())),
-                )?;
-
-                Err(e)
-            }
-        }
+        })
     }
 
     /// Execute next nodes based on edges
@@ -279,7 +280,7 @@ impl WorkflowExecutor {
         sleep(Duration::from_millis(100)).await;
 
         // Set outputs in context
-        for (key, var_name) in &data.output_mapping {
+        for (_key, var_name) in &data.output_mapping {
             context.set_variable(
                 var_name.clone(),
                 Value::String(format!("Output from {}", data.label)),
@@ -312,7 +313,7 @@ impl WorkflowExecutor {
     /// Execute loop node
     async fn execute_loop_node(
         &self,
-        workflow: &WorkflowDefinition,
+        _workflow: &WorkflowDefinition,
         node: &WorkflowNode,
         data: &LoopNodeData,
         context: &mut ExecutionContext,
@@ -508,12 +509,13 @@ impl WorkflowExecutor {
         if let Some(node_id) = execution.current_node_id {
             context.current_node_id = Some(node_id.clone());
 
-            // Find node and continue execution
+            // Find node and clone it before moving into async block
             if let Some(node) = workflow.nodes.iter().find(|n| n.id() == node_id) {
+                let node = node.clone();
                 let engine = Arc::clone(&self.engine);
                 tokio::spawn(async move {
                     let executor = WorkflowExecutor::new(engine);
-                    if let Err(e) = executor.execute_node(&workflow, node, &mut context).await {
+                    if let Err(e) = executor.execute_node(&workflow, &node, &mut context).await {
                         eprintln!("Failed to resume workflow: {}", e);
                     }
                 });

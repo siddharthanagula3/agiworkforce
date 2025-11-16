@@ -10,7 +10,7 @@ use tauri::State;
 use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SubmitTaskRequest {
+pub struct AgentSubmitTaskRequest {
     pub description: String,
     pub auto_approve: Option<bool>,
 }
@@ -71,7 +71,9 @@ pub async fn agent_init(
 
 /// Submit a task to the autonomous agent
 #[tauri::command]
-pub async fn agent_submit_task(request: SubmitTaskRequest) -> Result<SubmitTaskResponse, String> {
+pub async fn agent_submit_task(
+    request: AgentSubmitTaskRequest,
+) -> Result<SubmitTaskResponse, String> {
     let agent_arc = {
         let agent_guard = AGENT.lock();
         agent_guard

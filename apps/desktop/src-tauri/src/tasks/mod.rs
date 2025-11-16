@@ -14,14 +14,14 @@ pub mod types;
 
 use anyhow::Context;
 use executor::{TaskExecutor, TaskExecutorFn};
-use persistence::TaskPersistence;
+use persistence::{TaskPersistence, TaskStats};
 use queue::TaskQueue;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
-use types::{Priority, ProgressUpdate, Task, TaskContext, TaskFilter, TaskResult, TaskStatus};
+use types::{Priority, Task, TaskFilter, TaskResult, TaskStatus};
 
 /// Central task manager coordinating queue, executor, and persistence
 pub struct TaskManager {
@@ -234,12 +234,17 @@ impl TaskManager {
         Ok(result)
     }
 
+    /// Get persisted task statistics
+    pub fn stats(&self) -> anyhow::Result<TaskStats> {
+        self.persistence.get_stats()
+    }
+
     /// Poll for completed tasks and update their status
     pub async fn poll_completions(&self) -> anyhow::Result<()> {
         let completions = self.executor.poll_completions().await;
 
         for (task_id, result) in completions {
-            if let Some(mut task) = self.tasks.write().await.get_mut(&task_id) {
+            if let Some(task) = self.tasks.write().await.get_mut(&task_id) {
                 match result {
                     Ok(output) => {
                         task.complete(TaskResult::success(output));

@@ -59,7 +59,7 @@ impl WorkflowScheduler {
         timezone: Option<String>,
     ) -> Result<(), String> {
         // Validate cron expression
-        let schedule =
+        let _schedule =
             Schedule::from_str(cron_expr).map_err(|e| format!("Invalid cron expression: {}", e))?;
 
         println!(
@@ -114,7 +114,7 @@ impl WorkflowScheduler {
         &self,
         workflow_id: &str,
         path: &str,
-        event_types: Vec<String>,
+        _event_types: Vec<String>,
     ) -> Result<(), String> {
         println!(
             "Registered file watcher for workflow {} at path: {}",
@@ -130,7 +130,7 @@ impl WorkflowScheduler {
         &self,
         workflow_id: &str,
         account_id: &str,
-        filter: HashMap<String, String>,
+        _filter: HashMap<String, String>,
     ) -> Result<(), String> {
         println!(
             "Registered email trigger for workflow {} on account: {}",
@@ -190,7 +190,7 @@ impl WorkflowScheduler {
     /// List all scheduled workflows
     pub fn list_scheduled_workflows(
         &self,
-        user_id: &str,
+        _user_id: &str,
     ) -> Result<Vec<ScheduledWorkflow>, String> {
         // Placeholder: In real implementation, would query database
         Ok(Vec::new())

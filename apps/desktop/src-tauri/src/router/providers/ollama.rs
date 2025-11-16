@@ -109,12 +109,25 @@ impl LLMProvider for OllamaProvider {
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
         // Extract images from the last user message (Ollama uses images at request level)
-        let images = request
+        let user_images = request
             .messages
             .iter()
             .rev()
             .find(|m| m.role == "user")
             .and_then(|m| Self::extract_images(m.multimodal_content.as_ref()));
+        let supports_vision = Self::model_supports_vision(&request.model);
+        let images = if supports_vision {
+            user_images
+        } else {
+            if let Some(ref imgs) = user_images {
+                tracing::debug!(
+                    "Model '{}' does not support vision, dropping {} attached image(s)",
+                    request.model,
+                    imgs.len()
+                );
+            }
+            None
+        };
 
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
@@ -198,12 +211,25 @@ impl LLMProvider for OllamaProvider {
         Box<dyn Error + Send + Sync>,
     > {
         // Extract images from the last user message (Ollama uses images at request level)
-        let images = request
+        let user_images = request
             .messages
             .iter()
             .rev()
             .find(|m| m.role == "user")
             .and_then(|m| Self::extract_images(m.multimodal_content.as_ref()));
+        let supports_vision = Self::model_supports_vision(&request.model);
+        let images = if supports_vision {
+            user_images
+        } else {
+            if let Some(ref imgs) = user_images {
+                tracing::debug!(
+                    "Model '{}' does not support vision, dropping {} attached image(s)",
+                    request.model,
+                    imgs.len()
+                );
+            }
+            None
+        };
 
         let ollama_request = OllamaRequest {
             model: request.model.clone(),

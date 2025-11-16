@@ -93,7 +93,13 @@ impl McpMessage {
             return Ok(McpMessage::Notification(notif));
         }
 
-        Err(serde_json::Error::custom("Unknown message type"))
+        // Create a custom error for unknown message type
+        Err(serde_json::from_str::<Value>(s).err().unwrap_or_else(|| {
+            serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Unknown message type",
+            ))
+        }))
     }
 
     /// Serialize to JSON string

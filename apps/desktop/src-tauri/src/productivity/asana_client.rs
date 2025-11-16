@@ -93,10 +93,13 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaUser> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaResponse<AsanaUser> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data.gid)
         } else {
             let status = response.status();
@@ -116,11 +119,11 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             let data: AsanaListResponse<AsanaWorkspace> =
-                response.json().await.map_err(Error::Http)?;
+                response.json().await.map_err(|e| Error::from(e))?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -141,11 +144,11 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             let data: AsanaListResponse<AsanaProject> =
-                response.json().await.map_err(Error::Http)?;
+                response.json().await.map_err(|e| Error::from(e))?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -166,10 +169,13 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaListResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaListResponse<AsanaTask> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -207,10 +213,13 @@ impl AsanaClient {
             .json(&body)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaResponse<AsanaTask> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data.gid)
         } else {
             let status = response.status();
@@ -237,7 +246,7 @@ impl AsanaClient {
             .json(&body)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             Ok(())
@@ -264,7 +273,7 @@ impl AsanaClient {
             .json(&body)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             Ok(())
@@ -287,10 +296,13 @@ impl AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
-            let data: AsanaResponse<AsanaTask> = response.json().await.map_err(Error::Http)?;
+            let data: AsanaResponse<AsanaTask> = response
+                .json()
+                .await
+                .map_err(|e| Error::Http(e.to_string()))?;
             Ok(data.data)
         } else {
             Err(Error::Provider(format!(
@@ -420,7 +432,7 @@ impl UnifiedTaskProvider for AsanaClient {
             .bearer_auth(&self.token)
             .send()
             .await
-            .map_err(Error::Http)?;
+            .map_err(|e| Error::from(e))?;
 
         if response.status().is_success() {
             Ok(())

@@ -1,6 +1,6 @@
 use super::*;
 use crate::agi::tools::ToolRegistry;
-use crate::router::LLMRouter;
+use crate::router::{LLMRouter, Provider};
 use chrono::Utc;
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -123,6 +123,31 @@ impl AIEmployeeExecutor {
             error: None,
         };
 
+        let suggested_tools = self.tools.suggest_tools(&task.task_type);
+        tracing::debug!(
+            "[AIEmployeeExecutor] Suggested tools for task {} -> {:?}",
+            task_id,
+            suggested_tools
+                .iter()
+                .take(5)
+                .map(|tool| tool.id.clone())
+                .collect::<Vec<_>>()
+        );
+
+        let router_ready = match self.llm_router.lock() {
+            Ok(router) => router.has_provider(Provider::OpenAI),
+            Err(e) => {
+                tracing::warn!("Failed to inspect LLM router for task {}: {}", task_id, e);
+                false
+            }
+        };
+        if !router_ready {
+            tracing::debug!(
+                "[AIEmployeeExecutor] No OpenAI provider configured for task {}",
+                task_id
+            );
+        }
+
         // Store task in database
         let conn = self
             .db
@@ -177,7 +202,7 @@ impl AIEmployeeExecutor {
             result.map_err(|e| EmployeeError::DatabaseError(e.to_string()))?
         };
 
-        let input_data: HashMap<String, serde_json::Value> =
+        let _input_data: HashMap<String, serde_json::Value> =
             serde_json::from_str(&input_json).unwrap_or_default();
 
         // Execute based on employee role (simplified - in real implementation, this would use AGI tools)

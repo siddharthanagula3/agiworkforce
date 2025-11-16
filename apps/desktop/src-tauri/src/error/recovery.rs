@@ -1,9 +1,7 @@
 use super::{AGIError, LLMError, Result, ToolError};
 use serde::{Deserialize, Serialize};
-use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 /// Action to take after error recovery attempt
@@ -88,7 +86,7 @@ impl RecoveryManager {
         self.strategies.push(RecoveryStrategy::new(
             "Browser element not found recovery",
             |e| matches!(e, AGIError::ToolError(ToolError::BrowserError(msg)) if msg.contains("element not found")),
-            |e| async move {
+            |_e| async move {
                 info!("Attempting browser element recovery");
 
                 // Strategy 1: Wait longer for element to appear
@@ -177,15 +175,22 @@ impl RecoveryManager {
         self.strategies.push(RecoveryStrategy::new(
             "File not found recovery",
             |e| matches!(e, AGIError::ToolError(ToolError::FileSystemError(msg)) if msg.contains("not found")),
-            |e| async move {
-                if let AGIError::ToolError(ToolError::FileSystemError(msg)) = e {
-                    info!("File not found: {}", msg);
-                    Ok(RecoveryAction::RequestUserInput(format!(
-                        "File not found. Please provide the correct path: {}",
-                        msg
-                    )))
-                } else {
-                    Ok(RecoveryAction::Abort)
+            |e| {
+                // Clone the error message before moving into async block
+                let error_msg = match e {
+                    AGIError::ToolError(ToolError::FileSystemError(msg)) => msg.clone(),
+                    _ => String::new(),
+                };
+                async move {
+                    if !error_msg.is_empty() {
+                        info!("File not found: {}", error_msg);
+                        Ok(RecoveryAction::RequestUserInput(format!(
+                            "File not found. Please provide the correct path: {}",
+                            error_msg
+                        )))
+                    } else {
+                        Ok(RecoveryAction::Abort)
+                    }
                 }
             },
         ));
@@ -244,13 +249,17 @@ impl RecoveryManager {
         self.strategies.push(RecoveryStrategy::new(
             "Memory limit recovery",
             |e| matches!(e, AGIError::ResourceError(_)),
-            |e| async move {
-                info!("Resource limit hit, attempting recovery: {}", e);
+            |e| {
+                // Clone the error message before moving into async block
+                let error_msg = e.to_string();
+                async move {
+                    info!("Resource limit hit, attempting recovery: {}", error_msg);
 
-                // Clear caches, reduce concurrency
-                Ok(RecoveryAction::Fallback(
-                    "Clear caches and reduce workload".to_string(),
-                ))
+                    // Clear caches, reduce concurrency
+                    Ok(RecoveryAction::Fallback(
+                        "Clear caches and reduce workload".to_string(),
+                    ))
+                }
             },
         ));
     }
@@ -260,12 +269,16 @@ impl RecoveryManager {
         self.strategies.push(RecoveryStrategy::new(
             "Permission denied recovery",
             |e| matches!(e, AGIError::PermissionError(_)),
-            |e| async move {
-                warn!("Permission denied: {}", e);
-                Ok(RecoveryAction::RequestUserInput(format!(
-                    "Permission denied. Please grant the required permissions: {}",
-                    e
-                )))
+            |e| {
+                // Clone the error message before moving into async block
+                let error_msg = e.to_string();
+                async move {
+                    warn!("Permission denied: {}", error_msg);
+                    Ok(RecoveryAction::RequestUserInput(format!(
+                        "Permission denied. Please grant the required permissions: {}",
+                        error_msg
+                    )))
+                }
             },
         ));
     }

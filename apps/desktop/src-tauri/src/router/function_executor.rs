@@ -1,18 +1,27 @@
 use crate::agi::tools::ToolRegistry;
+use crate::router::tool_executor::ToolExecutor;
 use crate::router::{ToolCall, ToolDefinition};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tauri::AppHandle;
 
 /// Function Executor - Maps LLM function calls to AGI tool executions
 pub struct FunctionExecutor {
-    tool_registry: Arc<Mutex<ToolRegistry>>,
+    tool_executor: ToolExecutor,
 }
 
 impl FunctionExecutor {
-    pub fn new(tool_registry: Arc<Mutex<ToolRegistry>>) -> Self {
-        Self { tool_registry }
+    pub fn new(tool_registry: Arc<ToolRegistry>) -> Self {
+        Self {
+            tool_executor: ToolExecutor::new(tool_registry),
+        }
+    }
+
+    pub fn with_app_handle(tool_registry: Arc<ToolRegistry>, app_handle: AppHandle) -> Self {
+        Self {
+            tool_executor: ToolExecutor::with_app_handle(tool_registry, app_handle),
+        }
     }
 
     /// Execute a single function call
@@ -23,16 +32,9 @@ impl FunctionExecutor {
             tool_call.id
         );
 
-        // Parse arguments
-        let args: Value = serde_json::from_str(&tool_call.arguments)
-            .context("Failed to parse function arguments")?;
-
-        // Get tool registry
-        let registry = self.tool_registry.lock().await;
-
-        // Find tool by name
-        let tool_result = registry
-            .execute_tool(&tool_call.name, args)
+        let tool_result = self
+            .tool_executor
+            .execute_tool_call(tool_call)
             .await
             .context(format!("Failed to execute tool: {}", tool_call.name))?;
 
@@ -69,68 +71,7 @@ impl FunctionExecutor {
 
     /// Convert AGI tools to LLM function definitions
     pub async fn get_available_functions(&self) -> Result<Vec<ToolDefinition>> {
-        let registry = self.tool_registry.lock().await;
-        let tools = registry.list_tools().await?;
-
-        let functions = tools
-            .into_iter()
-            .map(|tool| {
-                // Convert tool parameters to JSON Schema
-                let parameters = Self::tool_params_to_json_schema(&tool.parameters);
-
-                ToolDefinition {
-                    name: tool.id,
-                    description: tool.description,
-                    parameters,
-                }
-            })
-            .collect();
-
-        Ok(functions)
-    }
-
-    /// Convert AGI tool parameters to JSON Schema format
-    fn tool_params_to_json_schema(params: &[crate::agi::tools::ToolParameter]) -> Value {
-        use crate::agi::tools::ParameterType;
-
-        let mut properties = serde_json::Map::new();
-        let mut required = Vec::new();
-
-        for param in params {
-            if param.required {
-                required.push(param.name.clone());
-            }
-
-            let param_type = match param.parameter_type {
-                ParameterType::String => "string",
-                ParameterType::Integer => "integer",
-                ParameterType::Float => "number",
-                ParameterType::Boolean => "boolean",
-                ParameterType::Object => "object",
-                ParameterType::Array => "array",
-                ParameterType::FilePath => "string",
-                ParameterType::URL => "string",
-            };
-
-            let mut param_schema = serde_json::Map::new();
-            param_schema.insert("type".to_string(), Value::String(param_type.to_string()));
-            param_schema.insert(
-                "description".to_string(),
-                Value::String(param.description.clone()),
-            );
-
-            if let Some(default) = &param.default {
-                param_schema.insert("default".to_string(), default.clone());
-            }
-
-            properties.insert(param.name.clone(), Value::Object(param_schema));
-        }
-
-        serde_json::json!({
-            "type": "object",
-            "properties": properties,
-            "required": required
-        })
+        Ok(self.tool_executor.get_tool_definitions(None))
     }
 }
 
@@ -158,36 +99,4 @@ impl FunctionResult {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_json_schema_conversion() {
-        use crate::agi::tools::{ParameterType, ToolParameter};
-
-        let params = vec![
-            ToolParameter {
-                name: "path".to_string(),
-                parameter_type: ParameterType::FilePath,
-                required: true,
-                description: "File path".to_string(),
-                default: None,
-            },
-            ToolParameter {
-                name: "count".to_string(),
-                parameter_type: ParameterType::Integer,
-                required: false,
-                description: "Number of items".to_string(),
-                default: Some(serde_json::json!(10)),
-            },
-        ];
-
-        let schema = FunctionExecutor::tool_params_to_json_schema(&params);
-
-        assert_eq!(schema["type"], "object");
-        assert_eq!(schema["required"], serde_json::json!(["path"]));
-        assert_eq!(schema["properties"]["path"]["type"], "string");
-        assert_eq!(schema["properties"]["count"]["type"], "integer");
-        assert_eq!(schema["properties"]["count"]["default"], 10);
-    }
-}
+mod tests {}
