@@ -217,12 +217,12 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
         <div className="space-y-3 px-3 pt-3">
           <Button className="w-full" onClick={handleNewTask}>
             <Plus className="mr-2 h-4 w-4" />
-            New Automation Task
+            New Chat
           </Button>
           <Input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search tasks"
+            placeholder="Search conversations"
             className="h-9 bg-background/80"
           />
         </div>
@@ -233,10 +233,10 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
           {filtered.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
               <MessageCircle className="h-5 w-5" />
-              <p>No tasks yet. Start a new automation.</p>
+              <p>No conversations yet. Start a new chat.</p>
               {!collapsed && (
                 <Button variant="link" size="sm" onClick={handleNewTask}>
-                  Start new task
+                  Start new chat
                 </Button>
               )}
             </div>

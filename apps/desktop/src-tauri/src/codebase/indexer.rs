@@ -5,7 +5,6 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -103,7 +102,10 @@ impl CodebaseIndexer {
         let symbols = self.extract_symbols(file_path, &content)?;
 
         // Store in database
-        let file_path_str = file_path.to_string_lossy().to_string();
+        let file_path_str = file_path
+            .strip_prefix(&self.workspace_root)
+            .map(|rel| rel.to_string_lossy().to_string())
+            .unwrap_or_else(|_| file_path.to_string_lossy().to_string());
         let content_hash = self.hash_content(&content);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?

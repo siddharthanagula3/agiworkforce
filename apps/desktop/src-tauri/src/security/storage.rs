@@ -83,6 +83,7 @@ impl SecureStorage {
     }
 
     /// Encrypt and store data
+    #[allow(deprecated)]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<EncryptedData, String> {
         let master = self.master_key.read().unwrap();
         let key = master
@@ -111,6 +112,7 @@ impl SecureStorage {
     }
 
     /// Decrypt data
+    #[allow(deprecated)]
     pub fn decrypt(&self, encrypted: &EncryptedData) -> Result<Vec<u8>, String> {
         let master = self.master_key.read().unwrap();
         let key = master
@@ -163,7 +165,7 @@ impl SecureStorage {
             .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
 
         entry
-            .delete_credential()
+            .delete_password()
             .map_err(|e| format!("Failed to delete API key: {}", e))
     }
 
@@ -211,6 +213,7 @@ fn generate_salt() -> Vec<u8> {
 }
 
 /// Encrypt file at rest with AES-256-GCM
+#[allow(deprecated)]
 pub fn encrypt_file(input_path: &str, output_path: &str, password: &str) -> Result<(), String> {
     use std::fs;
 
@@ -243,6 +246,7 @@ pub fn encrypt_file(input_path: &str, output_path: &str, password: &str) -> Resu
 }
 
 /// Decrypt file encrypted with encrypt_file
+#[allow(deprecated)]
 pub fn decrypt_file(input_path: &str, output_path: &str, password: &str) -> Result<(), String> {
     use std::fs;
 

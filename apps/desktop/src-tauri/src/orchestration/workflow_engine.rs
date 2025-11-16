@@ -424,14 +424,14 @@ impl WorkflowEngine {
                 let triggers_json: String = row.get(6)?;
                 let metadata_json: String = row.get(7)?;
 
-                let nodes: Vec<WorkflowNode> =
-                    serde_json::from_str(&nodes_json).map_err(|e| rusqlite::Error::InvalidQuery)?;
-                let edges: Vec<WorkflowEdge> =
-                    serde_json::from_str(&edges_json).map_err(|e| rusqlite::Error::InvalidQuery)?;
+                let nodes: Vec<WorkflowNode> = serde_json::from_str(&nodes_json)
+                    .map_err(|_e| rusqlite::Error::InvalidQuery)?;
+                let edges: Vec<WorkflowEdge> = serde_json::from_str(&edges_json)
+                    .map_err(|_e| rusqlite::Error::InvalidQuery)?;
                 let triggers: Vec<WorkflowTrigger> = serde_json::from_str(&triggers_json)
-                    .map_err(|e| rusqlite::Error::InvalidQuery)?;
+                    .map_err(|_e| rusqlite::Error::InvalidQuery)?;
                 let metadata: HashMap<String, Value> = serde_json::from_str(&metadata_json)
-                    .map_err(|e| rusqlite::Error::InvalidQuery)?;
+                    .map_err(|_e| rusqlite::Error::InvalidQuery)?;
 
                 Ok(WorkflowDefinition {
                     id: row.get(0)?,

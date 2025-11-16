@@ -1,6 +1,7 @@
 use crate::telemetry::{
     AnalyticsMetricsCollector, AppMetrics, SystemMetrics, TelemetryCollector, TelemetryEvent,
 };
+use chrono;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -207,7 +208,6 @@ use crate::analytics::{
 };
 use crate::commands::AppDatabase;
 use rusqlite::Connection;
-use std::sync::Arc;
 
 /// Helper function to create a tokio::sync::Mutex<Connection> for analytics
 /// Note: AppDatabase uses std::sync::Mutex, but analytics module expects tokio::sync::Mutex
@@ -438,6 +438,80 @@ pub async fn analytics_save_snapshot(
         .save_snapshot(&user_id, team_id.as_deref(), &roi)
         .await
         .map_err(|e| format!("Failed to save snapshot: {}", e))
+}
+
+/// Track workflow view for analytics
+#[tauri::command]
+pub async fn track_workflow_view(
+    workflow_id: String,
+    user_id: String,
+    state: State<'_, TelemetryState>,
+) -> Result<(), String> {
+    let collector = state.collector.read().await;
+
+    if !collector.is_enabled() {
+        return Ok(());
+    }
+
+    drop(collector); // Release read lock
+
+    // Create telemetry event for workflow view
+    let mut properties = std::collections::HashMap::new();
+    properties.insert("workflow_id".to_string(), serde_json::json!(workflow_id));
+    properties.insert("user_id".to_string(), serde_json::json!(user_id));
+
+    let event = TelemetryEvent {
+        name: "workflow_view".to_string(),
+        properties,
+        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        session_id: state.collector.read().await.get_session_id(),
+        user_id: Some(user_id),
+    };
+
+    let collector = state.collector.write().await;
+    collector
+        .track(event)
+        .await
+        .map_err(|e| format!("Failed to track workflow view: {}", e))
+}
+
+/// Acknowledge milestone for gamification and tracking
+#[tauri::command]
+pub async fn acknowledge_milestone(
+    milestone_id: String,
+    user_id: String,
+    state: State<'_, TelemetryState>,
+) -> Result<(), String> {
+    let collector = state.collector.read().await;
+
+    if !collector.is_enabled() {
+        return Ok(());
+    }
+
+    drop(collector); // Release read lock
+
+    // Create telemetry event for milestone acknowledgement
+    let mut properties = std::collections::HashMap::new();
+    properties.insert("milestone_id".to_string(), serde_json::json!(milestone_id));
+    properties.insert("user_id".to_string(), serde_json::json!(user_id));
+    properties.insert(
+        "acknowledged_at".to_string(),
+        serde_json::json!(chrono::Utc::now().to_rfc3339()),
+    );
+
+    let event = TelemetryEvent {
+        name: "milestone_acknowledged".to_string(),
+        properties,
+        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        session_id: state.collector.read().await.get_session_id(),
+        user_id: Some(user_id),
+    };
+
+    let collector = state.collector.write().await;
+    collector
+        .track(event)
+        .await
+        .map_err(|e| format!("Failed to acknowledge milestone: {}", e))
 }
 
 #[cfg(test)]

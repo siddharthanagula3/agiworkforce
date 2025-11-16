@@ -489,3 +489,242 @@ pub async fn orchestrator_cleanup() -> Result<usize, String> {
 
     Ok(removed)
 }
+
+/// System resource monitoring response
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemResourcesResponse {
+    pub cpu_usage_percent: f64,
+    pub memory_usage_mb: u64,
+    pub memory_total_mb: u64,
+    pub network_usage_mbps: f64,
+    pub storage_usage_mb: u64,
+    pub storage_total_mb: u64,
+    pub available_tools: Vec<String>,
+}
+
+/// Get current system resources from AGI ResourceManager
+#[tauri::command]
+pub async fn get_system_resources() -> Result<SystemResourcesResponse, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+    let resource_state = agi
+        .resource_manager()
+        .get_state()
+        .await
+        .map_err(|e| format!("Failed to get resource state: {}", e))?;
+
+    // Get total system memory from sysinfo
+    let mut sys = sysinfo::System::new_all();
+    sys.refresh_memory();
+    let memory_total_mb = (sys.total_memory() / 1024 / 1024) as u64;
+    let storage_total_mb = 1000000; // 1TB default - would need actual disk info
+
+    Ok(SystemResourcesResponse {
+        cpu_usage_percent: resource_state.cpu_usage_percent,
+        memory_usage_mb: resource_state.memory_usage_mb,
+        memory_total_mb,
+        network_usage_mbps: resource_state.network_usage_mbps,
+        storage_usage_mb: resource_state.storage_usage_mb,
+        storage_total_mb,
+        available_tools: resource_state.available_tools,
+    })
+}
+
+/// Pause an agent
+#[tauri::command]
+pub async fn pause_agent(agent_id: String) -> Result<(), String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    orchestrator
+        .pause_agent(&agent_id)
+        .await
+        .map_err(|e| format!("Failed to pause agent: {}", e))
+}
+
+/// Resume a paused agent
+#[tauri::command]
+pub async fn resume_agent(agent_id: String) -> Result<(), String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    orchestrator
+        .resume_agent(&agent_id)
+        .await
+        .map_err(|e| format!("Failed to resume agent: {}", e))
+}
+
+/// Cancel an agent
+#[tauri::command]
+pub async fn cancel_agent(agent_id: String) -> Result<(), String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    orchestrator
+        .cancel_agent(&agent_id)
+        .await
+        .map_err(|e| format!("Failed to cancel agent: {}", e))
+}
+
+/// Refresh agent status (re-emit events for all agents)
+#[tauri::command]
+pub async fn refresh_agent_status() -> Result<Vec<AgentStatus>, String> {
+    let orchestrator_arc = {
+        let guard = ORCHESTRATOR.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "Orchestrator not initialized".to_string())?
+            .clone()
+    };
+
+    let orchestrator = orchestrator_arc.lock().await;
+    let statuses = orchestrator
+        .list_agents()
+        .await
+        .map_err(|e| format!("Failed to list agents: {}", e))?;
+
+    Ok(statuses)
+}
+
+/// Knowledge entry for frontend
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeEntryResponse {
+    pub id: String,
+    pub category: String,
+    pub content: String,
+    pub metadata: std::collections::HashMap<String, String>,
+    pub timestamp: u64,
+    pub importance: f64,
+}
+
+/// Query knowledge base with search term
+#[tauri::command]
+pub async fn query_knowledge(
+    query: String,
+    limit: usize,
+) -> Result<Vec<KnowledgeEntryResponse>, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+    let entries = agi
+        .knowledge_base()
+        .query(&query, limit)
+        .await
+        .map_err(|e| format!("Failed to query knowledge: {}", e))?;
+
+    Ok(entries
+        .into_iter()
+        .map(|e| KnowledgeEntryResponse {
+            id: e.id,
+            category: e.category,
+            content: e.content,
+            metadata: e.metadata,
+            timestamp: e.timestamp,
+            importance: e.importance,
+        })
+        .collect())
+}
+
+/// Get recent knowledge entries
+#[tauri::command]
+pub async fn get_recent_knowledge(limit: usize) -> Result<Vec<KnowledgeEntryResponse>, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+
+    // Query with empty string to get all entries sorted by importance/timestamp
+    let entries = agi
+        .knowledge_base()
+        .query("", limit)
+        .await
+        .map_err(|e| format!("Failed to get recent knowledge: {}", e))?;
+
+    Ok(entries
+        .into_iter()
+        .map(|e| KnowledgeEntryResponse {
+            id: e.id,
+            category: e.category,
+            content: e.content,
+            metadata: e.metadata,
+            timestamp: e.timestamp,
+            importance: e.importance,
+        })
+        .collect())
+}
+
+/// Get knowledge by category
+#[tauri::command]
+pub async fn get_knowledge_by_category(
+    category: String,
+    limit: usize,
+) -> Result<Vec<KnowledgeEntryResponse>, String> {
+    let agi_arc = {
+        let guard = AGI_CORE.lock();
+        guard
+            .as_ref()
+            .ok_or_else(|| "AGI not initialized".to_string())?
+            .clone()
+    };
+
+    let agi = agi_arc.lock().await;
+    let entries = agi
+        .knowledge_base()
+        .query(&category, limit)
+        .await
+        .map_err(|e| format!("Failed to get knowledge by category: {}", e))?;
+
+    // Filter to exact category matches
+    let filtered: Vec<_> = entries
+        .into_iter()
+        .filter(|e| e.category == category)
+        .map(|e| KnowledgeEntryResponse {
+            id: e.id,
+            category: e.category,
+            content: e.content,
+            metadata: e.metadata,
+            timestamp: e.timestamp,
+            importance: e.importance,
+        })
+        .collect();
+
+    Ok(filtered)
+}
