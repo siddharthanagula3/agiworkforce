@@ -1042,6 +1042,224 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Terminal Operations
+        self.register_tool(Tool {
+            id: "terminal_execute".to_string(),
+            name: "Execute Terminal Command".to_string(),
+            description: "Execute a command in the system terminal (bash/powershell/cmd)".to_string(),
+            capabilities: vec![ToolCapability::CodeExecution, ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "command".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Command to execute".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "cwd".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Working directory for the command".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // Git Operations
+        self.register_tool(Tool {
+            id: "git_init".to_string(),
+            name: "Initialize Git Repository".to_string(),
+            description: "Initialize a new Git repository in the specified directory".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path to initialize repository".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_add".to_string(),
+            name: "Git Add Files".to_string(),
+            description: "Add files to Git staging area".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Repository path".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "files".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Files to add (use ['.'] for all files)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_commit".to_string(),
+            name: "Git Commit".to_string(),
+            description: "Create a Git commit with the staged changes".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Repository path".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "message".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Commit message".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["git_add".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_push".to_string(),
+            name: "Git Push".to_string(),
+            description: "Push commits to remote repository".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation, ToolCapability::NetworkOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Repository path".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "remote".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Remote name (defaults to 'origin')".to_string(),
+                    default: Some(serde_json::json!("origin")),
+                },
+                ToolParameter {
+                    name: "branch".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Branch name (defaults to current branch)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 50,
+                network_mb: 10.0,
+            },
+            dependencies: vec!["git_commit".to_string()],
+        })?;
+
+        // GitHub Operations
+        self.register_tool(Tool {
+            id: "github_create_repo".to_string(),
+            name: "Create GitHub Repository".to_string(),
+            description: "Create a new repository on GitHub".to_string(),
+            capabilities: vec![ToolCapability::APICall, ToolCapability::NetworkOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Repository name".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "description".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Repository description".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "private".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Make repository private".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 1.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // Physical Scrape Tool (composite: browser navigate + automation select all + copy + clipboard get)
+        self.register_tool(Tool {
+            id: "physical_scrape".to_string(),
+            name: "Physical Web Scrape".to_string(),
+            description: "Physically scrape a webpage by navigating, selecting all content, and copying to clipboard. Works on sites that block normal scraping.".to_string(),
+            capabilities: vec![
+                ToolCapability::BrowserAutomation,
+                ToolCapability::UIAutomation,
+                ToolCapability::TextProcessing,
+            ],
+            parameters: vec![
+                ToolParameter {
+                    name: "url".to_string(),
+                    parameter_type: ParameterType::URL,
+                    required: true,
+                    description: "URL to scrape".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "wait_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Milliseconds to wait for page load (defaults to 3000)".to_string(),
+                    default: Some(serde_json::json!(3000)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 20.0,
+                memory_mb: 250,
+                network_mb: 5.0,
+            },
+            dependencies: vec!["browser_navigate".to_string(), "ui_click".to_string()],
+        })?;
+
         Ok(())
     }
 
