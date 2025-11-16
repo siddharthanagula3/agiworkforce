@@ -47,13 +47,7 @@ impl DropboxClient {
     }
 
     pub fn get_authorization_url(&self, state: &str) -> (String, Option<PkceChallenge>) {
-        let url = format!(
-            "{}?client_id={}&response_type=code&redirect_uri={}&state={}",
-            DROPBOX_AUTH_URL,
-            urlencoding::encode(self.oauth_client.client_id()),
-            urlencoding::encode(self.oauth_client.redirect_uri()),
-            urlencoding::encode(state),
-        );
+        let url = self.oauth_client.get_authorization_url(state, None);
         (url, None)
     }
 

@@ -39,10 +39,20 @@ impl Categorizable for AGIError {
             AGIError::PermissionError(_) => ErrorCategory::Permission,
             AGIError::FatalError(_) => ErrorCategory::Permanent,
             AGIError::ConfigurationError(_) => ErrorCategory::Configuration,
+            AGIError::Config(_) => ErrorCategory::Configuration,
+            AGIError::Provider(_) => ErrorCategory::Permanent,
+            AGIError::Http(_) => ErrorCategory::Transient,
+            AGIError::Generic(_) => ErrorCategory::Permanent,
             AGIError::LLMError(e) => e.category(),
             AGIError::ToolError(e) => e.category(),
             AGIError::ResourceError(e) => e.category(),
             AGIError::PlanningError(_) => ErrorCategory::Permanent,
+            AGIError::Other(_) => ErrorCategory::Unknown,
+            AGIError::Database(_) => ErrorCategory::Transient,
+            AGIError::CommandTimeout(_) => ErrorCategory::Transient,
+            AGIError::EmailSend(_) => ErrorCategory::Transient,
+            AGIError::EmailParse(_) => ErrorCategory::Permanent,
+            AGIError::InvalidPath(_) => ErrorCategory::Permanent,
         }
     }
 

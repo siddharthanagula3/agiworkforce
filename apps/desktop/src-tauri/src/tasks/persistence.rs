@@ -1,7 +1,7 @@
 use super::types::{Priority, Task, TaskFilter, TaskResult, TaskStatus};
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::sync::{Arc, Mutex};
 
 /// Task persistence layer

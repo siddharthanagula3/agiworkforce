@@ -137,6 +137,11 @@ impl RealtimeMetricsCollector {
         }
     }
 
+    /// Get database connection
+    pub fn db_conn(&self) -> Arc<Mutex<Connection>> {
+        Arc::clone(&self.db)
+    }
+
     /// Record automation run and broadcast metrics update
     pub async fn record_automation_run(
         &self,
@@ -443,7 +448,7 @@ impl RealtimeMetricsCollector {
             )))
         })?;
 
-        let query = if let Some(cutoff) = cutoff_timestamp {
+        let query = if let Some(_cutoff) = cutoff_timestamp {
             "SELECT
                 employee_id,
                 SUM(time_saved_minutes) as total_time_minutes,

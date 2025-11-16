@@ -3,6 +3,7 @@
  * Background indexing service that watches for file changes
  */
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use walkdir::WalkDir;
 use super::{ChunkStrategy, CodeChunker, EmbeddingGenerator, EmbeddingMetadata, SimilaritySearch};
 
 /// Indexing progress
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingProgress {
     pub total_files: usize,
     pub indexed_files: usize,
@@ -115,7 +116,8 @@ impl IncrementalIndexer {
                 chunk.end_line,
             );
 
-            similarity.add_embedding(&metadata.id, embedding, metadata)?;
+            let metadata_id = metadata.id.clone();
+            similarity.add_embedding(&metadata_id, embedding, metadata)?;
         }
 
         // Mark file as indexed

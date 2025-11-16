@@ -82,6 +82,16 @@ impl FirstRunExperience {
             ],
         )?;
 
+        if !self.sample_data.has_sample_data(user_id) {
+            if let Err(e) = self.sample_data.populate_sample_data(user_id) {
+                tracing::warn!(
+                    "Failed to seed sample data for first-run experience (user {}): {}",
+                    user_id,
+                    e
+                );
+            }
+        }
+
         Ok(session)
     }
 
