@@ -10,6 +10,7 @@ import { useChatStore } from './stores/chatStore';
 import { useTemplateStore } from './stores/templateStore';
 import { useOrchestrationStore } from './stores/orchestrationStore';
 import { useTeamStore } from './stores/teamStore';
+import { initializeAgentStatusListener } from './stores/unifiedChatStore';
 import { Button } from './components/ui/Button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -104,7 +105,7 @@ const DesktopShell = () => {
   const [agentChatPosition] = useState<'left' | 'right'>('right');
   const [agentChatVisible, setAgentChatVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
-  const [currentView, setCurrentView] = useState<AppView>('chat');
+  const [currentView, setCurrentView] = useState<AppView>('enhanced-chat');
   const { theme, toggleTheme } = useTheme();
 
   const createConversation = useChatStore((store) => store.createConversation);
@@ -175,6 +176,9 @@ const DesktopShell = () => {
 
     // Track important user actions
     trackAction('app_loaded');
+
+    // Initialize agent status listener for unified chat
+    void initializeAgentStatusListener();
 
     return () => {
       // Flush error reports on unmount
@@ -410,48 +414,10 @@ const DesktopShell = () => {
             <GovernanceDashboard />
           </Suspense>
         );
-      case 'chat':
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <div className="flex flex-1 overflow-hidden min-w-0">
-              {/* Agent Chat (Left) */}
-              {agentChatVisible && agentChatPosition === 'left' && (
-                <>
-                  <AgentChatInterface className="w-96 shrink-0" position="left" />
-                  <div className="w-px bg-border shrink-0" />
-                </>
-              )}
-
-              {/* Main Chat Interface */}
-              <div className="flex-1 overflow-hidden min-w-0">
-                <ChatInterface className="h-full" />
-              </div>
-
-              {/* Agent Chat (Right) */}
-              {agentChatVisible && agentChatPosition === 'right' && (
-                <>
-                  <div className="w-px bg-border shrink-0" />
-                  <AgentChatInterface className="w-96 shrink-0" position="right" />
-                </>
-              )}
-
-              {/* Toggle Button */}
-              {!agentChatVisible && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute bottom-4 right-4 z-10"
-                  onClick={() => setAgentChatVisible(true)}
-                >
-                  {agentChatPosition === 'right' ? (
-                    <ChevronLeft className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
-            </div>
+            <EnhancedChatInterface />
           </Suspense>
         );
     }

@@ -38,6 +38,7 @@ interface LLMConfig {
     qwen: string;
     mistral: string;
   };
+  favoriteModels: string[]; // Quick-access models in format "provider/model"
 }
 
 interface WindowPreferences {
@@ -63,6 +64,9 @@ interface SettingsState {
   setTemperature: (temperature: number) => void;
   setMaxTokens: (maxTokens: number) => void;
   setDefaultModel: (provider: Provider, model: string) => void;
+  setFavoriteModels: (models: string[]) => void;
+  addFavoriteModel: (model: string) => void;
+  removeFavoriteModel: (model: string) => void;
 
   // Window Preferences
   setTheme: (theme: Theme) => void;
@@ -100,6 +104,16 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
       qwen: 'qwen-max',
       mistral: 'mistral-large-2',
     },
+    favoriteModels: [
+      'ollama/llama3',
+      'ollama/llama4-maverick',
+      'openai/gpt-4',
+      'openai/gpt-5',
+      'anthropic/claude-3-sonnet',
+      'anthropic/claude-sonnet-4-5',
+      'google/gemini-2.5-pro',
+      'deepseek/deepseek-v3',
+    ],
   },
   windowPreferences: {
     theme: 'system',
@@ -111,6 +125,7 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
 export const createDefaultLLMConfig = (): LLMConfig => ({
   ...defaultSettings.llmConfig,
   defaultModels: { ...defaultSettings.llmConfig.defaultModels },
+  favoriteModels: [...defaultSettings.llmConfig.favoriteModels],
 });
 
 export const createDefaultWindowPreferences = (): WindowPreferences => ({
@@ -238,6 +253,33 @@ export const useSettingsStore = create<SettingsState>()(
         }));
       },
 
+      setFavoriteModels: (models: string[]) => {
+        set((state) => ({
+          llmConfig: { ...state.llmConfig, favoriteModels: models },
+        }));
+      },
+
+      addFavoriteModel: (model: string) => {
+        set((state) => {
+          const favoriteModels = [...state.llmConfig.favoriteModels];
+          if (!favoriteModels.includes(model)) {
+            favoriteModels.push(model);
+          }
+          return {
+            llmConfig: { ...state.llmConfig, favoriteModels },
+          };
+        });
+      },
+
+      removeFavoriteModel: (model: string) => {
+        set((state) => {
+          const favoriteModels = state.llmConfig.favoriteModels.filter((m) => m !== model);
+          return {
+            llmConfig: { ...state.llmConfig, favoriteModels },
+          };
+        });
+      },
+
       setTheme: (theme: Theme) => {
         set((state) => ({
           windowPreferences: { ...state.windowPreferences, theme },
@@ -281,6 +323,8 @@ export const useSettingsStore = create<SettingsState>()(
               ...defaultSettings.llmConfig.defaultModels,
               ...(settings.llmConfig?.defaultModels ?? defaultSettings.llmConfig.defaultModels),
             },
+            favoriteModels:
+              settings.llmConfig?.favoriteModels ?? defaultSettings.llmConfig.favoriteModels,
           };
 
           const mergedWindowPreferences: WindowPreferences = {
@@ -391,6 +435,7 @@ export const useSettingsStore = create<SettingsState>()(
             ...currentState.llmConfig.defaultModels,
             ...(persisted?.llmConfig?.defaultModels ?? {}),
           },
+          favoriteModels: persisted?.llmConfig?.favoriteModels ?? currentState.llmConfig.favoriteModels,
         };
 
         const mergedWindowPreferences: WindowPreferences = {
