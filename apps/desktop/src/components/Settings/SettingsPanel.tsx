@@ -30,6 +30,7 @@ import {
 import { cn } from '../../lib/utils';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { EmployeesPage } from '../../pages/EmployeesPage';
+import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -482,7 +483,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     </p>
                   </div>
 
-                  <div className="pt-4 border-t border-border">
+                  {/* Favorite Models Selector */}
+                  <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                     <FavoriteModelsSelector />
                   </div>
                 </div>

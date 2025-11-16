@@ -138,6 +138,8 @@ pub struct ChatSendMessageRequest {
     pub stream: Option<bool>,
     #[serde(default)]
     pub enable_tools: Option<bool>,
+    #[serde(default)]
+    pub conversation_mode: Option<String>, // "safe" or "full_control"
 }
 
 #[derive(Debug, Serialize)]
@@ -580,6 +582,15 @@ pub async fn chat_send_message(
         .await
         .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
+    // 🔔 Emit agent status: Analyzing request
+    let _ = app_handle.emit("agent:status:update", serde_json::json!({
+        "id": "main_agent",
+        "name": "AGI Workforce Agent",
+        "status": "running",
+        "currentStep": "Analyzing request...",
+        "progress": 10
+    }));
+
     // Get conversation history (after compaction)
     let history = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -609,8 +620,12 @@ pub async fn chat_send_message(
         match ToolRegistry::new() {
             Ok(registry) => {
                 let tool_registry = Arc::new(registry);
-                let tool_executor =
+                let mut tool_executor =
                     ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
+
+                // 🔒 Set conversation mode for security checks
+                tool_executor.set_conversation_mode(request.conversation_mode.clone());
+
                 let mut tool_defs = tool_executor.get_tool_definitions(None);
 
                 // ✅ Add MCP tools if available
@@ -687,6 +702,16 @@ pub async fn chat_send_message(
 
     let has_tools = tool_definitions.is_some();
     let tool_defs_for_follow_up = tool_definitions.clone(); // Clone for potential follow-up request
+
+    // 🔔 Emit agent status: Planning
+    let _ = app_handle.emit("agent:status:update", serde_json::json!({
+        "id": "main_agent",
+        "name": "AGI Workforce Agent",
+        "status": "running",
+        "currentStep": "Planning actions...",
+        "progress": 30
+    }));
+
     let llm_request = LLMRequest {
         messages: router_messages,
         model: request

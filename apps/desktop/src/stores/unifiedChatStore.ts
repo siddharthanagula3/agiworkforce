@@ -166,6 +166,8 @@ export type SidecarSection =
   | 'tasks'
   | 'agents';
 
+export type ConversationMode = 'safe' | 'full_control';
+
 // ============================================================================
 // Store State Interface
 // ============================================================================
@@ -185,6 +187,7 @@ export interface UnifiedChatState {
 
   // Agents
   agents: AgentStatus[];
+  agentStatus: AgentStatus | null;
 
   // Tasks
   backgroundTasks: BackgroundTask[];
@@ -194,6 +197,9 @@ export interface UnifiedChatState {
 
   // Context
   activeContext: ContextItem[];
+
+  // Settings
+  conversationMode: ConversationMode;
 
   // UI State
   sidecarOpen: boolean;
@@ -231,11 +237,15 @@ export interface UnifiedChatState {
 
   // Actions - Agents & Tasks
   updateAgentStatus: (id: string, status: Partial<AgentStatus>) => void;
+  setAgentStatus: (status: AgentStatus | null) => void;
   addAgent: (agent: AgentStatus) => void;
   removeAgent: (id: string) => void;
   updateTaskProgress: (id: string, progress: number) => void;
   addBackgroundTask: (task: Omit<BackgroundTask, 'createdAt'>) => void;
   updateBackgroundTask: (id: string, updates: Partial<BackgroundTask>) => void;
+
+  // Actions - Settings
+  setConversationMode: (mode: ConversationMode) => void;
 
   // Actions - Approvals
   addApprovalRequest: (request: Omit<ApprovalRequest, 'createdAt' | 'status'>) => void;
@@ -283,10 +293,13 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       screenshots: [],
 
       agents: [],
+      agentStatus: null,
       backgroundTasks: [],
       pendingApprovals: [],
 
       activeContext: [],
+
+      conversationMode: 'safe',
 
       sidecarOpen: true,
       sidecarSection: 'operations',
@@ -382,6 +395,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           }
         }),
 
+      setAgentStatus: (status) =>
+        set((state) => {
+          state.agentStatus = status;
+        }),
+
       addAgent: (agent) =>
         set((state) => {
           state.agents.push(agent);
@@ -411,6 +429,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (index !== -1 && state.backgroundTasks[index]) {
             Object.assign(state.backgroundTasks[index], updates);
           }
+        }),
+
+      // Settings Actions
+      setConversationMode: (mode) =>
+        set((state) => {
+          state.conversationMode = mode;
         }),
 
       // Approval Actions
