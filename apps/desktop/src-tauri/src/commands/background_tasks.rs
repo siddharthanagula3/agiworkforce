@@ -141,7 +141,6 @@ pub async fn bg_get_task_stats(
 ) -> Result<crate::tasks::persistence::TaskStats, String> {
     state
         .0
-        .persistence
-        .get_stats()
+        .stats()
         .map_err(|e| format!("Failed to get task stats: {}", e))
 }

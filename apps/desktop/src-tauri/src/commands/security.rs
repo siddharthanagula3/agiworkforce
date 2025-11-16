@@ -2,6 +2,7 @@ use crate::security::{
     ApiSecurityManager, AuthManager, AuthToken, SecureStorage, UpdateMetadata,
     UpdateSecurityManager, UserRole, VerificationResult,
 };
+use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -11,6 +12,35 @@ pub struct AuthManagerState(pub Arc<parking_lot::RwLock<AuthManager>>);
 pub struct ApiSecurityState(pub Arc<parking_lot::RwLock<ApiSecurityManager>>);
 pub struct SecureStorageState(pub Arc<parking_lot::RwLock<SecureStorage>>);
 pub struct UpdateSecurityState(pub Arc<parking_lot::RwLock<UpdateSecurityManager>>);
+
+impl AuthManagerState {
+    pub fn read(&self) -> RwLockReadGuard<'_, AuthManager> {
+        self.0.read()
+    }
+
+    #[allow(dead_code)]
+    pub fn write(&self) -> RwLockWriteGuard<'_, AuthManager> {
+        self.0.write()
+    }
+}
+
+impl ApiSecurityState {
+    pub fn read(&self) -> RwLockReadGuard<'_, ApiSecurityManager> {
+        self.0.read()
+    }
+}
+
+impl SecureStorageState {
+    pub fn read(&self) -> RwLockReadGuard<'_, SecureStorage> {
+        self.0.read()
+    }
+}
+
+impl UpdateSecurityState {
+    pub fn read(&self) -> RwLockReadGuard<'_, UpdateSecurityManager> {
+        self.0.read()
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterRequest {

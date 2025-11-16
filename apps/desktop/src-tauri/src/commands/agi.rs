@@ -516,7 +516,7 @@ pub async fn get_system_resources() -> Result<SystemResourcesResponse, String> {
 
     let agi = agi_arc.lock().await;
     let resource_state = agi
-        .resources
+        .resource_manager()
         .get_state()
         .await
         .map_err(|e| format!("Failed to get resource state: {}", e))?;
@@ -604,7 +604,10 @@ pub async fn refresh_agent_status() -> Result<Vec<AgentStatus>, String> {
     };
 
     let orchestrator = orchestrator_arc.lock().await;
-    let statuses = orchestrator.list_agents().await;
+    let statuses = orchestrator
+        .list_agents()
+        .await
+        .map_err(|e| format!("Failed to list agents: {}", e))?;
 
     Ok(statuses)
 }
@@ -637,7 +640,7 @@ pub async fn query_knowledge(
 
     let agi = agi_arc.lock().await;
     let entries = agi
-        .knowledge
+        .knowledge_base()
         .query(&query, limit)
         .await
         .map_err(|e| format!("Failed to query knowledge: {}", e))?;
@@ -670,7 +673,7 @@ pub async fn get_recent_knowledge(limit: usize) -> Result<Vec<KnowledgeEntryResp
 
     // Query with empty string to get all entries sorted by importance/timestamp
     let entries = agi
-        .knowledge
+        .knowledge_base()
         .query("", limit)
         .await
         .map_err(|e| format!("Failed to get recent knowledge: {}", e))?;
@@ -704,7 +707,7 @@ pub async fn get_knowledge_by_category(
 
     let agi = agi_arc.lock().await;
     let entries = agi
-        .knowledge
+        .knowledge_base()
         .query(&category, limit)
         .await
         .map_err(|e| format!("Failed to get knowledge by category: {}", e))?;

@@ -4,13 +4,25 @@ use crate::agent::context_manager::{Constraint, ConstraintType, ContextManager};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 /// ContextManager state
 pub struct ContextManagerState(pub Arc<Mutex<ContextManager>>);
 
 /// CodeGenerator state
 pub struct CodeGeneratorState(pub Arc<Mutex<CodeGenerator>>);
+
+impl ContextManagerState {
+    pub async fn lock(&self) -> MutexGuard<'_, ContextManager> {
+        self.0.lock().await
+    }
+}
+
+impl CodeGeneratorState {
+    pub async fn lock(&self) -> MutexGuard<'_, CodeGenerator> {
+        self.0.lock().await
+    }
+}
 
 /// Analyze project and build context
 #[tauri::command]

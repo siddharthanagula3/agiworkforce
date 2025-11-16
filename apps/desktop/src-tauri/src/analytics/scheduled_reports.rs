@@ -5,7 +5,6 @@ use tokio::sync::Mutex;
 
 /// Scheduled report generator for automated reporting
 pub struct ScheduledReportGenerator {
-    db: Arc<Mutex<Connection>>,
     calculator: ROICalculator,
     aggregator: MetricsAggregator,
     generator: ReportGenerator,
@@ -18,7 +17,6 @@ impl ScheduledReportGenerator {
         let generator = ReportGenerator::new();
 
         Self {
-            db,
             calculator,
             aggregator,
             generator,
@@ -71,12 +69,6 @@ impl ScheduledReportGenerator {
             .aggregate_by_process_type(start, end)
             .await
             .map_err(|e| format!("Failed to aggregate metrics: {}", e))?;
-
-        let user_metrics = self
-            .aggregator
-            .aggregate_by_user(start, end)
-            .await
-            .map_err(|e| format!("Failed to aggregate user metrics: {}", e))?;
 
         let tool_metrics = self
             .aggregator
@@ -252,9 +244,7 @@ mod tests {
         let db = Arc::new(Mutex::new(conn));
         let generator = ScheduledReportGenerator::new(db);
 
-        assert_eq!(
-            std::mem::size_of::<ScheduledReportGenerator>(),
-            std::mem::size_of::<Arc<Mutex<Connection>>>() * 2
-        ); // db + state
+        // Without any schema/data the report generation should fail gracefully
+        assert!(generator.generate_trend_report("roi", 7).await.is_err());
     }
 }

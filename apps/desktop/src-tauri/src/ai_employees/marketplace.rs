@@ -93,7 +93,7 @@ impl EmployeeMarketplace {
 
         let mut result = Vec::new();
         for emp in employees {
-            if let Ok(mut e) = emp {
+            if let Ok(e) = emp {
                 // Apply filters that can't be done in SQL easily
                 let mut include = true;
 

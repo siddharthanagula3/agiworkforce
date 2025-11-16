@@ -1,4 +1,4 @@
-use super::{CursorPosition, PresenceStatus, UserActivity};
+use super::{CursorPosition, PresenceStatus};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -10,7 +10,7 @@ use tauri::State;
 pub async fn get_process_templates(
     db: State<'_, Database>,
 ) -> Result<Vec<ProcessTemplateDTO>, String> {
-    let db_path = db.path().to_string_lossy().to_string();
+    let db_path = database_path(&db)?;
 
     let ontology = ProcessOntology::new(db_path)
         .map_err(|e| format!("Failed to create process ontology: {}", e))?;
@@ -37,7 +37,7 @@ pub async fn get_outcome_tracking(
     goal_id: String,
     db: State<'_, Database>,
 ) -> Result<Vec<TrackedOutcomeDTO>, String> {
-    let db_path = db.path().to_string_lossy().to_string();
+    let db_path = database_path(&db)?;
 
     let tracker = OutcomeTracker::new(db_path)
         .map_err(|e| format!("Failed to create outcome tracker: {}", e))?;
@@ -66,7 +66,7 @@ pub async fn get_outcome_tracking(
 pub async fn get_process_success_rates(
     db: State<'_, Database>,
 ) -> Result<HashMap<String, f64>, String> {
-    let db_path = db.path().to_string_lossy().to_string();
+    let db_path = database_path(&db)?;
 
     let tracker = OutcomeTracker::new(db_path)
         .map_err(|e| format!("Failed to create outcome tracker: {}", e))?;
@@ -83,13 +83,24 @@ pub async fn get_process_success_rates(
     Ok(rates)
 }
 
+fn database_path(db: &Database) -> Result<String, String> {
+    let connection = db.get_connection();
+    let conn = connection
+        .lock()
+        .map_err(|e| format!("Failed to lock database: {}", e))?;
+
+    conn.path()
+        .map(|p| p.to_string())
+        .ok_or_else(|| "Database path not available".to_string())
+}
+
 /// Get best practices for a specific process type
 #[tauri::command]
 pub async fn get_best_practices(
     process_type: String,
     db: State<'_, Database>,
 ) -> Result<Vec<String>, String> {
-    let db_path = db.path().to_string_lossy().to_string();
+    let db_path = database_path(&db)?;
 
     let ontology = ProcessOntology::new(db_path)
         .map_err(|e| format!("Failed to create process ontology: {}", e))?;
@@ -117,7 +128,7 @@ pub async fn get_best_practices(
 pub async fn get_process_statistics(
     db: State<'_, Database>,
 ) -> Result<Vec<ProcessStatDTO>, String> {
-    let db_path = db.path().to_string_lossy().to_string();
+    let db_path = database_path(&db)?;
 
     let tracker = OutcomeTracker::new(db_path)
         .map_err(|e| format!("Failed to create outcome tracker: {}", e))?;

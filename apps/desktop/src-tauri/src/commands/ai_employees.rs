@@ -6,7 +6,7 @@ use tauri::State;
 
 /// State wrapper for AI Employee system
 pub struct AIEmployeeState {
-    pub executor: Arc<Mutex<executor::AIEmployeeExecutor>>,
+    pub executor: Arc<executor::AIEmployeeExecutor>,
     pub marketplace: Arc<Mutex<marketplace::EmployeeMarketplace>>,
     pub registry: Arc<Mutex<registry::AIEmployeeRegistry>>,
 }
@@ -75,8 +75,8 @@ pub async fn ai_employees_hire(
     user_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<String, String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .hire(&employee_id, &user_id)
         .await
         .map_err(|e| e.to_string())
@@ -88,8 +88,8 @@ pub async fn ai_employees_fire(
     user_employee_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<(), String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .fire(&user_employee_id)
         .await
         .map_err(|e| e.to_string())
@@ -115,8 +115,8 @@ pub async fn ai_employees_assign_task(
     input_data: HashMap<String, serde_json::Value>,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<EmployeeTask, String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .assign_task(&user_employee_id, task_type, input_data)
         .await
         .map_err(|e| e.to_string())
@@ -128,8 +128,8 @@ pub async fn ai_employees_execute_task(
     task_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<TaskResult, String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .execute_task(&task_id)
         .await
         .map_err(|e| e.to_string())
@@ -141,8 +141,8 @@ pub async fn ai_employees_get_task_status(
     task_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<EmployeeTask, String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .get_task_status(&task_id)
         .await
         .map_err(|e| e.to_string())
@@ -154,8 +154,8 @@ pub async fn ai_employees_list_tasks(
     user_employee_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<Vec<EmployeeTask>, String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .list_tasks(&user_employee_id)
         .await
         .map_err(|e| e.to_string())
@@ -167,8 +167,8 @@ pub async fn ai_employees_run_demo(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<DemoResult, String> {
-    let executor = state.executor.lock().map_err(|e| e.to_string())?;
-    executor
+    state
+        .executor
         .run_demo(&employee_id)
         .await
         .map_err(|e| e.to_string())

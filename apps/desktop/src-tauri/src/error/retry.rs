@@ -237,18 +237,71 @@ where
 }
 
 /// Conditional retry - only retry if condition is met
-pub async fn retry_if<F, Fut, T, C>(policy: &RetryPolicy, operation: F, condition: C) -> Result<T>
+pub async fn retry_if<F, Fut, T, C>(
+    policy: &RetryPolicy,
+    mut operation: F,
+    condition: C,
+) -> Result<T>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T>>,
     C: Fn(&AGIError) -> bool,
 {
-    let custom_policy = RetryPolicy {
-        retry_on: |e| (policy.retry_on)(e) && condition(e),
-        ..policy.clone()
-    };
+    let mut attempts = 0;
+    let mut last_error: Option<AGIError> = None;
 
-    retry_with_policy(&custom_policy, operation).await
+    let start_time = tokio::time::Instant::now();
+
+    while attempts < policy.max_attempts {
+        // Check timeout
+        if let Some(timeout) = policy.timeout {
+            if start_time.elapsed() > timeout {
+                warn!(
+                    "Operation timed out after {} attempts and {:?}",
+                    attempts,
+                    start_time.elapsed()
+                );
+                return Err(AGIError::TimeoutError(format!(
+                    "Operation timed out after {:?}",
+                    start_time.elapsed()
+                )));
+            }
+        }
+
+        attempts += 1;
+        debug!("Attempt {}/{}", attempts, policy.max_attempts);
+
+        match operation().await {
+            Ok(result) => {
+                if attempts > 1 {
+                    debug!("Operation succeeded on attempt {}", attempts);
+                }
+                return Ok(result);
+            }
+            Err(e) => {
+                warn!("Attempt {}/{} failed: {}", attempts, policy.max_attempts, e);
+
+                // Check if error is retryable using both policy and condition
+                if !(policy.retry_on)(&e) || !condition(&e) {
+                    warn!("Error is not retryable, aborting");
+                    return Err(e);
+                }
+
+                last_error = Some(e);
+
+                // Don't sleep on last attempt
+                if attempts < policy.max_attempts {
+                    let wait_time = policy.backoff.calculate(attempts - 1);
+                    debug!("Waiting {:?} before retry", wait_time);
+                    tokio::time::sleep(wait_time).await;
+                }
+            }
+        }
+    }
+
+    warn!("All {} retry attempts exhausted", policy.max_attempts);
+    Err(last_error
+        .unwrap_or_else(|| AGIError::FatalError("All retry attempts exhausted".to_string())))
 }
 
 #[cfg(test)]
