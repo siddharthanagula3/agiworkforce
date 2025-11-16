@@ -138,6 +138,8 @@ pub struct ChatSendMessageRequest {
     pub stream: Option<bool>,
     #[serde(default)]
     pub enable_tools: Option<bool>,
+    #[serde(default)]
+    pub conversation_mode: Option<String>, // "safe" or "full_control"
 }
 
 #[derive(Debug, Serialize)]
