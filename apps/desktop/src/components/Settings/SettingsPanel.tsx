@@ -10,6 +10,7 @@ import {
   Monitor,
   Shield,
   Download,
+  Users,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -27,6 +28,7 @@ import {
   createDefaultWindowPreferences,
 } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
+import { EmployeesPage } from '../../pages/EmployeesPage';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -196,7 +198,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           </div>
         ) : (
           <Tabs defaultValue="api-keys" className="mt-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
                 <Key className="h-4 w-4" />
                 API Keys
@@ -204,6 +206,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <TabsTrigger value="llm-config" className="flex items-center gap-2">
                 <Settings2 className="h-4 w-4" />
                 LLM Configuration
+              </TabsTrigger>
+              <TabsTrigger value="agent-library" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Agent Library
               </TabsTrigger>
               <TabsTrigger value="window" className="flex items-center gap-2">
                 <Monitor className="h-4 w-4" />
@@ -471,6 +477,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     </p>
                   </div>
                 </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="agent-library" className="space-y-6 pt-6">
+              <div className="h-[600px]">
+                <EmployeesPage />
               </div>
             </TabsContent>
 
