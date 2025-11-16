@@ -2,7 +2,7 @@
  * Code Chunker
  * Intelligent chunking of code files for embedding generation
  */
-use anyhow::{Context, Result};
+use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
 
@@ -29,7 +29,7 @@ pub struct CodeChunk {
     pub chunk_type: ChunkType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ChunkType {
     Function,
     Class,
@@ -271,7 +271,7 @@ impl CodeChunker {
                 }
             }
 
-            if let Some((start_idx, ref mut chunk_lines, chunk_type)) = current_chunk {
+            if let Some((start_idx, ref mut chunk_lines, ref chunk_type)) = current_chunk {
                 chunk_lines.push(*line);
                 brace_depth += count_braces(line);
 
@@ -283,7 +283,7 @@ impl CodeChunker {
                         language: language.to_string(),
                         start_line: (start_idx + 1) as u32,
                         end_line: (line_idx + 1) as u32,
-                        chunk_type,
+                        chunk_type: *chunk_type,
                     });
 
                     current_chunk = None;
@@ -343,7 +343,9 @@ impl CodeChunker {
                 }
             }
 
-            if let Some((start_idx, ref mut chunk_lines, chunk_type, base_indent)) = current_chunk {
+            if let Some((start_idx, ref mut chunk_lines, ref chunk_type, base_indent)) =
+                current_chunk
+            {
                 // End chunk if we encounter a line at or below the base indentation level
                 if !line.trim().is_empty() && indent_level <= base_indent && line_idx > start_idx {
                     chunks.push(CodeChunk {
@@ -353,7 +355,7 @@ impl CodeChunker {
                         language: language.to_string(),
                         start_line: (start_idx + 1) as u32,
                         end_line: line_idx as u32,
-                        chunk_type,
+                        chunk_type: *chunk_type,
                     });
 
                     current_chunk = None;
@@ -423,7 +425,7 @@ impl CodeChunker {
                 }
             }
 
-            if let Some((start_idx, ref mut chunk_lines, chunk_type)) = current_chunk {
+            if let Some((start_idx, ref mut chunk_lines, ref chunk_type)) = current_chunk {
                 chunk_lines.push(*line);
                 brace_depth += count_braces(line);
 
@@ -435,7 +437,7 @@ impl CodeChunker {
                         language: language.to_string(),
                         start_line: (start_idx + 1) as u32,
                         end_line: (line_idx + 1) as u32,
-                        chunk_type,
+                        chunk_type: *chunk_type,
                     });
 
                     current_chunk = None;

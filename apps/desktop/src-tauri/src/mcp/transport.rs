@@ -3,10 +3,7 @@
 // Manages child processes for MCP servers and handles newline-delimited JSON-RPC messages
 // over stdin/stdout according to the MCP specification.
 
-use super::protocol::{
-    ErrorObject, JsonRpcError, JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId,
-    INTERNAL_ERROR,
-};
+use super::protocol::{JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId};
 use crate::mcp::{McpError, McpResult};
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -28,7 +25,7 @@ pub struct StdioTransport {
     /// Channel for sending messages to the server
     tx: mpsc::UnboundedSender<JsonRpcRequest>,
     /// Shutdown signal
-    shutdown_tx: Option<oneshot::Sender<()>>,
+    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
 }
 
 impl StdioTransport {
@@ -179,7 +176,7 @@ impl StdioTransport {
             request_id: Arc::new(AtomicU64::new(1)),
             pending,
             tx,
-            shutdown_tx: Some(shutdown_tx),
+            shutdown_tx: Mutex::new(Some(shutdown_tx)),
         })
     }
 
@@ -249,17 +246,20 @@ impl StdioTransport {
     }
 
     /// Shutdown the transport
-    pub async fn shutdown(&mut self) -> McpResult<()> {
+    pub async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Transport] Shutting down");
 
         // Send shutdown signal
-        if let Some(tx) = self.shutdown_tx.take() {
+        if let Some(tx) = self.shutdown_tx.lock().take() {
             let _ = tx.send(());
         }
 
         // Kill child process
-        let mut child = self.child.lock();
-        if let Some(mut c) = child.take() {
+        let child = {
+            let mut guard = self.child.lock();
+            guard.take()
+        };
+        if let Some(mut c) = child {
             match c.kill().await {
                 Ok(_) => {
                     tracing::info!("[MCP Transport] Process killed");

@@ -106,7 +106,7 @@ impl RewardSystem {
     pub fn get_user_rewards(&self, user_id: &str) -> Vec<Reward> {
         let conn = self.db.lock().unwrap();
 
-        let mut stmt = conn
+        let stmt = conn
             .prepare("SELECT reward_id FROM user_rewards WHERE user_id = ?1")
             .ok();
 

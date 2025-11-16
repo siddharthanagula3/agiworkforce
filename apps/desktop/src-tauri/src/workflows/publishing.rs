@@ -243,9 +243,11 @@ impl WorkflowPublisher {
         workflow.created_at = now;
         workflow.updated_at = now;
 
-        // Re-serialize workflow
-        let cloned_json = serde_json::to_string(&workflow)
-            .map_err(|e| format!("Failed to serialize cloned workflow: {}", e))?;
+        // Serialize individual fields for database insertion (before serializing entire workflow)
+        let nodes_json = serde_json::to_string(&workflow.nodes).unwrap_or_default();
+        let edges_json = serde_json::to_string(&workflow.edges).unwrap_or_default();
+        let triggers_json = serde_json::to_string(&workflow.triggers).unwrap_or_default();
+        let metadata_json = serde_json::to_string(&workflow.metadata).unwrap_or_default();
 
         // Insert into workflow_definitions
         conn.execute(
@@ -256,10 +258,10 @@ impl WorkflowPublisher {
                 &workflow.user_id,
                 &workflow.name,
                 &workflow.description,
-                &serde_json::to_string(&workflow.nodes).unwrap_or_default(),
-                &serde_json::to_string(&workflow.edges).unwrap_or_default(),
-                &serde_json::to_string(&workflow.triggers).unwrap_or_default(),
-                &serde_json::to_string(&workflow.metadata).unwrap_or_default(),
+                &nodes_json,
+                &edges_json,
+                &triggers_json,
+                &metadata_json,
                 workflow.created_at,
                 workflow.updated_at,
             ],

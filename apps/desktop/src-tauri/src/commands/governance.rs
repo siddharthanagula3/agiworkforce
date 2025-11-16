@@ -3,14 +3,10 @@ use crate::error::Result;
 use crate::security::audit_logger::AuditFilters;
 use crate::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
-    ApprovalRequest, ApprovalStatistics, ApprovalStatus, ApprovalWorkflow, AuditEvent,
-    AuditEventType, AuditIntegrityReport, AuditStatus, EnhancedAuditLogger,
+    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent, AuditIntegrityReport,
+    AuditStatus, EnhancedAuditLogger,
 };
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::State;
-use uuid::Uuid;
 
 /// Get audit events with filtering
 #[tauri::command]
@@ -90,6 +86,7 @@ pub async fn log_workflow_execution(
 /// Create an approval request
 #[tauri::command]
 pub async fn create_approval_request(
+    app_handle: tauri::AppHandle,
     requester_id: String,
     team_id: Option<String>,
     action: ApprovalAction,
@@ -109,14 +106,42 @@ pub async fn create_approval_request(
         _ => crate::security::ApprovalRiskLevel::Medium,
     };
 
-    workflow.create_approval_request(
+    let request_id = workflow.create_approval_request(
         requester_id,
         team_id,
-        action,
+        action.clone(),
         risk,
-        justification,
+        justification.clone(),
         timeout_minutes,
-    )
+    )?;
+
+    // Emit frontend event for approval request
+    let created_at = chrono::Utc::now();
+    let approval_payload = crate::events::ApprovalRequestPayload {
+        id: request_id.clone(),
+        request_type: action.action_type.clone(),
+        description: format!(
+            "{} on {}",
+            action.action_type,
+            action
+                .resource_id
+                .as_ref()
+                .unwrap_or(&"unknown resource".to_string())
+        ),
+        impact: justification.clone(),
+        risk_level: risk_level.to_lowercase(),
+        status: "pending".to_string(),
+        created_at: created_at.to_rfc3339(),
+        approved_at: None,
+        rejected_at: None,
+        rejection_reason: None,
+        timeout_seconds: Some(timeout_minutes * 60),
+        details: Some(serde_json::to_value(&action).unwrap_or(serde_json::json!({}))),
+    };
+
+    crate::events::emit_approval_request(&app_handle, approval_payload);
+
+    Ok(request_id)
 }
 
 /// Get pending approval requests

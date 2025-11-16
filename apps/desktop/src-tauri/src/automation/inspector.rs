@@ -1,12 +1,8 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use windows::Win32::Foundation::{BOOL, POINT};
-use windows::Win32::UI::Accessibility::{
-    IUIAutomationElement, UIA_AutomationIdPropertyId, UIA_ClassNamePropertyId,
-    UIA_ControlTypePropertyId, UIA_HasKeyboardFocusPropertyId, UIA_IsEnabledPropertyId,
-    UIA_IsOffscreenPropertyId, UIA_NamePropertyId,
-};
+use windows::Win32::Foundation::POINT;
+use windows::Win32::UI::Accessibility::IUIAutomationElement;
 
 use super::uia::{read_bstr, BoundingRectangle, UIAutomationService};
 
@@ -136,14 +132,8 @@ impl InspectorService {
         let element = self.uia.get_element(element_id)?;
         let mut selectors = Vec::new();
 
-        // Try automation ID (best selector)
-        if let Some(automation_id) = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_AutomationIdPropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        }) {
+        // Try automation ID (best selector) using direct property where available
+        if let Some(automation_id) = read_bstr(|| unsafe { element.CurrentAutomationId().ok() }) {
             if !automation_id.is_empty() {
                 selectors.push(ElementSelector {
                     selector_type: SelectorType::AutomationId,
@@ -153,13 +143,7 @@ impl InspectorService {
         }
 
         // Try name (second best)
-        if let Some(name) = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_NamePropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        }) {
+        if let Some(name) = read_bstr(|| unsafe { element.CurrentName().ok() }) {
             if !name.is_empty() {
                 selectors.push(ElementSelector {
                     selector_type: SelectorType::Name,
@@ -169,13 +153,7 @@ impl InspectorService {
         }
 
         // Try class name (less reliable)
-        if let Some(class_name) = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_ClassNamePropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        }) {
+        if let Some(class_name) = read_bstr(|| unsafe { element.CurrentClassName().ok() }) {
             if !class_name.is_empty() {
                 selectors.push(ElementSelector {
                     selector_type: SelectorType::ClassName,
@@ -217,67 +195,40 @@ impl InspectorService {
     fn get_detailed_info(&self, element: &IUIAutomationElement) -> Result<DetailedElementInfo> {
         let id = self.uia.register_element(element)?;
 
-        let name = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_NamePropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        })
-        .unwrap_or_default();
+        let name = read_bstr(|| unsafe { element.CurrentName().ok() }).unwrap_or_default();
 
-        let class_name = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_ClassNamePropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        })
-        .unwrap_or_default();
+        let class_name =
+            read_bstr(|| unsafe { element.CurrentClassName().ok() }).unwrap_or_default();
 
         let control_type = unsafe {
             element
-                .GetCurrentPropertyValue(UIA_ControlTypePropertyId)
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .map(|id: i32| format!("ControlType_{}", id))
-                .unwrap_or_else(|| "Unknown".to_string())
+                .CurrentControlType()
+                .map(|id| format!("ControlType_{:?}", id))
+                .unwrap_or_else(|_| "Unknown".to_string())
         };
 
-        let automation_id = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_AutomationIdPropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        });
+        let automation_id = read_bstr(|| unsafe { element.CurrentAutomationId().ok() });
 
         let bounding_rect = self.uia.bounding_rect(&id).ok().flatten();
 
         let is_enabled = unsafe {
             element
-                .GetCurrentPropertyValue(UIA_IsEnabledPropertyId)
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .map(|b: BOOL| b.as_bool())
+                .CurrentIsEnabled()
+                .map(|b| b.as_bool())
                 .unwrap_or(false)
         };
 
         let is_offscreen = unsafe {
             element
-                .GetCurrentPropertyValue(UIA_IsOffscreenPropertyId)
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .map(|b: BOOL| b.as_bool())
+                .CurrentIsOffscreen()
+                .map(|b| b.as_bool())
                 .unwrap_or(false)
         };
 
         let has_keyboard_focus = unsafe {
             element
-                .GetCurrentPropertyValue(UIA_HasKeyboardFocusPropertyId)
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .map(|b: BOOL| b.as_bool())
+                .CurrentHasKeyboardFocus()
+                .map(|b| b.as_bool())
                 .unwrap_or(false)
         };
 
@@ -317,7 +268,7 @@ impl InspectorService {
 
     /// Get parent element
     fn get_parent(&self, element: &IUIAutomationElement) -> Result<BasicElementInfo> {
-        let condition = unsafe {
+        let _condition = unsafe {
             self.uia
                 .automation()
                 .CreateTrueCondition()
@@ -327,8 +278,10 @@ impl InspectorService {
         let parent = unsafe {
             self.uia
                 .automation()
-                .GetParentElementBuildCache(element, &condition)
-                .map_err(|err| anyhow!("GetParentElementBuildCache failed: {err:?}"))?
+                .ControlViewWalker()
+                .map_err(|err| anyhow!("ControlViewWalker failed: {err:?}"))?
+                .GetParentElement(element)
+                .map_err(|err| anyhow!("GetParentElement failed: {err:?}"))?
         };
 
         self.get_basic_info(&parent)
@@ -336,7 +289,7 @@ impl InspectorService {
 
     /// Get children elements
     fn get_children(&self, element: &IUIAutomationElement) -> Result<Vec<BasicElementInfo>> {
-        let condition = unsafe {
+        let _condition = unsafe {
             self.uia
                 .automation()
                 .CreateTrueCondition()
@@ -347,7 +300,7 @@ impl InspectorService {
             element
                 .FindAll(
                     windows::Win32::UI::Accessibility::TreeScope_Children,
-                    &condition,
+                    &_condition,
                 )
                 .map_err(|err| anyhow!("FindAll children failed: {err:?}"))?
         };
@@ -370,31 +323,16 @@ impl InspectorService {
     fn get_basic_info(&self, element: &IUIAutomationElement) -> Result<BasicElementInfo> {
         let id = self.uia.register_element(element)?;
 
-        let name = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_NamePropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        })
-        .unwrap_or_default();
+        let name = read_bstr(|| unsafe { element.CurrentName().ok() }).unwrap_or_default();
 
-        let class_name = read_bstr(|| unsafe {
-            element
-                .GetCurrentPropertyValue(UIA_ClassNamePropertyId)
-                .ok()?
-                .try_into()
-                .ok()
-        })
-        .unwrap_or_default();
+        let class_name =
+            read_bstr(|| unsafe { element.CurrentClassName().ok() }).unwrap_or_default();
 
         let control_type = unsafe {
             element
-                .GetCurrentPropertyValue(UIA_ControlTypePropertyId)
-                .ok()
-                .and_then(|v| v.try_into().ok())
-                .map(|id: i32| format!("ControlType_{}", id))
-                .unwrap_or_else(|| "Unknown".to_string())
+                .CurrentControlType()
+                .map(|id| format!("ControlType_{:?}", id))
+                .unwrap_or_else(|_| "Unknown".to_string())
         };
 
         Ok(BasicElementInfo {

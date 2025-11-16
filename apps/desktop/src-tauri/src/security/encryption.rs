@@ -75,6 +75,7 @@ pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, St
     use aes_gcm::aead::rand_core::RngCore;
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce_bytes);
+    #[allow(deprecated)]
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
@@ -99,6 +100,7 @@ pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String,
         .decode(&encrypted.nonce)
         .map_err(|e| format!("Failed to decode nonce: {}", e))?;
 
+    #[allow(deprecated)]
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let plaintext = cipher

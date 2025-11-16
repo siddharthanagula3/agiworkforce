@@ -24,6 +24,7 @@ pub struct AGICore {
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
     stop_signal: Arc<Mutex<bool>>,
+    pause_signal: Arc<Mutex<bool>>,
     pub(crate) app_handle: Option<tauri::AppHandle>,
     process_reasoning: Option<Arc<ProcessReasoning>>,
     process_ontology: Option<Arc<ProcessOntology>>,
@@ -77,11 +78,20 @@ impl AGICore {
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(Mutex::new(false)),
+            pause_signal: Arc::new(Mutex::new(false)),
             app_handle,
             process_reasoning: None,
             process_ontology: None,
             outcome_tracker: None,
         })
+    }
+
+    pub fn resource_manager(&self) -> Arc<ResourceManager> {
+        Arc::clone(&self.resource_manager)
+    }
+
+    pub fn knowledge_base(&self) -> Arc<KnowledgeBase> {
+        Arc::clone(&self.knowledge_base)
     }
 
     /// Create AGI Core with process reasoning and outcome tracking enabled
@@ -145,6 +155,7 @@ impl AGICore {
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(Mutex::new(false)),
+            pause_signal: Arc::new(Mutex::new(false)),
             app_handle,
             process_reasoning: Some(process_reasoning),
             process_ontology: Some(process_ontology),
@@ -350,8 +361,8 @@ impl AGICore {
         sandbox_manager.cleanup_all().await?;
 
         // Get best result
-        let best_result = comparator
-            .get_best_result(scored_results.clone())
+        let best_result = scored_results
+            .first()
             .ok_or_else(|| anyhow!("No valid results from parallel execution"))?;
 
         // Emit best result event
@@ -377,7 +388,7 @@ impl AGICore {
             }),
         );
 
-        Ok(best_result)
+        Ok(best_result.clone())
     }
 
     /// Process all active goals
@@ -602,6 +613,7 @@ impl AGICore {
             active_goals: self.active_goals.clone(),
             execution_contexts: self.execution_contexts.clone(),
             stop_signal: self.stop_signal.clone(),
+            pause_signal: self.pause_signal.clone(),
             app_handle: None, // Don't clone app handle (not Send) - events will be emitted from main thread
             process_reasoning: self.process_reasoning.clone(),
             process_ontology: self.process_ontology.clone(),
@@ -614,6 +626,25 @@ impl AGICore {
         if let Ok(mut stop) = self.stop_signal.lock() {
             *stop = true;
         }
+    }
+
+    /// Pause the AGI core
+    pub fn pause(&self) {
+        if let Ok(mut pause) = self.pause_signal.lock() {
+            *pause = true;
+        }
+    }
+
+    /// Resume the AGI core
+    pub fn resume(&self) {
+        if let Ok(mut pause) = self.pause_signal.lock() {
+            *pause = false;
+        }
+    }
+
+    /// Check if the AGI core is paused
+    pub fn is_paused(&self) -> bool {
+        self.pause_signal.lock().map(|p| *p).unwrap_or(false)
     }
 
     /// Get current capabilities

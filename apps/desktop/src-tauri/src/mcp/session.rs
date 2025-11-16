@@ -19,7 +19,7 @@ pub struct McpSession {
     /// Server name
     name: String,
     /// Transport layer
-    transport: Arc<RwLock<StdioTransport>>,
+    transport: Arc<StdioTransport>,
     /// Server info from initialization
     server_info: Option<Implementation>,
     /// Server capabilities
@@ -38,7 +38,7 @@ impl McpSession {
 
         let session = Self {
             name,
-            transport: Arc::new(RwLock::new(transport)),
+            transport: Arc::new(transport),
             server_info: None,
             capabilities: None,
             tools: Arc::new(RwLock::new(Vec::new())),
@@ -62,7 +62,6 @@ impl McpSession {
 
         let response = self
             .transport
-            .read()
             .send_request(
                 "initialize".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -83,7 +82,6 @@ impl McpSession {
 
         // Send initialized notification
         self.transport
-            .read()
             .send_notification("notifications/initialized".to_string(), None);
 
         Ok(result)
@@ -95,7 +93,6 @@ impl McpSession {
 
         let response = self
             .transport
-            .read()
             .send_request("tools/list".to_string(), None)
             .await?;
 
@@ -135,7 +132,6 @@ impl McpSession {
 
         let response = self
             .transport
-            .read()
             .send_request(
                 "tools/call".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -162,7 +158,6 @@ impl McpSession {
 
         let response = self
             .transport
-            .read()
             .send_request(
                 "resources/list".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -188,7 +183,6 @@ impl McpSession {
 
         let response = self
             .transport
-            .read()
             .send_request(
                 "resources/read".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -217,13 +211,13 @@ impl McpSession {
 
     /// Check if session is alive
     pub fn is_alive(&self) -> bool {
-        self.transport.read().is_alive()
+        self.transport.is_alive()
     }
 
     /// Shutdown the session
-    pub async fn shutdown(&mut self) -> McpResult<()> {
+    pub async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Session] Shutting down session for '{}'", self.name);
-        self.transport.write().shutdown().await
+        self.transport.shutdown().await
     }
 }
 

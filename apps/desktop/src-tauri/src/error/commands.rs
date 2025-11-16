@@ -1,4 +1,5 @@
 use super::{ErrorContext, RecoveryManager};
+use crate::error::categorization::Categorizable;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

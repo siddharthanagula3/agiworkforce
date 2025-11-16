@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tauri::Emitter;
 use tokio::sync::Mutex as TokioMutex;
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 /// Agent state enumeration
@@ -136,12 +136,9 @@ impl Drop for UiGuard {
 
 /// Running agent instance
 struct AgentInstance {
-    id: String,
-    name: String,
     goal: Goal,
     core: AGICore,
     status: AgentStatus,
-    handle: Option<JoinHandle<Result<serde_json::Value>>>,
 }
 
 /// Agent Orchestrator - manages multiple concurrent agents
@@ -149,7 +146,7 @@ pub struct AgentOrchestrator {
     max_agents: usize,
     agents: Arc<TokioMutex<HashMap<String, AgentInstance>>>,
     resource_lock: ResourceLock,
-    knowledge_base: Arc<RwLock<KnowledgeBase>>,
+    knowledge_base: Arc<KnowledgeBase>,
     config: AGIConfig,
     router: Arc<TokioMutex<LLMRouter>>,
     automation: Arc<AutomationService>,
@@ -165,8 +162,8 @@ impl AgentOrchestrator {
         automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
-        // Create shared knowledge base with RwLock for thread-safe concurrent access
-        let knowledge_base = Arc::new(RwLock::new(KnowledgeBase::new(config.knowledge_memory_mb)?));
+        // Create shared knowledge base
+        let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
 
         Ok(Self {
             max_agents,
@@ -228,10 +225,7 @@ impl AgentOrchestrator {
         };
 
         // Store goal in shared knowledge base (with RwLock)
-        {
-            let kb = self.knowledge_base.write();
-            kb.add_goal(&goal).await?;
-        }
+        self.knowledge_base.add_goal(&goal).await?;
 
         // Emit agent spawned event
         if let Some(ref app) = self.app_handle {
@@ -246,12 +240,9 @@ impl AgentOrchestrator {
 
         // Create agent instance (task will be spawned when we submit the goal)
         let agent = AgentInstance {
-            id: agent_id.clone(),
-            name: agent_name,
             goal: goal.clone(),
             core,
             status,
-            handle: None,
         };
 
         agents.insert(agent_id.clone(), agent);
@@ -328,6 +319,11 @@ impl AgentOrchestrator {
         statuses
     }
 
+    /// Alias for list_active_agents (for backward compatibility)
+    pub async fn list_agents(&self) -> Result<Vec<AgentStatus>> {
+        Ok(self.list_active_agents().await)
+    }
+
     /// Cancel a specific agent
     pub async fn cancel_agent(&self, id: &str) -> Result<()> {
         let mut agents = self.agents.lock().await;
@@ -352,6 +348,82 @@ impl AgentOrchestrator {
             if let Some(ref app) = self.app_handle {
                 let _ = app.emit(
                     "agent:cancelled",
+                    serde_json::json!({
+                        "agent_id": id,
+                    }),
+                );
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!("Agent {} not found", id))
+        }
+    }
+
+    /// Pause a specific agent
+    pub async fn pause_agent(&self, id: &str) -> Result<()> {
+        let mut agents = self.agents.lock().await;
+
+        if let Some(agent) = agents.get_mut(id) {
+            // Check if agent is in a pausable state
+            if agent.status.status != AgentState::Running {
+                return Err(anyhow!(
+                    "Agent {} cannot be paused (current state: {:?})",
+                    id,
+                    agent.status.status
+                ));
+            }
+
+            tracing::info!("[Orchestrator] Pausing agent {}", id);
+
+            // Pause the agent's core
+            agent.core.pause();
+
+            // Update status
+            agent.status.status = AgentState::Paused;
+
+            // Emit paused event
+            if let Some(ref app) = self.app_handle {
+                let _ = app.emit(
+                    "agent:paused",
+                    serde_json::json!({
+                        "agent_id": id,
+                    }),
+                );
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!("Agent {} not found", id))
+        }
+    }
+
+    /// Resume a paused agent
+    pub async fn resume_agent(&self, id: &str) -> Result<()> {
+        let mut agents = self.agents.lock().await;
+
+        if let Some(agent) = agents.get_mut(id) {
+            // Check if agent is paused
+            if agent.status.status != AgentState::Paused {
+                return Err(anyhow!(
+                    "Agent {} is not paused (current state: {:?})",
+                    id,
+                    agent.status.status
+                ));
+            }
+
+            tracing::info!("[Orchestrator] Resuming agent {}", id);
+
+            // Resume the agent's core
+            agent.core.resume();
+
+            // Update status
+            agent.status.status = AgentState::Running;
+
+            // Emit resumed event
+            if let Some(ref app) = self.app_handle {
+                let _ = app.emit(
+                    "agent:resumed",
                     serde_json::json!({
                         "agent_id": id,
                     }),
@@ -433,7 +505,7 @@ impl AgentOrchestrator {
     }
 
     /// Get shared knowledge base (read-only access)
-    pub fn get_knowledge_base(&self) -> Arc<RwLock<KnowledgeBase>> {
+    pub fn get_knowledge_base(&self) -> Arc<KnowledgeBase> {
         self.knowledge_base.clone()
     }
 

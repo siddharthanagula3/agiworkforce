@@ -157,7 +157,7 @@ impl GoogleDriveClient {
                     path: item.full_path(&folder_path),
                     mime_type: item.mime_type.clone(),
                     size: item.size.as_ref().and_then(|s| s.parse::<u64>().ok()),
-                    modified_at: item._modified_time.as_ref().map(|value| value.to_string()),
+                    modified_at: item.modified_time.as_ref().map(|value| value.to_string()),
                     is_folder: item.is_folder(),
                     share_link: item.web_view_link.clone(),
                 });
@@ -397,6 +397,12 @@ impl GoogleDriveClient {
             .json()
             .await
             .map_err(|e| Error::Other(format!("Failed to parse share metadata: {}", e)))?;
+
+        tracing::debug!(
+            "Google Drive share metadata for {} modified_at={:?}",
+            item.id,
+            payload.modified_time
+        );
 
         Ok(ShareLink {
             url: payload
@@ -709,7 +715,7 @@ struct DriveFileItem {
     #[serde(rename = "mimeType")]
     mime_type: Option<String>,
     #[serde(rename = "modifiedTime")]
-    _modified_time: Option<DateTime<Utc>>,
+    modified_time: Option<DateTime<Utc>>,
     size: Option<String>,
     parents: Option<Vec<String>>,
     #[serde(rename = "webViewLink")]
@@ -743,7 +749,7 @@ struct ShareMetadata {
     #[serde(rename = "webContentLink")]
     web_content_link: Option<String>,
     #[serde(rename = "modifiedTime")]
-    _modified_time: Option<DateTime<Utc>>,
+    modified_time: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize)]

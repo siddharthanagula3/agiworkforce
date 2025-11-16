@@ -182,7 +182,7 @@ impl PromptInjectionDetector {
 
     /// Check for known attack patterns
     fn check_patterns(&self, input: &str) -> (f64, Vec<String>) {
-        let mut max_risk = 0.0;
+        let mut max_risk: f64 = 0.0;
         let mut detected = Vec::new();
 
         for (pattern, description, weight) in &self.patterns {
@@ -198,7 +198,7 @@ impl PromptInjectionDetector {
 
     /// Check structural anomalies
     fn check_structure(&self, input: &str) -> f64 {
-        let mut risk = 0.0;
+        let mut risk: f64 = 0.0;
 
         // Check for unusual character frequency
         let special_chars = input
@@ -223,21 +223,17 @@ impl PromptInjectionDetector {
 
         // Check for repeating patterns (might be obfuscation)
         if input.len() > 100 {
-            let chunks: Vec<&str> = input
-                .chars()
-                .collect::<Vec<_>>()
+            let chars: Vec<char> = input.chars().collect();
+            let chunk_strings: Vec<String> = chars
                 .chunks(20)
                 .map(|chunk| chunk.iter().collect::<String>())
-                .collect::<Vec<String>>()
-                .iter()
-                .map(|s| s.as_str())
                 .collect();
 
-            let unique_chunks = chunks
+            let unique_chunks = chunk_strings
                 .iter()
                 .collect::<std::collections::HashSet<_>>()
                 .len();
-            let repetition_ratio = 1.0 - (unique_chunks as f64 / chunks.len() as f64);
+            let repetition_ratio = 1.0 - (unique_chunks as f64 / chunk_strings.len() as f64);
 
             if repetition_ratio > 0.5 {
                 risk += 0.25;

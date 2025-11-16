@@ -93,7 +93,7 @@ impl EmployeeMarketplace {
 
         let mut result = Vec::new();
         for emp in employees {
-            if let Ok(mut e) = emp {
+            if let Ok(e) = emp {
                 // Apply filters that can't be done in SQL easily
                 let mut include = true;
 
@@ -220,8 +220,8 @@ impl EmployeeMarketplace {
                 format!("{:?}", employee.role),
                 employee.description,
                 capabilities_json,
-                employee.estimated_time_saved as i64,
-                employee.estimated_cost_saved,
+                employee.estimated_time_saved_per_run as i64,
+                employee.estimated_cost_saved_per_run,
                 demo_json,
                 integrations_json,
                 employee.template_id,
@@ -236,6 +236,153 @@ impl EmployeeMarketplace {
         .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         Ok(employee.id)
+    }
+
+    /// Update an existing employee configuration
+    pub fn update_employee(&self, employee_id: &str, employee: AIEmployee) -> Result<()> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
+
+        // First verify the employee exists
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ai_employees WHERE id = ?1",
+                [employee_id],
+                |row| row.get::<_, i64>(0).map(|count| count > 0),
+            )
+            .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
+
+        if !exists {
+            return Err(EmployeeError::NotFound(format!(
+                "Employee {} not found",
+                employee_id
+            )));
+        }
+
+        let capabilities_json = serde_json::to_string(&employee.capabilities).unwrap_or_default();
+        let demo_json = employee
+            .demo_workflow
+            .as_ref()
+            .and_then(|d| serde_json::to_string(d).ok());
+        let integrations_json =
+            serde_json::to_string(&employee.required_integrations).unwrap_or_default();
+        let tags_json = serde_json::to_string(&employee.tags).unwrap_or_default();
+
+        conn.execute(
+            "UPDATE ai_employees SET
+                name = ?2,
+                role = ?3,
+                description = ?4,
+                capabilities = ?5,
+                estimated_time_saved = ?6,
+                estimated_cost_saved = ?7,
+                demo_workflow = ?8,
+                required_integrations = ?9,
+                template_id = ?10,
+                tags = ?11
+             WHERE id = ?1",
+            rusqlite::params![
+                employee_id,
+                employee.name,
+                format!("{:?}", employee.role),
+                employee.description,
+                capabilities_json,
+                employee.estimated_time_saved_per_run as i64,
+                employee.estimated_cost_saved_per_run,
+                demo_json,
+                integrations_json,
+                employee.template_id,
+                tags_json,
+            ],
+        )
+        .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Delete a custom employee
+    pub fn delete_employee(&self, employee_id: &str) -> Result<()> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
+
+        // First verify the employee exists
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ai_employees WHERE id = ?1",
+                [employee_id],
+                |row| row.get::<_, i64>(0).map(|count| count > 0),
+            )
+            .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
+
+        if !exists {
+            return Err(EmployeeError::NotFound(format!(
+                "Employee {} not found",
+                employee_id
+            )));
+        }
+
+        // Delete the employee (this will cascade to user_employees if FK constraints are set)
+        conn.execute("DELETE FROM ai_employees WHERE id = ?1", [employee_id])
+            .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Publish employee to marketplace with metadata
+    pub fn publish_to_marketplace(
+        &self,
+        employee_id: &str,
+        creator_id: &str,
+        is_public: bool,
+    ) -> Result<String> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| EmployeeError::DatabaseError(format!("Failed to acquire lock: {}", e)))?;
+
+        // First verify the employee exists and belongs to the creator
+        let (exists, current_creator): (bool, Option<String>) = conn
+            .query_row(
+                "SELECT COUNT(*), creator_id FROM ai_employees WHERE id = ?1 GROUP BY creator_id",
+                [employee_id],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0).map(|count| count > 0).unwrap_or(false),
+                        row.get::<_, Option<String>>(1).ok().flatten(),
+                    ))
+                },
+            )
+            .unwrap_or((false, None));
+
+        if !exists {
+            return Err(EmployeeError::NotFound(format!(
+                "Employee {} not found",
+                employee_id
+            )));
+        }
+
+        // Verify the creator matches (if creator_id is set)
+        if let Some(current) = current_creator {
+            if current != creator_id {
+                return Err(EmployeeError::InvalidConfig(format!(
+                    "Employee {} does not belong to creator {}",
+                    employee_id, creator_id
+                )));
+            }
+        }
+
+        // Update the employee to be published (mark as verified if publishing publicly)
+        conn.execute(
+            "UPDATE ai_employees SET is_verified = ?2, creator_id = ?3 WHERE id = ?1",
+            rusqlite::params![employee_id, if is_public { 1 } else { 0 }, creator_id,],
+        )
+        .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
+
+        Ok(employee_id.to_string())
     }
 
     /// Get all employees by category
