@@ -620,8 +620,12 @@ pub async fn chat_send_message(
         match ToolRegistry::new() {
             Ok(registry) => {
                 let tool_registry = Arc::new(registry);
-                let tool_executor =
+                let mut tool_executor =
                     ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
+
+                // 🔒 Set conversation mode for security checks
+                tool_executor.set_conversation_mode(request.conversation_mode.clone());
+
                 let mut tool_defs = tool_executor.get_tool_definitions(None);
 
                 // ✅ Add MCP tools if available
