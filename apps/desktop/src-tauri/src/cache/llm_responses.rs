@@ -80,21 +80,29 @@ impl LLMResponseCache {
                 return Ok(None);
             }
 
-            // Update last_used_at
+            // Extract all data from row before dropping rows and stmt
+            let content: String = row.get(0)?;
+            let tokens: Option<i32> = row.get(1)?;
+            let cost: f64 = row.get(2)?;
+            let model: String = row.get(3)?;
+
+            // Now drop rows and stmt before updating
             drop(rows);
             drop(stmt);
+
+            // Update last_used_at
             conn.execute(
                 "UPDATE cache_entries SET last_used_at = CURRENT_TIMESTAMP WHERE cache_key = ?1",
                 [&cache_key],
             )?;
 
             let response = LLMResponse {
-                content: row.get(0)?,
-                tokens: row.get::<_, Option<i32>>(1)?.map(|t| t as u32),
+                content,
+                tokens: tokens.map(|t| t as u32),
                 prompt_tokens: None,
                 completion_tokens: None,
-                cost: row.get(2)?,
-                model: row.get(3)?,
+                cost: Some(cost),
+                model,
                 cached: true,
                 tool_calls: None,
                 finish_reason: None,

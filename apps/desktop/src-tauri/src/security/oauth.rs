@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// OAuth2 provider types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum OAuthProvider {
     Google,

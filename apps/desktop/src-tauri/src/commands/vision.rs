@@ -1,7 +1,8 @@
 use crate::commands::{AppDatabase, LLMState};
 use crate::router::{ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest};
+use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageFormat as ImgFormat};
+use image::{DynamicImage, GenericImageView, ImageFormat as ImgFormat};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use tauri::State;
@@ -86,6 +87,8 @@ pub async fn vision_send_message(
 
         // Optimize image (resize if too large, convert to efficient format)
         let optimized = optimize_image_for_vision(&image_data)?;
+        let optimized_size = optimized.data.len();
+        let optimized_format = optimized.format;
 
         // Determine detail level
         let detail = vision_img
@@ -98,7 +101,7 @@ pub async fn vision_send_message(
         // Convert to ImageInput format
         let image_input = ImageInput {
             data: optimized.data,
-            format: optimized.format,
+            format: optimized_format,
             detail: detail_enum,
         };
 
@@ -107,8 +110,8 @@ pub async fn vision_send_message(
         tracing::debug!(
             "Image {} optimized: {} bytes, format: {:?}, detail: {:?}",
             idx,
-            optimized.data.len(),
-            optimized.format,
+            optimized_size,
+            optimized_format,
             detail_enum
         );
     }
@@ -130,9 +133,14 @@ pub async fn vision_send_message(
         tool_call_id: None,
     }];
 
+    let selected_model = request
+        .model
+        .clone()
+        .unwrap_or_else(|| "gpt-4o".to_string());
+
     let llm_request = LLMRequest {
         messages,
-        model: request.model.unwrap_or_else(|| "gpt-4o".to_string()),
+        model: selected_model.clone(),
         temperature: request.temperature,
         max_tokens: request.max_tokens,
         stream: false,
@@ -523,9 +531,17 @@ fn optimize_image_for_vision(image: &DynamicImage) -> Result<OptimizedImage, Str
     let mut bytes: Vec<u8> = Vec::new();
     let mut cursor = Cursor::new(&mut bytes);
 
-    processed
-        .write_to(&mut cursor, img_format)
-        .map_err(|e| format!("Failed to encode image: {}", e))?;
+    if matches!(img_format, ImgFormat::Jpeg) {
+        // Explicitly control JPEG quality rather than relying on defaults
+        let mut encoder = JpegEncoder::new_with_quality(&mut cursor, JPEG_QUALITY);
+        encoder
+            .encode_image(&processed)
+            .map_err(|e| format!("Failed to encode image: {}", e))?;
+    } else {
+        processed
+            .write_to(&mut cursor, img_format)
+            .map_err(|e| format!("Failed to encode image: {}", e))?;
+    }
 
     tracing::debug!(
         "Optimized image: {} bytes, format: {:?}",

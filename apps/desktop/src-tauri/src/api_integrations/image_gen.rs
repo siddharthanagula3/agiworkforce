@@ -171,19 +171,25 @@ impl ImageGenerationClient {
             let dalle_response: DALLEResponse =
                 response.json().await.map_err(APIError::HttpError)?;
 
+            let mut revised_prompt = None;
             let images = dalle_response
                 .data
                 .into_iter()
-                .map(|img| GeneratedImage {
-                    url: img.url,
-                    b64_json: img.b64_json,
+                .map(|img| {
+                    if revised_prompt.is_none() && img.revised_prompt.is_some() {
+                        revised_prompt = img.revised_prompt.clone();
+                    }
+                    GeneratedImage {
+                        url: img.url,
+                        b64_json: img.b64_json,
+                    }
                 })
                 .collect();
 
             Ok(ImageGenerationResponse {
                 images,
                 created_at: dalle_response.created,
-                revised_prompt: None,
+                revised_prompt,
             })
         } else if response.status().as_u16() == 429 {
             Err(APIError::RateLimitExceeded("DALL-E".to_string()))

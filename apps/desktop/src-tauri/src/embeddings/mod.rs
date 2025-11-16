@@ -161,8 +161,10 @@ pub async fn generate_code_embeddings(
             chunk.end_line,
         );
 
+        let metadata_id = metadata.id.clone();
+
         similarity_guard
-            .add_embedding(&metadata.id, embedding, metadata)
+            .add_embedding(&metadata_id, embedding, metadata)
             .map_err(|e| format!("Failed to store embedding: {}", e))?;
 
         count += 1;
@@ -240,8 +242,10 @@ pub struct EmbeddingStats {
 pub async fn index_workspace(
     embedding_service: tauri::State<'_, Arc<Mutex<EmbeddingService>>>,
 ) -> Result<(), String> {
-    let service = embedding_service.lock().await;
-    let indexer = service.indexer();
+    let indexer = {
+        let service = embedding_service.lock().await;
+        service.indexer()
+    };
     let indexer_guard = indexer.lock().await;
 
     indexer_guard
@@ -255,8 +259,10 @@ pub async fn index_file(
     file_path: String,
     embedding_service: tauri::State<'_, Arc<Mutex<EmbeddingService>>>,
 ) -> Result<(), String> {
-    let service = embedding_service.lock().await;
-    let indexer = service.indexer();
+    let indexer = {
+        let service = embedding_service.lock().await;
+        service.indexer()
+    };
     let indexer_guard = indexer.lock().await;
 
     let path = PathBuf::from(file_path);
@@ -270,8 +276,10 @@ pub async fn index_file(
 pub async fn get_indexing_progress(
     embedding_service: tauri::State<'_, Arc<Mutex<EmbeddingService>>>,
 ) -> Result<IndexingProgress, String> {
-    let service = embedding_service.lock().await;
-    let indexer = service.indexer();
+    let indexer = {
+        let service = embedding_service.lock().await;
+        service.indexer()
+    };
     let indexer_guard = indexer.lock().await;
 
     Ok(indexer_guard.get_progress().await)
@@ -282,8 +290,10 @@ pub async fn on_file_changed(
     file_path: String,
     embedding_service: tauri::State<'_, Arc<Mutex<EmbeddingService>>>,
 ) -> Result<(), String> {
-    let service = embedding_service.lock().await;
-    let indexer = service.indexer();
+    let indexer = {
+        let service = embedding_service.lock().await;
+        service.indexer()
+    };
     let indexer_guard = indexer.lock().await;
 
     let path = PathBuf::from(file_path);
@@ -298,8 +308,10 @@ pub async fn on_file_deleted(
     file_path: String,
     embedding_service: tauri::State<'_, Arc<Mutex<EmbeddingService>>>,
 ) -> Result<(), String> {
-    let service = embedding_service.lock().await;
-    let indexer = service.indexer();
+    let indexer = {
+        let service = embedding_service.lock().await;
+        service.indexer()
+    };
     let indexer_guard = indexer.lock().await;
 
     let path = PathBuf::from(file_path);

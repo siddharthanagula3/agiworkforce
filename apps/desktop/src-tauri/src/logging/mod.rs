@@ -69,7 +69,6 @@ pub fn init_logging(config: LogConfig) -> Result<(), Box<dyn std::error::Error>>
             .json()
             .with_writer(file_appender)
             .with_span_events(FmtSpan::CLOSE)
-            .with_current_span(true)
             .with_thread_ids(true)
             .with_thread_names(true)
             .boxed();
@@ -79,7 +78,6 @@ pub fn init_logging(config: LogConfig) -> Result<(), Box<dyn std::error::Error>>
             .with_writer(file_appender)
             .with_ansi(false)
             .with_span_events(FmtSpan::CLOSE)
-            .with_current_span(true)
             .with_thread_ids(true)
             .with_thread_names(true)
             .boxed();

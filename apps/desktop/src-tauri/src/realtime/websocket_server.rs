@@ -31,6 +31,14 @@ impl RealtimeServer {
         }
     }
 
+    pub async fn broadcast_to_user(
+        &self,
+        user_id: &str,
+        event: RealtimeEvent,
+    ) -> Result<(), String> {
+        Self::broadcast_to_specific_user(user_id, event, &self.clients, &self.senders).await
+    }
+
     pub async fn start(&self, port: u16) -> Result<(), Box<dyn std::error::Error>> {
         let addr = format!("127.0.0.1:{}", port);
         let listener = TcpListener::bind(&addr).await?;
@@ -162,30 +170,30 @@ impl RealtimeServer {
 
             RealtimeEvent::GoalCreated { .. } => {
                 if let Some(team_id) = Self::get_client_team(client_id, clients).await {
-                    Self::broadcast_to_team(&team_id, event, clients, senders).await;
+                    Self::broadcast_to_team(&team_id, event.clone(), clients, senders).await;
                 }
             }
 
             RealtimeEvent::GoalUpdated { .. } => {
                 if let Some(team_id) = Self::get_client_team(client_id, clients).await {
-                    Self::broadcast_to_team(&team_id, event, clients, senders).await;
+                    Self::broadcast_to_team(&team_id, event.clone(), clients, senders).await;
                 }
             }
 
             RealtimeEvent::WorkflowUpdated { .. } => {
                 if let Some(team_id) = Self::get_client_team(client_id, clients).await {
-                    Self::broadcast_to_team(&team_id, event, clients, senders).await;
+                    Self::broadcast_to_team(&team_id, event.clone(), clients, senders).await;
                 }
             }
 
             RealtimeEvent::UserTyping { resource_id, .. } => {
-                Self::broadcast_to_resource(resource_id, event, clients, senders).await;
+                Self::broadcast_to_resource(resource_id, event.clone(), clients, senders).await;
             }
 
             RealtimeEvent::CursorMoved { .. } => {
                 // Broadcast to all clients in the same team
                 if let Some(team_id) = Self::get_client_team(client_id, clients).await {
-                    Self::broadcast_to_team(&team_id, event, clients, senders).await;
+                    Self::broadcast_to_team(&team_id, event.clone(), clients, senders).await;
                 }
             }
 
@@ -240,6 +248,37 @@ impl RealtimeServer {
                     let _ = sender.send(message.clone()).await;
                 }
             }
+        }
+    }
+
+    async fn broadcast_to_specific_user(
+        user_id: &str,
+        event: RealtimeEvent,
+        clients: &Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
+        senders: &Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
+    ) -> Result<(), String> {
+        let message = Message::Text(
+            serde_json::to_string(&event)
+                .map_err(|e| format!("Failed to serialize event: {}", e))?,
+        );
+
+        let clients_lock = clients.lock().await;
+        let mut senders_lock = senders.lock().await;
+        let mut delivered = false;
+
+        for (client_id, client) in clients_lock.iter() {
+            if client.user_id.as_deref() == Some(user_id) {
+                if let Some(sender) = senders_lock.get_mut(client_id) {
+                    let _ = sender.send(message.clone()).await;
+                    delivered = true;
+                }
+            }
+        }
+
+        if delivered {
+            Ok(())
+        } else {
+            Err(format!("User {} not connected", user_id))
         }
     }
 }

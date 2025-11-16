@@ -5,6 +5,7 @@ use super::{
     ToolError,
 };
 use std::sync::Arc;
+use tauri::Emitter;
 
 /// Example: Wrap tool execution with retry and recovery
 pub async fn execute_tool_with_recovery<F, Fut, T>(
