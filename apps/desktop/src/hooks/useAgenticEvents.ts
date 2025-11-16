@@ -179,6 +179,22 @@ export function useAgenticEvents() {
       );
       unlistenFns.current.push(unlistenApprovalRequired);
 
+      // Listen for approval:request events from tool_executor.rs
+      const unlistenApprovalRequest = await listen<any>('approval:request', (event) => {
+        console.log('[useAgenticEvents] Approval request:', event.payload);
+        // Map the payload to ApprovalRequest format
+        const approval = {
+          id: event.payload.id,
+          type: event.payload.type || 'terminal_command',
+          description: event.payload.description || 'Agent operation requires approval',
+          riskLevel: (event.payload.riskLevel || 'high') as 'low' | 'medium' | 'high',
+          details: event.payload.details || {},
+          impact: event.payload.impact,
+        };
+        addApprovalRequest(approval);
+      });
+      unlistenFns.current.push(unlistenApprovalRequest);
+
       const unlistenApprovalGranted = await listen<ApprovalRequestEvent>(
         'agi:approval_granted',
         (event) => {
