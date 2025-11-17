@@ -74,7 +74,7 @@ export function sanitizeHtml(
     });
   }
 
-  return DOMPurify.sanitize(html, config) as string;
+  return DOMPurify.sanitize(html, config) as unknown as string;
 }
 
 /**
@@ -148,7 +148,7 @@ export function sanitizeEmailHtml(html: string): string {
     }
   });
 
-  return DOMPurify.sanitize(html, config) as string;
+  return DOMPurify.sanitize(html, config) as unknown as string;
 }
 
 /**
@@ -206,7 +206,7 @@ export function sanitizeMarkdownHtml(html: string): string {
     }
   });
 
-  return DOMPurify.sanitize(html, config) as string;
+  return DOMPurify.sanitize(html, config) as unknown as string;
 }
 
 /**
