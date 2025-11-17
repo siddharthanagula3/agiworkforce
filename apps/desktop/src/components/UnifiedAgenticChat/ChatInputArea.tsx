@@ -38,7 +38,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Updated Nov 16, 2025: Added ref to track FileReader instances for cleanup
   const fileReadersRef = useRef<FileReader[]>([]);
 
-  const activeContext = useUnifiedChatStore((state) => state.activeContext);
+  const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
 
