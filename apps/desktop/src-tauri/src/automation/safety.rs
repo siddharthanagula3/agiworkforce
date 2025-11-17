@@ -221,7 +221,7 @@ mod tests {
         );
         assert_eq!(
             safety.get_risk_level(&ComputerAction::Scroll {
-                direction: super::super::types::ScrollDirection::Down,
+                direction: crate::automation::types::ScrollDirection::Down,
                 amount: 3
             }),
             1
