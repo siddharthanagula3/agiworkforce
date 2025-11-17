@@ -3,7 +3,6 @@
 // These commands are NOT used by the frontend, so they're safely disabled for now.
 // If needed in the future, they should be reimplemented using the agi/ module.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
