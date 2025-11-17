@@ -163,6 +163,7 @@ function toast({ ...props }: Toast) {
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState);
 
+  // Updated Nov 16, 2025: Fixed memory leak - removed state from dependencies
   React.useEffect(() => {
     listeners.push(setState);
     return () => {
@@ -171,7 +172,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, [state]);
+  }, []);
 
   return {
     ...state,
