@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo } from 'react';
+// Updated Nov 16, 2025: Added React.memo and performance optimizations
+import { useCallback, useEffect, useMemo, useRef, memo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
 import { TokenCounter } from './TokenCounter';
@@ -19,7 +20,7 @@ interface ChatInterfaceProps {
   className?: string;
 }
 
-export function ChatInterface({ className }: ChatInterfaceProps) {
+export const ChatInterface = memo(function ChatInterface({ className }: ChatInterfaceProps) {
   const {
     messages,
     loading,
@@ -204,4 +205,4 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
       />
     </div>
   );
-}
+});

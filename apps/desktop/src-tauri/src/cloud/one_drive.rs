@@ -22,7 +22,8 @@ pub struct OneDriveClient {
 }
 
 impl OneDriveClient {
-    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Self {
+    // Updated Nov 16, 2025: Return Result instead of panicking on HTTP client construction failure
+    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Result<Self> {
         let oauth_config = OAuth2Config {
             client_id,
             client_secret: Some(client_secret),
@@ -39,13 +40,13 @@ impl OneDriveClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(60))
             .build()
-            .expect("Failed to construct HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to construct HTTP client for OneDrive: {}", e)))?;
 
-        Self {
+        Ok(Self {
             client,
-            oauth_client: OAuth2Client::new(oauth_config),
+            oauth_client: OAuth2Client::new(oauth_config)?,
             token: None,
-        }
+        })
     }
 
     pub fn get_authorization_url(&self, state: &str) -> (String, Option<PkceChallenge>) {

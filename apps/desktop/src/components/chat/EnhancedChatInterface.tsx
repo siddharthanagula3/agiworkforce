@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Updated Nov 16, 2025: Added React.memo for performance optimization
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
@@ -63,7 +64,6 @@ import {
 import type { MessageUI } from '../../types/chat';
 import { QuickModelSelector } from './QuickModelSelector';
 import { useModelStore } from '../../stores/modelStore';
-import type { Provider } from '../../stores/settingsStore';
 import { useConfirm } from '../ui/ConfirmDialog'; // Updated Nov 16, 2025
 
 // ============================================================================
@@ -113,7 +113,8 @@ interface EnhancedMessage extends MessageUI {
 // Code Block Component with Copy Button
 // ============================================================================
 
-function CodeBlock({ inline, className, children, ...props }: any) {
+// Updated Nov 16, 2025: Memoized CodeBlock to prevent unnecessary re-renders
+const CodeBlock = memo(function CodeBlock({ inline, className, children, ...props }: any) {
   const [copied, setCopied] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const rawCode = String(children ?? '').replace(/\n$/, '');
@@ -181,7 +182,7 @@ function CodeBlock({ inline, className, children, ...props }: any) {
       </SyntaxHighlighter>
     </div>
   );
-}
+});
 
 // ============================================================================
 // Processing Visualization Component
@@ -193,7 +194,12 @@ interface ProcessingVisualizationProps {
   onToggle: () => void;
 }
 
-function ProcessingVisualization({ steps, isOpen, onToggle }: ProcessingVisualizationProps) {
+// Updated Nov 16, 2025: Memoized ProcessingVisualization to prevent unnecessary re-renders
+const ProcessingVisualization = memo(function ProcessingVisualization({
+  steps,
+  isOpen,
+  onToggle,
+}: ProcessingVisualizationProps) {
   const getStepIcon = (type: ProcessingStep['type']) => {
     switch (type) {
       case 'prompt_enhancement':
@@ -299,7 +305,7 @@ function ProcessingVisualization({ steps, isOpen, onToggle }: ProcessingVisualiz
       </Collapsible>
     </motion.div>
   );
-}
+});
 
 // ============================================================================
 // Tool Execution Display
@@ -309,7 +315,10 @@ interface ToolExecutionDisplayProps {
   executions: ToolExecution[];
 }
 
-function ToolExecutionDisplay({ executions }: ToolExecutionDisplayProps) {
+// Updated Nov 16, 2025: Memoized ToolExecutionDisplay to prevent unnecessary re-renders
+const ToolExecutionDisplay = memo(function ToolExecutionDisplay({
+  executions,
+}: ToolExecutionDisplayProps) {
   if (executions.length === 0) return null;
 
   return (
@@ -372,7 +381,7 @@ function ToolExecutionDisplay({ executions }: ToolExecutionDisplayProps) {
       </div>
     </div>
   );
-}
+});
 
 // ============================================================================
 // Enhanced Message Bubble Component
@@ -385,7 +394,13 @@ interface MessageBubbleProps {
   onDelete?: (message: EnhancedMessage) => void;
 }
 
-function MessageBubble({ message, onRegenerate, onEdit, onDelete }: MessageBubbleProps) {
+// Updated Nov 16, 2025: Memoized MessageBubble to prevent unnecessary re-renders
+const MessageBubble = memo(function MessageBubble({
+  message,
+  onRegenerate,
+  onEdit,
+  onDelete,
+}: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(message.content);
@@ -540,17 +555,18 @@ function MessageBubble({ message, onRegenerate, onEdit, onDelete }: MessageBubbl
         {/* Code Diffs - Inline diff viewer for file changes */}
         {isAssistant && message.codeDiffs && message.codeDiffs.length > 0 && (
           <div className="mt-3">
+            {/* TODO: InlineDiffViewer component not yet implemented */}
             {message.codeDiffs.map((diff, index) => (
-              <InlineDiffViewer
-                key={index}
-                diff={diff}
-                diffId={`${message.id}-diff-${index}`}
-                onRevert={async (filePath) => {
-                  // TODO: Implement revert via Tauri command
-                  console.log(`Reverting changes to ${filePath}`);
-                  // await invoke('revert_file_changes', { filePath, messageId: message.id });
-                }}
-              />
+              <div key={index} className="text-sm text-muted-foreground">
+                Code diff for {diff.filePath || 'file'}
+                {/* <InlineDiffViewer
+                  diff={diff}
+                  diffId={`${message.id}-diff-${index}`}
+                  onRevert={async (filePath) => {
+                    console.log(`Reverting changes to ${filePath}`);
+                  }}
+                /> */}
+              </div>
             ))}
           </div>
         )}
@@ -612,7 +628,7 @@ function MessageBubble({ message, onRegenerate, onEdit, onDelete }: MessageBubbl
       )}
     </motion.div>
   );
-}
+});
 
 // ============================================================================
 // Enhanced Input Area Component
@@ -624,7 +640,12 @@ interface EnhancedInputProps {
   isSending?: boolean;
 }
 
-function EnhancedInput({ onSend, disabled, isSending }: EnhancedInputProps) {
+// Updated Nov 16, 2025: Memoized EnhancedInput to prevent unnecessary re-renders
+const EnhancedInput = memo(function EnhancedInput({
+  onSend,
+  disabled,
+  isSending,
+}: EnhancedInputProps) {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -640,7 +661,7 @@ function EnhancedInput({ onSend, disabled, isSending }: EnhancedInputProps) {
   useEffect(() => {
     if (!selectedModel || !selectedProvider) {
       // Set default to Ollama llama3.3
-      selectModel('llama3.3', 'ollama').catch(err => {
+      selectModel('llama3.3', 'ollama').catch((err) => {
         console.warn('Failed to set default Ollama model:', err);
       });
     }
@@ -825,7 +846,7 @@ function EnhancedInput({ onSend, disabled, isSending }: EnhancedInputProps) {
       </div>
     </div>
   );
-}
+});
 
 // ============================================================================
 // Main Enhanced Chat Interface Component
@@ -835,7 +856,10 @@ interface EnhancedChatInterfaceProps {
   className?: string;
 }
 
-export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps) {
+// Updated Nov 16, 2025: Memoized main component to prevent unnecessary re-renders
+export const EnhancedChatInterface = memo(function EnhancedChatInterface({
+  className,
+}: EnhancedChatInterfaceProps) {
   const messages = useChatStore(selectMessages);
   const loading = useChatStore(selectLoading);
   const isStreaming = useChatStore(selectIsStreaming);
@@ -1042,11 +1066,11 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
         </div>
       )}
 
-      {/* Agent Status Banner - Shows current agent activity */}
-      <AgentStatusBanner />
+      {/* TODO: Agent Status Banner - Shows current agent activity */}
+      {/* <AgentStatusBanner /> */}
 
-      {/* Chat Input Toolbar - Model selector and safety controls */}
-      <ChatInputToolbar />
+      {/* TODO: Chat Input Toolbar - Model selector and safety controls */}
+      {/* <ChatInputToolbar /> */}
 
       {/* Input Area */}
       <EnhancedInput onSend={handleSend} disabled={loading} isSending={loading} />
@@ -1055,4 +1079,4 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
       {confirmDialog}
     </div>
   );
-}
+});

@@ -1,76 +1,178 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// Updated Nov 16, 2025: Fixed test to actually test automationStore instead of JavaScript primitives
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { useAutomationStore } from '../automationStore';
+
+// Mock Tauri invoke
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+// Mock Tauri event listener
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
+type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
+type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
+
+async function getInvokeMock(): Promise<InvokeMock> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke as InvokeMock;
+}
 
 describe('automationStore', () => {
-  beforeEach(() => {
+  let invokeMock: InvokeMock;
+
+  beforeEach(async () => {
     // Reset store state before each test
+    useAutomationStore.getState().reset();
+
+    invokeMock = await getInvokeMock();
+    invokeMock.mockReset();
   });
 
   it('should initialize with default state', () => {
-    const defaultState = {
-      isRunning: false,
-      tasks: [],
-      currentTask: null,
-    };
+    const state = useAutomationStore.getState();
 
-    expect(defaultState.isRunning).toBe(false);
-    expect(defaultState.tasks).toEqual([]);
+    expect(state.windows).toEqual([]);
+    expect(state.elements).toEqual([]);
+    expect(state.loadingWindows).toBe(false);
+    expect(state.loadingElements).toBe(false);
+    expect(state.runningAction).toBe(false);
+    expect(state.error).toBeNull();
+    expect(state.isRecording).toBe(false);
+    expect(state.isExecuting).toBe(false);
   });
 
-  it('should add task to queue', () => {
-    const tasks: string[] = [];
-    tasks.push('task1');
+  it('should load windows successfully', async () => {
+    const mockWindows = [
+      { id: 'window-1', name: 'Test Window 1', handle: 123 },
+      { id: 'window-2', name: 'Test Window 2', handle: 456 },
+    ];
 
-    expect(tasks.length).toBe(1);
-    expect(tasks[0]).toBe('task1');
+    invokeMock.mockResolvedValue(mockWindows);
+
+    await useAutomationStore.getState().loadWindows();
+
+    const state = useAutomationStore.getState();
+    expect(state.windows).toEqual(mockWindows);
+    expect(state.loadingWindows).toBe(false);
+    expect(state.error).toBeNull();
+    expect(invokeMock).toHaveBeenCalledWith('list_automation_windows');
   });
 
-  it('should start automation', () => {
-    let isRunning = false;
-    isRunning = true;
+  it('should handle window loading errors', async () => {
+    const errorMessage = 'Failed to list windows';
+    invokeMock.mockRejectedValue(new Error(errorMessage));
 
-    expect(isRunning).toBe(true);
+    await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(errorMessage);
+
+    const state = useAutomationStore.getState();
+    expect(state.loadingWindows).toBe(false);
+    expect(state.error).toBe(`Error: ${errorMessage}`);
+    expect(state.windows).toEqual([]);
   });
 
-  it('should stop automation', () => {
-    let isRunning = true;
-    isRunning = false;
+  it('should search for elements', async () => {
+    const mockElements = [
+      { id: 'elem-1', name: 'Button', type: 'Button' },
+      { id: 'elem-2', name: 'Input', type: 'Edit' },
+    ];
 
-    expect(isRunning).toBe(false);
+    invokeMock.mockResolvedValue(mockElements);
+
+    const query = { window_id: 'window-1', element_type: 'Button' };
+    await useAutomationStore.getState().searchElements(query);
+
+    const state = useAutomationStore.getState();
+    expect(state.elements).toEqual(mockElements);
+    expect(state.loadingElements).toBe(false);
+    expect(invokeMock).toHaveBeenCalledWith('find_automation_elements', { query });
   });
 
-  it('should update current task', () => {
-    let currentTask = null;
-    currentTask = 'task1';
+  it('should perform click action', async () => {
+    invokeMock.mockResolvedValue(undefined);
 
-    expect(currentTask).toBe('task1');
+    const clickRequest = { element_id: 'button-1', x: 100, y: 50 };
+    await useAutomationStore.getState().click(clickRequest);
+
+    const state = useAutomationStore.getState();
+    expect(state.runningAction).toBe(false);
+    expect(state.error).toBeNull();
+    expect(invokeMock).toHaveBeenCalledWith('click_automation', { request: clickRequest });
   });
 
-  it('should clear completed tasks', () => {
-    const tasks = ['task1', 'task2', 'task3'];
-    const clearedTasks: string[] = [];
+  it('should handle click errors', async () => {
+    const errorMessage = 'Element not found';
+    invokeMock.mockRejectedValue(new Error(errorMessage));
 
-    expect(clearedTasks.length).toBe(0);
-    expect(tasks.length).toBe(3);
+    const clickRequest = { element_id: 'button-1', x: 100, y: 50 };
+    await expect(useAutomationStore.getState().click(clickRequest)).rejects.toThrow(errorMessage);
+
+    const state = useAutomationStore.getState();
+    expect(state.runningAction).toBe(false);
+    expect(state.error).toBe(`Error: ${errorMessage}`);
   });
 
-  it('should handle task failure', () => {
-    const taskStatus = {
-      id: 'task1',
-      status: 'failed',
-      error: 'Task execution failed',
-    };
+  it('should type text with options', async () => {
+    invokeMock.mockResolvedValue(undefined);
 
-    expect(taskStatus.status).toBe('failed');
-    expect(taskStatus.error).toBeDefined();
+    const text = 'Hello World';
+    const options = { elementId: 'input-1', focus: true };
+    await useAutomationStore.getState().typeText(text, options);
+
+    const state = useAutomationStore.getState();
+    expect(state.runningAction).toBe(false);
+    expect(invokeMock).toHaveBeenCalledWith('send_keys', { text, options });
   });
 
-  it('should track task progress', () => {
-    const progress = {
-      total: 10,
-      completed: 7,
-      percentage: 70,
-    };
+  it('should clear error state', () => {
+    useAutomationStore.setState({ error: 'Test error' });
+    expect(useAutomationStore.getState().error).toBe('Test error');
 
-    expect(progress.percentage).toBe(70);
+    useAutomationStore.getState().clearError();
+    expect(useAutomationStore.getState().error).toBeNull();
+  });
+
+  it('should reset store to initial state', () => {
+    // Modify state
+    useAutomationStore.setState({
+      windows: [{ id: 'w1', name: 'Window', handle: 1 }],
+      elements: [{ id: 'e1', name: 'Element', type: 'Button' }],
+      error: 'Some error',
+      isRecording: true,
+      isExecuting: true,
+    });
+
+    // Reset
+    useAutomationStore.getState().reset();
+
+    const state = useAutomationStore.getState();
+    expect(state.windows).toEqual([]);
+    expect(state.elements).toEqual([]);
+    expect(state.error).toBeNull();
+    expect(state.isRecording).toBe(false);
+    expect(state.isExecuting).toBe(false);
+  });
+
+  it('should activate and deactivate inspector', () => {
+    const { activateInspector, deactivateInspector } = useAutomationStore.getState();
+
+    activateInspector();
+    expect(useAutomationStore.getState().inspector.isActive).toBe(true);
+
+    deactivateInspector();
+    expect(useAutomationStore.getState().inspector.isActive).toBe(false);
+  });
+
+  it('should manage recording state', () => {
+    const { startRecording, stopRecording } = useAutomationStore.getState();
+
+    startRecording();
+    expect(useAutomationStore.getState().isRecording).toBe(true);
+    expect(useAutomationStore.getState().currentRecording).toBeNull();
+
+    stopRecording();
+    expect(useAutomationStore.getState().isRecording).toBe(false);
   });
 });
