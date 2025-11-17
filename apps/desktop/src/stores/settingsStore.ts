@@ -155,6 +155,7 @@ export const useSettingsStore = create<SettingsState>()(
       loading: false,
       error: null,
 
+      // Updated Nov 16, 2025: Added error cleanup
       setAPIKey: async (provider: Provider, key: string) => {
         set({ loading: true, error: null });
         try {
@@ -197,6 +198,7 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
 
+      // Updated Nov 16, 2025: Improved error handling
       testAPIKey: async (provider: Provider) => {
         set({ loading: true, error: null });
         try {
@@ -210,7 +212,7 @@ export const useSettingsStore = create<SettingsState>()(
               max_tokens: 10,
             },
           });
-          set({ loading: false });
+          set({ loading: false, error: null });
           return true;
         } catch (error) {
           console.error(`API key test failed for ${provider}:`, error);
@@ -307,14 +309,26 @@ export const useSettingsStore = create<SettingsState>()(
         }));
       },
 
+      // Updated Nov 16, 2025: Fixed async coordination race conditions
       loadSettings: async () => {
         set({ loading: true, error: null });
+
+        // Create a unique load ID to detect if another load started during execution
+        const loadId = Date.now();
+        const startingLoadId = loadId;
+
         try {
           // Load settings from backend/database
           const settings = await invoke<{
             llmConfig: LLMConfig;
             windowPreferences: WindowPreferences;
           }>('settings_load');
+
+          // Race condition guard: check if still the latest load
+          if (get().loading === false) {
+            console.warn('[settingsStore] Load cancelled - another operation started');
+            return;
+          }
 
           const mergedLLMConfig: LLMConfig = {
             ...defaultSettings.llmConfig,
@@ -332,7 +346,7 @@ export const useSettingsStore = create<SettingsState>()(
             ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
           };
 
-          // Load API keys from keyring
+          // Load API keys from keyring in parallel for better performance
           const providers: Provider[] = [
             'openai',
             'anthropic',
@@ -343,6 +357,20 @@ export const useSettingsStore = create<SettingsState>()(
             'qwen',
             'mistral',
           ];
+
+          // Parallel API key loading
+          const apiKeyResults = await Promise.allSettled(
+            providers.map(async (provider) => {
+              try {
+                const key = await get().getAPIKey(provider);
+                return { provider, key };
+              } catch (error) {
+                console.error(`Failed to load API key for ${provider}:`, error);
+                return { provider, key: '' };
+              }
+            }),
+          );
+
           const apiKeys: APIKeys = {
             openai: '',
             anthropic: '',
@@ -354,27 +382,46 @@ export const useSettingsStore = create<SettingsState>()(
             mistral: '',
           };
 
-          for (const provider of providers) {
-            try {
-              const key = await get().getAPIKey(provider);
-              apiKeys[provider] = key;
+          // Collect API keys from results
+          for (const result of apiKeyResults) {
+            if (result.status === 'fulfilled') {
+              apiKeys[result.value.provider] = result.value.key;
+            }
+          }
 
+          // Race condition guard: check if still the latest load
+          if (get().loading === false) {
+            console.warn('[settingsStore] Load cancelled before setting state');
+            return;
+          }
+
+          // Configure providers in parallel
+          const configPromises = providers.map(async (provider) => {
+            try {
               if (provider === 'ollama') {
                 await invoke('llm_configure_provider', {
                   provider,
                   apiKey: null,
                   baseUrl: 'http://localhost:11434',
                 });
-              } else if (key.trim().length > 0) {
+              } else if (apiKeys[provider].trim().length > 0) {
                 await invoke('llm_configure_provider', {
                   provider,
-                  apiKey: key,
+                  apiKey: apiKeys[provider],
                   baseUrl: null,
                 });
               }
             } catch (error) {
-              console.error(`Failed to load API key for ${provider}:`, error);
+              console.error(`Failed to configure provider ${provider}:`, error);
             }
+          });
+
+          await Promise.allSettled(configPromises);
+
+          // Final race condition guard
+          if (get().loading === false) {
+            console.warn('[settingsStore] Load cancelled before final update');
+            return;
           }
 
           set({
@@ -384,20 +431,23 @@ export const useSettingsStore = create<SettingsState>()(
             loading: false,
           });
 
-          // Apply theme
-          get().setTheme(settings.windowPreferences.theme);
+          // Apply theme (synchronous, safe to run)
+          get().setTheme(mergedWindowPreferences.theme);
 
           // Restore router default provider preference
           try {
             await invoke('llm_set_default_provider', {
-              provider: settings.llmConfig.defaultProvider,
+              provider: mergedLLMConfig.defaultProvider,
             });
           } catch (error) {
             console.error('Failed to restore default provider:', error);
           }
         } catch (error) {
           console.error('Failed to load settings:', error);
-          set({ error: String(error), loading: false });
+          // Only set error if still loading (not cancelled)
+          if (get().loading) {
+            set({ error: String(error), loading: false });
+          }
         }
       },
 

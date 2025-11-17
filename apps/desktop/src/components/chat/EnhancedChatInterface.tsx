@@ -64,6 +64,7 @@ import type { MessageUI } from '../../types/chat';
 import { QuickModelSelector } from './QuickModelSelector';
 import { useModelStore } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
+import { useConfirm } from '../ui/ConfirmDialog'; // Updated Nov 16, 2025
 
 // ============================================================================
 // Types
@@ -842,6 +843,9 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
   // Enhanced messages with processing info (mock data for now)
   const enhancedMessages = useMemo<EnhancedMessage[]>(() => {
     return messages.map((msg) => ({
@@ -926,13 +930,21 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
     [editMessage],
   );
 
+  // Updated Nov 16, 2025: Use accessible ConfirmDialog instead of window.confirm
   const handleDelete = useCallback(
-    (message: EnhancedMessage) => {
-      if (window.confirm('Delete this message?')) {
+    async (message: EnhancedMessage) => {
+      const confirmed = await confirm({
+        title: 'Delete message?',
+        description: 'Are you sure you want to delete this message? This action cannot be undone.',
+        confirmText: 'Delete',
+        variant: 'destructive',
+      });
+
+      if (confirmed) {
         deleteMessage(message.id);
       }
     },
-    [deleteMessage],
+    [deleteMessage, confirm],
   );
 
   return (
@@ -1038,6 +1050,9 @@ export function EnhancedChatInterface({ className }: EnhancedChatInterfaceProps)
 
       {/* Input Area */}
       <EnhancedInput onSend={handleSend} disabled={loading} isSending={loading} />
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {confirmDialog}
     </div>
   );
 }

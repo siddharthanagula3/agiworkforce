@@ -110,7 +110,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               rehypePlugins={[rehypeKatex]}
               components={{
                 code(props) {
-                  const { inline, className, children, ...rest } = props as any;
+                  // Updated Nov 16, 2025: Fixed type safety - use proper React element props
+                  const { inline, className, children, ...rest } = props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
                   const match = /language-(\w+)/.exec(className || '');
                   const language = match ? match[1] : 'text';
                   const code = String(children).replace(/\n$/, '');
