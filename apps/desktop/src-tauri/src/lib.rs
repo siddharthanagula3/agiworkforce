@@ -10,7 +10,6 @@ pub mod tray;
 pub mod window;
 
 // Error handling and logging
-pub mod errors;
 pub mod logging;
 
 // LLM Router and Cost Management
