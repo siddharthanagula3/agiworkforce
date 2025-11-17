@@ -212,21 +212,21 @@ impl CloudClient {
                     Error::Other("Client secret required for Google Drive".to_string())
                 })?,
                 config.redirect_uri.clone(),
-            ))),
+            )?)),
             CloudProvider::Dropbox => Ok(Self::Dropbox(DropboxClient::new(
                 config.client_id.clone(),
                 config.client_secret.clone().ok_or_else(|| {
                     Error::Other("Client secret required for Dropbox".to_string())
                 })?,
                 config.redirect_uri.clone(),
-            ))),
+            )?)),
             CloudProvider::OneDrive => Ok(Self::OneDrive(OneDriveClient::new(
                 config.client_id.clone(),
                 config.client_secret.clone().ok_or_else(|| {
                     Error::Other("Client secret required for OneDrive".to_string())
                 })?,
                 config.redirect_uri.clone(),
-            ))),
+            )?)),
         }
     }
 

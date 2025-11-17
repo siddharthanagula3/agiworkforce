@@ -4,7 +4,7 @@
  * Displays analytics and usage statistics with charts
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -55,6 +55,22 @@ export const UsageDashboard: React.FC = () => {
     end: new Date(),
   });
 
+  const loadChartData = useCallback(async () => {
+    try {
+      const [dau, features, events] = await Promise.all([
+        queryTimeSeriesData('dau', dateRange),
+        queryCategoryData('features'),
+        queryTopEvents(10, dateRange),
+      ]);
+
+      setDauData(dau);
+      setFeatureData(features);
+      setTopEvents(events);
+    } catch (error) {
+      console.error('Failed to load chart data:', error);
+    }
+  }, [dateRange]);
+
   useEffect(() => {
     // Load initial data
     loadSystemMetrics();
@@ -69,23 +85,13 @@ export const UsageDashboard: React.FC = () => {
     }, 60000); // Refresh every minute
 
     return () => clearInterval(interval);
-  }, []);
-
-  const loadChartData = async () => {
-    try {
-      const [dau, features, events] = await Promise.all([
-        queryTimeSeriesData('dau', dateRange),
-        queryCategoryData('features'),
-        queryTopEvents(10, dateRange),
-      ]);
-
-      setDauData(dau);
-      setFeatureData(features);
-      setTopEvents(events);
-    } catch (error) {
-      console.error('Failed to load chart data:', error);
-    }
-  };
+  }, [
+    loadSystemMetrics,
+    loadAppMetrics,
+    loadUsageStats,
+    loadChartData,
+    refreshAllMetrics,
+  ]);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 MB';

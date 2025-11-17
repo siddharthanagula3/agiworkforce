@@ -58,7 +58,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
         stopStreaming();
       }
     };
-  }, [currentTabId]);
+  }, [currentTabId, isStreaming, startStreaming, stopStreaming]);
 
   const toggleStreaming = () => {
     if (isStreaming) {

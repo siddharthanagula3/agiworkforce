@@ -15,8 +15,8 @@ fn validate_sql_identifier(identifier: &str) -> Result<()> {
     // Check for SQL keywords and dangerous patterns
     let upper = identifier.to_uppercase();
     let dangerous_keywords = [
-        "DROP", "DELETE", "TRUNCATE", "ALTER", "EXEC", "EXECUTE",
-        "UNION", "INSERT", "UPDATE", "--", "/*", "*/", ";",
+        "DROP", "DELETE", "TRUNCATE", "ALTER", "EXEC", "EXECUTE", "UNION", "INSERT", "UPDATE",
+        "--", "/*", "*/", ";",
     ];
 
     for keyword in &dangerous_keywords {

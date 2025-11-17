@@ -129,7 +129,6 @@ export function usePrompt() {
     defaultValue: string;
     confirmText: string;
     cancelText: string;
-    resolve?: (value: string | null) => void;
   }>({
     open: false,
     title: '',
@@ -137,6 +136,8 @@ export function usePrompt() {
     confirmText: 'OK',
     cancelText: 'Cancel',
   });
+  const resolverRef = React.useRef<((value: string | null) => void) | null>(null);
+  const resolvingRef = React.useRef(false);
 
   const prompt = React.useCallback(
     (options: {
@@ -149,6 +150,7 @@ export function usePrompt() {
       cancelText?: string;
     }) => {
       return new Promise<string | null>((resolve) => {
+        resolverRef.current = resolve;
         setState({
           open: true,
           title: options.title,
@@ -158,31 +160,39 @@ export function usePrompt() {
           defaultValue: options.defaultValue ?? '',
           confirmText: options.confirmText ?? 'OK',
           cancelText: options.cancelText ?? 'Cancel',
-          resolve,
         });
       });
     },
     [],
   );
 
+  const finalize = React.useCallback((result: string | null) => {
+    resolvingRef.current = true;
+    resolverRef.current?.(result);
+    resolverRef.current = null;
+    setState((prev) => ({ ...prev, open: false }));
+  }, []);
+
   const handleConfirm = React.useCallback(
     (value: string) => {
-      state.resolve?.(value);
-      setState((prev) => ({ ...prev, open: false }));
+      finalize(value);
     },
-    [state.resolve],
+    [finalize],
   );
 
   const handleCancel = React.useCallback(() => {
-    state.resolve?.(null);
-    setState((prev) => ({ ...prev, open: false }));
-  }, [state.resolve]);
+    finalize(null);
+  }, [finalize]);
 
   const dialog = (
     <PromptDialog
       open={state.open}
       onOpenChange={(open) => {
         if (!open) {
+          if (resolvingRef.current) {
+            resolvingRef.current = false;
+            return;
+          }
           handleCancel();
         }
       }}

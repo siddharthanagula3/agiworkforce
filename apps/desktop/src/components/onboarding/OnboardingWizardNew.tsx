@@ -4,7 +4,7 @@
  * Target: <5 minutes to first value
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Sparkles, Rocket, Target, Clock, DollarSign } from 'lucide-react';

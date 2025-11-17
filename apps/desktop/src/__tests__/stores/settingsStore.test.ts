@@ -39,6 +39,7 @@ describe('settingsStore', () => {
           qwen: 'qwen-max',
           mistral: 'mistral-large-latest',
         },
+        favoriteModels: [],
       },
       windowPreferences: {
         theme: 'system',
@@ -344,6 +345,7 @@ describe('settingsStore', () => {
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
           },
+          favoriteModels: [],
         },
         windowPreferences: {
           theme: 'dark' as const,
@@ -409,6 +411,7 @@ describe('settingsStore', () => {
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
           },
+          favoriteModels: [],
         },
         windowPreferences: {
           theme: 'dark',

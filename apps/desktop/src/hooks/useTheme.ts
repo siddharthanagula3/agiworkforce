@@ -54,6 +54,8 @@ export function useTheme() {
         return () => mediaQuery.removeListener(handleChange);
       }
     }
+
+    return undefined;
   }, [theme]);
 
   const setTheme = useCallback((newTheme: Theme) => {
