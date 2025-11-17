@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Paperclip, Mic, Camera, X, Image as ImageIcon } from 'lucide-react';
 import { useUnifiedChatStore, ContextItem, Attachment } from '../../stores/unifiedChatStore';
 
@@ -35,6 +35,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Updated Nov 16, 2025: Added ref to track FileReader instances for cleanup
+  const fileReadersRef = useRef<FileReader[]>([]);
 
   const activeContext = useUnifiedChatStore((state) => state.activeContext);
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
@@ -52,8 +54,31 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [content]);
 
-  // Calculate approximate token count
-  const estimatedTokens = Math.ceil(content.length * APPROX_TOKENS_PER_CHAR);
+  // Updated Nov 16, 2025: Cleanup FileReader instances and object URLs on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any pending FileReader operations
+      fileReadersRef.current.forEach((reader) => {
+        if (reader.readyState === FileReader.LOADING) {
+          reader.abort();
+        }
+      });
+      fileReadersRef.current = [];
+
+      // Revoke object URLs to prevent memory leaks
+      attachments.forEach((attachment) => {
+        if (attachment.path && attachment.path.startsWith('blob:')) {
+          URL.revokeObjectURL(attachment.path);
+        }
+      });
+    };
+  }, [attachments]);
+
+  // Updated Nov 16, 2025: Memoized token estimation to avoid recalculation on every render
+  const estimatedTokens = useMemo(
+    () => Math.ceil(content.length * APPROX_TOKENS_PER_CHAR),
+    [content.length],
+  );
   const charCount = content.length;
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -94,10 +119,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   };
 
+  // Updated Nov 16, 2025: Revoke object URL when removing attachment
   const removeAttachment = (id: string) => {
-    setAttachments(attachments.filter((a) => a.id !== id));
+    setAttachments((prev) => {
+      const attachment = prev.find((a) => a.id === id);
+      if (attachment?.path && attachment.path.startsWith('blob:')) {
+        URL.revokeObjectURL(attachment.path);
+      }
+      return prev.filter((a) => a.id !== id);
+    });
   };
 
+  // Updated Nov 16, 2025: Fixed memory leak and stale closure in handlePaste
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items);
     const imageItems = items.filter((item) => item.type.startsWith('image/'));
@@ -108,6 +141,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         const file = item.getAsFile();
         if (file) {
           const reader = new FileReader();
+          // Track reader for cleanup
+          fileReadersRef.current.push(reader);
+
           reader.onload = (event) => {
             const base64 = event.target?.result as string;
             const attachment: Attachment = {
@@ -118,8 +154,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               mimeType: file.type,
               content: base64,
             };
-            setAttachments([...attachments, attachment]);
+            // Use functional update to avoid stale closure
+            setAttachments((prev) => [...prev, attachment]);
+
+            // Remove reader from tracking after completion
+            fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
           };
+
+          reader.onerror = () => {
+            // Remove reader from tracking on error
+            fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
+          };
+
           reader.readAsDataURL(file);
         }
       });

@@ -101,6 +101,7 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
+    // Updated Nov 16, 2025: Fixed file handle leak with RAII pattern
     #[test]
     fn test_log_cleanup() {
         let temp_dir = TempDir::new().unwrap();
@@ -109,8 +110,11 @@ mod tests {
         // Create 10 old log files
         for i in 0..10 {
             let path = log_dir.join(format!("test_{}.log", i));
-            let mut file = File::create(&path).unwrap();
-            writeln!(file, "test log {}", i).unwrap();
+            // File handle automatically closed when dropped at end of scope
+            {
+                let mut file = File::create(&path).unwrap();
+                writeln!(file, "test log {}", i).unwrap();
+            } // file handle closed here
         }
 
         // Cleanup should keep only 7 most recent

@@ -124,7 +124,7 @@ export const useApiStore = create<ApiState>((set, get) => ({
   tokens: new Map(),
   history: [],
 
-  // Request execution
+  // Updated Nov 16, 2025: Added comprehensive error handling and cleanup
   executeRequest: async (request: ApiRequest) => {
     set({ loading: true, error: null });
     try {
@@ -132,11 +132,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => ({
         response,
         loading: false,
+        error: null,
         history: [...state.history.slice(-99), response],
       }));
       return response;
     } catch (error) {
-      set({ loading: false, error: String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] executeRequest failed:', errorMessage);
+      set({ loading: false, error: errorMessage, response: null });
       throw error;
     }
   },
@@ -148,11 +151,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => ({
         response,
         loading: false,
+        error: null,
         history: [...state.history.slice(-99), response],
       }));
       return response;
     } catch (error) {
-      set({ loading: false, error: String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] GET request failed:', errorMessage);
+      set({ loading: false, error: errorMessage, response: null });
       throw error;
     }
   },
@@ -164,11 +170,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => ({
         response,
         loading: false,
+        error: null,
         history: [...state.history.slice(-99), response],
       }));
       return response;
     } catch (error) {
-      set({ loading: false, error: String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] POST request failed:', errorMessage);
+      set({ loading: false, error: errorMessage, response: null });
       throw error;
     }
   },
@@ -180,11 +189,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => ({
         response,
         loading: false,
+        error: null,
         history: [...state.history.slice(-99), response],
       }));
       return response;
     } catch (error) {
-      set({ loading: false, error: String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] PUT request failed:', errorMessage);
+      set({ loading: false, error: errorMessage, response: null });
       throw error;
     }
   },
@@ -196,11 +208,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => ({
         response,
         loading: false,
+        error: null,
         history: [...state.history.slice(-99), response],
       }));
       return response;
     } catch (error) {
-      set({ loading: false, error: String(error) });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] DELETE request failed:', errorMessage);
+      set({ loading: false, error: errorMessage, response: null });
       throw error;
     }
   },
@@ -238,16 +253,19 @@ export const useApiStore = create<ApiState>((set, get) => ({
     }));
   },
 
-  // OAuth
+  // Updated Nov 16, 2025: Added proper error handling to OAuth methods
   createOAuthClient: async (clientId: string, config: OAuth2Config) => {
     try {
       await invoke('api_oauth_create_client', { clientId, config });
       set((state) => {
         const newClients = new Map(state.oauthClients);
         newClients.set(clientId, config);
-        return { oauthClients: newClients };
+        return { oauthClients: newClients, error: null };
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] createOAuthClient failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -259,8 +277,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
         stateParam: state,
         usePkce,
       });
+      set({ error: null });
       return url;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] getAuthUrl failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -275,11 +297,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => {
         const newTokens = new Map(state.tokens);
         newTokens.set(clientId, token);
-        return { tokens: newTokens };
+        return { tokens: newTokens, error: null };
       });
 
       return token;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] exchangeCode failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -294,11 +319,14 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => {
         const newTokens = new Map(state.tokens);
         newTokens.set(clientId, token);
-        return { tokens: newTokens };
+        return { tokens: newTokens, error: null };
       });
 
       return token;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] refreshToken failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -312,16 +340,19 @@ export const useApiStore = create<ApiState>((set, get) => ({
       set((state) => {
         const newTokens = new Map(state.tokens);
         newTokens.set(clientId, token);
-        return { tokens: newTokens };
+        return { tokens: newTokens, error: null };
       });
 
       return token;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] clientCredentials failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
 
-  // Templates
+  // Updated Nov 16, 2025: Added error handling to template and parsing methods
   renderTemplate: async (template: RequestTemplate, variables: Record<string, string>) => {
     try {
       const rendered = await invoke<any>('api_render_template', {
@@ -329,6 +360,7 @@ export const useApiStore = create<ApiState>((set, get) => ({
         variables,
       });
 
+      set({ error: null });
       return {
         method: rendered.method,
         url: rendered.url,
@@ -336,6 +368,9 @@ export const useApiStore = create<ApiState>((set, get) => ({
         body: rendered.body,
       } as ApiRequest;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] renderTemplate failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -345,8 +380,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
       const variables = await invoke<string[]>('api_extract_template_variables', {
         templateStr,
       });
+      set({ error: null });
       return variables;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] extractVariables failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -354,8 +393,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
   validateTemplate: async (templateStr: string) => {
     try {
       await invoke('api_validate_template', { templateStr });
+      set({ error: null });
       return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] validateTemplate failed:', errorMessage);
+      set({ error: errorMessage });
       return false;
     }
   },
@@ -367,8 +410,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
         body,
         contentType,
       });
+      set({ error: null });
       return parsed;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] parseResponse failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },
@@ -379,8 +426,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
         body,
         path,
       });
+      set({ error: null });
       return result;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[apiStore] extractJsonPath failed:', errorMessage);
+      set({ error: errorMessage });
       throw error;
     }
   },

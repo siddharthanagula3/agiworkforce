@@ -14,7 +14,8 @@ interface CapabilityItemProps {
 }
 
 function CapabilityItem({ capability, onDragStart }: CapabilityItemProps) {
-  const IconComponent = (Icons as any)[capability.icon] || Icons.Circle;
+  // Updated Nov 16, 2025: Improved type safety for dynamic icon lookup
+  const IconComponent = (Icons as Record<string, React.ComponentType>)[capability.icon] || Icons.Circle;
 
   const categoryColors = {
     data: 'text-blue-600 hover:bg-blue-50',

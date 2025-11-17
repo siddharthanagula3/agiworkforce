@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Replaced .unwrap() with proper error handling
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -38,28 +39,38 @@ impl CollaborationSession {
             color: Self::assign_color(&user_id),
             joined_at: Utc::now().timestamp(),
         };
-        self.participants.lock().unwrap().push(participant);
+        if let Ok(mut participants) = self.participants.lock() {
+            participants.push(participant);
+        }
     }
 
     pub fn remove_participant(&self, user_id: &str) {
-        let mut participants = self.participants.lock().unwrap();
-        participants.retain(|p| p.user_id != user_id);
-        self.cursor_positions.lock().unwrap().remove(user_id);
+        if let Ok(mut participants) = self.participants.lock() {
+            participants.retain(|p| p.user_id != user_id);
+        }
+        if let Ok(mut positions) = self.cursor_positions.lock() {
+            positions.remove(user_id);
+        }
     }
 
     pub fn update_cursor(&self, user_id: &str, position: CursorPosition) {
-        self.cursor_positions
-            .lock()
-            .unwrap()
-            .insert(user_id.to_string(), position);
+        if let Ok(mut positions) = self.cursor_positions.lock() {
+            positions.insert(user_id.to_string(), position);
+        }
     }
 
     pub fn get_active_editors(&self) -> Vec<Participant> {
-        self.participants.lock().unwrap().clone()
+        self.participants
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
     }
 
     pub fn get_cursor_positions(&self) -> HashMap<String, CursorPosition> {
-        self.cursor_positions.lock().unwrap().clone()
+        self.cursor_positions
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
     }
 
     pub fn get_resource_id(&self) -> &str {
