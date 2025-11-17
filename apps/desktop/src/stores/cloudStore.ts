@@ -1,6 +1,7 @@
+// Updated Nov 16, 2025: Added cleanup for event listeners to fix memory leak
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-shell';
 import type {
   CloudFile,
@@ -72,6 +73,9 @@ function mapAccount(raw: RawAccountResponse): Account {
   };
 }
 
+// Updated Nov 16, 2025: Store unlisten functions for cleanup
+const unlistenFunctions: UnlistenFn[] = [];
+
 export const useCloudStore = create<CloudState>((set, get) => {
   async function ensureListeners() {
     if (listenersRegistered) {
@@ -79,23 +83,26 @@ export const useCloudStore = create<CloudState>((set, get) => {
     }
     listenersRegistered = true;
 
-    await listen<{ accountId: string }>('cloud:connected', async () => {
+    const unlisten1 = await listen<{ accountId: string }>('cloud:connected', async () => {
       await get().refreshAccounts();
     });
+    unlistenFunctions.push(unlisten1);
 
-    await listen('cloud:file_uploaded', async (event) => {
+    const unlisten2 = await listen('cloud:file_uploaded', async (event) => {
       const payload = event.payload as { accountId?: string };
       if (payload?.accountId && payload.accountId === get().activeAccountId) {
         await get().listFiles(get().currentPath);
       }
     });
+    unlistenFunctions.push(unlisten2);
 
-    await listen('cloud:file_deleted', async (event) => {
+    const unlisten3 = await listen('cloud:file_deleted', async (event) => {
       const payload = event.payload as { accountId?: string };
       if (payload?.accountId && payload.accountId === get().activeAccountId) {
         await get().listFiles(get().currentPath);
       }
     });
+    unlistenFunctions.push(unlisten3);
   }
 
   return {
@@ -330,3 +337,10 @@ export const useCloudStore = create<CloudState>((set, get) => {
     clearError: () => set({ error: null }),
   };
 });
+
+// Updated Nov 16, 2025: Export cleanup function for event listeners
+export function cleanupCloudStoreListeners() {
+  unlistenFunctions.forEach((unlisten) => unlisten());
+  unlistenFunctions.length = 0;
+  listenersRegistered = false;
+}
