@@ -5,6 +5,7 @@ pub mod inspector;
 pub mod recorder;
 pub mod safety;
 pub mod screen;
+pub mod types;
 pub mod uia;
 pub mod vision_planner;
 
