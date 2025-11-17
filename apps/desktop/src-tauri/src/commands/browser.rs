@@ -98,11 +98,17 @@ pub async fn browser_open_tab(
         return Err("URL cannot be empty".to_string());
     }
     if url.len() > 10_000 {
-        return Err(format!("URL too long: {} characters. Maximum is 10,000", url.len()));
+        return Err(format!(
+            "URL too long: {} characters. Maximum is 10,000",
+            url.len()
+        ));
     }
     // Basic URL validation
     if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("file://") {
-        return Err(format!("Invalid URL scheme: {}. Must start with http://, https://, or file://", url));
+        return Err(format!(
+            "Invalid URL scheme: {}. Must start with http://, https://, or file://",
+            url
+        ));
     }
 
     let browser_state = state.inner().lock().await;
@@ -131,7 +137,10 @@ pub async fn browser_close_tab(
         return Err("Tab ID cannot be empty".to_string());
     }
     if tab_id.len() > 500 {
-        return Err(format!("Tab ID too long: {} characters. Maximum is 500", tab_id.len()));
+        return Err(format!(
+            "Tab ID too long: {} characters. Maximum is 500",
+            tab_id.len()
+        ));
     }
 
     let browser_state = state.inner().lock().await;
@@ -185,10 +194,16 @@ pub async fn browser_navigate(
         return Err("URL cannot be empty".to_string());
     }
     if url.len() > 10_000 {
-        return Err(format!("URL too long: {} characters. Maximum is 10,000", url.len()));
+        return Err(format!(
+            "URL too long: {} characters. Maximum is 10,000",
+            url.len()
+        ));
     }
     if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("file://") {
-        return Err(format!("Invalid URL scheme: {}. Must start with http://, https://, or file://", url));
+        return Err(format!(
+            "Invalid URL scheme: {}. Must start with http://, https://, or file://",
+            url
+        ));
     }
 
     let browser_state = state.inner().lock().await;
@@ -301,7 +316,10 @@ pub async fn browser_click(
         return Err("Selector cannot be empty".to_string());
     }
     if selector.len() > 5_000 {
-        return Err(format!("Selector too long: {} characters. Maximum is 5,000", selector.len()));
+        return Err(format!(
+            "Selector too long: {} characters. Maximum is 5,000",
+            selector.len()
+        ));
     }
 
     let browser_state = state.inner().lock().await;
@@ -376,7 +394,10 @@ pub async fn browser_wait_for_selector(
         return Err("Selector cannot be empty".to_string());
     }
     if selector.len() > 5_000 {
-        return Err(format!("Selector too long: {} characters. Maximum is 5,000", selector.len()));
+        return Err(format!(
+            "Selector too long: {} characters. Maximum is 5,000",
+            selector.len()
+        ));
     }
 
     // Validate timeout
@@ -384,7 +405,10 @@ pub async fn browser_wait_for_selector(
         return Err("Timeout must be greater than 0".to_string());
     }
     if timeout_ms > 300_000 {
-        return Err(format!("Timeout too long: {}ms. Maximum is 5 minutes (300,000ms)", timeout_ms));
+        return Err(format!(
+            "Timeout too long: {}ms. Maximum is 5 minutes (300,000ms)",
+            timeout_ms
+        ));
     }
 
     DomOperations::wait_for_selector(&tab_id, &selector, timeout_ms)
@@ -469,13 +493,21 @@ pub async fn browser_evaluate(
         return Err("Script cannot be empty".to_string());
     }
     if script.len() > 1_000_000 {
-        return Err(format!("Script too long: {} characters. Maximum is 1MB", script.len()));
+        return Err(format!(
+            "Script too long: {} characters. Maximum is 1MB",
+            script.len()
+        ));
     }
 
     // Security warning for potentially dangerous operations
     let dangerous_patterns = ["eval(", "Function(", "setTimeout(", "setInterval("];
-    if dangerous_patterns.iter().any(|pattern| script.contains(pattern)) {
-        tracing::warn!("Executing potentially dangerous JavaScript with dynamic code execution patterns");
+    if dangerous_patterns
+        .iter()
+        .any(|pattern| script.contains(pattern))
+    {
+        tracing::warn!(
+            "Executing potentially dangerous JavaScript with dynamic code execution patterns"
+        );
     }
 
     DomOperations::evaluate(&tab_id, &script)
@@ -680,7 +712,10 @@ pub async fn browser_upload_file(
                 return Err(format!("Path is not a file: {}", file_path));
             }
             if metadata.len() > 100_000_000 {
-                return Err(format!("File too large: {} bytes. Maximum is 100MB for upload", metadata.len()));
+                return Err(format!(
+                    "File too large: {} bytes. Maximum is 100MB for upload",
+                    metadata.len()
+                ));
             }
         }
         Err(_) => return Err(format!("File does not exist: {}", file_path)),

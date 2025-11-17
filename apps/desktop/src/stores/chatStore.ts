@@ -797,6 +797,7 @@ function handleStreamStart(payload: ChatStreamStartPayload) {
           state.messages = [...state.messages, placeholder];
         }
       }
+      return state;
     });
   } catch (error) {
     console.error('[chatStore] Error in handleStreamStart:', error);
@@ -855,6 +856,7 @@ function handleStreamChunk(payload: ChatStreamChunkPayload) {
           state.messages = [...state.messages, placeholder];
         }
       }
+      return state;
     });
   } catch (error) {
     console.error('[chatStore] Error in handleStreamChunk:', error);
@@ -885,6 +887,7 @@ function handleStreamEnd(payload: ChatStreamEndPayload) {
       state.messages = state.messages.map((message) =>
         message.id === payload.messageId ? { ...message, streaming: false } : message,
       );
+      return state;
     });
   } catch (error) {
     console.error('[chatStore] Error in handleStreamEnd:', error);

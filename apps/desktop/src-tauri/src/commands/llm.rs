@@ -55,13 +55,19 @@ pub async fn llm_send_message(
         return Err("Messages array cannot be empty".to_string());
     }
     if request.messages.len() > 1000 {
-        return Err(format!("Too many messages: {}. Maximum is 1000", request.messages.len()));
+        return Err(format!(
+            "Too many messages: {}. Maximum is 1000",
+            request.messages.len()
+        ));
     }
 
     // Validate temperature if provided
     if let Some(temp) = request.temperature {
         if temp < 0.0 || temp > 2.0 {
-            return Err(format!("Invalid temperature: {}. Must be between 0.0 and 2.0", temp));
+            return Err(format!(
+                "Invalid temperature: {}. Must be between 0.0 and 2.0",
+                temp
+            ));
         }
     }
 
@@ -71,7 +77,10 @@ pub async fn llm_send_message(
             return Err("max_tokens must be greater than 0".to_string());
         }
         if max_tokens > 1_000_000 {
-            return Err(format!("max_tokens too large: {}. Maximum is 1,000,000", max_tokens));
+            return Err(format!(
+                "max_tokens too large: {}. Maximum is 1,000,000",
+                max_tokens
+            ));
         }
     }
 
@@ -163,17 +172,26 @@ pub async fn llm_configure_provider(
             return Err("API key too short. Minimum length is 10 characters".to_string());
         }
         if key.len() > 500 {
-            return Err(format!("API key too long: {} characters. Maximum is 500", key.len()));
+            return Err(format!(
+                "API key too long: {} characters. Maximum is 500",
+                key.len()
+            ));
         }
     }
 
     // Validate base URL if provided
     if let Some(ref url) = base_url {
         if !url.starts_with("http://") && !url.starts_with("https://") {
-            return Err(format!("Invalid base URL: {}. Must start with http:// or https://", url));
+            return Err(format!(
+                "Invalid base URL: {}. Must start with http:// or https://",
+                url
+            ));
         }
         if url.len() > 1000 {
-            return Err(format!("Base URL too long: {} characters. Maximum is 1000", url.len()));
+            return Err(format!(
+                "Base URL too long: {} characters. Maximum is 1000",
+                url.len()
+            ));
         }
     }
 

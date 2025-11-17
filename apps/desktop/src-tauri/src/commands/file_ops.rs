@@ -76,12 +76,18 @@ fn validate_path_security(path: &str) -> Result<(), String> {
         return Err("Path cannot be empty".to_string());
     }
     if path.len() > 4096 {
-        return Err(format!("Path too long: {} characters. Maximum is 4096", path.len()));
+        return Err(format!(
+            "Path too long: {} characters. Maximum is 4096",
+            path.len()
+        ));
     }
 
     // Check for directory traversal attempts
     if path.contains("..") {
-        return Err("Path contains directory traversal (..) which is not allowed for security reasons".to_string());
+        return Err(
+            "Path contains directory traversal (..) which is not allowed for security reasons"
+                .to_string(),
+        );
     }
 
     // Check for null bytes
@@ -388,7 +394,10 @@ pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> 
     match fs::metadata(&path) {
         Ok(metadata) => {
             if !metadata.is_file() {
-                return Err(format!("Cannot delete: {} is not a file. Use dir_delete for directories", path));
+                return Err(format!(
+                    "Cannot delete: {} is not a file. Use dir_delete for directories",
+                    path
+                ));
             }
         }
         Err(_) => {
@@ -453,7 +462,10 @@ pub async fn file_rename(
 
     // Prevent overwriting existing files
     if Path::new(&new_path).exists() {
-        return Err(format!("Destination already exists: {}. Cannot overwrite", new_path));
+        return Err(format!(
+            "Destination already exists: {}. Cannot overwrite",
+            new_path
+        ));
     }
 
     // Check permissions on both paths
@@ -512,7 +524,10 @@ pub async fn file_copy(
 
     // Prevent overwriting without warning
     if Path::new(&dest).exists() {
-        return Err(format!("Destination already exists: {}. Cannot overwrite", dest));
+        return Err(format!(
+            "Destination already exists: {}. Cannot overwrite",
+            dest
+        ));
     }
 
     // Check permissions
@@ -593,8 +608,8 @@ pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
     // Validate path security
     validate_path_security(&path)?;
 
-    let metadata = fs::metadata(&path)
-        .map_err(|e| format!("Failed to get metadata for '{}': {}", path, e))?;
+    let metadata =
+        fs::metadata(&path).map_err(|e| format!("Failed to get metadata for '{}': {}", path, e))?;
 
     let created = metadata
         .created()
@@ -734,7 +749,10 @@ pub async fn dir_delete(
     match fs::metadata(&path) {
         Ok(metadata) => {
             if !metadata.is_dir() {
-                return Err(format!("Path is not a directory: {}. Use file_delete for files", path));
+                return Err(format!(
+                    "Path is not a directory: {}. Use file_delete for files",
+                    path
+                ));
             }
         }
         Err(_) => return Err(format!("Directory does not exist: {}", path)),
@@ -791,7 +809,10 @@ pub async fn dir_traverse(
         return Err("Glob pattern cannot contain directory traversal (..)".to_string());
     }
     if glob_pattern.len() > 1000 {
-        return Err(format!("Glob pattern too long: {} characters. Maximum is 1000", glob_pattern.len()));
+        return Err(format!(
+            "Glob pattern too long: {} characters. Maximum is 1000",
+            glob_pattern.len()
+        ));
     }
 
     // Verify path is a directory

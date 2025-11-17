@@ -664,8 +664,6 @@ fn main() {
             agiworkforce_desktop::commands::automation_list_scripts,
             agiworkforce_desktop::commands::automation_delete_script,
             agiworkforce_desktop::commands::automation_execute_script,
-            agiworkforce_desktop::commands::overlay_show,
-            agiworkforce_desktop::commands::overlay_hide,
             agiworkforce_desktop::commands::overlay_emit_click,
             agiworkforce_desktop::commands::overlay_emit_type,
             agiworkforce_desktop::commands::overlay_emit_region,

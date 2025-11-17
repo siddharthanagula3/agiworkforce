@@ -180,9 +180,9 @@ impl ResponseParser {
         for part in parts {
             // Handle array indices like "items[0]"
             if part.contains('[') && part.contains(']') {
-                let bracket_pos = part.find('[').ok_or_else(|| {
-                    Error::Other(format!("Invalid JSON path segment: {}", part))
-                })?;
+                let bracket_pos = part
+                    .find('[')
+                    .ok_or_else(|| Error::Other(format!("Invalid JSON path segment: {}", part)))?;
                 let key = &part[..bracket_pos];
                 let index_str = &part[bracket_pos + 1..part.len() - 1];
                 let index: usize = index_str
