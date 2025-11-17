@@ -132,7 +132,7 @@ export function Sidebar({ className, onOpenSettings, currentView, onViewChange }
   return (
     <aside
       className={cn(
-        'relative flex h-full w-72 flex-col border-r border-border/60 bg-background/95 backdrop-blur-xl transition-all duration-200',
+        'relative flex h-full w-72 flex-col border-r border-border/60 bg-background/95 backdrop-blur-xl transition-all duration-300 ease-in-out',
         collapsed && 'w-20',
         className,
       )}

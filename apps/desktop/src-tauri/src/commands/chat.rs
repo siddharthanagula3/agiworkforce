@@ -474,6 +474,7 @@ pub fn chat_get_conversation_stats(
 async fn chat_send_message_streaming(
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
+    settings_state: State<'_, crate::commands::settings::SettingsState>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
@@ -560,12 +561,31 @@ async fn chat_send_message_streaming(
         })
         .collect();
 
+    // Get default model from settings if not provided
+    let model = if let Some(model) = request.model.clone() {
+        model
+    } else {
+        let settings = settings_state.settings.lock().await;
+        let provider = request
+            .provider
+            .as_ref()
+            .unwrap_or(&settings.llm_config.default_provider);
+        match provider.as_str() {
+            "openai" => settings.llm_config.default_models.openai.clone(),
+            "anthropic" => settings.llm_config.default_models.anthropic.clone(),
+            "google" => settings.llm_config.default_models.google.clone(),
+            "ollama" => settings.llm_config.default_models.ollama.clone(),
+            "xai" => settings.llm_config.default_models.xai.clone(),
+            "deepseek" => settings.llm_config.default_models.deepseek.clone(),
+            "qwen" => settings.llm_config.default_models.qwen.clone(),
+            "mistral" => settings.llm_config.default_models.mistral.clone(),
+            _ => settings.llm_config.default_models.openai.clone(),
+        }
+    };
+
     let llm_request = LLMRequest {
         messages: router_messages,
-        model: request
-            .model
-            .clone()
-            .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+        model,
         temperature: None,
         max_tokens: None,
         stream: true,
@@ -682,6 +702,7 @@ async fn chat_send_message_streaming(
 pub async fn chat_send_message(
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
+    settings_state: State<'_, crate::commands::settings::SettingsState>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
@@ -689,7 +710,8 @@ pub async fn chat_send_message(
 
     // Use separate streaming path if requested
     if stream_mode {
-        return chat_send_message_streaming(db, llm_state, app_handle, request).await;
+        return chat_send_message_streaming(db, llm_state, settings_state, app_handle, request)
+            .await;
     }
     let trimmed_content = request.content.trim().to_string();
     if trimmed_content.is_empty() {
@@ -892,12 +914,31 @@ pub async fn chat_send_message(
         }),
     );
 
+    // Get default model from settings if not provided
+    let model = if let Some(model) = request.model.clone() {
+        model
+    } else {
+        let settings = settings_state.settings.lock().await;
+        let provider = request
+            .provider
+            .as_ref()
+            .unwrap_or(&settings.llm_config.default_provider);
+        match provider.as_str() {
+            "openai" => settings.llm_config.default_models.openai.clone(),
+            "anthropic" => settings.llm_config.default_models.anthropic.clone(),
+            "google" => settings.llm_config.default_models.google.clone(),
+            "ollama" => settings.llm_config.default_models.ollama.clone(),
+            "xai" => settings.llm_config.default_models.xai.clone(),
+            "deepseek" => settings.llm_config.default_models.deepseek.clone(),
+            "qwen" => settings.llm_config.default_models.qwen.clone(),
+            "mistral" => settings.llm_config.default_models.mistral.clone(),
+            _ => settings.llm_config.default_models.openai.clone(),
+        }
+    };
+
     let llm_request = LLMRequest {
         messages: router_messages,
-        model: request
-            .model
-            .clone()
-            .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+        model,
         temperature: None,
         max_tokens: None,
         stream: stream_mode,     // Use real streaming based on request

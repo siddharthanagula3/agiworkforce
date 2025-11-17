@@ -340,3 +340,32 @@ export const selectIsModelFavorite = (modelId: string) => (state: ModelState) =>
  */
 export const selectProviderStatus = (provider: Provider) => (state: ModelState) =>
   state.providerStatuses[provider];
+
+/**
+ * Initialize model store from settings store defaults
+ * Should be called on app startup if no model is currently selected
+ */
+export const initializeModelStoreFromSettings = async () => {
+  const modelStore = useModelStore.getState();
+
+  // Only initialize if no model is currently selected
+  if (modelStore.selectedModel && modelStore.selectedProvider) {
+    return;
+  }
+
+  try {
+    // Dynamically import to avoid circular dependencies
+    const { useSettingsStore } = await import('./settingsStore');
+    const settingsStore = useSettingsStore.getState();
+
+    const defaultProvider = settingsStore.llmConfig.defaultProvider;
+    const defaultModel = settingsStore.llmConfig.defaultModels[defaultProvider];
+
+    if (defaultProvider && defaultModel) {
+      // Use selectModel to ensure proper state update
+      await modelStore.selectModel(defaultModel, defaultProvider);
+    }
+  } catch (error) {
+    console.error('Failed to initialize model store from settings:', error);
+  }
+};

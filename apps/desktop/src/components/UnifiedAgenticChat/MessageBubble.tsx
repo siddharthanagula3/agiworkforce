@@ -173,7 +173,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         </div>
 
         {/* Attachments */}
-        {message.attachments && message.attachments.length > 0 && (
+        {Array.isArray(message.attachments) && message.attachments.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {message.attachments.map((attachment) => (
               <div
@@ -192,7 +192,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Operations (File, Terminal, Tool, Approval, Screenshot) */}
-        {message.operations && message.operations.length > 0 && (
+        {Array.isArray(message.operations) && message.operations.length > 0 && (
           <div className="mt-3 space-y-2">
             {message.operations.map((operation) => {
               if (operation.type === 'file' && operation.data) {
