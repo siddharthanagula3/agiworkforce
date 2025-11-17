@@ -44,11 +44,37 @@ impl LLMState {
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 #[tauri::command]
 pub async fn llm_send_message(
     request: LLMSendMessageRequest,
     state: State<'_, LLMState>,
 ) -> Result<LLMResponse, String> {
+    // Validate messages array is not empty
+    if request.messages.is_empty() {
+        return Err("Messages array cannot be empty".to_string());
+    }
+    if request.messages.len() > 1000 {
+        return Err(format!("Too many messages: {}. Maximum is 1000", request.messages.len()));
+    }
+
+    // Validate temperature if provided
+    if let Some(temp) = request.temperature {
+        if temp < 0.0 || temp > 2.0 {
+            return Err(format!("Invalid temperature: {}. Must be between 0.0 and 2.0", temp));
+        }
+    }
+
+    // Validate max_tokens if provided
+    if let Some(max_tokens) = request.max_tokens {
+        if max_tokens == 0 {
+            return Err("max_tokens must be greater than 0".to_string());
+        }
+        if max_tokens > 1_000_000 {
+            return Err(format!("max_tokens too large: {}. Maximum is 1,000,000", max_tokens));
+        }
+    }
+
     // Parse provider
     let provider = request.provider.as_deref().and_then(|p| match p {
         "openai" => Some(Provider::OpenAI),
@@ -115,6 +141,7 @@ pub async fn llm_send_message(
         .to_string())
 }
 
+// Updated Nov 16, 2025: Added input validation for API keys
 #[tauri::command]
 pub async fn llm_configure_provider(
     provider: String,
@@ -122,6 +149,34 @@ pub async fn llm_configure_provider(
     base_url: Option<String>,
     state: State<'_, LLMState>,
 ) -> Result<(), String> {
+    // Validate provider name
+    if provider.trim().is_empty() {
+        return Err("Provider name cannot be empty".to_string());
+    }
+
+    // Validate API key if provided
+    if let Some(ref key) = api_key {
+        if key.trim().is_empty() {
+            return Err("API key cannot be empty".to_string());
+        }
+        if key.len() < 10 {
+            return Err("API key too short. Minimum length is 10 characters".to_string());
+        }
+        if key.len() > 500 {
+            return Err(format!("API key too long: {} characters. Maximum is 500", key.len()));
+        }
+    }
+
+    // Validate base URL if provided
+    if let Some(ref url) = base_url {
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            return Err(format!("Invalid base URL: {}. Must start with http:// or https://", url));
+        }
+        if url.len() > 1000 {
+            return Err(format!("Base URL too long: {} characters. Maximum is 1000", url.len()));
+        }
+    }
+
     let mut router = state.router.lock().await;
 
     match provider.as_str() {
@@ -189,11 +244,17 @@ pub async fn llm_configure_provider(
     }
 }
 
+// Updated Nov 16, 2025: Added input validation
 #[tauri::command]
 pub async fn llm_set_default_provider(
     provider: String,
     state: State<'_, LLMState>,
 ) -> Result<(), String> {
+    // Validate provider name
+    if provider.trim().is_empty() {
+        return Err("Provider name cannot be empty".to_string());
+    }
+
     let mut router = state.router.lock().await;
 
     let provider_enum = match provider.as_str() {

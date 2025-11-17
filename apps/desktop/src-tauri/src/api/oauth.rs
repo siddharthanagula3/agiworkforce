@@ -105,13 +105,14 @@ impl Clone for OAuth2Client {
 
 impl OAuth2Client {
     /// Create new OAuth 2.0 client
-    pub fn new(config: OAuth2Config) -> Self {
+    /// Updated Nov 16, 2025: Return Result instead of panicking on HTTP client construction failure
+    pub fn new(config: OAuth2Config) -> crate::error::Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| crate::error::Error::Other(format!("Failed to create HTTP client for OAuth2: {}", e)))?;
 
-        Self { config, client }
+        Ok(Self { config, client })
     }
 
     /// Get the configured client ID

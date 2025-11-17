@@ -48,12 +48,38 @@ pub async fn db_create_pool(
         .map_err(|e| format!("Failed to create connection pool: {}", e))
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation and security checks
 #[tauri::command]
 pub async fn db_execute_query(
     connection_id: String,
     sql: String,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<serde_json::Value, String> {
+    // Validate connection_id
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+    if connection_id.len() > 500 {
+        return Err(format!("Connection ID too long: {} characters. Maximum is 500", connection_id.len()));
+    }
+
+    // Validate SQL query
+    if sql.trim().is_empty() {
+        return Err("SQL query cannot be empty".to_string());
+    }
+    if sql.len() > 1_000_000 {
+        return Err(format!("SQL query too long: {} characters. Maximum is 1MB", sql.len()));
+    }
+
+    // Security: Warn about potentially dangerous queries
+    let dangerous_keywords = ["DROP", "TRUNCATE", "DELETE FROM", "ALTER", "CREATE USER", "GRANT"];
+    let sql_upper = sql.to_uppercase();
+    for keyword in &dangerous_keywords {
+        if sql_upper.contains(keyword) {
+            tracing::warn!("Executing potentially dangerous SQL query with keyword: {}", keyword);
+        }
+    }
+
     let state = state.lock().await;
 
     state
@@ -61,9 +87,10 @@ pub async fn db_execute_query(
         .execute_query(&connection_id, &sql)
         .await
         .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("Query execution failed: {}", e))
+        .map_err(|e| format!("Query execution failed for connection '{}': {}", connection_id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation
 #[tauri::command]
 pub async fn db_execute_prepared(
     connection_id: String,
@@ -71,6 +98,24 @@ pub async fn db_execute_prepared(
     params: Vec<serde_json::Value>,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<serde_json::Value, String> {
+    // Validate connection_id
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // Validate SQL query
+    if sql.trim().is_empty() {
+        return Err("SQL query cannot be empty".to_string());
+    }
+    if sql.len() > 1_000_000 {
+        return Err(format!("SQL query too long: {} characters. Maximum is 1MB", sql.len()));
+    }
+
+    // Validate params array size
+    if params.len() > 1000 {
+        return Err(format!("Too many parameters: {}. Maximum is 1000", params.len()));
+    }
+
     let state = state.lock().await;
 
     state
@@ -81,12 +126,36 @@ pub async fn db_execute_prepared(
         .map_err(|e| format!("Prepared statement execution failed: {}", e))
 }
 
+// Updated Nov 16, 2025: Added input validation for batch operations
 #[tauri::command]
 pub async fn db_execute_batch(
     connection_id: String,
     queries: Vec<String>,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<Vec<serde_json::Value>, String> {
+    // Validate connection_id
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // Validate queries array
+    if queries.is_empty() {
+        return Err("Queries array cannot be empty".to_string());
+    }
+    if queries.len() > 100 {
+        return Err(format!("Too many queries in batch: {}. Maximum is 100", queries.len()));
+    }
+
+    // Validate each query
+    for (index, query) in queries.iter().enumerate() {
+        if query.trim().is_empty() {
+            return Err(format!("Query at index {} is empty", index));
+        }
+        if query.len() > 1_000_000 {
+            return Err(format!("Query at index {} too long: {} characters. Maximum is 1MB", index, query.len()));
+        }
+    }
+
     let state = state.lock().await;
 
     state
@@ -494,6 +563,7 @@ pub async fn db_redis_get(
         .map_err(|e| format!("Redis GET failed: {}", e))
 }
 
+// Updated Nov 16, 2025: Added validation for Redis key/value sizes
 #[tauri::command]
 pub async fn db_redis_set(
     connection_id: String,
@@ -502,6 +572,34 @@ pub async fn db_redis_set(
     expiration_seconds: Option<u64>,
     state: State<'_, Mutex<DatabaseState>>,
 ) -> Result<(), String> {
+    // Validate connection_id
+    if connection_id.trim().is_empty() {
+        return Err("Connection ID cannot be empty".to_string());
+    }
+
+    // Validate key
+    if key.is_empty() {
+        return Err("Redis key cannot be empty".to_string());
+    }
+    if key.len() > 512_000_000 {
+        return Err(format!("Redis key too long: {} bytes. Maximum is 512MB", key.len()));
+    }
+
+    // Validate value size
+    if value.len() > 512_000_000 {
+        return Err(format!("Redis value too large: {} bytes. Maximum is 512MB", value.len()));
+    }
+
+    // Validate expiration if provided
+    if let Some(exp) = expiration_seconds {
+        if exp == 0 {
+            return Err("Expiration must be greater than 0 seconds".to_string());
+        }
+        if exp > 31_536_000 {
+            return Err(format!("Expiration too long: {} seconds. Maximum is 1 year (31,536,000 seconds)", exp));
+        }
+    }
+
     let state = state.lock().await;
 
     state

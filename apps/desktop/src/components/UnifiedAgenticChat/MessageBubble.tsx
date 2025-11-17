@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+// Updated Nov 16, 2025: Added React.memo for performance optimization
+import React, { useMemo, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -23,7 +24,8 @@ export interface MessageBubbleProps {
   onCopy?: () => void;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+// Updated Nov 16, 2025: Memoized component to prevent unnecessary re-renders
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   message,
   showAvatar = true,
   showTimestamp = true,
@@ -39,13 +41,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isSystem = message.role === 'system';
   const isAssistant = message.role === 'assistant';
 
-  const avatarBg = isUser ? 'bg-blue-600' : isSystem ? 'bg-gray-600' : 'bg-purple-600';
+  // Updated Nov 16, 2025: Memoized computed values to prevent re-computation
+  const avatarBg = useMemo(
+    () => (isUser ? 'bg-blue-600' : isSystem ? 'bg-gray-600' : 'bg-purple-600'),
+    [isUser, isSystem],
+  );
 
-  const bubbleBg = isUser
-    ? 'bg-blue-50 dark:bg-blue-900/20'
-    : isSystem
-      ? 'bg-gray-50 dark:bg-gray-800/50'
-      : 'bg-white dark:bg-gray-800';
+  const bubbleBg = useMemo(
+    () =>
+      isUser
+        ? 'bg-blue-50 dark:bg-blue-900/20'
+        : isSystem
+          ? 'bg-gray-50 dark:bg-gray-800/50'
+          : 'bg-white dark:bg-gray-800',
+    [isUser, isSystem],
+  );
 
   const formattedTime = useMemo(() => {
     const date = new Date(message.timestamp);
@@ -55,14 +65,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     });
   }, [message.timestamp]);
 
-  const handleCopy = async () => {
+  // Updated Nov 16, 2025: Wrapped handler in useCallback to prevent re-renders
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(message.content);
       onCopy?.();
     } catch (err) {
       console.error('Failed to copy message:', err);
     }
-  };
+  }, [message.content, onCopy]);
 
   return (
     <div
@@ -110,7 +121,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               rehypePlugins={[rehypeKatex]}
               components={{
                 code(props) {
-                  const { inline, className, children, ...rest } = props as any;
+                  // Updated Nov 16, 2025: Fixed type safety - use proper React element props
+                  const { inline, className, children, ...rest } =
+                    props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
                   const match = /language-(\w+)/.exec(className || '');
                   const language = match ? match[1] : 'text';
                   const code = String(children).replace(/\n$/, '');
@@ -285,4 +298,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
 };
 
+MessageBubbleComponent.displayName = 'MessageBubble';
+
+export const MessageBubble = memo(MessageBubbleComponent);
 export default MessageBubble;
