@@ -39,12 +39,16 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     loadConversations();
   }, [loadConversations]);
 
+  // Updated Nov 16, 2025: Track which messages have been counted to prevent duplicates
+  const countedMessageIdsRef = useRef<Set<number>>(new Set());
+
   // Track token usage in budget system when messages change
   useEffect(() => {
     if (budget.enabled && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.tokens) {
+      if (lastMessage && lastMessage.tokens && !countedMessageIdsRef.current.has(lastMessage.id)) {
         addTokenUsage(lastMessage.tokens);
+        countedMessageIdsRef.current.add(lastMessage.id);
       }
     }
   }, [messages, budget.enabled, addTokenUsage]);

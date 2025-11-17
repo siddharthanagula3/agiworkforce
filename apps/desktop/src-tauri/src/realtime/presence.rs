@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Replaced .unwrap() with proper error handling
 use chrono::Utc;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -56,26 +57,29 @@ impl PresenceManager {
             current_activity: None,
         };
 
-        self.online_users
-            .lock()
-            .unwrap()
-            .insert(user_id.to_string(), presence.clone());
+        if let Ok(mut users) = self.online_users.lock() {
+            users.insert(user_id.to_string(), presence.clone());
+        }
         let _ = self.persist_presence(&presence);
     }
 
     pub fn set_offline(&self, user_id: &str) {
-        if let Some(presence) = self.online_users.lock().unwrap().get_mut(user_id) {
-            presence.status = PresenceStatus::Offline;
-            presence.last_seen = Utc::now().timestamp();
-            let _ = self.persist_presence(presence);
+        if let Ok(mut users) = self.online_users.lock() {
+            if let Some(presence) = users.get_mut(user_id) {
+                presence.status = PresenceStatus::Offline;
+                presence.last_seen = Utc::now().timestamp();
+                let _ = self.persist_presence(presence);
+            }
+            users.remove(user_id);
         }
-        self.online_users.lock().unwrap().remove(user_id);
     }
 
     pub fn set_activity(&self, user_id: &str, activity: UserActivity) {
-        if let Some(presence) = self.online_users.lock().unwrap().get_mut(user_id) {
-            presence.current_activity = Some(activity);
-            let _ = self.persist_presence(presence);
+        if let Ok(mut users) = self.online_users.lock() {
+            if let Some(presence) = users.get_mut(user_id) {
+                presence.current_activity = Some(activity);
+                let _ = self.persist_presence(presence);
+            }
         }
     }
 
@@ -84,18 +88,24 @@ impl PresenceManager {
         // In a real implementation, filter by team_id from database
         self.online_users
             .lock()
-            .unwrap()
-            .values()
-            .cloned()
-            .collect()
+            .map(|guard| guard.values().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn get_user_presence(&self, user_id: &str) -> Option<UserPresence> {
-        self.online_users.lock().unwrap().get(user_id).cloned()
+        self.online_users
+            .lock()
+            .ok()
+            .and_then(|guard| guard.get(user_id).cloned())
     }
 
     fn persist_presence(&self, presence: &UserPresence) -> Result<(), rusqlite::Error> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to acquire database lock: {}", e),
+            )))
+        })?;
         let activity_json = presence
             .current_activity
             .as_ref()

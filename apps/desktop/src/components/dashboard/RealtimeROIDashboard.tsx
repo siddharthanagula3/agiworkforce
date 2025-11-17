@@ -37,16 +37,8 @@ export const RealtimeROIDashboard: React.FC = () => {
   const [range, setRange] = useState<TimeRange>('today');
   const userId = 'default'; // TODO: Get from auth context
 
-  useEffect(() => {
-    loadStats();
-
-    // Refresh stats every 10 seconds
-    const interval = setInterval(loadStats, 10000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadStats = async () => {
+  // Updated Nov 16, 2025: Fixed missing dependency and potential memory leak
+  const loadStats = React.useCallback(async () => {
     try {
       const result = await invoke<RealtimeStats>('get_realtime_stats', {
         userId,
@@ -58,7 +50,16 @@ export const RealtimeROIDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    loadStats();
+
+    // Refresh stats every 10 seconds
+    const interval = setInterval(loadStats, 10000);
+
+    return () => clearInterval(interval);
+  }, [loadStats]);
 
   const getCurrentStats = (): PeriodStats => {
     if (!stats) return defaultStats;

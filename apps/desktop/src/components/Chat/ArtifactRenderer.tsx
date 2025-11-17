@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Added accessible dialogs to replace window.prompt
 import { useState, useMemo } from 'react';
 import { Copy, Check, Download, Code2, BarChart3, Network, FileUp } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -27,6 +28,7 @@ import type { Artifact } from '../../types/chat';
 import { useCodeStore } from '../../stores/codeStore';
 import { toast } from 'sonner';
 import { invoke } from '@tauri-apps/api/core';
+import { usePrompt } from '../ui/PromptDialog';
 
 interface ArtifactRendererProps {
   artifact: Artifact;
@@ -40,6 +42,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   const openFile = useCodeStore((state) => state.openFile);
   const setActiveFile = useCodeStore((state) => state.setActiveFile);
 
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { prompt, dialog: promptDialog } = usePrompt();
+
   const buildAbsolutePath = (base: string, target: string) => {
     const separator = base.includes('\\') ? '\\' : '/';
     const trimmed = target.replace(/^[\\/]+/, '').trim();
@@ -49,13 +54,22 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     return base.endsWith(separator) ? `${base}${trimmed}` : `${base}${separator}${trimmed}`;
   };
 
+  // Updated Nov 16, 2025: Use accessible PromptDialog instead of window.prompt
   const handleInsertIntoEditor = async () => {
     if (artifact.type !== 'code') return;
     if (!rootPath) {
       toast.error('Open a project folder before applying code to a file.');
       return;
     }
-    const relativePath = window.prompt('Enter relative path to write code', 'src/new-file.ts');
+
+    const relativePath = await prompt({
+      title: 'Write code to file',
+      description: 'Enter the relative path where you want to save this code',
+      label: 'File path',
+      defaultValue: 'src/new-file.ts',
+      placeholder: 'src/component.tsx',
+    });
+
     if (!relativePath) {
       return;
     }
@@ -390,6 +404,9 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
       <pre className="p-4 bg-background rounded-lg border overflow-x-auto">
         <code className="text-sm">{artifact.content}</code>
       </pre>
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {promptDialog}
     </div>
   );
 }

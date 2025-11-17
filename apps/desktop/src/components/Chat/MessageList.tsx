@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { VariableSizeList as List } from 'react-window';
 import type { CSSProperties } from 'react';
@@ -39,7 +39,8 @@ type MessageListItem =
 
 const ESTIMATED_ROW_HEIGHT = 120;
 
-const MessageRow = ({ index, style, data }: RowProps) => {
+// Updated Nov 16, 2025: Memoized MessageRow to prevent unnecessary re-renders
+const MessageRow = memo(({ index, style, data }: RowProps) => {
   const { items, registerSize, onRegenerateMessage } = data;
   const { onEditMessage, onDeleteMessage } = data;
   const item = items[index];
@@ -101,7 +102,8 @@ const MessageRow = ({ index, style, data }: RowProps) => {
       </div>
     </div>
   );
-};
+});
+MessageRow.displayName = 'MessageRow';
 
 export function MessageList({
   messages,
@@ -134,12 +136,14 @@ export function MessageList({
     [],
   );
 
+  // Updated Nov 16, 2025: Optimized items computation using for...of loop
   const items = useMemo(() => {
     const result: MessageListItem[] = [];
     let lastDateKey: string | null = null;
     let unreadDividerInserted = false;
 
-    messages.forEach((message) => {
+    // Use for...of instead of forEach for better performance
+    for (const message of messages) {
       const date = message.timestamp;
       const dateKey = date.toDateString();
       if (dateKey !== lastDateKey) {
@@ -171,7 +175,7 @@ export function MessageList({
         key: message.id,
         message,
       });
-    });
+    }
 
     if (loading) {
       result.push({ type: 'loading', key: 'loading-indicator' });
