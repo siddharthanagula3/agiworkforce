@@ -1,7 +1,9 @@
+// Updated Nov 16, 2025: Added tokenBudgetStore import to module level to fix race condition
 import { create } from 'zustand';
 import { invoke, isTauri } from '../lib/tauri-mock';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { useTokenBudgetStore } from './tokenBudgetStore';
 import type {
   Conversation,
   ConversationUI,
@@ -323,8 +325,8 @@ export const useChatStore = create<ChatState>()(
           return;
         }
 
+        // Updated Nov 16, 2025: Fixed async import race condition
         // Check token budget before sending
-        const { useTokenBudgetStore } = await import('./tokenBudgetStore');
         const budgetState = useTokenBudgetStore.getState();
         const { budget } = budgetState;
         if (budget.enabled && budget.currentUsage >= budget.limit) {
