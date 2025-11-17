@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Eye,
   EyeOff,
@@ -198,7 +198,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          {/* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */}
+          /* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */
           <Tabs defaultValue="api-keys" className="mt-6">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
@@ -573,18 +573,20 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   );
 }
 
-function AgentLibraryTab() {
+function _AgentLibraryTab() {
   return (
     <div>
       <h3 className="text-lg font-semibold mb-4">Agent Library</h3>
       <p className="text-sm text-muted-foreground mb-6">
-        Manage your AI Employees - specialized agents that can be used as tools in chat conversations
+        Manage your AI Employees - specialized agents that can be used as tools in chat
+        conversations
       </p>
 
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-6">
         <p className="text-sm text-muted-foreground">
-          <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in your conversations.
-          Hire and configure agents here, then reference them by name in chat (e.g., "@CodeReviewer").
+          <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in
+          your conversations. Hire and configure agents here, then reference them by name in chat
+          (e.g., "@CodeReviewer").
         </p>
       </div>
 
