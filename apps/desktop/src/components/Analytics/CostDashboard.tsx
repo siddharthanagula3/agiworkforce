@@ -1,5 +1,5 @@
-// Updated Nov 16, 2025: Added accessible dialogs to replace window.prompt/alert
-import { useEffect, useMemo } from 'react';
+// Updated Nov 16, 2025: Added accessible dialogs and React.memo for performance
+import { useEffect, useMemo, memo } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -39,13 +39,15 @@ function formatCurrency(value: number | null | undefined): string {
   return currency.format(value);
 }
 
+// Updated Nov 16, 2025: Moved outside component to prevent re-creation
 const DAY_OPTIONS = [
   { label: '7 days', value: 7 },
   { label: '30 days', value: 30 },
   { label: '90 days', value: 90 },
-];
+] as const;
 
-export function CostDashboard() {
+// Updated Nov 16, 2025: Memoized component to prevent unnecessary re-renders
+export const CostDashboard = memo(function CostDashboard() {
   const {
     overview,
     analytics,
@@ -436,4 +438,4 @@ export function CostDashboard() {
       {promptDialog}
     </div>
   );
-}
+});
