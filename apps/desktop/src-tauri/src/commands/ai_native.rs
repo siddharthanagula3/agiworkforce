@@ -1,261 +1,95 @@
-use crate::agent::code_generator::{CodeGenRequest, CodeGenResult, CodeGenerator};
-/// Tauri commands for AI-native software engineering features
-use crate::agent::context_manager::{Constraint, ConstraintType, ContextManager};
+// TODO: These commands are currently stubbed out because they were part of the deleted
+// agent/ module. The equivalent functionality exists in agi/ but has different APIs.
+// These commands are NOT used by the frontend, so they're safely disabled for now.
+// If needed in the future, they should be reimplemented using the agi/ module.
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::Mutex;
 
-/// ContextManager state
-pub struct ContextManagerState(pub Arc<Mutex<ContextManager>>);
+/// Placeholder state - not actually used
+pub struct ContextManagerState(pub Arc<Mutex<()>>);
 
-/// CodeGenerator state
-pub struct CodeGeneratorState(pub Arc<Mutex<CodeGenerator>>);
+/// Placeholder state - not actually used
+pub struct CodeGeneratorState(pub Arc<Mutex<()>>);
 
-impl ContextManagerState {
-    pub async fn lock(&self) -> MutexGuard<'_, ContextManager> {
-        self.0.lock().await
-    }
-}
-
-impl CodeGeneratorState {
-    pub async fn lock(&self) -> MutexGuard<'_, CodeGenerator> {
-        self.0.lock().await
-    }
-}
-
-/// Analyze project and build context
+/// Analyze project and build context (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_analyze_project(
-    state: State<'_, ContextManagerState>,
-    project_root: String,
+    _state: State<'_, ContextManagerState>,
+    _project_root: String,
 ) -> Result<String, String> {
-    let mut manager = state.inner().lock().await;
-    manager.set_project_root(PathBuf::from(project_root));
-    manager
-        .analyze_project()
-        .await
-        .map_err(|e| format!("Failed to analyze project: {}", e))?;
-
-    let context = manager.get_project_context();
-    Ok(format!(
-        "Project analyzed: {} ({})",
-        context.language, context.project_type
-    ))
+    Err("ai_analyze_project is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Add a constraint
+/// Add a constraint (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_add_constraint(
-    state: State<'_, ContextManagerState>,
-    constraint_type: String,
-    description: String,
-    priority: u8,
-    enforced: bool,
-    metadata: serde_json::Value,
+    _state: State<'_, ContextManagerState>,
+    _constraint_type: String,
+    _description: String,
+    _priority: u8,
+    _enforced: bool,
+    _metadata: serde_json::Value,
 ) -> Result<String, String> {
-    let constraint_type = match constraint_type.as_str() {
-        "code_style" => {
-            let rules = metadata["rules"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::CodeStyle { rules }
-        }
-        "performance" => {
-            let requirements = metadata["requirements"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::Performance { requirements }
-        }
-        "security" => {
-            let requirements = metadata["requirements"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::Security { requirements }
-        }
-        "architecture" => {
-            let patterns = metadata["patterns"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::Architecture { patterns }
-        }
-        "dependencies" => {
-            let allowed = metadata["allowed"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let forbidden = metadata["forbidden"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::Dependencies { allowed, forbidden }
-        }
-        "testing" => {
-            let requirements = metadata["requirements"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::Testing { requirements }
-        }
-        "documentation" => {
-            let requirements = metadata["requirements"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            ConstraintType::Documentation { requirements }
-        }
-        _ => return Err(format!("Unknown constraint type: {}", constraint_type)),
-    };
-
-    let constraint = Constraint {
-        id: uuid::Uuid::new_v4().to_string(),
-        constraint_type,
-        priority,
-        description,
-        enforced,
-    };
-
-    let mut manager = state.inner().lock().await;
-    manager.add_constraint(constraint.clone());
-
-    Ok(format!("Constraint added: {}", constraint.description))
+    Err("ai_add_constraint is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Generate code based on description and constraints
+/// Generate code based on description and constraints (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_generate_code(
-    state: State<'_, CodeGeneratorState>,
-    task_id: String,
-    description: String,
-    target_files: Vec<String>,
-    context: Option<String>,
-) -> Result<CodeGenResult, String> {
-    let generator = state.inner().lock().await;
-
-    // Get constraints from context manager
-    let constraints = Vec::new(); // TODO: Get from context manager
-
-    let request = CodeGenRequest {
-        task_id,
-        description,
-        target_files: target_files.into_iter().map(PathBuf::from).collect(),
-        constraints,
-        context: context.unwrap_or_default(),
-    };
-
-    generator
-        .generate_code(request)
-        .await
-        .map_err(|e| format!("Code generation failed: {}", e))
+    _state: State<'_, CodeGeneratorState>,
+    _task_id: String,
+    _description: String,
+    _target_files: Vec<String>,
+    _context: Option<String>,
+) -> Result<String, String> {
+    Err("ai_generate_code is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Refactor existing code
+/// Refactor existing code (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_refactor_code(
-    state: State<'_, CodeGeneratorState>,
-    files: Vec<String>,
-    description: String,
-) -> Result<CodeGenResult, String> {
-    let generator = state.inner().lock().await;
-
-    generator
-        .refactor_code(
-            files.into_iter().map(PathBuf::from).collect(),
-            description,
-            Vec::new(), // TODO: Get constraints
-        )
-        .await
-        .map_err(|e| format!("Refactoring failed: {}", e))
+    _state: State<'_, CodeGeneratorState>,
+    _files: Vec<String>,
+    _description: String,
+) -> Result<String, String> {
+    Err("ai_refactor_code is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Generate tests for files
+/// Generate tests for files (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_generate_tests(
-    state: State<'_, CodeGeneratorState>,
-    source_files: Vec<String>,
-    test_framework: Option<String>,
-) -> Result<Vec<crate::agent::code_generator::GeneratedFile>, String> {
-    let generator = state.inner().lock().await;
-
-    generator
-        .generate_tests(
-            source_files.into_iter().map(PathBuf::from).collect(),
-            test_framework,
-        )
-        .await
-        .map_err(|e| format!("Test generation failed: {}", e))
+    _state: State<'_, CodeGeneratorState>,
+    _source_files: Vec<String>,
+    _test_framework: Option<String>,
+) -> Result<Vec<String>, String> {
+    Err("ai_generate_tests is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Get project context
+/// Get project context (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_get_project_context(
-    state: State<'_, ContextManagerState>,
+    _state: State<'_, ContextManagerState>,
 ) -> Result<serde_json::Value, String> {
-    let manager = state.inner().lock().await;
-    let context = manager.get_project_context();
-
-    serde_json::to_value(context).map_err(|e| format!("Serialization failed: {}", e))
+    Err("ai_get_project_context is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Generate context prompt for LLM
+/// Generate context prompt for LLM (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_generate_context_prompt(
-    state: State<'_, ContextManagerState>,
-    task_description: String,
+    _state: State<'_, ContextManagerState>,
+    _task_description: String,
 ) -> Result<String, String> {
-    let manager = state.inner().lock().await;
-    Ok(manager.generate_context_prompt(&task_description))
+    Err("ai_generate_context_prompt is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
 
-/// Intelligently access a file (with screenshot fallback)
+/// Intelligently access a file (with screenshot fallback) (STUBBED - not implemented)
 #[tauri::command]
 pub async fn ai_access_file(
-    file_path: String,
-    context: Option<String>,
-) -> Result<crate::agent::intelligent_file_access::FileAccessResult, String> {
-    use crate::agent::intelligent_file_access::IntelligentFileAccess;
-
-    let file_access = IntelligentFileAccess::new()
-        .map_err(|e| format!("Failed to initialize file access: {}", e))?;
-
-    file_access
-        .access_file(PathBuf::from(file_path).as_path(), context.as_deref())
-        .await
-        .map_err(|e| format!("File access failed: {}", e))
+    _file_path: String,
+    _context: Option<String>,
+) -> Result<String, String> {
+    Err("ai_access_file is not implemented. This command was part of the deleted agent/ module.".to_string())
 }
