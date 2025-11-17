@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
@@ -20,6 +21,7 @@ import { ScrollArea } from '../ui/ScrollArea';
 import { useCalendarStore, type CalendarConnectConfig } from '../../stores/calendarStore';
 import type { CalendarEvent, EventDateTime, CalendarProvider } from '../../types/calendar';
 import CalendarMonthView from './CalendarMonthView';
+import { useConfirm } from '../ui/ConfirmDialog';
 
 interface CalendarWorkspaceProps {
   className?: string;
@@ -82,6 +84,10 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
   const [authCode, setAuthCode] = useState('');
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
+
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
   const createDefaultForm = useCallback(() => {
     const base = selectedDate ? new Date(selectedDate) : new Date();
 
@@ -296,8 +302,15 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
     }
   };
 
+  // Updated Nov 16, 2025: Use accessible ConfirmDialog instead of window.confirm
   const handleDeleteEvent = async (event: CalendarEvent) => {
-    const confirmed = window.confirm(`Delete the event "${event.title}"? This cannot be undone.`);
+    const confirmed = await confirm({
+      title: 'Delete event?',
+      description: `Are you sure you want to delete "${event.title}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'destructive',
+    });
+
     if (!confirmed) {
       return;
     }
@@ -702,6 +715,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {confirmDialog}
     </div>
   );
 }

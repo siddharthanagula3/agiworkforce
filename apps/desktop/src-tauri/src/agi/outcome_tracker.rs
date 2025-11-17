@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Replaced .unwrap() with proper error handling
 use super::process_reasoning::{Outcome, ProcessType, Strategy};
 use anyhow::Result;
 use rusqlite::{params, Connection};
@@ -97,11 +98,12 @@ impl OutcomeTracker {
         };
 
         {
-            let mut cache = self.cache.lock().unwrap();
-            cache.recent_outcomes.push(tracked);
-            // Keep only last 100 outcomes in cache
-            if cache.recent_outcomes.len() > 100 {
-                cache.recent_outcomes.remove(0);
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.recent_outcomes.push(tracked);
+                // Keep only last 100 outcomes in cache
+                if cache.recent_outcomes.len() > 100 {
+                    cache.recent_outcomes.remove(0);
+                }
             }
         }
 
@@ -148,9 +150,10 @@ impl OutcomeTracker {
     pub fn calculate_success_rate(&self, process_type: ProcessType) -> Result<f64> {
         // Check cache first
         {
-            let cache = self.cache.lock().unwrap();
-            if let Some(rate) = cache.success_rates.get(process_type.as_str()) {
-                return Ok(*rate);
+            if let Ok(cache) = self.cache.lock() {
+                if let Some(rate) = cache.success_rates.get(process_type.as_str()) {
+                    return Ok(*rate);
+                }
             }
         }
 
@@ -177,10 +180,11 @@ impl OutcomeTracker {
 
         // Update cache
         {
-            let mut cache = self.cache.lock().unwrap();
-            cache
-                .success_rates
-                .insert(process_type.as_str().to_string(), rate);
+            if let Ok(mut cache) = self.cache.lock() {
+                cache
+                    .success_rates
+                    .insert(process_type.as_str().to_string(), rate);
+            }
         }
 
         Ok(rate)
@@ -393,8 +397,9 @@ impl OutcomeTracker {
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
         {
-            let mut cache = self.cache.lock().unwrap();
-            cache.recent_outcomes = outcomes;
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.recent_outcomes = outcomes;
+            }
         }
 
         self.refresh_success_rates()?;
@@ -412,8 +417,9 @@ impl OutcomeTracker {
         }
 
         {
-            let mut cache = self.cache.lock().unwrap();
-            cache.success_rates = rates;
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.success_rates = rates;
+            }
         }
 
         Ok(())

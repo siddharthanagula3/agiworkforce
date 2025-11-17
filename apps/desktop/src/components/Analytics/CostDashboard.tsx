@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Added accessible dialogs to replace window.prompt/alert
 import { useEffect, useMemo } from 'react';
 import {
   ResponsiveContainer,
@@ -20,6 +21,8 @@ import { Skeleton } from '../ui/Skeleton';
 import { useCostStore } from '../../stores/costStore';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
+import { usePrompt } from '../ui/PromptDialog';
+import { toast } from 'sonner';
 
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -65,6 +68,9 @@ export function CostDashboard() {
     setMonthlyBudget: state.setMonthlyBudget,
   }));
 
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { prompt, dialog: promptDialog } = usePrompt();
+
   useEffect(() => {
     if (!overview && !loadingOverview) {
       void loadOverview();
@@ -83,26 +89,33 @@ export function CostDashboard() {
     return MODEL_PRESETS[filters.provider as Provider] ?? [];
   }, [filters.provider]);
 
+  // Updated Nov 16, 2025: Use accessible PromptDialog instead of window.prompt, toast instead of window.alert
   const handleBudgetUpdate = async () => {
     const current = overview?.monthly_budget ?? undefined;
-    const input = window.prompt(
-      'Set monthly budget (USD). Leave empty to clear.',
-      current != null ? String(current) : '',
-    );
+    const input = await prompt({
+      title: 'Set Monthly Budget',
+      description: 'Set your monthly budget in USD. Leave empty to clear.',
+      label: 'Budget (USD)',
+      defaultValue: current != null ? String(current) : '',
+      placeholder: '100.00',
+    });
+
     if (input === null) {
       return;
     }
     const trimmed = input.trim();
     if (trimmed.length === 0) {
       await setMonthlyBudget(undefined);
+      toast.success('Monthly budget cleared');
       return;
     }
     const amount = Number.parseFloat(trimmed);
     if (Number.isNaN(amount) || amount < 0) {
-      window.alert('Please enter a valid non-negative number.');
+      toast.error('Please enter a valid non-negative number.');
       return;
     }
     await setMonthlyBudget(amount);
+    toast.success('Monthly budget updated');
   };
 
   return (
@@ -418,6 +431,9 @@ export function CostDashboard() {
           </Card>
         </div>
       </ScrollArea>
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {promptDialog}
     </div>
   );
 }
