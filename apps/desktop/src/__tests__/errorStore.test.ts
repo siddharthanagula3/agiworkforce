@@ -1,13 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// Updated Nov 16, 2025: Added proper cleanup in beforeEach and afterEach
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import useErrorStore from '../stores/errorStore';
 
 describe('errorStore', () => {
   beforeEach(() => {
-    // Reset store before each test
+    // Reset store before each test to prevent test pollution
     useErrorStore.setState({
       errors: [],
       toasts: [],
     });
+  });
+
+  afterEach(() => {
+    // Clear all errors and toasts after each test
+    useErrorStore.getState().clearHistory();
   });
 
   describe('addError', () => {

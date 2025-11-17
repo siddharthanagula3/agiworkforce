@@ -30,6 +30,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { SyntaxHighlighterProps } from 'react-syntax-highlighter';
 import type { ToolResultUI, TableData, DiffData } from '../../types/toolCalling';
+import { sanitizeMarkdownHtml } from '../../utils/security';
 
 interface ToolResultCardProps {
   result: ToolResultUI;
@@ -143,10 +144,12 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
       }
 
       case 'markdown': {
+        // Updated Nov 16, 2025: Added XSS protection with DOMPurify sanitization
         const markdown = typeof result.data === 'string' ? result.data : String(result.data);
+        const sanitizedMarkdown = sanitizeMarkdownHtml(markdown);
         return (
           <div className="prose prose-sm dark:prose-invert max-w-none p-3 bg-muted/20 rounded border border-border">
-            <div dangerouslySetInnerHTML={{ __html: markdown }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizedMarkdown }} />
           </div>
         );
       }

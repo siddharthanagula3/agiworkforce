@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// Updated Nov 16, 2025: Added React.memo and performance optimizations
+import React, { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Card } from '../ui/Card';
 import { Loader2 } from 'lucide-react';
@@ -30,7 +31,10 @@ interface RealtimeStats {
 
 type TimeRange = 'today' | 'week' | 'month' | 'all';
 
-export const RealtimeROIDashboard: React.FC = () => {
+// Updated Nov 16, 2025: Memoized array to prevent re-creation on each render
+const TIME_RANGE_OPTIONS: TimeRange[] = ['today', 'week', 'month', 'all'];
+
+const RealtimeROIDashboardComponent: React.FC = () => {
   const [stats, setStats] = useState<RealtimeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,8 @@ export const RealtimeROIDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadStats]);
 
-  const getCurrentStats = (): PeriodStats => {
+  // Updated Nov 16, 2025: Memoized to prevent re-computation on unrelated state changes
+  const getCurrentStats = useCallback((): PeriodStats => {
     if (!stats) return defaultStats;
 
     switch (range) {
@@ -76,23 +81,30 @@ export const RealtimeROIDashboard: React.FC = () => {
       default:
         return stats.today;
     }
-  };
+  }, [stats, range]);
 
-  const formatTime = (hours: number): string => {
+  const formatTime = useCallback((hours: number): string => {
     if (hours < 1) {
       return `${Math.round(hours * 60)}m`;
     }
     return `${hours.toFixed(1)}h`;
-  };
+  }, []);
 
-  const formatCurrency = (amount: number): string => {
+  const formatCurrency = useCallback((amount: number): string => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
-  };
+  }, []);
+
+  // Updated Nov 16, 2025: Move useMemo before early returns to fix React Hooks rules
+  const currentStats = useMemo(() => getCurrentStats(), [getCurrentStats]);
+  const topEmployees = useMemo(
+    () => currentStats.top_employees.slice(0, 5),
+    [currentStats.top_employees],
+  );
 
   if (loading) {
     return (
@@ -119,14 +131,10 @@ export const RealtimeROIDashboard: React.FC = () => {
     );
   }
 
-  const currentStats = getCurrentStats();
-
   return (
     <div className="p-6 space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Your ROI Dashboard
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your ROI Dashboard</h1>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-sm text-gray-600 dark:text-gray-400">Live</span>
@@ -134,8 +142,9 @@ export const RealtimeROIDashboard: React.FC = () => {
       </div>
 
       {/* Time Range Selector */}
+      {/* Updated Nov 16, 2025: Use memoized array to prevent re-creation */}
       <div className="flex gap-2">
-        {(['today', 'week', 'month', 'all'] as TimeRange[]).map((r) => (
+        {TIME_RANGE_OPTIONS.map((r) => (
           <button
             key={r}
             onClick={() => setRange(r)}
@@ -148,10 +157,10 @@ export const RealtimeROIDashboard: React.FC = () => {
             {r === 'today'
               ? 'Today'
               : r === 'week'
-              ? 'This Week'
-              : r === 'month'
-              ? 'This Month'
-              : 'All Time'}
+                ? 'This Week'
+                : r === 'month'
+                  ? 'This Month'
+                  : 'All Time'}
           </button>
         ))}
       </div>
@@ -182,13 +191,14 @@ export const RealtimeROIDashboard: React.FC = () => {
       </div>
 
       {/* Top Employees */}
+      {/* Updated Nov 16, 2025: Memoize sliced array to prevent re-creation */}
       {currentStats.top_employees.length > 0 && (
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
             Top Performers
           </h2>
           <div className="space-y-3">
-            {currentStats.top_employees.slice(0, 5).map((employee, index) => (
+            {topEmployees.map((employee, index) => (
               <div
                 key={employee.employee_id}
                 className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
@@ -223,6 +233,10 @@ export const RealtimeROIDashboard: React.FC = () => {
   );
 };
 
+RealtimeROIDashboardComponent.displayName = 'RealtimeROIDashboard';
+
+export const RealtimeROIDashboard = memo(RealtimeROIDashboardComponent);
+
 interface BigStatCardProps {
   title: string;
   value: string;
@@ -231,33 +245,31 @@ interface BigStatCardProps {
   icon: string;
 }
 
-const BigStatCard: React.FC<BigStatCardProps> = ({
+// Updated Nov 16, 2025: Memoized color classes outside component
+const COLOR_CLASSES = {
+  blue: 'bg-blue-500',
+  green: 'bg-green-500',
+  purple: 'bg-purple-500',
+} as const;
+
+// Updated Nov 16, 2025: Memoized BigStatCard to prevent unnecessary re-renders
+const BigStatCardComponent: React.FC<BigStatCardProps> = ({
   title,
   value,
   subtitle,
   color,
   icon,
 }) => {
-  const colorClasses = {
-    blue: 'bg-blue-500',
-    green: 'bg-green-500',
-    purple: 'bg-purple-500',
-  };
-
   return (
     <Card className="p-6 relative overflow-hidden">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-            {title}
-          </p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-            {value}
-          </p>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{title}</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">{value}</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">{subtitle}</p>
         </div>
         <div
-          className={`w-12 h-12 ${colorClasses[color]} rounded-lg flex items-center justify-center text-2xl`}
+          className={`w-12 h-12 ${COLOR_CLASSES[color]} rounded-lg flex items-center justify-center text-2xl`}
         >
           {icon}
         </div>
@@ -265,6 +277,10 @@ const BigStatCard: React.FC<BigStatCardProps> = ({
     </Card>
   );
 };
+
+BigStatCardComponent.displayName = 'BigStatCard';
+
+const BigStatCard = memo(BigStatCardComponent);
 
 const defaultStats: PeriodStats = {
   total_time_saved_hours: 0,
