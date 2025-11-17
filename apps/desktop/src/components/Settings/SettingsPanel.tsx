@@ -573,30 +573,31 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   );
 }
 
-function _AgentLibraryTab() {
-  return (
-    <div>
-      <h3 className="text-lg font-semibold mb-4">Agent Library</h3>
-      <p className="text-sm text-muted-foreground mb-6">
-        Manage your AI Employees - specialized agents that can be used as tools in chat
-        conversations
-      </p>
-
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-6">
-        <p className="text-sm text-muted-foreground">
-          <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in
-          your conversations. Hire and configure agents here, then reference them by name in chat
-          (e.g., "@CodeReviewer").
-        </p>
-      </div>
-
-      {/* Embed the EmployeesPage component */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <EmployeesPage />
-      </div>
-    </div>
-  );
-}
+// Unused - AgentLibraryTab functionality is embedded in the tab content
+// function _AgentLibraryTab() {
+//   return (
+//     <div>
+//       <h3 className="text-lg font-semibold mb-4">Agent Library</h3>
+//       <p className="text-sm text-muted-foreground mb-6">
+//         Manage your AI Employees - specialized agents that can be used as tools in chat
+//         conversations
+//       </p>
+//
+//       <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-6">
+//         <p className="text-sm text-muted-foreground">
+//           <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in
+//           your conversations. Hire and configure agents here, then reference them by name in chat
+//           (e.g., "@CodeReviewer").
+//         </p>
+//       </div>
+//
+//       {/* Embed the EmployeesPage component */}
+//       <div className="rounded-lg border border-border overflow-hidden">
+//         <EmployeesPage />
+//       </div>
+//     </div>
+//   );
+// }
 
 function DataPrivacyTab() {
   const [exporting, setExporting] = useState(false);
