@@ -105,7 +105,9 @@ describe('automationStore', () => {
       const { listAutomationWindows } = await import('../../api/automation');
       (listAutomationWindows as any).mockRejectedValue(new Error('Failed to enumerate windows'));
 
-      await useAutomationStore.getState().loadWindows();
+      await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(
+        'Failed to enumerate windows',
+      );
 
       const state = useAutomationStore.getState();
       expect(state.windows).toEqual([]);

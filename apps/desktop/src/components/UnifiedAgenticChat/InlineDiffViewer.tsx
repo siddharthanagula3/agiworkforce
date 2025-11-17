@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Check, X, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { invoke } from '@tauri-apps/api/core';
 
 interface DiffLine {
   type: 'add' | 'remove' | 'context';
@@ -21,7 +20,6 @@ interface CodeDiff {
 
 interface InlineDiffViewerProps {
   diff: CodeDiff;
-  diffId?: string;
   onRevert?: (filePath: string) => Promise<void>;
 }
 
@@ -82,7 +80,7 @@ function generateDiffLines(oldContent: string, newContent: string): DiffLine[] {
  *
  * Similar to GitHub's inline diff view or Cursor's code changes display.
  */
-export function InlineDiffViewer({ diff, diffId, onRevert }: InlineDiffViewerProps) {
+export function InlineDiffViewer({ diff, onRevert }: InlineDiffViewerProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isReverting, setIsReverting] = useState(false);
   const [revertError, setRevertError] = useState<string | null>(null);

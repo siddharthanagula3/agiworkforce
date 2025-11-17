@@ -125,25 +125,6 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
     }
   };
 
-  // Simulate streaming response (placeholder for real implementation)
-  const simulateAssistantResponse = async (messageId: string) => {
-    const response =
-      "I'm the unified agentic chat interface! I can help you with various tasks. This is a simulated response for now.";
-    const words = response.split(' ');
-
-    for (let i = 0; i < words.length; i++) {
-      const partial = words.slice(0, i + 1).join(' ');
-      updateMessage(messageId, {
-        content: partial + (i < words.length - 1 ? '...' : ''),
-      });
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    updateMessage(messageId, {
-      metadata: { streaming: false, tokenCount: response.split(' ').length * 1.3 },
-    });
-  };
-
   // Handle message actions
   const handleMessageEdit = (id: string, content: string) => {
     updateMessage(id, { content });

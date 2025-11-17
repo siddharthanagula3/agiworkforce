@@ -38,6 +38,24 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     }
   }, []);
 
+  const addFiles = useCallback(
+    (newFiles: File[]) => {
+      const remaining = maxImages - images.length;
+      const filesToAdd = newFiles.slice(0, remaining);
+
+      const newImages: UploadedImage[] = filesToAdd.map((file) => ({
+        id: `file-${Date.now()}-${Math.random()}`,
+        file,
+        preview: URL.createObjectURL(file),
+        sourceType: 'file',
+        detail: 'auto',
+      }));
+
+      onImagesChange([...images, ...newImages]);
+    },
+    [images, maxImages, onImagesChange],
+  );
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -45,14 +63,14 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       setDragActive(false);
 
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        const newFiles = Array.from(e.dataTransfer.files).filter(
-          (file) => file.type.startsWith('image/')
+        const newFiles = Array.from(e.dataTransfer.files).filter((file) =>
+          file.type.startsWith('image/'),
         );
 
         addFiles(newFiles);
       }
     },
-    [images]
+    [addFiles],
   );
 
   const handleFileInput = useCallback(
@@ -62,23 +80,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         addFiles(newFiles);
       }
     },
-    [images]
+    [addFiles],
   );
-
-  const addFiles = (newFiles: File[]) => {
-    const remaining = maxImages - images.length;
-    const filesToAdd = newFiles.slice(0, remaining);
-
-    const newImages: UploadedImage[] = filesToAdd.map((file) => ({
-      id: `file-${Date.now()}-${Math.random()}`,
-      file,
-      preview: URL.createObjectURL(file),
-      sourceType: 'file',
-      detail: 'auto',
-    }));
-
-    onImagesChange([...images, ...newImages]);
-  };
 
   const removeImage = (id: string) => {
     const updatedImages = images.filter((img) => img.id !== id);

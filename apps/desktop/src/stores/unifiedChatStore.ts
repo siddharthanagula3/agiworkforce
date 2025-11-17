@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
+import { invoke, isTauri } from '../lib/tauri-mock';
 
 // ============================================================================
 // Types
@@ -106,6 +107,7 @@ export interface AgentStatus {
   };
   startedAt?: Date;
   completedAt?: Date;
+  error?: string;
 }
 
 export type BackgroundTaskStatus =
@@ -558,3 +560,181 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
     },
   ),
 );
+
+export type AgentStatusPayload = Partial<AgentStatus> & {
+  id: string;
+  status?: AgentStatus['status'] | string;
+  current_goal?: string;
+  current_step?: string;
+  started_at?: number | string | Date;
+  completed_at?: number | string | Date;
+  resource_usage?: { cpu: number; memory: number };
+};
+
+let agentStatusListenerInitialized = false;
+
+export async function initializeAgentStatusListener() {
+  if (agentStatusListenerInitialized || !isTauri) {
+    return;
+  }
+
+  agentStatusListenerInitialized = true;
+
+  try {
+    await bootstrapAgentStatuses();
+    const { listen } = await import('@tauri-apps/api/event');
+    await listen<AgentStatusPayload>('agent:status:update', (event) => {
+      applyAgentStatusUpdate(event.payload);
+    });
+  } catch (error) {
+    agentStatusListenerInitialized = false;
+    console.error('[UnifiedChatStore] Failed to initialize agent status listener:', error);
+  }
+}
+
+async function bootstrapAgentStatuses() {
+  try {
+    const agents = await invoke<AgentStatusPayload[]>('refresh_agent_status');
+    applyAgentStatusSnapshot(Array.isArray(agents) ? agents : []);
+  } catch (error) {
+    console.error('[UnifiedChatStore] Failed to bootstrap agent statuses:', error);
+  }
+}
+
+export function applyAgentStatusSnapshot(payloads: AgentStatusPayload[]) {
+  useUnifiedChatStore.setState((state) => {
+    if (!payloads || payloads.length === 0) {
+      state.agents = [];
+      state.agentStatus = null;
+      return;
+    }
+
+    const normalized = payloads.map((agent) => mergeAgentStatus(undefined, agent));
+    state.agents = normalized;
+    state.agentStatus =
+      normalized.find((agent) => agent.status === 'running' || agent.status === 'paused') ??
+      normalized[0] ??
+      null;
+  });
+}
+
+function applyAgentStatusUpdate(payload: AgentStatusPayload) {
+  useUnifiedChatStore.setState((state) => {
+    const index = state.agents.findIndex((agent) => agent.id === payload.id);
+    const nextStatus = mergeAgentStatus(index !== -1 ? state.agents[index] : undefined, payload);
+
+    if (index !== -1) {
+      state.agents[index] = nextStatus;
+    } else {
+      state.agents.push(nextStatus);
+    }
+
+    if (
+      !state.agentStatus ||
+      state.agentStatus.id === nextStatus.id ||
+      nextStatus.status === 'running'
+    ) {
+      state.agentStatus = nextStatus;
+    }
+  });
+}
+
+function mergeAgentStatus(
+  previous: AgentStatus | undefined,
+  payload: AgentStatusPayload,
+): AgentStatus {
+  return {
+    id: payload.id,
+    name: payload.name ?? previous?.name ?? 'Agent',
+    status: normalizeStatus(payload.status, previous?.status ?? 'idle'),
+    currentGoal:
+      payload.currentGoal ?? payload.current_goal ?? previous?.currentGoal,
+    currentStep:
+      payload.currentStep ?? payload.current_step ?? previous?.currentStep,
+    progress: normalizeProgress(payload.progress, previous?.progress ?? 0),
+    resourceUsage: normalizeResourceUsage(
+      payload.resourceUsage ?? payload.resource_usage,
+      previous?.resourceUsage,
+    ),
+    startedAt: normalizeTimestamp(payload.startedAt ?? payload.started_at, previous?.startedAt),
+    completedAt: normalizeTimestamp(
+      payload.completedAt ?? payload.completed_at,
+      previous?.completedAt,
+    ),
+    error: payload.error ?? previous?.error,
+  };
+}
+
+const VALID_AGENT_STATUSES: AgentStatus['status'][] = [
+  'idle',
+  'running',
+  'paused',
+  'completed',
+  'failed',
+];
+
+function normalizeStatus(
+  value: unknown,
+  fallback: AgentStatus['status'] = 'idle',
+): AgentStatus['status'] {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.toLowerCase() as AgentStatus['status'];
+  return VALID_AGENT_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeProgress(value: unknown, fallback = 0): number {
+  const raw =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number.parseFloat(value)
+        : fallback;
+
+  if (Number.isNaN(raw)) {
+    return fallback;
+  }
+
+  return Math.min(100, Math.max(0, raw));
+}
+
+function normalizeTimestamp(value: unknown, fallback?: Date): Date | undefined {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  const numeric =
+    typeof value === 'number' ? value : Number.parseInt(String(value).trim(), 10);
+
+  if (Number.isNaN(numeric)) {
+    return fallback;
+  }
+
+  const milliseconds = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  return new Date(milliseconds);
+}
+
+function normalizeResourceUsage(
+  value: unknown,
+  fallback?: { cpu: number; memory: number },
+): { cpu: number; memory: number } | undefined {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'cpu' in value &&
+    'memory' in value &&
+    typeof (value as { cpu: unknown }).cpu === 'number' &&
+    typeof (value as { memory: unknown }).memory === 'number'
+  ) {
+    const usage = value as { cpu: number; memory: number };
+    return { cpu: usage.cpu, memory: usage.memory };
+  }
+
+  return fallback;
+}

@@ -212,16 +212,25 @@ pub async fn automation_send_keys(
         return Err("Text cannot be empty".to_string());
     }
     if request.text.len() > 100_000 {
-        return Err(format!("Text too long: {} characters. Maximum is 100,000", request.text.len()));
+        return Err(format!(
+            "Text too long: {} characters. Maximum is 100,000",
+            request.text.len()
+        ));
     }
 
     // Validate coordinates if provided
     if let (Some(x), Some(y)) = (request.x, request.y) {
         if x < -10_000 || x > 100_000 {
-            return Err(format!("Invalid x coordinate: {}. Must be between -10,000 and 100,000", x));
+            return Err(format!(
+                "Invalid x coordinate: {}. Must be between -10,000 and 100,000",
+                x
+            ));
         }
         if y < -10_000 || y > 100_000 {
-            return Err(format!("Invalid y coordinate: {}. Must be between -10,000 and 100,000", y));
+            return Err(format!(
+                "Invalid y coordinate: {}. Must be between -10,000 and 100,000",
+                y
+            ));
         }
     }
 
@@ -252,10 +261,16 @@ pub fn automation_click(
     // Validate coordinates if provided directly
     if let (Some(x), Some(y)) = (request.x, request.y) {
         if x < -10_000 || x > 100_000 {
-            return Err(format!("Invalid x coordinate: {}. Must be between -10,000 and 100,000", x));
+            return Err(format!(
+                "Invalid x coordinate: {}. Must be between -10,000 and 100,000",
+                x
+            ));
         }
         if y < -10_000 || y > 100_000 {
-            return Err(format!("Invalid y coordinate: {}. Must be between -10,000 and 100,000", y));
+            return Err(format!(
+                "Invalid y coordinate: {}. Must be between -10,000 and 100,000",
+                y
+            ));
         }
     }
 
@@ -323,16 +338,28 @@ pub async fn automation_drag_drop(
 
     // Validate coordinates
     if request.from_x < -10_000 || request.from_x > 100_000 {
-        return Err(format!("Invalid from_x coordinate: {}. Must be between -10,000 and 100,000", request.from_x));
+        return Err(format!(
+            "Invalid from_x coordinate: {}. Must be between -10,000 and 100,000",
+            request.from_x
+        ));
     }
     if request.from_y < -10_000 || request.from_y > 100_000 {
-        return Err(format!("Invalid from_y coordinate: {}. Must be between -10,000 and 100,000", request.from_y));
+        return Err(format!(
+            "Invalid from_y coordinate: {}. Must be between -10,000 and 100,000",
+            request.from_y
+        ));
     }
     if request.to_x < -10_000 || request.to_x > 100_000 {
-        return Err(format!("Invalid to_x coordinate: {}. Must be between -10,000 and 100,000", request.to_x));
+        return Err(format!(
+            "Invalid to_x coordinate: {}. Must be between -10,000 and 100,000",
+            request.to_x
+        ));
     }
     if request.to_y < -10_000 || request.to_y > 100_000 {
-        return Err(format!("Invalid to_y coordinate: {}. Must be between -10,000 and 100,000", request.to_y));
+        return Err(format!(
+            "Invalid to_y coordinate: {}. Must be between -10,000 and 100,000",
+            request.to_y
+        ));
     }
 
     // Validate duration
@@ -340,7 +367,10 @@ pub async fn automation_drag_drop(
         return Err("Duration must be greater than 0".to_string());
     }
     if request.duration_ms > 60_000 {
-        return Err(format!("Duration too long: {}ms. Maximum is 60 seconds (60,000ms)", request.duration_ms));
+        return Err(format!(
+            "Duration too long: {}ms. Maximum is 60 seconds (60,000ms)",
+            request.duration_ms
+        ));
     }
 
     // Create mouse simulator outside the service to avoid async closure issues
@@ -385,7 +415,10 @@ pub fn automation_clipboard_get() -> Result<String, String> {
 pub fn automation_clipboard_set(text: String) -> Result<(), String> {
     // Validate clipboard text size
     if text.len() > 10_000_000 {
-        return Err(format!("Clipboard text too large: {} characters. Maximum is 10MB", text.len()));
+        return Err(format!(
+            "Clipboard text too large: {} characters. Maximum is 10MB",
+            text.len()
+        ));
     }
 
     with_service(|service| service.clipboard.set_text(&text))
@@ -421,7 +454,10 @@ pub async fn automation_screenshot(
             return Err("Width must be greater than 0".to_string());
         }
         if width > 20_000 {
-            return Err(format!("Width too large: {}. Maximum is 20,000 pixels", width));
+            return Err(format!(
+                "Width too large: {}. Maximum is 20,000 pixels",
+                width
+            ));
         }
     }
     if let Some(height) = request.height {
@@ -429,7 +465,10 @@ pub async fn automation_screenshot(
             return Err("Height must be greater than 0".to_string());
         }
         if height > 20_000 {
-            return Err(format!("Height too large: {}. Maximum is 20,000 pixels", height));
+            return Err(format!(
+                "Height too large: {}. Maximum is 20,000 pixels",
+                height
+            ));
         }
     }
 

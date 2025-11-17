@@ -23,7 +23,7 @@ impl Default for ApiState {
 impl ApiState {
     pub fn new() -> Self {
         Self {
-            client: ApiClient::new(),
+            client: ApiClient::new().expect("Failed to initialize API client"),
             oauth_clients: Mutex::new(HashMap::new()),
             pkce_challenges: Mutex::new(HashMap::new()),
         }
@@ -155,7 +155,8 @@ pub async fn api_oauth_create_client(
 ) -> Result<(), String> {
     tracing::info!("Creating OAuth 2.0 client: {}", client_id);
 
-    let oauth_client = OAuth2Client::new(config);
+    let oauth_client =
+        OAuth2Client::new(config).map_err(|e| format!("Failed to create OAuth client: {}", e))?;
     let mut clients = state.oauth_clients.lock().await;
     clients.insert(client_id, oauth_client);
 
@@ -322,7 +323,8 @@ mod tests {
         };
 
         // Create client
-        let oauth_client = OAuth2Client::new(config);
+        let oauth_client =
+            OAuth2Client::new(config).expect("Failed to create OAuth client for test");
         state
             .oauth_clients
             .lock()

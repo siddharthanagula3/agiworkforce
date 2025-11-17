@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -63,14 +63,7 @@ export function BrowserDebugPanel({ className, tabId }: BrowserDebugPanelProps) 
 
   const latestSnapshot = domSnapshots[domSnapshots.length - 1];
 
-  useEffect(() => {
-    // Auto-load debug data when panel opens
-    if (currentTabId) {
-      refreshData();
-    }
-  }, [currentTabId]);
-
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     if (!currentTabId) return;
 
     setIsLoading(true);
@@ -86,7 +79,14 @@ export function BrowserDebugPanel({ className, tabId }: BrowserDebugPanelProps) 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentTabId, getDOMSnapshot, getConsoleLogs, getNetworkActivity]);
+
+  useEffect(() => {
+    // Auto-load debug data when panel opens
+    if (currentTabId) {
+      refreshData();
+    }
+  }, [currentTabId, refreshData]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

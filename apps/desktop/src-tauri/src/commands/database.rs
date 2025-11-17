@@ -60,7 +60,10 @@ pub async fn db_execute_query(
         return Err("Connection ID cannot be empty".to_string());
     }
     if connection_id.len() > 500 {
-        return Err(format!("Connection ID too long: {} characters. Maximum is 500", connection_id.len()));
+        return Err(format!(
+            "Connection ID too long: {} characters. Maximum is 500",
+            connection_id.len()
+        ));
     }
 
     // Validate SQL query
@@ -68,15 +71,28 @@ pub async fn db_execute_query(
         return Err("SQL query cannot be empty".to_string());
     }
     if sql.len() > 1_000_000 {
-        return Err(format!("SQL query too long: {} characters. Maximum is 1MB", sql.len()));
+        return Err(format!(
+            "SQL query too long: {} characters. Maximum is 1MB",
+            sql.len()
+        ));
     }
 
     // Security: Warn about potentially dangerous queries
-    let dangerous_keywords = ["DROP", "TRUNCATE", "DELETE FROM", "ALTER", "CREATE USER", "GRANT"];
+    let dangerous_keywords = [
+        "DROP",
+        "TRUNCATE",
+        "DELETE FROM",
+        "ALTER",
+        "CREATE USER",
+        "GRANT",
+    ];
     let sql_upper = sql.to_uppercase();
     for keyword in &dangerous_keywords {
         if sql_upper.contains(keyword) {
-            tracing::warn!("Executing potentially dangerous SQL query with keyword: {}", keyword);
+            tracing::warn!(
+                "Executing potentially dangerous SQL query with keyword: {}",
+                keyword
+            );
         }
     }
 
@@ -87,7 +103,12 @@ pub async fn db_execute_query(
         .execute_query(&connection_id, &sql)
         .await
         .map(|result| serde_json::to_value(result).unwrap())
-        .map_err(|e| format!("Query execution failed for connection '{}': {}", connection_id, e))
+        .map_err(|e| {
+            format!(
+                "Query execution failed for connection '{}': {}",
+                connection_id, e
+            )
+        })
 }
 
 // Updated Nov 16, 2025: Added input validation
@@ -108,12 +129,18 @@ pub async fn db_execute_prepared(
         return Err("SQL query cannot be empty".to_string());
     }
     if sql.len() > 1_000_000 {
-        return Err(format!("SQL query too long: {} characters. Maximum is 1MB", sql.len()));
+        return Err(format!(
+            "SQL query too long: {} characters. Maximum is 1MB",
+            sql.len()
+        ));
     }
 
     // Validate params array size
     if params.len() > 1000 {
-        return Err(format!("Too many parameters: {}. Maximum is 1000", params.len()));
+        return Err(format!(
+            "Too many parameters: {}. Maximum is 1000",
+            params.len()
+        ));
     }
 
     let state = state.lock().await;
@@ -143,7 +170,10 @@ pub async fn db_execute_batch(
         return Err("Queries array cannot be empty".to_string());
     }
     if queries.len() > 100 {
-        return Err(format!("Too many queries in batch: {}. Maximum is 100", queries.len()));
+        return Err(format!(
+            "Too many queries in batch: {}. Maximum is 100",
+            queries.len()
+        ));
     }
 
     // Validate each query
@@ -152,7 +182,11 @@ pub async fn db_execute_batch(
             return Err(format!("Query at index {} is empty", index));
         }
         if query.len() > 1_000_000 {
-            return Err(format!("Query at index {} too long: {} characters. Maximum is 1MB", index, query.len()));
+            return Err(format!(
+                "Query at index {} too long: {} characters. Maximum is 1MB",
+                index,
+                query.len()
+            ));
         }
     }
 
@@ -582,12 +616,18 @@ pub async fn db_redis_set(
         return Err("Redis key cannot be empty".to_string());
     }
     if key.len() > 512_000_000 {
-        return Err(format!("Redis key too long: {} bytes. Maximum is 512MB", key.len()));
+        return Err(format!(
+            "Redis key too long: {} bytes. Maximum is 512MB",
+            key.len()
+        ));
     }
 
     // Validate value size
     if value.len() > 512_000_000 {
-        return Err(format!("Redis value too large: {} bytes. Maximum is 512MB", value.len()));
+        return Err(format!(
+            "Redis value too large: {} bytes. Maximum is 512MB",
+            value.len()
+        ));
     }
 
     // Validate expiration if provided
@@ -596,7 +636,10 @@ pub async fn db_redis_set(
             return Err("Expiration must be greater than 0 seconds".to_string());
         }
         if exp > 31_536_000 {
-            return Err(format!("Expiration too long: {} seconds. Maximum is 1 year (31,536,000 seconds)", exp));
+            return Err(format!(
+                "Expiration too long: {} seconds. Maximum is 1 year (31,536,000 seconds)",
+                exp
+            ));
         }
     }
 

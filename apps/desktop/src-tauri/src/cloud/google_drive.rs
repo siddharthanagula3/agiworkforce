@@ -49,7 +49,12 @@ impl GoogleDriveClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(60))
             .build()
-            .map_err(|e| Error::Other(format!("Failed to construct HTTP client for Google Drive: {}", e)))?;
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to construct HTTP client for Google Drive: {}",
+                    e
+                ))
+            })?;
 
         Ok(Self {
             client,

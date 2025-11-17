@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -66,11 +66,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
   const [teamsClientSecret, setTeamsClientSecret] = useState('');
   const [teamsWorkspaceName, setTeamsWorkspaceName] = useState('');
 
-  useEffect(() => {
-    loadConnections();
-  }, [userId]);
-
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     try {
       setLoading(true);
       const result = await invoke<MessagingConnection[]>('list_messaging_connections', {
@@ -83,7 +79,11 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    loadConnections();
+  }, [loadConnections]);
 
   const handleConnectSlack = async () => {
     try {

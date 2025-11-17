@@ -194,7 +194,9 @@ pub fn chat_create_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     let id = repository::create_conversation(&conn, trimmed_title.to_string())
         .map_err(|e| format!("Failed to create conversation: {}", e))?;
@@ -214,10 +216,15 @@ pub fn chat_get_conversations(db: State<AppDatabase>) -> Result<Vec<Conversation
 pub fn chat_get_conversation(db: State<AppDatabase>, id: i64) -> Result<Conversation, String> {
     // Validate ID is positive
     if id <= 0 {
-        return Err(format!("Invalid conversation ID: {}. ID must be positive", id));
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            id
+        ));
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::get_conversation(&conn, id)
         .map_err(|e| format!("Failed to get conversation {}: {}", id, e))
@@ -232,7 +239,10 @@ pub fn chat_update_conversation(
 ) -> Result<(), String> {
     // Validate ID is positive
     if id <= 0 {
-        return Err(format!("Invalid conversation ID: {}. ID must be positive", id));
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            id
+        ));
     }
 
     // Validate title
@@ -244,7 +254,9 @@ pub fn chat_update_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::update_conversation_title(&conn, id, trimmed_title.to_string())
         .map_err(|e| format!("Failed to update conversation {}: {}", id, e))
@@ -255,10 +267,15 @@ pub fn chat_update_conversation(
 pub fn chat_delete_conversation(db: State<AppDatabase>, id: i64) -> Result<(), String> {
     // Validate ID is positive
     if id <= 0 {
-        return Err(format!("Invalid conversation ID: {}. ID must be positive", id));
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            id
+        ));
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::delete_conversation(&conn, id)
         .map_err(|e| format!("Failed to delete conversation {}: {}", id, e))
@@ -272,7 +289,10 @@ pub fn chat_create_message(
 ) -> Result<Message, String> {
     // Validate conversation_id is positive
     if request.conversation_id <= 0 {
-        return Err(format!("Invalid conversation ID: {}. ID must be positive", request.conversation_id));
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            request.conversation_id
+        ));
     }
 
     // Validate content is not empty and within limits
@@ -287,25 +307,38 @@ pub fn chat_create_message(
     // Validate tokens if provided
     if let Some(tokens) = request.tokens {
         if tokens < 0 {
-            return Err(format!("Invalid tokens value: {}. Tokens must be non-negative", tokens));
+            return Err(format!(
+                "Invalid tokens value: {}. Tokens must be non-negative",
+                tokens
+            ));
         }
     }
 
     // Validate cost if provided
     if let Some(cost) = request.cost {
         if cost < 0.0 {
-            return Err(format!("Invalid cost value: {}. Cost must be non-negative", cost));
+            return Err(format!(
+                "Invalid cost value: {}. Cost must be non-negative",
+                cost
+            ));
         }
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let role = match request.role.as_str() {
         "user" => MessageRole::User,
         "assistant" => MessageRole::Assistant,
         "system" => MessageRole::System,
-        other => return Err(format!("Invalid role: '{}'. Must be 'user', 'assistant', or 'system'", other)),
+        other => {
+            return Err(format!(
+                "Invalid role: '{}'. Must be 'user', 'assistant', or 'system'",
+                other
+            ))
+        }
     };
 
     let message = Message {
@@ -320,8 +353,12 @@ pub fn chat_create_message(
         created_at: Utc::now(),
     };
 
-    let id = repository::create_message(&conn, &message)
-        .map_err(|e| format!("Failed to create message in conversation {}: {}", request.conversation_id, e))?;
+    let id = repository::create_message(&conn, &message).map_err(|e| {
+        format!(
+            "Failed to create message in conversation {}: {}",
+            request.conversation_id, e
+        )
+    })?;
     repository::get_message(&conn, id)
         .map_err(|e| format!("Failed to retrieve message {}: {}", id, e))
 }
@@ -334,13 +371,22 @@ pub fn chat_get_messages(
 ) -> Result<Vec<Message>, String> {
     // Validate conversation_id is positive
     if conversation_id <= 0 {
-        return Err(format!("Invalid conversation ID: {}. ID must be positive", conversation_id));
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            conversation_id
+        ));
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
-    repository::list_messages(&conn, conversation_id)
-        .map_err(|e| format!("Failed to list messages for conversation {}: {}", conversation_id, e))
+    repository::list_messages(&conn, conversation_id).map_err(|e| {
+        format!(
+            "Failed to list messages for conversation {}: {}",
+            conversation_id, e
+        )
+    })
 }
 
 // Updated Nov 16, 2025: Added input validation for ID and content
@@ -364,7 +410,9 @@ pub fn chat_update_message(
         return Err("Message content cannot exceed 1,000,000 characters".to_string());
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::update_message_content(&conn, id, trimmed_content.to_string())
         .map_err(|e| format!("Failed to update message {}: {}", id, e))
@@ -378,7 +426,9 @@ pub fn chat_delete_message(db: State<AppDatabase>, id: i64) -> Result<(), String
         return Err(format!("Invalid message ID: {}. ID must be positive", id));
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::delete_message(&conn, id)
         .map_err(|e| format!("Failed to delete message {}: {}", id, e))
@@ -392,13 +442,22 @@ pub fn chat_get_conversation_stats(
 ) -> Result<ConversationStats, String> {
     // Validate conversation_id is positive
     if conversation_id <= 0 {
-        return Err(format!("Invalid conversation ID: {}. ID must be positive", conversation_id));
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            conversation_id
+        ));
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
-    let messages = repository::list_messages(&conn, conversation_id)
-        .map_err(|e| format!("Failed to list messages for conversation {}: {}", conversation_id, e))?;
+    let messages = repository::list_messages(&conn, conversation_id).map_err(|e| {
+        format!(
+            "Failed to list messages for conversation {}: {}",
+            conversation_id, e
+        )
+    })?;
 
     let message_count = messages.len();
     let total_tokens = messages.iter().filter_map(|m| m.tokens).sum();
@@ -693,13 +752,16 @@ pub async fn chat_send_message(
         .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
     // 🔔 Emit agent status: Analyzing request
-    let _ = app_handle.emit("agent:status:update", serde_json::json!({
-        "id": "main_agent",
-        "name": "AGI Workforce Agent",
-        "status": "running",
-        "currentStep": "Analyzing request...",
-        "progress": 10
-    }));
+    let _ = app_handle.emit(
+        "agent:status:update",
+        serde_json::json!({
+            "id": "main_agent",
+            "name": "AGI Workforce Agent",
+            "status": "running",
+            "currentStep": "Analyzing request...",
+            "progress": 10
+        }),
+    );
 
     // Get conversation history (after compaction)
     let history = {
@@ -722,7 +784,7 @@ pub async fn chat_send_message(
     // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees
     let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
-        use crate::commands::{McpState, AIEmployeeState};
+        use crate::commands::{AIEmployeeState, McpState};
         use crate::router::tool_executor::ToolExecutor;
         use crate::router::ToolDefinition;
         use std::sync::Arc;
@@ -765,9 +827,14 @@ pub async fn chat_send_message(
                                 for user_employee in user_employees.iter() {
                                     if user_employee.is_active {
                                         // Get the full employee details
-                                        if let Ok(employee) = marketplace.get_employee_by_id(&user_employee.employee_id) {
+                                        if let Ok(employee) = marketplace
+                                            .get_employee_by_id(&user_employee.employee_id)
+                                        {
                                             let tool_def = ToolDefinition {
-                                                name: format!("ai_employee_{}", employee.id.replace("-", "_")),
+                                                name: format!(
+                                                    "ai_employee_{}",
+                                                    employee.id.replace("-", "_")
+                                                ),
                                                 description: format!(
                                                     "{} - {}. Capabilities: {}",
                                                     employee.name,
@@ -814,13 +881,16 @@ pub async fn chat_send_message(
     let tool_defs_for_follow_up = tool_definitions.clone(); // Clone for potential follow-up request
 
     // 🔔 Emit agent status: Planning
-    let _ = app_handle.emit("agent:status:update", serde_json::json!({
-        "id": "main_agent",
-        "name": "AGI Workforce Agent",
-        "status": "running",
-        "currentStep": "Planning actions...",
-        "progress": 30
-    }));
+    let _ = app_handle.emit(
+        "agent:status:update",
+        serde_json::json!({
+            "id": "main_agent",
+            "name": "AGI Workforce Agent",
+            "status": "running",
+            "currentStep": "Planning actions...",
+            "progress": 30
+        }),
+    );
 
     let llm_request = LLMRequest {
         messages: router_messages,
@@ -1282,11 +1352,16 @@ pub fn chat_get_cost_analytics(
             return Err(format!("Invalid days value: {}. Days must be positive", d));
         }
         if d > 3650 {
-            return Err(format!("Invalid days value: {}. Days cannot exceed 3650 (10 years)", d));
+            return Err(format!(
+                "Invalid days value: {}. Days cannot exceed 3650 (10 years)",
+                d
+            ));
         }
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     let window = days.unwrap_or(30).max(1);
 
@@ -1338,14 +1413,22 @@ pub fn chat_set_monthly_budget(db: State<AppDatabase>, amount: Option<f64>) -> R
     // Validate amount if provided
     if let Some(value) = amount {
         if value < 0.0 {
-            return Err(format!("Invalid budget amount: {}. Budget must be non-negative", value));
+            return Err(format!(
+                "Invalid budget amount: {}. Budget must be non-negative",
+                value
+            ));
         }
         if value > 1_000_000.0 {
-            return Err(format!("Invalid budget amount: {}. Budget cannot exceed $1,000,000", value));
+            return Err(format!(
+                "Invalid budget amount: {}. Budget cannot exceed $1,000,000",
+                value
+            ));
         }
     }
 
-    let conn = db.conn.lock()
+    let conn = db
+        .conn
+        .lock()
         .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     match amount {
