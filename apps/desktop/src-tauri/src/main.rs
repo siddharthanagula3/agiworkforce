@@ -3,21 +3,22 @@
 #![allow(unsafe_code)] // Required for Windows API calls
 #![allow(unused_qualifications)] // Some qualifications improve code clarity
 
-use agiworkforce_desktop::agent::code_generator::CodeGenerator;
-use agiworkforce_desktop::agent::context_manager::ContextManager;
-use agiworkforce_desktop::agent::runtime::AgentRuntime;
+// Note: agent:: module has been deleted - functionality moved to agi:: module
+// CodeGenerator, ContextManager, and AgentRuntime are now stubbed in commands/ai_native.rs
 use agiworkforce_desktop::billing::BillingStateWrapper;
 use agiworkforce_desktop::security::{AuthManager, SecretManager};
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
         load_persisted_calendar_accounts, security::AuthManagerState, AIEmployeeState,
-        AgentRuntimeState, ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState,
-        CodeEditingState, CodeGeneratorState, ComputerUseState, ContextManagerState, DatabaseState,
+        ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState,
+        CodeEditingState, DatabaseState,
         DocumentState, EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState,
         McpState, ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
         TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
         WorkspaceIndexState,
+        // Note: CodeGeneratorState and ContextManagerState moved to ai_native module (stubbed)
+        ai_native::{CodeGeneratorState, ContextManagerState},
     },
     db::migrations,
     initialize_window,
@@ -186,36 +187,13 @@ fn main() {
 
             tracing::info!("MCP state initialized");
 
-            // Initialize AgentRuntime
-            let agent_runtime = AgentRuntime::new(
-                mcp_client.clone(),
-                mcp_registry.clone(),
-                app.handle().clone(),
-            );
-            app.manage(AgentRuntimeState(Arc::new(TokioMutex::new(agent_runtime))));
+            // TODO: AgentRuntime, ContextManager, and CodeGenerator are temporarily disabled
+            // These were part of the deleted agent/ module and should be reimplemented using agi/ if needed
+            // For now, we initialize stub states to satisfy the type system
+            app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
+            app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
 
-            tracing::info!("AgentRuntime initialized");
-
-            // Initialize ContextManager for AI-native development
-            let project_root =
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let context_manager = ContextManager::new(project_root);
-            app.manage(ContextManagerState(Arc::new(TokioMutex::new(
-                context_manager,
-            ))));
-
-            tracing::info!("ContextManager initialized");
-
-            // Initialize CodeGenerator
-            let context_manager_for_gen = ContextManager::new(
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-            );
-            let code_generator = CodeGenerator::new(context_manager_for_gen);
-            app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(
-                code_generator,
-            ))));
-
-            tracing::info!("CodeGenerator initialized");
+            tracing::info!("AI-native states initialized (stubbed)");
 
             // Initialize GitHub integration state
             let workspace_dir = app
@@ -228,10 +206,8 @@ fn main() {
 
             tracing::info!("GitHub state initialized");
 
-            // Initialize Computer Use state
-            app.manage(Arc::new(TokioMutex::new(ComputerUseState::new())));
-
-            tracing::info!("Computer Use state initialized");
+            // TODO: Computer Use state disabled - was part of deleted computer_use/ module
+            // Functionality now available through automation/ module
 
             // Initialize Code Editing state
             app.manage(Arc::new(TokioMutex::new(CodeEditingState::new())));
@@ -520,25 +496,13 @@ fn main() {
             agiworkforce_desktop::commands::query_knowledge,
             agiworkforce_desktop::commands::get_recent_knowledge,
             agiworkforce_desktop::commands::get_knowledge_by_category,
-            // Agent commands
-            agiworkforce_desktop::commands::agent_init,
-            agiworkforce_desktop::commands::agent_submit_task,
-            agiworkforce_desktop::commands::agent_get_task_status,
-            agiworkforce_desktop::commands::agent_list_tasks,
-            agiworkforce_desktop::commands::agent_stop,
-            // AgentRuntime commands
-            agiworkforce_desktop::commands::runtime_queue_task,
-            agiworkforce_desktop::commands::runtime_get_next_task,
-            agiworkforce_desktop::commands::runtime_execute_task,
-            agiworkforce_desktop::commands::runtime_cancel_task,
-            agiworkforce_desktop::commands::runtime_get_task_status,
-            agiworkforce_desktop::commands::runtime_get_all_tasks,
-            agiworkforce_desktop::commands::runtime_set_auto_approve,
-            agiworkforce_desktop::commands::runtime_is_auto_approve_enabled,
-            agiworkforce_desktop::commands::runtime_revert_task,
-            agiworkforce_desktop::commands::runtime_get_task_changes,
-            agiworkforce_desktop::commands::runtime_get_all_changes,
-            // AI-native software engineering commands
+            // TODO: Agent and Runtime commands disabled - were part of deleted agent/ module
+            // agent_init, agent_submit_task, agent_get_task_status, agent_list_tasks, agent_stop
+            // runtime_queue_task, runtime_get_next_task, runtime_execute_task, runtime_cancel_task,
+            // runtime_get_task_status, runtime_get_all_tasks, runtime_set_auto_approve,
+            // runtime_is_auto_approve_enabled, runtime_revert_task, runtime_get_task_changes,
+            // runtime_get_all_changes
+            // AI-native software engineering commands (stubbed)
             agiworkforce_desktop::commands::ai_analyze_project,
             agiworkforce_desktop::commands::ai_add_constraint,
             agiworkforce_desktop::commands::ai_generate_code,
