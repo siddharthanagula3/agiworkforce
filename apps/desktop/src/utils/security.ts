@@ -18,7 +18,7 @@ export function sanitizeHtml(
     allowLinks?: boolean;
   },
 ): string {
-  const config: DOMPurify.Config = {
+  const config: any = {
     ALLOWED_TAGS: options?.allowedTags || [
       'p',
       'br',
@@ -74,7 +74,7 @@ export function sanitizeHtml(
     });
   }
 
-  return DOMPurify.sanitize(html, config);
+  return DOMPurify.sanitize(html, config) as string;
 }
 
 /**
@@ -82,7 +82,7 @@ export function sanitizeHtml(
  * Updated Nov 16, 2025
  */
 export function sanitizeEmailHtml(html: string): string {
-  const config: DOMPurify.Config = {
+  const config: any = {
     ALLOWED_TAGS: [
       'p',
       'br',
