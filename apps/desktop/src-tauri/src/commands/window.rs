@@ -85,8 +85,21 @@ pub fn window_is_maximized(app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn window_maximize(app: AppHandle) -> Result<(), String> {
+pub fn window_maximize(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     let window = main_window(&app)?;
+
+    // Exit fullscreen first if currently fullscreen
+    let is_fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
+    if is_fullscreen {
+        window.set_fullscreen(false).map_err(|e| e.to_string())?;
+        state
+            .update(|s| {
+                s.fullscreen = false;
+                true
+            })
+            .map_err(|e| e.to_string())?;
+    }
+
     window.maximize().map_err(|err| err.to_string())
 }
 
@@ -127,6 +140,10 @@ pub fn window_set_fullscreen(
     state
         .update(|s| {
             s.fullscreen = fullscreen;
+            // Exit maximized state when entering fullscreen
+            if fullscreen {
+                s.maximized = false;
+            }
             true
         })
         .map_err(|e| e.to_string())?;

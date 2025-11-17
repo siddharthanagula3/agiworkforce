@@ -75,7 +75,7 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
     let snapshot = app_state.snapshot();
 
     window.set_always_on_top(snapshot.always_on_top)?;
-    window.set_decorations(true)?;
+    window.set_decorations(false)?;
     window.set_focus()?;
     window.set_title("AGI Workforce")?;
 
