@@ -182,43 +182,46 @@ export function MessageList({
 
   const itemCount = items.length;
 
+  // Updated Nov 16, 2025: Removed redundant messages.length dependency
   useEffect(() => {
     if (itemCount > 0) {
       listRef.current?.scrollToItem(itemCount - 1, 'end');
     }
-  }, [itemCount, messages.length]);
+  }, [itemCount]);
 
   useEffect(() => {
     sizeMap.current.clear();
     listRef.current?.resetAfterIndex(0, true);
   }, [conversationId]);
 
-  const handleScroll = useCallback(() => {
-    const container = outerRef.current;
-    if (!container) {
-      return;
-    }
-    const threshold = 32;
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const atBottom = distanceFromBottom <= threshold;
-    setIsAtBottom(atBottom);
-    if (atBottom) {
-      setUnreadCount(0);
-      setFirstUnreadId(null);
-    }
-  }, []);
-
+  // Updated Nov 16, 2025: Moved handleScroll inside useEffect to prevent listener churn
   useEffect(() => {
     if (!outerElement) {
       return;
     }
+
+    const handleScroll = () => {
+      const container = outerRef.current;
+      if (!container) {
+        return;
+      }
+      const threshold = 32;
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      const atBottom = distanceFromBottom <= threshold;
+      setIsAtBottom(atBottom);
+      if (atBottom) {
+        setUnreadCount(0);
+        setFirstUnreadId(null);
+      }
+    };
+
     outerElement.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     return () => {
       outerElement.removeEventListener('scroll', handleScroll);
     };
-  }, [outerElement, handleScroll]);
+  }, [outerElement]);
 
   useEffect(() => {
     const previousIds = messageIdSetRef.current;
