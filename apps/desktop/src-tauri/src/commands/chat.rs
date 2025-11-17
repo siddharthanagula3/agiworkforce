@@ -1,5 +1,11 @@
 use super::llm::LLMState;
-use crate::agent::context_compactor::ContextCompactor;
+// TODO: Re-enable auto-compaction once ContextManager API is compatible with chat.rs
+// The deleted agent/context_compactor used std::sync::Mutex, but agi::ContextManager
+// requires tokio::sync::Mutex. Need to either:
+// 1. Change LLMState to use tokio::sync::Mutex, or
+// 2. Create an adapter/wrapper, or
+// 3. Port ContextCompactor functionality to a chat-specific helper
+// use crate::agi::ContextManager;
 use crate::db::models::{
     Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, MessageRole,
     ProviderCostBreakdown,
@@ -25,6 +31,7 @@ pub struct AppDatabase {
     pub conn: Arc<Mutex<Connection>>,
 }
 
+/* TODO: Re-enable auto-compaction once ContextManager API is compatible
 /// Auto-compact conversation history if needed (like Cursor/Claude Code)
 async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Result<(), String> {
     let messages = {
@@ -103,6 +110,7 @@ async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Re
 
     Ok(())
 }
+*/
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
@@ -537,10 +545,10 @@ async fn chat_send_message_streaming(
         (conversation_id, user_msg_id, assistant_msg_id)
     };
 
-    // Auto-compact conversation history if needed (like Cursor/Claude Code)
-    auto_compact_conversation(&db, conversation_id)
-        .await
-        .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
+    // TODO: Re-enable auto-compaction once ContextManager API is compatible
+    // auto_compact_conversation(&db, conversation_id)
+    //     .await
+    //     .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
     // Get conversation history (after compaction)
     let history = {
@@ -768,10 +776,10 @@ pub async fn chat_send_message(
         (conversation_id, message)
     };
 
-    // Auto-compact conversation history if needed (like Cursor/Claude Code)
-    auto_compact_conversation(&db, conversation_id)
-        .await
-        .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
+    // TODO: Re-enable auto-compaction once ContextManager API is compatible
+    // auto_compact_conversation(&db, conversation_id)
+    //     .await
+    //     .unwrap_or_else(|e| warn!("Auto-compaction failed: {}", e));
 
     // 🔔 Emit agent status: Analyzing request
     let _ = app_handle.emit(
