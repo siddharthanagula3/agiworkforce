@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
+import { sanitizeEmailHtml } from '../../utils/security';
 import {
   Dialog,
   DialogContent,
@@ -806,7 +807,8 @@ function EmailDetail({
       <ScrollArea className="flex-1">
         <div className="prose prose-sm max-w-none px-6 py-5">
           {message.body_html ? (
-            <div dangerouslySetInnerHTML={{ __html: message.body_html }} />
+            // Updated Nov 16, 2025: Added XSS protection with DOMPurify sanitization for email HTML
+            <div dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(message.body_html) }} />
           ) : (
             <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-foreground">
               {message.body_text ?? 'No message body'}

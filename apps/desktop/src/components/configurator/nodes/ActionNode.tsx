@@ -7,7 +7,8 @@ export function ActionNode({ data, selected, id }: NodeProps) {
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
 
   // Get icon from lucide-react based on icon name
-  const IconComponent = (Icons as any)[data.iconName || 'Circle'] || Icons.Circle;
+  // Updated Nov 16, 2025: Improved type safety for dynamic icon lookup
+  const IconComponent = (Icons as Record<string, React.ComponentType>)[data.iconName || 'Circle'] || Icons.Circle;
 
   // Determine variant based on capability category
   const variant = data.category === 'data' ? 'data' : 'action';

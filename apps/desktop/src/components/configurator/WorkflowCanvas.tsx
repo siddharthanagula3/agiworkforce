@@ -52,28 +52,58 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
   const [nodes, setLocalNodes, onNodesChange] = useNodesState(workflowNodes);
   const [edges, setLocalEdges, onEdgesChange] = useEdgesState(workflowEdges);
 
-  // Sync local state with store
-  React.useEffect(() => {
-    setLocalNodes(workflowNodes);
-  }, [workflowNodes, setLocalNodes]);
+  // Updated Nov 16, 2025: Fixed circular dependency with proper synchronization
+  const syncingRef = React.useRef(false);
 
+  // Sync local state with store (only when store changes externally)
   React.useEffect(() => {
-    setLocalEdges(workflowEdges);
-  }, [workflowEdges, setLocalEdges]);
-
-  // Update store when nodes change
-  React.useEffect(() => {
-    if (JSON.stringify(nodes) !== JSON.stringify(workflowNodes)) {
-      setNodes(nodes);
+    if (!syncingRef.current) {
+      syncingRef.current = true;
+      setLocalNodes(workflowNodes);
+      // Use setTimeout to break out of the sync cycle
+      setTimeout(() => {
+        syncingRef.current = false;
+      }, 0);
     }
-  }, [nodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowNodes]);
 
-  // Update store when edges change
   React.useEffect(() => {
-    if (JSON.stringify(edges) !== JSON.stringify(workflowEdges)) {
-      setEdges(edges);
+    if (!syncingRef.current) {
+      syncingRef.current = true;
+      setLocalEdges(workflowEdges);
+      setTimeout(() => {
+        syncingRef.current = false;
+      }, 0);
     }
-  }, [edges]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowEdges]);
+
+  // Update store when nodes change (with debouncing to prevent rapid updates)
+  const nodesChanged = React.useRef(false);
+  React.useEffect(() => {
+    if (nodesChanged.current && !syncingRef.current) {
+      const timer = setTimeout(() => {
+        setNodes(nodes);
+        nodesChanged.current = false;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, setNodes]);
+
+  // Update store when edges change (with debouncing to prevent rapid updates)
+  const edgesChanged = React.useRef(false);
+  React.useEffect(() => {
+    if (edgesChanged.current && !syncingRef.current) {
+      const timer = setTimeout(() => {
+        setEdges(edges);
+        edgesChanged.current = false;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edges, setEdges]);
 
   const onConnect = React.useCallback(
     (params: Connection) => {
@@ -86,6 +116,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
       };
       setLocalEdges((eds) => addEdge(params, eds));
       addEdgeToStore(newEdge);
+      edgesChanged.current = true;
     },
     [setLocalEdges, addEdgeToStore],
   );
@@ -123,6 +154,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
 
       setLocalNodes((nds) => nds.concat(newNode));
       setNodes([...nodes, newNode]);
+      nodesChanged.current = true;
     },
     [reactFlowInstance, nodes, setLocalNodes, setNodes],
   );

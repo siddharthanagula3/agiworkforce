@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, isTauri } from '../lib/tauri-mock';
 
 export type DockPosition = 'left' | 'right';
@@ -132,9 +132,13 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     }
   }, []);
 
+  // Updated Nov 16, 2025: Fixed stale closure by using useRef
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   const togglePinned = useCallback(async () => {
-    await setPinned(!state.pinned);
-  }, [setPinned, state.pinned]);
+    await setPinned(!stateRef.current.pinned);
+  }, [setPinned]);
 
   const setAlwaysOnTop = useCallback(async (value: boolean) => {
     try {
@@ -146,8 +150,8 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
   }, []);
 
   const toggleAlwaysOnTop = useCallback(async () => {
-    await setAlwaysOnTop(!state.alwaysOnTop);
-  }, [setAlwaysOnTop, state.alwaysOnTop]);
+    await setAlwaysOnTop(!stateRef.current.alwaysOnTop);
+  }, [setAlwaysOnTop]);
 
   const minimize = useCallback(async () => {
     if (!isTauri) {
