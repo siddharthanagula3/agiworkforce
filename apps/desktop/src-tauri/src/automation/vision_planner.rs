@@ -1,7 +1,7 @@
 use super::types::{ActionPlan, ComputerAction, ProgressVerification};
-use crate::automation::screen::capture::CapturedImage;
+use crate::automation::screen::CapturedImage;
 use crate::router::llm_router::LLMRouter;
-use crate::router::{LLMRequest, MessageContent};
+use crate::router::{ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput};
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use image::DynamicImage;
@@ -117,25 +117,62 @@ impl ActionPlanner {
     }
 
     async fn call_vision_llm(&self, prompt: &str, base64_image: &str) -> Result<String> {
-        let mut router = self.llm_router.lock().await;
+        let router = self.llm_router.lock().await;
 
-        // Create request with image content
-        let request = LLMRequest {
-            messages: vec![MessageContent::VisionMessage {
+        // Decode base64 image
+        let image_bytes = general_purpose::STANDARD
+            .decode(base64_image)
+            .context("Failed to decode base64 image")?;
+
+        // Create multimodal content
+        let multimodal_content = vec![
+            ContentPart::Text {
                 text: prompt.to_string(),
-                images: vec![base64_image.to_string()],
+            },
+            ContentPart::Image {
+                image: ImageInput {
+                    data: image_bytes,
+                    format: ImageFormat::Png,
+                    detail: ImageDetail::Auto,
+                },
+            },
+        ];
+
+        // Create request with vision support
+        let request = crate::router::LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: String::new(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: Some(multimodal_content),
             }],
-            max_tokens: 2048,
+            model: String::new(), // Will be set by router
             temperature: Some(0.7),
-            tools: vec![],
+            max_tokens: Some(2048),
+            stream: false,
+            tools: None,
+            tool_choice: None,
         };
 
-        let response = router
-            .complete(request)
-            .await
-            .context("LLM request failed")?;
+        // Get candidates (prefer vision-capable models)
+        let preferences = crate::router::llm_router::RouterPreferences {
+            provider: Some(crate::router::Provider::Anthropic), // Claude has vision
+            model: None,
+            strategy: crate::router::llm_router::RoutingStrategy::Auto,
+        };
 
-        Ok(response.content)
+        let candidates = router.candidates(&request, &preferences);
+        if candidates.is_empty() {
+            return Err(anyhow::anyhow!("No vision-capable LLM providers configured"));
+        }
+
+        let outcome = router
+            .invoke_candidate(&candidates[0], &request)
+            .await
+            .context("Vision LLM request failed")?;
+
+        Ok(outcome.response.content)
     }
 
     fn image_to_base64(&self, image: &image::RgbaImage) -> Result<String> {
