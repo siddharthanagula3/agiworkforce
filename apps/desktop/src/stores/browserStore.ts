@@ -1,6 +1,7 @@
+// Updated Nov 16, 2025: Added UnlistenFn import for cleanup
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export interface BrowserTab {
   id: string;
@@ -146,7 +147,13 @@ interface BrowserState {
   // Clear data
   clearActions: () => void;
   clearScreenshots: () => void;
+
+  // Updated Nov 16, 2025: Added cleanup function for event listeners
+  cleanup: () => void;
 }
+
+// Updated Nov 16, 2025: Store unlisten functions for cleanup
+const unlistenFunctions: UnlistenFn[] = [];
 
 export const useBrowserStore = create<BrowserState>((set, get) => ({
   sessions: [],
@@ -169,32 +176,49 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   isStreaming: false,
   streamIntervalId: null,
 
+  // Updated Nov 16, 2025: Added error handling to event listeners
   initialize: async () => {
     try {
       await invoke('browser_init');
       set({ initialized: true });
 
-      // Listen for browser automation events
-      listen('browser:action', (event: any) => {
-        const action = event.payload as BrowserAction;
-        get().addAction(action);
+      // Listen for browser automation events with error handling
+      const unlisten1 = await listen('browser:action', (event: any) => {
+        try {
+          const action = event.payload as BrowserAction;
+          get().addAction(action);
+        } catch (error) {
+          console.error('[browserStore] Error handling browser:action event:', error);
+        }
       });
+      unlistenFunctions.push(unlisten1);
 
-      listen('browser:console', (event: any) => {
-        const log = event.payload as ConsoleLog;
-        set((state) => ({
-          consoleLogs: [...state.consoleLogs, log],
-        }));
+      const unlisten2 = await listen('browser:console', (event: any) => {
+        try {
+          const log = event.payload as ConsoleLog;
+          set((state) => ({
+            consoleLogs: [...state.consoleLogs, log],
+          }));
+        } catch (error) {
+          console.error('[browserStore] Error handling browser:console event:', error);
+        }
       });
+      unlistenFunctions.push(unlisten2);
 
-      listen('browser:network', (event: any) => {
-        const request = event.payload as NetworkRequest;
-        set((state) => ({
-          networkRequests: [...state.networkRequests, request],
-        }));
+      const unlisten3 = await listen('browser:network', (event: any) => {
+        try {
+          const request = event.payload as NetworkRequest;
+          set((state) => ({
+            networkRequests: [...state.networkRequests, request],
+          }));
+        } catch (error) {
+          console.error('[browserStore] Error handling browser:network event:', error);
+        }
       });
+      unlistenFunctions.push(unlisten3);
     } catch (error) {
       console.error('Failed to initialize browser:', error);
+      set({ initialized: false });
       throw error;
     }
   },
@@ -544,4 +568,31 @@ test('recorded automation', async ({ page }) => {
   clearScreenshots: () => {
     set({ screenshots: [] });
   },
+
+  // Updated Nov 16, 2025: Cleanup function for event listeners and intervals
+  cleanup: () => {
+    // Stop streaming if active
+    const { streamIntervalId } = get();
+    if (streamIntervalId !== null) {
+      window.clearInterval(streamIntervalId);
+      set({ isStreaming: false, streamIntervalId: null });
+    }
+
+    // Cleanup all event listeners
+    unlistenFunctions.forEach((unlisten) => {
+      try {
+        unlisten();
+      } catch (error) {
+        console.error('[browserStore] Error cleaning up listener:', error);
+      }
+    });
+    unlistenFunctions.length = 0;
+
+    set({ initialized: false });
+  },
 }));
+
+// Updated Nov 16, 2025: Export cleanup function for external use
+export function cleanupBrowserStore() {
+  useBrowserStore.getState().cleanup();
+}

@@ -124,12 +124,14 @@ pub struct ApiClient {
 
 impl ApiClient {
     /// Create a new API client
-    pub fn new() -> Self {
+    /// Updated Nov 16, 2025: Return Result to propagate HTTP client construction errors
+    pub fn new() -> Result<Self> {
         Self::with_retry_config(RetryConfig::default())
     }
 
     /// Create API client with custom retry configuration
-    pub fn with_retry_config(config: RetryConfig) -> Self {
+    /// Updated Nov 16, 2025: Return Result instead of panicking on HTTP client construction failure
+    pub fn with_retry_config(config: RetryConfig) -> Result<Self> {
         // Create retry policy with exponential backoff
         let retry_policy = ExponentialBackoff::builder()
             .retry_bounds(
@@ -142,16 +144,16 @@ impl ApiClient {
         let reqwest_client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
         let client = ClientBuilder::new(reqwest_client)
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
-        Self {
+        Ok(Self {
             client,
             default_timeout: Duration::from_secs(30),
-        }
+        })
     }
 
     /// Execute an API request

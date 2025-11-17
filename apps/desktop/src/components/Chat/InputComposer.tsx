@@ -18,7 +18,14 @@ import type { ChatRoutingPreferences } from '../../types/chat';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
 import { useCommandAutocomplete } from '../../hooks/useCommandAutocomplete';
 import { CommandAutocomplete } from './CommandAutocomplete';
-import type { ContextSuggestion, ContextItem, FileContextItem } from '@agiworkforce/types';
+import type {
+  ContextSuggestion,
+  ContextItem,
+  FileContextItem,
+  FolderContextItem,
+  UrlContextItem,
+  WebContextItem,
+} from '@agiworkforce/types';
 
 interface InputComposerProps {
   onSend: (
@@ -133,7 +140,7 @@ function InputComposerComponent({
           description: suggestion.description,
           path: suggestion.value,
           timestamp: new Date(),
-        } as any;
+        } as FolderContextItem; // Updated Nov 16, 2025: Fixed type safety
       } else if (suggestion.type === 'url') {
         contextItem = {
           id: suggestion.id,
@@ -142,7 +149,7 @@ function InputComposerComponent({
           description: suggestion.description,
           url: suggestion.value,
           timestamp: new Date(),
-        } as any;
+        } as UrlContextItem; // Updated Nov 16, 2025: Fixed type safety
       } else if (suggestion.type === 'web') {
         contextItem = {
           id: suggestion.id,
@@ -151,16 +158,17 @@ function InputComposerComponent({
           description: suggestion.description,
           query: suggestion.value,
           timestamp: new Date(),
-        } as any;
+        } as WebContextItem; // Updated Nov 16, 2025: Fixed type safety
       } else {
         // Fallback for other types
+        // Updated Nov 16, 2025: Fixed type safety - create minimal context item
         contextItem = {
           id: suggestion.id,
           type: suggestion.type,
           name: suggestion.label,
           description: suggestion.description,
           timestamp: new Date(),
-        } as any;
+        } as ContextItem;
       }
 
       // Add to context items
@@ -223,13 +231,17 @@ function InputComposerComponent({
     setSelectedModel(llmConfig.defaultModels[llmConfig.defaultProvider] ?? '');
   }, [llmConfig.defaultProvider, llmConfig.defaultModels]);
 
+  // Updated Nov 16, 2025: Keep ref in sync with attachments state
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
 
+  // Updated Nov 16, 2025: Cleanup all attachments on unmount
   useEffect(
     () => () => {
+      // Clean up all remaining attachments when component unmounts
       attachmentsRef.current.forEach(cleanupAttachmentPreview);
+      attachmentsRef.current = [];
     },
     [],
   );
@@ -246,6 +258,7 @@ function InputComposerComponent({
   const selectedModelLabel =
     modelOptions.find((option) => option.value === selectedModel)?.label ?? selectedModel;
 
+  // Updated Nov 16, 2025: Added proper cleanup after send
   const handleSend = () => {
     if (!trimmedContent && attachments.length === 0 && captures.length === 0) {
       return;
@@ -262,6 +275,7 @@ function InputComposerComponent({
       contextItems,
     );
     setContent('');
+    // Clean up attachment previews before clearing
     attachments.forEach(cleanupAttachmentPreview);
     setAttachments([]);
     setCaptures([]);

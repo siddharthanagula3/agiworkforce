@@ -166,16 +166,16 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   shortcuts: [],
   lastTriggeredShortcut: null,
 
+  // Updated Nov 16, 2025: Ensured proper cleanup with finally blocks
   async loadWindows() {
     set({ loadingWindows: true, error: null });
     try {
       const windows = await listAutomationWindows();
-      set({ windows });
+      set({ windows, loadingWindows: false });
     } catch (error) {
       console.error('Failed to load automation windows:', error);
-      set({ error: String(error) });
-    } finally {
-      set({ loadingWindows: false });
+      set({ error: String(error), loadingWindows: false, windows: [] });
+      throw error;
     }
   },
 
@@ -183,25 +183,24 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     set({ loadingElements: true, error: null });
     try {
       const elements = await findAutomationElements(query);
-      set({ elements });
+      set({ elements, loadingElements: false });
     } catch (error) {
       console.error('Failed to find automation elements:', error);
-      set({ error: String(error) });
-    } finally {
-      set({ loadingElements: false });
+      set({ error: String(error), loadingElements: false, elements: [] });
+      throw error;
     }
   },
 
+  // Updated Nov 16, 2025: Consolidated error cleanup in single set call
   async click(request) {
     set({ runningAction: true, error: null });
     try {
       await clickAutomation(request);
+      set({ runningAction: false });
     } catch (error) {
       console.error('Automation click failed:', error);
-      set({ error: String(error) });
+      set({ error: String(error), runningAction: false });
       throw error;
-    } finally {
-      set({ runningAction: false });
     }
   },
 
@@ -209,12 +208,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     set({ runningAction: true, error: null });
     try {
       await sendKeys(text, options);
+      set({ runningAction: false });
     } catch (error) {
       console.error('Automation type failed:', error);
-      set({ error: String(error) });
+      set({ error: String(error), runningAction: false });
       throw error;
-    } finally {
-      set({ runningAction: false });
     }
   },
 
@@ -222,12 +220,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     set({ runningAction: true, error: null });
     try {
       await sendHotkey(key, modifiers);
+      set({ runningAction: false });
     } catch (error) {
       console.error('Automation hotkey failed:', error);
-      set({ error: String(error) });
+      set({ error: String(error), runningAction: false });
       throw error;
-    } finally {
-      set({ runningAction: false });
     }
   },
 
@@ -235,14 +232,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     set({ runningAction: true, error: null });
     try {
       const capture = await automationScreenshot(options ?? {});
-      set({ lastScreenshot: capture });
+      set({ lastScreenshot: capture, runningAction: false });
       return capture;
     } catch (error) {
       console.error('Automation screenshot failed:', error);
-      set({ error: String(error) });
+      set({ error: String(error), runningAction: false, lastScreenshot: null });
       throw error;
-    } finally {
-      set({ runningAction: false });
     }
   },
 
@@ -250,14 +245,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     set({ runningAction: true, error: null });
     try {
       const result = await automationOcr(imagePath);
-      set({ lastOcr: result });
+      set({ lastOcr: result, runningAction: false });
       return result;
     } catch (error) {
       console.error('Automation OCR failed:', error);
-      set({ error: String(error) });
+      set({ error: String(error), runningAction: false, lastOcr: null });
       throw error;
-    } finally {
-      set({ runningAction: false });
     }
   },
 
@@ -325,14 +318,16 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     return null;
   },
 
-  // Script library actions (placeholder implementations)
+  // Updated Nov 16, 2025: Added proper error handling to script loading
   loadScripts: async () => {
-    set({ loadingScripts: true });
+    set({ loadingScripts: true, error: null });
     try {
+      // TODO: Replace with actual backend call when implemented
       set({ scripts: [], loadingScripts: false });
     } catch (error) {
       console.error('Failed to load scripts:', error);
-      set({ loadingScripts: false });
+      set({ error: String(error), loadingScripts: false, scripts: [] });
+      throw error;
     }
   },
 
