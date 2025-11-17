@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm/prompt
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '../../utils/ipc';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -19,8 +20,10 @@ import {
 import { ScrollArea } from '../ui/ScrollArea';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { cn } from '../../lib/utils';
+import { cn, debounce } from '../../lib/utils';
 import { toast } from 'sonner';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { usePrompt } from '../ui/PromptDialog';
 
 export interface FileNode {
   name: string;
@@ -61,7 +64,9 @@ const getNameFromPath = (path: string) => {
 export function FileTree({ rootPath, onFileSelect, selectedFile, className }: FileTreeProps) {
   const [tree, setTree] = useState<FileNode | null>(null);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  // Updated Nov 16, 2025: Added debounced search query to improve performance
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<{
     path: string;
     isDirectory: boolean;
@@ -71,6 +76,21 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
   const refreshTimeout = useRef<number | null>(null);
   const normalizedRoot = useMemo(() => normalizePath(rootPath), [rootPath]);
+
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  const { prompt, dialog: promptDialog } = usePrompt();
+
+  // Updated Nov 16, 2025: Debounced search to avoid filtering on every keystroke
+  const debouncedSearch = useMemo(
+    () => debounce((value: string) => setDebouncedSearchQuery(value), 300),
+    [],
+  );
+
+  // Update debounced query when input changes
+  useEffect(() => {
+    debouncedSearch(searchInput);
+  }, [searchInput, debouncedSearch]);
 
   const fetchDirectoryEntries = useCallback(async (path: string) => {
     const entries = await invoke<
@@ -145,6 +165,9 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
+  // Updated Nov 16, 2025: Fixed infinite loop risk by using ref for initial load
+  const initialLoadRef = useRef(true);
+
   const loadDirectory = useCallback(
     async (
       path: string,
@@ -172,10 +195,20 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     [expandedPaths, buildTree],
   );
 
+  // Updated Nov 16, 2025: Fixed dependency loop - only load on root path change
   useEffect(() => {
-    setExpandedPaths(new Set([normalizedRoot]));
-    void loadDirectory(normalizedRoot);
-  }, [normalizedRoot, loadDirectory]);
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      setExpandedPaths(new Set([normalizedRoot]));
+      void loadDirectory(normalizedRoot);
+    } else {
+      // Root changed, reload
+      setExpandedPaths(new Set([normalizedRoot]));
+      void loadDirectory(normalizedRoot);
+    }
+    // Intentionally not including loadDirectory to avoid infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedRoot]);
 
   useEffect(() => {
     let unlistenRef: UnlistenFn | null = null;
@@ -249,9 +282,16 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     void loadDirectory(rootPath, { preserveExpansion: true });
   };
 
+  // Updated Nov 16, 2025: Use accessible PromptDialog instead of window.prompt
   const handleCreate = async (targetPath: string, isDirectory: boolean) => {
     const label = isDirectory ? 'folder' : 'file';
-    const name = window.prompt(`Enter ${label} name`);
+    const name = await prompt({
+      title: `Create ${label}`,
+      description: `Enter a name for the new ${label}`,
+      label: `${label.charAt(0).toUpperCase() + label.slice(1)} name`,
+      placeholder: `my-${label}`,
+    });
+
     if (!name) {
       return;
     }
@@ -277,9 +317,16 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
+  // Updated Nov 16, 2025: Use accessible PromptDialog instead of window.prompt
   const handleRename = async (path: string) => {
     const currentName = getNameFromPath(path);
-    const newName = window.prompt('Enter new name', currentName);
+    const newName = await prompt({
+      title: 'Rename',
+      description: 'Enter a new name for this item',
+      label: 'New name',
+      defaultValue: currentName,
+    });
+
     if (!newName || newName === currentName) {
       return;
     }
@@ -302,12 +349,19 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
+  // Updated Nov 16, 2025: Use accessible ConfirmDialog instead of window.confirm
   const handleDelete = async (path: string, isDirectory: boolean) => {
-    const confirmMessage = isDirectory
-      ? 'Delete this folder and all of its contents?'
-      : 'Delete this file?';
+    const itemName = getNameFromPath(path);
+    const confirmed = await confirm({
+      title: `Delete ${isDirectory ? 'folder' : 'file'}?`,
+      description: isDirectory
+        ? `Are you sure you want to delete "${itemName}" and all of its contents? This action cannot be undone.`
+        : `Are you sure you want to delete "${itemName}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'destructive',
+    });
 
-    if (!window.confirm(confirmMessage)) {
+    if (!confirmed) {
       return;
     }
 
@@ -441,7 +495,11 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     };
   }, [contextMenu]);
 
-  const displayTree = useMemo(() => filterTree(tree, searchQuery), [tree, searchQuery, filterTree]);
+  // Updated Nov 16, 2025: Use debounced search query for better performance
+  const displayTree = useMemo(
+    () => filterTree(tree, debouncedSearchQuery),
+    [tree, debouncedSearchQuery, filterTree],
+  );
 
   const renderNode = (node: FileNode, level = 0) => {
     const isSelected = selectedFile === node.path;
@@ -500,8 +558,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         <Input
           type="text"
           placeholder="Search files..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           className="h-8 text-sm"
         />
       </div>
@@ -523,6 +581,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
           <div
             className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-lg"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            role="menu"
+            aria-label="File actions menu"
           >
             {contextMenu.isDirectory && (
               <>
@@ -532,8 +592,10 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                     handleCreate(contextMenu.path, false);
                     setContextMenu(null);
                   }}
+                  role="menuitem"
+                  aria-label="Create new file"
                 >
-                  <PlusCircle className="h-4 w-4" />
+                  <PlusCircle className="h-4 w-4" aria-hidden="true" />
                   New file
                 </button>
                 <button
@@ -542,11 +604,13 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                     handleCreate(contextMenu.path, true);
                     setContextMenu(null);
                   }}
+                  role="menuitem"
+                  aria-label="Create new folder"
                 >
-                  <Folder className="h-4 w-4" />
+                  <Folder className="h-4 w-4" aria-hidden="true" />
                   New folder
                 </button>
-                <div className="my-1 h-px bg-border/60" />
+                <div className="my-1 h-px bg-border/60" role="separator" />
               </>
             )}
             <button
@@ -555,8 +619,10 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                 handleRename(contextMenu.path);
                 setContextMenu(null);
               }}
+              role="menuitem"
+              aria-label="Rename item"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-4 w-4" aria-hidden="true" />
               Rename
             </button>
             <button
@@ -565,13 +631,19 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                 handleDelete(contextMenu.path, contextMenu.isDirectory);
                 setContextMenu(null);
               }}
+              role="menuitem"
+              aria-label="Delete item"
             >
-              <Trash className="h-4 w-4" />
+              <Trash className="h-4 w-4" aria-hidden="true" />
               Delete
             </button>
           </div>
         </div>
       )}
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {confirmDialog}
+      {promptDialog}
     </div>
   );
 }

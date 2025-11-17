@@ -30,7 +30,7 @@ function convertKeysToCamelCase(obj: any): any {
       const camelKey = toCamelCase(key);
       result[camelKey] = convertKeysToCamelCase(obj[key]);
       return result;
-    }, {} as any);
+    }, {} as Record<string, any>); // Updated Nov 16, 2025: Improved type safety
   }
   return obj;
 }
@@ -43,7 +43,7 @@ function convertKeysToSnakeCase(obj: any): any {
       const snakeKey = toSnakeCase(key);
       result[snakeKey] = convertKeysToSnakeCase(obj[key]);
       return result;
-    }, {} as any);
+    }, {} as Record<string, any>); // Updated Nov 16, 2025: Improved type safety
   }
   return obj;
 }
