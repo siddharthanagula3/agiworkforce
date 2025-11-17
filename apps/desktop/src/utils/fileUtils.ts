@@ -191,9 +191,10 @@ export function readFileAsText(file: File): Promise<string> {
 
 /**
  * Creates a unique ID for files and artifacts
+ * Updated Nov 16, 2025: Replaced deprecated substr() with substring()
  */
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**
