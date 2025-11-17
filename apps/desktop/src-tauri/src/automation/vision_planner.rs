@@ -5,7 +5,6 @@ use crate::router::{ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInp
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use image::DynamicImage;
-use serde_json::json;
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -208,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_create_planning_prompt() {
-        let router = Arc::new(Mutex::new(LLMRouter::new(None).unwrap()));
+        let router = Arc::new(Mutex::new(LLMRouter::new()));
         let planner = ActionPlanner::new(router);
         let prompt = planner.create_planning_prompt("Open notepad", &[]);
         assert!(prompt.contains("Open notepad"));
@@ -217,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_parse_action_plan() {
-        let router = Arc::new(Mutex::new(LLMRouter::new(None).unwrap()));
+        let router = Arc::new(Mutex::new(LLMRouter::new()));
         let planner = ActionPlanner::new(router);
 
         let json = r#"{"actions": [{"type": "click", "x": 100, "y": 200}], "reasoning": "test"}"#;
@@ -228,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_parse_action_plan_with_extra_text() {
-        let router = Arc::new(Mutex::new(LLMRouter::new(None).unwrap()));
+        let router = Arc::new(Mutex::new(LLMRouter::new()));
         let planner = ActionPlanner::new(router);
 
         let response = "Here's the plan:\n{\"actions\": [], \"reasoning\": \"complete\"}\nDone!";
