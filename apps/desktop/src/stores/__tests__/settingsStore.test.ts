@@ -1,66 +1,280 @@
-import { describe, it, expect } from 'vitest';
+// Updated Nov 16, 2025: Fixed test to actually test settingsStore instead of JavaScript primitives
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import {
+  useSettingsStore,
+  createDefaultLLMConfig,
+  createDefaultWindowPreferences,
+} from '../settingsStore';
+
+// Mock Tauri invoke
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+  length: 0,
+  key: vi.fn(),
+};
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+});
+
+type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
+type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
+
+async function getInvokeMock(): Promise<InvokeMock> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke as InvokeMock;
+}
 
 describe('settingsStore', () => {
-  it('should initialize with default settings', () => {
-    const settings = {
-      theme: 'dark',
-      llmProvider: 'openai',
-      autoApprove: false,
-    };
+  let invokeMock: InvokeMock;
 
-    expect(settings.theme).toBe('dark');
-    expect(settings.llmProvider).toBe('openai');
-    expect(settings.autoApprove).toBe(false);
+  beforeEach(async () => {
+    // Reset localStorage mock
+    localStorageMock.getItem.mockReturnValue(null);
+    localStorageMock.setItem.mockClear();
+    localStorageMock.removeItem.mockClear();
+
+    // Reset Tauri invoke mock
+    invokeMock = await getInvokeMock();
+    invokeMock.mockReset();
+
+    // Reset store to defaults
+    useSettingsStore.setState({
+      apiKeys: {
+        openai: '',
+        anthropic: '',
+        google: '',
+        ollama: '',
+        xai: '',
+        deepseek: '',
+        qwen: '',
+        mistral: '',
+      },
+      llmConfig: createDefaultLLMConfig(),
+      windowPreferences: createDefaultWindowPreferences(),
+      loading: false,
+      error: null,
+    });
+  });
+
+  it('should initialize with default settings', () => {
+    const state = useSettingsStore.getState();
+
+    expect(state.llmConfig.defaultProvider).toBe('anthropic');
+    expect(state.llmConfig.temperature).toBe(0.7);
+    expect(state.llmConfig.maxTokens).toBe(4096);
+    expect(state.windowPreferences.theme).toBe('system');
+    expect(state.windowPreferences.startupPosition).toBe('center');
+    expect(state.windowPreferences.dockOnStartup).toBeNull();
   });
 
   it('should update theme', () => {
-    let theme = 'dark';
-    theme = 'light';
+    const { setTheme } = useSettingsStore.getState();
 
-    expect(theme).toBe('light');
+    setTheme('dark');
+    expect(useSettingsStore.getState().windowPreferences.theme).toBe('dark');
+
+    setTheme('light');
+    expect(useSettingsStore.getState().windowPreferences.theme).toBe('light');
   });
 
-  it('should update LLM provider', () => {
-    let provider = 'openai';
-    provider = 'ollama';
+  it('should set default provider', async () => {
+    invokeMock.mockResolvedValue(undefined);
 
-    expect(provider).toBe('ollama');
+    const { setDefaultProvider } = useSettingsStore.getState();
+    await setDefaultProvider('openai');
+
+    expect(useSettingsStore.getState().llmConfig.defaultProvider).toBe('openai');
+    expect(invokeMock).toHaveBeenCalledWith('llm_set_default_provider', { provider: 'openai' });
   });
 
-  it('should toggle auto approve', () => {
-    let autoApprove = false;
-    autoApprove = !autoApprove;
+  it('should handle provider setting errors', async () => {
+    const errorMessage = 'Failed to set provider';
+    invokeMock.mockRejectedValue(new Error(errorMessage));
 
-    expect(autoApprove).toBe(true);
+    const { setDefaultProvider } = useSettingsStore.getState();
+    await expect(setDefaultProvider('ollama')).rejects.toThrow(errorMessage);
+
+    expect(useSettingsStore.getState().error).toBe(`Error: ${errorMessage}`);
   });
 
-  it('should save settings', () => {
-    const saved = true;
+  it('should update temperature', () => {
+    const { setTemperature } = useSettingsStore.getState();
 
-    expect(saved).toBe(true);
+    setTemperature(0.5);
+    expect(useSettingsStore.getState().llmConfig.temperature).toBe(0.5);
+
+    setTemperature(1.0);
+    expect(useSettingsStore.getState().llmConfig.temperature).toBe(1.0);
   });
 
-  it('should load settings', () => {
-    const settings = {
-      theme: 'dark',
-      llmProvider: 'anthropic',
-    };
+  it('should update max tokens', () => {
+    const { setMaxTokens } = useSettingsStore.getState();
 
-    expect(settings).toBeDefined();
+    setMaxTokens(2048);
+    expect(useSettingsStore.getState().llmConfig.maxTokens).toBe(2048);
   });
 
-  it('should validate settings', () => {
-    const valid = true;
+  it('should set default model for provider', () => {
+    const { setDefaultModel } = useSettingsStore.getState();
 
-    expect(valid).toBe(true);
+    setDefaultModel('openai', 'gpt-4-turbo');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.openai).toBe('gpt-4-turbo');
+
+    setDefaultModel('anthropic', 'claude-3-opus');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.anthropic).toBe('claude-3-opus');
   });
 
-  it('should reset to defaults', () => {
-    const defaults = {
-      theme: 'dark',
-      autoApprove: false,
-    };
+  it('should add favorite model', () => {
+    const { addFavoriteModel } = useSettingsStore.getState();
+    const initialFavorites = useSettingsStore.getState().llmConfig.favoriteModels;
+    const newModel = 'openai/gpt-4-turbo';
 
-    expect(defaults.theme).toBe('dark');
+    addFavoriteModel(newModel);
+
+    const favorites = useSettingsStore.getState().llmConfig.favoriteModels;
+    expect(favorites.length).toBeGreaterThan(initialFavorites.length);
+    expect(favorites).toContain(newModel);
+  });
+
+  it('should not add duplicate favorite models', () => {
+    const { addFavoriteModel } = useSettingsStore.getState();
+    const model = 'openai/gpt-4';
+
+    addFavoriteModel(model);
+    const lengthAfterFirst = useSettingsStore.getState().llmConfig.favoriteModels.length;
+
+    addFavoriteModel(model);
+    const lengthAfterSecond = useSettingsStore.getState().llmConfig.favoriteModels.length;
+
+    expect(lengthAfterFirst).toBe(lengthAfterSecond);
+  });
+
+  it('should remove favorite model', () => {
+    const { removeFavoriteModel } = useSettingsStore.getState();
+    const favorites = useSettingsStore.getState().llmConfig.favoriteModels;
+    const modelToRemove = favorites[0];
+
+    expect(modelToRemove).toBeDefined();
+    removeFavoriteModel(modelToRemove!);
+
+    const updatedFavorites = useSettingsStore.getState().llmConfig.favoriteModels;
+    expect(updatedFavorites).not.toContain(modelToRemove);
+    expect(updatedFavorites.length).toBe(favorites.length - 1);
+  });
+
+  it('should set API key and configure provider', async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const { setAPIKey } = useSettingsStore.getState();
+    const apiKey = 'test-api-key-123';
+
+    await setAPIKey('openai', apiKey);
+
+    const state = useSettingsStore.getState();
+    expect(state.apiKeys.openai).toBe(apiKey);
+    expect(state.loading).toBe(false);
+    expect(invokeMock).toHaveBeenCalledWith('settings_save_api_key', {
+      provider: 'openai',
+      key: apiKey,
+    });
+    expect(invokeMock).toHaveBeenCalledWith('llm_configure_provider', {
+      provider: 'openai',
+      apiKey,
+      baseUrl: null,
+    });
+  });
+
+  it('should handle Ollama provider specially (no API key)', async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const { setAPIKey } = useSettingsStore.getState();
+    await setAPIKey('ollama', '');
+
+    expect(invokeMock).toHaveBeenCalledWith('llm_configure_provider', {
+      provider: 'ollama',
+      apiKey: null,
+      baseUrl: 'http://localhost:11434',
+    });
+  });
+
+  it('should test API key', async () => {
+    invokeMock.mockResolvedValue({ success: true });
+
+    const { testAPIKey } = useSettingsStore.getState();
+    const result = await testAPIKey('anthropic');
+
+    expect(result).toBe(true);
+    expect(useSettingsStore.getState().loading).toBe(false);
+    expect(useSettingsStore.getState().error).toBeNull();
+  });
+
+  it('should handle API key test failure', async () => {
+    invokeMock.mockRejectedValue(new Error('Invalid API key'));
+
+    const { testAPIKey } = useSettingsStore.getState();
+    const result = await testAPIKey('anthropic');
+
+    expect(result).toBe(false);
+    expect(useSettingsStore.getState().loading).toBe(false);
+    expect(useSettingsStore.getState().error).toBe('Error: Invalid API key');
+  });
+
+  it('should update startup position', () => {
+    const { setStartupPosition } = useSettingsStore.getState();
+
+    setStartupPosition('remember');
+    expect(useSettingsStore.getState().windowPreferences.startupPosition).toBe('remember');
+
+    setStartupPosition('center');
+    expect(useSettingsStore.getState().windowPreferences.startupPosition).toBe('center');
+  });
+
+  it('should update dock on startup', () => {
+    const { setDockOnStartup } = useSettingsStore.getState();
+
+    setDockOnStartup('left');
+    expect(useSettingsStore.getState().windowPreferences.dockOnStartup).toBe('left');
+
+    setDockOnStartup('right');
+    expect(useSettingsStore.getState().windowPreferences.dockOnStartup).toBe('right');
+
+    setDockOnStartup(null);
+    expect(useSettingsStore.getState().windowPreferences.dockOnStartup).toBeNull();
+  });
+
+  it('should save settings', async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    const { saveSettings } = useSettingsStore.getState();
+    await saveSettings();
+
+    expect(invokeMock).toHaveBeenCalledWith('settings_save', {
+      settings: {
+        llmConfig: expect.any(Object),
+        windowPreferences: expect.any(Object),
+      },
+    });
+    expect(useSettingsStore.getState().loading).toBe(false);
+  });
+
+  it('should handle save errors', async () => {
+    const errorMessage = 'Database error';
+    invokeMock.mockRejectedValue(new Error(errorMessage));
+
+    const { saveSettings } = useSettingsStore.getState();
+    await expect(saveSettings()).rejects.toThrow(errorMessage);
+
+    expect(useSettingsStore.getState().loading).toBe(false);
+    expect(useSettingsStore.getState().error).toBe(`Error: ${errorMessage}`);
   });
 });

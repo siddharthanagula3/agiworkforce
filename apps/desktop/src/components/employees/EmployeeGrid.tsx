@@ -1,14 +1,17 @@
 /**
  * EmployeeGrid Component
  * Grid layout for displaying employee cards with loading states
+ * Updated Nov 16, 2025: Added React.memo for performance optimization
  */
 
+import { memo, useMemo } from 'react';
 import { Users } from 'lucide-react';
 import { useEmployeeStore, selectFilteredEmployees } from '../../stores/employeeStore';
 import { EmployeeCard } from './EmployeeCard';
 import { Skeleton } from '../ui/Skeleton';
 
-function LoadingSkeleton() {
+// Updated Nov 16, 2025: Memoized LoadingSkeleton to prevent re-renders
+const LoadingSkeleton = memo(function LoadingSkeleton() {
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4">
       <div className="flex items-start gap-3">
@@ -34,9 +37,10 @@ function LoadingSkeleton() {
       </div>
     </div>
   );
-}
+});
 
-function EmptyState() {
+// Updated Nov 16, 2025: Memoized EmptyState to prevent re-renders
+const EmptyState = memo(function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -48,12 +52,16 @@ function EmptyState() {
       </p>
     </div>
   );
-}
+});
 
-export function EmployeeGrid() {
+// Updated Nov 16, 2025: Memoized EmployeeGrid to prevent unnecessary re-renders
+export const EmployeeGrid = memo(function EmployeeGrid() {
   const filteredEmployees = useEmployeeStore(selectFilteredEmployees);
   const isLoading = useEmployeeStore((state) => state.isLoading);
   const error = useEmployeeStore((state) => state.error);
+
+  // Updated Nov 16, 2025: Memoized skeleton array to prevent re-creation
+  const skeletonArray = useMemo(() => Array.from({ length: 8 }), []);
 
   if (error) {
     return (
@@ -68,7 +76,7 @@ export function EmployeeGrid() {
   if (isLoading && filteredEmployees.length === 0) {
     return (
       <div className="grid grid-cols-1 gap-6 p-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+        {skeletonArray.map((_, i) => (
           <LoadingSkeleton key={i} />
         ))}
       </div>
@@ -86,4 +94,4 @@ export function EmployeeGrid() {
       ))}
     </div>
   );
-}
+});

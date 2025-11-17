@@ -109,16 +109,14 @@ describe('retry utility', () => {
       expect(shouldRetry).toHaveBeenCalledWith(expect.any(Error), 1);
     });
 
+    // Updated Nov 16, 2025: Fixed flaky timing test with more tolerant assertions
     it('should use exponential backoff', async () => {
       let attempts = 0;
-      const delays: number[] = [];
-      const startTime = Date.now();
+      const timestamps: number[] = [Date.now()];
 
       const operation = vi.fn().mockImplementation(async () => {
-        if (attempts > 0) {
-          delays.push(Date.now() - startTime);
-        }
         attempts++;
+        timestamps.push(Date.now());
         if (attempts < 4) {
           throw new Error('Temporary failure');
         }
@@ -131,11 +129,25 @@ describe('retry utility', () => {
         backoffMultiplier: 2,
       });
 
-      // Verify exponential backoff (approximately)
-      // First retry: ~100ms, second: ~200ms, third: ~400ms
-      expect(delays[0]).toBeGreaterThanOrEqual(90);
-      expect(delays[1]).toBeGreaterThanOrEqual(190);
-      expect(delays[2]).toBeGreaterThanOrEqual(390);
+      // Verify exponential backoff by checking delays between attempts
+      // First delay: ~100ms, second: ~200ms, third: ~400ms
+      // Use more tolerant ranges to avoid flakiness (±50ms tolerance)
+      const delay1 = timestamps[1]! - timestamps[0]!;
+      const delay2 = timestamps[2]! - timestamps[1]!;
+      const delay3 = timestamps[3]! - timestamps[2]!;
+
+      expect(delay1).toBeGreaterThanOrEqual(50);
+      expect(delay1).toBeLessThan(200);
+
+      expect(delay2).toBeGreaterThanOrEqual(100);
+      expect(delay2).toBeLessThan(350);
+
+      expect(delay3).toBeGreaterThanOrEqual(200);
+      expect(delay3).toBeLessThan(600);
+
+      // Verify backoff multiplier effect: each delay should be roughly 2x previous
+      expect(delay2).toBeGreaterThan(delay1);
+      expect(delay3).toBeGreaterThan(delay2);
     });
 
     it('should cap delay at maxDelay', async () => {

@@ -200,12 +200,31 @@ pub fn automation_focus_window(element_id: String) -> Result<(), String> {
     with_service(|service| service.uia.focus_window(&element_id)).map_err(|err| err.to_string())
 }
 
+// Updated Nov 16, 2025: Added input validation
 #[tauri::command]
 pub async fn automation_send_keys(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: SendKeysRequest,
 ) -> Result<(), String> {
+    // Validate text input
+    if request.text.is_empty() {
+        return Err("Text cannot be empty".to_string());
+    }
+    if request.text.len() > 100_000 {
+        return Err(format!("Text too long: {} characters. Maximum is 100,000", request.text.len()));
+    }
+
+    // Validate coordinates if provided
+    if let (Some(x), Some(y)) = (request.x, request.y) {
+        if x < -10_000 || x > 100_000 {
+            return Err(format!("Invalid x coordinate: {}. Must be between -10,000 and 100,000", x));
+        }
+        if y < -10_000 || y > 100_000 {
+            return Err(format!("Invalid y coordinate: {}. Must be between -10,000 and 100,000", y));
+        }
+    }
+
     execute_text_input(&app, &db, &request, false).await
 }
 
@@ -221,6 +240,7 @@ pub fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
         .map_err(|err| err.to_string())
 }
 
+// Updated Nov 16, 2025: Added input validation for coordinates
 #[tauri::command]
 pub fn automation_click(
     app: AppHandle,
@@ -228,6 +248,17 @@ pub fn automation_click(
     request: ClickRequest,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
+
+    // Validate coordinates if provided directly
+    if let (Some(x), Some(y)) = (request.x, request.y) {
+        if x < -10_000 || x > 100_000 {
+            return Err(format!("Invalid x coordinate: {}. Must be between -10,000 and 100,000", x));
+        }
+        if y < -10_000 || y > 100_000 {
+            return Err(format!("Invalid y coordinate: {}. Must be between -10,000 and 100,000", y));
+        }
+    }
+
     let (x, y, button_name) = with_service(|service| {
         let (x, y) = if let Some(element_id) = &request.element_id {
             let rect = service
@@ -281,6 +312,7 @@ pub async fn automation_type(
     execute_text_input(&app, &db, &request, true).await
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 #[tauri::command]
 pub async fn automation_drag_drop(
     app: AppHandle,
@@ -288,6 +320,28 @@ pub async fn automation_drag_drop(
     request: DragDropRequest,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
+
+    // Validate coordinates
+    if request.from_x < -10_000 || request.from_x > 100_000 {
+        return Err(format!("Invalid from_x coordinate: {}. Must be between -10,000 and 100,000", request.from_x));
+    }
+    if request.from_y < -10_000 || request.from_y > 100_000 {
+        return Err(format!("Invalid from_y coordinate: {}. Must be between -10,000 and 100,000", request.from_y));
+    }
+    if request.to_x < -10_000 || request.to_x > 100_000 {
+        return Err(format!("Invalid to_x coordinate: {}. Must be between -10,000 and 100,000", request.to_x));
+    }
+    if request.to_y < -10_000 || request.to_y > 100_000 {
+        return Err(format!("Invalid to_y coordinate: {}. Must be between -10,000 and 100,000", request.to_y));
+    }
+
+    // Validate duration
+    if request.duration_ms == 0 {
+        return Err("Duration must be greater than 0".to_string());
+    }
+    if request.duration_ms > 60_000 {
+        return Err(format!("Duration too long: {}ms. Maximum is 60 seconds (60,000ms)", request.duration_ms));
+    }
 
     // Create mouse simulator outside the service to avoid async closure issues
     let mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
@@ -326,9 +380,16 @@ pub fn automation_clipboard_get() -> Result<String, String> {
     with_service(|service| service.clipboard.get_text()).map_err(|err| err.to_string())
 }
 
+// Updated Nov 16, 2025: Added input validation
 #[tauri::command]
 pub fn automation_clipboard_set(text: String) -> Result<(), String> {
-    with_service(|service| service.clipboard.set_text(&text)).map_err(|err| err.to_string())
+    // Validate clipboard text size
+    if text.len() > 10_000_000 {
+        return Err(format!("Clipboard text too large: {} characters. Maximum is 10MB", text.len()));
+    }
+
+    with_service(|service| service.clipboard.set_text(&text))
+        .map_err(|err| format!("Failed to set clipboard text: {}", err))
 }
 
 #[tauri::command]
@@ -345,6 +406,7 @@ pub async fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
     }
 }
 
+// Updated Nov 16, 2025: Added input validation for screenshot dimensions
 #[tauri::command]
 pub async fn automation_screenshot(
     app: AppHandle,
@@ -352,6 +414,24 @@ pub async fn automation_screenshot(
     request: ScreenshotRequest,
 ) -> Result<crate::commands::capture::CaptureResult, String> {
     ensure_overlay_ready(&app);
+
+    // Validate dimensions if provided
+    if let Some(width) = request.width {
+        if width == 0 {
+            return Err("Width must be greater than 0".to_string());
+        }
+        if width > 20_000 {
+            return Err(format!("Width too large: {}. Maximum is 20,000 pixels", width));
+        }
+    }
+    if let Some(height) = request.height {
+        if height == 0 {
+            return Err("Height must be greater than 0".to_string());
+        }
+        if height > 20_000 {
+            return Err(format!("Height too large: {}. Maximum is 20,000 pixels", height));
+        }
+    }
 
     if let Some(ref element_id) = request.element_id {
         let bounds = with_service(|service| service.uia.bounding_rect(element_id))

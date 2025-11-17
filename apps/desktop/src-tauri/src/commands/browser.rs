@@ -84,6 +84,7 @@ pub async fn browser_launch(
     }
 }
 
+// Updated Nov 16, 2025: Added URL validation
 /// Open a new tab
 #[tauri::command]
 pub async fn browser_open_tab(
@@ -91,6 +92,18 @@ pub async fn browser_open_tab(
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<String, String> {
     tracing::info!("Opening tab: {}", url);
+
+    // Validate URL
+    if url.trim().is_empty() {
+        return Err("URL cannot be empty".to_string());
+    }
+    if url.len() > 10_000 {
+        return Err(format!("URL too long: {} characters. Maximum is 10,000", url.len()));
+    }
+    // Basic URL validation
+    if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("file://") {
+        return Err(format!("Invalid URL scheme: {}. Must start with http://, https://, or file://", url));
+    }
 
     let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
@@ -104,6 +117,7 @@ pub async fn browser_open_tab(
     }
 }
 
+// Updated Nov 16, 2025: Added tab_id validation
 /// Close a tab
 #[tauri::command]
 pub async fn browser_close_tab(
@@ -112,13 +126,21 @@ pub async fn browser_close_tab(
 ) -> Result<(), String> {
     tracing::info!("Closing tab: {}", tab_id);
 
+    // Validate tab_id
+    if tab_id.trim().is_empty() {
+        return Err("Tab ID cannot be empty".to_string());
+    }
+    if tab_id.len() > 500 {
+        return Err(format!("Tab ID too long: {} characters. Maximum is 500", tab_id.len()));
+    }
+
     let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
     tab_manager
         .close_tab(&tab_id)
         .await
-        .map_err(|e| format!("Failed to close tab: {}", e))
+        .map_err(|e| format!("Failed to close tab '{}': {}", tab_id, e))
 }
 
 /// List all open tabs
@@ -143,6 +165,7 @@ pub async fn browser_list_tabs(
     }
 }
 
+// Updated Nov 16, 2025: Added input validation
 /// Navigate to URL
 #[tauri::command]
 pub async fn browser_navigate(
@@ -152,6 +175,22 @@ pub async fn browser_navigate(
 ) -> Result<(), String> {
     tracing::info!("Navigating tab {} to {}", tab_id, url);
 
+    // Validate tab_id
+    if tab_id.trim().is_empty() {
+        return Err("Tab ID cannot be empty".to_string());
+    }
+
+    // Validate URL
+    if url.trim().is_empty() {
+        return Err("URL cannot be empty".to_string());
+    }
+    if url.len() > 10_000 {
+        return Err(format!("URL too long: {} characters. Maximum is 10,000", url.len()));
+    }
+    if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("file://") {
+        return Err(format!("Invalid URL scheme: {}. Must start with http://, https://, or file://", url));
+    }
+
     let browser_state = state.inner().lock().await;
     let tab_manager = browser_state.tab_manager.lock().await;
 
@@ -160,7 +199,7 @@ pub async fn browser_navigate(
     tab_manager
         .navigate(&tab_id, &url, options)
         .await
-        .map_err(|e| format!("Failed to navigate: {}", e))
+        .map_err(|e| format!("Failed to navigate to '{}': {}", url, e))
 }
 
 /// Go back
@@ -244,6 +283,7 @@ pub async fn browser_get_title(
         .map_err(|e| format!("Failed to get title: {}", e))
 }
 
+// Updated Nov 16, 2025: Added input validation
 /// Click element
 #[tauri::command]
 pub async fn browser_click(
@@ -253,17 +293,28 @@ pub async fn browser_click(
 ) -> Result<(), String> {
     tracing::info!("Clicking element {} in tab {}", selector, tab_id);
 
+    // Validate inputs
+    if tab_id.trim().is_empty() {
+        return Err("Tab ID cannot be empty".to_string());
+    }
+    if selector.trim().is_empty() {
+        return Err("Selector cannot be empty".to_string());
+    }
+    if selector.len() > 5_000 {
+        return Err(format!("Selector too long: {} characters. Maximum is 5,000", selector.len()));
+    }
+
     let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
         .await
-        .map_err(|e| format!("Failed to get CDP client: {}", e))?;
+        .map_err(|e| format!("Failed to get CDP client for tab '{}': {}", tab_id, e))?;
 
     let options = ClickOptions::default();
 
     DomOperations::click_with_cdp(cdp_client, &selector, options)
         .await
-        .map_err(|e| format!("Failed to click: {}", e))
+        .map_err(|e| format!("Failed to click element '{}': {}", selector, e))
 }
 
 /// Type text
@@ -308,6 +359,7 @@ pub async fn browser_get_attribute(
         .map_err(|e| format!("Failed to get attribute: {}", e))
 }
 
+// Updated Nov 16, 2025: Added input validation
 /// Wait for selector
 #[tauri::command]
 pub async fn browser_wait_for_selector(
@@ -316,9 +368,28 @@ pub async fn browser_wait_for_selector(
     timeout_ms: u64,
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<(), String> {
+    // Validate inputs
+    if tab_id.trim().is_empty() {
+        return Err("Tab ID cannot be empty".to_string());
+    }
+    if selector.trim().is_empty() {
+        return Err("Selector cannot be empty".to_string());
+    }
+    if selector.len() > 5_000 {
+        return Err(format!("Selector too long: {} characters. Maximum is 5,000", selector.len()));
+    }
+
+    // Validate timeout
+    if timeout_ms == 0 {
+        return Err("Timeout must be greater than 0".to_string());
+    }
+    if timeout_ms > 300_000 {
+        return Err(format!("Timeout too long: {}ms. Maximum is 5 minutes (300,000ms)", timeout_ms));
+    }
+
     DomOperations::wait_for_selector(&tab_id, &selector, timeout_ms)
         .await
-        .map_err(|e| format!("Failed to wait for selector: {}", e))
+        .map_err(|e| format!("Failed to wait for selector '{}': {}", selector, e))
 }
 
 /// Select dropdown option
@@ -382,6 +453,7 @@ pub async fn browser_screenshot(
     }
 }
 
+// Updated Nov 16, 2025: Added input validation and security warning
 /// Execute JavaScript
 #[tauri::command]
 pub async fn browser_evaluate(
@@ -389,6 +461,23 @@ pub async fn browser_evaluate(
     script: String,
     _state: State<'_, BrowserStateWrapper>,
 ) -> Result<serde_json::Value, String> {
+    // Validate inputs
+    if tab_id.trim().is_empty() {
+        return Err("Tab ID cannot be empty".to_string());
+    }
+    if script.trim().is_empty() {
+        return Err("Script cannot be empty".to_string());
+    }
+    if script.len() > 1_000_000 {
+        return Err(format!("Script too long: {} characters. Maximum is 1MB", script.len()));
+    }
+
+    // Security warning for potentially dangerous operations
+    let dangerous_patterns = ["eval(", "Function(", "setTimeout(", "setInterval("];
+    if dangerous_patterns.iter().any(|pattern| script.contains(pattern)) {
+        tracing::warn!("Executing potentially dangerous JavaScript with dynamic code execution patterns");
+    }
+
     DomOperations::evaluate(&tab_id, &script)
         .await
         .map_err(|e| format!("Failed to evaluate script: {}", e))
@@ -562,6 +651,7 @@ pub async fn browser_drag_and_drop(
         .map_err(|e| format!("Failed to drag and drop: {}", e))
 }
 
+// Updated Nov 16, 2025: Added input validation and file existence check
 /// Upload file to file input
 #[tauri::command]
 pub async fn browser_upload_file(
@@ -572,6 +662,30 @@ pub async fn browser_upload_file(
 ) -> Result<(), String> {
     tracing::info!("Uploading file {} to {}", file_path, selector);
 
+    // Validate inputs
+    if tab_id.trim().is_empty() {
+        return Err("Tab ID cannot be empty".to_string());
+    }
+    if selector.trim().is_empty() {
+        return Err("Selector cannot be empty".to_string());
+    }
+    if file_path.trim().is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+
+    // Verify file exists and is not too large
+    match std::fs::metadata(&file_path) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err(format!("Path is not a file: {}", file_path));
+            }
+            if metadata.len() > 100_000_000 {
+                return Err(format!("File too large: {} bytes. Maximum is 100MB for upload", metadata.len()));
+            }
+        }
+        Err(_) => return Err(format!("File does not exist: {}", file_path)),
+    }
+
     let browser_state = state.inner().lock().await;
     let cdp_client = browser_state
         .get_cdp_client(&tab_id)
@@ -580,7 +694,7 @@ pub async fn browser_upload_file(
 
     AdvancedBrowserOps::upload_file(cdp_client, &selector, &file_path)
         .await
-        .map_err(|e| format!("Failed to upload file: {}", e))
+        .map_err(|e| format!("Failed to upload file '{}': {}", file_path, e))
 }
 
 /// Get all cookies
