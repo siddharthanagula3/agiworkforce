@@ -1,7 +1,6 @@
 // Base UI Components
 export * from './Accordion';
 export * from './Badge';
-export * from '@agiworkforce/ui-components';
 export * from './Card';
 export * from './Collapsible';
 export * from './Dialog';
