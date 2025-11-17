@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Search } from 'lucide-react';
 import * as Icons from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/Accordion';
@@ -13,9 +14,15 @@ interface CapabilityItemProps {
   onDragStart: (event: React.DragEvent, capability: Capability) => void;
 }
 
+const defaultIcon: LucideIcon = Icons.Circle;
+
+function getIconComponent(iconName?: string): LucideIcon {
+  const icon = iconName ? (Icons as Record<string, unknown>)[iconName] : undefined;
+  return typeof icon === 'function' ? (icon as LucideIcon) : defaultIcon;
+}
+
 function CapabilityItem({ capability, onDragStart }: CapabilityItemProps) {
-  // Updated Nov 16, 2025: Improved type safety for dynamic icon lookup
-  const IconComponent = (Icons as Record<string, React.ComponentType>)[capability.icon] || Icons.Circle;
+  const IconComponent = getIconComponent(capability.icon);
 
   const categoryColors = {
     data: 'text-blue-600 hover:bg-blue-50',

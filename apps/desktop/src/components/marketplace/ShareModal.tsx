@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Copy, Check, Twitter, Linkedin, Mail, Link, MessageSquare, Newspaper } from 'lucide-react';
 import {
   Dialog,
@@ -22,13 +22,7 @@ export function ShareModal() {
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
 
-  useEffect(() => {
-    if (selectedWorkflow && showShareModal) {
-      loadShareData();
-    }
-  }, [selectedWorkflow, showShareModal]);
-
-  const loadShareData = async () => {
+  const loadShareData = useCallback(async () => {
     if (!selectedWorkflow) return;
 
     try {
@@ -40,7 +34,13 @@ export function ShareModal() {
     } catch (error) {
       console.error('Failed to load share data:', error);
     }
-  };
+  }, [getEmbedCode, getShareUrl, selectedWorkflow]);
+
+  useEffect(() => {
+    if (selectedWorkflow && showShareModal) {
+      loadShareData();
+    }
+  }, [loadShareData, selectedWorkflow, showShareModal]);
 
   const handleCopyUrl = async () => {
     try {

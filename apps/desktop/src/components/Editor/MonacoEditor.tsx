@@ -34,6 +34,14 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [detectedLanguage, setDetectedLanguage] = useState<string>(propLanguage || 'plaintext');
   const [fileUri, setFileUri] = useState<string>('');
+  const initialValueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+
+  initialValueRef.current = value;
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   // Detect language from file path
   useEffect(() => {
@@ -319,7 +327,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (!containerRef.current) return;
 
     const editor = monaco.editor.create(containerRef.current, {
-      value,
+      value: initialValueRef.current,
       language: detectedLanguage,
       theme,
       automaticLayout: true,
@@ -336,13 +344,13 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
     // Notify LSP of document open
     if (enableLSP && lsp.server) {
-      lsp.didOpen(fileUri, detectedLanguage, value);
+      lsp.didOpen(fileUri, detectedLanguage, editor.getValue());
     }
 
     // Handle content changes
     editor.onDidChangeModelContent(() => {
       const newValue = editor.getValue();
-      onChange?.(newValue);
+      onChangeRef.current?.(newValue);
 
       // Notify LSP of changes
       if (enableLSP && lsp.server) {
@@ -383,7 +391,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
       editor.dispose();
     };
-  }, [detectedLanguage, theme, options, enableLSP]);
+  }, [detectedLanguage, theme, options, enableLSP, fileUri, lsp]);
 
   // Update value when prop changes
   useEffect(() => {

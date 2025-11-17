@@ -110,7 +110,12 @@ impl OAuth2Client {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .map_err(|e| crate::error::Error::Other(format!("Failed to create HTTP client for OAuth2: {}", e)))?;
+            .map_err(|e| {
+                crate::error::Error::Other(format!(
+                    "Failed to create HTTP client for OAuth2: {}",
+                    e
+                ))
+            })?;
 
         Ok(Self { config, client })
     }
@@ -368,7 +373,7 @@ mod tests {
             use_pkce: true,
         };
 
-        let client = OAuth2Client::new(config);
+        let client = OAuth2Client::new(config).expect("Failed to create OAuth2 client for test");
         let pkce = PkceChallenge::generate();
         let url = client.get_authorization_url("random_state", Some(&pkce));
 

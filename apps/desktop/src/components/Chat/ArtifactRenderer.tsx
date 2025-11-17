@@ -126,94 +126,97 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   }, [artifact.type]);
 
   return (
-    <Card className={cn('overflow-hidden', className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-muted/50">
-        <div className="flex items-center gap-2">
-          {icon}
-          <CardTitle className="text-sm font-semibold">
-            {artifact.title ||
-              `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
-          </CardTitle>
-          {artifact.language && (
-            <Badge variant="outline" className="text-xs">
-              {artifact.language}
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {artifact.type === 'code' && (
+    <>
+      <Card className={cn('overflow-hidden', className)}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-muted/50">
+          <div className="flex items-center gap-2">
+            {icon}
+            <CardTitle className="text-sm font-semibold">
+              {artifact.title ||
+                `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
+            </CardTitle>
+            {artifact.language && (
+              <Badge variant="outline" className="text-xs">
+                {artifact.language}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {artifact.type === 'code' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleInsertIntoEditor}
+                    aria-label="Apply code to file"
+                  >
+                    <FileUp className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Apply to file...</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={handleInsertIntoEditor}
-                  aria-label="Apply code to file"
+                  onClick={handleCopy}
+                  aria-label="Copy to clipboard"
                 >
-                  <FileUp className="h-3.5 w-3.5" />
+                  {copied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                      <span className="sr-only">Copied!</span>
+                    </>
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Apply to file…</p>
+                <p>{copied ? 'Copied!' : 'Copy to clipboard'}</p>
               </TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleDownload}
+                  aria-label="Download artifact"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Download</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {artifact.type === 'code' ? (
+            <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
+          ) : artifact.type === 'chart' ? (
+            <ChartArtifact artifact={artifact} />
+          ) : artifact.type === 'table' ? (
+            <TableArtifact artifact={artifact} />
+          ) : artifact.type === 'mermaid' ? (
+            <MermaidArtifact artifact={artifact} />
+          ) : (
+            <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleCopy}
-                aria-label="Copy to clipboard"
-              >
-                {copied ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                    <span className="sr-only">Copied!</span>
-                  </>
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{copied ? 'Copied!' : 'Copy to clipboard'}</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleDownload}
-                aria-label="Download artifact"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Download</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        {artifact.type === 'code' ? (
-          <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
-        ) : artifact.type === 'chart' ? (
-          <ChartArtifact artifact={artifact} />
-        ) : artifact.type === 'table' ? (
-          <TableArtifact artifact={artifact} />
-        ) : artifact.type === 'mermaid' ? (
-          <MermaidArtifact artifact={artifact} />
-        ) : (
-          <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
-        )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      {promptDialog}
+    </>
   );
 }
 
@@ -404,9 +407,6 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
       <pre className="p-4 bg-background rounded-lg border overflow-x-auto">
         <code className="text-sm">{artifact.content}</code>
       </pre>
-
-      {/* Updated Nov 16, 2025: Render accessible dialogs */}
-      {promptDialog}
     </div>
   );
 }

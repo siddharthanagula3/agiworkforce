@@ -43,15 +43,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadArticles();
-  }, []);
-
-  useEffect(() => {
-    filterArticles();
-  }, [searchQuery, articles, context]);
-
-  const loadArticles = async () => {
+  const loadArticles = useCallback(async () => {
     setLoading(true);
     try {
       // In a real implementation, load from database or API
@@ -62,7 +54,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const filterArticles = useCallback(() => {
     let filtered = articles;
@@ -91,6 +83,14 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
 
     setFilteredArticles(filtered);
   }, [articles, searchQuery, context]);
+
+  useEffect(() => {
+    loadArticles();
+  }, [loadArticles]);
+
+  useEffect(() => {
+    filterArticles();
+  }, [filterArticles]);
 
   const recordHelpUsage = async (articleId: string, helpful: boolean) => {
     try {

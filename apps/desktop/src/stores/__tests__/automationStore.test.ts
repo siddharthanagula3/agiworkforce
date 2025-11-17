@@ -46,8 +46,8 @@ describe('automationStore', () => {
 
   it('should load windows successfully', async () => {
     const mockWindows = [
-      { id: 'window-1', name: 'Test Window 1', handle: 123 },
-      { id: 'window-2', name: 'Test Window 2', handle: 456 },
+      { id: 'window-1', name: 'Test Window 1', className: 'Window', controlType: 'Window' },
+      { id: 'window-2', name: 'Test Window 2', className: 'Window', controlType: 'Window' },
     ];
 
     invokeMock.mockResolvedValue(mockWindows);
@@ -61,27 +61,27 @@ describe('automationStore', () => {
     expect(invokeMock).toHaveBeenCalledWith('list_automation_windows');
   });
 
-  it('should handle window loading errors', async () => {
-    const errorMessage = 'Failed to list windows';
-    invokeMock.mockRejectedValue(new Error(errorMessage));
+    it('should handle window loading errors', async () => {
+      const errorMessage = 'Failed to list windows';
+      invokeMock.mockRejectedValue(new Error(errorMessage));
 
-    await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(errorMessage);
+      await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(errorMessage);
 
-    const state = useAutomationStore.getState();
-    expect(state.loadingWindows).toBe(false);
-    expect(state.error).toBe(`Error: ${errorMessage}`);
-    expect(state.windows).toEqual([]);
-  });
+      const state = useAutomationStore.getState();
+      expect(state.loadingWindows).toBe(false);
+      expect(state.error).toBe(`Error: ${errorMessage}`);
+      expect(state.windows).toEqual([]);
+    });
 
   it('should search for elements', async () => {
     const mockElements = [
-      { id: 'elem-1', name: 'Button', type: 'Button' },
-      { id: 'elem-2', name: 'Input', type: 'Edit' },
+      { id: 'elem-1', name: 'Button', className: 'Button', controlType: 'Button' },
+      { id: 'elem-2', name: 'Input', className: 'Edit', controlType: 'Edit' },
     ];
 
     invokeMock.mockResolvedValue(mockElements);
 
-    const query = { window_id: 'window-1', element_type: 'Button' };
+    const query = { window: 'window-1', controlType: 'Button' };
     await useAutomationStore.getState().searchElements(query);
 
     const state = useAutomationStore.getState();
@@ -93,7 +93,7 @@ describe('automationStore', () => {
   it('should perform click action', async () => {
     invokeMock.mockResolvedValue(undefined);
 
-    const clickRequest = { element_id: 'button-1', x: 100, y: 50 };
+    const clickRequest = { elementId: 'button-1', x: 100, y: 50 };
     await useAutomationStore.getState().click(clickRequest);
 
     const state = useAutomationStore.getState();
@@ -106,7 +106,7 @@ describe('automationStore', () => {
     const errorMessage = 'Element not found';
     invokeMock.mockRejectedValue(new Error(errorMessage));
 
-    const clickRequest = { element_id: 'button-1', x: 100, y: 50 };
+    const clickRequest = { elementId: 'button-1', x: 100, y: 50 };
     await expect(useAutomationStore.getState().click(clickRequest)).rejects.toThrow(errorMessage);
 
     const state = useAutomationStore.getState();
@@ -137,8 +137,8 @@ describe('automationStore', () => {
   it('should reset store to initial state', () => {
     // Modify state
     useAutomationStore.setState({
-      windows: [{ id: 'w1', name: 'Window', handle: 1 }],
-      elements: [{ id: 'e1', name: 'Element', type: 'Button' }],
+      windows: [{ id: 'w1', name: 'Window', className: 'Window', controlType: 'Window' }],
+      elements: [{ id: 'e1', name: 'Element', className: 'Button', controlType: 'Button' }],
       error: 'Some error',
       isRecording: true,
       isExecuting: true,
