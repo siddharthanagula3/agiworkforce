@@ -3,8 +3,10 @@ pub mod executor;
 pub mod input;
 pub mod inspector;
 pub mod recorder;
+pub mod safety;
 pub mod screen;
 pub mod uia;
+pub mod vision_planner;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
