@@ -370,15 +370,16 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     },
 
     // Load metric trends
+    // Updated Nov 16, 2025: Fixed direct state mutation - use spread operator for immutability
     loadTrends: async (metric: string, days: number) => {
       try {
         const trends = await invoke<any[]>('analytics_get_metric_trends', {
           metric,
           days,
         });
-        set((state) => {
-          state.trends[metric] = trends || [];
-        });
+        set((state) => ({
+          trends: { ...state.trends, [metric]: trends || [] },
+        }));
         return trends || [];
       } catch (error) {
         console.error('Failed to load trends:', error);
@@ -432,12 +433,26 @@ export const useAnalyticsStore = create<AnalyticsState>()(
   }))
 );
 
+// Updated Nov 16, 2025: Fixed memory leak - store interval ID for cleanup
 // Auto-refresh metrics every 30 seconds
-if (typeof window !== 'undefined') {
-  setInterval(() => {
+let metricsRefreshInterval: number | null = null;
+
+export function startMetricsAutoRefresh() {
+  if (metricsRefreshInterval !== null || typeof window === 'undefined') {
+    return;
+  }
+
+  metricsRefreshInterval = window.setInterval(() => {
     const store = useAnalyticsStore.getState();
     if (store.config.enabled) {
       store.refreshAllMetrics();
     }
   }, 30000);
+}
+
+export function stopMetricsAutoRefresh() {
+  if (metricsRefreshInterval !== null) {
+    window.clearInterval(metricsRefreshInterval);
+    metricsRefreshInterval = null;
+  }
 }

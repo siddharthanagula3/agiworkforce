@@ -30,7 +30,6 @@ import {
 import { cn } from '../../lib/utils';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { EmployeesPage } from '../../pages/EmployeesPage';
-import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -199,6 +198,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
+          {/* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */}
           <Tabs defaultValue="api-keys" className="mt-6">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
@@ -208,10 +208,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <TabsTrigger value="llm-config" className="flex items-center gap-2">
                 <Settings2 className="h-4 w-4" />
                 Models
-              </TabsTrigger>
-              <TabsTrigger value="agent-library" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Agent Library
               </TabsTrigger>
               <TabsTrigger value="agent-library" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
