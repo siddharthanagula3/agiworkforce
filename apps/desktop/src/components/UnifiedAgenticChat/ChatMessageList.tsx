@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
+// Updated Nov 16, 2025: Added React.memo for performance optimization
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { VariableSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
@@ -53,7 +54,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     return baseHeight + contentHeight + attachmentHeight;
   };
 
-  const handleExport = async () => {
+  // Updated Nov 16, 2025: Wrapped handlers in useCallback to prevent re-renders
+  const handleExport = useCallback(async () => {
     try {
       const data = await exportConversation();
       const blob = new Blob([data], { type: 'application/json' });
@@ -66,33 +68,36 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     } catch (err) {
       console.error('Failed to export conversation:', err);
     }
-  };
+  }, [exportConversation]);
 
-  const handleClearHistory = () => {
+  const handleClearHistory = useCallback(() => {
     if (confirm('Are you sure you want to clear all messages? This cannot be undone.')) {
       clearHistory();
     }
-  };
+  }, [clearHistory]);
 
-  // Row renderer for virtual list
-  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const message = filteredMessages[index];
-    if (!message) return null;
+  // Updated Nov 16, 2025: Memoized Row component to prevent unnecessary re-renders
+  const Row = useCallback(
+    ({ index, style }: { index: number; style: React.CSSProperties }) => {
+      const message = filteredMessages[index];
+      if (!message) return null;
 
-    return (
-      <div style={style}>
-        <MessageBubble
-          message={message}
-          showAvatar={true}
-          showTimestamp={true}
-          enableActions={true}
-          onEdit={(content) => onMessageEdit?.(message.id, content)}
-          onDelete={() => onMessageDelete?.(message.id)}
-          onRegenerate={() => onMessageRegenerate?.(message.id)}
-        />
-      </div>
-    );
-  };
+      return (
+        <div style={style}>
+          <MessageBubble
+            message={message}
+            showAvatar={true}
+            showTimestamp={true}
+            enableActions={true}
+            onEdit={(content) => onMessageEdit?.(message.id, content)}
+            onDelete={() => onMessageDelete?.(message.id)}
+            onRegenerate={() => onMessageRegenerate?.(message.id)}
+          />
+        </div>
+      );
+    },
+    [filteredMessages, onMessageEdit, onMessageDelete, onMessageRegenerate],
+  );
 
   // Empty state
   if (filteredMessages.length === 0 && !searchQuery) {

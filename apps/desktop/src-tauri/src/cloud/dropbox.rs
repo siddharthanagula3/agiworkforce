@@ -23,7 +23,8 @@ pub struct DropboxClient {
 }
 
 impl DropboxClient {
-    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Self {
+    // Updated Nov 16, 2025: Return Result instead of panicking on HTTP client construction failure
+    pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Result<Self> {
         let oauth_config = OAuth2Config {
             client_id,
             client_secret: Some(client_secret),
@@ -37,13 +38,13 @@ impl DropboxClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(60))
             .build()
-            .expect("Failed to construct HTTP client");
+            .map_err(|e| Error::Other(format!("Failed to construct HTTP client for Dropbox: {}", e)))?;
 
-        Self {
+        Ok(Self {
             client,
-            oauth_client: OAuth2Client::new(oauth_config),
+            oauth_client: OAuth2Client::new(oauth_config)?,
             token: None,
-        }
+        })
     }
 
     pub fn get_authorization_url(&self, state: &str) -> (String, Option<PkceChallenge>) {
@@ -251,9 +252,13 @@ impl DropboxClient {
                 })?;
                 session_id = Some(payload.session_id);
             } else {
+                // Updated Nov 16, 2025: Use proper error handling instead of unwrap
+                let current_session_id = session_id.as_ref().ok_or_else(|| {
+                    Error::Other("Upload session ID is missing during append operation".to_string())
+                })?;
                 let cursor_payload = serde_json::json!({
                     "cursor": {
-                        "session_id": session_id.clone().unwrap(),
+                        "session_id": current_session_id,
                         "offset": offset
                     },
                     "close": false
