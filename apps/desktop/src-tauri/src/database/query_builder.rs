@@ -3,6 +3,67 @@ use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 
+// Updated Nov 16, 2025: Added SQL injection protection
+
+/// Validate SQL identifier (table/column name) to prevent SQL injection
+/// Only allows alphanumeric, underscore, and period (for qualified names)
+fn validate_sql_identifier(identifier: &str) -> Result<()> {
+    if identifier.is_empty() {
+        return Err(Error::Other("SQL identifier cannot be empty".to_string()));
+    }
+
+    // Check for SQL keywords and dangerous patterns
+    let upper = identifier.to_uppercase();
+    let dangerous_keywords = [
+        "DROP", "DELETE", "TRUNCATE", "ALTER", "EXEC", "EXECUTE",
+        "UNION", "INSERT", "UPDATE", "--", "/*", "*/", ";",
+    ];
+
+    for keyword in &dangerous_keywords {
+        if upper.contains(keyword) {
+            return Err(Error::Other(format!(
+                "SQL identifier contains dangerous keyword: {}",
+                keyword
+            )));
+        }
+    }
+
+    // Only allow alphanumeric, underscore, period, and asterisk (for SELECT *)
+    for ch in identifier.chars() {
+        if !ch.is_alphanumeric() && ch != '_' && ch != '.' && ch != '*' && ch != ' ' {
+            return Err(Error::Other(format!(
+                "SQL identifier contains invalid character: '{}'",
+                ch
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Sanitize WHERE clause to prevent SQL injection
+/// NOTE: This is a basic validation. For production use, always use parameterized queries.
+fn validate_where_clause(clause: &str) -> Result<()> {
+    if clause.is_empty() {
+        return Ok(());
+    }
+
+    // Check for dangerous SQL patterns
+    let upper = clause.to_uppercase();
+    let dangerous_patterns = ["--", "/*", "*/", "EXEC", "EXECUTE"];
+
+    for pattern in &dangerous_patterns {
+        if upper.contains(pattern) {
+            return Err(Error::Other(format!(
+                "WHERE clause contains dangerous pattern: {}",
+                pattern
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// Query builder for SQL operations
 #[derive(Debug, Clone)]
 pub struct QueryBuilder {
@@ -256,10 +317,24 @@ impl QueryBuilder {
     }
 
     fn build_select(&self, query: &SelectQuery) -> Result<String> {
+        // Updated Nov 16, 2025: Added SQL injection protection
+
+        // Validate table name
+        validate_sql_identifier(&query.table)?;
+
+        // Validate column names
+        for column in &query.columns {
+            validate_sql_identifier(column)?;
+        }
+
         let mut sql = format!("SELECT {} FROM {}", query.columns.join(", "), query.table);
 
         // Add joins
         for join in &query.joins {
+            // Validate join table name
+            validate_sql_identifier(&join.table)?;
+            validate_where_clause(&join.on_condition)?;
+
             let join_keyword = match join.join_type {
                 JoinType::Inner => "INNER JOIN",
                 JoinType::Left => "LEFT JOIN",
@@ -272,8 +347,9 @@ impl QueryBuilder {
             ));
         }
 
-        // Add WHERE clause
+        // Add WHERE clause with validation
         if let Some(ref where_clause) = query.where_clause {
+            validate_where_clause(where_clause)?;
             sql.push_str(&format!(" WHERE {}", where_clause));
         }
 
@@ -282,22 +358,25 @@ impl QueryBuilder {
             let order_clauses: Vec<String> = order_by
                 .iter()
                 .map(|o| {
+                    // Validate column name
+                    validate_sql_identifier(&o.column).ok()?;
                     let dir = match o.direction {
                         OrderDirection::Asc => "ASC",
                         OrderDirection::Desc => "DESC",
                     };
-                    format!("{} {}", o.column, dir)
+                    Some(format!("{} {}", o.column, dir))
                 })
-                .collect();
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| Error::Other("Invalid ORDER BY column".to_string()))?;
             sql.push_str(&format!(" ORDER BY {}", order_clauses.join(", ")));
         }
 
-        // Add LIMIT
+        // Add LIMIT (safe - numeric value)
         if let Some(limit) = query.limit {
             sql.push_str(&format!(" LIMIT {}", limit));
         }
 
-        // Add OFFSET
+        // Add OFFSET (safe - numeric value)
         if let Some(offset) = query.offset {
             sql.push_str(&format!(" OFFSET {}", offset));
         }
@@ -306,10 +385,20 @@ impl QueryBuilder {
     }
 
     fn build_insert(&self, query: &InsertQuery) -> Result<String> {
+        // Updated Nov 16, 2025: Added SQL injection protection
+
         if query.columns.is_empty() || query.values.is_empty() {
             return Err(Error::Other(
                 "INSERT requires columns and values".to_string(),
             ));
+        }
+
+        // Validate table name
+        validate_sql_identifier(&query.table)?;
+
+        // Validate column names
+        for column in &query.columns {
+            validate_sql_identifier(column)?;
         }
 
         let columns = query.columns.join(", ");
@@ -328,6 +417,9 @@ impl QueryBuilder {
 
         // Add RETURNING clause (PostgreSQL)
         if let Some(ref returning) = query.returning {
+            for col in returning {
+                validate_sql_identifier(col)?;
+            }
             sql.push_str(&format!(" RETURNING {}", returning.join(", ")));
         }
 
@@ -335,25 +427,39 @@ impl QueryBuilder {
     }
 
     fn build_update(&self, query: &UpdateQuery) -> Result<String> {
+        // Updated Nov 16, 2025: Added SQL injection protection
+
         if query.set_values.is_empty() {
             return Err(Error::Other("UPDATE requires SET values".to_string()));
         }
 
+        // Validate table name
+        validate_sql_identifier(&query.table)?;
+
         let set_clauses: Vec<String> = query
             .set_values
             .iter()
-            .map(|(col, val)| format!("{} = {}", col, val))
-            .collect();
+            .map(|(col, val)| {
+                // Validate column name
+                validate_sql_identifier(col).ok()?;
+                Some(format!("{} = {}", col, val))
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| Error::Other("Invalid column name in SET clause".to_string()))?;
 
         let mut sql = format!("UPDATE {} SET {}", query.table, set_clauses.join(", "));
 
-        // Add WHERE clause
+        // Add WHERE clause with validation
         if let Some(ref where_clause) = query.where_clause {
+            validate_where_clause(where_clause)?;
             sql.push_str(&format!(" WHERE {}", where_clause));
         }
 
         // Add RETURNING clause (PostgreSQL)
         if let Some(ref returning) = query.returning {
+            for col in returning {
+                validate_sql_identifier(col)?;
+            }
             sql.push_str(&format!(" RETURNING {}", returning.join(", ")));
         }
 
@@ -361,15 +467,24 @@ impl QueryBuilder {
     }
 
     fn build_delete(&self, query: &DeleteQuery) -> Result<String> {
+        // Updated Nov 16, 2025: Added SQL injection protection
+
+        // Validate table name
+        validate_sql_identifier(&query.table)?;
+
         let mut sql = format!("DELETE FROM {}", query.table);
 
-        // Add WHERE clause
+        // Add WHERE clause with validation
         if let Some(ref where_clause) = query.where_clause {
+            validate_where_clause(where_clause)?;
             sql.push_str(&format!(" WHERE {}", where_clause));
         }
 
         // Add RETURNING clause (PostgreSQL)
         if let Some(ref returning) = query.returning {
+            for col in returning {
+                validate_sql_identifier(col)?;
+            }
             sql.push_str(&format!(" RETURNING {}", returning.join(", ")));
         }
 

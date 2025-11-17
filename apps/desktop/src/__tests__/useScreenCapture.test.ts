@@ -15,9 +15,15 @@ async function getInvokeMock(): Promise<InvokeMock> {
   return invoke as InvokeMock;
 }
 
+// Updated Nov 16, 2025: Added proper afterEach cleanup
 describe('useScreenCapture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Ensure all mocks are fully cleaned up
+    vi.resetAllMocks();
   });
 
   it('should initialize with correct default values', () => {

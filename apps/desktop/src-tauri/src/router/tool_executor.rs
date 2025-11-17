@@ -1072,6 +1072,7 @@ mod tests {
         assert!(args.get("path").and_then(|v| v.as_str()).is_some());
     }
 
+    // Updated Nov 16, 2025: Fixed file handle leak with RAII pattern
     #[tokio::test]
     async fn test_tool_execution_file_read() {
         // Test file_read tool execution
@@ -1082,8 +1083,11 @@ mod tests {
         // Create a temporary file
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
-        let mut file = File::create(&file_path).unwrap();
-        writeln!(file, "Hello, World!").unwrap();
+        // File handle automatically closed when dropped at end of scope
+        {
+            let mut file = File::create(&file_path).unwrap();
+            writeln!(file, "Hello, World!").unwrap();
+        } // file handle closed here
 
         // Create tool call
         let tool_call = ToolCall {

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo } from 'react';
+// Updated Nov 16, 2025: Added React.memo and performance optimizations
+import { useCallback, useEffect, useMemo, useRef, memo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
 import { TokenCounter } from './TokenCounter';
@@ -19,7 +20,7 @@ interface ChatInterfaceProps {
   className?: string;
 }
 
-export function ChatInterface({ className }: ChatInterfaceProps) {
+export const ChatInterface = memo(function ChatInterface({ className }: ChatInterfaceProps) {
   const {
     messages,
     loading,
@@ -39,12 +40,16 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
     loadConversations();
   }, [loadConversations]);
 
+  // Updated Nov 16, 2025: Track which messages have been counted to prevent duplicates
+  const countedMessageIdsRef = useRef<Set<number>>(new Set());
+
   // Track token usage in budget system when messages change
   useEffect(() => {
     if (budget.enabled && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.tokens) {
+      if (lastMessage && lastMessage.tokens && !countedMessageIdsRef.current.has(lastMessage.id)) {
         addTokenUsage(lastMessage.tokens);
+        countedMessageIdsRef.current.add(lastMessage.id);
       }
     }
   }, [messages, budget.enabled, addTokenUsage]);
@@ -200,4 +205,4 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
       />
     </div>
   );
-}
+});

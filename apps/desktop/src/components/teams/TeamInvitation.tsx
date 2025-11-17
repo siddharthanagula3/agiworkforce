@@ -3,6 +3,7 @@ import { useTeamStore } from '../../stores/teamStore';
 import type { TeamInvitation as TeamInvitationType, Team } from '../../types/teams';
 import { Button } from '../ui/Button';
 import { Mail, Copy, Check } from 'lucide-react';
+import { validateUrl } from '../../utils/security';
 
 interface TeamInvitationProps {
   invitations: TeamInvitationType[];
@@ -38,8 +39,18 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
   };
 
   const copyInviteLink = async (token: string) => {
-    const inviteUrl = `${window.location.origin}/accept-invitation?token=${token}`;
-    await navigator.clipboard.writeText(inviteUrl);
+    // Updated Nov 16, 2025: Added URL validation for security
+    const baseUrl = window.location.origin;
+    const inviteUrl = `${baseUrl}/accept-invitation?token=${encodeURIComponent(token)}`;
+
+    // Validate the generated URL
+    const validation = validateUrl(inviteUrl);
+    if (!validation.valid) {
+      console.error('Invalid invite URL generated:', validation.error);
+      return;
+    }
+
+    await navigator.clipboard.writeText(validation.sanitized || inviteUrl);
     setCopiedToken(token);
     setTimeout(() => setCopiedToken(null), 2000);
   };

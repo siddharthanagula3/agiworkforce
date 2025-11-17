@@ -39,13 +39,10 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { SyntaxHighlighterProps } from 'react-syntax-highlighter';
 import 'katex/dist/katex.min.css';
 import { Textarea } from '../ui/Textarea';
+import { useConfirm } from '../ui/ConfirmDialog'; // Updated Nov 16, 2025
 
 // Import tool calling components
-import {
-  ToolCallCard,
-  ToolResultCard,
-  ToolExecutionTimeline,
-} from '../ToolCalling';
+import { ToolCallCard, ToolResultCard, ToolExecutionTimeline } from '../ToolCalling';
 import type { MessageUI } from '../../types/chat';
 
 export interface MessageWithToolsProps {
@@ -136,6 +133,7 @@ function MessageWithToolsComponent({
   const isStreaming = Boolean(message.streaming);
   const canEdit = Boolean(onEdit) && message.role === 'user';
   const canDelete = Boolean(onDelete);
+  const { confirm, dialog: confirmDialog } = useConfirm(); // Updated Nov 16, 2025
 
   // Check if message has tool-related content
   const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
@@ -203,12 +201,19 @@ function MessageWithToolsComponent({
     }
   };
 
+  // Updated Nov 16, 2025 - Use accessible confirm dialog
   const handleDelete = async () => {
     if (!onDelete) {
       return;
     }
 
-    const confirmed = window.confirm('Delete this message?');
+    const confirmed = await confirm({
+      title: 'Delete message?',
+      description: 'Are you sure you want to delete this message? This action cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    });
+
     if (!confirmed) {
       return;
     }
@@ -255,185 +260,193 @@ function MessageWithToolsComponent({
   }
 
   return (
-    <div
-      className={cn(
-        'group relative flex gap-3 px-4 py-4 transition-colors',
-        'hover:bg-accent/50',
-        isUser && 'bg-muted/30',
-      )}
-    >
-      {avatar}
+    <>
+      {confirmDialog}
+      <div
+        className={cn(
+          'group relative flex gap-3 px-4 py-4 transition-colors',
+          'hover:bg-accent/50',
+          isUser && 'bg-muted/30',
+        )}
+      >
+        {avatar}
 
-      <div className="flex-1 space-y-3 overflow-hidden">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{isUser ? 'You' : 'Assistant'}</span>
-          <span className="text-xs text-muted-foreground">
-            {message.timestamp.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-          {isStreaming && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          {hasAnyTools && !isUser && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Wrench className="h-3 w-3" />
-              <span>Tool Execution</span>
+        <div className="flex-1 space-y-3 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">{isUser ? 'You' : 'Assistant'}</span>
+            <span className="text-xs text-muted-foreground">
+              {message.timestamp.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+            {isStreaming && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            {hasAnyTools && !isUser && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Wrench className="h-3 w-3" />
+                <span>Tool Execution</span>
+              </div>
+            )}
+          </div>
+
+          {/* Message Content */}
+          {isEditing ? (
+            <div className="space-y-2">
+              <Textarea
+                value={editValue}
+                onChange={(event) => setEditValue(event.target.value)}
+                disabled={isSavingEdit}
+                rows={Math.min(Math.max(editValue.split('\n').length + 1, 3), 10)}
+                className="resize-none"
+                autoFocus
+              />
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => void handleSaveEdit()} disabled={isSavingEdit}>
+                  {isSavingEdit && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                  Save changes
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCancelEdit}
+                  disabled={isSavingEdit}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {message.content && (
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      code: (props) => <MarkdownCodeBlock {...props} />,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              )}
+
+              {/* Tool Execution Workflow (Multi-step) */}
+              {hasWorkflow && message.workflow && (
+                <div className="mt-3">
+                  <ToolExecutionTimeline
+                    workflow={message.workflow}
+                    onCancelTool={onCancelTool}
+                    onApproveTool={onApproveTool}
+                    onRejectTool={onRejectTool}
+                    onRetryTool={onRetryTool}
+                  />
+                </div>
+              )}
+
+              {/* Individual Tool Calls (when not part of workflow) */}
+              {!hasWorkflow && hasToolCalls && (
+                <div className="space-y-2 mt-3">
+                  {message.tool_calls!.map((toolCall) => (
+                    <ToolCallCard
+                      key={toolCall.id}
+                      toolCall={toolCall}
+                      onCancel={onCancelTool}
+                      onApprove={onApproveTool}
+                      onReject={onRejectTool}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Individual Tool Results (when not part of workflow) */}
+              {!hasWorkflow && hasToolResults && (
+                <div className="space-y-2 mt-3">
+                  {message.tool_results!.map((result) => (
+                    <ToolResultCard key={result.tool_call_id} result={result} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {actionError && <p className="text-xs font-medium text-destructive">{actionError}</p>}
+
+          {(message.tokens || message.cost) && (
+            <div className="flex gap-3 text-xs text-muted-foreground">
+              {message.tokens && <span>{message.tokens} tokens</span>}
+              {message.cost && <span>${message.cost.toFixed(4)}</span>}
             </div>
           )}
         </div>
 
-        {/* Message Content */}
-        {isEditing ? (
-          <div className="space-y-2">
-            <Textarea
-              value={editValue}
-              onChange={(event) => setEditValue(event.target.value)}
-              disabled={isSavingEdit}
-              rows={Math.min(Math.max(editValue.split('\n').length + 1, 3), 10)}
-              className="resize-none"
-              autoFocus
-            />
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={() => void handleSaveEdit()} disabled={isSavingEdit}>
-                {isSavingEdit && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                Save changes
-              </Button>
-              <Button size="sm" variant="ghost" onClick={handleCancelEdit} disabled={isSavingEdit}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {message.content && (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                  components={{
-                    code: (props) => <MarkdownCodeBlock {...props} />,
+        {!isEditing && (
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="bottom">
+                <DropdownMenuItem
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void handleCopy();
                   }}
                 >
-                  {message.content}
-                </ReactMarkdown>
-              </div>
-            )}
-
-            {/* Tool Execution Workflow (Multi-step) */}
-            {hasWorkflow && message.workflow && (
-              <div className="mt-3">
-                <ToolExecutionTimeline
-                  workflow={message.workflow}
-                  onCancelTool={onCancelTool}
-                  onApproveTool={onApproveTool}
-                  onRejectTool={onRejectTool}
-                  onRetryTool={onRetryTool}
-                />
-              </div>
-            )}
-
-            {/* Individual Tool Calls (when not part of workflow) */}
-            {!hasWorkflow && hasToolCalls && (
-              <div className="space-y-2 mt-3">
-                {message.tool_calls!.map((toolCall) => (
-                  <ToolCallCard
-                    key={toolCall.id}
-                    toolCall={toolCall}
-                    onCancel={onCancelTool}
-                    onApprove={onApproveTool}
-                    onReject={onRejectTool}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Individual Tool Results (when not part of workflow) */}
-            {!hasWorkflow && hasToolResults && (
-              <div className="space-y-2 mt-3">
-                {message.tool_results!.map((result) => (
-                  <ToolResultCard key={result.tool_call_id} result={result} />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {actionError && <p className="text-xs font-medium text-destructive">{actionError}</p>}
-
-        {(message.tokens || message.cost) && (
-          <div className="flex gap-3 text-xs text-muted-foreground">
-            {message.tokens && <span>{message.tokens} tokens</span>}
-            {message.cost && <span>${message.cost.toFixed(4)}</span>}
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  <span className="ml-2">{copied ? 'Copied!' : 'Copy message'}</span>
+                </DropdownMenuItem>
+                {isAssistant && (
+                  <DropdownMenuItem
+                    disabled={regenerating || isStreaming || isDeleting}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void handleRegenerate();
+                    }}
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    <span className="ml-2">
+                      {regenerating ? 'Regenerating...' : 'Regenerate response'}
+                    </span>
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <DropdownMenuItem
+                    disabled={isSavingEdit || isDeleting || isStreaming}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      handleStartEdit();
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span className="ml-2">Edit message</span>
+                  </DropdownMenuItem>
+                )}
+                {canDelete && (
+                  <DropdownMenuItem
+                    disabled={isDeleting}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void handleDelete();
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="ml-2">Delete message</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
-
-      {!isEditing && (
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="bottom">
-              <DropdownMenuItem
-                onClick={(event) => {
-                  event.preventDefault();
-                  void handleCopy();
-                }}
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-                <span className="ml-2">{copied ? 'Copied!' : 'Copy message'}</span>
-              </DropdownMenuItem>
-              {isAssistant && (
-                <DropdownMenuItem
-                  disabled={regenerating || isStreaming || isDeleting}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    void handleRegenerate();
-                  }}
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  <span className="ml-2">
-                    {regenerating ? 'Regenerating...' : 'Regenerate response'}
-                  </span>
-                </DropdownMenuItem>
-              )}
-              {canEdit && (
-                <DropdownMenuItem
-                  disabled={isSavingEdit || isDeleting || isStreaming}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    handleStartEdit();
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                  <span className="ml-2">Edit message</span>
-                </DropdownMenuItem>
-              )}
-              {canDelete && (
-                <DropdownMenuItem
-                  disabled={isDeleting}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    void handleDelete();
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="ml-2">Delete message</span>
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
