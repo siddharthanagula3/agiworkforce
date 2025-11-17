@@ -24,6 +24,7 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
         'shadow-[0_2px_12px_rgba(8,12,20,0.22)]',
         'select-none',
         'min-w-[640px]',
+        'relative z-50',
       )}
       data-tauri-drag-region
     >

@@ -19,11 +19,11 @@ export interface ActiveOperationsSectionProps {
 export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = ({
   className = '',
 }) => {
-  const fileOperations = useUnifiedChatStore((state) => state.fileOperations);
-  const terminalCommands = useUnifiedChatStore((state) => state.terminalCommands);
-  const toolExecutions = useUnifiedChatStore((state) => state.toolExecutions);
-  const backgroundTasks = useUnifiedChatStore((state) => state.backgroundTasks);
-  const agents = useUnifiedChatStore((state) => state.agents);
+  const fileOperations = useUnifiedChatStore((state) => state.fileOperations) || [];
+  const terminalCommands = useUnifiedChatStore((state) => state.terminalCommands) || [];
+  const toolExecutions = useUnifiedChatStore((state) => state.toolExecutions) || [];
+  const backgroundTasks = useUnifiedChatStore((state) => state.backgroundTasks) || [];
+  const agents = useUnifiedChatStore((state) => state.agents) || [];
 
   // Get recent operations (last 10)
   const recentFileOps = fileOperations.slice(-10).reverse();

@@ -154,6 +154,12 @@ const DesktopShell = () => {
     // Initialize agent status listener for unified chat
     void initializeAgentStatusListener();
 
+    // Initialize model store from settings if no model is selected
+    void (async () => {
+      const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
+      await initializeModelStoreFromSettings();
+    })();
+
     return () => {
       // Flush error reports on unmount
       void errorReportingService.flush();
@@ -380,14 +386,12 @@ const DesktopShell = () => {
         commandShortcutHint={commandShortcutHint}
       />
       <main className="flex flex-1 overflow-hidden min-h-0 min-w-0">
-        {!sidebarCollapsed && (
-          <Sidebar
-            className="shrink-0"
-            onOpenSettings={() => setSettingsPanelOpen(true)}
-            currentView={currentView}
-            onViewChange={setCurrentView}
-          />
-        )}
+        <Sidebar
+          className="shrink-0"
+          onOpenSettings={() => setSettingsPanelOpen(true)}
+          currentView={currentView}
+          onViewChange={setCurrentView}
+        />
         {renderMainContent()}
       </main>
       <CommandPalette

@@ -31,6 +31,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
   // Filter messages by search query
   const filteredMessages = React.useMemo(() => {
+    if (!messages || !Array.isArray(messages)) return [];
     if (!searchQuery.trim()) return messages;
     const query = searchQuery.toLowerCase();
     return messages.filter((msg) => msg.content.toLowerCase().includes(query));
