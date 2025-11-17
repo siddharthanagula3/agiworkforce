@@ -48,6 +48,8 @@ export interface Shortcut {
  * events and automatically updates the automation store when events occur.
  * It handles cleanup on unmount.
  *
+ * Updated Nov 16, 2025: Fixed missing dependencies and race conditions
+ *
  * @example
  * ```tsx
  * function AutomationView() {
@@ -58,23 +60,44 @@ export interface Shortcut {
  */
 export function useAutomationEvents() {
   const unlistenFns = useRef<UnlistenFn[]>([]);
-  const handleRecordingStarted = useAutomationStore((state) => state.handleRecordingStarted);
-  const handleRecordingStopped = useAutomationStore((state) => state.handleRecordingStopped);
-  const handleActionRecorded = useAutomationStore((state) => state.handleActionRecorded);
-  const handleShortcutAction = useAutomationStore((state) => state.handleShortcutAction);
-  const handleShortcutRegistered = useAutomationStore((state) => state.handleShortcutRegistered);
-  const handleShortcutUnregistered = useAutomationStore(
-    (state) => state.handleShortcutUnregistered,
-  );
+  const isMountedRef = useRef(true);
+
+  // Store handler refs to avoid dependency issues
+  const handlersRef = useRef({
+    handleRecordingStarted: useAutomationStore.getState().handleRecordingStarted,
+    handleRecordingStopped: useAutomationStore.getState().handleRecordingStopped,
+    handleActionRecorded: useAutomationStore.getState().handleActionRecorded,
+    handleShortcutAction: useAutomationStore.getState().handleShortcutAction,
+    handleShortcutRegistered: useAutomationStore.getState().handleShortcutRegistered,
+    handleShortcutUnregistered: useAutomationStore.getState().handleShortcutUnregistered,
+  });
+
+  // Update handler refs when store changes
+  useEffect(() => {
+    const unsubscribe = useAutomationStore.subscribe((state) => {
+      handlersRef.current = {
+        handleRecordingStarted: state.handleRecordingStarted,
+        handleRecordingStopped: state.handleRecordingStopped,
+        handleActionRecorded: state.handleActionRecorded,
+        handleShortcutAction: state.handleShortcutAction,
+        handleShortcutRegistered: state.handleShortcutRegistered,
+        handleShortcutUnregistered: state.handleShortcutUnregistered,
+      };
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     const setupListeners = async () => {
       // Recording Started Event
       const unlistenRecordingStarted = await listen<RecordingStartedEvent>(
         'automation:recording_started',
         (event) => {
+          if (!isMountedRef.current) return;
           console.log('[useAutomationEvents] Recording started:', event.payload);
-          handleRecordingStarted(event.payload);
+          handlersRef.current.handleRecordingStarted(event.payload);
         },
       );
       unlistenFns.current.push(unlistenRecordingStarted);
@@ -83,8 +106,9 @@ export function useAutomationEvents() {
       const unlistenRecordingStopped = await listen<RecordingStoppedEvent>(
         'automation:recording_stopped',
         (event) => {
+          if (!isMountedRef.current) return;
           console.log('[useAutomationEvents] Recording stopped:', event.payload);
-          handleRecordingStopped(event.payload.recording);
+          handlersRef.current.handleRecordingStopped(event.payload.recording);
         },
       );
       unlistenFns.current.push(unlistenRecordingStopped);
@@ -93,23 +117,26 @@ export function useAutomationEvents() {
       const unlistenActionRecorded = await listen<ActionRecordedEvent>(
         'automation:action_recorded',
         (event) => {
+          if (!isMountedRef.current) return;
           console.log('[useAutomationEvents] Action recorded:', event.payload);
-          handleActionRecorded(event.payload.action);
+          handlersRef.current.handleActionRecorded(event.payload.action);
         },
       );
       unlistenFns.current.push(unlistenActionRecorded);
 
       // Shortcut Action Event
       const unlistenShortcutAction = await listen<string>('shortcut_action', (event) => {
+        if (!isMountedRef.current) return;
         console.log('[useAutomationEvents] Shortcut action triggered:', event.payload);
-        handleShortcutAction(event.payload);
+        handlersRef.current.handleShortcutAction(event.payload);
       });
       unlistenFns.current.push(unlistenShortcutAction);
 
       // Shortcut Registered Event
       const unlistenShortcutRegistered = await listen<Shortcut>('shortcut_registered', (event) => {
+        if (!isMountedRef.current) return;
         console.log('[useAutomationEvents] Shortcut registered:', event.payload);
-        handleShortcutRegistered(event.payload);
+        handlersRef.current.handleShortcutRegistered(event.payload);
       });
       unlistenFns.current.push(unlistenShortcutRegistered);
 
@@ -117,8 +144,9 @@ export function useAutomationEvents() {
       const unlistenShortcutUnregistered = await listen<string>(
         'shortcut_unregistered',
         (event) => {
+          if (!isMountedRef.current) return;
           console.log('[useAutomationEvents] Shortcut unregistered:', event.payload);
-          handleShortcutUnregistered(event.payload);
+          handlersRef.current.handleShortcutUnregistered(event.payload);
         },
       );
       unlistenFns.current.push(unlistenShortcutUnregistered);
@@ -132,13 +160,14 @@ export function useAutomationEvents() {
 
     // Cleanup: unlisten all events on unmount
     return () => {
+      isMountedRef.current = false;
       console.log('[useAutomationEvents] Cleaning up automation event listeners');
       unlistenFns.current.forEach((unlisten) => {
         unlisten();
       });
       unlistenFns.current = [];
     };
-  }, []); // Empty deps - setup once on mount
+  }, []); // Empty deps - setup once on mount, handlers updated via refs
 
   return null;
 }

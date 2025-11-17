@@ -241,9 +241,17 @@ impl AuditLogger {
     }
 
     /// Generate HMAC-SHA256 signature
+    /// Updated Nov 16, 2025: Handle HMAC construction gracefully instead of using expect
     fn generate_signature(&self, data: &str) -> String {
-        let mut mac =
-            HmacSha256::new_from_slice(&self.hmac_key).expect("HMAC can take key of any size");
+        // HMAC can take keys of any size, but handle gracefully just in case
+        let mut mac = match HmacSha256::new_from_slice(&self.hmac_key) {
+            Ok(mac) => mac,
+            Err(e) => {
+                tracing::error!("Failed to create HMAC: {}. This should never happen.", e);
+                // Return empty signature as fallback (will fail validation)
+                return String::new();
+            }
+        };
         mac.update(data.as_bytes());
         let result = mac.finalize();
         hex::encode(result.into_bytes())

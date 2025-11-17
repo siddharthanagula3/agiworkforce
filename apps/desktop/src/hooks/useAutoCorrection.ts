@@ -3,6 +3,8 @@
  *
  * Automatically detects and corrects errors in code generation.
  * Monitors output for errors and triggers retry with corrections.
+ *
+ * Updated Nov 16, 2025: Fixed unnecessary dependencies in callbacks
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -66,6 +68,8 @@ export function useAutoCorrection(options: AutoCorrectionOptions = {}) {
   });
 
   const previousErrorsRef = useRef<DetectedError[]>([]);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   /**
    * Check output for errors and determine if correction is needed
@@ -78,11 +82,11 @@ export function useAutoCorrection(options: AutoCorrectionOptions = {}) {
 
       const errors = detectErrors(output);
       const hasErrors = errors.length > 0;
-      const shouldCorrect = hasErrors && shouldRetry(errors, state.attemptCount);
+      const shouldCorrect = hasErrors && shouldRetry(errors, stateRef.current.attemptCount);
 
       return { hasErrors, shouldCorrect, errors };
     },
-    [enabled, state.attemptCount],
+    [enabled],
   );
 
   /**
@@ -94,12 +98,13 @@ export function useAutoCorrection(options: AutoCorrectionOptions = {}) {
         return null;
       }
 
-      if (state.attemptCount >= maxAttempts) {
+      const currentAttemptCount = stateRef.current.attemptCount;
+      if (currentAttemptCount >= maxAttempts) {
         onMaxAttemptsReached?.(errors);
         return null;
       }
 
-      const newAttemptCount = state.attemptCount + 1;
+      const newAttemptCount = currentAttemptCount + 1;
 
       setState((prev) => ({
         ...prev,
@@ -119,7 +124,7 @@ export function useAutoCorrection(options: AutoCorrectionOptions = {}) {
 
       return correctionPrompt;
     },
-    [enabled, state.attemptCount, maxAttempts, onCorrection, onMaxAttemptsReached],
+    [enabled, maxAttempts, onCorrection, onMaxAttemptsReached],
   );
 
   /**
@@ -144,13 +149,13 @@ export function useAutoCorrection(options: AutoCorrectionOptions = {}) {
       }));
 
       if (newErrors.length === 0) {
-        onFixed?.(state.attemptCount);
+        onFixed?.(stateRef.current.attemptCount);
         return { success: true, errors: [] };
       }
 
       return { success: false, errors: newErrors };
     },
-    [state.attemptCount, onFixed],
+    [onFixed],
   );
 
   /**

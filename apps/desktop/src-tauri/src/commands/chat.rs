@@ -179,16 +179,27 @@ pub struct ConversationStats {
     pub total_cost: f64,
 }
 
+// Updated Nov 16, 2025: Added input validation for title length
 #[tauri::command]
 pub fn chat_create_conversation(
     db: State<AppDatabase>,
     request: CreateConversationRequest,
 ) -> Result<Conversation, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let id = repository::create_conversation(&conn, request.title)
+    // Validate title is not empty and not too long
+    let trimmed_title = request.title.trim();
+    if trimmed_title.is_empty() {
+        return Err("Conversation title cannot be empty".to_string());
+    }
+    if trimmed_title.len() > 500 {
+        return Err("Conversation title cannot exceed 500 characters".to_string());
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let id = repository::create_conversation(&conn, trimmed_title.to_string())
         .map_err(|e| format!("Failed to create conversation: {}", e))?;
     repository::get_conversation(&conn, id)
-        .map_err(|e| format!("Failed to retrieve conversation: {}", e))
+        .map_err(|e| format!("Failed to retrieve conversation {}: {}", id, e))
 }
 
 #[tauri::command]
@@ -198,50 +209,110 @@ pub fn chat_get_conversations(db: State<AppDatabase>) -> Result<Vec<Conversation
         .map_err(|e| format!("Failed to list conversations: {}", e))
 }
 
+// Updated Nov 16, 2025: Added input validation for conversation ID
 #[tauri::command]
 pub fn chat_get_conversation(db: State<AppDatabase>, id: i64) -> Result<Conversation, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate ID is positive
+    if id <= 0 {
+        return Err(format!("Invalid conversation ID: {}. ID must be positive", id));
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::get_conversation(&conn, id)
-        .map_err(|e| format!("Failed to get conversation: {}", e))
+        .map_err(|e| format!("Failed to get conversation {}: {}", id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation for ID and title
 #[tauri::command]
 pub fn chat_update_conversation(
     db: State<AppDatabase>,
     id: i64,
     request: UpdateConversationRequest,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    repository::update_conversation_title(&conn, id, request.title)
-        .map_err(|e| format!("Failed to update conversation: {}", e))
+    // Validate ID is positive
+    if id <= 0 {
+        return Err(format!("Invalid conversation ID: {}. ID must be positive", id));
+    }
+
+    // Validate title
+    let trimmed_title = request.title.trim();
+    if trimmed_title.is_empty() {
+        return Err("Conversation title cannot be empty".to_string());
+    }
+    if trimmed_title.len() > 500 {
+        return Err("Conversation title cannot exceed 500 characters".to_string());
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    repository::update_conversation_title(&conn, id, trimmed_title.to_string())
+        .map_err(|e| format!("Failed to update conversation {}: {}", id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation for ID
 #[tauri::command]
 pub fn chat_delete_conversation(db: State<AppDatabase>, id: i64) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate ID is positive
+    if id <= 0 {
+        return Err(format!("Invalid conversation ID: {}. ID must be positive", id));
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::delete_conversation(&conn, id)
-        .map_err(|e| format!("Failed to delete conversation: {}", e))
+        .map_err(|e| format!("Failed to delete conversation {}: {}", id, e))
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 #[tauri::command]
 pub fn chat_create_message(
     db: State<AppDatabase>,
     request: CreateMessageRequest,
 ) -> Result<Message, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate conversation_id is positive
+    if request.conversation_id <= 0 {
+        return Err(format!("Invalid conversation ID: {}. ID must be positive", request.conversation_id));
+    }
+
+    // Validate content is not empty and within limits
+    let trimmed_content = request.content.trim();
+    if trimmed_content.is_empty() {
+        return Err("Message content cannot be empty".to_string());
+    }
+    if trimmed_content.len() > 1_000_000 {
+        return Err("Message content cannot exceed 1,000,000 characters".to_string());
+    }
+
+    // Validate tokens if provided
+    if let Some(tokens) = request.tokens {
+        if tokens < 0 {
+            return Err(format!("Invalid tokens value: {}. Tokens must be non-negative", tokens));
+        }
+    }
+
+    // Validate cost if provided
+    if let Some(cost) = request.cost {
+        if cost < 0.0 {
+            return Err(format!("Invalid cost value: {}. Cost must be non-negative", cost));
+        }
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     let role = match request.role.as_str() {
         "user" => MessageRole::User,
         "assistant" => MessageRole::Assistant,
         "system" => MessageRole::System,
-        other => return Err(format!("Invalid role: {other}")),
+        other => return Err(format!("Invalid role: '{}'. Must be 'user', 'assistant', or 'system'", other)),
     };
 
     let message = Message {
         id: 0,
         conversation_id: request.conversation_id,
         role,
-        content: request.content,
+        content: trimmed_content.to_string(),
         tokens: request.tokens,
         cost: request.cost,
         provider: None,
@@ -250,45 +321,84 @@ pub fn chat_create_message(
     };
 
     let id = repository::create_message(&conn, &message)
-        .map_err(|e| format!("Failed to create message: {}", e))?;
-    repository::get_message(&conn, id).map_err(|e| format!("Failed to retrieve message: {}", e))
+        .map_err(|e| format!("Failed to create message in conversation {}: {}", request.conversation_id, e))?;
+    repository::get_message(&conn, id)
+        .map_err(|e| format!("Failed to retrieve message {}: {}", id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation for conversation ID
 #[tauri::command]
 pub fn chat_get_messages(
     db: State<AppDatabase>,
     conversation_id: i64,
 ) -> Result<Vec<Message>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate conversation_id is positive
+    if conversation_id <= 0 {
+        return Err(format!("Invalid conversation ID: {}. ID must be positive", conversation_id));
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     repository::list_messages(&conn, conversation_id)
-        .map_err(|e| format!("Failed to list messages: {}", e))
+        .map_err(|e| format!("Failed to list messages for conversation {}: {}", conversation_id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation for ID and content
 #[tauri::command]
 pub fn chat_update_message(
     db: State<AppDatabase>,
     id: i64,
     content: String,
 ) -> Result<Message, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    repository::update_message_content(&conn, id, content)
-        .map_err(|e| format!("Failed to update message: {}", e))
+    // Validate ID is positive
+    if id <= 0 {
+        return Err(format!("Invalid message ID: {}. ID must be positive", id));
+    }
+
+    // Validate content is not empty and within limits
+    let trimmed_content = content.trim();
+    if trimmed_content.is_empty() {
+        return Err("Message content cannot be empty".to_string());
+    }
+    if trimmed_content.len() > 1_000_000 {
+        return Err("Message content cannot exceed 1,000,000 characters".to_string());
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    repository::update_message_content(&conn, id, trimmed_content.to_string())
+        .map_err(|e| format!("Failed to update message {}: {}", id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation for ID
 #[tauri::command]
 pub fn chat_delete_message(db: State<AppDatabase>, id: i64) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    repository::delete_message(&conn, id).map_err(|e| format!("Failed to delete message: {}", e))
+    // Validate ID is positive
+    if id <= 0 {
+        return Err(format!("Invalid message ID: {}. ID must be positive", id));
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    repository::delete_message(&conn, id)
+        .map_err(|e| format!("Failed to delete message {}: {}", id, e))
 }
 
+// Updated Nov 16, 2025: Added input validation for conversation ID
 #[tauri::command]
 pub fn chat_get_conversation_stats(
     db: State<AppDatabase>,
     conversation_id: i64,
 ) -> Result<ConversationStats, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate conversation_id is positive
+    if conversation_id <= 0 {
+        return Err(format!("Invalid conversation ID: {}. ID must be positive", conversation_id));
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     let messages = repository::list_messages(&conn, conversation_id)
-        .map_err(|e| format!("Failed to list messages: {}", e))?;
+        .map_err(|e| format!("Failed to list messages for conversation {}: {}", conversation_id, e))?;
 
     let message_count = messages.len();
     let total_tokens = messages.iter().filter_map(|m| m.tokens).sum();
@@ -1158,6 +1268,7 @@ pub struct CostAnalyticsResponse {
     pub top_conversations: Vec<ConversationCostBreakdown>,
 }
 
+// Updated Nov 16, 2025: Added input validation for days parameter
 #[tauri::command]
 pub fn chat_get_cost_analytics(
     db: State<AppDatabase>,
@@ -1165,7 +1276,18 @@ pub fn chat_get_cost_analytics(
     provider: Option<String>,
     model: Option<String>,
 ) -> Result<CostAnalyticsResponse, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate days parameter
+    if let Some(d) = days {
+        if d <= 0 {
+            return Err(format!("Invalid days value: {}. Days must be positive", d));
+        }
+        if d > 3650 {
+            return Err(format!("Invalid days value: {}. Days cannot exceed 3650 (10 years)", d));
+        }
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
     let window = days.unwrap_or(30).max(1);
 
     let provider_clean = provider
@@ -1210,9 +1332,21 @@ pub fn chat_get_cost_analytics(
     })
 }
 
+// Updated Nov 16, 2025: Added input validation for budget amount
 #[tauri::command]
 pub fn chat_set_monthly_budget(db: State<AppDatabase>, amount: Option<f64>) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Validate amount if provided
+    if let Some(value) = amount {
+        if value < 0.0 {
+            return Err(format!("Invalid budget amount: {}. Budget must be non-negative", value));
+        }
+        if value > 1_000_000.0 {
+            return Err(format!("Invalid budget amount: {}. Budget cannot exceed $1,000,000", value));
+        }
+    }
+
+    let conn = db.conn.lock()
+        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
 
     match amount {
         Some(value) => repository::set_setting(
