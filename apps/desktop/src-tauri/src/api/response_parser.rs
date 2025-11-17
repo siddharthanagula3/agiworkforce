@@ -176,10 +176,13 @@ impl ResponseParser {
         let parts: Vec<&str> = path.split('.').collect();
         let mut current = &parsed.data;
 
+        // Updated Nov 16, 2025: Replace .unwrap() with proper error handling
         for part in parts {
             // Handle array indices like "items[0]"
             if part.contains('[') && part.contains(']') {
-                let bracket_pos = part.find('[').unwrap();
+                let bracket_pos = part.find('[').ok_or_else(|| {
+                    Error::Other(format!("Invalid JSON path segment: {}", part))
+                })?;
                 let key = &part[..bracket_pos];
                 let index_str = &part[bracket_pos + 1..part.len() - 1];
                 let index: usize = index_str
@@ -204,6 +207,7 @@ impl ResponseParser {
     }
 
     /// Convert response to pretty-printed string
+    /// Updated Nov 16, 2025: Already has proper error handling via unwrap_or_else
     pub fn to_pretty_string(parsed: &ParsedResponse) -> String {
         match parsed.format {
             ResponseFormat::Json => {

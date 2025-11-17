@@ -4,8 +4,20 @@ use std::path::Path;
 use tracing::{debug, warn};
 
 /// Helper function to compile regex patterns safely
+/// Updated Nov 16, 2025: Log errors and return fallback regex instead of panicking
 fn compile_regex(pattern: &str) -> Regex {
-    Regex::new(pattern).expect(&format!("Invalid regex pattern: {}", pattern))
+    match Regex::new(pattern) {
+        Ok(regex) => regex,
+        Err(e) => {
+            // This should never happen for hardcoded patterns, but handle gracefully
+            warn!("Failed to compile regex pattern '{}': {}. Using fallback pattern that matches nothing.", pattern, e);
+            // Return a regex that matches nothing as a safe fallback
+            Regex::new(r"(?!)").unwrap_or_else(|_| {
+                // This truly should never fail, but if it does, create a simple safe regex
+                Regex::new("^$").expect("Basic regex pattern failed")
+            })
+        }
+    }
 }
 
 /// Command safety level

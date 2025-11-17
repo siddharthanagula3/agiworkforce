@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// Updated Nov 16, 2025: Added React.memo and performance optimizations
+import React, { useState, useCallback, memo } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
 import type { TeamMember, Team, TeamRole } from '../../types/teams';
 import { hasPermission, Permission, canModifyRole, canRemoveRole } from '../../types/teams';
@@ -11,7 +12,8 @@ interface TeamMemberListProps {
   isLoading: boolean;
 }
 
-export const TeamMemberList: React.FC<TeamMemberListProps> = ({
+// Updated Nov 16, 2025: Memoized component to prevent unnecessary re-renders
+const TeamMemberListComponent: React.FC<TeamMemberListProps> = ({
   members,
   currentTeam,
   isLoading,
@@ -23,25 +25,33 @@ export const TeamMemberList: React.FC<TeamMemberListProps> = ({
   const currentUserMember = members.find((m) => m.userId === currentUserId);
   const currentUserRole = currentUserMember?.role || ('viewer' as TeamRole);
 
-  const handleRemoveMember = async (userId: string) => {
-    if (!confirm('Are you sure you want to remove this member?')) return;
-    try {
-      await removeMember(currentTeam.id, userId, currentUserId);
-    } catch (error) {
-      console.error('Failed to remove member:', error);
-    }
-  };
+  // Updated Nov 16, 2025: Wrapped handlers in useCallback to prevent re-renders
+  const handleRemoveMember = useCallback(
+    async (userId: string) => {
+      if (!confirm('Are you sure you want to remove this member?')) return;
+      try {
+        await removeMember(currentTeam.id, userId, currentUserId);
+      } catch (error) {
+        console.error('Failed to remove member:', error);
+      }
+    },
+    [removeMember, currentTeam.id, currentUserId],
+  );
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
-    try {
-      await updateMemberRole(currentTeam.id, userId, newRole, currentUserId);
-      setEditingMemberId(null);
-    } catch (error) {
-      console.error('Failed to update role:', error);
-    }
-  };
+  const handleUpdateRole = useCallback(
+    async (userId: string, newRole: string) => {
+      try {
+        await updateMemberRole(currentTeam.id, userId, newRole, currentUserId);
+        setEditingMemberId(null);
+      } catch (error) {
+        console.error('Failed to update role:', error);
+      }
+    },
+    [updateMemberRole, currentTeam.id, currentUserId],
+  );
 
-  const getRoleBadgeColor = (role: TeamRole) => {
+  // Updated Nov 16, 2025: Wrapped in useCallback to prevent re-renders
+  const getRoleBadgeColor = useCallback((role: TeamRole) => {
     switch (role) {
       case 'owner':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
@@ -54,7 +64,7 @@ export const TeamMemberList: React.FC<TeamMemberListProps> = ({
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
     }
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -175,3 +185,7 @@ export const TeamMemberList: React.FC<TeamMemberListProps> = ({
     </div>
   );
 };
+
+TeamMemberListComponent.displayName = 'TeamMemberList';
+
+export const TeamMemberList = memo(TeamMemberListComponent);

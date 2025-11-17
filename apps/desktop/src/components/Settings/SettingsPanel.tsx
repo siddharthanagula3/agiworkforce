@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Eye,
   EyeOff,
@@ -198,7 +198,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          {/* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */}
+          /* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */
           <Tabs defaultValue="api-keys" className="mt-6">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
@@ -573,28 +573,31 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   );
 }
 
-function AgentLibraryTab() {
-  return (
-    <div>
-      <h3 className="text-lg font-semibold mb-4">Agent Library</h3>
-      <p className="text-sm text-muted-foreground mb-6">
-        Manage your AI Employees - specialized agents that can be used as tools in chat conversations
-      </p>
-
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-6">
-        <p className="text-sm text-muted-foreground">
-          <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in your conversations.
-          Hire and configure agents here, then reference them by name in chat (e.g., "@CodeReviewer").
-        </p>
-      </div>
-
-      {/* Embed the EmployeesPage component */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <EmployeesPage />
-      </div>
-    </div>
-  );
-}
+// Unused - AgentLibraryTab functionality is embedded in the tab content
+// function _AgentLibraryTab() {
+//   return (
+//     <div>
+//       <h3 className="text-lg font-semibold mb-4">Agent Library</h3>
+//       <p className="text-sm text-muted-foreground mb-6">
+//         Manage your AI Employees - specialized agents that can be used as tools in chat
+//         conversations
+//       </p>
+//
+//       <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-6">
+//         <p className="text-sm text-muted-foreground">
+//           <strong>New in Unified Chat:</strong> AI Employees can now be used directly as tools in
+//           your conversations. Hire and configure agents here, then reference them by name in chat
+//           (e.g., "@CodeReviewer").
+//         </p>
+//       </div>
+//
+//       {/* Embed the EmployeesPage component */}
+//       <div className="rounded-lg border border-border overflow-hidden">
+//         <EmployeesPage />
+//       </div>
+//     </div>
+//   );
+// }
 
 function DataPrivacyTab() {
   const [exporting, setExporting] = useState(false);
@@ -603,21 +606,29 @@ function DataPrivacyTab() {
   const [crashReportingEnabled, setCrashReportingEnabled] = useState(true);
   const [savingCrashReporting, setSavingCrashReporting] = useState(false);
 
-  // Load crash reporting preference
+  // Updated Nov 16, 2025: Added cleanup flag to prevent state updates on unmounted component
   useEffect(() => {
+    let mounted = true;
+
     const loadPreference = async () => {
       try {
         const result = await invoke<{ value: string } | null>('get_user_preference', {
           key: 'crash_reporting_enabled',
         });
-        if (result) {
+        if (result && mounted) {
           setCrashReportingEnabled(result.value === 'true');
         }
       } catch (error) {
-        console.error('Failed to load crash reporting preference:', error);
+        if (mounted) {
+          console.error('Failed to load crash reporting preference:', error);
+        }
       }
     };
     void loadPreference();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
@@ -636,6 +647,21 @@ function DataPrivacyTab() {
     } finally {
       setSavingCrashReporting(false);
     }
+  }, []);
+
+  // Updated Nov 16, 2025: Added cleanup for setTimeout to prevent memory leaks
+  const exportSuccessTimerRef = useRef<number | null>(null);
+  const exportErrorTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (exportSuccessTimerRef.current) {
+        window.clearTimeout(exportSuccessTimerRef.current);
+      }
+      if (exportErrorTimerRef.current) {
+        window.clearTimeout(exportErrorTimerRef.current);
+      }
+    };
   }, []);
 
   const handleExportData = useCallback(async () => {
@@ -662,12 +688,18 @@ function DataPrivacyTab() {
         // Write to file
         await writeTextFile(savePath, exportData);
         setExportSuccess(true);
-        setTimeout(() => setExportSuccess(false), 5000);
+        if (exportSuccessTimerRef.current) {
+          window.clearTimeout(exportSuccessTimerRef.current);
+        }
+        exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
       }
     } catch (error) {
       console.error('Failed to export data:', error);
       setExportError(error instanceof Error ? error.message : 'Failed to export data');
-      setTimeout(() => setExportError(null), 5000);
+      if (exportErrorTimerRef.current) {
+        window.clearTimeout(exportErrorTimerRef.current);
+      }
+      exportErrorTimerRef.current = window.setTimeout(() => setExportError(null), 5000);
     } finally {
       setExporting(false);
     }

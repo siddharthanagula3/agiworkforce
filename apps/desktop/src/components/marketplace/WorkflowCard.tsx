@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// Updated Nov 16, 2025: Added React.memo and performance optimizations
+import React, { useState, useCallback, memo } from 'react';
 import { Copy, Eye, Star, Share2, Sparkles, Clock, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -11,41 +12,53 @@ interface WorkflowCardProps {
   showAnalytics?: boolean;
 }
 
-export function WorkflowCard({ workflow, showAnalytics = false }: WorkflowCardProps) {
-  const { openDetailModal, openShareModal, cloneWorkflow, showCloneSuccess } = useMarketplaceStore();
+// Updated Nov 16, 2025: Memoized component to prevent unnecessary re-renders
+export const WorkflowCard = memo(function WorkflowCard({
+  workflow,
+  showAnalytics = false,
+}: WorkflowCardProps) {
+  const { openDetailModal, openShareModal, cloneWorkflow, showCloneSuccess } =
+    useMarketplaceStore();
   const [isCloning, setIsCloning] = useState(false);
 
-  const handlePreview = () => {
+  // Updated Nov 16, 2025: Wrapped handlers in useCallback to prevent re-renders
+  const handlePreview = useCallback(() => {
     openDetailModal(workflow);
-  };
+  }, [openDetailModal, workflow]);
 
-  const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    openShareModal(workflow);
-  };
+  const handleShare = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      openShareModal(workflow);
+    },
+    [openShareModal, workflow],
+  );
 
-  const handleClone = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsCloning(true);
-    try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
-      const userName = 'Current User';
+  const handleClone = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsCloning(true);
+      try {
+        // TODO: Get user ID from auth context
+        const userId = 'current_user_id';
+        const userName = 'Current User';
 
-      await cloneWorkflow({
-        workflow_id: workflow.id,
-        user_id: userId,
-        user_name: userName,
-      });
+        await cloneWorkflow({
+          workflow_id: workflow.id,
+          user_id: userId,
+          user_name: userName,
+        });
 
-      showCloneSuccess(workflow);
-    } catch (error) {
-      console.error('Failed to clone workflow:', error);
-      alert('Failed to clone workflow. Please try again.');
-    } finally {
-      setIsCloning(false);
-    }
-  };
+        showCloneSuccess(workflow);
+      } catch (error) {
+        console.error('Failed to clone workflow:', error);
+        alert('Failed to clone workflow. Please try again.');
+      } finally {
+        setIsCloning(false);
+      }
+    },
+    [cloneWorkflow, showCloneSuccess, workflow],
+  );
 
   return (
     <Card
@@ -192,28 +205,18 @@ export function WorkflowCard({ workflow, showAnalytics = false }: WorkflowCardPr
       </CardContent>
 
       <CardFooter className="gap-2 pt-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handlePreview}
-          className="flex-1"
-        >
+        <Button variant="outline" size="sm" onClick={handlePreview} className="flex-1">
           <Eye className="mr-2 h-4 w-4" />
           Preview
         </Button>
-        <Button
-          size="sm"
-          onClick={handleClone}
-          disabled={isCloning}
-          className="flex-1"
-        >
+        <Button size="sm" onClick={handleClone} disabled={isCloning} className="flex-1">
           <Copy className="mr-2 h-4 w-4" />
           {isCloning ? 'Cloning...' : 'Clone'}
         </Button>
       </CardFooter>
     </Card>
   );
-}
+});
 
 interface StatProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -222,7 +225,8 @@ interface StatProps {
   iconClassName?: string;
 }
 
-function Stat({ icon: Icon, value, label, iconClassName }: StatProps) {
+// Updated Nov 16, 2025: Memoized Stat component to prevent unnecessary re-renders
+const Stat = memo(function Stat({ icon: Icon, value, label, iconClassName }: StatProps) {
   return (
     <div className="flex items-center gap-1.5">
       <Icon className={iconClassName || 'h-4 w-4'} />
@@ -230,8 +234,9 @@ function Stat({ icon: Icon, value, label, iconClassName }: StatProps) {
       <span className="text-muted-foreground">{label}</span>
     </div>
   );
-}
+});
 
+// Updated Nov 16, 2025: Moved outside component to prevent re-creation
 function formatCount(count: number): string {
   if (count >= 1000000) {
     return `${(count / 1000000).toFixed(1)}M`;

@@ -147,26 +147,50 @@ export const useCloudStore = create<CloudState>((set, get) => {
       }
     },
 
+    // Updated Nov 16, 2025: Fixed race condition with state verification
     listFiles: async (path = '/', options) => {
       const { activeAccountId } = get();
       if (!activeAccountId) {
         return;
       }
 
+      // Store the account ID to verify it hasn't changed after async operation
+      const requestAccountId = activeAccountId;
+
       set({ loading: true, error: null });
       try {
         const files = await invoke<RawFileResponse[]>('cloud_list', {
           request: {
-            accountId: activeAccountId,
+            accountId: requestAccountId,
             folderPath: path,
             search: options?.search,
             includeFolders: options?.includeFolders ?? true,
           },
         });
+
+        // Race condition guard: only update if still the same account
+        const currentAccountId = get().activeAccountId;
+        if (currentAccountId !== requestAccountId) {
+          console.warn(
+            '[cloud] Ignoring stale listFiles result - account changed from',
+            requestAccountId,
+            'to',
+            currentAccountId,
+          );
+          set({ loading: false });
+          return;
+        }
+
         set({ files, currentPath: path, loading: false });
       } catch (error) {
         console.error('[cloud] listing files failed', error);
-        set({ error: (error as Error).message, loading: false });
+        // Only set error if account hasn't changed
+        const currentAccountId = get().activeAccountId;
+        if (currentAccountId === requestAccountId) {
+          set({ error: (error as Error).message, loading: false });
+        } else {
+          set({ loading: false });
+        }
       }
     },
 

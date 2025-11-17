@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// Updated Nov 16, 2025: Added proper cleanup in beforeEach and afterEach
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useUnifiedChatStore } from '../unifiedChatStore';
 
 describe('unifiedChatStore', () => {
   beforeEach(() => {
-    // Reset store before each test
+    // Reset store before each test to prevent test pollution
     useUnifiedChatStore.setState({
       messages: [],
       fileOperations: [],
@@ -14,7 +15,21 @@ describe('unifiedChatStore', () => {
       backgroundTasks: [],
       pendingApprovals: [],
       activeContext: [],
+      isLoading: false,
+      isStreaming: false,
+      currentStreamingMessageId: null,
+      sidecarOpen: true,
+      sidecarSection: 'context',
+      sidecarWidth: 400,
     });
+  });
+
+  afterEach(() => {
+    // Additional cleanup to ensure no side effects
+    const store = useUnifiedChatStore.getState();
+    if (store.currentStreamingMessageId) {
+      store.setStreamingMessage(null);
+    }
   });
 
   it('should initialize with empty state', () => {
