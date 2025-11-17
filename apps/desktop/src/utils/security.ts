@@ -148,7 +148,7 @@ export function sanitizeEmailHtml(html: string): string {
     }
   });
 
-  return DOMPurify.sanitize(html, config);
+  return DOMPurify.sanitize(html, config) as string;
 }
 
 /**
@@ -156,7 +156,7 @@ export function sanitizeEmailHtml(html: string): string {
  * Updated Nov 16, 2025
  */
 export function sanitizeMarkdownHtml(html: string): string {
-  const config: DOMPurify.Config = {
+  const config: any = {
     ALLOWED_TAGS: [
       'p',
       'br',
@@ -206,7 +206,7 @@ export function sanitizeMarkdownHtml(html: string): string {
     }
   });
 
-  return DOMPurify.sanitize(html, config);
+  return DOMPurify.sanitize(html, config) as string;
 }
 
 /**
