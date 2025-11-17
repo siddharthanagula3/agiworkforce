@@ -196,7 +196,7 @@ export function Example6_DebugPanel() {
   const { getDOMSnapshot, getConsoleLogs, getNetworkActivity } = useBrowserStore();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  const handleRefreshAll = async () => {
+  const handleRefreshAll = React.useCallback(async () => {
     setIsRefreshing(true);
     try {
       const activeTabId = 'your-tab-id'; // Get from store
@@ -210,13 +210,13 @@ export function Example6_DebugPanel() {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [getConsoleLogs, getDOMSnapshot, getNetworkActivity]);
 
   React.useEffect(() => {
     // Auto-refresh every 5 seconds
     const interval = setInterval(handleRefreshAll, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [handleRefreshAll]);
 
   return (
     <div className="h-screen flex flex-col p-4">
@@ -247,7 +247,7 @@ export function Example7_RecorderWithPreview() {
     if (recordedSteps.length > 0) {
       setGeneratedCode(generatePlaywrightCode());
     }
-  }, [recordedSteps]);
+  }, [recordedSteps, generatePlaywrightCode]);
 
   return (
     <div className="h-screen grid grid-cols-2 gap-4 p-4">

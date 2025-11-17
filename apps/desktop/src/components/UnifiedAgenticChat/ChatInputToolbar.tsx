@@ -1,17 +1,12 @@
 import { Shield, ShieldOff } from 'lucide-react';
 import { useUnifiedChatStore, type ConversationMode } from '../../stores/unifiedChatStore';
-import { useSettingsStore } from '../../stores/settingsStore';
-import { useModelStore } from '../../stores/modelStore';
-import { QuickModelSelector } from '../chat/QuickModelSelector';
-import { Button } from '../ui/button';
+import { QuickModelSelector } from '../Chat/QuickModelSelector';
+import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
 export const ChatInputToolbar = () => {
   const conversationMode = useUnifiedChatStore((s) => s.conversationMode);
   const setConversationMode = useUnifiedChatStore((s) => s.setConversationMode);
-  const llmConfig = useSettingsStore((s) => s.llmConfig);
-  const { selectedModel, selectModel } = useModelStore();
-
   const toggleSafetyMode = () => {
     const newMode: ConversationMode = conversationMode === 'safe' ? 'full_control' : 'safe';
     setConversationMode(newMode);

@@ -1,17 +1,4 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  HelpCircle,
-  MessageCircle,
-  Plus,
-  Settings,
-  Package,
-  Workflow,
-  Users,
-  Shield,
-  Zap,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, HelpCircle, MessageCircle, Plus, Settings } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useChatStore } from '../../stores/chatStore';

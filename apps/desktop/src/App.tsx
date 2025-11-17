@@ -28,45 +28,18 @@ import {
 } from 'lucide-react';
 import { Spinner } from './components/ui/Spinner';
 // Lazy load heavy components for better bundle splitting
-const _ChatInterface = lazy(() =>
-  import('./components/Chat/ChatInterface').then((m) => ({ default: m.ChatInterface })),
-);
-const _AgentChatInterface = lazy(() =>
-  import('./components/Chat/AgentChatInterface').then((m) => ({ default: m.AgentChatInterface })),
-);
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
     default: m.VisualizationLayer,
   })),
 );
 const OnboardingWizard = lazy(() =>
-  import('./components/onboarding/OnboardingWizardNew').then((m) => ({
+  import('./components/Onboarding/OnboardingWizardNew').then((m) => ({
     default: m.OnboardingWizardNew,
   })),
 );
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
-);
-const _TemplateMarketplace = lazy(() =>
-  import('./components/templates/TemplateMarketplace').then((m) => ({
-    default: m.TemplateMarketplace,
-  })),
-);
-const _WorkflowBuilder = lazy(() =>
-  import('./components/orchestration/WorkflowBuilder').then((m) => ({
-    default: m.WorkflowBuilder,
-  })),
-);
-const _TeamDashboard = lazy(() =>
-  import('./components/teams/TeamDashboard').then((m) => ({ default: m.TeamDashboard })),
-);
-const _GovernanceDashboard = lazy(() =>
-  import('./components/governance/GovernanceDashboard').then((m) => ({
-    default: m.GovernanceDashboard,
-  })),
-);
-const _EmployeesPage = lazy(() =>
-  import('./pages/EmployeesPage').then((m) => ({ default: m.EmployeesPage })),
 );
 const DesktopAgentChat = lazy(() =>
   import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
@@ -108,19 +81,9 @@ const DesktopShell = () => {
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('enhanced-chat');
   const { theme, toggleTheme } = useTheme();
-  const _resolvedEditorTheme = useMemo<'light' | 'dark'>(() => {
-    if (theme === 'system') {
-      if (typeof window !== 'undefined') {
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      return 'light';
-    }
-    return theme;
-  }, [theme]);
 
   const createConversation = useChatStore((store) => store.createConversation);
   const selectConversation = useChatStore((store) => store.selectConversation);
-  const chatMessages = useChatStore((store) => store.messages);
   const addError = useErrorStore((store) => store.addError);
 
   const fetchTemplates = useTemplateStore((store) => store.fetchTemplates);
@@ -130,62 +93,6 @@ const DesktopShell = () => {
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
-  const _codePreviewData = useMemo(() => {
-    const lastArtifactMessage = [...chatMessages]
-      .reverse()
-      .find((message) => (message.artifacts ?? []).some((artifact) => artifact.type === 'code'));
-
-    if (lastArtifactMessage) {
-      const artifact = (lastArtifactMessage.artifacts ?? []).find(
-        (item) => item.type === 'code' && item.content,
-      );
-
-      if (artifact) {
-        const metadata = artifact.metadata as Record<string, unknown> | undefined;
-        const baselineCandidate = metadata?.['baseline'];
-        const baseline =
-          (typeof baselineCandidate === 'string' ? baselineCandidate : undefined) ??
-          artifact.content.split('\n').slice(0, 6).join('\n');
-
-        return {
-          title: artifact.title ?? 'Generated snippet',
-          summary:
-            lastArtifactMessage.content.slice(0, 90) ||
-            'AI generated update based on the last request.',
-          baseContent: baseline,
-          modifiedContent: artifact.content,
-          language: artifact.language ?? 'typescript',
-        };
-      }
-    }
-
-    // Sample data for new sessions
-    return {
-      title: 'smartChunk.ts',
-      summary: 'Adaptive chunker refactor suggested by the planning agent.',
-      baseContent: `export function chunkArray<T>(input: T[], size = 100): T[][] {
-  const chunks: T[][] = [];
-  for (let index = 0; index < input.length; index += size) {
-    chunks.push(input.slice(index, index + size));
-  }
-  return chunks;
-}`,
-      modifiedContent: `export function chunkArray<T>(input: T[], target = 100): T[][] {
-  if (target <= 0) {
-    throw new Error('Chunk size must be positive');
-  }
-
-  const chunks: T[][] = [];
-  const size = Math.max(16, Math.min(target, Math.ceil(input.length / 32)));
-
-  for (let index = 0; index < input.length; index += size) {
-    chunks.push(input.slice(index, index + size));
-  }
-  return chunks;
-}`,
-      language: 'typescript',
-    };
-  }, [chatMessages]);
 
   // Global error handlers
   useEffect(() => {

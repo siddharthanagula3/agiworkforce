@@ -1046,8 +1046,12 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "terminal_execute".to_string(),
             name: "Execute Terminal Command".to_string(),
-            description: "Execute a command in the system terminal (bash/powershell/cmd)".to_string(),
-            capabilities: vec![ToolCapability::CodeExecution, ToolCapability::SystemOperation],
+            description: "Execute a command in the system terminal (bash/powershell/cmd)"
+                .to_string(),
+            capabilities: vec![
+                ToolCapability::CodeExecution,
+                ToolCapability::SystemOperation,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "command".to_string(),
@@ -1078,15 +1082,13 @@ impl ToolRegistry {
             name: "Initialize Git Repository".to_string(),
             description: "Initialize a new Git repository in the specified directory".to_string(),
             capabilities: vec![ToolCapability::SystemOperation],
-            parameters: vec![
-                ToolParameter {
-                    name: "path".to_string(),
-                    parameter_type: ParameterType::FilePath,
-                    required: true,
-                    description: "Path to initialize repository".to_string(),
-                    default: None,
-                },
-            ],
+            parameters: vec![ToolParameter {
+                name: "path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: true,
+                description: "Path to initialize repository".to_string(),
+                default: None,
+            }],
             estimated_resources: ResourceUsage {
                 cpu_percent: 5.0,
                 memory_mb: 20,
@@ -1157,7 +1159,10 @@ impl ToolRegistry {
             id: "git_push".to_string(),
             name: "Git Push".to_string(),
             description: "Push commits to remote repository".to_string(),
-            capabilities: vec![ToolCapability::SystemOperation, ToolCapability::NetworkOperation],
+            capabilities: vec![
+                ToolCapability::SystemOperation,
+                ToolCapability::NetworkOperation,
+            ],
             parameters: vec![
                 ToolParameter {
                     name: "path".to_string(),

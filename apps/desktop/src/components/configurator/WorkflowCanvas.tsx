@@ -90,6 +90,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return undefined;
   }, [nodes, setNodes]);
 
   // Update store when edges change (with debouncing to prevent rapid updates)
@@ -103,6 +104,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return undefined;
   }, [edges, setEdges]);
 
   const onConnect = React.useCallback(

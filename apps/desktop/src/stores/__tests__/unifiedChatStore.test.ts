@@ -19,7 +19,7 @@ describe('unifiedChatStore', () => {
       isStreaming: false,
       currentStreamingMessageId: null,
       sidecarOpen: true,
-      sidecarSection: 'context',
+      sidecarSection: 'operations',
       sidecarWidth: 400,
     });
   });

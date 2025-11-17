@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { LayoutGrid, List, Activity, Zap, Brain, Filter, RefreshCw, Settings } from 'lucide-react';
 import { AgentStatusMonitor } from '../AgentStatusMonitor';
 import { ResourceMonitor } from '../ResourceMonitor';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import {
+  applyAgentStatusSnapshot,
+  type AgentStatusPayload,
+  useUnifiedChatStore,
+} from '../../stores/unifiedChatStore';
 import { invoke } from '@tauri-apps/api/core';
 
 type ViewMode = 'grid' | 'list';
@@ -64,7 +68,8 @@ export const MissionControl: React.FC<MissionControlProps> = ({ className = '' }
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await invoke('refresh_agent_status');
+      const agents = await invoke<AgentStatusPayload[]>('refresh_agent_status');
+      applyAgentStatusSnapshot(Array.isArray(agents) ? agents : []);
     } catch (error) {
       console.error('Failed to refresh agents:', error);
     } finally {

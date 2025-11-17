@@ -45,7 +45,8 @@ impl GoogleCalendarClient {
             .build()
             .expect("Failed to create HTTP client");
 
-        let oauth_client = OAuth2Client::new(oauth_config);
+        let oauth_client =
+            OAuth2Client::new(oauth_config).expect("Failed to create OAuth client for calendar");
 
         Self {
             client,
