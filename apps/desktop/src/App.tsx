@@ -11,8 +11,7 @@ import { useTemplateStore } from './stores/templateStore';
 import { useOrchestrationStore } from './stores/orchestrationStore';
 import { useTeamStore } from './stores/teamStore';
 import { initializeAgentStatusListener } from './stores/unifiedChatStore';
-import { Button } from './components/ui/Button';
-import { ChevronLeft, ChevronRight, PanelRightOpen } from 'lucide-react';
+// Unused imports removed Nov 16, 2025 (for future use)
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorToastContainer from './components/errors/ErrorToast';
 import useErrorStore from './stores/errorStore';
@@ -28,14 +27,11 @@ import {
   RefreshCcw,
 } from 'lucide-react';
 import { Spinner } from './components/ui/Spinner';
-import { MissionControlPanel } from './components/MissionControl';
-import { InlineDiffViewer } from './components/CodeWorkbench/InlineDiffViewer';
-
 // Lazy load heavy components for better bundle splitting
-const ChatInterface = lazy(() =>
+const _ChatInterface = lazy(() =>
   import('./components/Chat/ChatInterface').then((m) => ({ default: m.ChatInterface })),
 );
-const AgentChatInterface = lazy(() =>
+const _AgentChatInterface = lazy(() =>
   import('./components/Chat/AgentChatInterface').then((m) => ({ default: m.AgentChatInterface })),
 );
 const VisualizationLayer = lazy(() =>
@@ -44,32 +40,32 @@ const VisualizationLayer = lazy(() =>
   })),
 );
 const OnboardingWizard = lazy(() =>
-  import('./components/Onboarding/OnboardingWizardNew').then((m) => ({
+  import('./components/onboarding/OnboardingWizardNew').then((m) => ({
     default: m.OnboardingWizardNew,
   })),
 );
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
-const TemplateMarketplace = lazy(() =>
+const _TemplateMarketplace = lazy(() =>
   import('./components/templates/TemplateMarketplace').then((m) => ({
     default: m.TemplateMarketplace,
   })),
 );
-const WorkflowBuilder = lazy(() =>
+const _WorkflowBuilder = lazy(() =>
   import('./components/orchestration/WorkflowBuilder').then((m) => ({
     default: m.WorkflowBuilder,
   })),
 );
-const TeamDashboard = lazy(() =>
+const _TeamDashboard = lazy(() =>
   import('./components/teams/TeamDashboard').then((m) => ({ default: m.TeamDashboard })),
 );
-const GovernanceDashboard = lazy(() =>
+const _GovernanceDashboard = lazy(() =>
   import('./components/governance/GovernanceDashboard').then((m) => ({
     default: m.GovernanceDashboard,
   })),
 );
-const EmployeesPage = lazy(() =>
+const _EmployeesPage = lazy(() =>
   import('./pages/EmployeesPage').then((m) => ({ default: m.EmployeesPage })),
 );
 const DesktopAgentChat = lazy(() =>
@@ -106,13 +102,13 @@ const DesktopShell = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [agentChatPosition] = useState<'left' | 'right'>('right');
-  const [agentChatVisible, setAgentChatVisible] = useState(true);
-  const [missionControlVisible, setMissionControlVisible] = useState(true);
+  const [_agentChatPosition] = useState<'left' | 'right'>('right');
+  const [_agentChatVisible, _setAgentChatVisible] = useState(true);
+  const [_missionControlVisible, _setMissionControlVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('enhanced-chat');
   const { theme, toggleTheme } = useTheme();
-  const resolvedEditorTheme = useMemo<'light' | 'dark'>(() => {
+  const _resolvedEditorTheme = useMemo<'light' | 'dark'>(() => {
     if (theme === 'system') {
       if (typeof window !== 'undefined') {
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -134,7 +130,7 @@ const DesktopShell = () => {
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
-  const codePreviewData = useMemo(() => {
+  const _codePreviewData = useMemo(() => {
     const lastArtifactMessage = [...chatMessages]
       .reverse()
       .find((message) => (message.artifacts ?? []).some((artifact) => artifact.type === 'code'));
@@ -453,7 +449,11 @@ const DesktopShell = () => {
       default:
         return (
           <Suspense fallback={<LoadingFallback />}>
-            <UnifiedAgenticChat layout="default" sidecarPosition="right" defaultSidecarOpen={true} />
+            <UnifiedAgenticChat
+              layout="default"
+              sidecarPosition="right"
+              defaultSidecarOpen={true}
+            />
           </Suspense>
         );
     }
@@ -497,8 +497,19 @@ const DesktopShell = () => {
 };
 
 const App = () => {
-  const isOverlayMode =
-    typeof window !== 'undefined' && window.location.search.includes('mode=overlay');
+  // Updated Nov 16, 2025: Added proper URL parameter validation for security
+  const isOverlayMode = (() => {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const mode = params.get('mode');
+      // Only accept specific allowed values
+      return mode === 'overlay';
+    } catch {
+      return false;
+    }
+  })();
 
   return (
     <ErrorBoundary>

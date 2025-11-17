@@ -7,7 +7,8 @@ export function AINode({ data, selected, id }: NodeProps) {
   const deleteNode = useConfiguratorStore((state) => state.deleteNode);
 
   // Get icon from lucide-react based on icon name or use Sparkles as default
-  const IconComponent = (Icons as any)[data.iconName || 'Sparkles'] || Icons.Sparkles;
+  // Updated Nov 16, 2025: Improved type safety for dynamic icon lookup
+  const IconComponent = (Icons as Record<string, React.ComponentType>)[data.iconName || 'Sparkles'] || Icons.Sparkles;
 
   return (
     <BaseNode

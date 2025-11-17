@@ -1,6 +1,13 @@
 /**
  * Input validation utilities for security
+ * Updated Nov 16, 2025: Migrated security functions to security.ts
  */
+
+import {
+  checkForInjection as checkForInjectionSecure,
+  escapeHtml as escapeHtmlSecure,
+  sanitizeHtml as sanitizeHtmlSecure,
+} from './security';
 
 /**
  * Validate email address format
@@ -12,6 +19,8 @@ export function validateEmail(email: string): boolean {
 
 /**
  * Validate URL format
+ * @deprecated Use validateUrl from security.ts for better security
+ * Updated Nov 16, 2025: Deprecated in favor of security.ts version
  */
 export function validateUrl(url: string): boolean {
   try {
@@ -59,26 +68,21 @@ export function validateFilePath(path: string): { valid: boolean; error?: string
 
 /**
  * Sanitize HTML content to prevent XSS
+ * @deprecated Use sanitizeHtml from security.ts with DOMPurify
+ * Updated Nov 16, 2025: Deprecated - this function only escapes text, doesn't sanitize HTML
  */
 export function sanitizeHtml(html: string): string {
-  const div = document.createElement('div');
-  div.textContent = html;
-  return div.innerHTML;
+  console.warn('DEPRECATED: Use sanitizeHtml from security.ts for proper HTML sanitization');
+  return sanitizeHtmlSecure(html);
 }
 
 /**
  * Escape HTML entities
+ * @deprecated Use escapeHtml from security.ts
+ * Updated Nov 16, 2025: Migrated to security.ts
  */
 export function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-
-  return text.replace(/[&<>"']/g, (char) => map[char] || char);
+  return escapeHtmlSecure(text);
 }
 
 /**
@@ -199,41 +203,11 @@ export function validateSqlQuery(query: string): { valid: boolean; error?: strin
 
 /**
  * Validate input against common injection patterns
+ * @deprecated Use checkForInjection from security.ts for improved detection
+ * Updated Nov 16, 2025: Migrated to security.ts with enhanced patterns
  */
 export function checkForInjection(input: string): { safe: boolean; type?: string } {
-  // SQL injection patterns
-  const sqlPatterns = [
-    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b)/i,
-    /(--|;|\/\*|\*\/)/,
-    /(\bOR\b.*=.*)/i,
-    /(\bUNION\b.*\bSELECT\b)/i,
-  ];
-
-  for (const pattern of sqlPatterns) {
-    if (pattern.test(input)) {
-      return { safe: false, type: 'SQL Injection' };
-    }
-  }
-
-  // Command injection patterns
-  const commandPatterns = [/[;&|`$()]/];
-
-  for (const pattern of commandPatterns) {
-    if (pattern.test(input)) {
-      return { safe: false, type: 'Command Injection' };
-    }
-  }
-
-  // XSS patterns
-  const xssPatterns = [/<script[\s\S]*?>[\s\S]*?<\/script>/i, /javascript:/i, /on\w+\s*=/i];
-
-  for (const pattern of xssPatterns) {
-    if (pattern.test(input)) {
-      return { safe: false, type: 'XSS' };
-    }
-  }
-
-  return { safe: true };
+  return checkForInjectionSecure(input);
 }
 
 /**

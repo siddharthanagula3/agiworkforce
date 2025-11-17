@@ -68,6 +68,30 @@ pub struct DangerousOpEvent {
     pub paths: Vec<String>,
 }
 
+// Updated Nov 16, 2025: Enhanced path validation with directory traversal prevention
+/// Validate path for security issues
+fn validate_path_security(path: &str) -> Result<(), String> {
+    // Check path length
+    if path.is_empty() {
+        return Err("Path cannot be empty".to_string());
+    }
+    if path.len() > 4096 {
+        return Err(format!("Path too long: {} characters. Maximum is 4096", path.len()));
+    }
+
+    // Check for directory traversal attempts
+    if path.contains("..") {
+        return Err("Path contains directory traversal (..) which is not allowed for security reasons".to_string());
+    }
+
+    // Check for null bytes
+    if path.contains('\0') {
+        return Err("Path contains null bytes which is not allowed".to_string());
+    }
+
+    Ok(())
+}
+
 /// Check if a path is blacklisted (sensitive system directories)
 fn is_blacklisted_path(path: &str) -> bool {
     let path_lower = path.to_lowercase();
@@ -83,6 +107,9 @@ fn is_blacklisted_path(path: &str) -> bool {
         ".gnupg",
         ".env",
         "credentials",
+        "private",
+        "/etc/passwd",
+        "/etc/shadow",
     ];
 
     blacklist
@@ -219,6 +246,7 @@ async fn _confirm_dangerous_operation(
 // FILE CRUD OPERATIONS
 // ============================================================================
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Read file contents
 #[tauri::command]
 pub async fn file_read(
@@ -226,6 +254,25 @@ pub async fn file_read(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
     debug!("Reading file: {}", path);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Check file size before reading (prevent OOM)
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            if metadata.len() > 100_000_000 {
+                return Err(format!(
+                    "File too large: {} bytes. Maximum is 100MB for safety",
+                    metadata.len()
+                ));
+            }
+            if !metadata.is_file() {
+                return Err(format!("Path is not a file: {}", path));
+            }
+        }
+        Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Read, &state).await? {
@@ -263,6 +310,7 @@ pub async fn file_read(
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Write file contents
 #[tauri::command]
 pub async fn file_write(
@@ -271,6 +319,17 @@ pub async fn file_write(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
     debug!("Writing file: {}", path);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Check content size
+    if content.len() > 100_000_000 {
+        return Err(format!(
+            "Content too large: {} bytes. Maximum is 100MB for safety",
+            content.len()
+        ));
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Write, &state).await? {
@@ -316,10 +375,26 @@ pub async fn file_write(
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Delete file
 #[tauri::command]
 pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> Result<(), String> {
     debug!("Deleting file: {}", path);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Verify it's a file, not a directory
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err(format!("Cannot delete: {} is not a file. Use dir_delete for directories", path));
+            }
+        }
+        Err(_) => {
+            return Err(format!("File does not exist: {}", path));
+        }
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Delete, &state).await? {
@@ -357,6 +432,7 @@ pub async fn file_delete(path: String, state: tauri::State<'_, AppDatabase>) -> 
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Rename/move file
 #[tauri::command]
 pub async fn file_rename(
@@ -365,6 +441,20 @@ pub async fn file_rename(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
     debug!("Renaming file: {} -> {}", old_path, new_path);
+
+    // Validate both paths
+    validate_path_security(&old_path)?;
+    validate_path_security(&new_path)?;
+
+    // Verify source exists and is a file
+    if !Path::new(&old_path).exists() {
+        return Err(format!("Source file does not exist: {}", old_path));
+    }
+
+    // Prevent overwriting existing files
+    if Path::new(&new_path).exists() {
+        return Err(format!("Destination already exists: {}. Cannot overwrite", new_path));
+    }
 
     // Check permissions on both paths
     if !check_file_permission(&old_path, FileOperation::Delete, &state).await? {
@@ -389,6 +479,7 @@ pub async fn file_rename(
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Copy file
 #[tauri::command]
 pub async fn file_copy(
@@ -397,6 +488,32 @@ pub async fn file_copy(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
     debug!("Copying file: {} -> {}", src, dest);
+
+    // Validate both paths
+    validate_path_security(&src)?;
+    validate_path_security(&dest)?;
+
+    // Check source exists and is a file
+    match fs::metadata(&src) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err(format!("Source is not a file: {}", src));
+            }
+            // Check file size
+            if metadata.len() > 1_000_000_000 {
+                return Err(format!(
+                    "File too large to copy: {} bytes. Maximum is 1GB",
+                    metadata.len()
+                ));
+            }
+        }
+        Err(_) => return Err(format!("Source file does not exist: {}", src)),
+    }
+
+    // Prevent overwriting without warning
+    if Path::new(&dest).exists() {
+        return Err(format!("Destination already exists: {}. Cannot overwrite", dest));
+    }
 
     // Check permissions
     if !check_file_permission(&src, FileOperation::Read, &state).await? {
@@ -457,18 +574,27 @@ pub async fn file_move(
     }
 }
 
+// Updated Nov 16, 2025: Added input validation
 /// Check if file exists
 #[tauri::command]
 pub async fn file_exists(path: String) -> Result<bool, String> {
+    // Validate path security
+    validate_path_security(&path)?;
+
     Ok(Path::new(&path).exists())
 }
 
+// Updated Nov 16, 2025: Added input validation
 /// Get file metadata
 #[tauri::command]
 pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
     debug!("Getting metadata for: {}", path);
 
-    let metadata = fs::metadata(&path).map_err(|e| format!("Failed to get metadata: {}", e))?;
+    // Validate path security
+    validate_path_security(&path)?;
+
+    let metadata = fs::metadata(&path)
+        .map_err(|e| format!("Failed to get metadata for '{}': {}", path, e))?;
 
     let created = metadata
         .created()
@@ -498,10 +624,19 @@ pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
 // DIRECTORY OPERATIONS
 // ============================================================================
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Create directory (including parent directories)
 #[tauri::command]
 pub async fn dir_create(path: String, state: tauri::State<'_, AppDatabase>) -> Result<(), String> {
     debug!("Creating directory: {}", path);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Check if already exists
+    if Path::new(&path).exists() {
+        return Err(format!("Path already exists: {}", path));
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Write, &state).await? {
@@ -522,6 +657,7 @@ pub async fn dir_create(path: String, state: tauri::State<'_, AppDatabase>) -> R
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// List directory contents
 #[tauri::command]
 pub async fn dir_list(
@@ -529,6 +665,19 @@ pub async fn dir_list(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<Vec<DirEntry>, String> {
     debug!("Listing directory: {}", path);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Verify it's a directory
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            if !metadata.is_dir() {
+                return Err(format!("Path is not a directory: {}", path));
+            }
+        }
+        Err(_) => return Err(format!("Directory does not exist: {}", path)),
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Read, &state).await? {
@@ -568,6 +717,7 @@ pub async fn dir_list(
     Ok(results)
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Delete directory
 #[tauri::command]
 pub async fn dir_delete(
@@ -576,6 +726,24 @@ pub async fn dir_delete(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
     debug!("Deleting directory: {} (recursive: {})", path, recursive);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Verify it's a directory
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            if !metadata.is_dir() {
+                return Err(format!("Path is not a directory: {}. Use file_delete for files", path));
+            }
+        }
+        Err(_) => return Err(format!("Directory does not exist: {}", path)),
+    }
+
+    // Warn about recursive deletion
+    if recursive {
+        warn!("Recursive directory deletion requested for: {}", path);
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Delete, &state).await? {
@@ -602,6 +770,7 @@ pub async fn dir_delete(
     }
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Traverse directory with glob pattern
 #[tauri::command]
 pub async fn dir_traverse(
@@ -613,6 +782,27 @@ pub async fn dir_traverse(
         "Traversing directory: {} with pattern: {}",
         path, glob_pattern
     );
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    // Validate glob pattern doesn't contain dangerous elements
+    if glob_pattern.contains("..") {
+        return Err("Glob pattern cannot contain directory traversal (..)".to_string());
+    }
+    if glob_pattern.len() > 1000 {
+        return Err(format!("Glob pattern too long: {} characters. Maximum is 1000", glob_pattern.len()));
+    }
+
+    // Verify path is a directory
+    match fs::metadata(&path) {
+        Ok(metadata) => {
+            if !metadata.is_dir() {
+                return Err(format!("Path is not a directory: {}", path));
+            }
+        }
+        Err(_) => return Err(format!("Directory does not exist: {}", path)),
+    }
 
     // Check permissions
     if !check_file_permission(&path, FileOperation::Read, &state).await? {
@@ -626,12 +816,18 @@ pub async fn dir_traverse(
         format!("{}/{}", path, glob_pattern)
     };
 
-    // Execute glob
+    // Execute glob with result limit to prevent DoS
     let mut results = Vec::new();
+    const MAX_RESULTS: usize = 10_000;
 
     match glob::glob(&full_pattern) {
         Ok(paths) => {
-            for entry in paths {
+            for (index, entry) in paths.enumerate() {
+                if index >= MAX_RESULTS {
+                    warn!("Glob result limit reached: {} files", MAX_RESULTS);
+                    break;
+                }
+
                 match entry {
                     Ok(path_buf) => {
                         results.push(path_buf.to_string_lossy().to_string());
@@ -789,6 +985,7 @@ pub struct WorkspaceFile {
     pub language: Option<String>,
 }
 
+// Updated Nov 16, 2025: Added comprehensive input validation
 /// Get list of files in workspace directory (non-recursive)
 #[tauri::command]
 pub async fn fs_get_workspace_files(
@@ -796,6 +993,19 @@ pub async fn fs_get_workspace_files(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<Vec<WorkspaceFile>, String> {
     debug!("Getting workspace files: {}", workspace_path);
+
+    // Validate path security
+    validate_path_security(&workspace_path)?;
+
+    // Verify it's a directory
+    match fs::metadata(&workspace_path) {
+        Ok(metadata) => {
+            if !metadata.is_dir() {
+                return Err(format!("Path is not a directory: {}", workspace_path));
+            }
+        }
+        Err(_) => return Err(format!("Directory does not exist: {}", workspace_path)),
+    }
 
     // Check permissions
     if !check_file_permission(&workspace_path, FileOperation::Read, &state).await? {

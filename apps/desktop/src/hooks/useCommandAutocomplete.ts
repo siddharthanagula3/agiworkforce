@@ -3,6 +3,8 @@
  *
  * Handles @command autocomplete for file, folder, url, web commands.
  * Similar to Cursor/Claude Code @-mentions.
+ *
+ * Updated Nov 16, 2025: Fixed cleanup issues with timers and abort controller
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -79,6 +81,7 @@ export function useCommandAutocomplete(
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
 
   /**
    * Fetch suggestions based on trigger and query
@@ -208,10 +211,13 @@ export function useCommandAutocomplete(
 
       debounceTimerRef.current = setTimeout(() => {
         void fetchSuggestions(trigger, query).then((suggestions) => {
-          setAutocompleteState((prev) => ({
-            ...prev,
-            suggestions,
-          }));
+          // Only update state if component is still mounted
+          if (isMountedRef.current) {
+            setAutocompleteState((prev) => ({
+              ...prev,
+              suggestions,
+            }));
+          }
         });
       }, debounceMs);
     },
@@ -299,12 +305,16 @@ export function useCommandAutocomplete(
    * Cleanup on unmount
    */
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
   }, []);

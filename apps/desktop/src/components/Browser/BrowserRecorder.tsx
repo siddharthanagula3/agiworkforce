@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm
 import { useState } from 'react';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
@@ -18,6 +19,7 @@ import {
   Code,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirm } from '../ui/ConfirmDialog';
 
 interface BrowserRecorderProps {
   className?: string;
@@ -36,6 +38,9 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
   const [codeFormat, setCodeFormat] = useState<'playwright' | 'puppeteer' | 'selenium'>('playwright');
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
 
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
   const handleStartRecording = () => {
     startRecording();
     toast.success('Recording started');
@@ -46,9 +51,17 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
     toast.success('Recording stopped');
   };
 
-  const handleClearRecording = () => {
+  // Updated Nov 16, 2025: Use accessible ConfirmDialog instead of window.confirm
+  const handleClearRecording = async () => {
     if (recordedSteps.length > 0) {
-      if (window.confirm('Are you sure you want to clear all recorded steps?')) {
+      const confirmed = await confirm({
+        title: 'Clear recording?',
+        description: 'Are you sure you want to clear all recorded steps? This action cannot be undone.',
+        confirmText: 'Clear',
+        variant: 'destructive',
+      });
+
+      if (confirmed) {
         clearRecording();
         toast.success('Recording cleared');
       }
@@ -385,6 +398,9 @@ try:
           </ScrollArea>
         </TabsContent>
       </Tabs>
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {confirmDialog}
     </div>
   );
 }

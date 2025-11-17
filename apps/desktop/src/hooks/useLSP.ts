@@ -1,6 +1,8 @@
 /**
  * LSP Integration Hook
  * Manages Language Server Protocol connections for code intelligence
+ *
+ * Updated Nov 16, 2025: Fixed cleanup dependencies and useEffect issues
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -85,9 +87,15 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
   const [diagnostics, setDiagnostics] = useState<Record<string, LSPDiagnostic[]>>({});
   const documentVersionRef = useRef<Record<string, number>>({});
 
+  // Use refs to avoid unnecessary recreations
+  const serverRef = useRef(server);
+  const isStartingRef = useRef(isStarting);
+  serverRef.current = server;
+  isStartingRef.current = isStarting;
+
   // Start LSP server
   const startServer = useCallback(async () => {
-    if (isStarting || server) return;
+    if (isStartingRef.current || serverRef.current) return;
 
     setIsStarting(true);
     setError(null);
@@ -105,11 +113,11 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
     } finally {
       setIsStarting(false);
     }
-  }, [language, rootPath, isStarting, server]);
+  }, [language, rootPath]);
 
   // Stop LSP server
   const stopServer = useCallback(async () => {
-    if (!server) return;
+    if (!serverRef.current) return;
 
     try {
       await invoke('lsp_stop_server', { language });
@@ -119,7 +127,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
     } catch (err) {
       console.error('Failed to stop LSP server:', err);
     }
-  }, [language, server]);
+  }, [language]);
 
   // Notify LSP of document open
   const didOpen = useCallback(
@@ -138,7 +146,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         console.error('Failed to notify LSP of document open:', err);
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Notify LSP of document change
@@ -160,7 +168,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         console.error('Failed to notify LSP of document change:', err);
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Notify LSP of document close
@@ -175,7 +183,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         console.error('Failed to notify LSP of document close:', err);
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Get completions
@@ -196,7 +204,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Get hover information
@@ -217,7 +225,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return null;
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Go to definition
@@ -238,7 +246,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Find references
@@ -259,7 +267,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Rename symbol
@@ -268,7 +276,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
       uri: string,
       line: number,
       character: number,
-      newName: string
+      newName: string,
     ): Promise<LSPWorkspaceEdit | null> => {
       if (!server) return null;
 
@@ -286,7 +294,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return null;
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Format document
@@ -305,7 +313,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Search workspace symbols
@@ -324,12 +332,16 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Get code actions
   const getCodeActions = useCallback(
-    async (uri: string, range: LSPRange, diagnostics: LSPDiagnostic[]): Promise<LSPCodeAction[]> => {
+    async (
+      uri: string,
+      range: LSPRange,
+      diagnostics: LSPDiagnostic[],
+    ): Promise<LSPCodeAction[]> => {
       if (!server) return [];
 
       try {
@@ -345,7 +357,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Get diagnostics for a document
@@ -364,7 +376,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         return [];
       }
     },
-    [language, server]
+    [language, server],
   );
 
   // Get all diagnostics
@@ -385,16 +397,20 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
 
   // Auto-start server on mount
   useEffect(() => {
-    if (autoStart && !server && !isStarting) {
+    if (autoStart) {
       startServer();
     }
 
+    // Cleanup on unmount
     return () => {
-      if (server) {
-        stopServer();
+      if (serverRef.current) {
+        void invoke('lsp_stop_server', { language }).catch((err) => {
+          console.error('Failed to stop LSP server on cleanup:', err);
+        });
       }
     };
-  }, [autoStart, server, isStarting, startServer, stopServer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]); // Only depend on autoStart and language, startServer is stable
 
   return {
     server,

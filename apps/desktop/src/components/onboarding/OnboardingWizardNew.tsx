@@ -46,10 +46,18 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
 
   const [selectedDemoData, setSelectedDemoData] = useState<OnboardingDemo | null>(null);
 
-  // Initialize onboarding on mount
+  // Updated Nov 16, 2025: Fixed dependency issues with refs
+  const initializedRef = useRef(false);
+
+  // Initialize onboarding on mount (only once)
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      initialize();
+    }
+    // Intentionally not including initialize to avoid re-initialization
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load demo data when demo is selected
   useEffect(() => {

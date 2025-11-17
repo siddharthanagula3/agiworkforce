@@ -60,6 +60,7 @@ describe('Window State Persistence - Integration Tests', () => {
 
     mockGetCurrentWindow.mockReturnValue(mockWindowInstance);
 
+    // Updated Nov 16, 2025: Fixed incorrect mock implementation for toggle_maximize
     // Mock invoke to simulate backend persistence
     mockInvoke.mockImplementation((command: string, args?: any) => {
       if (command === 'window_get_state') {
@@ -70,7 +71,9 @@ describe('Window State Persistence - Integration Tests', () => {
         return Promise.resolve();
       }
       if (command === 'window_toggle_maximize') {
-        persistedState.fullscreen = !persistedState.fullscreen;
+        // Bug fix: Toggle maximized state, not fullscreen
+        // Maximize and fullscreen are different window states
+        persistedState.maximized = !persistedState.maximized;
         return Promise.resolve();
       }
       if (command === 'window_set_pinned') {
@@ -144,14 +147,15 @@ describe('Window State Persistence - Integration Tests', () => {
   });
 
   describe('State Persistence on Changes', () => {
-    it('should persist fullscreen state when toggling maximize', async () => {
+    // Updated Nov 16, 2025: Fixed to test maximize state instead of fullscreen
+    it('should persist maximize state when toggling maximize', async () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Toggle to fullscreen
+      // Toggle to maximized
       await act(async () => {
         await result.current.actions.toggleMaximize();
       });
@@ -159,29 +163,30 @@ describe('Window State Persistence - Integration Tests', () => {
       // Verify backend was called
       expect(mockInvoke).toHaveBeenCalledWith('window_toggle_maximize');
 
-      // Simulate backend state update event
+      // Simulate backend state update event (maximized, not fullscreen)
       await act(async () => {
         if (stateEventCallback) {
           stateEventCallback({
-            payload: { ...persistedState, fullscreen: true },
+            payload: { ...persistedState, maximized: true },
           });
         }
       });
 
       // Verify state updated
       await waitFor(() => {
-        expect(result.current.state.fullscreen).toBe(true);
+        expect(result.current.state.maximized).toBe(true);
       });
 
       // Create a new hook instance to simulate app restart
       const { result: newResult } = renderHook(() => useWindowManager());
 
-      // Should restore the persisted fullscreen state
+      // Should restore the persisted maximize state
       await waitFor(() => {
-        expect(newResult.current.state.fullscreen).toBe(true);
+        expect(newResult.current.state.maximized).toBe(true);
       });
     });
 
+    // Updated Nov 16, 2025: Fixed to test maximize state instead of fullscreen
     it('should persist state across multiple toggles', async () => {
       const { result } = renderHook(() => useWindowManager());
 
@@ -189,39 +194,39 @@ describe('Window State Persistence - Integration Tests', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Toggle fullscreen on
+      // Toggle maximize on
       await act(async () => {
         await result.current.actions.toggleMaximize();
         if (stateEventCallback) {
           stateEventCallback({
-            payload: { ...persistedState, fullscreen: true },
+            payload: { ...persistedState, maximized: true },
           });
         }
       });
 
       await waitFor(() => {
-        expect(result.current.state.fullscreen).toBe(true);
+        expect(result.current.state.maximized).toBe(true);
       });
 
-      // Toggle fullscreen off
+      // Toggle maximize off
       await act(async () => {
         await result.current.actions.toggleMaximize();
         if (stateEventCallback) {
           stateEventCallback({
-            payload: { ...persistedState, fullscreen: false },
+            payload: { ...persistedState, maximized: false },
           });
         }
       });
 
       await waitFor(() => {
-        expect(result.current.state.fullscreen).toBe(false);
+        expect(result.current.state.maximized).toBe(false);
       });
 
       // Create new instance - should have latest state
       const { result: newResult } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(newResult.current.state.fullscreen).toBe(false);
+        expect(newResult.current.state.maximized).toBe(false);
       });
     });
   });
@@ -241,6 +246,7 @@ describe('Window State Persistence - Integration Tests', () => {
         await result.current.actions.setAlwaysOnTop(true);
       });
 
+      // Updated Nov 16, 2025: Fixed to update maximized state instead of fullscreen
       // Simulate backend events
       await act(async () => {
         if (stateEventCallback) {
@@ -249,8 +255,8 @@ describe('Window State Persistence - Integration Tests', () => {
               pinned: false,
               alwaysOnTop: true,
               dock: null,
-              maximized: false,
-              fullscreen: true,
+              maximized: true,
+              fullscreen: false,
             },
           });
         }
@@ -260,11 +266,12 @@ describe('Window State Persistence - Integration Tests', () => {
       await waitFor(() => {
         expect(result.current.state.pinned).toBe(false);
         expect(result.current.state.alwaysOnTop).toBe(true);
-        expect(result.current.state.fullscreen).toBe(true);
+        expect(result.current.state.maximized).toBe(true);
       });
     });
 
-    it('should handle dock and fullscreen state changes together', async () => {
+    // Updated Nov 16, 2025: Fixed to test maximize state instead of fullscreen
+    it('should handle dock and maximize state changes together', async () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
@@ -285,24 +292,24 @@ describe('Window State Persistence - Integration Tests', () => {
         expect(result.current.state.dock).toBe('left');
       });
 
-      // Enter fullscreen while docked
+      // Maximize while docked
       await act(async () => {
         await result.current.actions.toggleMaximize();
         if (stateEventCallback) {
           stateEventCallback({
-            payload: { ...persistedState, dock: 'left', fullscreen: true },
+            payload: { ...persistedState, dock: 'left', maximized: true },
           });
         }
       });
 
       await waitFor(() => {
         expect(result.current.state.dock).toBe('left');
-        expect(result.current.state.fullscreen).toBe(true);
+        expect(result.current.state.maximized).toBe(true);
       });
 
       // Verify persisted state has both
       expect(persistedState.dock).toBe('left');
-      expect(persistedState.fullscreen).toBe(true);
+      expect(persistedState.maximized).toBe(true);
     });
   });
 
@@ -327,7 +334,8 @@ describe('Window State Persistence - Integration Tests', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      const initialFullscreen = result.current.state.fullscreen;
+      // Updated Nov 16, 2025: Test maximize state instead of fullscreen
+      const initialMaximized = result.current.state.maximized;
 
       // Attempt toggle (will fail)
       await act(async () => {
@@ -336,7 +344,7 @@ describe('Window State Persistence - Integration Tests', () => {
 
       // State should remain unchanged after error
       await waitFor(() => {
-        expect(result.current.state.fullscreen).toBe(initialFullscreen);
+        expect(result.current.state.maximized).toBe(initialMaximized);
       });
 
       consoleErrorSpy.mockRestore();

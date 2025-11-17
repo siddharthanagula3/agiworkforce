@@ -1,7 +1,9 @@
+// Updated Nov 16, 2025: Added tokenBudgetStore import to module level to fix race condition
 import { create } from 'zustand';
 import { invoke, isTauri } from '../lib/tauri-mock';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { useTokenBudgetStore } from './tokenBudgetStore';
 import type {
   Conversation,
   ConversationUI,
@@ -109,8 +111,9 @@ function toConversationUI(
   };
 }
 
+// Updated Nov 16, 2025: Optimized to use spread operator instead of slice()
 function sortConversations(conversations: ConversationUI[]): ConversationUI[] {
-  return conversations.slice().sort((a, b) => {
+  return [...conversations].sort((a, b) => {
     if (Boolean(b.pinned) !== Boolean(a.pinned)) {
       return Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
     }
@@ -323,8 +326,8 @@ export const useChatStore = create<ChatState>()(
           return;
         }
 
+        // Updated Nov 16, 2025: Fixed async import race condition
         // Check token budget before sending
-        const { useTokenBudgetStore } = await import('./tokenBudgetStore');
         const budgetState = useTokenBudgetStore.getState();
         const { budget } = budgetState;
         if (budget.enabled && budget.currentUsage >= budget.limit) {
@@ -437,13 +440,18 @@ export const useChatStore = create<ChatState>()(
             const assistantMessageUI = toMessageUI(response.assistant_message);
             assistantMessageUI.streaming = false;
 
+            // Updated Nov 16, 2025: Optimized to avoid unnecessary array copies
             if (isSameConversation) {
-              const filtered = state.messages.filter(
-                (msg) => msg.id !== userMessageUI.id && msg.id !== assistantMessageUI.id,
-              );
-              state.messages = [...filtered, userMessageUI, assistantMessageUI].sort(
-                (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-              );
+              // Remove duplicates and add new messages in one pass
+              const newMessages: MessageUI[] = [];
+              for (const msg of state.messages) {
+                if (msg.id !== userMessageUI.id && msg.id !== assistantMessageUI.id) {
+                  newMessages.push(msg);
+                }
+              }
+              newMessages.push(userMessageUI, assistantMessageUI);
+              newMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+              state.messages = newMessages;
             } else {
               state.messages = [userMessageUI, assistantMessageUI];
             }
@@ -739,111 +747,148 @@ async function initializeStreamListeners() {
   }
 }
 
+// Updated Nov 16, 2025: Added error handling and race condition guards
 function handleStreamStart(payload: ChatStreamStartPayload) {
-  useChatStore.setState((state) => {
-    let conversationsChanged = false;
-    state.conversations = state.conversations.map((conversation) => {
-      if (conversation.id !== payload.conversationId) {
-        return conversation;
+  try {
+    useChatStore.setState((state) => {
+      // Race condition guard: verify conversation still exists
+      const conversationExists = state.conversations.some((c) => c.id === payload.conversationId);
+      if (!conversationExists) {
+        console.warn('[chatStore] Stream start for non-existent conversation:', payload.conversationId);
+        return state;
       }
-      conversationsChanged = true;
-      return {
-        ...conversation,
-        updatedAt: new Date(payload.createdAt),
-        lastMessage: '',
-      };
-    });
 
-    if (conversationsChanged) {
-      const pinnedSet = new Set(state.pinnedConversations);
-      state.conversations = applyPinnedState(state.conversations, pinnedSet);
-    }
-
-    if (state.activeConversationId === payload.conversationId) {
-      const timestamp = new Date(payload.createdAt);
-      const hasExisting = state.messages.some((message) => message.id === payload.messageId);
-
-      if (hasExisting) {
-        state.messages = state.messages.map((message) =>
-          message.id === payload.messageId ? { ...message, timestamp, streaming: true } : message,
-        );
-      } else {
-        const placeholder: MessageUI = {
-          id: payload.messageId,
-          conversation_id: payload.conversationId,
-          role: 'assistant',
-          content: '',
-          created_at: payload.createdAt,
-          timestamp,
-          streaming: true,
+      let conversationsChanged = false;
+      state.conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== payload.conversationId) {
+          return conversation;
+        }
+        conversationsChanged = true;
+        return {
+          ...conversation,
+          updatedAt: new Date(payload.createdAt),
+          lastMessage: '',
         };
-        state.messages = [...state.messages, placeholder];
+      });
+
+      if (conversationsChanged) {
+        const pinnedSet = new Set(state.pinnedConversations);
+        state.conversations = applyPinnedState(state.conversations, pinnedSet);
       }
-    }
-  });
+
+      if (state.activeConversationId === payload.conversationId) {
+        const timestamp = new Date(payload.createdAt);
+        const hasExisting = state.messages.some((message) => message.id === payload.messageId);
+
+        if (hasExisting) {
+          state.messages = state.messages.map((message) =>
+            message.id === payload.messageId ? { ...message, timestamp, streaming: true } : message,
+          );
+        } else {
+          const placeholder: MessageUI = {
+            id: payload.messageId,
+            conversation_id: payload.conversationId,
+            role: 'assistant',
+            content: '',
+            created_at: payload.createdAt,
+            timestamp,
+            streaming: true,
+          };
+          state.messages = [...state.messages, placeholder];
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[chatStore] Error in handleStreamStart:', error);
+  }
 }
 
+// Updated Nov 16, 2025: Added error handling and race condition guards
 function handleStreamChunk(payload: ChatStreamChunkPayload) {
-  useChatStore.setState((state) => {
-    let conversationsChanged = false;
-    state.conversations = state.conversations.map((conversation) => {
-      if (conversation.id !== payload.conversationId) {
-        return conversation;
+  try {
+    useChatStore.setState((state) => {
+      // Race condition guard: verify conversation still exists
+      const conversationExists = state.conversations.some((c) => c.id === payload.conversationId);
+      if (!conversationExists) {
+        console.warn('[chatStore] Stream chunk for non-existent conversation:', payload.conversationId);
+        return state;
       }
-      conversationsChanged = true;
-      return {
-        ...conversation,
-        lastMessage: payload.content,
-        updatedAt: new Date(),
-      };
-    });
 
-    if (conversationsChanged) {
-      const pinnedSet = new Set(state.pinnedConversations);
-      state.conversations = applyPinnedState(state.conversations, pinnedSet);
-    }
-
-    if (state.activeConversationId === payload.conversationId) {
-      const hasExisting = state.messages.some((message) => message.id === payload.messageId);
-
-      if (hasExisting) {
-        state.messages = state.messages.map((message) =>
-          message.id === payload.messageId
-            ? { ...message, content: payload.content, streaming: true }
-            : message,
-        );
-      } else {
-        const timestamp = new Date();
-        const placeholder: MessageUI = {
-          id: payload.messageId,
-          conversation_id: payload.conversationId,
-          role: 'assistant',
-          content: payload.content,
-          created_at: timestamp.toISOString(),
-          timestamp,
-          streaming: true,
+      let conversationsChanged = false;
+      state.conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== payload.conversationId) {
+          return conversation;
+        }
+        conversationsChanged = true;
+        return {
+          ...conversation,
+          lastMessage: payload.content,
+          updatedAt: new Date(),
         };
-        state.messages = [...state.messages, placeholder];
+      });
+
+      if (conversationsChanged) {
+        const pinnedSet = new Set(state.pinnedConversations);
+        state.conversations = applyPinnedState(state.conversations, pinnedSet);
       }
-    }
-  });
+
+      if (state.activeConversationId === payload.conversationId) {
+        const hasExisting = state.messages.some((message) => message.id === payload.messageId);
+
+        if (hasExisting) {
+          state.messages = state.messages.map((message) =>
+            message.id === payload.messageId
+              ? { ...message, content: payload.content, streaming: true }
+              : message,
+          );
+        } else {
+          const timestamp = new Date();
+          const placeholder: MessageUI = {
+            id: payload.messageId,
+            conversation_id: payload.conversationId,
+            role: 'assistant',
+            content: payload.content,
+            created_at: timestamp.toISOString(),
+            timestamp,
+            streaming: true,
+          };
+          state.messages = [...state.messages, placeholder];
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[chatStore] Error in handleStreamChunk:', error);
+  }
 }
 
+// Updated Nov 16, 2025: Added error handling and race condition guards
 function handleStreamEnd(payload: ChatStreamEndPayload) {
-  useChatStore.setState((state) => {
-    if (state.activeConversationId !== payload.conversationId) {
-      return;
-    }
+  try {
+    useChatStore.setState((state) => {
+      // Race condition guard: verify conversation still exists
+      const conversationExists = state.conversations.some((c) => c.id === payload.conversationId);
+      if (!conversationExists) {
+        console.warn('[chatStore] Stream end for non-existent conversation:', payload.conversationId);
+        return state;
+      }
 
-    const hasExisting = state.messages.some((message) => message.id === payload.messageId);
-    if (!hasExisting) {
-      return;
-    }
+      if (state.activeConversationId !== payload.conversationId) {
+        return state;
+      }
 
-    state.messages = state.messages.map((message) =>
-      message.id === payload.messageId ? { ...message, streaming: false } : message,
-    );
-  });
+      const hasExisting = state.messages.some((message) => message.id === payload.messageId);
+      if (!hasExisting) {
+        console.warn('[chatStore] Stream end for non-existent message:', payload.messageId);
+        return state;
+      }
+
+      state.messages = state.messages.map((message) =>
+        message.id === payload.messageId ? { ...message, streaming: false } : message,
+      );
+    });
+  } catch (error) {
+    console.error('[chatStore] Error in handleStreamEnd:', error);
+  }
 }
 
 // ========================================

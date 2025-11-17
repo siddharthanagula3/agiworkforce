@@ -16,7 +16,7 @@ import {
 } from '../types/analytics';
 import { analytics } from '../services/analytics';
 import { performanceMonitor } from '../services/performance';
-import { errorTracking } from '../services/errorTracking';
+import { errorTracking, ErrorSeverity } from '../services/errorTracking';
 import { featureFlags } from '../services/featureFlags';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -96,7 +96,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
           error instanceof Error ? error : new Error(String(error)),
           {
             component: 'analyticsStore',
-            severity: 'medium' as any,
+            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
           }
         );
       } finally {
@@ -116,7 +116,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
           error instanceof Error ? error : new Error(String(error)),
           {
             component: 'analyticsStore',
-            severity: 'medium' as any,
+            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
           }
         );
       } finally {
@@ -149,7 +149,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
           error instanceof Error ? error : new Error(String(error)),
           {
             component: 'analyticsStore',
-            severity: 'medium' as any,
+            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
           }
         );
       } finally {
@@ -189,7 +189,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
           error instanceof Error ? error : new Error(String(error)),
           {
             component: 'analyticsStore',
-            severity: 'medium' as any,
+            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
           }
         );
       }
