@@ -93,9 +93,6 @@ pub mod productivity;
 // Document MCP (M16) - Word, Excel, PDF support
 pub mod document;
 
-// Autonomous Agent System
-pub mod agent;
-
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 
