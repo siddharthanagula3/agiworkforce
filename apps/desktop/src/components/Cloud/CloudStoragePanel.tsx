@@ -1,3 +1,4 @@
+// Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm/prompt/alert
 import { useEffect, useMemo, useState } from 'react';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import {
@@ -18,6 +19,9 @@ import { useCloudStore } from '../../stores/cloudStore';
 import type { CloudProvider } from '../../types/cloud';
 import { formatBytes } from '../../lib/utils';
 import { cn } from '../../lib/utils';
+import { useConfirm } from '../ui/ConfirmDialog';
+import { usePrompt } from '../ui/PromptDialog';
+import { toast } from 'sonner';
 
 const PROVIDER_LABELS: Record<CloudProvider, string> = {
   google_drive: 'Google Drive',
@@ -61,6 +65,10 @@ export function CloudStoragePanel() {
   const [oauthState, setOauthState] = useState('');
   const [oauthCode, setOauthCode] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Updated Nov 16, 2025: Use accessible dialogs
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  const { prompt, dialog: promptDialog } = usePrompt();
 
   useEffect(() => {
     void refreshAccounts();
@@ -108,9 +116,10 @@ export function CloudStoragePanel() {
     });
   };
 
+  // Updated Nov 16, 2025: Use toast instead of window.alert
   const handleCompleteConnect = async () => {
     if (!oauthState || !oauthCode) {
-      window.alert('State and authorization code are required to complete the flow.');
+      toast.error('State and authorization code are required to complete the flow.');
       return;
     }
     await completeConnect(oauthState.trim(), oauthCode.trim());
@@ -159,8 +168,15 @@ export function CloudStoragePanel() {
     await downloadFile(path, savePath);
   };
 
+  // Updated Nov 16, 2025: Use accessible PromptDialog instead of window.prompt
   const handleCreateFolder = async () => {
-    const folderName = window.prompt('Folder name');
+    const folderName = await prompt({
+      title: 'Create folder',
+      description: 'Enter a name for the new folder',
+      label: 'Folder name',
+      placeholder: 'my-folder',
+    });
+
     if (!folderName) {
       return;
     }
@@ -172,18 +188,27 @@ export function CloudStoragePanel() {
     await createFolder(remotePath);
   };
 
+  // Updated Nov 16, 2025: Use accessible ConfirmDialog instead of window.confirm
   const handleDelete = async (path: string) => {
-    if (!window.confirm('Delete this item?')) {
+    const confirmed = await confirm({
+      title: 'Delete item?',
+      description: 'Are you sure you want to delete this item? This action cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    });
+
+    if (!confirmed) {
       return;
     }
     await deleteEntry(path);
   };
 
+  // Updated Nov 16, 2025: Use toast instead of window.alert
   const handleShare = async (path: string) => {
     const link = await shareLink(path);
     if (link?.url) {
       await navigator.clipboard.writeText(link.url);
-      window.alert('Share link copied to clipboard.');
+      toast.success('Share link copied to clipboard.');
     }
   };
 
@@ -484,6 +509,10 @@ export function CloudStoragePanel() {
         Tip: OAuth requires redirect handling. Use a localhost endpoint that captures the `code`
         parameter and paste it above to complete setup.
       </div>
+
+      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+      {confirmDialog}
+      {promptDialog}
     </div>
   );
 }

@@ -97,11 +97,15 @@ impl AppState {
             .unwrap_or_else(|_| PersistentWindowState::default())
     }
 
+    // Updated Nov 16, 2025: Replaced .unwrap() with proper error handling
     pub fn update<F>(&self, mutator: F) -> anyhow::Result<()>
     where
         F: FnOnce(&mut PersistentWindowState) -> bool,
     {
-        let mut guard = self.inner.write().unwrap();
+        let mut guard = self
+            .inner
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
         let mutated = mutator(&mut guard);
         if mutated {
             self.persist_locked(&guard)?;
@@ -112,8 +116,12 @@ impl AppState {
     pub fn with_state<F, T>(&self, accessor: F) -> T
     where
         F: FnOnce(&PersistentWindowState) -> T,
+        T: Default,
     {
-        accessor(&self.inner.read().unwrap())
+        self.inner
+            .read()
+            .map(|guard| accessor(&guard))
+            .unwrap_or_default()
     }
 
     pub fn is_events_suppressed(&self) -> bool {
