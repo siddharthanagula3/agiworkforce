@@ -1,7 +1,7 @@
 # AGI Workforce: Consolidated Research Summary
 
 **Document Version:** 1.0
-**Last Updated:** November 14, 2025
+**Last Updated:** November 16, 2025
 **Research Period:** October-November 2025
 
 ---
