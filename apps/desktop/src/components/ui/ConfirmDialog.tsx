@@ -94,7 +94,6 @@ export function useConfirm() {
     confirmText: string;
     cancelText: string;
     variant: 'default' | 'destructive';
-    resolve?: (value: boolean) => void;
   }>({
     open: false,
     title: '',
@@ -103,6 +102,8 @@ export function useConfirm() {
     cancelText: 'Cancel',
     variant: 'default',
   });
+  const resolverRef = React.useRef<((value: boolean) => void) | null>(null);
+  const resolvingRef = React.useRef(false);
 
   const confirm = React.useCallback(
     (options: {
@@ -113,6 +114,7 @@ export function useConfirm() {
       variant?: 'default' | 'destructive';
     }) => {
       return new Promise<boolean>((resolve) => {
+        resolverRef.current = resolve;
         setState({
           open: true,
           title: options.title,
@@ -120,28 +122,36 @@ export function useConfirm() {
           confirmText: options.confirmText ?? 'Confirm',
           cancelText: options.cancelText ?? 'Cancel',
           variant: options.variant ?? 'default',
-          resolve,
         });
       });
     },
     [],
   );
 
-  const handleConfirm = React.useCallback(() => {
-    state.resolve?.(true);
+  const finalize = React.useCallback((result: boolean) => {
+    resolvingRef.current = true;
+    resolverRef.current?.(result);
+    resolverRef.current = null;
     setState((prev) => ({ ...prev, open: false }));
-  }, [state.resolve]);
+  }, []);
+
+  const handleConfirm = React.useCallback(() => {
+    finalize(true);
+  }, [finalize]);
 
   const handleCancel = React.useCallback(() => {
-    state.resolve?.(false);
-    setState((prev) => ({ ...prev, open: false }));
-  }, [state.resolve]);
+    finalize(false);
+  }, [finalize]);
 
   const dialog = (
     <ConfirmDialog
       open={state.open}
       onOpenChange={(open) => {
         if (!open) {
+          if (resolvingRef.current) {
+            resolvingRef.current = false;
+            return;
+          }
           handleCancel();
         }
       }}

@@ -497,7 +497,7 @@ impl ApiClient {
 
 impl Default for ApiClient {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to construct default ApiClient")
     }
 }
 
@@ -522,13 +522,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_api_client_creation() {
-        let client = ApiClient::new();
+        let client = ApiClient::new().expect("Failed to create ApiClient for test");
         assert_eq!(client.default_timeout, Duration::from_secs(30));
     }
 
     #[tokio::test]
     async fn test_get_request() {
-        let client = ApiClient::new();
+        let client = ApiClient::new().expect("Failed to create ApiClient for test");
 
         // Test with httpbin.org (public testing API)
         let result = client.get("https://httpbin.org/get").await;

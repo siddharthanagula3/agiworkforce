@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { websocketClient, UserPresence } from '../../services/websocketClient';
 
@@ -23,6 +23,15 @@ const statusLabels = {
 export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({ teamId }) => {
   const [presence, setPresence] = useState<UserPresence[]>([]);
 
+  const loadPresence = useCallback(async () => {
+    try {
+      const teamPresence = await invoke<UserPresence[]>('get_team_presence', { teamId });
+      setPresence(teamPresence);
+    } catch (error) {
+      console.error('Failed to load team presence:', error);
+    }
+  }, [teamId]);
+
   useEffect(() => {
     loadPresence();
 
@@ -40,16 +49,7 @@ export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({ teamId }) 
       unsubscribe();
       clearInterval(interval);
     };
-  }, [teamId]);
-
-  const loadPresence = async () => {
-    try {
-      const teamPresence = await invoke<UserPresence[]>('get_team_presence', { teamId });
-      setPresence(teamPresence);
-    } catch (error) {
-      console.error('Failed to load team presence:', error);
-    }
-  };
+  }, [loadPresence]);
 
   const updatePresenceState = (event: { user_id: string; status: UserPresence['status'] }) => {
     setPresence((prev) => {

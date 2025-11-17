@@ -313,10 +313,6 @@ export const useSettingsStore = create<SettingsState>()(
       loadSettings: async () => {
         set({ loading: true, error: null });
 
-        // Create a unique load ID to detect if another load started during execution
-        const loadId = Date.now();
-        const startingLoadId = loadId;
-
         try {
           // Load settings from backend/database
           const settings = await invoke<{

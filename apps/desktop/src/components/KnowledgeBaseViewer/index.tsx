@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Brain,
   Search,
@@ -46,7 +46,7 @@ export const KnowledgeBaseViewer: React.FC<KnowledgeBaseViewerProps> = ({
   const [sortBy, setSortBy] = useState<SortBy>('importance');
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
 
-  const fetchKnowledge = async () => {
+  const fetchKnowledge = useCallback(async () => {
     try {
       let data: KnowledgeEntry[];
 
@@ -71,7 +71,7 @@ export const KnowledgeBaseViewer: React.FC<KnowledgeBaseViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, maxEntries]);
 
   useEffect(() => {
     fetchKnowledge();
@@ -81,7 +81,7 @@ export const KnowledgeBaseViewer: React.FC<KnowledgeBaseViewerProps> = ({
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [searchQuery, autoRefresh, refreshInterval, maxEntries]);
+  }, [autoRefresh, fetchKnowledge, refreshInterval]);
 
   useEffect(() => {
     let filtered = [...entries];

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Dangerous tools that require user approval in safe mode
 const DANGEROUS_TOOLS: &[&str] = &[
@@ -150,9 +150,7 @@ impl ToolExecutor {
         }
 
         // 🔒 Security Check: Dangerous operations in safe mode
-        if is_dangerous_tool(&tool_call.name)
-            && self.conversation_mode.as_deref() == Some("safe")
-        {
+        if is_dangerous_tool(&tool_call.name) && self.conversation_mode.as_deref() == Some("safe") {
             tracing::warn!(
                 "[Security] Dangerous tool '{}' requested in safe mode. Emitting approval request.",
                 tool_call.name
@@ -160,27 +158,33 @@ impl ToolExecutor {
 
             // Emit approval request event
             if let Some(app_handle) = &self.app_handle {
-                let _ = app_handle.emit("approval:request", json!({
-                    "id": uuid::Uuid::new_v4().to_string(),
-                    "type": "tool_execution",
-                    "toolName": tool_call.name,
-                    "description": format!("Agent wants to execute: {}", tool.name),
-                    "riskLevel": "high",
-                    "details": {
-                        "tool": tool.name,
-                        "arguments": args,
-                    },
-                    "status": "pending",
-                }));
+                let _ = app_handle.emit(
+                    "approval:request",
+                    json!({
+                        "id": uuid::Uuid::new_v4().to_string(),
+                        "type": "tool_execution",
+                        "toolName": tool_call.name,
+                        "description": format!("Agent wants to execute: {}", tool.name),
+                        "riskLevel": "high",
+                        "details": {
+                            "tool": tool.name,
+                            "arguments": args,
+                        },
+                        "status": "pending",
+                    }),
+                );
 
                 // Also emit agent status update
-                let _ = app_handle.emit("agent:status:update", json!({
-                    "id": "main_agent",
-                    "name": "AGI Workforce Agent",
-                    "status": "paused",
-                    "currentStep": format!("Waiting for approval to execute: {}", tool.name),
-                    "progress": 50
-                }));
+                let _ = app_handle.emit(
+                    "agent:status:update",
+                    json!({
+                        "id": "main_agent",
+                        "name": "AGI Workforce Agent",
+                        "status": "paused",
+                        "currentStep": format!("Waiting for approval to execute: {}", tool.name),
+                        "progress": 50
+                    }),
+                );
             }
 
             // TODO: In production, wait for approval response
@@ -201,13 +205,16 @@ impl ToolExecutor {
 
         // Emit agent status: executing tool
         if let Some(app_handle) = &self.app_handle {
-            let _ = app_handle.emit("agent:status:update", json!({
-                "id": "main_agent",
-                "name": "AGI Workforce Agent",
-                "status": "running",
-                "currentStep": format!("Executing: {}", tool.name),
-                "progress": 60
-            }));
+            let _ = app_handle.emit(
+                "agent:status:update",
+                json!({
+                    "id": "main_agent",
+                    "name": "AGI Workforce Agent",
+                    "status": "running",
+                    "currentStep": format!("Executing: {}", tool.name),
+                    "progress": 60
+                }),
+            );
         }
 
         // Execute the tool based on its ID

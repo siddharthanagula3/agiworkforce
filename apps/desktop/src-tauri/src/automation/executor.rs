@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 use super::inspector::{ElementSelector, InspectorService};
-use crate::automation::{global_service, input::MouseButton};
+use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 
 /// Script action to execute
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -284,12 +284,8 @@ impl ExecutorService {
     async fn execute_click(&self, action: &ScriptAction) -> Result<()> {
         let (x, y) = self.resolve_coordinates(action)?;
 
-        let mut guard = global_service()?;
-        let service = guard
-            .as_mut()
-            .ok_or_else(|| anyhow!("Automation service unavailable"))?;
-
-        service.mouse.click(x, y, MouseButton::Left)?;
+        let mouse = MouseSimulator::new()?;
+        mouse.click(x, y, MouseButton::Left)?;
         Ok(())
     }
 
@@ -303,20 +299,13 @@ impl ExecutorService {
         // Optionally click first if coordinates provided
         if action.coordinates.is_some() || action.selector.is_some() {
             let (x, y) = self.resolve_coordinates(action)?;
-            let mut guard = global_service()?;
-            let service = guard
-                .as_mut()
-                .ok_or_else(|| anyhow!("Automation service unavailable"))?;
-            service.mouse.click(x, y, MouseButton::Left)?;
+            let mouse = MouseSimulator::new()?;
+            mouse.click(x, y, MouseButton::Left)?;
             sleep(Duration::from_millis(100)).await;
         }
 
-        let mut guard = global_service()?;
-        let service = guard
-            .as_mut()
-            .ok_or_else(|| anyhow!("Automation service unavailable"))?;
-
-        service.keyboard.send_text(text).await?;
+        let keyboard = KeyboardSimulator::new()?;
+        keyboard.send_text(text).await?;
         Ok(())
     }
 
