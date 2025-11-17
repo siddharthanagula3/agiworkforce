@@ -103,19 +103,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
   }, [isResizing, position, onWidthChange, setSidecarWidth]);
 
   if (!isOpen) {
-    return (
-      <div
-        className={`fixed ${position === 'right' ? 'right-0' : 'left-0'} top-0 bottom-0 w-12 bg-gray-100 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center ${className}`}
-      >
-        <button
-          onClick={onToggle}
-          className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-          title="Open sidecar"
-        >
-          {position === 'right' ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-        </button>
-      </div>
-    );
+    return null;
   }
 
   const sections: SidecarSection[] = [

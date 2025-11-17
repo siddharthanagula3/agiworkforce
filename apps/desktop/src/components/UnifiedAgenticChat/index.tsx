@@ -10,6 +10,7 @@ import { ChatInputToolbar } from './ChatInputToolbar';
 import { ApprovalModal } from './ApprovalModal';
 import { PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
+import ErrorBoundary from '../ErrorBoundary';
 
 export interface UnifiedAgenticChatProps {
   className?: string;
@@ -69,6 +70,27 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
 
   // Handle message sending
   const handleSendMessage = async (content: string, options: SendOptions) => {
+    // Validate that a model is selected
+    if (!selectedModel || !selectedProvider) {
+      console.error('No model selected - cannot send message');
+      // Try to initialize from settings
+      const { initializeModelStoreFromSettings } = await import('../../stores/modelStore');
+      await initializeModelStoreFromSettings();
+
+      // Check again after initialization
+      const modelStore = useModelStore.getState();
+      if (!modelStore.selectedModel || !modelStore.selectedProvider) {
+        // Show error to user
+        addMessage({
+          role: 'assistant',
+          content:
+            'Error: No model selected. Please select a model from the model selector in the toolbar before sending messages.',
+          metadata: { streaming: false, error: true },
+        });
+        return;
+      }
+    }
+
     // Add user message
     addMessage({
       role: 'user',
@@ -155,7 +177,7 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
 
   return (
     <div
-      className={`unified-agentic-chat h-screen flex flex-col bg-gray-50 dark:bg-gray-900 ${layoutClasses[layout]} ${className}`}
+      className={`unified-agentic-chat h-full flex flex-col bg-gray-50 dark:bg-gray-900 ${layoutClasses[layout]} ${className}`}
     >
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
@@ -213,11 +235,29 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
 
         {/* Sidecar Panel */}
         {sidecarOpen && (
-          <SidecarPanel
-            isOpen={sidecarOpen}
-            onToggle={handleSidecarToggle}
-            position={sidecarPosition}
-          />
+          <ErrorBoundary
+            fallback={
+              <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center p-4">
+                <div className="text-center">
+                  <p className="text-sm text-red-600 dark:text-red-400 mb-2">
+                    Sidecar error
+                  </p>
+                  <button
+                    onClick={handleSidecarToggle}
+                    className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Close sidecar
+                  </button>
+                </div>
+              </div>
+            }
+          >
+            <SidecarPanel
+              isOpen={sidecarOpen}
+              onToggle={handleSidecarToggle}
+              position={sidecarPosition}
+            />
+          </ErrorBoundary>
         )}
       </div>
 
