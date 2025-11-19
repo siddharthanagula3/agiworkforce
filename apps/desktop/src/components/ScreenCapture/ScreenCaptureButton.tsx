@@ -19,6 +19,10 @@ interface ScreenCaptureButtonProps {
   onCaptureComplete?: (result: CaptureResult) => void;
   variant?: 'default' | 'ghost' | 'outline';
   size?: 'default' | 'sm' | 'lg' | 'icon';
+  disabled?: boolean;
+  suppressToasts?: boolean;
+  mode?: 'menu' | 'quick';
+  className?: string;
 }
 
 export function ScreenCaptureButton({
@@ -26,6 +30,10 @@ export function ScreenCaptureButton({
   onCaptureComplete,
   variant = 'ghost',
   size = 'icon',
+  disabled = false,
+  suppressToasts = false,
+  mode = 'menu',
+  className,
 }: ScreenCaptureButtonProps) {
   const [showRegionSelector, setShowRegionSelector] = useState(false);
   const { captureFullScreen, captureRegion, isCapturing } = useScreenCapture();
@@ -33,7 +41,9 @@ export function ScreenCaptureButton({
   const handleFullScreen = async () => {
     try {
       const result = await captureFullScreen(conversationId);
-      toast.success('Screen captured successfully');
+      if (!suppressToasts) {
+        toast.success('Screen captured successfully');
+      }
       onCaptureComplete?.(result);
     } catch (error) {
       toast.error('Failed to capture screen');
@@ -49,7 +59,9 @@ export function ScreenCaptureButton({
     setShowRegionSelector(false);
     try {
       const result = await captureRegion(region, conversationId);
-      toast.success('Region captured successfully');
+      if (!suppressToasts) {
+        toast.success('Region captured successfully');
+      }
       onCaptureComplete?.(result);
     } catch (error) {
       toast.error('Failed to capture region');
@@ -61,13 +73,45 @@ export function ScreenCaptureButton({
     setShowRegionSelector(false);
   };
 
+  if (mode === 'quick') {
+    return (
+      <>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={variant}
+              size={size}
+              disabled={isCapturing || disabled}
+              onClick={handleRegionCapture}
+              className={className}
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Capture screenshot</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {showRegionSelector && (
+          <RegionSelector onConfirm={handleRegionConfirm} onCancel={handleRegionCancel} />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant={variant} size={size} disabled={isCapturing}>
+              <Button
+                variant={variant}
+                size={size}
+                disabled={isCapturing || disabled}
+                className={className}
+              >
                 <Camera className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -78,13 +122,13 @@ export function ScreenCaptureButton({
         </Tooltip>
 
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleFullScreen} disabled={isCapturing}>
+          <DropdownMenuItem onClick={handleFullScreen} disabled={isCapturing || disabled}>
             <Monitor className="mr-2 h-4 w-4" />
             <span>Capture Full Screen</span>
             <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+S</span>
           </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={handleRegionCapture} disabled={isCapturing}>
+          <DropdownMenuItem onClick={handleRegionCapture} disabled={isCapturing || disabled}>
             <CropIcon className="mr-2 h-4 w-4" />
             <span>Capture Region</span>
             <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+R</span>

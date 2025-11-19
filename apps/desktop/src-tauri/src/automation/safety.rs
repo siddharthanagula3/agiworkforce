@@ -215,10 +215,7 @@ mod tests {
     fn test_get_risk_level() {
         let safety = ComputerUseSafety::new();
 
-        assert_eq!(
-            safety.get_risk_level(&ComputerAction::Wait { ms: 1000 }),
-            0
-        );
+        assert_eq!(safety.get_risk_level(&ComputerAction::Wait { ms: 1000 }), 0);
         assert_eq!(
             safety.get_risk_level(&ComputerAction::Scroll {
                 direction: crate::automation::types::ScrollDirection::Down,
