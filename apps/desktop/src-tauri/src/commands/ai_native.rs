@@ -32,7 +32,10 @@ pub async fn ai_add_constraint(
     _enforced: bool,
     _metadata: serde_json::Value,
 ) -> Result<String, String> {
-    Err("ai_add_constraint is not implemented. This command was part of the deleted agent/ module.".to_string())
+    Err(
+        "ai_add_constraint is not implemented. This command was part of the deleted agent/ module."
+            .to_string(),
+    )
 }
 
 /// Generate code based on description and constraints (STUBBED - not implemented)
@@ -44,7 +47,10 @@ pub async fn ai_generate_code(
     _target_files: Vec<String>,
     _context: Option<String>,
 ) -> Result<String, String> {
-    Err("ai_generate_code is not implemented. This command was part of the deleted agent/ module.".to_string())
+    Err(
+        "ai_generate_code is not implemented. This command was part of the deleted agent/ module."
+            .to_string(),
+    )
 }
 
 /// Refactor existing code (STUBBED - not implemented)
@@ -54,7 +60,10 @@ pub async fn ai_refactor_code(
     _files: Vec<String>,
     _description: String,
 ) -> Result<String, String> {
-    Err("ai_refactor_code is not implemented. This command was part of the deleted agent/ module.".to_string())
+    Err(
+        "ai_refactor_code is not implemented. This command was part of the deleted agent/ module."
+            .to_string(),
+    )
 }
 
 /// Generate tests for files (STUBBED - not implemented)
@@ -64,7 +73,10 @@ pub async fn ai_generate_tests(
     _source_files: Vec<String>,
     _test_framework: Option<String>,
 ) -> Result<Vec<String>, String> {
-    Err("ai_generate_tests is not implemented. This command was part of the deleted agent/ module.".to_string())
+    Err(
+        "ai_generate_tests is not implemented. This command was part of the deleted agent/ module."
+            .to_string(),
+    )
 }
 
 /// Get project context (STUBBED - not implemented)
@@ -90,5 +102,8 @@ pub async fn ai_access_file(
     _file_path: String,
     _context: Option<String>,
 ) -> Result<String, String> {
-    Err("ai_access_file is not implemented. This command was part of the deleted agent/ module.".to_string())
+    Err(
+        "ai_access_file is not implemented. This command was part of the deleted agent/ module."
+            .to_string(),
+    )
 }

@@ -1,54 +1,46 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  PanelRightOpen,
+  PanelRightClose,
+  Shield,
+  ShieldOff,
+  Mic,
+  Paperclip,
+  Send,
+  Camera,
+} from 'lucide-react';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { ChatMessageList } from './ChatMessageList';
-import { ChatInputArea, SendOptions } from './ChatInputArea';
+import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { SidecarPanel } from './SidecarPanel';
 import { AgentStatusBanner } from './AgentStatusBanner';
-import { ChatInputToolbar } from './ChatInputToolbar';
 import { ApprovalModal } from './ApprovalModal';
-import { PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { cn } from '../../lib/utils';
+import { QuickModelSelector } from '../Chat/QuickModelSelector';
 import { useModelStore } from '../../stores/modelStore';
-import ErrorBoundary from '../ErrorBoundary';
+import { useSettingsStore } from '../../stores/settingsStore';
 
-export interface UnifiedAgenticChatProps {
+const heroChips = ['Code', 'Write', 'Learn', 'Automate', 'Claude’s pick', 'Life stuff'];
+
+const personaOptions = ['ChatGPT 5.1 Thinking', 'Claude Opus 4.1', 'GPT-4o Omni', 'Gemini 2.5 Pro'];
+
+export const UnifiedAgenticChat: React.FC<{
   className?: string;
   layout?: 'default' | 'compact' | 'immersive';
   sidecarPosition?: 'right' | 'left' | 'bottom';
   defaultSidecarOpen?: boolean;
   onSendMessage?: (content: string, options: SendOptions) => Promise<void>;
-}
-
-/**
- * UnifiedAgenticChat - Main container for the unified agentic chat interface
- *
- * This component provides a complete chat interface with:
- * - Message list with virtual scrolling
- * - Input area with attachments and context
- * - Sidecar panel for operations, reasoning, files, etc.
- * - Mission Control modal overlay (future)
- * - Global keyboard shortcuts (future)
- *
- * @example
- * ```tsx
- * <UnifiedAgenticChat
- *   layout="default"
- *   sidecarPosition="right"
- *   defaultSidecarOpen={true}
- *   onSendMessage={async (content, options) => {
- *     // Handle message sending
- *   }}
- * />
- * ```
- */
-export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
+}> = ({
   className = '',
   layout = 'default',
   sidecarPosition = 'right',
   defaultSidecarOpen = true,
   onSendMessage,
 }) => {
+  const contentWidthClass = 'max-w-[1180px] w-full';
   const sidecarOpen = useUnifiedChatStore((state) => state.sidecarOpen);
   const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
   const addMessage = useUnifiedChatStore((state) => state.addMessage);
@@ -56,49 +48,45 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
   const deleteMessage = useUnifiedChatStore((state) => state.deleteMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
-  const { selectedModel, selectedProvider } = useModelStore();
+  const setConversationMode = useUnifiedChatStore((state) => state.setConversationMode);
+  const messages = useUnifiedChatStore((state) => state.messages);
+  const hasMessages = messages.length > 0;
+  const llmConfig = useSettingsStore((state) => state.llmConfig);
+  const selectedProvider = useModelStore((state) => state.selectedProvider);
+  const selectedModel = useModelStore((state) => state.selectedModel);
 
-  // Setup event listeners for real-time updates from Tauri backend
+  const [heroInput, setHeroInput] = useState('');
+  const [activePersona, setActivePersona] = useState(personaOptions[0]);
+  const [thinkingMode, setThinkingMode] = useState<'Extended thinking' | 'Fast'>(
+    'Extended thinking',
+  );
+
   useAgenticEvents();
 
-  // Initialize sidecar state
   useEffect(() => {
-    if (defaultSidecarOpen !== undefined && sidecarOpen === undefined) {
-      setSidecarOpen(defaultSidecarOpen);
+    if (defaultSidecarOpen === false) {
+      setSidecarOpen(false);
     }
-  }, [defaultSidecarOpen, sidecarOpen, setSidecarOpen]);
+  }, [defaultSidecarOpen, setSidecarOpen]);
 
-  // Handle message sending
+  const toggleSidecar = () => setSidecarOpen(!sidecarOpen);
+  const fallbackProvider = llmConfig.defaultProvider;
+  const providerForMessage = selectedProvider ?? fallbackProvider ?? undefined;
+  const fallbackModelForProvider =
+    providerForMessage && llmConfig.defaultModels
+      ? llmConfig.defaultModels[providerForMessage]
+      : undefined;
+  const modelForMessage = selectedModel ?? fallbackModelForProvider ?? undefined;
+
   const handleSendMessage = async (content: string, options: SendOptions) => {
-    // Validate that a model is selected
-    if (!selectedModel || !selectedProvider) {
-      console.error('No model selected - cannot send message');
-      // Try to initialize from settings
-      const { initializeModelStoreFromSettings } = await import('../../stores/modelStore');
-      await initializeModelStoreFromSettings();
+    const enrichedOptions: SendOptions = {
+      ...options,
+      providerId: options.providerId ?? providerForMessage,
+      modelId: options.modelId ?? modelForMessage,
+    };
 
-      // Check again after initialization
-      const modelStore = useModelStore.getState();
-      if (!modelStore.selectedModel || !modelStore.selectedProvider) {
-        // Show error to user
-        addMessage({
-          role: 'assistant',
-          content:
-            'Error: No model selected. Please select a model from the model selector in the toolbar before sending messages.',
-          metadata: { streaming: false, error: true },
-        });
-        return;
-      }
-    }
+    addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
 
-    // Add user message
-    addMessage({
-      role: 'user',
-      content,
-      attachments: options.attachments,
-    });
-
-    // Create assistant message placeholder for streaming
     const assistantMessageId = crypto.randomUUID();
     addMessage({
       role: 'assistant',
@@ -108,23 +96,21 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
     setStreamingMessage(assistantMessageId);
 
     try {
-      // Call the provided handler or use default behavior
       if (onSendMessage) {
-        await onSendMessage(content, options);
+        await onSendMessage(content, enrichedOptions);
       } else {
-        // 🔥 Call actual Tauri backend with conversationMode
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
-            provider: selectedProvider || undefined,
-            model: selectedModel || undefined,
-            stream: false, // Non-streaming for now
+            provider: enrichedOptions.providerId,
+            model: enrichedOptions.modelId,
+            stream: false,
             enable_tools: true,
-            conversation_mode: conversationMode, // 🔒 Security setting
+            conversation_mode: conversationMode,
+            enabled_tools: ['desktop', 'terminal', 'browser', 'files', 'mcp'],
           },
         });
 
-        // Update assistant message with response
         updateMessage(assistantMessageId, {
           content: response.assistant_message?.content || 'No response',
           metadata: {
@@ -137,7 +123,6 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
         });
       }
     } catch (error) {
-      console.error('Error sending message:', error);
       updateMessage(assistantMessageId, {
         content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         metadata: { streaming: false },
@@ -147,124 +132,267 @@ export const UnifiedAgenticChat: React.FC<UnifiedAgenticChatProps> = ({
     }
   };
 
-  // Handle message actions
-  const handleMessageEdit = (id: string, content: string) => {
-    updateMessage(id, { content });
-  };
-
   const handleMessageDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this message?')) {
       deleteMessage(id);
     }
   };
 
-  const handleMessageRegenerate = (id: string) => {
-    // TODO: Implement regeneration logic
-    console.log('Regenerate message:', id);
+  const handleMessageEdit = (id: string, content: string) => updateMessage(id, { content });
+  const handleMessageRegenerate = (id: string) => console.log('Regenerate message:', id);
+
+  const heroSubtitle = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
+  const sendHeroMessage = () => {
+    if (!heroInput.trim()) return;
+    void handleSendMessage(heroInput, {});
+    setHeroInput('');
   };
 
-  // Toggle sidecar
-  const handleSidecarToggle = () => {
-    setSidecarOpen(!sidecarOpen);
-  };
-
-  // Layout-specific classes
   const layoutClasses = {
     default: 'p-0',
     compact: 'p-2',
     immersive: 'p-0',
   };
 
-  return (
-    <div
-      className={`unified-agentic-chat h-full flex flex-col bg-gray-50 dark:bg-gray-900 ${layoutClasses[layout]} ${className}`}
-    >
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                AGI Workforce
-              </h1>
-              <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs rounded-full">
-                Beta
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSidecarToggle}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                title={sidecarOpen ? 'Close sidecar' : 'Open sidecar'}
-              >
-                {sidecarOpen ? (
-                  <PanelRightClose size={20} className="text-gray-600 dark:text-gray-400" />
-                ) : (
-                  <PanelRightOpen size={20} className="text-gray-600 dark:text-gray-400" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Agent Status Banner */}
-          <AgentStatusBanner />
-
-          {/* Message List */}
-          <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
-            <ChatMessageList
-              onMessageEdit={handleMessageEdit}
-              onMessageDelete={handleMessageDelete}
-              onMessageRegenerate={handleMessageRegenerate}
-            />
-          </div>
-
-          {/* Chat Input Toolbar */}
-          <ChatInputToolbar />
-
-          {/* Input Area */}
-          <ChatInputArea
-            onSend={handleSendMessage}
-            placeholder="Type a message or describe a task..."
-            enableAttachments={true}
-            enableVoice={false}
-            enableScreenshot={true}
-          />
+  const renderHero = () => (
+    <div className="relative flex-1 overflow-auto px-4 py-10 lg:px-6">
+      <div className="pointer-events-none absolute inset-0 opacity-70">
+        <div
+          className={`mx-auto h-full ${contentWidthClass} bg-gradient-to-b from-indigo-500/10 via-transparent to-transparent blur-3xl`}
+        />
+      </div>
+      <div
+        className={`relative mx-auto flex w-full ${contentWidthClass} flex-col gap-8 text-center text-white`}
+      >
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-500">
+            AGI Workforce • {heroSubtitle}
+          </p>
+          <h1 className="text-4xl font-semibold sm:text-5xl">Ready when you are.</h1>
+          <p className="max-w-3xl text-base text-slate-400">
+            Start a conversation in your AGI workspace. Blend terminal actions, browser automation,
+            MCP tools, and reasoning — all from one place.
+          </p>
         </div>
 
-        {/* Sidecar Panel */}
-        {sidecarOpen && (
-          <ErrorBoundary
-            fallback={
-              <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center p-4">
-                <div className="text-center">
-                  <p className="text-sm text-red-600 dark:text-red-400 mb-2">
-                    Sidecar error
-                  </p>
-                  <button
-                    onClick={handleSidecarToggle}
-                    className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Close sidecar
-                  </button>
-                </div>
+        <div className="rounded-[32px] border border-white/10 bg-white/5/40 p-6 text-left shadow-2xl backdrop-blur">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-1 flex-wrap items-center gap-3">
+              <label className="text-xs uppercase tracking-[0.2em] text-slate-500">Persona</label>
+              <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-black/40 px-4 py-2 text-sm">
+                <select
+                  value={activePersona}
+                  onChange={(event) => setActivePersona(event.target.value)}
+                  className="bg-transparent text-white focus:outline-none"
+                >
+                  {personaOptions.map((option) => (
+                    <option key={option} value={option} className="bg-[#05060b] text-white">
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </div>
-            }
-          >
-            <SidecarPanel
-              isOpen={sidecarOpen}
-              onToggle={handleSidecarToggle}
-              position={sidecarPosition}
+            </div>
+            <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-black/40 px-4 py-2 text-sm">
+              <span className="text-slate-400">{thinkingMode}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs text-slate-300 hover:text-white"
+                onClick={() =>
+                  setThinkingMode((mode) =>
+                    mode === 'Extended thinking' ? 'Fast' : 'Extended thinking',
+                  )
+                }
+              >
+                Switch
+              </Button>
+            </div>
+            <Button
+              variant={conversationMode === 'safe' ? 'outline' : 'default'}
+              size="sm"
+              className={cn(
+                'gap-2 border-white/20',
+                conversationMode === 'safe'
+                  ? 'text-white hover:bg-white/10'
+                  : 'bg-orange-500 text-white hover:bg-orange-600',
+              )}
+              onClick={() =>
+                setConversationMode(conversationMode === 'safe' ? 'full_control' : 'safe')
+              }
+            >
+              {conversationMode === 'safe' ? (
+                <Shield className="h-4 w-4" />
+              ) : (
+                <ShieldOff className="h-4 w-4" />
+              )}
+              {conversationMode === 'safe' ? 'Safe mode' : 'Full control'}
+            </Button>
+          </div>
+
+          <div className="mt-5 rounded-3xl border border-white/10 bg-black/60 px-6 py-5">
+            <textarea
+              className="h-28 w-full resize-none bg-transparent text-lg text-white placeholder:text-slate-500 focus:outline-none"
+              placeholder="Ask anything..."
+              value={heroInput}
+              onChange={(event) => setHeroInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  sendHeroMessage();
+                }
+              }}
             />
-          </ErrorBoundary>
-        )}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-slate-400">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="rounded-full border border-white/15 p-2 hover:text-white"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/15 p-2 hover:text-white"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/15 p-2 hover:text-white"
+                >
+                  <Mic className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <span>{thinkingMode}</span>
+                <span className="text-slate-600">|</span>
+                <span>{activePersona}</span>
+              </div>
+              <Button
+                onClick={sendHeroMessage}
+                className="rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 px-6 text-white"
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Send
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-2 text-sm text-slate-200">
+          {heroChips.map((chip) => (
+            <span key={chip} className="rounded-full border border-white/10 px-4 py-1">
+              {chip}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderConversationView = () => (
+    <div className="flex flex-1 overflow-hidden bg-[#05060b] text-white">
+      <div className="flex flex-1 flex-col min-w-0 min-h-0">
+        <div className="border-b border-white/10 bg-white/5/10 px-4 py-4">
+          <div
+            className={`mx-auto flex w-full ${contentWidthClass} flex-wrap items-center justify-between gap-4`}
+          >
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Greeting</p>
+              <h2 className="text-2xl font-semibold">Golden hour thinking</h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant={conversationMode === 'safe' ? 'outline' : 'default'}
+                size="sm"
+                className={cn(
+                  'gap-2 border-white/10',
+                  conversationMode === 'safe'
+                    ? 'text-white hover:bg-white/10'
+                    : 'bg-orange-500 text-white hover:bg-orange-600',
+                )}
+                onClick={() =>
+                  setConversationMode(conversationMode === 'safe' ? 'full_control' : 'safe')
+                }
+              >
+                {conversationMode === 'safe' ? (
+                  <Shield className="h-4 w-4" />
+                ) : (
+                  <ShieldOff className="h-4 w-4" />
+                )}
+                {conversationMode === 'safe' ? 'Safe mode' : 'Full control'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-slate-400 hover:text-white"
+                onClick={toggleSidecar}
+                title={sidecarOpen ? 'Hide side panel' : 'Show side panel'}
+              >
+                {sidecarOpen ? (
+                  <PanelRightClose className="h-5 w-5" />
+                ) : (
+                  <PanelRightOpen className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <AgentStatusBanner />
+
+        <div className="flex-1 min-h-0 px-4 py-6">
+          <div className={`mx-auto flex h-full w-full ${contentWidthClass} flex-col`}>
+            <div className="flex-1 overflow-hidden rounded-[32px] border border-white/5 bg-white/5 p-4">
+              <ChatMessageList
+                className="h-full"
+                onMessageEdit={handleMessageEdit}
+                onMessageDelete={handleMessageDelete}
+                onMessageRegenerate={handleMessageRegenerate}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/5 bg-transparent px-4 py-6">
+          <div className={`mx-auto w-full ${contentWidthClass}`}>
+            <ChatInputArea
+              onSend={handleSendMessage}
+              placeholder="Type a prompt or describe a workflow..."
+              enableAttachments
+              enableScreenshot
+              className="bg-transparent"
+              rightAccessory={
+                <div className="flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-2 text-xs uppercase tracking-[0.2em] text-slate-300">
+                  <span className="text-[10px] text-slate-400">Model</span>
+                  <QuickModelSelector className="w-[150px]" />
+                </div>
+              }
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Mission Control Modal (Future) */}
-      {/* <MissionControl isOpen={missionControlOpen} onClose={() => setMissionControlOpen(false)} /> */}
+      {sidecarOpen && (
+        <div className="w-[360px] border-l border-white/10 bg-white/5/40 backdrop-blur">
+          <SidecarPanel isOpen={sidecarOpen} onToggle={toggleSidecar} position={sidecarPosition} />
+        </div>
+      )}
+    </div>
+  );
 
-      {/* Approval Modal */}
+  return (
+    <div
+      className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
+    >
+      {hasMessages ? renderConversationView() : renderHero()}
       <ApprovalModal />
     </div>
   );

@@ -10,15 +10,35 @@ use agiworkforce_desktop::security::{AuthManager, SecretManager};
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        load_persisted_calendar_accounts, security::AuthManagerState, AIEmployeeState,
-        ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState,
-        CodeEditingState, DatabaseState,
-        DocumentState, EmbeddingServiceState, FileWatcherState, GitHubState, LLMState, LSPState,
-        McpState, ProductivityState, SettingsServiceState, SettingsState, ShortcutsState,
-        TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
-        WorkspaceIndexState,
         // Note: CodeGeneratorState and ContextManagerState moved to ai_native module (stubbed)
         ai_native::{CodeGeneratorState, ContextManagerState},
+        load_persisted_calendar_accounts,
+        security::AuthManagerState,
+        AIEmployeeState,
+        ApiState,
+        AppDatabase,
+        BrowserStateWrapper,
+        CalendarState,
+        CloudState,
+        CodeEditingState,
+        ComputerUseState,
+        DatabaseState,
+        DocumentState,
+        EmbeddingServiceState,
+        FileWatcherState,
+        GitHubState,
+        LLMState,
+        LSPState,
+        McpState,
+        ProductivityState,
+        SettingsServiceState,
+        SettingsState,
+        ShortcutsState,
+        TaskManagerState,
+        TemplateManagerState,
+        VoiceState,
+        WorkflowEngineState,
+        WorkspaceIndexState,
     },
     db::migrations,
     initialize_window,
@@ -181,8 +201,6 @@ fn main() {
 
             // Initialize MCP state
             let mcp_state = McpState::new();
-            let mcp_client = mcp_state.client.clone();
-            let mcp_registry = mcp_state.registry.clone();
             app.manage(mcp_state);
 
             tracing::info!("MCP state initialized");
@@ -206,8 +224,10 @@ fn main() {
 
             tracing::info!("GitHub state initialized");
 
-            // TODO: Computer Use state disabled - was part of deleted computer_use/ module
-            // Functionality now available through automation/ module
+            // Initialize Computer Use state
+            app.manage(Arc::new(TokioMutex::new(ComputerUseState::new())));
+
+            tracing::info!("Computer use state initialized");
 
             // Initialize Code Editing state
             app.manage(Arc::new(TokioMutex::new(CodeEditingState::new())));

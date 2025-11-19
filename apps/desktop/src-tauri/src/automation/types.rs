@@ -7,14 +7,37 @@ use std::fmt;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerAction {
-    Click { x: i32, y: i32 },
-    DoubleClick { x: i32, y: i32 },
-    RightClick { x: i32, y: i32 },
-    Type { text: String },
-    Scroll { direction: ScrollDirection, amount: i32 },
-    KeyPress { key: String },
-    Wait { ms: u64 },
-    DragTo { from_x: i32, from_y: i32, to_x: i32, to_y: i32 },
+    Click {
+        x: i32,
+        y: i32,
+    },
+    DoubleClick {
+        x: i32,
+        y: i32,
+    },
+    RightClick {
+        x: i32,
+        y: i32,
+    },
+    Type {
+        text: String,
+    },
+    Scroll {
+        direction: ScrollDirection,
+        amount: i32,
+    },
+    KeyPress {
+        key: String,
+    },
+    Wait {
+        ms: u64,
+    },
+    DragTo {
+        from_x: i32,
+        from_y: i32,
+        to_x: i32,
+        to_y: i32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

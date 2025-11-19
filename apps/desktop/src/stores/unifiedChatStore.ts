@@ -303,7 +303,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       conversationMode: 'safe',
 
-      sidecarOpen: true,
+      sidecarOpen: false,
       sidecarSection: 'operations',
       sidecarWidth: 400,
       missionControlOpen: false,
@@ -647,10 +647,8 @@ function mergeAgentStatus(
     id: payload.id,
     name: payload.name ?? previous?.name ?? 'Agent',
     status: normalizeStatus(payload.status, previous?.status ?? 'idle'),
-    currentGoal:
-      payload.currentGoal ?? payload.current_goal ?? previous?.currentGoal,
-    currentStep:
-      payload.currentStep ?? payload.current_step ?? previous?.currentStep,
+    currentGoal: payload.currentGoal ?? payload.current_goal ?? previous?.currentGoal,
+    currentStep: payload.currentStep ?? payload.current_step ?? previous?.currentStep,
     progress: normalizeProgress(payload.progress, previous?.progress ?? 0),
     resourceUsage: normalizeResourceUsage(
       payload.resourceUsage ?? payload.resource_usage,
@@ -709,8 +707,7 @@ function normalizeTimestamp(value: unknown, fallback?: Date): Date | undefined {
     return value;
   }
 
-  const numeric =
-    typeof value === 'number' ? value : Number.parseInt(String(value).trim(), 10);
+  const numeric = typeof value === 'number' ? value : Number.parseInt(String(value).trim(), 10);
 
   if (Number.isNaN(numeric)) {
     return fallback;

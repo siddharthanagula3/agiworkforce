@@ -56,16 +56,27 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'get_conversations':
     case 'load_conversations':
+    case 'chat_get_conversations':
       return [] as T; // Return empty array for conversations
 
     case 'get_messages':
     case 'load_messages':
+    case 'chat_get_messages':
       return [] as T; // Return empty array for messages
 
+    case 'chat_get_conversation_stats':
+      return {
+        message_count: 0,
+        token_count: 0,
+        last_activity: Date.now(),
+      } as T;
+
     case 'create_conversation':
+    case 'chat_create_conversation':
       return { id: `conv-${Date.now()}`, title: args?.['title'] || 'New Conversation' } as T;
 
     case 'send_message':
+    case 'chat_send_message':
       return {
         id: `msg-${Date.now()}`,
         content: 'Mock response',
