@@ -1,17 +1,5 @@
 import React, { useState, useRef } from 'react';
-import {
-  ChevronRight,
-  ChevronLeft,
-  Pin,
-  X,
-  Activity,
-  Brain,
-  FileText,
-  Terminal,
-  Wrench,
-  ListTodo,
-  Users,
-} from 'lucide-react';
+import { Pin, X, Activity, Brain, FileText, Terminal, Wrench, ListTodo, Users } from 'lucide-react';
 import { useUnifiedChatStore, SidecarSection } from '../../stores/unifiedChatStore';
 import { ActiveOperationsSection } from './Sidecar/ActiveOperationsSection';
 
