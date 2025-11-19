@@ -7,25 +7,13 @@ import { useWindowManager } from './hooks/useWindowManager';
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import { useTheme } from './hooks/useTheme';
 import { useChatStore } from './stores/chatStore';
-import { useTemplateStore } from './stores/templateStore';
-import { useOrchestrationStore } from './stores/orchestrationStore';
-import { useTeamStore } from './stores/teamStore';
 import { initializeAgentStatusListener } from './stores/unifiedChatStore';
 // Unused imports removed Nov 16, 2025 (for future use)
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorToastContainer from './components/errors/ErrorToast';
 import useErrorStore from './stores/errorStore';
 import { errorReportingService } from './services/errorReporting';
-import {
-  Plus,
-  History,
-  Settings as SettingsIcon,
-  Sun,
-  Moon,
-  Minimize2,
-  Maximize2,
-  RefreshCcw,
-} from 'lucide-react';
+import { Plus, Sun, Moon, Minimize2, Maximize2, RefreshCcw, CircleUserRound } from 'lucide-react';
 import { Spinner } from './components/ui/Spinner';
 // Lazy load heavy components for better bundle splitting
 const VisualizationLayer = lazy(() =>
@@ -34,31 +22,18 @@ const VisualizationLayer = lazy(() =>
   })),
 );
 const OnboardingWizard = lazy(() =>
-  import('./components/Onboarding/OnboardingWizardNew').then((m) => ({
+  import('./components/onboarding/OnboardingWizardNew').then((m) => ({
     default: m.OnboardingWizardNew,
   })),
 );
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
-const DesktopAgentChat = lazy(() =>
-  import('./components/Chat/DesktopAgentChat').then((m) => ({ default: m.DesktopAgentChat })),
-);
 const UnifiedAgenticChat = lazy(() =>
   import('./components/UnifiedAgenticChat').then((m) => ({
     default: m.UnifiedAgenticChat,
   })),
 );
-
-export type AppView =
-  | 'chat'
-  | 'agent'
-  | 'enhanced-chat'
-  | 'templates'
-  | 'workflows'
-  | 'teams'
-  | 'governance'
-  | 'employees';
 
 // Loading fallback component for Suspense
 const LoadingFallback = () => (
@@ -74,22 +49,14 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [_agentChatPosition] = useState<'left' | 'right'>('right');
-  const [_agentChatVisible, _setAgentChatVisible] = useState(true);
-  const [_missionControlVisible, _setMissionControlVisible] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
-  const [currentView, setCurrentView] = useState<AppView>('enhanced-chat');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   const createConversation = useChatStore((store) => store.createConversation);
   const selectConversation = useChatStore((store) => store.selectConversation);
+  const loadConversations = useChatStore((store) => store.loadConversations);
   const addError = useErrorStore((store) => store.addError);
-
-  const fetchTemplates = useTemplateStore((store) => store.fetchTemplates);
-  const fetchInstalledTemplates = useTemplateStore((store) => store.fetchInstalledTemplates);
-  const loadWorkflows = useOrchestrationStore((store) => store.loadWorkflows);
-  const getUserTeams = useTeamStore((store) => store.getUserTeams);
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
   const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
@@ -186,40 +153,26 @@ const DesktopShell = () => {
     void checkOnboarding();
   }, [addError]);
 
-  // Initialize stores on mount
   useEffect(() => {
-    const initializeStores = async () => {
+    if (!onboardingComplete) {
+      return;
+    }
+
+    const hydrateChat = async () => {
       try {
-        // Initialize templates
-        await Promise.all([fetchTemplates(), fetchInstalledTemplates()]);
-
-        // Initialize workflows (using default user ID for now)
-        await loadWorkflows('default-user');
-
-        // Initialize teams (using default user ID for now)
-        await getUserTeams('default-user');
+        await loadConversations();
       } catch (error) {
-        console.error('Failed to initialize stores:', error);
         addError({
-          type: 'INITIALIZATION_ERROR',
+          type: 'CHAT_INIT_ERROR',
           severity: 'warning',
-          message: 'Failed to initialize some features',
+          message: 'Failed to load conversations',
           details: error instanceof Error ? error.message : String(error),
         });
       }
     };
 
-    if (onboardingComplete) {
-      void initializeStores();
-    }
-  }, [
-    onboardingComplete,
-    fetchTemplates,
-    fetchInstalledTemplates,
-    loadWorkflows,
-    getUserTeams,
-    addError,
-  ]);
+    void hydrateChat();
+  }, [addError, loadConversations, onboardingComplete]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -236,8 +189,8 @@ const DesktopShell = () => {
     };
   }, []);
 
-  const startNewAutomation = useCallback(async () => {
-    const id = await createConversation('New Task');
+  const startNewChat = useCallback(async () => {
+    const id = await createConversation('New Chat');
     await selectConversation(id);
   }, [createConversation, selectConversation]);
 
@@ -266,25 +219,17 @@ const DesktopShell = () => {
 
     return [
       buildOption({
-        id: 'agent.new-task',
-        title: 'Start new automation task',
-        group: 'Agent',
+        id: 'chat.new',
+        title: 'Start new chat',
+        group: 'Chat',
         icon: Plus,
-        action: () => void startNewAutomation(),
+        action: () => void startNewChat(),
       }),
       buildOption({
-        id: 'agent.toggle-sidebar',
-        title: sidebarCollapsed ? 'Show conversation list' : 'Hide conversation list',
-        group: 'Navigation',
-        icon: History,
-        action: () => setSidebarCollapsed((prev) => !prev),
-        active: !sidebarCollapsed,
-      }),
-      buildOption({
-        id: 'agent.open-settings',
+        id: 'app.open-settings',
         title: 'Open settings',
         group: 'Navigation',
-        icon: SettingsIcon,
+        icon: CircleUserRound,
         action: openSettings,
       }),
       buildOption({
@@ -318,16 +263,7 @@ const DesktopShell = () => {
         active: state.maximized,
       }),
     ];
-  }, [
-    actions,
-    sidebarCollapsed,
-    openSettings,
-    startNewAutomation,
-    state.maximized,
-    theme,
-    toggleTheme,
-    isMac,
-  ]);
+  }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
   // Show loading state while checking onboarding
   if (onboardingComplete === null) {
@@ -350,30 +286,8 @@ const DesktopShell = () => {
     );
   }
 
-  const renderMainContent = () => {
-    switch (currentView) {
-      case 'agent':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <DesktopAgentChat />
-          </Suspense>
-        );
-      case 'enhanced-chat':
-      default:
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <UnifiedAgenticChat
-              layout="default"
-              sidecarPosition="right"
-              defaultSidecarOpen={true}
-            />
-          </Suspense>
-        );
-    }
-  };
-
   return (
-    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-[#030409] text-slate-100 overflow-hidden">
       {!isTauri && (
         <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
           <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
@@ -384,15 +298,32 @@ const DesktopShell = () => {
         actions={actions}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         commandShortcutHint={commandShortcutHint}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
       />
-      <main className="flex flex-1 overflow-hidden min-h-0 min-w-0">
+      <main className="flex flex-1 min-h-0 min-w-0 bg-gradient-to-br from-[#05060b] via-[#05060b] to-[#090c1c]">
         <Sidebar
           className="shrink-0"
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
           onOpenSettings={() => setSettingsPanelOpen(true)}
-          currentView={currentView}
-          onViewChange={setCurrentView}
         />
-        {renderMainContent()}
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden px-4 sm:px-6">
+            <div className="flex h-full w-full items-center justify-center overflow-auto py-8">
+              <div className="w-full max-w-[1400px] origin-center scale-[0.75]">
+                <Suspense fallback={<LoadingFallback />}>
+                  <UnifiedAgenticChat
+                    className="mx-auto flex h-full w-full"
+                    layout="default"
+                    sidecarPosition="right"
+                    defaultSidecarOpen={true}
+                  />
+                </Suspense>
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
       <CommandPalette
         open={commandPaletteOpen}

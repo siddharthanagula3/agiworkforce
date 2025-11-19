@@ -85,6 +85,7 @@ pub async fn llm_send_message(
     }
 
     // Parse provider
+    let provider_name = request.provider.clone();
     let provider = request.provider.as_deref().and_then(|p| match p {
         "openai" => Some(Provider::OpenAI),
         "anthropic" => Some(Provider::Anthropic),
@@ -124,6 +125,12 @@ pub async fn llm_send_message(
     };
 
     if candidates.is_empty() {
+        if let Some(name) = provider_name {
+            return Err(format!(
+                "Provider '{}' is not configured. Add an API key in Settings > API Keys.",
+                name
+            ));
+        }
         return Err("No LLM providers are configured.".to_string());
     }
 

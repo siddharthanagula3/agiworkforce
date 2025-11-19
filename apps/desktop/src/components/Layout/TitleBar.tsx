@@ -1,4 +1,4 @@
-import { X, Minus, Square, Search, Minimize2 } from 'lucide-react';
+import { X, Minus, Square, Search, Minimize2, Menu } from 'lucide-react';
 import { WindowActions } from '../../hooks/useWindowManager';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
@@ -12,9 +12,18 @@ interface TitleBarProps {
   actions: WindowActions;
   onOpenCommandPalette: () => void;
   commandShortcutHint?: string;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }: TitleBarProps) => {
+const TitleBar = ({
+  state,
+  actions,
+  onOpenCommandPalette,
+  commandShortcutHint,
+  sidebarCollapsed,
+  onToggleSidebar,
+}: TitleBarProps) => {
   return (
     <header
       className={cn(
@@ -29,24 +38,23 @@ const TitleBar = ({ state, actions, onOpenCommandPalette, commandShortcutHint }:
       data-tauri-drag-region
     >
       {/* Logo and Title */}
-      <div
-        className="flex items-center gap-3 pointer-events-none min-w-0 shrink"
-        data-tauri-drag-region
-      >
-        <div
+      <div className="flex.items-center gap-3 min-w-0 shrink" data-tauri-drag-region>
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          disabled={!onToggleSidebar}
           className={cn(
-            'flex items-center justify-center shrink-0',
-            'w-8 h-8 rounded-lg',
-            'bg-primary text-primary-foreground',
-            'text-xs font-bold tracking-wider',
+            'flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 text-muted-foreground transition-colors',
+            'hover:bg-accent hover:text-foreground',
+            !onToggleSidebar && 'cursor-not-allowed opacity-50',
           )}
         >
-          AGI
-        </div>
+          <Menu className="h-4 w-4" />
+        </button>
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
           <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
           <p className="text-xs text-muted-foreground leading-none mt-0.5 truncate">
-            {state.focused ? 'Ready' : 'Inactive'}
+            {sidebarCollapsed ? 'Sidebar hidden' : state.focused ? 'Ready' : 'Inactive'}
           </p>
         </div>
       </div>
