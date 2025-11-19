@@ -69,8 +69,8 @@ impl ActionPlanner {
 
         let response = self.call_vision_llm(&prompt, &base64_image).await?;
 
-        let verification: ProgressVerification = serde_json::from_str(&response)
-            .context("Failed to parse progress verification")?;
+        let verification: ProgressVerification =
+            serde_json::from_str(&response).context("Failed to parse progress verification")?;
 
         Ok(verification)
     }
@@ -163,7 +163,9 @@ impl ActionPlanner {
 
         let candidates = router.candidates(&request, &preferences);
         if candidates.is_empty() {
-            return Err(anyhow::anyhow!("No vision-capable LLM providers configured"));
+            return Err(anyhow::anyhow!(
+                "No vision-capable LLM providers configured"
+            ));
         }
 
         let outcome = router
