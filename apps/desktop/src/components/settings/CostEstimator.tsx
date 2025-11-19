@@ -52,23 +52,19 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
   // Calculate monthly projection (assuming current usage is for current month)
   const currentDate = new Date();
   const dayOfMonth = currentDate.getDate();
-  const daysInMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth() + 1,
-    0,
-  ).getDate();
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const projectedMonthlyCost = (stats.totalCost / dayOfMonth) * daysInMonth;
 
   // Calculate average cost per message
   const avgCostPerMessage = stats.messageCount > 0 ? stats.totalCost / stats.messageCount : 0;
 
   // Get top models by usage
-  const topModels = Object.entries(stats.byModel)
+  const topModels = Object.entries(stats.byModel ?? {})
     .sort(([, a], [, b]) => b.cost - a.cost)
     .slice(0, 5);
 
   // Get provider breakdown
-  const providerBreakdown = Object.entries(stats.byProvider)
+  const providerBreakdown = Object.entries(stats.byProvider ?? {})
     .filter(([, data]) => data.cost > 0)
     .sort(([, a], [, b]) => b.cost - a.cost);
 
@@ -160,8 +156,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
             </h3>
             <div className="space-y-2">
               {providerBreakdown.map(([provider, data]) => {
-                const percentage =
-                  stats.totalCost > 0 ? (data.cost / stats.totalCost) * 100 : 0;
+                const percentage = stats.totalCost > 0 ? (data.cost / stats.totalCost) * 100 : 0;
                 return (
                   <div
                     key={provider}
@@ -263,16 +258,10 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
               Cost Optimization Tips
             </h4>
             <ul className="space-y-1 text-sm text-yellow-800 dark:text-yellow-200">
-              <li>
-                • Use Claude Haiku 4.5 for simple tasks (4x faster, 1/3 cost of Sonnet)
-              </li>
-              <li>
-                • Use local models via Ollama for zero-cost inference
-              </li>
+              <li>• Use Claude Haiku 4.5 for simple tasks (4x faster, 1/3 cost of Sonnet)</li>
+              <li>• Use local models via Ollama for zero-cost inference</li>
               <li>• Enable response caching to reduce redundant API calls</li>
-              <li>
-                • Set a token budget limit in settings to control spending
-              </li>
+              <li>• Set a token budget limit in settings to control spending</li>
             </ul>
           </div>
         )}

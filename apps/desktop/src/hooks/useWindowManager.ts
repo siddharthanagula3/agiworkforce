@@ -21,7 +21,7 @@ interface WindowState extends BackendWindowState {
 }
 
 const defaultState: WindowState = {
-  pinned: true,
+  pinned: false,
   alwaysOnTop: false,
   dock: null,
   maximized: false,
