@@ -1,6 +1,7 @@
 // Types matching Rust backend models
 
 import type { ToolCallUI, ToolResultUI, ToolExecutionWorkflow } from './toolCalling';
+import type { TaskMetadata } from '../lib/taskMetadata';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -96,12 +97,19 @@ export interface ChatRoutingPreferences {
   provider?: string | undefined;
   model?: string | undefined;
   strategy?: string | undefined;
+  costPriority?: 'low' | 'balanced';
 }
 
 export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   conversationId?: number | null;
   content: string;
   stream?: boolean;
+  workflowHash?: string;
+  taskMetadata?: TaskMetadata;
+  providerOverride?: string;
+  modelOverride?: string;
+  enableTools?: boolean;
+  conversationMode?: 'safe' | 'full_control';
 }
 
 export interface ChatSendMessageResponse {

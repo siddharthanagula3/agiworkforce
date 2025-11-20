@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { Provider } from '../../stores/settingsStore';
 import {
   getModelMetadata,
@@ -8,6 +9,7 @@ import {
   type ModelMetadata,
 } from '../../constants/llm';
 import { useModelStore } from '../../stores/modelStore';
+import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import {
   Select,
   SelectContent,
@@ -18,9 +20,17 @@ import {
   SelectValue,
 } from '../ui/Select';
 import { cn } from '../../lib/utils';
+import { deriveTaskMetadata } from '../../lib/taskMetadata';
+import { Button } from '../ui/Button';
 
 type QuickModelSelectorProps = {
   className?: string;
+};
+
+type RouterSuggestion = {
+  provider: Provider;
+  model: string;
+  reason: string;
 };
 
 const DEFAULT_PROVIDER: Provider = 'openai';
@@ -35,6 +45,22 @@ export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
       selectModel: state.selectModel,
     }),
   );
+  const messages = useUnifiedChatStore((state) => state.messages);
+  const [suggestion, setSuggestion] = useState<RouterSuggestion | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+
+  const latestUserMessage = useMemo(
+    () => [...messages].reverse().find((msg) => msg.role === 'user'),
+    [messages],
+  );
+
+  const suggestionContext = useMemo(() => {
+    return deriveTaskMetadata(
+      latestUserMessage?.content ?? '',
+      latestUserMessage?.attachments,
+      'balanced',
+    );
+  }, [latestUserMessage]);
 
   const activeProvider: Provider = useMemo(() => {
     const selectedMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
@@ -75,8 +101,49 @@ export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
       map.set(metadata.id, metadata);
     });
 
+    if (suggestion) {
+      const suggestedMetadata = getModelMetadata(suggestion.model);
+      if (suggestedMetadata) {
+        map.set(suggestedMetadata.id, suggestedMetadata);
+      }
+    }
+
     return Array.from(map.values());
-  }, [activeProvider, favorites, recentModels]);
+  }, [activeProvider, favorites, recentModels, suggestion]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSuggestion = async () => {
+      setSuggestionLoading(true);
+      try {
+        const response = await invoke<RouterSuggestion>('router_suggestions', {
+          context: {
+            intents: suggestionContext.intents,
+            requiresVision: suggestionContext.requiresVision,
+            tokenEstimate: suggestionContext.tokenEstimate,
+            costPriority: suggestionContext.costPriority,
+          },
+        });
+        if (!cancelled) {
+          setSuggestion(response);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[QuickModelSelector] Failed to load suggestion', error);
+          setSuggestion(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setSuggestionLoading(false);
+        }
+      }
+    };
+
+    fetchSuggestion();
+    return () => {
+      cancelled = true;
+    };
+  }, [suggestionContext]);
 
   const handleModelChange = (modelId: string) => {
     const metadata = getModelMetadata(modelId);
@@ -100,21 +167,53 @@ export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
     );
   }
 
+  const suggestedMetadata = suggestion ? getModelMetadata(suggestion.model) : null;
+
   return (
-    <Select value={selectedModel ?? undefined} onValueChange={handleModelChange}>
-      <SelectTrigger className={cn('w-[220px] text-sm', className)} aria-label="Select model">
-        <SelectValue placeholder="Choose model" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectLabel>{PROVIDER_LABELS[activeProvider]}</SelectLabel>
-          {modelOptions.map((model) => (
-            <SelectItem key={model.id} value={model.id}>
-              {`${model.name} • ${formatCost(model.inputCost, model.outputCost)}`}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <div className={cn('flex w-full max-w-[220px] flex-col gap-2', className)}>
+      {suggestion && suggestedMetadata && (
+        <div className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+                Recommended
+              </p>
+              <p className="text-sm font-medium text-foreground">
+                {suggestedMetadata.name}{' '}
+                <span className="text-muted-foreground">
+                  ({PROVIDER_LABELS[suggestion.provider]})
+                </span>
+              </p>
+              <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                {suggestion.reason}
+              </p>
+            </div>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={suggestionLoading || selectedModel === suggestion.model}
+              onClick={() => handleModelChange(suggestion.model)}
+            >
+              Use
+            </Button>
+          </div>
+        </div>
+      )}
+      <Select value={selectedModel ?? undefined} onValueChange={handleModelChange}>
+        <SelectTrigger className="w-full text-sm" aria-label="Select model">
+          <SelectValue placeholder="Choose model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectLabel>{PROVIDER_LABELS[activeProvider]}</SelectLabel>
+            {modelOptions.map((model) => (
+              <SelectItem key={model.id} value={model.id}>
+                {`${model.name} - ${formatCost(model.inputCost, model.outputCost)}`}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
   );
 };

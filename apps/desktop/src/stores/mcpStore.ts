@@ -24,6 +24,8 @@ interface McpState {
   loadConfig: () => Promise<void>;
   updateConfig: (config: McpServersConfig) => Promise<void>;
   storeCredential: (serverName: string, key: string, value: string) => Promise<void>;
+  enableServer: (name: string) => Promise<void>;
+  disableServer: (name: string) => Promise<void>;
   searchTools: (query: string) => Promise<void>;
   setSelectedServer: (name: string | null) => void;
   setSearchQuery: (query: string) => void;
@@ -125,6 +127,34 @@ export const useMcpStore = create<McpState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : `Failed to disconnect from ${name}`,
+        isLoading: false,
+      });
+    }
+  },
+
+  enableServer: async (name: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await McpClient.enableServer(name);
+      await get().refreshServers();
+      set({ isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : `Failed to enable ${name}`,
+        isLoading: false,
+      });
+    }
+  },
+
+  disableServer: async (name: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await McpClient.disableServer(name);
+      await get().refreshServers();
+      set({ isLoading: false });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : `Failed to disable ${name}`,
         isLoading: false,
       });
     }

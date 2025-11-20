@@ -5,7 +5,7 @@ use crate::router::providers::{
 };
 use crate::router::{
     cache_manager::CacheManager,
-    llm_router::{RouterPreferences, RoutingStrategy},
+    llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
     ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider,
 };
 use anyhow::anyhow;
@@ -27,6 +27,13 @@ pub struct LLMSendMessageRequest {
 pub struct LLMState {
     pub router: Arc<Mutex<LLMRouter>>,
     pub cache_manager: CacheManager,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RouterSuggestionPayload {
+    pub provider: String,
+    pub model: String,
+    pub reason: String,
 }
 
 impl Default for LLMState {
@@ -117,6 +124,7 @@ pub async fn llm_send_message(
         provider,
         model: request.model.clone(),
         strategy: RoutingStrategy::Auto,
+        context: None,
     };
 
     let candidates = {
@@ -558,5 +566,19 @@ pub async fn llm_get_usage_stats() -> Result<UsageStats, String> {
         message_count: 0,
         by_provider,
         by_model: std::collections::HashMap::new(),
+    })
+}
+
+#[tauri::command]
+pub async fn router_suggestions(
+    state: State<'_, LLMState>,
+    context: Option<RouterContext>,
+) -> Result<RouterSuggestionPayload, String> {
+    let router = state.router.lock().await;
+    let suggestion = router.suggest_for_context(&context.unwrap_or_default());
+    Ok(RouterSuggestionPayload {
+        provider: suggestion.provider.as_string().to_string(),
+        model: suggestion.model,
+        reason: suggestion.reason,
     })
 }

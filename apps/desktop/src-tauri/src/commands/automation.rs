@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result as AnyResult};
 use serde::Deserialize;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
+use uuid::Uuid;
 
 use super::capture::{capture_screen_full, capture_screen_region};
 use super::AppDatabase;
@@ -274,7 +276,7 @@ pub fn automation_click(
         }
     }
 
-    let (x, y, button_name) = with_service(|service| {
+    let click_result = with_service(|service| {
         let (x, y) = if let Some(element_id) = &request.element_id {
             let rect = service
                 .uia
@@ -299,7 +301,27 @@ pub fn automation_click(
         service.mouse.click(x, y, button)?;
         Ok((x, y, button_name))
     })
-    .map_err(|err| err.to_string())?;
+    .map_err(|err| err.to_string());
+
+    let (x, y, button_name) = match click_result {
+        Ok(value) => value,
+        Err(err) => {
+            emit_ui_action(
+                &app,
+                "UI Click",
+                &format!("Failed to click: {}", err),
+                "failed",
+                json!({
+                    "elementId": request.element_id,
+                    "x": request.x,
+                    "y": request.y,
+                    "button": request.button
+                }),
+                Some(err.clone()),
+            );
+            return Err(err);
+        }
+    };
 
     if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
@@ -308,12 +330,26 @@ pub fn automation_click(
             OverlayAnimation::Click {
                 x,
                 y,
-                button: button_name,
+                button: button_name.clone(),
             },
         ) {
             tracing::warn!("Failed to emit click overlay animation: {err:?}");
         }
     }
+
+    emit_ui_action(
+        &app,
+        "UI Click",
+        &format!("Clicked at ({}, {}) with {}", x, y, button_name),
+        "success",
+        json!({
+            "elementId": request.element_id,
+            "x": x,
+            "y": y,
+            "button": button_name,
+        }),
+        None,
+    );
 
     Ok(())
 }
@@ -375,7 +411,7 @@ pub async fn automation_drag_drop(
 
     // Create mouse simulator outside the service to avoid async closure issues
     let mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
-    mouse
+    if let Err(err) = mouse
         .drag_and_drop(
             request.from_x,
             request.from_y,
@@ -384,7 +420,22 @@ pub async fn automation_drag_drop(
             request.duration_ms,
         )
         .await
-        .map_err(|err| err.to_string())?;
+    {
+        let message = err.to_string();
+        emit_ui_action(
+            &app,
+            "Drag && Drop",
+            &format!("Failed to drag and drop: {}", message),
+            "failed",
+            json!({
+                "from": { "x": request.from_x, "y": request.from_y },
+                "to": { "x": request.to_x, "y": request.to_y },
+                "durationMs": request.duration_ms,
+            }),
+            Some(message.clone()),
+        );
+        return Err(message);
+    }
 
     // Emit overlay animation for drag-drop
     if let Ok(conn) = db.conn.lock() {
@@ -401,6 +452,19 @@ pub async fn automation_drag_drop(
             tracing::warn!("Failed to emit drag-drop overlay animation: {err:?}");
         }
     }
+
+    emit_ui_action(
+        &app,
+        "Drag && Drop",
+        "Dragged item via UI automation",
+        "success",
+        json!({
+            "from": { "x": request.from_x, "y": request.from_y },
+            "to": { "x": request.to_x, "y": request.to_y },
+            "durationMs": request.duration_ms,
+        }),
+        None,
+    );
 
     Ok(())
 }
@@ -521,7 +585,7 @@ async fn execute_text_input(
     // Create a keyboard simulator outside the closure
     let keyboard = KeyboardSimulator::new().map_err(|e| e.to_string())?;
 
-    let location = with_service(|service| {
+    let location = match with_service(|service| {
         if let Some(element_id) = &element_id {
             if should_focus {
                 let _ = service.uia.set_focus(element_id);
@@ -535,11 +599,42 @@ async fn execute_text_input(
         }
 
         Ok(fallback_position)
-    })
-    .map_err(|err| err.to_string())?;
+    }) {
+        Ok(value) => value,
+        Err(err) => {
+            emit_ui_action(
+                app,
+                "Type Text",
+                &format!("Failed to locate target: {}", err),
+                "failed",
+                json!({
+                    "elementId": element_id,
+                    "textLength": text.chars().count(),
+                    "forcedFocus": should_focus,
+                }),
+                Some(err.to_string()),
+            );
+            return Err(err.to_string());
+        }
+    };
 
     // Send text asynchronously outside the closure
-    keyboard.send_text(&text).await.map_err(|e| e.to_string())?;
+    if let Err(err) = keyboard.send_text(&text).await {
+        let error_string = err.to_string();
+        emit_ui_action(
+            app,
+            "Type Text",
+            &format!("Typing failed: {}", error_string),
+            "failed",
+            json!({
+                "elementId": element_id,
+                "textLength": text.chars().count(),
+                "forcedFocus": should_focus,
+            }),
+            Some(error_string.clone()),
+        );
+        return Err(error_string);
+    }
 
     if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
@@ -555,7 +650,53 @@ async fn execute_text_input(
         }
     }
 
+    emit_ui_action(
+        app,
+        "Type Text",
+        "Typed text via automation",
+        "success",
+        json!({
+            "elementId": element_id,
+            "textLength": text.chars().count(),
+            "forcedFocus": should_focus,
+        }),
+        None,
+    );
+
     Ok(())
+}
+
+fn emit_ui_action(
+    app: &AppHandle,
+    title: &str,
+    description: &str,
+    status: &str,
+    metadata: serde_json::Value,
+    error: Option<String>,
+) {
+    let action_id = Uuid::new_v4().to_string();
+    let payload = json!({
+        "action": {
+            "id": action_id,
+            "actionId": action_id,
+            "workflowHash": serde_json::Value::Null,
+            "type": "ui",
+            "title": title,
+            "description": description,
+            "status": status,
+            "requiresApproval": false,
+            "scope": {
+                "type": "ui",
+                "description": description,
+            },
+            "metadata": metadata,
+            "error": error,
+        }
+    });
+
+    if let Err(err) = app.emit("agent:action_update", payload) {
+        tracing::warn!("Failed to emit UI automation action: {}", err);
+    }
 }
 
 #[tauri::command]

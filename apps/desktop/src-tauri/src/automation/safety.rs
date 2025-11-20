@@ -88,11 +88,17 @@ impl ComputerUseSafety {
             return false;
         }
 
-        // TODO: Add detection for dangerous UI elements
-        // - Power button
-        // - System settings
-        // - File deletion dialogs
-        // This would require screen analysis or UI element inspection
+        // Block close button area (assumes 1080p scaling)
+        if y <= 15 && x >= 1800 {
+            tracing::warn!("Click near window controls blocked: ({}, {})", x, y);
+            return false;
+        }
+
+        // Block common taskbar hot zones (start button + system tray)
+        if y >= 1040 && (x <= 120 || x >= 1800) {
+            tracing::warn!("Click near system taskbar blocked: ({}, {})", x, y);
+            return false;
+        }
 
         true
     }
