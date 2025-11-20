@@ -8,9 +8,9 @@ pub mod pdf;
 pub mod word;
 
 // Creation modules
-pub mod create_word;
 pub mod create_excel;
 pub mod create_pdf;
+pub mod create_word;
 
 // Re-exports (reading)
 pub use excel::ExcelHandler;
@@ -18,9 +18,9 @@ pub use pdf::PdfHandler;
 pub use word::WordHandler;
 
 // Re-exports (creation)
-pub use create_word::{WordContent, WordDocumentConfig, WordDocumentCreator};
 pub use create_excel::{ExcelCell, ExcelDocumentConfig, ExcelDocumentCreator, ExcelSheet};
 pub use create_pdf::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
+pub use create_word::{WordContent, WordDocumentConfig, WordDocumentCreator};
 
 use serde::{Deserialize, Serialize};
 
