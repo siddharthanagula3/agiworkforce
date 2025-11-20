@@ -135,7 +135,8 @@ impl ExcelDocumentCreator {
                         }
                         ExcelCell::Date { value } => {
                             // Parse ISO 8601 date and write as Excel date
-                            let datetime_format = Format::new().set_num_format("yyyy-mm-dd hh:mm:ss");
+                            let datetime_format =
+                                Format::new().set_num_format("yyyy-mm-dd hh:mm:ss");
                             worksheet
                                 .write_string_with_format(
                                     excel_row,
@@ -290,10 +291,7 @@ mod tests {
             output_path_str,
             "Sales",
             vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()],
-            vec![
-                vec![100.5, 200.75, 150.25],
-                vec![300.0, 250.5, 400.0],
-            ],
+            vec![vec![100.5, 200.75, 150.25], vec![300.0, 250.5, 400.0]],
         );
 
         assert!(result.is_ok());

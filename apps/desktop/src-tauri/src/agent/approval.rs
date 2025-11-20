@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{Mutex as TokioMutex, oneshot};
+use tokio::sync::{oneshot, Mutex as TokioMutex};
 
 pub struct ApprovalManager {
     config: AgentConfig,
@@ -273,16 +273,15 @@ impl ApprovalController {
             }
             Err(_) => {
                 self.pending.lock().await.remove(&payload.action_id);
-                Err(anyhow!("Approval channel dropped for {}", payload.action_id))
+                Err(anyhow!(
+                    "Approval channel dropped for {}",
+                    payload.action_id
+                ))
             }
         }
     }
 
-    pub async fn resolve(
-        &self,
-        action_id: &str,
-        resolution: ApprovalResolution,
-    ) -> Result<()> {
+    pub async fn resolve(&self, action_id: &str, resolution: ApprovalResolution) -> Result<()> {
         let sender = {
             let mut pending = self.pending.lock().await;
             pending
@@ -301,11 +300,7 @@ impl ApprovalController {
         signature: &str,
     ) -> Result<bool> {
         if let Some(hash) = workflow_hash {
-            Ok(self
-                .trust_store
-                .lock()
-                .await
-                .is_trusted(hash, signature))
+            Ok(self.trust_store.lock().await.is_trusted(hash, signature))
         } else {
             Ok(false)
         }
@@ -359,8 +354,8 @@ impl TrustedWorkflowStore {
         }
 
         let entries = if path.exists() {
-            let contents = fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read {:?}", path))?;
+            let contents =
+                fs::read_to_string(&path).with_context(|| format!("Failed to read {:?}", path))?;
             if contents.trim().is_empty() {
                 HashMap::new()
             } else {

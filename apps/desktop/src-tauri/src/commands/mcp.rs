@@ -164,11 +164,7 @@ pub async fn mcp_initialize(
 pub async fn mcp_list_servers(state: State<'_, McpState>) -> Result<Vec<McpServerInfo>, String> {
     let config = state.config.lock();
     let stats = state.client.get_stats();
-    let connected: HashSet<String> = state
-        .client
-        .get_connected_servers()
-        .into_iter()
-        .collect();
+    let connected: HashSet<String> = state.client.get_connected_servers().into_iter().collect();
 
     let servers: Vec<McpServerInfo> = config
         .mcp_servers
@@ -176,7 +172,7 @@ pub async fn mcp_list_servers(state: State<'_, McpState>) -> Result<Vec<McpServe
         .map(|(name, server_config)| McpServerInfo {
             name: name.clone(),
             enabled: server_config.enabled,
-             connected: connected.contains(name),
+            connected: connected.contains(name),
             tool_count: stats.get(name).copied().unwrap_or(0),
             command: format!("{} {}", server_config.command, server_config.args.join(" ")),
         })
@@ -339,7 +335,10 @@ pub async fn mcp_enable_server(state: State<'_, McpState>, name: String) -> Resu
 }
 
 #[tauri::command]
-pub async fn mcp_disable_server(state: State<'_, McpState>, name: String) -> Result<String, String> {
+pub async fn mcp_disable_server(
+    state: State<'_, McpState>,
+    name: String,
+) -> Result<String, String> {
     set_server_enabled(state, name, false).await
 }
 
