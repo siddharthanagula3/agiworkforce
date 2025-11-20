@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const DEFAULT_CONFIG_JSON: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/mcp/default_servers.json"));
+const DEFAULT_CONFIG_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/mcp/default_servers.json"
+));
 
 /// Configuration for a single MCP server
 #[derive(Debug, Clone, Serialize, Deserialize)]

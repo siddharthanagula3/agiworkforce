@@ -24,7 +24,7 @@ pub enum WordContent {
         bold: Option<bool>,
         italic: Option<bool>,
         underline: Option<bool>,
-        font_size: Option<u32>, // in half-points (e.g., 24 = 12pt)
+        font_size: Option<u32>,    // in half-points (e.g., 24 = 12pt)
         alignment: Option<String>, // "left", "center", "right", "justify"
     },
     BulletList {
@@ -76,7 +76,10 @@ impl WordDocumentCreator {
 
         // Build and write to file directly
         docx.build()
-            .pack(File::create(output_path).map_err(|e| Error::Generic(format!("Failed to create file: {}", e)))?)
+            .pack(
+                File::create(output_path)
+                    .map_err(|e| Error::Generic(format!("Failed to create file: {}", e)))?,
+            )
             .map_err(|e| Error::Generic(format!("Failed to pack DOCX: {}", e)))?;
 
         Ok(())
@@ -164,8 +167,9 @@ impl WordDocumentCreator {
                 let header_cells: Vec<TableCell> = headers
                     .iter()
                     .map(|header| {
-                        TableCell::new()
-                            .add_paragraph(Paragraph::new().add_run(Run::new().add_text(header).bold()))
+                        TableCell::new().add_paragraph(
+                            Paragraph::new().add_run(Run::new().add_text(header).bold()),
+                        )
                     })
                     .collect();
 
@@ -176,8 +180,9 @@ impl WordDocumentCreator {
                     let row_cells: Vec<TableCell> = row_data
                         .iter()
                         .map(|cell_text| {
-                            TableCell::new()
-                                .add_paragraph(Paragraph::new().add_run(Run::new().add_text(cell_text)))
+                            TableCell::new().add_paragraph(
+                                Paragraph::new().add_run(Run::new().add_text(cell_text)),
+                            )
                         })
                         .collect();
                     table = table.add_row(TableRow::new(row_cells));

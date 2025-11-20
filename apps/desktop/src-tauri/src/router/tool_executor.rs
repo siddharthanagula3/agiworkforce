@@ -8,6 +8,7 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::Path;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::{Emitter, Manager};
@@ -15,7 +16,6 @@ use tokio::fs;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration as TokioDuration};
 use uuid::Uuid;
-use std::process::Stdio;
 
 /// Dangerous tools that require user approval in safe mode
 const DANGEROUS_TOOLS: &[&str] = &[
@@ -223,7 +223,10 @@ impl ToolExecutor {
                 );
             }
 
-            let message = format!("User approval required to execute dangerous tool: {}", tool.name);
+            let message = format!(
+                "User approval required to execute dangerous tool: {}",
+                tool.name
+            );
             self.emit_tool_action(
                 &action_id,
                 &tool_call.name,
@@ -365,7 +368,8 @@ impl ToolExecutor {
                         })
                     }
                 }
-            }            "file_write" => {
+            }
+            "file_write" => {
                 let path = args
                     .get("path")
                     .and_then(|v| v.as_str())
@@ -417,7 +421,8 @@ impl ToolExecutor {
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     }),
                 }
-            }            "file_delete" => {
+            }
+            "file_delete" => {
                 let path = args
                     .get("path")
                     .and_then(|v| v.as_str())
@@ -428,7 +433,10 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let size_bytes = fs::metadata(&path).await.ok().map(|meta| meta.len() as usize);
+                let size_bytes = fs::metadata(&path)
+                    .await
+                    .ok()
+                    .map(|meta| meta.len() as usize);
                 let delete_result = fs::remove_file(&path).await;
 
                 if let Some(app_handle) = &self.app_handle {
@@ -456,7 +464,8 @@ impl ToolExecutor {
                         metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     }),
                 }
-            }            "ui_screenshot" => {
+            }
+            "ui_screenshot" => {
                 // ✅ Actual screen capture implementation
                 use crate::automation::screen::capture_primary_screen;
                 match capture_primary_screen() {
@@ -845,7 +854,10 @@ impl ToolExecutor {
                     .unwrap_or(60_000);
 
                 let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
-                    "cmd" => ("cmd.exe".to_string(), vec!["/C".to_string(), command.clone()]),
+                    "cmd" => (
+                        "cmd.exe".to_string(),
+                        vec!["/C".to_string(), command.clone()],
+                    ),
                     "bash" => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
                     "wsl" => (
                         "wsl.exe".to_string(),
@@ -872,10 +884,19 @@ impl ToolExecutor {
                 cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
                 cmd.kill_on_drop(true);
 
-                let child = cmd.spawn().map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
+                let child = cmd
+                    .spawn()
+                    .map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
                 let start = Instant::now();
-                let output = match timeout(TokioDuration::from_millis(timeout_ms), child.wait_with_output()).await {
-                    Ok(result) => result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?,
+                let output = match timeout(
+                    TokioDuration::from_millis(timeout_ms),
+                    child.wait_with_output(),
+                )
+                .await
+                {
+                    Ok(result) => {
+                        result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?
+                    }
                     Err(_) => {
                         let timeout_error = format!("Command timed out after {} ms", timeout_ms);
                         if let Some(app_handle) = &self.app_handle {
@@ -913,8 +934,16 @@ impl ToolExecutor {
                         command: command.clone(),
                         cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
                         exit_code,
-                        stdout: if stdout.is_empty() { None } else { Some(stdout.clone()) },
-                        stderr: if stderr.is_empty() { None } else { Some(stderr.clone()) },
+                        stdout: if stdout.is_empty() {
+                            None
+                        } else {
+                            Some(stdout.clone())
+                        },
+                        stderr: if stderr.is_empty() {
+                            None
+                        } else {
+                            Some(stderr.clone())
+                        },
                         duration: Some(duration_ms),
                         session_id: None,
                         agent_id: None,
@@ -954,7 +983,8 @@ impl ToolExecutor {
                     error: error_message,
                     metadata,
                 })
-            }            "db_query" => {
+            }
+            "db_query" => {
                 // ✅ Database query implementation
                 let query = args
                     .get("query")
@@ -1349,19 +1379,9 @@ impl ToolExecutor {
         }
     }
 
-    fn emit_tool_metrics(
-        &self,
-        action_id: &str,
-        tool_name: &str,
-        duration_ms: u64,
-        success: bool,
-    ) {
+    fn emit_tool_metrics(&self, action_id: &str, tool_name: &str, duration_ms: u64, success: bool) {
         if let Some(app_handle) = &self.app_handle {
-            let completion_reason = if success {
-                "completed"
-            } else {
-                "tool_failed"
-            };
+            let completion_reason = if success { "completed" } else { "tool_failed" };
             let payload = json!({
                 "metrics": {
                     "workflowHash": serde_json::Value::Null,
@@ -1385,7 +1405,11 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         match result {
             Ok(tool_result) => {
-                let status = if tool_result.success { "success" } else { "failed" };
+                let status = if tool_result.success {
+                    "success"
+                } else {
+                    "failed"
+                };
                 self.emit_tool_action(
                     action_id,
                     tool_name,
