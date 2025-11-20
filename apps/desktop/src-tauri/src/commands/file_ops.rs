@@ -1164,8 +1164,7 @@ mod tests {
 pub async fn file_read_text(file_path: String) -> Result<String, String> {
     validate_path_security(&file_path)?;
 
-    fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))
+    fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 /// Write text to a file
@@ -1175,12 +1174,10 @@ pub async fn file_write_text(file_path: String, content: String) -> Result<(), S
 
     // Create parent directory if needed
     if let Some(parent) = Path::new(&file_path).parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
-    fs::write(&file_path, content)
-        .map_err(|e| format!("Failed to write file: {}", e))
+    fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))
 }
 
 /// Read binary file as base64
@@ -1188,8 +1185,7 @@ pub async fn file_write_text(file_path: String, content: String) -> Result<(), S
 pub async fn file_read_binary(file_path: String) -> Result<String, String> {
     validate_path_security(&file_path)?;
 
-    let data = fs::read(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let data = fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     Ok(base64::encode(&data))
 }
@@ -1199,17 +1195,15 @@ pub async fn file_read_binary(file_path: String) -> Result<String, String> {
 pub async fn file_write_binary(file_path: String, base64_content: String) -> Result<(), String> {
     validate_path_security(&file_path)?;
 
-    let data = base64::decode(&base64_content)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+    let data =
+        base64::decode(&base64_content).map_err(|e| format!("Failed to decode base64: {}", e))?;
 
     // Create parent directory if needed
     if let Some(parent) = Path::new(&file_path).parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
-    fs::write(&file_path, data)
-        .map_err(|e| format!("Failed to write file: {}", e))
+    fs::write(&file_path, data).map_err(|e| format!("Failed to write file: {}", e))
 }
 
 /// Get simple file metadata
@@ -1217,8 +1211,8 @@ pub async fn file_write_binary(file_path: String, base64_content: String) -> Res
 pub async fn file_get_metadata(file_path: String) -> Result<FileMetadata, String> {
     validate_path_security(&file_path)?;
 
-    let metadata = fs::metadata(&file_path)
-        .map_err(|e| format!("Failed to get metadata: {}", e))?;
+    let metadata =
+        fs::metadata(&file_path).map_err(|e| format!("Failed to get metadata: {}", e))?;
 
     let created = metadata
         .created()

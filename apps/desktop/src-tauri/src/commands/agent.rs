@@ -198,7 +198,9 @@ pub async fn agent_resolve_approval(
             );
         }
         ApprovalResolution::Rejected { reason } => {
-            let rejection_reason = reason.clone().unwrap_or_else(|| "Rejected by user".to_string());
+            let rejection_reason = reason
+                .clone()
+                .unwrap_or_else(|| "Rejected by user".to_string());
             let _ = app_handle.emit(
                 "agi:approval_denied",
                 json!({
