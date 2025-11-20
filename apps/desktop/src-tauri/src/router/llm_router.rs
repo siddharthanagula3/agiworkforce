@@ -115,9 +115,8 @@ impl LLMRouter {
 
         let mut provider = Provider::OpenAI;
         let mut task_category = TaskCategory::Simple;
-        let mut reason = String::from(
-            "General developer chat - routing to OpenAI for balanced cost/quality.",
-        );
+        let mut reason =
+            String::from("General developer chat - routing to OpenAI for balanced cost/quality.");
 
         if context.requires_vision {
             provider = Provider::Google;
@@ -139,9 +138,8 @@ impl LLMRouter {
         } else if context.cost_priority == CostPriority::Low {
             provider = Provider::Ollama;
             task_category = TaskCategory::Simple;
-            reason =
-                "Cost priority is low - routing to local Ollama model for inexpensive loops."
-                    .to_string();
+            reason = "Cost priority is low - routing to local Ollama model for inexpensive loops."
+                .to_string();
         }
 
         if context.token_estimate > 12_000 && provider == Provider::OpenAI {
@@ -299,7 +297,10 @@ impl LLMRouter {
         if !user_specified_provider {
             if let Some(context) = &preferences.context {
                 let suggestion = self.suggest_for_context(context);
-                if !order.iter().any(|existing| existing.provider == suggestion.provider) {
+                if !order
+                    .iter()
+                    .any(|existing| existing.provider == suggestion.provider)
+                {
                     order.push(RouteCandidate {
                         provider: suggestion.provider,
                         model: suggestion.model,

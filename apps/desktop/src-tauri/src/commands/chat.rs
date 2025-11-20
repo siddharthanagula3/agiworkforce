@@ -619,10 +619,7 @@ async fn chat_send_message_streaming(
         .or(request.provider.as_ref())
         .and_then(|value| Provider::from_string(value));
 
-    let model_override = request
-        .model_override
-        .clone()
-        .or(request.model.clone());
+    let model_override = request.model_override.clone().or(request.model.clone());
 
     let router_context = request
         .task_metadata
@@ -1015,10 +1012,7 @@ pub async fn chat_send_message(
         .or(request.provider.as_ref())
         .and_then(|value| Provider::from_string(value));
 
-    let model_override = request
-        .model_override
-        .clone()
-        .or(request.model.clone());
+    let model_override = request.model_override.clone().or(request.model.clone());
 
     let router_context = request
         .task_metadata
@@ -1382,17 +1376,13 @@ pub async fn chat_send_message(
     }
 
     let duration_ms = task_start.elapsed().as_millis() as u64;
-    let completion_reason = outcome
-        .response
-        .finish_reason
-        .clone()
-        .unwrap_or_else(|| {
-            if outcome.response.cached {
-                "cache_hit".to_string()
-            } else {
-                "completed".to_string()
-            }
-        });
+    let completion_reason = outcome.response.finish_reason.clone().unwrap_or_else(|| {
+        if outcome.response.cached {
+            "cache_hit".to_string()
+        } else {
+            "completed".to_string()
+        }
+    });
     let response_tokens = outcome.response.tokens.unwrap_or(0);
     let response_cost = outcome.response.cost.unwrap_or(0.0);
     let metrics_payload = serde_json::json!({

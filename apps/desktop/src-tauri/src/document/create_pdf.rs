@@ -75,16 +75,17 @@ impl PdfDocumentCreator {
 
         // Create document
         let title = config.title.as_deref().unwrap_or("Document");
-        let (doc, page1, layer1) =
-            PdfDocument::new(title, page_width, page_height, "Layer 1");
+        let (doc, page1, layer1) = PdfDocument::new(title, page_width, page_height, "Layer 1");
 
         // Get the current layer and page
         let current_layer = doc.get_page(page1).get_layer(layer1);
 
         // Add built-in font
-        let font = doc.add_builtin_font(BuiltinFont::Helvetica)
+        let font = doc
+            .add_builtin_font(BuiltinFont::Helvetica)
             .map_err(|e| Error::Generic(format!("Failed to add font: {}", e)))?;
-        let font_bold = doc.add_builtin_font(BuiltinFont::HelveticaBold)
+        let font_bold = doc
+            .add_builtin_font(BuiltinFont::HelveticaBold)
             .map_err(|e| Error::Generic(format!("Failed to add bold font: {}", e)))?;
 
         // Start position
@@ -103,7 +104,13 @@ impl PdfDocumentCreator {
                         _ => 12,
                     };
 
-                    current_layer.use_text(&text, font_size as f32, margin_left, current_y, &font_bold);
+                    current_layer.use_text(
+                        &text,
+                        font_size as f32,
+                        margin_left,
+                        current_y,
+                        &font_bold,
+                    );
                     current_y -= Mm(font_size as f32 * 0.5); // Add spacing
                 }
 
@@ -121,7 +128,13 @@ impl PdfDocumentCreator {
                         &font
                     };
 
-                    current_layer.use_text(&text, size as f32, margin_left, current_y, selected_font);
+                    current_layer.use_text(
+                        &text,
+                        size as f32,
+                        margin_left,
+                        current_y,
+                        selected_font,
+                    );
                     current_y -= Mm(size as f32 * 0.5);
                 }
 
@@ -164,7 +177,11 @@ impl PdfDocumentCreator {
                     current_y -= Mm(20.0);
                 }
 
-                PdfContent::Image { path, width: _, height: _ } => {
+                PdfContent::Image {
+                    path,
+                    width: _,
+                    height: _,
+                } => {
                     // Image placeholder
                     let placeholder = format!("[Image: {}]", path);
                     current_layer.use_text(&placeholder, 12.0, margin_left, current_y, &font);
