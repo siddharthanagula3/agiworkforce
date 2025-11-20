@@ -1109,7 +1109,8 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "document_create_excel".to_string(),
             name: "Create Excel Spreadsheet".to_string(),
-            description: "Create an Excel spreadsheet (XLSX) with headers and data rows".to_string(),
+            description: "Create an Excel spreadsheet (XLSX) with headers and data rows"
+                .to_string(),
             capabilities: vec![ToolCapability::FileWrite, ToolCapability::DataAnalysis],
             parameters: vec![
                 ToolParameter {
@@ -1137,7 +1138,8 @@ impl ToolRegistry {
                     name: "rows".to_string(),
                     parameter_type: ParameterType::Array,
                     required: true,
-                    description: "Array of data rows (each row is an array of cell values)".to_string(),
+                    description: "Array of data rows (each row is an array of cell values)"
+                        .to_string(),
                     default: None,
                 },
             ],
@@ -1152,7 +1154,8 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "document_create_pdf".to_string(),
             name: "Create PDF Document".to_string(),
-            description: "Create a PDF document with text content (headings, paragraphs, lists)".to_string(),
+            description: "Create a PDF document with text content (headings, paragraphs, lists)"
+                .to_string(),
             capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
             parameters: vec![
                 ToolParameter {

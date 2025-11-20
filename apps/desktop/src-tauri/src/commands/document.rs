@@ -2,10 +2,19 @@ use std::sync::Arc;
 use tauri::{command, State};
 
 use crate::document::{
-    DocumentContent, DocumentManager, DocumentMetadata, SearchResult,
+    DocumentContent,
+    DocumentManager,
+    DocumentMetadata,
     // Creation types
-    ExcelDocumentConfig, ExcelDocumentCreator, ExcelSheet, PdfContent,
-    PdfDocumentConfig, PdfDocumentCreator, WordContent, WordDocumentConfig,
+    ExcelDocumentConfig,
+    ExcelDocumentCreator,
+    ExcelSheet,
+    PdfContent,
+    PdfDocumentConfig,
+    PdfDocumentCreator,
+    SearchResult,
+    WordContent,
+    WordDocumentConfig,
     WordDocumentCreator,
 };
 use crate::error::Result;
