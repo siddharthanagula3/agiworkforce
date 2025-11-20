@@ -1,12 +1,16 @@
-use crate::agent::{AgentConfig, AutonomousAgent, Task};
+use crate::agent::{
+    approval::{ApprovalController, ApprovalResolution},
+    AgentConfig, AutonomousAgent, Task,
+};
 use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
 use crate::router::LLMRouter;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tauri::State;
+use serde_json::json;
+use std::{collections::HashMap, sync::Arc};
+use tauri::{Emitter, State};
 use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -141,4 +145,108 @@ pub async fn agent_stop() -> Result<(), String> {
         agent.stop();
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_resolve_approval(
+    app_handle: tauri::AppHandle,
+    approval_state: State<'_, ApprovalController>,
+    approval_id: String,
+    decision: String,
+    trust: Option<bool>,
+    reason: Option<String>,
+) -> Result<(), String> {
+    let normalized = decision.to_lowercase();
+    let resolution = match normalized.as_str() {
+        "approve" | "approved" => ApprovalResolution::Approved {
+            trust: trust.unwrap_or(false),
+        },
+        "reject" | "rejected" => ApprovalResolution::Rejected { reason },
+        other => return Err(format!("Invalid approval decision: {}", other)),
+    };
+
+    approval_state
+        .resolve(&approval_id, resolution.clone())
+        .await
+        .map_err(|e| format!("Failed to resolve approval: {}", e))?;
+
+    match &resolution {
+        ApprovalResolution::Approved { .. } => {
+            let _ = app_handle.emit(
+                "agi:approval_granted",
+                json!({
+                    "approval": {
+                        "id": approval_id,
+                    }
+                }),
+            );
+            let _ = app_handle.emit(
+                "approval:granted",
+                json!({
+                    "id": approval_id,
+                }),
+            );
+            let _ = app_handle.emit(
+                "agent:action_update",
+                json!({
+                    "action": {
+                        "id": approval_id,
+                        "status": "running",
+                        "requiresApproval": false
+                    }
+                }),
+            );
+        }
+        ApprovalResolution::Rejected { reason } => {
+            let rejection_reason = reason.clone().unwrap_or_else(|| "Rejected by user".to_string());
+            let _ = app_handle.emit(
+                "agi:approval_denied",
+                json!({
+                    "approval": {
+                        "id": approval_id,
+                        "rejectionReason": rejection_reason
+                    }
+                }),
+            );
+            let _ = app_handle.emit(
+                "approval:denied",
+                json!({
+                    "id": approval_id,
+                    "reason": rejection_reason
+                }),
+            );
+            let _ = app_handle.emit(
+                "agent:action_update",
+                json!({
+                    "action": {
+                        "id": approval_id,
+                        "status": "failed",
+                        "requiresApproval": false,
+                        "error": reason.clone().unwrap_or_else(|| "Rejected".to_string())
+                    }
+                }),
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_set_workflow_hash(
+    approval_state: State<'_, ApprovalController>,
+    workflow_hash: Option<String>,
+) -> Result<(), String> {
+    approval_state.set_current_hash(workflow_hash).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn agent_list_trusted_workflows(
+    approval_state: State<'_, ApprovalController>,
+) -> Result<HashMap<String, Vec<String>>, String> {
+    approval_state
+        .list_trusted_workflows()
+        .await
+        .map_err(|e| format!("Failed to list trusted workflows: {}", e))
 }

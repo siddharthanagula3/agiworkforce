@@ -1,12 +1,32 @@
 use super::*;
+use crate::agi::planner::Plan;
 use crate::automation::AutomationService;
 use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
+use chrono::Utc;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::Emitter;
 use tokio::time::sleep;
+
+#[derive(Clone)]
+struct PlanStepRuntimeState {
+    status: String,
+    result: Option<String>,
+    error: Option<String>,
+}
+
+impl Default for PlanStepRuntimeState {
+    fn default() -> Self {
+        Self {
+            status: "pending".to_string(),
+            result: None,
+            error: None,
+        }
+    }
+}
 
 /// AGI Core - The central intelligence that coordinates all systems
 pub struct AGICore {
@@ -170,6 +190,49 @@ impl AGICore {
                 tracing::warn!("Failed to emit event {}: {}", event, e);
             }
         }
+    }
+
+    fn emit_agent_plan_update(
+        &self,
+        goal_id: &str,
+        description: &str,
+        plan: &Plan,
+        states: &[PlanStepRuntimeState],
+        workflow_hash: Option<&str>,
+        created_at_ms: i64,
+    ) {
+        let steps_payload: Vec<_> = plan
+            .steps
+            .iter()
+            .enumerate()
+            .map(|(index, step)| {
+                let runtime = states.get(index).cloned().unwrap_or_default();
+                let step_title = step.description.clone();
+                let detail = format!("{} (tool: {})", step.description, step.tool_id);
+                json!({
+                    "id": step.id.clone(),
+                    "title": step_title,
+                    "description": detail,
+                    "status": runtime.status,
+                    "result": runtime.result,
+                    "error": runtime.error,
+                })
+            })
+            .collect();
+        let updated_at = Utc::now().timestamp_millis();
+        self.emit_event(
+            "agent:plan_update",
+            json!({
+                "plan": {
+                    "id": goal_id,
+                    "workflowHash": workflow_hash,
+                    "description": description,
+                    "steps": steps_payload,
+                    "createdAt": created_at_ms,
+                    "updatedAt": updated_at,
+                }
+            }),
+        );
     }
 
     /// Start the AGI core loop (runs continuously)
@@ -438,6 +501,18 @@ impl AGICore {
 
         tracing::info!("[AGI] Plan created with {} steps", plan.steps.len());
 
+        let workflow_hash = compute_plan_workflow_hash(&context.goal, &plan);
+        let plan_created_at = Utc::now().timestamp_millis();
+        let mut step_states = vec![PlanStepRuntimeState::default(); plan.steps.len()];
+        self.emit_agent_plan_update(
+            &goal_id,
+            &context.goal.description,
+            &plan,
+            &step_states,
+            Some(workflow_hash.as_str()),
+            plan_created_at,
+        );
+
         // Emit plan created event
         self.emit_event(
             "agi:goal:plan_created",
@@ -480,10 +555,28 @@ impl AGICore {
                 continue;
             }
 
+            if let Some(state) = step_states.get_mut(index) {
+                state.status = "running".to_string();
+                state.result = None;
+                state.error = None;
+            }
+            self.emit_agent_plan_update(
+                &goal_id,
+                &context.goal.description,
+                &plan,
+                &step_states,
+                Some(workflow_hash.as_str()),
+                plan_created_at,
+            );
+
             // Execute step
             let start = std::time::Instant::now();
-            let result = self.executor.execute_step(step, &context).await;
+            let execution = self.executor.execute_step(step, &context).await;
             let execution_time = start.elapsed();
+            let (success, step_value, error_text) = match execution {
+                Ok(value) => (true, value, None),
+                Err(err) => (false, serde_json::Value::Null, Some(err.to_string())),
+            };
 
             // Release resources
             self.resource_manager
@@ -493,16 +586,30 @@ impl AGICore {
             // Record result
             let tool_result = ToolExecutionResult {
                 tool_id: step.tool_id.clone(),
-                success: result.is_ok(),
-                result: result
-                    .as_ref()
-                    .ok()
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null),
-                error: result.err().map(|e| e.to_string()),
+                success,
+                result: step_value.clone(),
+                error: error_text.clone(),
                 execution_time_ms: execution_time.as_millis() as u64,
                 resources_used: step.estimated_resources.clone(),
             };
+
+            if let Some(state) = step_states.get_mut(index) {
+                state.status = if success {
+                    "success".to_string()
+                } else {
+                    "failed".to_string()
+                };
+                state.result = format_plan_result_snippet(&step_value);
+                state.error = error_text.clone();
+            }
+            self.emit_agent_plan_update(
+                &goal_id,
+                &context.goal.description,
+                &plan,
+                &step_states,
+                Some(workflow_hash.as_str()),
+                plan_created_at,
+            );
 
             // Emit step completed event
             self.emit_event(
@@ -569,6 +676,15 @@ impl AGICore {
                 .unwrap()
                 .insert(goal_id.clone(), context.clone());
         }
+
+        self.emit_agent_plan_update(
+            &goal_id,
+            &context.goal.description,
+            &plan,
+            &step_states,
+            Some(workflow_hash.as_str()),
+            plan_created_at,
+        );
 
         Ok(())
     }
@@ -663,5 +779,32 @@ impl AGICore {
             .lock()
             .ok()
             .map_or(Vec::new(), |g| g.clone())
+    }
+}
+
+fn compute_plan_workflow_hash(goal: &Goal, plan: &Plan) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(goal.id.as_bytes());
+    hasher.update(goal.description.as_bytes());
+    for step in &plan.steps {
+        hasher.update(step.id.as_bytes());
+        hasher.update(step.tool_id.as_bytes());
+        hasher.update(step.description.as_bytes());
+    }
+    hex::encode(hasher.finalize())
+}
+
+fn format_plan_result_snippet(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        _ => serde_json::to_string(value).ok(),
     }
 }

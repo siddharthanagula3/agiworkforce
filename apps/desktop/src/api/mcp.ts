@@ -142,6 +142,30 @@ export async function mcpDisconnectServer(name: string): Promise<string> {
 }
 
 /**
+ * Enable a server in the config and start it
+ */
+export async function mcpEnableServer(name: string): Promise<string> {
+  try {
+    validateNonEmpty(name, 'server name');
+    return await invokeWithTimeout<string>('mcp_enable_server', { name });
+  } catch (error) {
+    throw new Error(`Failed to enable MCP server '${name}': ${error}`);
+  }
+}
+
+/**
+ * Disable a server and stop it if running
+ */
+export async function mcpDisableServer(name: string): Promise<string> {
+  try {
+    validateNonEmpty(name, 'server name');
+    return await invokeWithTimeout<string>('mcp_disable_server', { name });
+  } catch (error) {
+    throw new Error(`Failed to disable MCP server '${name}': ${error}`);
+  }
+}
+
+/**
  * List all available tools from all connected servers
  * Updated Nov 16, 2025: Added error handling and timeout
  */
@@ -303,6 +327,20 @@ export class McpClient {
    */
   static async disconnect(serverName: string): Promise<string> {
     return mcpDisconnectServer(serverName);
+  }
+
+  /**
+   * Enable a server (persist + start)
+   */
+  static async enableServer(serverName: string): Promise<string> {
+    return mcpEnableServer(serverName);
+  }
+
+  /**
+   * Disable a server (persist + stop)
+   */
+  static async disableServer(serverName: string): Promise<string> {
+    return mcpDisableServer(serverName);
   }
 
   /**

@@ -14,9 +14,9 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 import { ApprovalRequest } from '../../../stores/unifiedChatStore';
 import { CodeBlock } from '../Visualizations/CodeBlock';
+import { useApprovalActions } from '../../../hooks/useApprovalActions';
 
 export interface ApprovalRequestCardProps {
   approval: ApprovalRequest;
@@ -79,6 +79,8 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [pendingDecision, setPendingDecision] = useState<'approve' | 'reject' | null>(null);
+  const { resolveApproval } = useApprovalActions();
 
   const TypeIcon = TYPE_ICONS[approval.type];
   const riskConfig = RISK_LEVEL_CONFIG[approval.riskLevel];
@@ -112,13 +114,16 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   const handleApprove = async () => {
     if (onApprove) {
       onApprove();
-    } else {
-      // Default: call Tauri command
-      try {
-        await invoke('approve_operation', { approvalId: approval.id });
-      } catch (error) {
-        console.error('Failed to approve operation:', error);
-      }
+      return;
+    }
+
+    setPendingDecision('approve');
+    try {
+      await resolveApproval(approval, 'approve');
+    } catch (error) {
+      console.error('Failed to approve operation:', error);
+    } finally {
+      setPendingDecision(null);
     }
   };
 
@@ -126,22 +131,26 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     if (showRejectReason) {
       if (onReject) {
         onReject(rejectReason || undefined);
+        setShowRejectReason(false);
+        setRejectReason('');
       } else {
-        // Default: call Tauri command
+        setPendingDecision('reject');
         try {
-          await invoke('reject_operation', {
-            approvalId: approval.id,
+          await resolveApproval(approval, 'reject', {
             reason: rejectReason || undefined,
           });
+          setShowRejectReason(false);
+          setRejectReason('');
         } catch (error) {
           console.error('Failed to reject operation:', error);
+        } finally {
+          setPendingDecision(null);
         }
       }
-      setShowRejectReason(false);
-      setRejectReason('');
-    } else {
-      setShowRejectReason(true);
+      return;
     }
+
+    setShowRejectReason(true);
   };
 
   const formatJson = (data: any): string => {
@@ -272,7 +281,8 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
               <div className="flex gap-2">
                 <button
                   onClick={handleReject}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-60"
+                  disabled={pendingDecision === 'reject'}
                 >
                   Confirm Rejection
                 </button>
@@ -291,14 +301,16 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={handleApprove}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                disabled={pendingDecision !== null}
               >
                 <Check size={16} />
                 Approve
               </button>
               <button
                 onClick={handleReject}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                disabled={pendingDecision !== null}
               >
                 <X size={16} />
                 Reject

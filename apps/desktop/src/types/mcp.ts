@@ -7,6 +7,7 @@ export interface McpServerInfo {
   enabled: boolean;
   connected: boolean;
   tool_count: number;
+  command?: string;
 }
 
 export interface McpToolInfo {

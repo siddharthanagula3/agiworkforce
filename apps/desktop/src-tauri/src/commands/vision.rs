@@ -161,6 +161,7 @@ pub async fn vision_send_message(
         provider,
         model: request.model.clone(),
         strategy: crate::router::llm_router::RoutingStrategy::Auto,
+        context: None,
     };
 
     // Get candidates from router

@@ -11,48 +11,57 @@ AGI Workforce is an autonomous desktop automation platform built on **Tauri 2.0,
 ## Essential Commands
 
 ```powershell
-# Setup
-pnpm install
-pnpm lint && pnpm typecheck
+# Setup (requires Node 20.11.0+, pnpm 9.15.0+, Rust 1.90.0)
+nvm use                                          # Auto-switch to Node 22
+pnpm install                                     # Install all deps + Husky hooks
+pnpm lint && pnpm typecheck                      # Verify setup
 
 # Development
-pnpm --filter @agiworkforce/desktop dev        # Run dev server
-pnpm --filter @agiworkforce/desktop build      # Production build
-pnpm --filter @agiworkforce/desktop test       # Run tests
+pnpm --filter @agiworkforce/desktop dev          # Run dev server (Vite + Tauri)
+pnpm --filter @agiworkforce/desktop build        # Production build
+pnpm --filter @agiworkforce/desktop test         # Run all tests
+pnpm --filter @agiworkforce/desktop test:ui      # Test UI mode (Vitest)
+pnpm --filter @agiworkforce/desktop test:e2e     # E2E tests (Playwright)
+pnpm --filter @agiworkforce/desktop test:coverage # Coverage report
 
 # Rust (from apps/desktop/src-tauri)
-cargo check                                     # Check compilation
-cargo test                                      # Run tests
-cargo test test_name -- --nocapture            # Debug specific test
-cargo clippy                                    # Lint
+cargo check                                      # Check compilation
+cargo test                                       # Run all tests (232/241 passing)
+cargo test test_name -- --nocapture             # Debug specific test
+cargo test agi::                                 # Test specific module
+cargo clippy                                     # Lint (must pass with 0 warnings)
+cargo fmt                                        # Format code
 
 # Debugging
 $env:RUST_LOG="agiworkforce_desktop::agi=debug"  # Debug AGI
 $env:RUST_LOG="debug"                            # Debug all
 pnpm test -- chatStore.test.ts                   # Single test file
+pnpm lint:fix                                    # Auto-fix lint errors
 ```
 
 ## Architecture
 
 ### Frontend (React/TypeScript)
 
-- **Stack:** React 18, TypeScript 5.4+, Vite, Zustand, Radix UI, Tailwind
-- **Stores:** `apps/desktop/src/stores/` - each feature has its own store
-- **Key Libraries:** Monaco Editor, xterm.js, react-markdown
+- **Stack:** React 18, TypeScript 5.4+, Vite, Zustand (37 stores), Radix UI, Tailwind
+- **Stores:** `apps/desktop/src/stores/` - each feature has its own store (atomic updates with immer)
+- **Key Libraries:** Monaco Editor, xterm.js, react-markdown, ReactFlow (@xyflow/react)
+- **Patterns:** Lazy loading for heavy components, error boundaries, compound components, React.memo for performance
 
 ### Backend (Rust/Tauri)
 
-- **Stack:** Tauri 2.0, Tokio, SQLite (rusqlite)
-- **Modules:** `apps/desktop/src-tauri/src/` - automation, browser, filesystem, database, api, router, security, etc.
+- **Stack:** Tauri 2.0, Tokio, SQLite (rusqlite), windows-rs 0.56, rmcp 0.8
+- **Modules:** `apps/desktop/src-tauri/src/` - 62 command modules in `commands/`
+- **Key Directories:** `agi/`, `router/`, `mcp/`, `automation/`, `browser/`, `error/`, `hooks/`, `db/`
 
 **Adding Commands:**
 
-1. Add `#[tauri::command]` to function in appropriate module
+1. Add `#[tauri::command]` to function in appropriate module under `commands/`
 2. Re-export from `commands/mod.rs`
 3. Add to `invoke_handler!` in `main.rs`
-4. Initialize state with `app.manage()` if needed
+4. Initialize state with `app.manage()` if needed (in `main.rs`)
 
-**State Objects:** AppDatabase, LLMState, BrowserStateWrapper, SettingsServiceState, FileWatcherState, TaskManagerState
+**State Objects:** AppDatabase, LLMState, BrowserStateWrapper, SettingsServiceState, FileWatcherState, TaskManagerState, ApprovalController, AuthManagerState
 
 ### AGI System (`agi/` and `agent/`)
 
@@ -101,7 +110,7 @@ import * as gdrive from './servers/google-drive';
 const doc = await gdrive.getDocument({ id: 'abc123' });
 ```
 
-**Modules:** `mcp/protocol.rs`, `mcp/tool_executor.rs`
+**Modules:** 13 modules in `mcp/` including `protocol.rs`, `manager.rs`, `client.rs`, `tool_executor.rs`, `transport/`
 
 ### Hook System (`hooks/`)
 
@@ -157,11 +166,11 @@ browser.click_semantic("the login button").await?;  // Survives UI changes
 
 ## Version Pinning
 
-- **Node.js:** 20.11.0+ (`.nvmrc`, engines field)
-- **pnpm:** 9.15.0+ (`.npmrc` with `engine-strict=true`)
+- **Node.js:** 20.11.0+ (`.nvmrc` set to v22, engines field)
+- **pnpm:** 9.15.0+ (`package.json` engines, `.npmrc` has `engine-strict=false` to suppress external warnings)
 - **Rust:** 1.90.0 (`rust-toolchain.toml`)
 
-Use `nvm use` to auto-switch Node version.
+Use `nvm use` to auto-switch Node version. All versions strictly enforced via Git pre-push hooks.
 
 ## Development Workflow
 
@@ -247,9 +256,12 @@ $env:RUSTC_WRAPPER="sccache"
 
 ## Git Workflow
 
-- **Format:** `type(scope): description`
+- **Format:** `type(scope): description` (enforced via commitlint)
 - **Types:** feat, fix, chore, docs, test, refactor, perf, ci
-- **Hooks:** Pre-commit (lint-staged), pre-push (type-check)
+- **Hooks (Husky):**
+  - Pre-commit: lint-staged (ESLint + Prettier on staged files)
+  - Commit-msg: commitlint (validates Conventional Commits format)
+  - Pre-push: `pnpm typecheck` and `cargo fmt --check` (must pass)
 
 ## Testing
 
@@ -268,6 +280,28 @@ cd apps/desktop/src-tauri && cargo test        # Rust tests
 - **Rust:** Use `rayon` (parallel), `dashmap`/`parking_lot` (concurrent)
 - **Database:** SQLite pooled via `tokio-rusqlite`, prepared statements
 
+## Monorepo Structure
+
+This is a pnpm workspace with 4 primary packages:
+
+```
+agiworkforce/
+├── apps/
+│   ├── desktop/           # Main Tauri app (primary focus)
+│   │   ├── src/           # React frontend (37 stores, 40+ components)
+│   │   └── src-tauri/     # Rust backend (266 commands, 62 modules)
+│   ├── mobile/            # Mobile app (future)
+│   └── extension/         # Browser extension (future)
+├── packages/
+│   ├── types/             # Shared TypeScript types
+│   ├── ui-components/     # Reusable UI components
+│   └── utils/             # Shared utilities
+├── services/              # Backend services
+└── docs/                  # Architecture docs (30+ files)
+```
+
+**Import Protocol:** Use `workspace:*` in package.json, not relative paths or versions.
+
 ## Documentation
 
 - `README.md` - Setup guide
@@ -275,3 +309,4 @@ cd apps/desktop/src-tauri && cargo test        # Rust tests
 - `CLAUDE.md` - This file
 - `MCP_IMPLEMENTATION.md` - MCP architecture details
 - `IMPLEMENTATION_SUMMARY.md` - Feature implementation details
+- `docs/architecture/` - 30+ architecture documents

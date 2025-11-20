@@ -114,6 +114,7 @@ mod tests {
             provider: Some(Provider::Ollama),
             model: Some("llama3".to_string()),
             strategy: RoutingStrategy::LocalFirst,
+            context: None,
         };
 
         assert_eq!(prefs.provider, Some(Provider::Ollama));

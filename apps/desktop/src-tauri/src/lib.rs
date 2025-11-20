@@ -132,6 +132,9 @@ pub mod realtime;
 // Real-time ROI metrics and dashboard
 pub mod metrics;
 
+// Autonomous agent system (planner/executor/approval runtime)
+pub mod agent;
+
 // Re-exports for convenience
 pub use state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use tray::build_system_tray;

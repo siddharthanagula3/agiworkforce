@@ -1,10 +1,21 @@
 use crate::agi::tools::{Tool, ToolRegistry, ToolResult};
+use crate::events::{
+    create_file_delete_event, create_file_read_event, create_file_write_event, emit_file_operation,
+    emit_terminal_command, TerminalCommand,
+};
 use crate::router::{ToolCall, ToolDefinition};
 use anyhow::{anyhow, Result};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::{Emitter, Manager};
+use tokio::fs;
+use tokio::process::Command;
+use tokio::time::{timeout, Duration as TokioDuration};
+use uuid::Uuid;
+use std::process::Stdio;
 
 /// Dangerous tools that require user approval in safe mode
 const DANGEROUS_TOOLS: &[&str] = &[
@@ -121,42 +132,68 @@ impl ToolExecutor {
 
     /// Execute a tool call from the LLM
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
-        // ✅ Check if this is an MCP tool (prefix: mcp_)
+        let args: HashMap<String, serde_json::Value> =
+            serde_json::from_str(&tool_call.arguments)
+                .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
+        let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
+        let action_id = self.next_action_id(tool_call);
+        let start_time = Instant::now();
+
+        self.emit_tool_action(
+            &action_id,
+            &tool_call.name,
+            "running",
+            &metadata_snapshot,
+            None,
+        );
+
         if tool_call.name.starts_with("mcp_") {
-            return self.execute_mcp_tool(tool_call).await;
+            let result = self.execute_mcp_tool(tool_call, args).await;
+            return self.finalize_tool_result(
+                &action_id,
+                &tool_call.name,
+                metadata_snapshot,
+                start_time,
+                result,
+            );
         }
 
-        // Get the tool from AGI registry
         let tool = self
             .registry
             .get_tool(&tool_call.name)
             .ok_or_else(|| anyhow!("Tool not found: {}", tool_call.name))?;
 
-        // Parse arguments
-        let args: HashMap<String, serde_json::Value> =
-            serde_json::from_str(&tool_call.arguments)
-                .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
-
-        // Validate required parameters
         for param in &tool.parameters {
             if param.required && !args.contains_key(&param.name) {
+                let error_message = format!("Missing required parameter: {}", param.name);
+                self.emit_tool_action(
+                    &action_id,
+                    &tool_call.name,
+                    "failed",
+                    &metadata_snapshot,
+                    Some(error_message.clone()),
+                );
+                self.emit_tool_metrics(
+                    &action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
                 return Ok(ToolResult {
                     success: false,
                     data: json!(null),
-                    error: Some(format!("Missing required parameter: {}", param.name)),
+                    error: Some(error_message),
                     metadata: HashMap::new(),
                 });
             }
         }
 
-        // 🔒 Security Check: Dangerous operations in safe mode
         if is_dangerous_tool(&tool_call.name) && self.conversation_mode.as_deref() == Some("safe") {
             tracing::warn!(
                 "[Security] Dangerous tool '{}' requested in safe mode. Emitting approval request.",
                 tool_call.name
             );
 
-            // Emit approval request event
             if let Some(app_handle) = &self.app_handle {
                 let _ = app_handle.emit(
                     "approval:request",
@@ -168,13 +205,12 @@ impl ToolExecutor {
                         "riskLevel": "high",
                         "details": {
                             "tool": tool.name,
-                            "arguments": args,
+                            "arguments": metadata_snapshot.clone(),
                         },
                         "status": "pending",
                     }),
                 );
 
-                // Also emit agent status update
                 let _ = app_handle.emit(
                     "agent:status:update",
                     json!({
@@ -187,15 +223,25 @@ impl ToolExecutor {
                 );
             }
 
-            // TODO: In production, wait for approval response
-            // For now, return a special result indicating approval needed
+            let message = format!("User approval required to execute dangerous tool: {}", tool.name);
+            self.emit_tool_action(
+                &action_id,
+                &tool_call.name,
+                "blocked",
+                &metadata_snapshot,
+                Some(message.clone()),
+            );
+            self.emit_tool_metrics(
+                &action_id,
+                &tool_call.name,
+                start_time.elapsed().as_millis() as u64,
+                false,
+            );
+
             return Ok(ToolResult {
                 success: false,
                 data: json!({ "approval_required": true }),
-                error: Some(format!(
-                    "User approval required to execute dangerous tool: {}",
-                    tool.name
-                )),
+                error: Some(message),
                 metadata: HashMap::from([
                     ("requires_approval".to_string(), json!(true)),
                     ("tool_name".to_string(), json!(tool_call.name)),
@@ -203,7 +249,6 @@ impl ToolExecutor {
             });
         }
 
-        // Emit agent status: executing tool
         if let Some(app_handle) = &self.app_handle {
             let _ = app_handle.emit(
                 "agent:status:update",
@@ -217,12 +262,22 @@ impl ToolExecutor {
             );
         }
 
-        // Execute the tool based on its ID
-        self.execute_tool_impl(&tool, args).await
+        let result = self.execute_tool_impl(&tool, args).await;
+        self.finalize_tool_result(
+            &action_id,
+            &tool_call.name,
+            metadata_snapshot,
+            start_time,
+            result,
+        )
     }
 
     /// Execute an MCP tool
-    async fn execute_mcp_tool(&self, tool_call: &ToolCall) -> Result<ToolResult> {
+    async fn execute_mcp_tool(
+        &self,
+        tool_call: &ToolCall,
+        args: HashMap<String, serde_json::Value>,
+    ) -> Result<ToolResult> {
         use crate::commands::McpState;
 
         // Get MCP state from app handle
@@ -231,11 +286,6 @@ impl ToolExecutor {
             .as_ref()
             .and_then(|h| h.try_state::<McpState>())
             .ok_or_else(|| anyhow!("MCP state not available"))?;
-
-        // Parse arguments
-        let args: HashMap<String, serde_json::Value> =
-            serde_json::from_str(&tool_call.arguments)
-                .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
 
         // Execute the MCP tool
         match mcp_state.registry.execute_tool(&tool_call.name, args).await {
@@ -268,42 +318,95 @@ impl ToolExecutor {
                 let path = args
                     .get("path")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?;
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+                let session_id = args
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
 
-                // ✅ Actual filesystem implementation
-                match std::fs::read_to_string(path) {
-                    Ok(content) => Ok(ToolResult {
-                        success: true,
-                        data: json!({ "content": content, "path": path }),
-                        error: None,
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
-                    Err(e) => Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(format!("Failed to read file: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
-                    }),
+                match fs::read_to_string(&path).await {
+                    Ok(content) => {
+                        if let Some(app_handle) = &self.app_handle {
+                            let file_op = create_file_read_event(
+                                &path,
+                                &content,
+                                true,
+                                None,
+                                session_id.clone(),
+                            );
+                            emit_file_operation(app_handle, file_op);
+                        }
+
+                        Ok(ToolResult {
+                            success: true,
+                            data: json!({ "content": content, "path": &path }),
+                            error: None,
+                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        })
+                    }
+                    Err(e) => {
+                        if let Some(app_handle) = &self.app_handle {
+                            let file_op = create_file_read_event(
+                                &path,
+                                "",
+                                false,
+                                Some(e.to_string()),
+                                session_id.clone(),
+                            );
+                            emit_file_operation(app_handle, file_op);
+                        }
+
+                        Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to read file: {}", e)),
+                            metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                        })
+                    }
                 }
-            }
-            "file_write" => {
+            }            "file_write" => {
                 let path = args
                     .get("path")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path parameter"))?;
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
                 let content = args
                     .get("content")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing content parameter"))?;
+                    .ok_or_else(|| anyhow!("Missing content parameter"))?
+                    .to_string();
+                let session_id = args
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
 
-                // ✅ Actual filesystem implementation
-                match std::fs::write(path, content) {
+                let old_content = fs::read_to_string(&path).await.ok();
+                if let Some(parent) = Path::new(&path).parent() {
+                    let _ = fs::create_dir_all(parent).await;
+                }
+
+                let write_result = fs::write(&path, content.as_bytes()).await;
+
+                if let Some(app_handle) = &self.app_handle {
+                    let file_op = create_file_write_event(
+                        &path,
+                        old_content.as_deref(),
+                        &content,
+                        write_result.is_ok(),
+                        write_result.as_ref().err().map(|e| e.to_string()),
+                        session_id.clone(),
+                    );
+                    emit_file_operation(app_handle, file_op);
+                }
+
+                match write_result {
                     Ok(_) => Ok(ToolResult {
                         success: true,
-                        data: json!({ "success": true, "path": path }),
+                        data: json!({ "success": true, "path": &path }),
                         error: None,
                         metadata: HashMap::from([
-                            ("path".to_string(), json!(path)),
+                            ("path".to_string(), json!(&path)),
                             ("content_length".to_string(), json!(content.len())),
                         ]),
                     }),
@@ -311,11 +414,49 @@ impl ToolExecutor {
                         success: false,
                         data: json!(null),
                         error: Some(format!("Failed to write file: {}", e)),
-                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
                     }),
                 }
-            }
-            "ui_screenshot" => {
+            }            "file_delete" => {
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+                let session_id = args
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                let size_bytes = fs::metadata(&path).await.ok().map(|meta| meta.len() as usize);
+                let delete_result = fs::remove_file(&path).await;
+
+                if let Some(app_handle) = &self.app_handle {
+                    let file_op = create_file_delete_event(
+                        &path,
+                        size_bytes,
+                        delete_result.is_ok(),
+                        delete_result.as_ref().err().map(|e| e.to_string()),
+                        session_id,
+                    );
+                    emit_file_operation(app_handle, file_op);
+                }
+
+                match delete_result {
+                    Ok(_) => Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "path": &path }),
+                        error: None,
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Failed to delete file: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    }),
+                }
+            }            "ui_screenshot" => {
                 // ✅ Actual screen capture implementation
                 use crate::automation::screen::capture_primary_screen;
                 match capture_primary_screen() {
@@ -683,7 +824,137 @@ impl ToolExecutor {
                     })
                 }
             }
-            "db_query" => {
+            "terminal_execute" => {
+                let command = args
+                    .get("command")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing command parameter"))?
+                    .to_string();
+                let cwd = args
+                    .get("cwd")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let shell = args
+                    .get("shell")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("powershell")
+                    .to_lowercase();
+                let timeout_ms = args
+                    .get("timeout_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(60_000);
+
+                let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
+                    "cmd" => ("cmd.exe".to_string(), vec!["/C".to_string(), command.clone()]),
+                    "bash" => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+                    "wsl" => (
+                        "wsl.exe".to_string(),
+                        vec!["bash".to_string(), "-lc".to_string(), command.clone()],
+                    ),
+                    _ => (
+                        "powershell.exe".to_string(),
+                        vec![
+                            "-NoLogo".to_string(),
+                            "-NoProfile".to_string(),
+                            "-Command".to_string(),
+                            command.clone(),
+                        ],
+                    ),
+                };
+
+                let mut cmd = Command::new(&program);
+                for arg in shell_args.drain(..) {
+                    cmd.arg(arg);
+                }
+                if let Some(dir) = &cwd {
+                    cmd.current_dir(dir);
+                }
+                cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+                cmd.kill_on_drop(true);
+
+                let child = cmd.spawn().map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
+                let start = Instant::now();
+                let output = match timeout(TokioDuration::from_millis(timeout_ms), child.wait_with_output()).await {
+                    Ok(result) => result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?,
+                    Err(_) => {
+                        let timeout_error = format!("Command timed out after {} ms", timeout_ms);
+                        if let Some(app_handle) = &self.app_handle {
+                            let terminal_event = TerminalCommand {
+                                id: Uuid::new_v4().to_string(),
+                                command: command.clone(),
+                                cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
+                                exit_code: None,
+                                stdout: None,
+                                stderr: Some(timeout_error.clone()),
+                                duration: Some(timeout_ms),
+                                session_id: None,
+                                agent_id: None,
+                            };
+                            emit_terminal_command(app_handle, terminal_event);
+                        }
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(timeout_error),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                };
+
+                let duration_ms = start.elapsed().as_millis() as u64;
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let exit_code = output.status.code();
+                let success = output.status.success();
+
+                if let Some(app_handle) = &self.app_handle {
+                    let terminal_event = TerminalCommand {
+                        id: Uuid::new_v4().to_string(),
+                        command: command.clone(),
+                        cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
+                        exit_code,
+                        stdout: if stdout.is_empty() { None } else { Some(stdout.clone()) },
+                        stderr: if stderr.is_empty() { None } else { Some(stderr.clone()) },
+                        duration: Some(duration_ms),
+                        session_id: None,
+                        agent_id: None,
+                    };
+                    emit_terminal_command(app_handle, terminal_event);
+                }
+
+                let mut metadata = HashMap::new();
+                metadata.insert("shell".to_string(), json!(shell));
+                metadata.insert("program".to_string(), json!(program));
+                if let Some(dir) = &cwd {
+                    metadata.insert("cwd".to_string(), json!(dir));
+                }
+
+                let error_message = if success {
+                    None
+                } else {
+                    let trimmed = stderr.trim();
+                    if trimmed.is_empty() {
+                        Some(match exit_code {
+                            Some(code) => format!("Command exited with code {}", code),
+                            None => "Command exited with error".to_string(),
+                        })
+                    } else {
+                        Some(trimmed.to_string())
+                    }
+                };
+
+                Ok(ToolResult {
+                    success,
+                    data: json!({
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "exitCode": exit_code,
+                        "durationMs": duration_ms,
+                    }),
+                    error: error_message,
+                    metadata,
+                })
+            }            "db_query" => {
                 // ✅ Database query implementation
                 let query = args
                     .get("query")
@@ -909,6 +1180,7 @@ impl ToolExecutor {
                         provider: None,
                         model: Some(model_str.to_string()),
                         strategy: crate::router::RoutingStrategy::Auto,
+                        context: None,
                     });
 
                     let router = llm_state.router.lock().await;
@@ -1035,6 +1307,117 @@ impl ToolExecutor {
                 }
             }
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
+        }
+    }
+
+    fn next_action_id(&self, tool_call: &ToolCall) -> String {
+        if tool_call.id.trim().is_empty() {
+            format!("tool-{}", Uuid::new_v4())
+        } else {
+            tool_call.id.clone()
+        }
+    }
+
+    fn emit_tool_action(
+        &self,
+        action_id: &str,
+        tool_name: &str,
+        status: &str,
+        metadata: &Value,
+        error: Option<String>,
+    ) {
+        if let Some(app_handle) = &self.app_handle {
+            let payload = json!({
+                "action": {
+                    "id": action_id,
+                    "actionId": action_id,
+                    "workflowHash": serde_json::Value::Null,
+                    "type": "tool",
+                    "title": format!("Execute {}", tool_name),
+                    "description": format!("Tool {}", tool_name),
+                    "status": status,
+                    "requiresApproval": false,
+                    "scope": {
+                        "type": "tool",
+                        "description": format!("Tool {}", tool_name),
+                    },
+                    "metadata": metadata,
+                    "error": error,
+                }
+            });
+            let _ = app_handle.emit("agent:action_update", payload);
+        }
+    }
+
+    fn emit_tool_metrics(
+        &self,
+        action_id: &str,
+        tool_name: &str,
+        duration_ms: u64,
+        success: bool,
+    ) {
+        if let Some(app_handle) = &self.app_handle {
+            let completion_reason = if success {
+                "completed"
+            } else {
+                "tool_failed"
+            };
+            let payload = json!({
+                "metrics": {
+                    "workflowHash": serde_json::Value::Null,
+                    "actionId": action_id,
+                    "tool": tool_name,
+                    "durationMs": duration_ms,
+                    "completionReason": completion_reason,
+                }
+            });
+            let _ = app_handle.emit("agent:metrics", payload);
+        }
+    }
+
+    fn finalize_tool_result(
+        &self,
+        action_id: &str,
+        tool_name: &str,
+        metadata: Value,
+        start_time: Instant,
+        result: Result<ToolResult>,
+    ) -> Result<ToolResult> {
+        match result {
+            Ok(tool_result) => {
+                let status = if tool_result.success { "success" } else { "failed" };
+                self.emit_tool_action(
+                    action_id,
+                    tool_name,
+                    status,
+                    &metadata,
+                    tool_result.error.clone(),
+                );
+                self.emit_tool_metrics(
+                    action_id,
+                    tool_name,
+                    start_time.elapsed().as_millis() as u64,
+                    tool_result.success,
+                );
+                Ok(tool_result)
+            }
+            Err(err) => {
+                let message = err.to_string();
+                self.emit_tool_action(
+                    action_id,
+                    tool_name,
+                    "failed",
+                    &metadata,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    action_id,
+                    tool_name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                Err(err)
+            }
         }
     }
 
