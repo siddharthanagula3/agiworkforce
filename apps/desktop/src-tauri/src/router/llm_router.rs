@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Result};
 use futures_util::Stream;
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 
 use crate::router::cache_manager::CacheManager;
 use crate::router::cost_calculator::CostCalculator;
@@ -26,6 +27,7 @@ pub struct RouterPreferences {
     pub provider: Option<Provider>,
     pub model: Option<String>,
     pub strategy: RoutingStrategy,
+    pub context: Option<RouterContext>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +47,50 @@ pub struct RouteOutcome {
     pub cost: f64,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CostPriority {
+    Low,
+    Balanced,
+}
+
+impl Default for CostPriority {
+    fn default() -> Self {
+        CostPriority::Balanced
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouterContext {
+    #[serde(default)]
+    pub intents: Vec<String>,
+    #[serde(default)]
+    pub requires_vision: bool,
+    #[serde(default)]
+    pub token_estimate: u32,
+    #[serde(default)]
+    pub cost_priority: CostPriority,
+}
+
+impl Default for RouterContext {
+    fn default() -> Self {
+        Self {
+            intents: Vec::new(),
+            requires_vision: false,
+            token_estimate: 0,
+            cost_priority: CostPriority::Balanced,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RouterSuggestion {
+    pub provider: Provider,
+    pub model: String,
+    pub reason: String,
+}
+
 pub struct LLMRouter {
     providers: HashMap<Provider, Box<dyn LLMProvider>>,
     default_provider: Provider,
@@ -60,6 +106,108 @@ impl Default for LLMRouter {
 }
 
 impl LLMRouter {
+    pub fn suggest_for_context(&self, context: &RouterContext) -> RouterSuggestion {
+        let normalized_intents: Vec<String> = context
+            .intents
+            .iter()
+            .map(|intent| intent.to_lowercase())
+            .collect();
+
+        let mut provider = Provider::OpenAI;
+        let mut task_category = TaskCategory::Simple;
+        let mut reason = String::from(
+            "General developer chat - routing to OpenAI for balanced cost/quality.",
+        );
+
+        if context.requires_vision {
+            provider = Provider::Google;
+            task_category = TaskCategory::Creative;
+            reason =
+                "Vision or screenshot detected - routing to Google Gemini for multimodal reasoning."
+                    .to_string();
+        } else if normalized_intents.iter().any(|intent| {
+            matches!(
+                intent.as_str(),
+                "code" | "devops" | "repo" | "terminal" | "automation" | "build" | "test"
+            )
+        }) {
+            provider = Provider::Anthropic;
+            task_category = TaskCategory::Complex;
+            reason =
+                "Developer or automation workflow detected - routing to Anthropic Claude for deep reasoning."
+                    .to_string();
+        } else if context.cost_priority == CostPriority::Low {
+            provider = Provider::Ollama;
+            task_category = TaskCategory::Simple;
+            reason =
+                "Cost priority is low - routing to local Ollama model for inexpensive loops."
+                    .to_string();
+        }
+
+        if context.token_estimate > 12_000 && provider == Provider::OpenAI {
+            task_category = TaskCategory::Complex;
+            reason = format!(
+                "{} Large context (~{} tokens) detected - upgrading to GPT-4o.",
+                reason, context.token_estimate
+            );
+        }
+
+        self.prepare_context_suggestion(provider, task_category, reason)
+    }
+
+    fn prepare_context_suggestion(
+        &self,
+        preferred: Provider,
+        task_category: TaskCategory,
+        mut reason: String,
+    ) -> RouterSuggestion {
+        if self.has_provider(preferred) {
+            let model = self.default_model(preferred, task_category);
+            return RouterSuggestion {
+                provider: preferred,
+                model,
+                reason,
+            };
+        }
+
+        let fallback_order = [
+            self.default_provider,
+            Provider::Anthropic,
+            Provider::OpenAI,
+            Provider::Google,
+            Provider::DeepSeek,
+            Provider::Qwen,
+            Provider::Mistral,
+            Provider::Ollama,
+            Provider::XAI,
+        ];
+
+        for fallback in fallback_order {
+            if self.has_provider(fallback) {
+                if fallback != preferred {
+                    reason = format!(
+                        "{} ({} unavailable, falling back to {})",
+                        reason,
+                        preferred.as_string(),
+                        fallback.as_string()
+                    );
+                }
+                let model = self.default_model(fallback, task_category);
+                return RouterSuggestion {
+                    provider: fallback,
+                    model,
+                    reason,
+                };
+            }
+        }
+
+        RouterSuggestion {
+            provider: preferred,
+            model: self.default_model(preferred, task_category),
+            reason,
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             providers: HashMap::new(),
@@ -145,6 +293,19 @@ impl LLMRouter {
                         .unwrap_or_else(|| self.default_model(preferred, TaskCategory::Simple)),
                     reason: "user-preference",
                 });
+            }
+        }
+
+        if !user_specified_provider {
+            if let Some(context) = &preferences.context {
+                let suggestion = self.suggest_for_context(context);
+                if !order.iter().any(|existing| existing.provider == suggestion.provider) {
+                    order.push(RouteCandidate {
+                        provider: suggestion.provider,
+                        model: suggestion.model,
+                        reason: "context-signal",
+                    });
+                }
             }
         }
 

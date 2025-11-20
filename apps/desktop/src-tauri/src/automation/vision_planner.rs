@@ -159,6 +159,7 @@ impl ActionPlanner {
             provider: Some(crate::router::Provider::Anthropic), // Claude has vision
             model: None,
             strategy: crate::router::llm_router::RoutingStrategy::Auto,
+            context: None,
         };
 
         let candidates = router.candidates(&request, &preferences);

@@ -187,7 +187,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     } catch (error) {
       console.error('Failed to find automation elements:', error);
       set({ error: String(error), loadingElements: false, elements: [] });
-      throw error;
     }
   },
 

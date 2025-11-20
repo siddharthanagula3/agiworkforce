@@ -83,6 +83,25 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         role: 'assistant',
       } as T;
 
+    case 'router_suggestions':
+      return {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        reason: 'Mock suggestion: defaulting to OpenAI in web preview mode.',
+      } as T;
+
+    case 'orchestrator_init_default':
+      return undefined as T;
+
+    case 'orchestrator_spawn_agent':
+      return { agent_id: `mock-agent-${Date.now()}` } as T;
+
+    case 'orchestrator_list_agents':
+      return [] as T;
+
+    case 'orchestrator_cancel_agent':
+      return undefined as T;
+
     // Add more mock responses as needed
     default:
       console.warn(`[Tauri Mock] No mock for command: ${command}`);
