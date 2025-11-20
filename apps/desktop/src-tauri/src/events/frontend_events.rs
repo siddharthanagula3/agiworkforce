@@ -192,6 +192,29 @@ pub fn create_file_write_event(
     }
 }
 
+/// Helper to create file operation event for file delete
+pub fn create_file_delete_event(
+    file_path: &str,
+    size_bytes: Option<usize>,
+    success: bool,
+    error: Option<String>,
+    session_id: Option<String>,
+) -> FileOperation {
+    FileOperation {
+        id: uuid::Uuid::new_v4().to_string(),
+        op_type: FileOperationType::Delete,
+        file_path: file_path.to_string(),
+        old_content: None,
+        new_content: None,
+        size_bytes,
+        success,
+        error,
+        session_id,
+        agent_id: None,
+        goal_id: None,
+    }
+}
+
 /// Helper to create tool execution event
 pub fn create_tool_execution_event(
     tool_name: &str,

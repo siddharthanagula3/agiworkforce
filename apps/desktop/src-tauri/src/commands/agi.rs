@@ -299,6 +299,20 @@ pub async fn orchestrator_init(
     Ok(())
 }
 
+/// Initialize orchestrator using default config (helper for UI)
+#[tauri::command]
+pub async fn orchestrator_init_default(
+    automation: State<'_, Arc<AutomationService>>,
+    llm_state: State<'_, LLMState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let request = OrchestratorInitRequest {
+        max_agents: 4,
+        config: AGIConfig::default(),
+    };
+    orchestrator_init(request, automation, llm_state, app).await
+}
+
 /// Spawn a single agent
 #[tauri::command]
 pub async fn orchestrator_spawn_agent(

@@ -1154,3 +1154,92 @@ mod tests {
         assert!(!is_blacklisted_path("C:\\Users\\user\\Documents\\file.txt"));
     }
 }
+
+// ============================================================================
+// DOCUMENT PROCESSING HELPERS
+// ============================================================================
+
+/// Read a text file and return its content
+#[tauri::command]
+pub async fn file_read_text(file_path: String) -> Result<String, String> {
+    validate_path_security(&file_path)?;
+
+    fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+/// Write text to a file
+#[tauri::command]
+pub async fn file_write_text(file_path: String, content: String) -> Result<(), String> {
+    validate_path_security(&file_path)?;
+
+    // Create parent directory if needed
+    if let Some(parent) = Path::new(&file_path).parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))
+}
+
+/// Read binary file as base64
+#[tauri::command]
+pub async fn file_read_binary(file_path: String) -> Result<String, String> {
+    validate_path_security(&file_path)?;
+
+    let data = fs::read(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    Ok(base64::encode(&data))
+}
+
+/// Write binary file from base64
+#[tauri::command]
+pub async fn file_write_binary(file_path: String, base64_content: String) -> Result<(), String> {
+    validate_path_security(&file_path)?;
+
+    let data = base64::decode(&base64_content)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Create parent directory if needed
+    if let Some(parent) = Path::new(&file_path).parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    fs::write(&file_path, data)
+        .map_err(|e| format!("Failed to write file: {}", e))
+}
+
+/// Get simple file metadata
+#[tauri::command]
+pub async fn file_get_metadata(file_path: String) -> Result<FileMetadata, String> {
+    validate_path_security(&file_path)?;
+
+    let metadata = fs::metadata(&file_path)
+        .map_err(|e| format!("Failed to get metadata: {}", e))?;
+
+    let created = metadata
+        .created()
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let modified = metadata
+        .modified()
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    Ok(FileMetadata {
+        size: metadata.len(),
+        is_file: metadata.is_file(),
+        is_dir: metadata.is_dir(),
+        created,
+        modified,
+        readonly: metadata.permissions().readonly(),
+    })
+}

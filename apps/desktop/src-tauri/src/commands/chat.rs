@@ -1,4 +1,5 @@
 use super::llm::LLMState;
+use crate::agent::approval::ApprovalController;
 // TODO: Re-enable auto-compaction once ContextManager API is compatible with chat.rs
 // The deleted agent/context_compactor used std::sync::Mutex, but agi::ContextManager
 // requires tokio::sync::Mutex. Need to either:
@@ -13,7 +14,7 @@ use crate::db::models::{
 use crate::db::repository;
 use crate::router::{
     cache_manager::{CacheManager, CacheRecord},
-    llm_router::{RouteOutcome, RouterPreferences, RoutingStrategy},
+    llm_router::{CostPriority, RouteOutcome, RouterContext, RouterPreferences, RoutingStrategy},
     ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider,
 };
 use anyhow::anyhow;
@@ -133,21 +134,42 @@ pub struct UpdateConversationRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatSendMessageRequest {
-    #[serde(default)]
+    #[serde(default, alias = "conversationId")]
     pub conversation_id: Option<i64>,
     pub content: String,
     #[serde(default)]
     pub provider: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default, alias = "providerOverride")]
+    pub provider_override: Option<String>,
+    #[serde(default, alias = "modelOverride")]
+    pub model_override: Option<String>,
     #[serde(default)]
     pub strategy: Option<String>,
     #[serde(default)]
     pub stream: Option<bool>,
-    #[serde(default)]
+    #[serde(default, alias = "enableTools")]
     pub enable_tools: Option<bool>,
-    #[serde(default)]
+    #[serde(default, alias = "conversationMode")]
     pub conversation_mode: Option<String>, // "safe" or "full_control"
+    #[serde(default, alias = "workflowHash")]
+    pub workflow_hash: Option<String>,
+    #[serde(default, alias = "taskMetadata")]
+    pub task_metadata: Option<TaskMetadata>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskMetadata {
+    #[serde(default)]
+    pub intents: Vec<String>,
+    #[serde(default)]
+    pub requires_vision: bool,
+    #[serde(default)]
+    pub token_estimate: Option<u32>,
+    #[serde(default)]
+    pub cost_priority: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -157,6 +179,22 @@ pub struct ChatSendMessageResponse {
     pub assistant_message: Message,
     pub stats: ConversationStats,
     pub last_message: Option<String>,
+}
+
+fn router_context_from_metadata(metadata: &TaskMetadata) -> RouterContext {
+    RouterContext {
+        intents: metadata.intents.clone(),
+        requires_vision: metadata.requires_vision,
+        token_estimate: metadata.token_estimate.unwrap_or(0),
+        cost_priority: parse_cost_priority(metadata.cost_priority.as_deref()),
+    }
+}
+
+fn parse_cost_priority(source: Option<&str>) -> CostPriority {
+    match source {
+        Some(value) if value.eq_ignore_ascii_case("low") => CostPriority::Low,
+        _ => CostPriority::Balanced,
+    }
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -486,6 +524,12 @@ async fn chat_send_message_streaming(
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
+    let task_start = std::time::Instant::now();
+    if let Some(approval_state) = app_handle.try_state::<ApprovalController>() {
+        approval_state
+            .set_current_hash(request.workflow_hash.clone())
+            .await;
+    }
     let trimmed_content = request.content.trim().to_string();
     if trimmed_content.is_empty() {
         return Err("Message cannot be empty".to_string());
@@ -569,16 +613,34 @@ async fn chat_send_message_streaming(
         })
         .collect();
 
+    let provider_override = request
+        .provider_override
+        .as_ref()
+        .or(request.provider.as_ref())
+        .and_then(|value| Provider::from_string(value));
+
+    let model_override = request
+        .model_override
+        .clone()
+        .or(request.model.clone());
+
+    let router_context = request
+        .task_metadata
+        .as_ref()
+        .map(router_context_from_metadata);
+
     // Get default model from settings if not provided
-    let model = if let Some(model) = request.model.clone() {
+    let model = if let Some(model) = model_override.clone() {
         model
     } else {
         let settings = settings_state.settings.lock().await;
-        let provider = request
-            .provider
+        let provider_name = request
+            .provider_override
             .as_ref()
-            .unwrap_or(&settings.llm_config.default_provider);
-        match provider.as_str() {
+            .or(request.provider.as_ref())
+            .cloned()
+            .unwrap_or_else(|| settings.llm_config.default_provider.clone());
+        match provider_name.as_str() {
             "openai" => settings.llm_config.default_models.openai.clone(),
             "anthropic" => settings.llm_config.default_models.anthropic.clone(),
             "google" => settings.llm_config.default_models.google.clone(),
@@ -602,9 +664,10 @@ async fn chat_send_message_streaming(
     };
 
     let preferences = RouterPreferences {
-        provider: request.provider.as_deref().and_then(Provider::from_string),
-        model: request.model.clone(),
+        provider: provider_override,
+        model: model_override,
         strategy: parse_routing_strategy(request.strategy.as_deref()),
+        context: router_context.clone(),
     };
 
     // Emit stream start
@@ -693,6 +756,23 @@ async fn chat_send_message_streaming(
     let total_tokens_sum: i32 = messages.iter().filter_map(|m| m.tokens).sum();
     let total_cost: f64 = messages.iter().filter_map(|m| m.cost).sum();
 
+    let duration_ms = task_start.elapsed().as_millis() as u64;
+    let stream_tokens = assistant_msg.tokens.unwrap_or(0).max(0) as u32;
+    let stream_cost = assistant_msg.cost.unwrap_or(0.0);
+    let metrics_payload = serde_json::json!({
+        "metrics": {
+            "workflowHash": request.workflow_hash.clone(),
+            "actionId": format!("chat-stream-{}", assistant_msg.id),
+            "tokens": stream_tokens,
+            "costUsd": stream_cost,
+            "durationMs": duration_ms,
+            "completionReason": "stream_completed",
+        }
+    });
+    if let Err(err) = app_handle.emit("agent:metrics", metrics_payload) {
+        warn!("Failed to emit streaming metrics event: {}", err);
+    }
+
     Ok(ChatSendMessageResponse {
         conversation,
         user_message: user_msg,
@@ -721,6 +801,13 @@ pub async fn chat_send_message(
         return chat_send_message_streaming(db, llm_state, settings_state, app_handle, request)
             .await;
     }
+    let task_start = std::time::Instant::now();
+    if let Some(approval_state) = app_handle.try_state::<ApprovalController>() {
+        approval_state
+            .set_current_hash(request.workflow_hash.clone())
+            .await;
+    }
+
     let trimmed_content = request.content.trim().to_string();
     if trimmed_content.is_empty() {
         return Err("Message cannot be empty".to_string());
@@ -922,16 +1009,34 @@ pub async fn chat_send_message(
         }),
     );
 
+    let provider_override = request
+        .provider_override
+        .as_ref()
+        .or(request.provider.as_ref())
+        .and_then(|value| Provider::from_string(value));
+
+    let model_override = request
+        .model_override
+        .clone()
+        .or(request.model.clone());
+
+    let router_context = request
+        .task_metadata
+        .as_ref()
+        .map(router_context_from_metadata);
+
     // Get default model from settings if not provided
-    let model = if let Some(model) = request.model.clone() {
+    let model = if let Some(model) = model_override.clone() {
         model
     } else {
         let settings = settings_state.settings.lock().await;
-        let provider = request
-            .provider
+        let provider_name = request
+            .provider_override
             .as_ref()
-            .unwrap_or(&settings.llm_config.default_provider);
-        match provider.as_str() {
+            .or(request.provider.as_ref())
+            .cloned()
+            .unwrap_or_else(|| settings.llm_config.default_provider.clone());
+        match provider_name.as_str() {
             "openai" => settings.llm_config.default_models.openai.clone(),
             "anthropic" => settings.llm_config.default_models.anthropic.clone(),
             "google" => settings.llm_config.default_models.google.clone(),
@@ -959,9 +1064,10 @@ pub async fn chat_send_message(
     };
 
     let preferences = RouterPreferences {
-        provider: request.provider.as_deref().and_then(Provider::from_string),
-        model: request.model.clone(),
+        provider: provider_override,
+        model: model_override,
         strategy: parse_routing_strategy(request.strategy.as_deref()),
+        context: router_context.clone(),
     };
 
     let candidates = {
@@ -1273,6 +1379,34 @@ pub async fn chat_send_message(
                 warn!("Failed to emit stream end event: {}", error);
             }
         }
+    }
+
+    let duration_ms = task_start.elapsed().as_millis() as u64;
+    let completion_reason = outcome
+        .response
+        .finish_reason
+        .clone()
+        .unwrap_or_else(|| {
+            if outcome.response.cached {
+                "cache_hit".to_string()
+            } else {
+                "completed".to_string()
+            }
+        });
+    let response_tokens = outcome.response.tokens.unwrap_or(0);
+    let response_cost = outcome.response.cost.unwrap_or(0.0);
+    let metrics_payload = serde_json::json!({
+        "metrics": {
+            "workflowHash": request.workflow_hash.clone(),
+            "actionId": format!("chat-response-{}", assistant_message.id),
+            "tokens": response_tokens,
+            "costUsd": response_cost,
+            "durationMs": duration_ms,
+            "completionReason": completion_reason,
+        }
+    });
+    if let Err(err) = app_handle.emit("agent:metrics", metrics_payload) {
+        warn!("Failed to emit metrics event: {}", err);
     }
 
     Ok(ChatSendMessageResponse {

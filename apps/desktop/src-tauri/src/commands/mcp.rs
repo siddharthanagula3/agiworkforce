@@ -4,7 +4,7 @@ use crate::mcp::{
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::State;
 
@@ -42,6 +42,7 @@ impl McpState {
 pub struct McpServerInfo {
     pub name: String,
     pub enabled: bool,
+    pub connected: bool,
     pub tool_count: usize,
     pub command: String,
 }
@@ -163,6 +164,11 @@ pub async fn mcp_initialize(
 pub async fn mcp_list_servers(state: State<'_, McpState>) -> Result<Vec<McpServerInfo>, String> {
     let config = state.config.lock();
     let stats = state.client.get_stats();
+    let connected: HashSet<String> = state
+        .client
+        .get_connected_servers()
+        .into_iter()
+        .collect();
 
     let servers: Vec<McpServerInfo> = config
         .mcp_servers
@@ -170,6 +176,7 @@ pub async fn mcp_list_servers(state: State<'_, McpState>) -> Result<Vec<McpServe
         .map(|(name, server_config)| McpServerInfo {
             name: name.clone(),
             enabled: server_config.enabled,
+             connected: connected.contains(name),
             tool_count: stats.get(name).copied().unwrap_or(0),
             command: format!("{} {}", server_config.command, server_config.args.join(" ")),
         })
@@ -324,6 +331,66 @@ pub async fn mcp_update_config(
     *state.config.lock() = parsed_config;
 
     Ok("Configuration updated successfully".to_string())
+}
+
+#[tauri::command]
+pub async fn mcp_enable_server(state: State<'_, McpState>, name: String) -> Result<String, String> {
+    set_server_enabled(state, name, true).await
+}
+
+#[tauri::command]
+pub async fn mcp_disable_server(state: State<'_, McpState>, name: String) -> Result<String, String> {
+    set_server_enabled(state, name, false).await
+}
+
+async fn set_server_enabled(
+    state: State<'_, McpState>,
+    name: String,
+    enabled: bool,
+) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Server name cannot be empty".to_string());
+    }
+
+    let server_config = {
+        let mut config_guard = state.config.lock();
+        let entry = config_guard
+            .mcp_servers
+            .get_mut(trimmed)
+            .ok_or_else(|| format!("Server '{}' not found in configuration", trimmed))?;
+        entry.enabled = enabled;
+        entry.clone()
+    };
+    let snapshot = {
+        let config_guard = state.config.lock();
+        config_guard.clone()
+    };
+
+    let config_path = McpServersConfig::default_config_path()
+        .map_err(|e| format!("Failed to get config path: {}", e))?;
+    snapshot
+        .save_to_file(&config_path)
+        .await
+        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
+
+    if enabled {
+        state
+            .client
+            .connect_server(trimmed.to_string(), server_config)
+            .await
+            .map_err(|e| format!("Failed to start '{}': {}", trimmed, e))?;
+        Ok(format!("Server '{}' enabled", trimmed))
+    } else {
+        if let Err(err) = state.client.disconnect_server(trimmed).await {
+            tracing::warn!(
+                "Server '{}' disabled but disconnect failed: {}",
+                trimmed,
+                err
+            );
+        }
+        Ok(format!("Server '{}' disabled", trimmed))
+    }
 }
 
 /// Get MCP statistics

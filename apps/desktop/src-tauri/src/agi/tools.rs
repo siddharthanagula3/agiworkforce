@@ -136,6 +136,26 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        self.register_tool(Tool {
+            id: "file_delete".to_string(),
+            name: "Delete File".to_string(),
+            description: "Delete a file from disk".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: true,
+                description: "Path to the file to delete".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 4,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // UI Automation
         self.register_tool(Tool {
             id: "ui_click".to_string(),
@@ -1042,6 +1062,136 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Document Creation Tools
+        self.register_tool(Tool {
+            id: "document_create_word".to_string(),
+            name: "Create Word Document".to_string(),
+            description: "Create a Word document (DOCX) with rich content (headings, paragraphs, tables, lists)".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "output_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path where the DOCX file will be saved".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "title".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Document title".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "author".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Document author".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "paragraphs".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Array of paragraph texts to include in the document".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "document_create_excel".to_string(),
+            name: "Create Excel Spreadsheet".to_string(),
+            description: "Create an Excel spreadsheet (XLSX) with headers and data rows".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::DataAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "output_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path where the XLSX file will be saved".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "sheet_name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Name of the worksheet".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "headers".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Array of column headers".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "rows".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Array of data rows (each row is an array of cell values)".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "document_create_pdf".to_string(),
+            name: "Create PDF Document".to_string(),
+            description: "Create a PDF document with text content (headings, paragraphs, lists)".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "output_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Path where the PDF file will be saved".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "title".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Document title".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "author".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Document author".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "paragraphs".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Array of paragraph texts to include in the PDF".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 80,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // Terminal Operations
         self.register_tool(Tool {
             id: "terminal_execute".to_string(),
@@ -1066,6 +1216,21 @@ impl ToolRegistry {
                     required: false,
                     description: "Working directory for the command".to_string(),
                     default: None,
+                },
+                ToolParameter {
+                    name: "shell".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Shell to execute command in (powershell|cmd|bash)".to_string(),
+                    default: Some(serde_json::json!("powershell")),
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Timeout before the command is aborted (defaults to 60s)"
+                        .to_string(),
+                    default: Some(serde_json::json!(60000)),
                 },
             ],
             estimated_resources: ResourceUsage {

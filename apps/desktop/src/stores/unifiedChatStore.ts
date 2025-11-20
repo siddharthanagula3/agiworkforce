@@ -94,6 +94,77 @@ export interface Screenshot {
   timestamp: Date;
 }
 
+export type ActionLogEntryType =
+  | 'plan'
+  | 'terminal'
+  | 'filesystem'
+  | 'browser'
+  | 'ui'
+  | 'mcp'
+  | 'approval'
+  | 'metrics';
+
+export type ActionLogStatus = 'pending' | 'running' | 'success' | 'failed' | 'blocked';
+
+export type ApprovalScopeType = 'terminal' | 'filesystem' | 'browser' | 'ui' | 'mcp';
+
+export interface ApprovalScope {
+  type: ApprovalScopeType;
+  command?: string;
+  cwd?: string;
+  path?: string;
+  domain?: string;
+  description?: string;
+  risk: ApprovalRiskLevel;
+}
+
+export interface ActionLogEntry {
+  id: string;
+  actionId?: string;
+  workflowHash?: string;
+  type: ActionLogEntryType;
+  title: string;
+  description?: string;
+  status: ActionLogStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  requiresApproval?: boolean;
+  scope?: ApprovalScope;
+  metadata?: Record<string, unknown>;
+  result?: string;
+  error?: string;
+}
+
+export interface PlanStep {
+  id: string;
+  title: string;
+  description?: string;
+  status: ActionLogStatus;
+  parentId?: string;
+  result?: string;
+}
+
+export interface PlanData {
+  id: string;
+  description: string;
+  steps: PlanStep[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TrustedWorkflow {
+  hash: string;
+  label?: string;
+  createdAt: Date;
+  actionSignatures: string[];
+}
+
+export interface WorkflowContext {
+  hash: string;
+  description?: string;
+  entryPoint?: string;
+}
+
 export interface AgentStatus {
   id: string;
   name: string;
@@ -140,7 +211,7 @@ export interface ApprovalRequest {
   type: 'file_delete' | 'terminal_command' | 'api_call' | 'data_modification';
   description: string;
   riskLevel: ApprovalRiskLevel;
-  details: any;
+  details: Record<string, unknown>;
   impact?: string;
   status: ApprovalStatus;
   timeoutSeconds?: number;
@@ -148,6 +219,10 @@ export interface ApprovalRequest {
   approvedAt?: Date;
   rejectedAt?: Date;
   rejectionReason?: string;
+  workflowHash?: string;
+  actionId?: string;
+  scope?: ApprovalScope;
+  actionSignature?: string;
 }
 
 export interface ContextItem {
@@ -186,6 +261,7 @@ export interface UnifiedChatState {
   terminalCommands: TerminalCommand[];
   toolExecutions: ToolExecution[];
   screenshots: Screenshot[];
+  actionLog: ActionLogEntry[];
 
   // Agents
   agents: AgentStatus[];
@@ -194,11 +270,14 @@ export interface UnifiedChatState {
   // Tasks
   backgroundTasks: BackgroundTask[];
 
-  // Approvals
+  // Approvals & Trust
   pendingApprovals: ApprovalRequest[];
+  trustedWorkflows: Record<string, TrustedWorkflow>;
 
   // Context
   activeContext: ContextItem[];
+  workflowContext: WorkflowContext | null;
+  plan: PlanData | null;
 
   // Settings
   conversationMode: ConversationMode;
@@ -236,6 +315,9 @@ export interface UnifiedChatState {
   }) => void;
   addToolExecution: (exec: Omit<ToolExecution, 'timestamp'>) => void;
   addScreenshot: (screenshot: Omit<Screenshot, 'timestamp'>) => void;
+  addActionLogEntry: (entry: Omit<ActionLogEntry, 'createdAt' | 'updatedAt'>) => void;
+  updateActionLogEntry: (id: string, updates: Partial<ActionLogEntry>) => void;
+  clearActionLog: () => void;
 
   // Actions - Agents & Tasks
   updateAgentStatus: (id: string, status: Partial<AgentStatus>) => void;
@@ -246,13 +328,24 @@ export interface UnifiedChatState {
   addBackgroundTask: (task: Omit<BackgroundTask, 'createdAt'>) => void;
   updateBackgroundTask: (id: string, updates: Partial<BackgroundTask>) => void;
 
+  // Actions - Plan & Workflow
+  setWorkflowContext: (context: WorkflowContext | null) => void;
+  setPlan: (plan: PlanData | null) => void;
+  updatePlanStep: (stepId: string, updates: Partial<PlanStep>) => void;
+  clearPlan: () => void;
+
   // Actions - Settings
   setConversationMode: (mode: ConversationMode) => void;
 
-  // Actions - Approvals
+  // Actions - Approvals & Trust
   addApprovalRequest: (request: Omit<ApprovalRequest, 'createdAt' | 'status'>) => void;
   approveOperation: (id: string) => void;
   rejectOperation: (id: string, reason?: string) => void;
+  removeApprovalRequest: (id: string) => void;
+  setTrustedWorkflow: (workflow: TrustedWorkflow) => void;
+  removeTrustedWorkflow: (hash: string) => void;
+  recordTrustedAction: (hash: string, signature: string) => void;
+  isActionTrusted: (hash: string | undefined, signature: string | undefined) => boolean;
 
   // Actions - Context
   addContextItem: (item: ContextItem) => void;
@@ -293,13 +386,17 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       terminalCommands: [],
       toolExecutions: [],
       screenshots: [],
+      actionLog: [],
 
       agents: [],
       agentStatus: null,
       backgroundTasks: [],
       pendingApprovals: [],
+      trustedWorkflows: {},
 
       activeContext: [],
+      workflowContext: null,
+      plan: null,
 
       conversationMode: 'safe',
 
@@ -388,6 +485,36 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.screenshots.push({ ...screenshot, timestamp: new Date() });
         }),
 
+      addActionLogEntry: (entry) =>
+        set((state) => {
+          const now = new Date();
+          state.actionLog.unshift({
+            ...entry,
+            createdAt: now,
+            updatedAt: now,
+          });
+          if (state.actionLog.length > 500) {
+            state.actionLog = state.actionLog.slice(0, 500);
+          }
+        }),
+
+      updateActionLogEntry: (id, updates) =>
+        set((state) => {
+          const index = state.actionLog.findIndex((item) => item.id === id || item.actionId === id);
+          if (index !== -1 && state.actionLog[index]) {
+            state.actionLog[index] = {
+              ...state.actionLog[index],
+              ...updates,
+              updatedAt: new Date(),
+            };
+          }
+        }),
+
+      clearActionLog: () =>
+        set((state) => {
+          state.actionLog = [];
+        }),
+
       // Agent & Task Actions
       updateAgentStatus: (id, status) =>
         set((state) => {
@@ -433,6 +560,59 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           }
         }),
 
+      setWorkflowContext: (context) =>
+        set((state) => {
+          state.workflowContext = context;
+        }),
+
+      setPlan: (plan) =>
+        set((state) => {
+          if (!plan) {
+            state.plan = null;
+            return;
+          }
+
+          const normalizeDate = (value?: Date | string | number) => {
+            if (!value) return new Date();
+            if (value instanceof Date) return value;
+            const numeric = typeof value === 'number' ? value : Number(value);
+            if (Number.isNaN(numeric)) return new Date();
+            return new Date(numeric);
+          };
+
+          state.plan = {
+            ...plan,
+            createdAt: normalizeDate(plan.createdAt),
+            updatedAt: new Date(),
+            steps:
+              plan.steps?.map((step) => ({
+                ...step,
+                status: step.status ?? 'pending',
+              })) ?? [],
+          };
+        }),
+
+      updatePlanStep: (stepId, updates) =>
+        set((state) => {
+          if (!state.plan) {
+            return;
+          }
+
+          const index = state.plan.steps.findIndex((step) => step.id === stepId);
+          if (index !== -1 && state.plan.steps[index]) {
+            state.plan.steps[index] = {
+              ...state.plan.steps[index],
+              ...updates,
+            };
+            state.plan.updatedAt = new Date();
+          }
+        }),
+
+      clearPlan: () =>
+        set((state) => {
+          state.plan = null;
+        }),
+
       // Settings Actions
       setConversationMode: (mode) =>
         set((state) => {
@@ -442,11 +622,18 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       // Approval Actions
       addApprovalRequest: (request) =>
         set((state) => {
-          state.pendingApprovals.push({
+          const normalized = {
             ...request,
+            details: request.details ?? {},
             createdAt: new Date(),
-            status: 'pending',
-          });
+            status: 'pending' as ApprovalStatus,
+          };
+          const index = state.pendingApprovals.findIndex((approval) => approval.id === request.id);
+          if (index !== -1) {
+            state.pendingApprovals[index] = normalized;
+          } else {
+            state.pendingApprovals.push(normalized);
+          }
         }),
 
       approveOperation: (id) =>
@@ -455,6 +642,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (index !== -1 && state.pendingApprovals[index]) {
             state.pendingApprovals[index].status = 'approved';
             state.pendingApprovals[index].approvedAt = new Date();
+            state.pendingApprovals.splice(index, 1);
           }
         }),
 
@@ -465,8 +653,54 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             state.pendingApprovals[index].status = 'rejected';
             state.pendingApprovals[index].rejectedAt = new Date();
             state.pendingApprovals[index].rejectionReason = reason;
+            state.pendingApprovals.splice(index, 1);
           }
         }),
+
+      removeApprovalRequest: (id) =>
+        set((state) => {
+          state.pendingApprovals = state.pendingApprovals.filter((approval) => approval.id !== id);
+        }),
+
+      setTrustedWorkflow: (workflow) =>
+        set((state) => {
+          state.trustedWorkflows[workflow.hash] = {
+            ...workflow,
+            actionSignatures: workflow.actionSignatures ?? [],
+            createdAt: workflow.createdAt ?? new Date(),
+          };
+        }),
+
+      removeTrustedWorkflow: (hash) =>
+        set((state) => {
+          delete state.trustedWorkflows[hash];
+        }),
+
+      recordTrustedAction: (hash, signature) =>
+        set((state) => {
+          if (!hash || !signature) {
+            return;
+          }
+          const workflow =
+            state.trustedWorkflows[hash] ??
+            ({
+              hash,
+              createdAt: new Date(),
+              actionSignatures: [],
+            } as TrustedWorkflow);
+          if (!workflow.actionSignatures.includes(signature)) {
+            workflow.actionSignatures.push(signature);
+          }
+          state.trustedWorkflows[hash] = workflow;
+        }),
+
+      isActionTrusted: (hash, signature) => {
+        if (!hash || !signature) {
+          return false;
+        }
+        const workflow = get().trustedWorkflows[hash];
+        return Boolean(workflow?.actionSignatures.includes(signature));
+      },
 
       // Context Actions
       addContextItem: (item) =>
@@ -534,6 +768,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.terminalCommands = [];
           state.toolExecutions = [];
           state.screenshots = [];
+          state.actionLog = [];
+          state.plan = null;
         }),
 
       exportConversation: async () => {
