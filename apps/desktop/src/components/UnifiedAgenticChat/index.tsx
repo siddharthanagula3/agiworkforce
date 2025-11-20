@@ -22,6 +22,9 @@ import { cn } from '../../lib/utils';
 import { QuickModelSelector } from '../Chat/QuickModelSelector';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { sha256 } from '../../lib/hash';
+import { isTauri } from '../../lib/tauri-mock';
+import { deriveTaskMetadata } from '../../lib/taskMetadata';
 
 const heroChips = ['Code', 'Write', 'Learn', 'Automate', 'Claude’s pick', 'Life stuff'];
 
@@ -54,6 +57,7 @@ export const UnifiedAgenticChat: React.FC<{
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const selectedModel = useModelStore((state) => state.selectedModel);
+  const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
 
   const [heroInput, setHeroInput] = useState('');
   const [activePersona, setActivePersona] = useState(personaOptions[0]);
@@ -85,6 +89,23 @@ export const UnifiedAgenticChat: React.FC<{
       modelId: options.modelId ?? modelForMessage,
     };
 
+    const entryPoint = content.trim();
+    const workflowHash = await sha256(entryPoint || crypto.randomUUID());
+    setWorkflowContext({
+      hash: workflowHash,
+      description: entryPoint,
+      entryPoint,
+    });
+    if (isTauri) {
+      try {
+        await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
+      } catch (error) {
+        console.error('[UnifiedAgenticChat] Failed to set workflow hash', error);
+      }
+    }
+
+    const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
+
     addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
 
     const assistantMessageId = crypto.randomUUID();
@@ -102,12 +123,13 @@ export const UnifiedAgenticChat: React.FC<{
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
-            provider: enrichedOptions.providerId,
-            model: enrichedOptions.modelId,
+            providerOverride: enrichedOptions.providerId,
+            modelOverride: enrichedOptions.modelId,
             stream: false,
-            enable_tools: true,
-            conversation_mode: conversationMode,
-            enabled_tools: ['desktop', 'terminal', 'browser', 'files', 'mcp'],
+            enableTools: true,
+            conversationMode,
+            workflowHash,
+            taskMetadata,
           },
         });
 

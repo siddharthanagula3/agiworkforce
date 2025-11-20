@@ -118,6 +118,7 @@ Return ONLY the JSON array, no other text."#,
             provider: None,
             model: None,
             strategy: RoutingStrategy::Auto,
+            context: None,
         };
 
         let router = self.router.lock().await;

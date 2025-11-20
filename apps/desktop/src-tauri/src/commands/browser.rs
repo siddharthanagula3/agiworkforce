@@ -1,8 +1,10 @@
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::async_runtime::block_on;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{Mutex, MutexGuard};
+use uuid::Uuid;
 
 use crate::browser::advanced::Cookie;
 use crate::browser::{
@@ -178,6 +180,7 @@ pub async fn browser_list_tabs(
 /// Navigate to URL
 #[tauri::command]
 pub async fn browser_navigate(
+    app_handle: AppHandle,
     tab_id: String,
     url: String,
     state: State<'_, BrowserStateWrapper>,
@@ -211,10 +214,41 @@ pub async fn browser_navigate(
 
     let options = NavigationOptions::default();
 
-    tab_manager
+    let result = tab_manager
         .navigate(&tab_id, &url, options)
         .await
-        .map_err(|e| format!("Failed to navigate to '{}': {}", url, e))
+        .map_err(|e| format!("Failed to navigate to '{}': {}", url, e));
+
+    match result {
+        Ok(_) => {
+            emit_browser_action(
+                &app_handle,
+                "Navigate",
+                &format!("Navigated tab {} to {}", tab_id, url),
+                "success",
+                json!({
+                    "tabId": tab_id,
+                    "url": url,
+                }),
+                None,
+            );
+            Ok(())
+        }
+        Err(err) => {
+            emit_browser_action(
+                &app_handle,
+                "Navigate",
+                &err,
+                "failed",
+                json!({
+                    "tabId": tab_id,
+                    "url": url,
+                }),
+                Some(err.clone()),
+            );
+            Err(err)
+        }
+    }
 }
 
 /// Go back
@@ -302,6 +336,7 @@ pub async fn browser_get_title(
 /// Click element
 #[tauri::command]
 pub async fn browser_click(
+    app_handle: AppHandle,
     tab_id: String,
     selector: String,
     state: State<'_, BrowserStateWrapper>,
@@ -330,14 +365,46 @@ pub async fn browser_click(
 
     let options = ClickOptions::default();
 
-    DomOperations::click_with_cdp(cdp_client, &selector, options)
+    let result = DomOperations::click_with_cdp(cdp_client, &selector, options)
         .await
-        .map_err(|e| format!("Failed to click element '{}': {}", selector, e))
+        .map_err(|e| format!("Failed to click element '{}': {}", selector, e));
+
+    match result {
+        Ok(_) => {
+            emit_browser_action(
+                &app_handle,
+                "Click",
+                &format!("Clicked selector {} in tab {}", selector, tab_id),
+                "success",
+                json!({
+                    "tabId": tab_id,
+                    "selector": selector,
+                }),
+                None,
+            );
+            Ok(())
+        }
+        Err(err) => {
+            emit_browser_action(
+                &app_handle,
+                "Click",
+                &err,
+                "failed",
+                json!({
+                    "tabId": tab_id,
+                    "selector": selector,
+                }),
+                Some(err.clone()),
+            );
+            Err(err)
+        }
+    }
 }
 
 /// Type text
 #[tauri::command]
 pub async fn browser_type(
+    app_handle: AppHandle,
     tab_id: String,
     selector: String,
     text: String,
@@ -347,9 +414,42 @@ pub async fn browser_type(
 
     let options = TypeOptions::default();
 
-    DomOperations::type_text(&tab_id, &selector, &text, options)
+    let result = DomOperations::type_text(&tab_id, &selector, &text, options)
         .await
-        .map_err(|e| format!("Failed to type: {}", e))
+        .map_err(|e| format!("Failed to type: {}", e));
+
+    match result {
+        Ok(_) => {
+            emit_browser_action(
+                &app_handle,
+                "Type Text",
+                &format!("Typed into {} in tab {}", selector, tab_id),
+                "success",
+                json!({
+                    "tabId": tab_id,
+                    "selector": selector,
+                    "textLength": text.chars().count(),
+                }),
+                None,
+            );
+            Ok(())
+        }
+        Err(err) => {
+            emit_browser_action(
+                &app_handle,
+                "Type Text",
+                &err,
+                "failed",
+                json!({
+                    "tabId": tab_id,
+                    "selector": selector,
+                    "textLength": text.chars().count(),
+                }),
+                Some(err.clone()),
+            );
+            Err(err)
+        }
+    }
 }
 
 /// Get text content
@@ -375,6 +475,39 @@ pub async fn browser_get_attribute(
     DomOperations::get_attribute(&tab_id, &selector, &attribute)
         .await
         .map_err(|e| format!("Failed to get attribute: {}", e))
+}
+
+fn emit_browser_action(
+    app_handle: &AppHandle,
+    title: &str,
+    description: &str,
+    status: &str,
+    metadata: serde_json::Value,
+    error: Option<String>,
+) {
+    let action_id = Uuid::new_v4().to_string();
+    let payload = json!({
+        "action": {
+            "id": action_id,
+            "actionId": action_id,
+            "workflowHash": serde_json::Value::Null,
+            "type": "browser",
+            "title": title,
+            "description": description,
+            "status": status,
+            "requiresApproval": false,
+            "scope": {
+                "type": "browser",
+                "description": description,
+            },
+            "metadata": metadata,
+            "error": error,
+        }
+    });
+
+    if let Err(err) = app_handle.emit("agent:action_update", payload) {
+        tracing::warn!("Failed to emit browser action event: {}", err);
+    }
 }
 
 // Updated Nov 16, 2025: Added input validation
@@ -1382,6 +1515,7 @@ fn selector_from_element(info: &ElementInfo) -> Result<String, String> {
 /// Click element using semantic selector
 #[tauri::command]
 pub async fn click_semantic(
+    app_handle: AppHandle,
     tab_id: String,
     query: String,
     state: State<'_, BrowserStateWrapper>,
@@ -1393,12 +1527,13 @@ pub async fn click_semantic(
 
     // Click using the found selector
     let selector = selector_from_element(&element_info)?;
-    browser_click(tab_id, selector, state).await
+    browser_click(app_handle, tab_id, selector, state).await
 }
 
 /// Type text into element using semantic selector
 #[tauri::command]
 pub async fn type_semantic(
+    app_handle: AppHandle,
     tab_id: String,
     query: String,
     text: String,
@@ -1411,7 +1546,7 @@ pub async fn type_semantic(
 
     // Type using the found selector
     let selector = selector_from_element(&element_info)?;
-    browser_type(tab_id, selector, text, state).await
+    browser_type(app_handle, tab_id, selector, text, state).await
 }
 
 /// Get accessibility tree for the current page

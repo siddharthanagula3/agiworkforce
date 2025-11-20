@@ -280,6 +280,7 @@ Provide your analysis in a clear, structured format."#
             provider: None,
             model: None,
             strategy: crate::router::RoutingStrategy::Auto,
+            context: None,
         };
 
         // Lock router and get candidates

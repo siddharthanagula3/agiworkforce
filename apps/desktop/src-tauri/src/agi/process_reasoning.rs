@@ -348,6 +348,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             provider: Some(crate::router::Provider::Anthropic),
             model: Some("claude-haiku-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
+            context: None,
         };
 
         let request = LLMRequest {

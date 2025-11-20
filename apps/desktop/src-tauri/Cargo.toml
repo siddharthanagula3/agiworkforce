@@ -163,11 +163,16 @@ sysinfo = "0.30"
 flate2 = "1.0"
 zip = "0.6"
 
-# Document processing
+# Document processing (reading)
 pdf-extract = "0.5"
 lopdf = "0.32"
 roxmltree = "0.20"
 calamine = "0.21"
+
+# Document creation
+docx-rs = "0.4"              # DOCX creation
+rust_xlsxwriter = "0.77"      # XLSX creation
+printpdf = "0.7"             # PDF creation
 
 # OCR (conditional)
 tesseract = { version = "0.15", optional = true }

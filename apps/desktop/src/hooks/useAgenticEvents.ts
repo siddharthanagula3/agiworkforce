@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 import type {
   FileOperation,
@@ -9,7 +10,14 @@ import type {
   AgentStatus,
   BackgroundTask,
   ApprovalRequest,
+  ActionLogEntry,
+  PlanStep,
+  ApprovalScope,
+  ActionLogStatus,
+  ActionLogEntryType,
 } from '../stores/unifiedChatStore';
+import { sha256 } from '../lib/hash';
+import { isTauri } from '../lib/tauri-mock';
 
 /**
  * Event payloads emitted from Tauri backend
@@ -36,6 +44,11 @@ export interface ScreenshotEvent {
 
 export interface AgentStatusEvent {
   agent: AgentStatus;
+}
+
+export interface AgentSpawnedEvent {
+  agent_id: string;
+  goal?: string;
 }
 
 export interface BackgroundTaskEvent {
@@ -68,6 +81,62 @@ export interface GoalCompletedEvent {
   error?: string;
 }
 
+export interface AgentPlanUpdateEvent {
+  plan: {
+    id: string;
+    description: string;
+    workflowHash?: string;
+    steps: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      status?: string;
+      parentId?: string;
+      result?: string;
+    }>;
+    createdAt?: number | string;
+  };
+}
+
+export interface AgentActionUpdateEvent {
+  action: {
+    id: string;
+    workflowHash?: string;
+    type?: string;
+    title?: string;
+    description?: string;
+    status?: string;
+    requiresApproval?: boolean;
+    scope?: ApprovalScope;
+    metadata?: Record<string, unknown>;
+    result?: string;
+    error?: string;
+    actionId?: string;
+  };
+}
+
+export interface AgentPermissionRequiredEvent {
+  actionId: string;
+  workflowHash?: string;
+  reason?: string;
+  title?: string;
+  scope: ApprovalScope;
+  riskLevel?: 'low' | 'medium' | 'high';
+  actionSignature?: string;
+  type?: string;
+}
+
+export interface AgentMetricsEvent {
+  metrics: {
+    workflowHash?: string;
+    actionId?: string;
+    tokens?: number;
+    costUsd?: number;
+    durationMs?: number;
+    completionReason?: string;
+  };
+}
+
 /**
  * Hook to listen to Tauri events and update the unified chat store
  *
@@ -94,6 +163,8 @@ export function useAgenticEvents() {
     addTerminalCommand: useUnifiedChatStore.getState().addTerminalCommand,
     addToolExecution: useUnifiedChatStore.getState().addToolExecution,
     addScreenshot: useUnifiedChatStore.getState().addScreenshot,
+    addActionLogEntry: useUnifiedChatStore.getState().addActionLogEntry,
+    updateActionLogEntry: useUnifiedChatStore.getState().updateActionLogEntry,
     updateAgentStatus: useUnifiedChatStore.getState().updateAgentStatus,
     addAgent: useUnifiedChatStore.getState().addAgent,
     updateBackgroundTask: useUnifiedChatStore.getState().updateBackgroundTask,
@@ -101,7 +172,95 @@ export function useAgenticEvents() {
     addApprovalRequest: useUnifiedChatStore.getState().addApprovalRequest,
     approveOperation: useUnifiedChatStore.getState().approveOperation,
     rejectOperation: useUnifiedChatStore.getState().rejectOperation,
+    setPlan: useUnifiedChatStore.getState().setPlan,
+    updatePlanStep: useUnifiedChatStore.getState().updatePlanStep,
+    setWorkflowContext: useUnifiedChatStore.getState().setWorkflowContext,
   });
+
+  const normalizeActionStatus = (status?: string): ActionLogStatus => {
+    if (!status) {
+      return 'pending';
+    }
+    const normalized = status.toLowerCase();
+    if (normalized === 'running' || normalized === 'in_progress') {
+      return 'running';
+    }
+    if (normalized === 'success' || normalized === 'completed' || normalized === 'done') {
+      return 'success';
+    }
+    if (normalized === 'failed' || normalized === 'error') {
+      return 'failed';
+    }
+    if (normalized === 'blocked') {
+      return 'blocked';
+    }
+    return 'pending';
+  };
+
+  const mapActionType = (type?: string): ActionLogEntryType => {
+    switch ((type ?? '').toLowerCase()) {
+      case 'filesystem':
+      case 'file':
+        return 'filesystem';
+      case 'browser':
+        return 'browser';
+      case 'ui':
+      case 'desktop':
+        return 'ui';
+      case 'mcp':
+        return 'mcp';
+      case 'approval':
+        return 'approval';
+      case 'metrics':
+        return 'metrics';
+      case 'plan':
+        return 'plan';
+      default:
+        return 'terminal';
+    }
+  };
+
+  const upsertActionLogEntry = (
+    entry: Partial<ActionLogEntry> & { id?: string; actionId?: string; type?: ActionLogEntryType },
+  ) => {
+    const entryId = entry.id ?? entry.actionId;
+    if (!entryId) {
+      return;
+    }
+    const state = useUnifiedChatStore.getState();
+    const existing = state.actionLog.find(
+      (log) => log.id === entryId || (!!entry.actionId && log.actionId === entry.actionId),
+    );
+    if (!existing) {
+      handlersRef.current.addActionLogEntry({
+        id: entryId,
+        actionId: entry.actionId,
+        workflowHash: entry.workflowHash,
+        type: entry.type ?? 'terminal',
+        title: entry.title ?? entry.description ?? 'Agent action',
+        description: entry.description,
+        status: entry.status ?? 'pending',
+        requiresApproval: entry.requiresApproval,
+        scope: entry.scope,
+        metadata: entry.metadata,
+        result: entry.result,
+        error: entry.error,
+      });
+      return;
+    }
+    handlersRef.current.updateActionLogEntry(existing.id, {
+      workflowHash: entry.workflowHash ?? existing.workflowHash,
+      status: entry.status ?? existing.status,
+      title: entry.title ?? existing.title,
+      description: entry.description ?? existing.description,
+      requiresApproval: entry.requiresApproval ?? existing.requiresApproval,
+      scope: entry.scope ?? existing.scope,
+      metadata: entry.metadata ?? existing.metadata,
+      result: entry.result ?? existing.result,
+      error: entry.error ?? existing.error,
+      type: entry.type ?? existing.type,
+    });
+  };
 
   // Update handler refs when store changes
   useEffect(() => {
@@ -111,6 +270,8 @@ export function useAgenticEvents() {
         addTerminalCommand: state.addTerminalCommand,
         addToolExecution: state.addToolExecution,
         addScreenshot: state.addScreenshot,
+        addActionLogEntry: state.addActionLogEntry,
+        updateActionLogEntry: state.updateActionLogEntry,
         updateAgentStatus: state.updateAgentStatus,
         addAgent: state.addAgent,
         updateBackgroundTask: state.updateBackgroundTask,
@@ -118,6 +279,9 @@ export function useAgenticEvents() {
         addApprovalRequest: state.addApprovalRequest,
         approveOperation: state.approveOperation,
         rejectOperation: state.rejectOperation,
+        setPlan: state.setPlan,
+        updatePlanStep: state.updatePlanStep,
+        setWorkflowContext: state.setWorkflowContext,
       };
     });
 
@@ -162,6 +326,142 @@ export function useAgenticEvents() {
       });
       unlistenFns.current.push(unlistenScreenshot);
 
+      const unlistenPlanUpdate = await listen<AgentPlanUpdateEvent>(
+        'agent:plan_update',
+        (event) => {
+          if (!isMountedRef.current) return;
+          if (!event.payload?.plan) return;
+          void (async () => {
+            console.log('[useAgenticEvents] Plan update:', event.payload);
+            const { plan } = event.payload;
+            const normalizedSteps =
+              plan.steps?.map<PlanStep>((step) => ({
+                id: step.id,
+                title: step.title,
+                description: step.description,
+                status: normalizeActionStatus(step.status),
+                parentId: step.parentId,
+                result: step.result,
+              })) ?? [];
+            handlersRef.current.setPlan({
+              id: plan.id,
+              description: plan.description,
+              steps: normalizedSteps,
+              createdAt: plan.createdAt ? new Date(plan.createdAt) : new Date(),
+              updatedAt: new Date(),
+            });
+
+            const currentContext = useUnifiedChatStore.getState().workflowContext;
+            const entryPoint =
+              currentContext?.entryPoint ?? currentContext?.description ?? plan.description;
+            let workflowHash = plan.workflowHash;
+            if (!workflowHash && entryPoint) {
+              const composite = `${entryPoint}::${plan.description}`;
+              workflowHash = await sha256(composite);
+            }
+
+            if (workflowHash) {
+              handlersRef.current.setWorkflowContext({
+                hash: workflowHash,
+                description: plan.description,
+                entryPoint,
+              });
+              if (isTauri) {
+                try {
+                  await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
+                } catch (error) {
+                  console.error('[useAgenticEvents] Failed to push workflow hash', error);
+                }
+              }
+            }
+
+            upsertActionLogEntry({
+              id: plan.id,
+              type: 'plan',
+              title: 'Plan generated',
+              description: plan.description,
+              status: 'success',
+              workflowHash,
+            });
+          })();
+        },
+      );
+      unlistenFns.current.push(unlistenPlanUpdate);
+
+      const unlistenActionUpdate = await listen<AgentActionUpdateEvent>(
+        'agent:action_update',
+        (event) => {
+          if (!isMountedRef.current) return;
+          if (!event.payload?.action) return;
+          const payload = event.payload.action;
+          upsertActionLogEntry({
+            id: payload.id ?? payload.actionId,
+            actionId: payload.actionId ?? payload.id,
+            workflowHash: payload.workflowHash,
+            type: mapActionType(payload.type),
+            title: payload.title,
+            description: payload.description,
+            status: normalizeActionStatus(payload.status),
+            requiresApproval: payload.requiresApproval,
+            scope: payload.scope,
+            metadata: payload.metadata,
+            result: payload.result,
+            error: payload.error,
+          });
+        },
+      );
+      unlistenFns.current.push(unlistenActionUpdate);
+
+      const unlistenPermissionRequired = await listen<AgentPermissionRequiredEvent>(
+        'agent:permission_required',
+        (event) => {
+          if (!isMountedRef.current) return;
+          if (!event.payload) return;
+          const payload = event.payload;
+          console.log('[useAgenticEvents] Permission required:', payload);
+          handlersRef.current.addApprovalRequest({
+            id: payload.actionId,
+            type: (payload.type as ApprovalRequest['type']) ?? 'terminal_command',
+            description: payload.reason ?? 'Action requires approval',
+            riskLevel: payload.riskLevel ?? payload.scope.risk ?? 'high',
+            details: {
+              scope: payload.scope,
+            },
+            scope: payload.scope,
+            workflowHash: payload.workflowHash,
+            actionId: payload.actionId,
+            actionSignature: payload.actionSignature,
+          });
+          upsertActionLogEntry({
+            id: payload.actionId,
+            type: mapActionType(payload.type),
+            title: payload.title ?? 'Approval required',
+            description: payload.reason,
+            status: 'blocked',
+            workflowHash: payload.workflowHash,
+            requiresApproval: true,
+            scope: payload.scope,
+          });
+        },
+      );
+      unlistenFns.current.push(unlistenPermissionRequired);
+
+      const unlistenMetrics = await listen<AgentMetricsEvent>('agent:metrics', (event) => {
+        if (!isMountedRef.current) return;
+        if (!event.payload?.metrics) return;
+        const payload = event.payload.metrics;
+        upsertActionLogEntry({
+          id: payload.actionId ?? `metrics-${payload.workflowHash ?? crypto.randomUUID()}`,
+          type: 'metrics',
+          title: 'Task metrics',
+          description: `Tokens: ${payload.tokens ?? 0}, Cost: $${(payload.costUsd ?? 0).toFixed(4)}`,
+          status: 'success',
+          workflowHash: payload.workflowHash,
+          metadata: payload,
+        });
+      });
+      unlistenFns.current.push(unlistenMetrics);
+
       // Agent Status Events
       const unlistenAgentStatus = await listen<AgentStatusEvent>('agent:status_update', (event) => {
         if (!isMountedRef.current) return;
@@ -176,6 +476,22 @@ export function useAgenticEvents() {
         }
       });
       unlistenFns.current.push(unlistenAgentStatus);
+
+      const unlistenAgentSpawned = await listen<AgentSpawnedEvent>('agent:spawned', (event) => {
+        if (!isMountedRef.current) return;
+        const payload = event.payload;
+        if (!payload?.agent_id) return;
+        console.log('[useAgenticEvents] Agent spawned:', payload);
+        handlersRef.current.addAgent({
+          id: payload.agent_id,
+          name: payload.goal ? `Agent • ${payload.goal}` : payload.agent_id,
+          status: 'idle',
+          currentGoal: payload.goal,
+          progress: 0,
+          startedAt: new Date(),
+        });
+      });
+      unlistenFns.current.push(unlistenAgentSpawned);
 
       // Background Task Events
       const unlistenTaskProgress = await listen<BackgroundTaskEvent>('task:progress', (event) => {

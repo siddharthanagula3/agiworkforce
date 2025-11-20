@@ -5,6 +5,7 @@
 
 // Note: agent:: module has been deleted - functionality moved to agi:: module
 // CodeGenerator, ContextManager, and AgentRuntime are now stubbed in commands/ai_native.rs
+use agiworkforce_desktop::agent::approval::ApprovalController;
 use agiworkforce_desktop::billing::BillingStateWrapper;
 use agiworkforce_desktop::security::{AuthManager, SecretManager};
 use agiworkforce_desktop::{
@@ -59,11 +60,11 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             // Initialize database
-            let db_path = app
+            let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .context("Failed to get app data dir")?
-                .join("agiworkforce.db");
+                .context("Failed to get app data dir")?;
+            let db_path = app_data_dir.join("agiworkforce.db");
 
             // Ensure parent directory exists
             if let Some(parent) = db_path.parent() {
@@ -86,6 +87,11 @@ fn main() {
             app.manage(AppDatabase {
                 conn: db_conn_arc.clone(),
             });
+
+            // Approval controller for permission prompts and trusted workflows
+            let approval_controller = ApprovalController::new(app_data_dir.clone())
+                .map_err(|e| anyhow::anyhow!("Failed to initialize approval controller: {}", e))?;
+            app.manage(approval_controller);
 
             // Initialize security components
             // SecretManager handles secure JWT secret storage (OS keyring + database fallback)
@@ -490,6 +496,7 @@ fn main() {
             agiworkforce_desktop::commands::agi_stop,
             // Parallel Agent Orchestration commands
             agiworkforce_desktop::commands::orchestrator_init,
+            agiworkforce_desktop::commands::orchestrator_init_default,
             agiworkforce_desktop::commands::orchestrator_spawn_agent,
             agiworkforce_desktop::commands::orchestrator_spawn_parallel,
             agiworkforce_desktop::commands::orchestrator_get_agent_status,
@@ -505,9 +512,12 @@ fn main() {
             agiworkforce_desktop::commands::cancel_agent,
             agiworkforce_desktop::commands::refresh_agent_status,
             // User operation commands
-            agiworkforce_desktop::commands::approve_operation,
-            agiworkforce_desktop::commands::reject_operation,
-            agiworkforce_desktop::commands::cancel_background_task,
+              agiworkforce_desktop::commands::approve_operation,
+              agiworkforce_desktop::commands::reject_operation,
+              agiworkforce_desktop::commands::agent_resolve_approval,
+              agiworkforce_desktop::commands::agent_set_workflow_hash,
+              agiworkforce_desktop::commands::agent_list_trusted_workflows,
+              agiworkforce_desktop::commands::cancel_background_task,
             agiworkforce_desktop::commands::pause_background_task,
             agiworkforce_desktop::commands::resume_background_task,
             agiworkforce_desktop::commands::list_background_tasks,
@@ -770,6 +780,7 @@ fn main() {
             agiworkforce_desktop::commands::llm_get_available_models,
             agiworkforce_desktop::commands::llm_check_provider_status,
             agiworkforce_desktop::commands::llm_get_usage_stats,
+            agiworkforce_desktop::commands::router_suggestions,
             // Cache management commands
             agiworkforce_desktop::commands::cache_get_stats,
             agiworkforce_desktop::commands::cache_clear_all,
@@ -922,12 +933,26 @@ fn main() {
             agiworkforce_desktop::commands::db_redis_hset,
             agiworkforce_desktop::commands::db_redis_hgetall,
             agiworkforce_desktop::commands::db_redis_disconnect,
-            // Document commands
+            // Document reading commands
             agiworkforce_desktop::commands::document_read,
             agiworkforce_desktop::commands::document_extract_text,
             agiworkforce_desktop::commands::document_get_metadata,
             agiworkforce_desktop::commands::document_search,
             agiworkforce_desktop::commands::document_detect_type,
+            // Document creation commands
+            agiworkforce_desktop::commands::document_create_word,
+            agiworkforce_desktop::commands::document_create_word_simple,
+            agiworkforce_desktop::commands::document_create_excel,
+            agiworkforce_desktop::commands::document_create_excel_simple,
+            agiworkforce_desktop::commands::document_create_excel_numbers,
+            agiworkforce_desktop::commands::document_create_pdf,
+            agiworkforce_desktop::commands::document_create_pdf_simple,
+            // File operations for document processing
+            agiworkforce_desktop::commands::file_read_text,
+            agiworkforce_desktop::commands::file_write_text,
+            agiworkforce_desktop::commands::file_read_binary,
+            agiworkforce_desktop::commands::file_write_binary,
+            agiworkforce_desktop::commands::file_get_metadata,
             // MCP commands
             agiworkforce_desktop::commands::mcp_initialize,
             agiworkforce_desktop::commands::mcp_list_servers,
@@ -938,6 +963,8 @@ fn main() {
             agiworkforce_desktop::commands::mcp_call_tool,
             agiworkforce_desktop::commands::mcp_get_config,
             agiworkforce_desktop::commands::mcp_update_config,
+            agiworkforce_desktop::commands::mcp_enable_server,
+            agiworkforce_desktop::commands::mcp_disable_server,
             agiworkforce_desktop::commands::mcp_get_stats,
             agiworkforce_desktop::commands::mcp_store_credential,
             agiworkforce_desktop::commands::mcp_get_tool_schemas,

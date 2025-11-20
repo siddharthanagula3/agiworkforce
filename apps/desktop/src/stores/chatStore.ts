@@ -4,6 +4,7 @@ import { invoke, isTauri } from '../lib/tauri-mock';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useTokenBudgetStore } from './tokenBudgetStore';
+import { deriveTaskMetadata } from '../lib/taskMetadata';
 import type {
   Conversation,
   ConversationUI,
@@ -416,6 +417,12 @@ export const useChatStore = create<ChatState>()(
           }
         }
 
+        const taskMetadata = deriveTaskMetadata(
+          messageContent,
+          undefined,
+          routing?.costPriority ?? 'balanced',
+        );
+
         try {
           const response = await invoke<ChatSendMessageResponse>('chat_send_message', {
             request: {
@@ -423,8 +430,11 @@ export const useChatStore = create<ChatState>()(
               content: messageContent,
               provider: routing?.provider,
               model: routing?.model,
+              providerOverride: routing?.provider,
+              modelOverride: routing?.model,
               strategy: routing?.strategy,
               stream: true,
+              taskMetadata,
             },
           });
 
@@ -754,7 +764,10 @@ function handleStreamStart(payload: ChatStreamStartPayload) {
       // Race condition guard: verify conversation still exists
       const conversationExists = state.conversations.some((c) => c.id === payload.conversationId);
       if (!conversationExists) {
-        console.warn('[chatStore] Stream start for non-existent conversation:', payload.conversationId);
+        console.warn(
+          '[chatStore] Stream start for non-existent conversation:',
+          payload.conversationId,
+        );
         return state;
       }
 
@@ -811,7 +824,10 @@ function handleStreamChunk(payload: ChatStreamChunkPayload) {
       // Race condition guard: verify conversation still exists
       const conversationExists = state.conversations.some((c) => c.id === payload.conversationId);
       if (!conversationExists) {
-        console.warn('[chatStore] Stream chunk for non-existent conversation:', payload.conversationId);
+        console.warn(
+          '[chatStore] Stream chunk for non-existent conversation:',
+          payload.conversationId,
+        );
         return state;
       }
 
@@ -870,7 +886,10 @@ function handleStreamEnd(payload: ChatStreamEndPayload) {
       // Race condition guard: verify conversation still exists
       const conversationExists = state.conversations.some((c) => c.id === payload.conversationId);
       if (!conversationExists) {
-        console.warn('[chatStore] Stream end for non-existent conversation:', payload.conversationId);
+        console.warn(
+          '[chatStore] Stream end for non-existent conversation:',
+          payload.conversationId,
+        );
         return state;
       }
 

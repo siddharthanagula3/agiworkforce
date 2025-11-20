@@ -196,6 +196,7 @@ impl ContextManager {
                     provider: None,
                     model: Some("gpt-4o-mini".to_string()), // Use fast, cheap model
                     strategy: crate::router::RoutingStrategy::Auto,
+                    context: None,
                 }),
             )
             .await?;

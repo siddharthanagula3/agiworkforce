@@ -8,6 +8,7 @@ import { Dialog } from '../ui/Dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { Spinner } from '../ui/Spinner';
 import { ScrollArea } from '../ui/ScrollArea';
+import { Switch } from '../ui/Switch';
 import {
   Server,
   Power,
@@ -19,7 +20,7 @@ import {
   CheckCircle,
   XCircle,
   Activity,
-  Download
+  Download,
 } from 'lucide-react';
 import type { McpServerInfo } from '../../types/mcp';
 
@@ -29,6 +30,34 @@ interface ServerConfigDialogProps {
   onClose: () => void;
   onSave: (serverName: string, config: any) => void;
 }
+
+const curatedCatalog = [
+  {
+    name: 'filesystem',
+    title: 'Filesystem',
+    description: 'Read and write local project files safely.',
+  },
+  {
+    name: 'git',
+    title: 'Git',
+    description: 'Inspect branches, diffs, and repo history.',
+  },
+  {
+    name: 'github',
+    title: 'GitHub',
+    description: 'Open pull requests, issues, and reviews with tokens.',
+  },
+  {
+    name: 'terminal',
+    title: 'Terminal',
+    description: 'Shell access for scripted workflows.',
+  },
+  {
+    name: 'windows_ui',
+    title: 'Windows UI',
+    description: 'Interact with native apps via the Windows automation harness.',
+  },
+] as const;
 
 function ServerConfigDialog({ server, open, onClose, onSave }: ServerConfigDialogProps) {
   const [apiKey, setApiKey] = useState('');
@@ -79,9 +108,7 @@ function ServerConfigDialog({ server, open, onClose, onSave }: ServerConfigDialo
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>
-            Save Configuration
-          </Button>
+          <Button onClick={handleSave}>Save Configuration</Button>
         </div>
       </div>
     </Dialog>
@@ -95,6 +122,7 @@ interface ServerCardProps {
   onConfigure: (server: McpServerInfo) => void;
   onViewLogs: (name: string) => void;
   onUninstall: (name: string) => void;
+  onToggleEnabled: (name: string, enabled: boolean) => void;
   isLoading: boolean;
 }
 
@@ -105,7 +133,8 @@ function ServerCard({
   onConfigure,
   onViewLogs,
   onUninstall,
-  isLoading
+  onToggleEnabled,
+  isLoading,
 }: ServerCardProps) {
   const getStatusBadge = () => {
     if (server.connected) {
@@ -117,7 +146,10 @@ function ServerCard({
       );
     } else if (server.enabled) {
       return (
-        <Badge variant="secondary" className="flex items-center gap-1 bg-yellow-100 text-yellow-800">
+        <Badge
+          variant="secondary"
+          className="flex items-center gap-1 bg-yellow-100 text-yellow-800"
+        >
           <AlertCircle className="w-3 h-3" />
           Stopped
         </Badge>
@@ -142,69 +174,79 @@ function ServerCard({
             {getStatusBadge()}
           </div>
 
-          <p className="text-sm text-gray-600 mb-3">
-            {server.tool_count} tools available
-          </p>
-
-          <div className="flex flex-wrap gap-2">
-            {server.connected ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onStop(server.name)}
-                disabled={isLoading}
-                className="flex items-center gap-1"
-              >
-                <PowerOff className="w-3 h-3" />
-                Stop
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onStart(server.name)}
-                disabled={isLoading || !server.enabled}
-                className="flex items-center gap-1"
-              >
-                <Power className="w-3 h-3" />
-                Start
-              </Button>
-            )}
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onConfigure(server)}
-              disabled={isLoading}
-              className="flex items-center gap-1"
-            >
-              <Settings className="w-3 h-3" />
-              Configure
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onViewLogs(server.name)}
-              disabled={isLoading}
-              className="flex items-center gap-1"
-            >
-              <Activity className="w-3 h-3" />
-              Logs
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onUninstall(server.name)}
-              disabled={isLoading}
-              className="flex items-center gap-1 text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="w-3 h-3" />
-              Uninstall
-            </Button>
-          </div>
+          <p className="text-sm text-gray-600 mb-3">{server.tool_count} tools available</p>
         </div>
+
+        <div className="flex flex-col items-end gap-1 pl-4">
+          <Switch
+            checked={server.enabled}
+            disabled={isLoading}
+            onCheckedChange={(checked) => onToggleEnabled(server.name, checked)}
+            aria-label={`Toggle ${server.name}`}
+          />
+          <span className="text-xs text-gray-500">
+            {server.enabled ? 'Auto-start on' : 'Auto-start off'}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {server.connected ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onStop(server.name)}
+            disabled={isLoading}
+            className="flex items-center gap-1"
+          >
+            <PowerOff className="w-3 h-3" />
+            Stop
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onStart(server.name)}
+            disabled={isLoading || !server.enabled}
+            className="flex items-center gap-1"
+          >
+            <Power className="w-3 h-3" />
+            Start
+          </Button>
+        )}
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onConfigure(server)}
+          disabled={isLoading}
+          className="flex items-center gap-1"
+        >
+          <Settings className="w-3 h-3" />
+          Configure
+        </Button>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onViewLogs(server.name)}
+          disabled={isLoading}
+          className="flex items-center gap-1"
+        >
+          <Activity className="w-3 h-3" />
+          Logs
+        </Button>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onUninstall(server.name)}
+          disabled={isLoading}
+          className="flex items-center gap-1 text-red-600 hover:text-red-700"
+        >
+          <Trash2 className="w-3 h-3" />
+          Uninstall
+        </Button>
       </div>
     </Card>
   );
@@ -219,6 +261,8 @@ export function MCPServerManager() {
     refreshServers,
     connectServer,
     disconnectServer,
+    enableServer,
+    disableServer,
     clearError,
   } = useMcpStore();
 
@@ -252,6 +296,21 @@ export function MCPServerManager() {
     setActionLoading(null);
   };
 
+  const handleToggleEnabled = async (serverName: string, nextEnabled: boolean) => {
+    setActionLoading(serverName);
+    try {
+      if (nextEnabled) {
+        await enableServer(serverName);
+      } else {
+        await disableServer(serverName);
+      }
+      await refreshServers();
+    } catch (err) {
+      console.error('Failed to update server toggle:', err);
+    }
+    setActionLoading(null);
+  };
+
   const handleConfigure = (server: McpServerInfo) => {
     setSelectedServer(server);
     setConfigDialogOpen(true);
@@ -278,8 +337,12 @@ export function MCPServerManager() {
     await refreshServers();
   };
 
-  const connectedServers = servers.filter(s => s.connected);
-  const availableServers = servers.filter(s => !s.connected);
+  const connectedServers = servers.filter((s) => s.connected);
+  const availableServers = servers.filter((s) => !s.connected);
+  const curatedEntries = curatedCatalog.map((meta) => ({
+    meta,
+    info: servers.find((server) => server.name === meta.name) ?? null,
+  }));
 
   return (
     <div className="p-6">
@@ -316,17 +379,43 @@ export function MCPServerManager() {
         )}
       </div>
 
+      <div className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">Curated Tool Marketplace</h2>
+          <p className="text-sm text-gray-600">
+            Flip on the core MCP servers we recommend for developer automation.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {curatedEntries.map(({ meta, info }) => (
+            <Card key={meta.name} className="p-4 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-medium">{meta.title}</p>
+                  <p className="text-sm text-gray-600">{meta.description}</p>
+                </div>
+                <Switch
+                  checked={Boolean(info?.enabled)}
+                  disabled={!info || isLoading || actionLoading === info?.name}
+                  onCheckedChange={(checked) => info && handleToggleEnabled(info.name, checked)}
+                  aria-label={`Toggle ${meta.title}`}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>{info?.connected ? 'Connected' : 'Not connected'}</span>
+                <span>{info ? `${info.tool_count} tools` : 'Not installed'}</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
       <Tabs defaultValue="installed">
         <TabsList>
-          <TabsTrigger value="installed">
-            Installed Servers ({servers.length})
-          </TabsTrigger>
-          <TabsTrigger value="running">
-            Running ({connectedServers.length})
-          </TabsTrigger>
-          <TabsTrigger value="available">
-            Available ({availableServers.length})
-          </TabsTrigger>
+          <TabsTrigger value="installed">Installed Servers ({servers.length})</TabsTrigger>
+          <TabsTrigger value="running">Running ({connectedServers.length})</TabsTrigger>
+          <TabsTrigger value="available">Available ({availableServers.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="installed">
@@ -338,9 +427,7 @@ export function MCPServerManager() {
             <div className="text-center py-12">
               <Server className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No MCP Servers</h3>
-              <p className="text-gray-600 mb-4">
-                Get started by browsing the server registry
-              </p>
+              <p className="text-gray-600 mb-4">Get started by browsing the server registry</p>
               <Button className="flex items-center gap-2">
                 <Download className="w-4 h-4" />
                 Browse Registry
@@ -358,6 +445,7 @@ export function MCPServerManager() {
                     onConfigure={handleConfigure}
                     onViewLogs={handleViewLogs}
                     onUninstall={handleUninstall}
+                    onToggleEnabled={handleToggleEnabled}
                     isLoading={actionLoading === server.name}
                   />
                 ))}
@@ -371,9 +459,7 @@ export function MCPServerManager() {
             <div className="text-center py-12">
               <PowerOff className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Running Servers</h3>
-              <p className="text-gray-600">
-                Start a server from the Installed Servers tab
-              </p>
+              <p className="text-gray-600">Start a server from the Installed Servers tab</p>
             </div>
           ) : (
             <ScrollArea className="h-[600px]">
@@ -387,6 +473,7 @@ export function MCPServerManager() {
                     onConfigure={handleConfigure}
                     onViewLogs={handleViewLogs}
                     onUninstall={handleUninstall}
+                    onToggleEnabled={handleToggleEnabled}
                     isLoading={actionLoading === server.name}
                   />
                 ))}
@@ -400,9 +487,7 @@ export function MCPServerManager() {
             <div className="text-center py-12">
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">All Servers Running</h3>
-              <p className="text-gray-600">
-                All installed servers are currently running
-              </p>
+              <p className="text-gray-600">All installed servers are currently running</p>
             </div>
           ) : (
             <ScrollArea className="h-[600px]">
@@ -416,6 +501,7 @@ export function MCPServerManager() {
                     onConfigure={handleConfigure}
                     onViewLogs={handleViewLogs}
                     onUninstall={handleUninstall}
+                    onToggleEnabled={handleToggleEnabled}
                     isLoading={actionLoading === server.name}
                   />
                 ))}
