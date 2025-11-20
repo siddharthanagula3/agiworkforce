@@ -299,4 +299,7 @@ pub trait LLMProvider: Send + Sync {
     }
 }
 
-pub use llm_router::{LLMRouter, RouteCandidate, RouteOutcome, RouterPreferences, RoutingStrategy};
+pub use llm_router::{
+    CostPriority, LLMRouter, RouteCandidate, RouteOutcome, RouterContext, RouterPreferences,
+    RouterSuggestion, RoutingStrategy,
+};

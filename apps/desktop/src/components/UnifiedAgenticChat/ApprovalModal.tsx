@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { Shield, AlertTriangle, Info, CheckCircle, XCircle } from 'lucide-react';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import {
@@ -11,15 +10,17 @@ import {
   DialogFooter,
 } from '../ui/Dialog';
 import { Button } from '../ui/Button';
+import { Checkbox } from '../ui/Checkbox';
 import { cn } from '../../lib/utils';
+import { useApprovalActions } from '../../hooks/useApprovalActions';
 
 export const ApprovalModal = () => {
   const pendingApprovals = useUnifiedChatStore((s) => s.pendingApprovals);
-  const approveOperation = useUnifiedChatStore((s) => s.approveOperation);
-  const rejectOperation = useUnifiedChatStore((s) => s.rejectOperation);
+  const { resolveApproval } = useApprovalActions();
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [alwaysAllow, setAlwaysAllow] = useState(false);
 
   // Get the first pending approval (FIFO queue)
   const currentApproval = pendingApprovals.find((a) => a.status === 'pending');
@@ -29,14 +30,8 @@ export const ApprovalModal = () => {
 
     setIsApproving(true);
     try {
-      // Call backend to approve
-      await invoke('approve_operation', {
-        approvalId: currentApproval.id,
-      });
-
-      // Update store (backend will emit event, but update optimistically)
-      approveOperation(currentApproval.id);
-
+      await resolveApproval(currentApproval, 'approve', { trust: alwaysAllow });
+      setAlwaysAllow(false);
       console.log('[ApprovalModal] Operation approved:', currentApproval.id);
     } catch (error) {
       console.error('[ApprovalModal] Failed to approve:', error);
@@ -51,15 +46,10 @@ export const ApprovalModal = () => {
 
     setIsRejecting(true);
     try {
-      // Call backend to reject
-      await invoke('reject_operation', {
-        approvalId: currentApproval.id,
+      await resolveApproval(currentApproval, 'reject', {
         reason: 'User rejected from approval modal',
       });
-
-      // Update store (backend will emit event, but update optimistically)
-      rejectOperation(currentApproval.id, 'User rejected');
-
+      setAlwaysAllow(false);
       console.log('[ApprovalModal] Operation rejected:', currentApproval.id);
     } catch (error) {
       console.error('[ApprovalModal] Failed to reject:', error);
@@ -158,6 +148,20 @@ export const ApprovalModal = () => {
               Only approve if you trust this operation. Rejecting will stop the agent from
               proceeding with this action.
             </p>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-lg border border-gray-200/80 p-3 text-sm dark:border-gray-800">
+            <Checkbox
+              id="always-allow"
+              checked={alwaysAllow}
+              onCheckedChange={(checked) => setAlwaysAllow(Boolean(checked))}
+            />
+            <label
+              htmlFor="always-allow"
+              className="flex-1 text-xs text-gray-600 dark:text-gray-300"
+            >
+              Always allow this operation for this workflow in the future.
+            </label>
           </div>
         </div>
 

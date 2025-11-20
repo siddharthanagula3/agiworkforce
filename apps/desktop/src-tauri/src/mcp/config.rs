@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+const DEFAULT_CONFIG_JSON: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/mcp/default_servers.json"));
+
 /// Configuration for a single MCP server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
@@ -67,6 +70,16 @@ impl McpServersConfig {
 
     /// Create a default configuration
     pub fn default() -> Self {
+        serde_json::from_str(DEFAULT_CONFIG_JSON).unwrap_or_else(|error| {
+            tracing::error!(
+                "Failed to parse packaged MCP defaults ({}). Falling back to legacy config.",
+                error
+            );
+            Self::fallback_config()
+        })
+    }
+
+    fn fallback_config() -> Self {
         let mut mcp_servers = HashMap::new();
 
         // Filesystem server (official MCP server)

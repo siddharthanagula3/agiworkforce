@@ -215,6 +215,7 @@ Return ONLY the JSON array."#,
             provider: Some(crate::router::Provider::Anthropic),
             model: Some("claude-sonnet-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
+            context: None,
         };
 
         let request = LLMRequest {
@@ -606,6 +607,7 @@ Your response:"#,
             provider: None,
             model: None,
             strategy: RoutingStrategy::Auto,
+            context: None,
         };
 
         let request = LLMRequest {
@@ -779,6 +781,7 @@ Return ONLY a JSON array of steps with this structure:
             provider: Some(crate::router::Provider::Anthropic),
             model: Some("claude-sonnet-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
+            context: None,
         };
 
         let request = LLMRequest {
