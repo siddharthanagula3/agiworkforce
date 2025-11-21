@@ -104,7 +104,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
             <Search className="mr-2 h-4 w-4 text-muted-foreground" />
             <Command.Input
               autoFocus
-              placeholder="Type a command or search�"
+              placeholder="Type a command or search"
               className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
