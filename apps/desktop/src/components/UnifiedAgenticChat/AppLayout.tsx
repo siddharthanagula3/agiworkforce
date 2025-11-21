@@ -15,10 +15,12 @@ type SidebarItem = {
 interface AppLayoutProps {
   headerLeft?: React.ReactNode;
   headerRight?: React.ReactNode;
+  activeModel?: string;
   sidebarItems: SidebarItem[];
   onNewChat: () => void;
   children: React.ReactNode;
   composer?: React.ReactNode;
+  isEmptyState?: boolean;
   sidecar?: React.ReactNode;
   sidecarOpen: boolean;
   onToggleSidecar: () => void;
@@ -30,10 +32,12 @@ const MAX_SIDECAR_WIDTH = 960;
 export const AppLayout: React.FC<AppLayoutProps> = ({
   headerLeft,
   headerRight,
+  activeModel,
   sidebarItems,
   onNewChat,
   children,
   composer,
+  isEmptyState = false,
   sidecar,
   sidecarOpen,
   onToggleSidecar,
@@ -139,6 +143,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <header className="flex h-[60px] items-center justify-between border-b border-white/10 bg-zinc-950/90 px-6 backdrop-blur">
           <div className="flex items-center gap-3">{headerLeft}</div>
           <div className="flex items-center gap-3">
+            {activeModel ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-100">
+                ✦ {activeModel}
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={onToggleSidecar}
@@ -158,8 +167,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <div className="flex min-h-0 flex-1">
           <main className="flex flex-1 min-h-0 overflow-hidden">
             <div className="mx-auto flex h-full min-h-0 w-full max-w-[800px] flex-col px-6 py-8">
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">{children}</div>
-              {composer ? <div className="mt-6">{composer}</div> : null}
+              {isEmptyState ? (
+                <div className="flex flex-1 items-center justify-center">
+                  {composer ? <motion.div layoutId="composer">{composer}</motion.div> : null}
+                </div>
+              ) : (
+                <>
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">{children}</div>
+                  {composer ? (
+                    <motion.div layoutId="composer" className="mt-6">
+                      {composer}
+                    </motion.div>
+                  ) : null}
+                </>
+              )}
             </div>
           </main>
 
