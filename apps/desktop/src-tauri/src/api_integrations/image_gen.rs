@@ -104,7 +104,9 @@ impl ImageGenerationClient {
             ImageProvider::StableDiffusion => self.generate_with_stable_diffusion(request).await,
             ImageProvider::Midjourney => self.generate_with_midjourney(request).await,
             ImageProvider::GoogleImagen => self.generate_with_google_imagen(request, false).await,
-            ImageProvider::GoogleImagenLite => self.generate_with_google_imagen(request, true).await,
+            ImageProvider::GoogleImagenLite => {
+                self.generate_with_google_imagen(request, true).await
+            }
         }
     }
 
@@ -130,7 +132,12 @@ impl ImageGenerationClient {
 
         let dalle_request = DALLERequest {
             prompt: request.prompt.clone(),
-            model: Some(request.model.clone().unwrap_or_else(|| "dall-e-3".to_string())),
+            model: Some(
+                request
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| "dall-e-3".to_string()),
+            ),
             size: request.size.map(|s| match s {
                 ImageSize::Small => "256x256".to_string(),
                 ImageSize::Medium => "512x512".to_string(),
@@ -223,7 +230,10 @@ impl ImageGenerationClient {
             .model
             .as_deref()
             .unwrap_or("stable-diffusion-xl-1024-v1-0");
-        let url = format!("https://api.stability.ai/v1/generation/{}/text-to-image", model);
+        let url = format!(
+            "https://api.stability.ai/v1/generation/{}/text-to-image",
+            model
+        );
 
         #[derive(Serialize)]
         struct StableDiffusionRequest {

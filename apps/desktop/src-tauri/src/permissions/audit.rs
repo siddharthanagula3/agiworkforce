@@ -297,7 +297,8 @@ impl AuditLogger {
                     AVG(memory_used_mb) as avg_memory,
                     AVG(cpu_usage_percent) as avg_cpu
                  FROM tool_executions
-                 WHERE tool_id = ?1".to_string(),
+                 WHERE tool_id = ?1"
+                    .to_string(),
                 vec![Box::new(id.to_string())],
             )
         } else {
@@ -310,7 +311,8 @@ impl AuditLogger {
                     MAX(execution_time_ms) as max_time,
                     AVG(memory_used_mb) as avg_memory,
                     AVG(cpu_usage_percent) as avg_cpu
-                 FROM tool_executions".to_string(),
+                 FROM tool_executions"
+                    .to_string(),
                 vec![],
             )
         };
@@ -318,17 +320,20 @@ impl AuditLogger {
         let mut stmt = conn.prepare(&sql)?;
 
         let stats = if tool_id.is_some() {
-            stmt.query_row(rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())), |row| {
-                Ok(ToolExecutionStats {
-                    total_executions: row.get::<_, i64>(0)? as u64,
-                    successful_executions: row.get::<_, i64>(1)? as u64,
-                    failed_executions: row.get::<_, i64>(2)? as u64,
-                    avg_execution_time_ms: row.get(3)?,
-                    max_execution_time_ms: row.get::<_, i64>(4)? as u64,
-                    avg_memory_used_mb: row.get(5)?,
-                    avg_cpu_usage_percent: row.get(6)?,
-                })
-            })?
+            stmt.query_row(
+                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+                |row| {
+                    Ok(ToolExecutionStats {
+                        total_executions: row.get::<_, i64>(0)? as u64,
+                        successful_executions: row.get::<_, i64>(1)? as u64,
+                        failed_executions: row.get::<_, i64>(2)? as u64,
+                        avg_execution_time_ms: row.get(3)?,
+                        max_execution_time_ms: row.get::<_, i64>(4)? as u64,
+                        avg_memory_used_mb: row.get(5)?,
+                        avg_cpu_usage_percent: row.get(6)?,
+                    })
+                },
+            )?
         } else {
             stmt.query_row([], |row| {
                 Ok(ToolExecutionStats {
