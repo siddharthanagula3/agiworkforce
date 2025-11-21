@@ -1,25 +1,61 @@
-# Repository Guidelines
+# AGENTS.md — Working Guidelines
 
-## Project Structure & Module Organization
+Use this condensed guide when contributing as an agent. It merges the repository rules with the Claude playbook so you can move quickly without re-reading multiple docs.
 
-AGI Workforce is a pnpm workspace centered on `apps/desktop`. React UI code lives in `apps/desktop/src`, and the Tauri/Rust backend in `apps/desktop/src-tauri` (folders such as `agi/`, `automation/`, `router/`). Shared helpers go under `packages/types` or `packages/ui-components`. Docs sit in `docs/`; configuration and rollout scripts live in `configs/`, `infrastructure/`, and `scripts/`, with schema updates in `migrations/`. Tests live in `tests/` or co-located `__tests__`, while `artifacts/`, `target/`, and `test-results/` store generated output only.
+## Project Layout
 
-## Build, Test, and Development Commands
+- Primary focus is `apps/desktop` (React 18 + Vite) with Tauri/Rust backend in `apps/desktop/src-tauri` (`agi/`, `automation/`, `router/`, `mcp/`, `browser/`).
+- Companion targets: `apps/mobile` (Expo) and `apps/extension` (browser). Keep platform-only assets inside each app.
+- Shared code lives in `packages/{types,ui-components,utils}`; import via `@agiworkforce/*` aliases from `tsconfig.base.json`.
+- Backend services live under `services/{api-gateway,signaling-server,update-server}`. Docs in `docs/`, automation/scripts in `scripts/`, infra/config in `configs/` and `infrastructure/`, migrations in `migrations/`. Generated artifacts in `artifacts/`, `target/`, `test-results/` only.
 
-Install via `pnpm install`, then run `pnpm --filter @agiworkforce/desktop dev` for hot reload. `pnpm lint` and `pnpm typecheck` guard TypeScript quality, while `pnpm --filter @agiworkforce/desktop build` emits binaries under `apps/desktop/src-tauri/target/release`. Execute `cargo check`, `cargo test`, `cargo fmt`, and `cargo clippy --all-targets -- -D warnings` from `apps/desktop/src-tauri` for Rust changes. Use `pnpm test` plus Playwright helpers (`pnpm --filter @agiworkforce/desktop test:ui`, `test:e2e`, `test:smoke`) to validate automation behavior.
+## Tooling & Versions
 
-## Coding Style & Naming Conventions
+- Node 20.11+ (use `nvm use` to switch to v22), pnpm 9.15+, Rust 1.90 (`rust-toolchain.toml`), Tauri 2.0.
+- Prettier: 2-space, single quotes, trailing commas, `printWidth` 100. ESLint must be clean; Husky + lint-staged run on staged files.
 
-TypeScript adheres to ESLint plus the repository Prettier config (`tabWidth: 2`, `singleQuote: true`, `trailingComma: all`, `printWidth: 100`). Components use PascalCase, hooks follow `useFeature`, and shared imports should use workspace aliases like `@agiworkforce/types` instead of deep relatives. Rust modules must compile warning-free, avoid `unwrap`, document public APIs with `///`, and keep filenames snake_case.
+## Install, Dev, Build
 
-## Testing Guidelines
+```powershell
+pnpm install                 # root install (prefer --frozen-lockfile if CI-like)
+pnpm --filter @agiworkforce/desktop dev   # Tauri dev (UI + backend)
+pnpm --filter @agiworkforce/desktop dev:vite # UI-only shell
+pnpm --filter @agiworkforce/desktop build    # Vite build + Tauri bundle
+pnpm build:all               # workspace builds excluding desktop
+```
 
-Vitest drives unit tests via `pnpm test` with files named `*.test.ts`; use `pnpm test -- path/to/spec` to isolate failures and `pnpm --filter @agiworkforce/desktop test:coverage` to track >=80% coverage on automation/agent code. Playwright handles UI/e2e coverage through `pnpm --filter @agiworkforce/desktop test:ui`, `test:e2e`, and `test:smoke`. Rust tests live in `#[cfg(test)]` modules alongside source; run `cargo test -- --nocapture` when you need logs.
+Rust backend (from `apps/desktop/src-tauri`):
 
-## Commit & Pull Request Guidelines
+```powershell
+cargo check
+cargo test
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+```
 
-Commit messages must follow Conventional Commits (e.g., `fix(router): guard provider fallback`), enforced by Husky/commitlint. Before pushing, run `pnpm typecheck`, `pnpm lint`, `pnpm test`, plus the relevant `cargo` tasks to satisfy hooks. Pull requests should summarize the problem, list the solution, show test evidence (commands or UI screenshots), and link issues via `Closes #123`. Keep PRs scoped and update docs (`README.md`, `docs/developer/TESTING.md`, `CLAUDE.md`) when workflows change.
+## Quality Gates & Testing
 
-## Security & Configuration Tips
+- TypeScript: `pnpm typecheck` (or `pnpm typecheck:all` for workspace), `pnpm lint`, `pnpm test`.
+- Frontend tests: `pnpm --filter @agiworkforce/desktop test`, `test:ui`, `test:coverage` (HTML at `apps/desktop/coverage/index.html`).
+- Playwright E2E: `pnpm --filter @agiworkforce/desktop test:e2e`, `test:smoke`, or `test:e2e:ui`.
+- Rust coverage: `cargo llvm-cov --workspace --all-features` (HTML in `target/llvm-cov/html`).
+- Coverage targets: 70% overall, 85% for security/AGI-critical modules, 80% for new code.
+- Co-locate tests as `*.test.ts[x]` or in `__tests__/`; Rust tests live beside modules under `#[cfg(test)]`.
 
-Never commit API keys or secrets; configure providers inside the desktop app so credentials stay in Windows Credential Manager. SQLite state persists at `%APPDATA%/agiworkforce/agiworkforce.db`, so scrub it before sharing logs. Store MCP and LLM endpoints via environment files under `configs/` and redact tokens from issue or PR text.
+## Coding Standards
+
+- React components and Zustand stores use PascalCase filenames; hooks use `useName`. Favor lazy loading for heavy UI, error boundaries, and avoid state mutation in stores (use Immer helpers).
+- Rust files are snake_case; avoid `unwrap`/`expect` in production paths, prefer typed errors, and document public APIs with `///`.
+- When adding Tauri commands: annotate with `#[tauri::command]`, re-export in `commands/mod.rs`, register in `invoke_handler!` within `main.rs`, and manage shared state via `app.manage(...)`.
+
+## Security & Configuration
+
+- Never commit secrets; credentials belong in Windows Credential Manager (desktop app settings) or env files under `configs/`. MCP/LLM endpoints must be redacted.
+- Enforce permission prompts for automation; keep telemetry and security modules aligned with `SECURITY.md`.
+- SQLite state at `%APPDATA%/agiworkforce/agiworkforce.db` is user data—scrub before sharing logs.
+
+## Git, Commits, and PRs
+
+- Conventional Commits (enforced by commitlint/Husky): `feat|fix|chore|docs|test|refactor|perf|ci(scope): summary`.
+- Before PR: run `pnpm typecheck`, `pnpm lint`, `pnpm test`, plus `cargo fmt --check`, `cargo clippy --all-targets`, and `cargo test`.
+- PRs follow template in `CONTRIBUTING.md`: Summary, Changes, Testing (commands), and issue links (`Closes #123`). Keep scope tight; docs-only changes should stay separate from code changes.

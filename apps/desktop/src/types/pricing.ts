@@ -3,13 +3,14 @@
  * Matches Rust backend pricing models
  */
 
-export type PricingModel = 'free' | 'pay_per_result' | 'pro' | 'enterprise';
+export type PricingModel = 'free' | 'pay_per_result' | 'pro' | 'max' | 'enterprise';
 
 export interface PricingPlan {
   id: string;
   name: string;
   pricing_model: PricingModel;
   base_price_usd?: number;
+  annual_price_usd?: number;
   price_per_automation_usd?: number;
   included_hours?: number;
   features: string[];

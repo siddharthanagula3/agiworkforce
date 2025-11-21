@@ -1,26 +1,19 @@
-import { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
-  FolderPlus,
   Pin,
   PinOff,
   Plus,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useChatStore } from '../../stores/chatStore';
-import type { ConversationUI } from '../../types/chat';
+import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/DropdownMenu';
 
 interface SidebarProps {
   className?: string;
@@ -38,68 +31,65 @@ export function Sidebar({
   const {
     conversations,
     activeConversationId,
-    selectConversation,
     createConversation,
+    selectConversation,
     renameConversation,
+    deleteConversation,
     togglePinnedConversation,
-  } = useChatStore();
+  } = useUnifiedChatStore();
+  const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
-  const matchingConversations = useMemo(() => {
+  useEffect(() => {
+    ensureActiveConversation();
+  }, [ensureActiveConversation]);
+
+  const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
     if (!term) return conversations;
-    return conversations.filter((conversation) => {
-      const haystack =
-        `${conversation.title ?? ''} ${conversation.lastMessage ?? ''}`.toLowerCase();
+    return conversations.filter((conv) => {
+      const haystack = `${conv.title ?? ''} ${conv.lastMessage ?? ''}`.toLowerCase();
       return haystack.includes(term);
     });
   }, [conversations, searchQuery]);
 
-  const projects = useMemo(
-    () => matchingConversations.filter((conversation) => Boolean(conversation.pinned)),
-    [matchingConversations],
+  const pinned = useMemo(
+    () => filtered.filter((conv) => conv.pinned).sort(sortByUpdated),
+    [filtered],
   );
   const recents = useMemo(
-    () => matchingConversations.filter((conversation) => !conversation.pinned),
-    [matchingConversations],
+    () => filtered.filter((conv) => !conv.pinned).sort(sortByUpdated),
+    [filtered],
   );
 
   const handleNewChat = useCallback(async () => {
     const id = await createConversation('New chat');
-    await selectConversation(id);
+    selectConversation(id);
   }, [createConversation, selectConversation]);
 
-  const handleNewProjectChat = useCallback(async () => {
-    const id = await createConversation('Untitled project');
-    await togglePinnedConversation(id);
-    await selectConversation(id);
-    setEditingId(id);
-    setEditingTitle('Untitled project');
-  }, [createConversation, selectConversation, togglePinnedConversation]);
-
-  const handleSelectConversation = useCallback(
-    async (id: number) => {
-      await selectConversation(id);
+  const handleSelect = useCallback(
+    (id: string) => {
+      selectConversation(id);
     },
     [selectConversation],
   );
 
-  const handleRename = useCallback(async () => {
-    if (editingId === null) return;
-    const trimmed = editingTitle.trim();
-    if (!trimmed) {
+  const handleRename = useCallback(
+    async (id: string) => {
+      const trimmed = editingTitle.trim();
+      if (trimmed) {
+        renameConversation(id, trimmed);
+      }
       setEditingId(null);
-      return;
-    }
-    await renameConversation(editingId, trimmed);
-    setEditingId(null);
-  }, [editingId, editingTitle, renameConversation]);
+    },
+    [editingTitle, renameConversation],
+  );
 
   const renderConversation = useCallback(
-    (conversation: ConversationUI, showPinActions: boolean) => {
+    (conversation: ConversationSummary) => {
       const isActive = conversation.id === activeConversationId;
       const isEditing = conversation.id === editingId;
       const title = conversation.title?.trim() || 'Untitled chat';
@@ -116,17 +106,17 @@ export function Sidebar({
           <button
             type="button"
             className="flex-1 text-left"
-            onClick={() => void handleSelectConversation(conversation.id)}
+            onClick={() => void handleSelect(conversation.id)}
           >
             {isEditing ? (
               <input
                 value={editingTitle}
                 onChange={(event) => setEditingTitle(event.target.value)}
-                onBlur={() => void handleRename()}
+                onBlur={() => void handleRename(conversation.id)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
-                    void handleRename();
+                    void handleRename(conversation.id);
                   }
                   if (event.key === 'Escape') {
                     event.preventDefault();
@@ -143,45 +133,46 @@ export function Sidebar({
               </>
             )}
           </button>
-          {showPinActions && (
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
             <button
               type="button"
-              className={cn(
-                'opacity-0 transition-opacity group-hover:opacity-100',
-                collapsed && 'opacity-100',
-              )}
+              className="rounded-md p-1 text-slate-400 hover:bg-white/10"
               title={conversation.pinned ? 'Unpin' : 'Pin'}
-              onClick={() => void togglePinnedConversation(conversation.id)}
+              onClick={() => togglePinnedConversation(conversation.id)}
             >
-              {conversation.pinned ? (
-                <PinOff className="h-4 w-4 text-slate-400" />
-              ) : (
-                <Pin className="h-4 w-4 text-slate-400" />
-              )}
+              {conversation.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
             </button>
-          )}
-          {!isEditing && !collapsed && (
             <button
               type="button"
-              className="text-xs text-slate-500 hover:text-white"
+              className="rounded-md p-1 text-slate-400 hover:bg-white/10"
+              title="Rename"
               onClick={() => {
                 setEditingId(conversation.id);
                 setEditingTitle(title);
               }}
             >
-              Rename
+              <Search className="h-4 w-4 rotate-90" />
             </button>
-          )}
+            <button
+              type="button"
+              className="rounded-md p-1 text-slate-400 hover:bg-white/10"
+              title="Delete"
+              onClick={() => deleteConversation(conversation.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       );
     },
     [
       activeConversationId,
       collapsed,
+      deleteConversation,
       editingId,
       editingTitle,
+      handleSelect,
       handleRename,
-      handleSelectConversation,
       togglePinnedConversation,
     ],
   );
@@ -189,199 +180,99 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        'relative flex h-full w-80 flex-col border-r border-white/10 bg-gradient-to-b from-[#0b0d13] via-[#0a0c12] to-[#05060b] text-slate-200 transition-all duration-300',
-        collapsed && 'w-[96px]',
+        'flex h-full w-[320px] flex-col border-r border-white/10 bg-[#0b0c14]/80 backdrop-blur-lg transition-all duration-200',
+        collapsed && 'w-[72px]',
         className,
       )}
     >
-      <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 text-base font-semibold">
-            AGI
-          </div>
-          {!collapsed && (
-            <div>
-              <p className="text-sm font-semibold text-white">AGI Workforce</p>
-              <p className="text-xs text-slate-400">Ready</p>
-            </div>
-          )}
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="h-8 w-8 text-slate-400 hover:bg-white/10 hover:text-white"
-          onClick={() => onToggleCollapse?.()}
+      <div className="flex items-center justify-between px-3 py-3">
+        <button
+          type="button"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-white transition hover:bg-white/10"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      <div className="px-4 py-5 space-y-4">
-        <Button
-          className={cn(
-            'w-full justify-center bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/30',
-            collapsed && 'justify-center px-0',
-          )}
-          onClick={() => void handleNewChat()}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {!collapsed && <span>New chat</span>}
-        </Button>
+        </button>
+        {!collapsed && <div className="text-base font-semibold text-white">AGI Workforce</div>}
         {!collapsed && (
-          <div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search conversations"
-                className="h-10 bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500 pl-9"
-              />
-            </div>
-            <p className="mt-1 text-xs text-slate-500">Ctrl+K to open command palette</p>
-          </div>
-        )}
-        {collapsed && (
-          <div className="flex flex-col items-center gap-3 pt-4 text-slate-400">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-2xl border border-white/10 hover:text-white"
-              title="New chat"
-              onClick={() => void handleNewChat()}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-2xl border border-white/10 hover:text-white"
-              title="New project chat"
-              onClick={() => void handleNewProjectChat()}
-            >
-              <FolderPlus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-2xl border border-white/10 hover:text-white"
-              title="Search"
-              onClick={() => setSearchQuery('')}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9"
+            onClick={() => void handleNewChat()}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         )}
       </div>
 
-      {!collapsed && (
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full px-4">
-            <div className="space-y-6 pb-6">
-              <section>
-                <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-500">
-                  <span>Projects</span>
-                  {!collapsed && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-[10px] text-slate-500 hover:text-white"
-                      onClick={() => void handleNewProjectChat()}
-                    >
-                      New project chat
-                    </Button>
-                  )}
-                </div>
-                {projects.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    {collapsed ? 'No pins' : 'Pin important chats to keep them here.'}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {projects.map((conversation) => renderConversation(conversation, true))}
-                  </div>
-                )}
-                {!collapsed && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-3 w-full justify-center gap-2 rounded-2xl border border-dashed border-white/15 text-slate-400 hover:text-white"
-                    onClick={() => void handleNewProjectChat()}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add project
-                  </Button>
-                )}
-              </section>
+      <div className="px-3 pb-3">
+        {!collapsed && (
+          <Input
+            placeholder="Search chats"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="w-full"
+          />
+        )}
+      </div>
 
-              <section>
-                <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-500">
-                  <span>Recents</span>
-                  {!collapsed && recents.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-[10px] text-slate-500 hover:text-white"
-                      onClick={() => setSearchQuery('')}
-                    >
-                      Clear search
-                    </Button>
-                  )}
-                </div>
-                {recents.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    {collapsed ? 'No chats' : 'No conversations match your search.'}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {recents
-                      .slice(0, collapsed ? 6 : 24)
-                      .map((conversation) => renderConversation(conversation, true))}
-                  </div>
-                )}
-              </section>
-            </div>
-          </ScrollArea>
-        </div>
-      )}
+      <ScrollArea className="flex-1 px-1">
+        {!collapsed && pinned.length > 0 && (
+          <Section title="Pinned">
+            {pinned.map((conversation) => renderConversation(conversation))}
+          </Section>
+        )}
+        <Section title={collapsed ? '' : 'Recent'}>
+          {recents.length === 0 ? (
+            <EmptyState onNewChat={handleNewChat} collapsed={collapsed} />
+          ) : (
+            recents.map((conversation) => renderConversation(conversation))
+          )}
+        </Section>
+      </ScrollArea>
 
-      <div className="border-t border-white/10 px-3 py-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors hover:bg-white/10',
-                collapsed && 'justify-center',
-              )}
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20">
-                <CircleUserRound className="h-5 w-5 text-white" />
-              </div>
-              {!collapsed && (
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">Account</p>
-                  <p className="text-xs text-slate-400">Manage settings</p>
-                </div>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            <DropdownMenuItem onSelect={() => onOpenSettings?.()}>Settings</DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() =>
-                window.open(
-                  'https://github.com/siddharthanagula3/agiworkforce-desktop-app',
-                  '_blank',
-                )
-              }
-            >
-              Help & Feedback
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="border-t border-white/5 px-3 py-3">
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-slate-300 hover:bg-white/5"
+          onClick={onOpenSettings}
+        >
+          <CircleUserRound className="h-4 w-4" />
+          {!collapsed && <span>Settings</span>}
+        </Button>
       </div>
     </aside>
   );
+}
+
+const Section = ({ title, children }: { title?: string; children: React.ReactNode }) => (
+  <div className="px-2 pb-3">
+    {title ? (
+      <div className="mb-2 px-1 text-xs uppercase tracking-wide text-slate-400">{title}</div>
+    ) : null}
+    <div className="space-y-1">{children}</div>
+  </div>
+);
+
+const EmptyState = ({ onNewChat, collapsed }: { onNewChat: () => void; collapsed: boolean }) => (
+  <div className="rounded-xl border border-white/5 bg-black/20 p-4 text-sm text-slate-400">
+    <div className="mb-2 font-medium text-white">No conversations yet</div>
+    {!collapsed && (
+      <p className="text-slate-400">
+        Start a new chat to create a workspace, organize tasks, and collaborate with the agent.
+      </p>
+    )}
+    <div className="mt-3">
+      <Button className="w-full justify-center gap-2" onClick={onNewChat}>
+        <Plus className="h-4 w-4" />
+        <span>New chat</span>
+      </Button>
+    </div>
+  </div>
+);
+
+function sortByUpdated(a: ConversationSummary, b: ConversationSummary) {
+  return (b.updatedAt?.valueOf?.() ?? 0) - (a.updatedAt?.valueOf?.() ?? 0);
 }

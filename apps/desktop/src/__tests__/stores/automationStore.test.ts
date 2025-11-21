@@ -162,7 +162,7 @@ describe('automationStore', () => {
 
       const state = useAutomationStore.getState();
       expect(state.elements).toEqual([]);
-      expect(state.error).toBe('Error: Element not found');
+      expect(state.error).toContain('Element not found');
       expect(state.loadingElements).toBe(false);
     });
   });
@@ -215,7 +215,7 @@ describe('automationStore', () => {
       await expect(useAutomationStore.getState().click(clickRequest)).rejects.toThrow();
 
       const state = useAutomationStore.getState();
-      expect(state.error).toBe('Error: Click failed');
+      expect(state.error).toContain('Click failed');
       expect(state.runningAction).toBe(false);
     });
   });

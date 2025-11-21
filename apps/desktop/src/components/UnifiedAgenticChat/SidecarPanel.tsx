@@ -5,6 +5,7 @@ import {
   Activity,
   Brain,
   FileText,
+  Shield,
   Terminal,
   Wrench,
   ListTodo,
@@ -47,6 +48,7 @@ const DEFAULT_WIDTH = 400;
 const SECTION_ICONS: Record<SidecarSection, React.ReactNode> = {
   operations: <Activity size={16} />,
   reasoning: <Brain size={16} />,
+  approvals: <Shield size={16} />,
   files: <FileText size={16} />,
   terminal: <Terminal size={16} />,
   tools: <Wrench size={16} />,
@@ -57,6 +59,7 @@ const SECTION_ICONS: Record<SidecarSection, React.ReactNode> = {
 const SECTION_LABELS: Record<SidecarSection, string> = {
   operations: 'Operations',
   reasoning: 'Reasoning',
+  approvals: 'Approvals',
   files: 'Files',
   terminal: 'Terminal',
   tools: 'Tools',
@@ -158,6 +161,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
   const sections: SidecarSection[] = [
     'operations',
     'reasoning',
+    'approvals',
     'files',
     'terminal',
     'tools',
@@ -235,6 +239,66 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         )}
 
         {sidecarSection === 'reasoning' && <PlanSection plan={plan} />}
+
+        {sidecarSection === 'approvals' && (
+          <div className="space-y-2">
+            {pendingApprovals.length === 0 && (
+              <PlaceholderSection message="No approvals pending. The agent will ask before risky actions." />
+            )}
+            {pendingApprovals.map((approval) => {
+              const busy = busyApproval?.id === approval.id ? busyApproval.decision : null;
+              return (
+                <div
+                  key={approval.id}
+                  className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {approval.scope?.description || 'Approval required'}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        {approval.scope?.type?.toUpperCase()} •{' '}
+                        {approval.scope?.risk?.toUpperCase() || 'RISK UNKNOWN'}
+                      </div>
+                      {approval.scope?.command && (
+                        <div className="mt-1 rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                          {approval.scope.command}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === 'approve'}
+                        onClick={() => void handleInlineDecision(approval, 'approve')}
+                      >
+                        {busy === 'approve' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Approve'
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={busy === 'reject'}
+                        onClick={() => void handleInlineDecision(approval, 'reject')}
+                      >
+                        {busy === 'reject' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Reject'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {sidecarSection === 'agents' && <AgentsSection agents={agents} />}
 

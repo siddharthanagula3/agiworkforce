@@ -5,6 +5,12 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
+#[derive(Clone, Debug)]
+pub struct SessionContext {
+    pub shell_type: ShellType,
+    pub cwd: String,
+}
+
 #[derive(Clone)]
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, Arc<Mutex<PtySession>>>>>,
@@ -105,6 +111,23 @@ impl SessionManager {
     pub async fn list_sessions(&self) -> Vec<String> {
         let sessions = self.sessions.lock().await;
         sessions.keys().cloned().collect()
+    }
+
+    pub async fn get_session_context(&self, session_id: &str) -> Result<SessionContext> {
+        let sessions = self.sessions.lock().await;
+
+        let session_arc = sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
+
+        drop(sessions);
+
+        let session = session_arc.lock().await;
+        Ok(SessionContext {
+            shell_type: session.shell_type.clone(),
+            cwd: session.cwd.clone(),
+        })
     }
 
     async fn start_output_stream(&self, session_id: String, session_arc: Arc<Mutex<PtySession>>) {
