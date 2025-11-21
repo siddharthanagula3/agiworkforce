@@ -2,6 +2,8 @@ import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Braces,
+  FileText,
+  Image as ImageIcon,
   MousePointerClick,
   Shield,
   ShieldAlert,
@@ -14,8 +16,9 @@ import { BrowserVisualization } from '../Browser/BrowserVisualization';
 import { MonacoEditor } from '../Editor/MonacoEditor';
 import { TerminalPanel } from '../execution/TerminalPanel';
 import { cn } from '../../lib/utils';
+import { MediaGallery } from '../Media/MediaGallery';
 
-export type DynamicPanelType = 'terminal' | 'browser' | 'code' | 'video' | null;
+export type DynamicPanelType = 'terminal' | 'browser' | 'code' | 'video' | 'media' | 'files' | null;
 
 interface DynamicSidecarProps {
   panelType: DynamicPanelType;
@@ -30,6 +33,8 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   browser: <MousePointerClick className="h-4 w-4 text-sky-300" />,
   code: <Braces className="h-4 w-4 text-purple-300" />,
   video: <Video className="h-4 w-4 text-orange-300" />,
+  media: <ImageIcon className="h-4 w-4 text-indigo-300" />,
+  files: <FileText className="h-4 w-4 text-slate-200" />,
 };
 
 export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
@@ -43,7 +48,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
     allowStatus === 'allowed' ? (
       <div className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-100">
         <ShieldCheck className="h-3 w-3" />
-        Allowed{allowedDirectory ? ` · ${allowedDirectory}` : ''}
+        Allowed{allowedDirectory ? ` - ${allowedDirectory}` : ''}
       </div>
     ) : (
       <div className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-100">
@@ -73,6 +78,24 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             height="100%"
           />
         );
+      case 'files':
+        return (
+          <div className="grid h-full grid-cols-1 md:grid-cols-3">
+            <div className="hidden h-full bg-black/50 px-3 py-4 text-xs text-zinc-400 md:block">
+              File tree is visible in the primary sidecar. Previewing selected file here.
+            </div>
+            <div className="col-span-2 h-full bg-black/70">
+              <MonacoEditor
+                value={String(payload?.['content'] ?? '// Select a file to view')}
+                filePath={payload?.['filePath'] as string | undefined}
+                language={(payload?.['language'] as string) || 'typescript'}
+                height="100%"
+              />
+            </div>
+          </div>
+        );
+      case 'media':
+        return <MediaGallery />;
       case 'video':
         return (
           <div className="flex h-full flex-col gap-3">

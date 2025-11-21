@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
 
+const MAX_SELF_HEAL_RETRIES: usize = 3;
+
 pub struct AutonomousAgent {
     config: AgentConfig,
     automation: Arc<AutomationService>,
@@ -46,6 +48,11 @@ impl AutonomousAgent {
 
     /// Start the autonomous agent loop (runs 24/7)
     pub async fn start(&self) -> Result<()> {
+        self.run_autonomous_loop().await
+    }
+
+    /// Continuous execution loop that self-heals on recoverable errors
+    pub async fn run_autonomous_loop(&self) -> Result<()> {
         tracing::info!("[Agent] Starting autonomous agent loop");
         *self
             .stop_signal
@@ -74,7 +81,7 @@ impl AutonomousAgent {
             self.process_task_queue().await?;
 
             // Small delay to prevent tight loop
-            sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_millis(50)).await;
         }
 
         Ok(())
@@ -205,55 +212,69 @@ impl AutonomousAgent {
                 }
             }
 
-            let step_result = self.executor.execute_step(step, &self.vision).await;
+            let mut attempt = 0usize;
+            loop {
+                attempt += 1;
+                let step_result = self.executor.execute_step(step, &self.vision).await;
 
-            match step_result {
-                Ok(result) if result.success => {
-                    tracing::info!(
-                        "[Agent] Step {} completed: {}",
-                        step.id,
-                        result.result.as_deref().unwrap_or("OK")
-                    );
-                }
-                Ok(result) => {
-                    tracing::warn!(
-                        "[Agent] Step {} failed: {}",
-                        step.id,
-                        result.error.as_deref().unwrap_or("Unknown error")
-                    );
-                    if step.retry_on_failure && task.retry_count < task.max_retries {
-                        task.retry_count += 1;
+                match step_result {
+                    Ok(result) if result.success => {
                         tracing::info!(
-                            "[Agent] Retrying step {} (attempt {}/{})",
+                            "[Agent] Step {} completed: {}",
                             step.id,
-                            task.retry_count,
-                            task.max_retries
+                            result.result.as_deref().unwrap_or("OK")
                         );
-                        // Retry the step
-                        continue;
-                    } else {
-                        task.status = TaskStatus::Failed(format!(
-                            "Step {} failed: {}",
-                            step.id,
-                            result.error.as_deref().unwrap_or("Unknown")
-                        ));
                         break;
                     }
-                }
-                Err(e) => {
-                    tracing::error!("[Agent] Step {} error: {}", step.id, e);
-                    if step.retry_on_failure && task.retry_count < task.max_retries {
-                        task.retry_count += 1;
-                        continue;
-                    } else {
-                        task.status = TaskStatus::Failed(e.to_string());
-                        break;
+                    Ok(result) => {
+                        tracing::warn!(
+                            "[Agent] Step {} failed: {}",
+                            step.id,
+                            result.error.as_deref().unwrap_or("Unknown error")
+                        );
+                        if task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES {
+                            task.retry_count += 1;
+                            tracing::info!(
+                                "[Agent] Self-correcting step {} (attempt {}/{})",
+                                step.id,
+                                attempt,
+                                MAX_SELF_HEAL_RETRIES
+                            );
+                            continue;
+                        } else {
+                            task.status = TaskStatus::Failed(format!(
+                                "Step {} failed: {}",
+                                step.id,
+                                result.error.as_deref().unwrap_or("Unknown")
+                            ));
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("[Agent] Step {} error: {}", step.id, e);
+                        if task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES {
+                            task.retry_count += 1;
+                            tracing::warn!(
+                                "[Agent] Retrying step {} after error (attempt {}/{})",
+                                step.id,
+                                attempt,
+                                MAX_SELF_HEAL_RETRIES
+                            );
+                            continue;
+                        } else {
+                            task.status = TaskStatus::Failed(e.to_string());
+                            break;
+                        }
                     }
                 }
             }
 
-            // Small delay between steps
-            sleep(Duration::from_millis(100)).await;
+            if matches!(task.status, TaskStatus::Failed(_)) {
+                break;
+            }
+
+            // Small delay between steps to avoid hammering resources
+            sleep(Duration::from_millis(75)).await;
         }
 
         // Update final status
