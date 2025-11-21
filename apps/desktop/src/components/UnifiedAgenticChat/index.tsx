@@ -394,8 +394,8 @@ export const UnifiedAgenticChat: React.FC<{
     <DynamicSidecar
       panelType={sidecarState.type}
       payload={sidecarState.payload}
-      allowedDirectory={sidecarState.payload?.allowedDirectory as string | undefined}
-      allowStatus={sidecarState.payload?.restricted ? 'restricted' : 'allowed'}
+      allowedDirectory={sidecarState.payload?.['allowedDirectory'] as string | undefined}
+      allowStatus={sidecarState.payload?.['restricted'] ? 'restricted' : 'allowed'}
       onClose={() => {
         setSidecarOpen(false);
         setSidecarState({ type: null });
