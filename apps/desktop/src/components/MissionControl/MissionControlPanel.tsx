@@ -68,7 +68,6 @@ export function MissionControlPanel({ className, onClose }: MissionControlPanelP
   }));
 
   const conversations = useUnifiedChatStore((state) => state.conversations);
-  const messages = useUnifiedChatStore((state) => state.messages);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
 
   const [activeTab, setActiveTab] = useState('plan');
@@ -180,30 +179,17 @@ export function MissionControlPanel({ className, onClose }: MissionControlPanelP
   const latestArtifacts = useMemo(() => {
     const codeArtifacts: { id: string; title: string; language?: string; excerpt: string }[] = [];
 
-    [...messages].reverse().forEach((message) => {
-      (message.artifacts || []).forEach((artifact) => {
-        if (artifact.type === 'code' && codeArtifacts.length < 4) {
-          codeArtifacts.push({
-            id: artifact.id,
-            title: artifact.title || 'Generated snippet',
-            language: artifact.language,
-            excerpt: artifact.content.slice(0, 160),
-          });
-        }
-      });
+    // TODO: Re-implement artifacts when the unified message structure supports them
+    // For now, return sample data
+    codeArtifacts.push({
+      id: 'sample-artifact',
+      title: 'VectorRouter.ts',
+      language: 'typescript',
+      excerpt: `export function routeProvider(task: TaskDescription): ProviderChoice {\n  if (task.type === 'code_review') {\n    return Providers.DeepCode;\n  }\n  return Providers.Omni;\n}`,
     });
 
-    if (codeArtifacts.length === 0) {
-      codeArtifacts.push({
-        id: 'sample-artifact',
-        title: 'VectorRouter.ts',
-        language: 'typescript',
-        excerpt: `export function routeProvider(task: TaskDescription): ProviderChoice {\n  if (task.type === 'code_review') {\n    return Providers.DeepCode;\n  }\n  return Providers.Omni;\n}`,
-      });
-    }
-
     return codeArtifacts;
-  }, [messages]);
+  }, []);
 
   return (
     <aside
