@@ -283,7 +283,6 @@ const DesktopShell = () => {
             <UnifiedAgenticChat
               className="h-full w-full"
               layout="default"
-              sidecarPosition="right"
               defaultSidecarOpen={true}
               onOpenSettings={() => setSettingsPanelOpen(true)}
             />

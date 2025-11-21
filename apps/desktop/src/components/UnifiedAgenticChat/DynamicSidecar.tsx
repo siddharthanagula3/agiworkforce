@@ -58,14 +58,17 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         return <TerminalPanel className="flex-1" />;
       case 'browser':
         return (
-          <BrowserVisualization className="flex-1" tabId={payload?.tabId as string | undefined} />
+          <BrowserVisualization
+            className="flex-1"
+            tabId={payload?.['tabId'] as string | undefined}
+          />
         );
       case 'code':
         return (
           <MonacoEditor
-            value={String(payload?.code ?? '// Agent opened code context')}
-            language={(payload?.language as string) || 'typescript'}
-            filePath={payload?.filePath as string | undefined}
+            value={String(payload?.['code'] ?? '// Agent opened code context')}
+            language={(payload?.['language'] as string) || 'typescript'}
+            filePath={payload?.['filePath'] as string | undefined}
             enableLSP
             height="100%"
           />
@@ -73,17 +76,21 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
       case 'video':
         return (
           <div className="flex h-full flex-col gap-3">
-            {typeof payload?.title === 'string' ? (
-              <div className="text-sm text-zinc-200">{payload.title}</div>
+            {typeof payload?.['title'] === 'string' ? (
+              <div className="text-sm text-zinc-200">{payload?.['title'] as string}</div>
             ) : null}
             <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/60">
               {/* caption alternative is provided via aria-label for accessibility */}
               <video
                 className="h-auto w-full"
-                src={payload?.src as string | undefined}
+                src={payload?.['src'] as string | undefined}
                 controls
                 autoPlay
-                aria-label={typeof payload?.title === 'string' ? payload.title : 'Video output'}
+                aria-label={
+                  typeof payload?.['title'] === 'string'
+                    ? (payload?.['title'] as string)
+                    : 'Video output'
+                }
               />
             </div>
           </div>
