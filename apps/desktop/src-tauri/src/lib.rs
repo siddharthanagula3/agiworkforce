@@ -93,6 +93,24 @@ pub mod productivity;
 // Document MCP (M16) - Word, Excel, PDF support
 pub mod document;
 
+// Windows Speech Recognition integration
+pub mod speech;
+
+// Windows Clipboard Monitoring
+pub mod clipboard;
+
+// Cloud Sync System
+pub mod sync;
+
+// Full-Text Search (FTS5)
+pub mod search;
+
+// Projects System with RAG
+pub mod projects;
+
+// Advanced Tool Permission System
+pub mod permissions;
+
 // AGI (Artificial General Intelligence) System
 pub mod agi;
 

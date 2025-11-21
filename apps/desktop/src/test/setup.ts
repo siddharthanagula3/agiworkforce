@@ -44,10 +44,20 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: vi.fn(),
+  listen: vi.fn().mockResolvedValue(() => {}),
   emit: vi.fn(),
   once: vi.fn(),
 }));
+
+// Make lib/tauri-mock share the same mocked invoke so store tests can control it
+vi.mock('../lib/tauri-mock', async () => {
+  const core = await import('@tauri-apps/api/core');
+  return {
+    invoke: (core as any).invoke,
+    isTauri: false,
+    isTauriContext: () => false,
+  };
+});
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
@@ -93,4 +103,33 @@ vi.mock('@xterm/xterm', () => ({
     onData: vi.fn(),
     onResize: vi.fn(),
   })),
+}));
+
+// Mock canvas context to avoid jsdom "not implemented" errors (xterm webgl, charts)
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+(HTMLCanvasElement.prototype as any).getContext = vi.fn(() => ({
+  fillRect: vi.fn(),
+  clearRect: vi.fn(),
+  getImageData: vi.fn(() => ({ data: [] })),
+  putImageData: vi.fn(),
+  createImageData: vi.fn(() => []),
+  setTransform: vi.fn(),
+  drawImage: vi.fn(),
+  save: vi.fn(),
+  fillText: vi.fn(),
+  restore: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  closePath: vi.fn(),
+  stroke: vi.fn(),
+  translate: vi.fn(),
+  scale: vi.fn(),
+  rotate: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
+  measureText: vi.fn(() => ({ width: 0 })),
+  transform: vi.fn(),
+  rect: vi.fn(),
+  clip: vi.fn(),
 }));

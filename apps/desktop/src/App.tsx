@@ -2,12 +2,10 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { invoke, isTauri } from './lib/tauri-mock';
 
 import TitleBar from './components/Layout/TitleBar';
-import { Sidebar } from './components/Layout/Sidebar';
 import { useWindowManager } from './hooks/useWindowManager';
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import { useTheme } from './hooks/useTheme';
-import { useChatStore } from './stores/chatStore';
-import { initializeAgentStatusListener } from './stores/unifiedChatStore';
+import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
 // Unused imports removed Nov 16, 2025 (for future use)
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorToastContainer from './components/errors/ErrorToast';
@@ -50,12 +48,10 @@ const DesktopShell = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
-  const createConversation = useChatStore((store) => store.createConversation);
-  const selectConversation = useChatStore((store) => store.selectConversation);
-  const loadConversations = useChatStore((store) => store.loadConversations);
+  const clearHistory = useUnifiedChatStore((store) => store.clearHistory);
+  const ensureActiveConversation = useUnifiedChatStore((store) => store.ensureActiveConversation);
   const addError = useErrorStore((store) => store.addError);
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
@@ -133,6 +129,10 @@ const DesktopShell = () => {
     };
   }, []);
 
+  useEffect(() => {
+    ensureActiveConversation();
+  }, [ensureActiveConversation]);
+
   // Check onboarding status on mount
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -154,27 +154,6 @@ const DesktopShell = () => {
   }, [addError]);
 
   useEffect(() => {
-    if (!onboardingComplete) {
-      return;
-    }
-
-    const hydrateChat = async () => {
-      try {
-        await loadConversations();
-      } catch (error) {
-        addError({
-          type: 'CHAT_INIT_ERROR',
-          severity: 'warning',
-          message: 'Failed to load conversations',
-          details: error instanceof Error ? error.message : String(error),
-        });
-      }
-    };
-
-    void hydrateChat();
-  }, [addError, loadConversations, onboardingComplete]);
-
-  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       if ((event.metaKey || event.ctrlKey) && key === 'k') {
@@ -190,9 +169,8 @@ const DesktopShell = () => {
   }, []);
 
   const startNewChat = useCallback(async () => {
-    const id = await createConversation('New Chat');
-    await selectConversation(id);
-  }, [createConversation, selectConversation]);
+    clearHistory();
+  }, [clearHistory]);
 
   const openSettings = useCallback(() => setSettingsPanelOpen(true), []);
 
@@ -287,7 +265,7 @@ const DesktopShell = () => {
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#030409] text-slate-100 overflow-hidden">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
       {!isTauri && (
         <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
           <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
@@ -298,31 +276,18 @@ const DesktopShell = () => {
         actions={actions}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         commandShortcutHint={commandShortcutHint}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
       />
-      <main className="flex flex-1 min-h-0 min-w-0 bg-gradient-to-br from-[#05060b] via-[#05060b] to-[#090c1c]">
-        <Sidebar
-          className="shrink-0"
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
-          onOpenSettings={() => setSettingsPanelOpen(true)}
-        />
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-hidden px-4 sm:px-6">
-            <div className="flex h-full w-full items-center justify-center overflow-auto py-8">
-              <div className="w-full max-w-[1400px] origin-center scale-[0.75]">
-                <Suspense fallback={<LoadingFallback />}>
-                  <UnifiedAgenticChat
-                    className="mx-auto flex h-full w-full"
-                    layout="default"
-                    sidecarPosition="right"
-                    defaultSidecarOpen={true}
-                  />
-                </Suspense>
-              </div>
-            </div>
-          </div>
+      <main className="flex flex-1 min-h-0 min-w-0 bg-zinc-950">
+        <div className="flex-1 overflow-hidden">
+          <Suspense fallback={<LoadingFallback />}>
+            <UnifiedAgenticChat
+              className="h-full w-full"
+              layout="default"
+              sidecarPosition="right"
+              defaultSidecarOpen={true}
+              onOpenSettings={() => setSettingsPanelOpen(true)}
+            />
+          </Suspense>
         </div>
       </main>
       <CommandPalette

@@ -144,6 +144,14 @@ export interface PlanStep {
   result?: string;
 }
 
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  pinned: boolean;
+  lastMessage?: string;
+  updatedAt: Date;
+}
+
 export interface PlanData {
   id: string;
   description: string;
@@ -237,6 +245,7 @@ export interface ContextItem {
 export type SidecarSection =
   | 'operations'
   | 'reasoning'
+  | 'approvals'
   | 'files'
   | 'terminal'
   | 'tools'
@@ -250,7 +259,12 @@ export type ConversationMode = 'safe' | 'full_control';
 // ============================================================================
 
 export interface UnifiedChatState {
-  // Messages
+  // Conversations
+  conversations: ConversationSummary[];
+  activeConversationId: string | null;
+  messagesByConversation: Record<string, EnhancedMessage[]>;
+
+  // Messages (active conversation view)
   messages: EnhancedMessage[];
   isLoading: boolean;
   isStreaming: boolean;
@@ -295,6 +309,14 @@ export interface UnifiedChatState {
     terminalStatus: ('success' | 'error')[];
     toolNames: string[];
   };
+
+  // Actions - Conversations
+  ensureActiveConversation: () => void;
+  createConversation: (title?: string) => string;
+  selectConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
+  deleteConversation: (id: string) => void;
+  togglePinnedConversation: (id: string) => void;
 
   // Actions - Messages
   addMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => void;
@@ -377,6 +399,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
   persist(
     immer((set, get) => ({
       // Initial State
+      conversations: [],
+      activeConversationId: null,
+      messagesByConversation: {},
       messages: [],
       isLoading: false,
       isStreaming: false,
@@ -412,28 +437,147 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         toolNames: [],
       },
 
+      // Conversation Actions
+      ensureActiveConversation: () =>
+        set((state) => {
+          if (state.activeConversationId) {
+            const existing = state.messagesByConversation[state.activeConversationId];
+            if (existing && state.messages.length === 0) {
+              state.messages = existing.slice();
+            }
+            return;
+          }
+          const id = crypto.randomUUID();
+          const created: ConversationSummary = {
+            id,
+            title: 'New chat',
+            pinned: false,
+            lastMessage: '',
+            updatedAt: new Date(),
+          };
+          state.conversations.unshift(created);
+          state.activeConversationId = id;
+          state.messagesByConversation[id] = [];
+          state.messages = [];
+        }),
+
+      createConversation: (title = 'New chat') => {
+        const id = crypto.randomUUID();
+        set((state) => {
+          const convo: ConversationSummary = {
+            id,
+            title,
+            pinned: false,
+            lastMessage: '',
+            updatedAt: new Date(),
+          };
+          state.conversations.unshift(convo);
+          state.activeConversationId = id;
+          state.messagesByConversation[id] = [];
+          state.messages = [];
+          state.isStreaming = false;
+          state.currentStreamingMessageId = null;
+        });
+        return id;
+      },
+
+      selectConversation: (id: string) =>
+        set((state) => {
+          if (state.activeConversationId === id) return;
+          state.activeConversationId = id;
+          state.messages = state.messagesByConversation[id]?.slice() ?? [];
+          state.isStreaming = false;
+          state.currentStreamingMessageId = null;
+        }),
+
+      renameConversation: (id: string, title: string) =>
+        set((state) => {
+          const convo = state.conversations.find((c) => c.id === id);
+          if (convo) {
+            convo.title = title.trim() || convo.title;
+            convo.updatedAt = new Date();
+          }
+        }),
+
+      deleteConversation: (id: string) =>
+        set((state) => {
+          state.conversations = state.conversations.filter((c) => c.id !== id);
+          delete state.messagesByConversation[id];
+          if (state.activeConversationId === id) {
+            const next = state.conversations[0];
+            state.activeConversationId = next ? next.id : null;
+            state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
+          }
+        }),
+
+      togglePinnedConversation: (id: string) =>
+        set((state) => {
+          const convo = state.conversations.find((c) => c.id === id);
+          if (convo) {
+            convo.pinned = !convo.pinned;
+            convo.updatedAt = new Date();
+          }
+        }),
+
       // Message Actions
       addMessage: (message) =>
         set((state) => {
+          // ensure a conversation is active
+          if (!state.activeConversationId) {
+            const id = crypto.randomUUID();
+            const convo: ConversationSummary = {
+              id,
+              title: 'New chat',
+              pinned: false,
+              lastMessage: '',
+              updatedAt: new Date(),
+            };
+            state.conversations.unshift(convo);
+            state.activeConversationId = id;
+            state.messagesByConversation[id] = [];
+          }
+          const convoId = state.activeConversationId as string;
           const newMessage: EnhancedMessage = {
             ...message,
             id: crypto.randomUUID(),
             timestamp: new Date(),
           };
           state.messages.push(newMessage);
+          if (!state.messagesByConversation[convoId]) {
+            state.messagesByConversation[convoId] = [];
+          }
+          state.messagesByConversation[convoId].push(newMessage);
+          const convo = state.conversations.find((c) => c.id === convoId);
+          if (convo) {
+            convo.lastMessage = newMessage.content;
+            convo.updatedAt = newMessage.timestamp;
+          }
         }),
 
       updateMessage: (id, updates) =>
         set((state) => {
-          const index = state.messages.findIndex((m) => m.id === id);
-          if (index !== -1 && state.messages[index]) {
-            Object.assign(state.messages[index], updates);
+          const applyUpdate = (list: EnhancedMessage[]) => {
+            const idx = list.findIndex((m) => m.id === id);
+            if (idx !== -1 && list[idx]) {
+              Object.assign(list[idx], updates);
+            }
+          };
+          applyUpdate(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyUpdate(state.messagesByConversation[convoId]);
           }
         }),
 
       deleteMessage: (id) =>
         set((state) => {
           state.messages = state.messages.filter((m) => m.id !== id);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            state.messagesByConversation[convoId] = state.messagesByConversation[convoId].filter(
+              (m) => m.id !== id,
+            );
+          }
         }),
 
       setStreamingMessage: (id) =>
@@ -763,13 +907,26 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       // Utility Actions
       clearHistory: () =>
         set((state) => {
+          const newId = crypto.randomUUID();
+          const convo: ConversationSummary = {
+            id: newId,
+            title: 'New chat',
+            pinned: false,
+            lastMessage: '',
+            updatedAt: new Date(),
+          };
+          state.conversations.unshift(convo);
+          state.activeConversationId = newId;
           state.messages = [];
+          state.messagesByConversation[newId] = [];
           state.fileOperations = [];
           state.terminalCommands = [];
           state.toolExecutions = [];
           state.screenshots = [];
           state.actionLog = [];
           state.plan = null;
+          state.isStreaming = false;
+          state.currentStreamingMessageId = null;
         }),
 
       exportConversation: async () => {
@@ -788,6 +945,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
     {
       name: 'unified-chat-storage',
       partialize: (state) => ({
+        conversations: state.conversations,
+        activeConversationId: state.activeConversationId,
+        messagesByConversation: state.messagesByConversation,
         sidecarOpen: state.sidecarOpen,
         sidecarSection: state.sidecarSection,
         sidecarWidth: state.sidecarWidth,
