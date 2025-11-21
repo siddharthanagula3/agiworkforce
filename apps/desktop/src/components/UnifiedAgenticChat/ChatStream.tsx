@@ -58,7 +58,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
   return (
     <div className="flex flex-col gap-4">
       <AnimatePresence>
-        {agentStatus?.status === 'running' || agentStatus?.status === 'executing' ? (
+        {agentStatus?.status === 'running' ? (
           <motion.div
             key="live-execution"
             className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100"
