@@ -15,6 +15,7 @@ import {
   Globe2,
   FileText,
   Image,
+  Brain,
 } from 'lucide-react';
 import { EnhancedMessage } from '../../stores/unifiedChatStore';
 import { CodeBlock } from './Visualizations/CodeBlock';
@@ -52,7 +53,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isAssistant = message.role === 'assistant';
 
   const avatarBg = useMemo(
-    () => (isUser ? 'bg-blue-600' : isSystem ? 'bg-gray-600' : 'bg-purple-600'),
+    () => (isUser ? 'bg-blue-600' : isSystem ? 'bg-zinc-600' : 'bg-purple-600'),
     [isUser, isSystem],
   );
 
@@ -151,7 +152,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
     const cardClasses = requiresApproval
       ? 'rounded-2xl border border-amber-500/60 bg-amber-500/5 px-4 py-3 shadow-lg shadow-black/30'
-      : 'rounded-2xl border border-zinc-700 bg-black/60 px-4 py-3 shadow-lg shadow-black/30';
+      : 'rounded-2xl border border-white/5 bg-black/60 px-4 py-3 shadow-lg shadow-black/30';
 
     const emitAction = async (eventName: string) => {
       if (!isTauri) {
@@ -193,7 +194,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           <div className="flex items-center gap-2 text-sm text-zinc-100">
             {icon}
             <span className="font-semibold">{toolName || 'Tool call'}</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300">
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/5 px-2 py-0.5 text-[11px] text-zinc-300">
               {statusIcon}
               <span className="capitalize">{statusLabel}</span>
             </span>
@@ -202,7 +203,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <button
               type="button"
               onClick={() => onToggleSidecar?.(targetTab)}
-              className="rounded-lg border border-zinc-700 px-3 py-1 text-xs font-semibold text-zinc-100 hover:border-zinc-500"
+              className="rounded-lg border border-white/5 px-3 py-1 text-xs font-semibold text-zinc-100 hover:border-zinc-500"
             >
               View Output
             </button>
@@ -256,7 +257,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
     return (
       <div
-        className="group flex gap-3 px-4 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+        className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors"
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -268,7 +269,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         <div className="flex-1">
           <details className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
             <summary className="flex cursor-pointer items-center gap-2 px-4 py-2 text-xs text-zinc-400">
-              <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
+              <Brain className="h-3 w-3 text-zinc-400" />
               <span className="font-semibold text-zinc-200">{summary}</span>
             </summary>
             <pre className="max-h-96 overflow-auto bg-zinc-900 px-4 py-3 text-sm leading-relaxed text-zinc-200">
@@ -283,7 +284,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   if (isToolCall) {
     return (
       <div
-        className="group flex gap-3 px-4 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+        className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors"
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -301,7 +302,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   return (
     <div
-      className={`message-bubble group flex gap-3 px-4 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors ${
+      className={`message-bubble group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors ${
         isUser ? 'flex-row-reverse' : ''
       }`}
       onMouseEnter={() => setShowActions(true)}
@@ -317,28 +318,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             {isUser ? 'You' : isSystem ? 'System' : 'Assistant'}
           </span>
-          {showTimestamp && <span className="text-xs text-gray-500">{formattedTime}</span>}
+          {showTimestamp && <span className="text-xs text-zinc-500">{formattedTime}</span>}
           {message.metadata?.streaming && (
-            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
               <span className="animate-pulse">...</span>
               Streaming...
             </span>
           )}
-          {message.metadata?.tokenCount && (
-            <span className="text-xs text-gray-400">{message.metadata.tokenCount} tokens</span>
-          )}
         </div>
 
         <div className="rounded-xl border border-white/10 bg-[#0b0c14] px-4 py-3 shadow-sm">
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-            {message.metadata?.model && <span>Model: {message.metadata.model}</span>}
-            {message.metadata?.provider && <span>Provider: {message.metadata.provider}</span>}
-            {message.metadata?.tokenCount && <span>{message.metadata.tokenCount} tokens</span>}
-            {message.metadata?.cost && <span>${message.metadata.cost.toFixed(4)}</span>}
-          </div>
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
@@ -360,7 +352,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                     />
                   ) : (
                     <code
-                      className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono"
+                      className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
                       {...rest}
                     >
                       {children}
@@ -400,26 +392,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             {message.attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm"
+                className="flex items-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm"
               >
-                <span className="text-gray-600 dark:text-gray-400">{attachment.name}</span>
-                {attachment.size && (
-                  <span className="text-xs text-gray-500">
-                    ({Math.round(attachment.size / 1024)} KB)
-                  </span>
-                )}
+                <span className="text-zinc-600 dark:text-zinc-400">{attachment.name}</span>
               </div>
             ))}
-          </div>
-        )}
-
-        {message.metadata && (
-          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-            {message.metadata.model && <span>Model: {message.metadata.model}</span>}
-            {message.metadata.duration && (
-              <span>{(message.metadata.duration / 1000).toFixed(2)}s</span>
-            )}
-            {message.metadata.cost && <span>${message.metadata.cost.toFixed(4)}</span>}
           </div>
         )}
       </div>
@@ -430,43 +407,43 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         >
           <button
             onClick={handleCopy}
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
             title="Copy message"
           >
-            <Copy size={14} className="text-gray-600 dark:text-gray-400" />
+            <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
           </button>
           {isAssistant && onRegenerate && (
             <button
               onClick={onRegenerate}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
               title="Regenerate"
             >
-              <RotateCw size={14} className="text-gray-600 dark:text-gray-400" />
+              <RotateCw size={14} className="text-zinc-600 dark:text-zinc-400" />
             </button>
           )}
           {isUser && onEdit && (
             <button
               onClick={() => onEdit(message.content)}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
               title="Edit"
             >
-              <Edit2 size={14} className="text-gray-600 dark:text-gray-400" />
+              <Edit2 size={14} className="text-zinc-600 dark:text-zinc-400" />
             </button>
           )}
           {onDelete && (
             <button
               onClick={onDelete}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
               title="Delete"
             >
-              <Trash2 size={14} className="text-gray-600 dark:text-gray-400" />
+              <Trash2 size={14} className="text-zinc-600 dark:text-zinc-400" />
             </button>
           )}
           <button
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
             title="More actions"
           >
-            <MoreVertical size={14} className="text-gray-600 dark:text-gray-400" />
+            <MoreVertical size={14} className="text-zinc-600 dark:text-zinc-400" />
           </button>
         </div>
       )}

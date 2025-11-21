@@ -1,19 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  CircleUserRound,
-  Pin,
-  PinOff,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
+import { UserProfile } from './UserProfile';
 
 interface SidebarProps {
   className?: string;
@@ -233,15 +225,14 @@ export function Sidebar({
         </Section>
       </ScrollArea>
 
-      <div className="border-t border-white/5 px-3 py-3">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-slate-300 hover:bg-white/5"
-          onClick={onOpenSettings}
-        >
-          <CircleUserRound className="h-4 w-4" />
-          {!collapsed && <span>Settings</span>}
-        </Button>
+      <div className="border-t border-white/10 px-3 py-3">
+        <UserProfile
+          name="Siddhartha Nagula"
+          email="siddhartha@agiworkforce.com"
+          onSettingsClick={onOpenSettings}
+          onBillingClick={onOpenSettings}
+          collapsed={collapsed}
+        />
       </div>
     </aside>
   );
