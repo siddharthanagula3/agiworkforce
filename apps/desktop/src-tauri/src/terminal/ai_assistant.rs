@@ -293,10 +293,7 @@ Response:"#,
     }
 
     async fn run_git_command(&self, session_id: &str, args: Vec<String>) -> Result<String> {
-        let context = self
-            .session_manager
-            .get_session_context(session_id)
-            .await?;
+        let context = self.session_manager.get_session_context(session_id).await?;
 
         if args.is_empty() {
             return Err(Error::Other("Git command missing arguments".to_string()));

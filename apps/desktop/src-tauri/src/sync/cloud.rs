@@ -244,8 +244,7 @@ impl CloudSyncClient {
     pub async fn upload_file(&self, file_path: &str, file_data: Vec<u8>) -> Result<String> {
         let form = reqwest::multipart::Form::new().part(
             "file",
-            reqwest::multipart::Part::bytes(file_data)
-                .file_name(file_path.to_string()),
+            reqwest::multipart::Part::bytes(file_data).file_name(file_path.to_string()),
         );
 
         let response = self

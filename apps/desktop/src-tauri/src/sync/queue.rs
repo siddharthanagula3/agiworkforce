@@ -196,7 +196,11 @@ impl SyncQueue {
         Ok(deleted)
     }
 
-    pub fn get_by_entity(&self, entity_type: SyncEntity, entity_id: &str) -> Result<Vec<SyncQueueItem>> {
+    pub fn get_by_entity(
+        &self,
+        entity_type: SyncEntity,
+        entity_id: &str,
+    ) -> Result<Vec<SyncQueueItem>> {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(

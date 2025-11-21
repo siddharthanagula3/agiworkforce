@@ -6,13 +6,34 @@ use std::io::Read;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WordEdit {
-    ReplaceText { old_text: String, new_text: String },
-    InsertParagraph { index: usize, text: String },
-    DeleteParagraph { index: usize },
-    AppendParagraph { text: String },
-    UpdateHeading { index: usize, new_text: String, level: usize },
-    InsertTableRow { table_index: usize, row_index: usize, cells: Vec<String> },
-    DeleteTableRow { table_index: usize, row_index: usize },
+    ReplaceText {
+        old_text: String,
+        new_text: String,
+    },
+    InsertParagraph {
+        index: usize,
+        text: String,
+    },
+    DeleteParagraph {
+        index: usize,
+    },
+    AppendParagraph {
+        text: String,
+    },
+    UpdateHeading {
+        index: usize,
+        new_text: String,
+        level: usize,
+    },
+    InsertTableRow {
+        table_index: usize,
+        row_index: usize,
+        cells: Vec<String>,
+    },
+    DeleteTableRow {
+        table_index: usize,
+        row_index: usize,
+    },
 }
 
 pub struct WordEditor;
@@ -22,7 +43,12 @@ impl WordEditor {
         Self
     }
 
-    pub fn edit_document(&self, file_path: &str, edits: Vec<WordEdit>, output_path: &str) -> Result<()> {
+    pub fn edit_document(
+        &self,
+        file_path: &str,
+        edits: Vec<WordEdit>,
+        output_path: &str,
+    ) -> Result<()> {
         // Read existing document
         let mut file = File::open(file_path)?;
         let mut buffer = Vec::new();
@@ -55,7 +81,11 @@ impl WordEditor {
                 // This would require more complex manipulation
                 docx = docx.add_paragraph(Paragraph::new().add_run(Run::new().add_text(&text)));
             }
-            WordEdit::UpdateHeading { index: _, new_text, level } => {
+            WordEdit::UpdateHeading {
+                index: _,
+                new_text,
+                level,
+            } => {
                 let heading = match level {
                     1 => Paragraph::new().add_run(Run::new().add_text(&new_text).size(28).bold()),
                     2 => Paragraph::new().add_run(Run::new().add_text(&new_text).size(24).bold()),
@@ -72,7 +102,13 @@ impl WordEditor {
         Ok(docx)
     }
 
-    pub fn replace_text(&self, file_path: &str, old_text: &str, new_text: &str, output_path: &str) -> Result<()> {
+    pub fn replace_text(
+        &self,
+        file_path: &str,
+        old_text: &str,
+        new_text: &str,
+        output_path: &str,
+    ) -> Result<()> {
         let edits = vec![WordEdit::ReplaceText {
             old_text: old_text.to_string(),
             new_text: new_text.to_string(),

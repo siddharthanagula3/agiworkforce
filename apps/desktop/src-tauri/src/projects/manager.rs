@@ -289,7 +289,9 @@ impl ProjectManager {
             .to_string();
 
         // Extract text from file
-        let content = self.rag_engine.extract_text_from_file(file_path, &file_type)?;
+        let content = self
+            .rag_engine
+            .extract_text_from_file(file_path, &file_type)?;
         let size = content.len();
 
         // Create document
@@ -315,7 +317,9 @@ impl ProjectManager {
         // Generate embeddings and add chunks
         for chunk in chunks {
             let mut chunk_with_embedding = chunk;
-            let embedding = self.rag_engine.generate_embedding(&chunk_with_embedding.content)?;
+            let embedding = self
+                .rag_engine
+                .generate_embedding(&chunk_with_embedding.content)?;
             chunk_with_embedding.embedding = Some(embedding);
             self.knowledge_base.add_chunk(chunk_with_embedding)?;
         }
@@ -323,7 +327,12 @@ impl ProjectManager {
         Ok(document)
     }
 
-    pub fn search_knowledge(&self, project_id: &str, query: &str, top_k: usize) -> Result<Vec<super::rag::RAGResult>> {
+    pub fn search_knowledge(
+        &self,
+        project_id: &str,
+        query: &str,
+        top_k: usize,
+    ) -> Result<Vec<super::rag::RAGResult>> {
         // Generate query embedding
         let query_embedding = self.rag_engine.generate_embedding(query)?;
 
@@ -337,7 +346,9 @@ impl ProjectManager {
         }
 
         // Find similar chunks
-        let results = self.rag_engine.find_similar_chunks(&query_embedding, all_chunks, top_k);
+        let results = self
+            .rag_engine
+            .find_similar_chunks(&query_embedding, all_chunks, top_k);
 
         Ok(results)
     }

@@ -229,10 +229,9 @@ impl PermissionManager {
         permanent: bool,
         duration_hours: Option<u32>,
     ) -> Result<()> {
-        let mut policy = self
-            .get_policy(tool_id)
-            .await
-            .unwrap_or_else(|| ToolPermissionPolicy::new(tool_id.to_string(), tool_name.to_string()));
+        let mut policy = self.get_policy(tool_id).await.unwrap_or_else(|| {
+            ToolPermissionPolicy::new(tool_id.to_string(), tool_name.to_string())
+        });
 
         if permanent {
             policy.grant_permanent_access();
