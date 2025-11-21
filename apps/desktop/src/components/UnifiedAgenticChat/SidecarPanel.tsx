@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef } from 'react';
 import {
   Pin,
   X,
@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Image,
+  Globe2,
 } from 'lucide-react';
 import { useUnifiedChatStore, SidecarSection } from '../../stores/unifiedChatStore';
 import type {
@@ -31,6 +33,11 @@ import { cn } from '../../lib/utils';
 import { useApprovalActions } from '../../hooks/useApprovalActions';
 import { useOrchestratorActions } from '../../hooks/useOrchestratorActions';
 import type { AgentPriority } from '../../api/orchestrator';
+import { TerminalPanel } from '../execution/TerminalPanel';
+import { BrowserVisualization } from '../Browser/BrowserVisualization';
+import { MonacoEditor } from '../Editor/MonacoEditor';
+import { FileTree } from '../Code/FileTree';
+import { MediaGallery } from '../Media/MediaGallery';
 
 export interface SidecarPanelProps {
   isOpen: boolean;
@@ -51,6 +58,8 @@ const SECTION_ICONS: Record<SidecarSection, React.ReactNode> = {
   approvals: <Shield size={16} />,
   files: <FileText size={16} />,
   terminal: <Terminal size={16} />,
+  browser: <Globe2 size={16} />,
+  media: <Image size={16} />,
   tools: <Wrench size={16} />,
   tasks: <ListTodo size={16} />,
   agents: <Users size={16} />,
@@ -62,6 +71,8 @@ const SECTION_LABELS: Record<SidecarSection, string> = {
   approvals: 'Approvals',
   files: 'Files',
   terminal: 'Terminal',
+  browser: 'Browser',
+  media: 'Media',
   tools: 'Tools',
   tasks: 'Tasks',
   agents: 'Agents',
@@ -101,6 +112,8 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
   const width = controlledWidth ?? sidecarWidth ?? DEFAULT_WIDTH;
   const [isResizing, setIsResizing] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<string>('');
+  const [fileContent, setFileContent] = useState<string>('// Select a file from the tree to load');
 
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -163,6 +176,8 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
     'reasoning',
     'approvals',
     'files',
+    'browser',
+    'media',
     'terminal',
     'tools',
     'tasks',
@@ -229,13 +244,15 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
         {sidecarSection === 'operations' && (
-          <OperationsSection
-            actionLog={actionLog}
-            workflowContext={workflowContext}
-            approvalMap={approvalMap}
-            busyApproval={busyApproval}
-            onResolveApproval={handleInlineDecision}
-          />
+          <div className="h-full bg-black/40">
+            <OperationsSection
+              actionLog={actionLog}
+              workflowContext={workflowContext}
+              approvalMap={approvalMap}
+              busyApproval={busyApproval}
+              onResolveApproval={handleInlineDecision}
+            />
+          </div>
         )}
 
         {sidecarSection === 'reasoning' && <PlanSection plan={plan} />}
@@ -258,7 +275,7 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
                         {approval.scope?.description || 'Approval required'}
                       </div>
                       <div className="mt-1 text-xs text-gray-500">
-                        {approval.scope?.type?.toUpperCase()} •{' '}
+                        {approval.scope?.type?.toUpperCase()} ·{' '}
                         {approval.scope?.risk?.toUpperCase() || 'RISK UNKNOWN'}
                       </div>
                       {approval.scope?.command && (
@@ -303,11 +320,36 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
         {sidecarSection === 'agents' && <AgentsSection agents={agents} />}
 
         {sidecarSection === 'files' && (
-          <PlaceholderSection message="File operations will show here once the agent reads or writes files." />
+          <div className="flex h-full min-h-[420px] flex-row divide-x divide-gray-800">
+            <div className="w-1/3 overflow-hidden bg-gray-950/80">
+              <FileTree
+                rootPath={workflowContext?.entryPoint || ''}
+                onFileSelect={(path) => {
+                  setSelectedFile(path);
+                  setFileContent(
+                    `// Preview of ${path}\n// Connect to backend to load real content.`,
+                  );
+                }}
+                selectedFile={selectedFile}
+                className="h-full"
+              />
+            </div>
+            <div className="w-2/3 overflow-hidden bg-black/60">
+              <MonacoEditor
+                value={fileContent}
+                filePath={selectedFile}
+                language="typescript"
+                enableLSP
+                height="100%"
+              />
+            </div>
+          </div>
         )}
 
         {sidecarSection === 'terminal' && (
-          <PlaceholderSection message="Terminal commands executed by the agent will appear in the action log." />
+          <div className="flex h-full flex-col bg-black/70">
+            <TerminalPanel className="flex-1" />
+          </div>
         )}
 
         {sidecarSection === 'tools' && (
@@ -316,6 +358,18 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({
 
         {sidecarSection === 'tasks' && (
           <PlaceholderSection message="Background tasks will be displayed here when available." />
+        )}
+
+        {sidecarSection === 'browser' && (
+          <div className="h-full bg-black/60">
+            <BrowserVisualization className="h-full" />
+          </div>
+        )}
+
+        {sidecarSection === 'media' && (
+          <div className="h-full bg-black/60">
+            <MediaGallery />
+          </div>
         )}
       </div>
     </div>
@@ -551,7 +605,7 @@ const AgentsSection: React.FC<{ agents: AgentStatus[] }> = ({ agents }) => {
             variant="secondary"
             disabled={!description.trim() || isSubmitting}
           >
-            {isSubmitting ? 'Spawning…' : 'Spawn Agent'}
+            {isSubmitting ? 'Spawningâ€¦' : 'Spawn Agent'}
           </Button>
         </div>
         {error && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{error}</p>}
@@ -654,11 +708,11 @@ function formatTimestamp(value?: Date): string | null {
 function renderScopeSummary(scope: ApprovalScope): string {
   switch (scope.type) {
     case 'terminal':
-      return `${scope.command ?? 'command'}${scope.cwd ? ` • ${scope.cwd}` : ''}`;
+      return `${scope.command ?? 'command'}${scope.cwd ? ` â€¢ ${scope.cwd}` : ''}`;
     case 'filesystem':
-      return `${scope.description ?? 'filesystem change'}${scope.path ? ` • ${scope.path}` : ''}`;
+      return `${scope.description ?? 'filesystem change'}${scope.path ? ` â€¢ ${scope.path}` : ''}`;
     case 'browser':
-      return `${scope.description ?? 'browser action'}${scope.domain ? ` • ${scope.domain}` : ''}`;
+      return `${scope.description ?? 'browser action'}${scope.domain ? ` â€¢ ${scope.domain}` : ''}`;
     case 'ui':
       return scope.description ?? 'UI automation';
     case 'mcp':
