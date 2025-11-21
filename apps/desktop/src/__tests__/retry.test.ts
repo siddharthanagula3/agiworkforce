@@ -112,7 +112,7 @@ describe('retry utility', () => {
     // Updated Nov 16, 2025: Fixed flaky timing test with more tolerant assertions
     it('should use exponential backoff', async () => {
       let attempts = 0;
-      const timestamps: number[] = [Date.now()];
+      const timestamps: number[] = [];
 
       const operation = vi.fn().mockImplementation(async () => {
         attempts++;

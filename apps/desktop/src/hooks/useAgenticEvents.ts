@@ -419,6 +419,32 @@ export function useAgenticEvents() {
           if (!event.payload) return;
           const payload = event.payload;
           console.log('[useAgenticEvents] Permission required:', payload);
+          const riskyScope =
+            payload.scope?.type === 'filesystem' || payload.scope?.type === 'browser';
+          const highRisk = (payload.riskLevel ?? payload.scope?.risk ?? 'high') === 'high';
+          if (riskyScope && highRisk) {
+            const summary =
+              payload.reason ||
+              payload.title ||
+              `Agent requested ${payload.scope?.type ?? 'privileged'} action`;
+            const confirm = window.confirm(
+              `High-risk ${payload.scope?.type ?? 'action'}:\n${summary}\nDo you want to queue this for approval?`,
+            );
+            if (!confirm) {
+              handlersRef.current.rejectOperation(payload.actionId, 'Blocked by user preflight');
+              upsertActionLogEntry({
+                id: payload.actionId,
+                type: mapActionType(payload.type),
+                title: payload.title ?? 'Blocked action',
+                description: summary,
+                status: 'failed',
+                workflowHash: payload.workflowHash,
+                requiresApproval: true,
+                scope: payload.scope,
+              });
+              return;
+            }
+          }
           handlersRef.current.addApprovalRequest({
             id: payload.actionId,
             type: (payload.type as ApprovalRequest['type']) ?? 'terminal_command',

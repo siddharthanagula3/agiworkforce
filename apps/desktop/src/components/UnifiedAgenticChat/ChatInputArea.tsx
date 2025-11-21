@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Paperclip, Mic, Camera, X, Image as ImageIcon } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, Image as ImageIcon, Mic, Paperclip, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useUnifiedChatStore, ContextItem, Attachment } from '../../stores/unifiedChatStore';
-import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
-import type { CaptureResult } from '../../types/capture';
+
 import { cn } from '../../lib/utils';
+import type { CaptureResult } from '../../types/capture';
+import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
+import { Attachment, ContextItem, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
 export interface SendOptions {
   attachments?: Attachment[];
@@ -31,7 +32,7 @@ const APPROX_TOKENS_PER_CHAR = 0.25;
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   disabled = false,
-  placeholder = 'Type a message…',
+  placeholder = 'Type a message...',
   maxLength = 10000,
   enableAttachments = true,
   enableVoice = true,
@@ -159,7 +160,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const attachment: Attachment = {
       id: capture.id || crypto.randomUUID(),
       type: 'screenshot',
-      name: `${label} • ${new Date(capture.createdAt).toLocaleTimeString()}`,
+      name: `${label} - ${new Date(capture.createdAt).toLocaleTimeString()}`,
       path: capture.path,
       mimeType: 'image/png',
     };
@@ -273,25 +274,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   return (
     <div
       className={cn(
-        'rounded-[28px] border border-white/10 bg-[#0b0e16]/90 text-white shadow-[0_25px_80px_rgba(5,6,12,0.65)] backdrop-blur',
+        'rounded-2xl border border-zinc-700 bg-zinc-800/50 text-zinc-100 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-sm',
         className,
       )}
     >
       {activeContext.length > 0 && (
-        <div className="border-b border-white/10 px-4 py-2">
-          <div className="flex flex-wrap.items-center gap-2">
-            <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Context</span>
+        <div className="border-b border-zinc-700/60 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-[0.18em] text-zinc-400">Context</span>
             {activeContext.map((item) => (
               <div
                 key={item.id}
-                className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-2 py-1 text-xs text-indigo-200"
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-2 py-1 text-xs text-indigo-100"
               >
-                <span>{item.icon ?? '⊙'}</span>
-                <span className="max-w-[160px] truncate">{item.name}</span>
+                <span>{item.icon ?? '�'}</span>
+                <span className="max-w-[180px] truncate">{item.name}</span>
                 <button
                   type="button"
                   onClick={() => removeContextItem(item.id)}
-                  className="ml-1 text-indigo-200/70 hover:text-white"
+                  className="ml-1 text-indigo-200/70 transition hover:text-white"
                 >
                   <X size={12} />
                 </button>
@@ -302,34 +303,34 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       )}
 
       {attachments.length > 0 && (
-        <div className="border-b border-white/10 px-4 py-2">
-          <div className="flex flex-wrap.items-center gap-2">
+        <div className="border-b border-zinc-700/60 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-white"
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-900/70 px-3 py-2 text-sm text-zinc-100"
               >
                 {attachment.type === 'image' ? (
-                  <ImageIcon size={16} className="text-slate-300" />
+                  <ImageIcon size={16} className="text-zinc-300" />
                 ) : attachment.type === 'screenshot' ? (
-                  <Camera size={16} className="text-slate-300" />
+                  <Camera size={16} className="text-zinc-300" />
                 ) : attachment.mimeType?.startsWith('audio/') ? (
-                  <Mic size={16} className="text-slate-300" />
+                  <Mic size={16} className="text-zinc-300" />
                 ) : (
-                  <Paperclip size={16} className="text-slate-300" />
+                  <Paperclip size={16} className="text-zinc-300" />
                 )}
-                <span className="max-w-[180px] truncate">{attachment.name}</span>
+                <span className="max-w-[200px] truncate">{attachment.name}</span>
                 {attachment.size && (
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-zinc-400">
                     ({Math.round(attachment.size / 1024)}KB)
                   </span>
                 )}
                 <button
                   type="button"
                   onClick={() => removeAttachment(attachment.id)}
-                  className="rounded p-1 hover:bg-white/10"
+                  className="rounded p-1 text-zinc-300 transition hover:bg-zinc-800"
                 >
-                  <X size={14} className="text-slate-200" />
+                  <X size={14} />
                 </button>
               </div>
             ))}
@@ -337,85 +338,88 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="flex flex-wrap items-end gap-3 px-4 py-3">
-          {enableAttachments && (
-            <>
+      <form onSubmit={handleSubmit} className="flex flex-col">
+        <div className="px-4 pt-4">
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={placeholder}
+            disabled={isDisabled}
+            maxLength={maxLength}
+            rows={1}
+            className="w-full resize-none rounded-xl bg-transparent px-3 py-2 text-base leading-relaxed text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ minHeight: '72px' }}
+          />
+        </div>
+
+        <div className="mt-3 flex items-center justify-between border-t border-zinc-700/60 px-3 py-3">
+          <div className="flex items-center gap-1">
+            {enableAttachments && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isDisabled}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/70 text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Attach files"
+                >
+                  <Paperclip size={18} />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept="*/*"
+                />
+              </>
+            )}
+
+            {enableScreenshot && (
+              <ScreenCaptureButton
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-xl border border-zinc-700 bg-zinc-900/70 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800"
+                onCaptureComplete={handleScreenCaptureComplete}
+                disabled={isDisabled}
+                suppressToasts
+                mode="quick"
+              />
+            )}
+
+            {enableVoice && (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
                 disabled={isDisabled}
-                className="flex-shrink-0 rounded-xl p-2 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-                title="Attach files"
+                onClick={handleVoiceButtonClick}
+                aria-pressed={isRecordingVoice}
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/70 text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40',
+                  isRecordingVoice && 'border-red-500/60 bg-red-500/10 text-red-200',
+                )}
+                title={isRecordingVoice ? 'Click to finish recording' : 'Record a quick voice note'}
               >
-                <Paperclip size={20} className="text-slate-300" />
+                <Mic size={18} />
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileSelect}
-                className="hidden"
-                accept="*/*"
-              />
-            </>
-          )}
+            )}
+          </div>
 
-          <div className="relative flex-1">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder={placeholder}
-              disabled={isDisabled}
-              maxLength={maxLength}
-              rows={1}
-              className="w-full resize-none rounded-2xl border border-white/10 bg-transparent px-4 py-3 pr-24 text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-white/30 disabled:cursor-not-allowed disabled:opacity-40"
-              style={{ minHeight: '48px' }}
-            />
-            <div className="pointer-events-none absolute bottom-2 right-3 flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-2 text-xs text-zinc-400 sm:flex">
               <span>{estimatedTokens} tokens</span>
-              <span className={charCount > maxLength * 0.9 ? 'text-orange-400' : ''}>
+              <span className={charCount > maxLength * 0.9 ? 'text-orange-400' : undefined}>
                 {charCount}/{maxLength}
               </span>
             </div>
-          </div>
-
-          {enableScreenshot && (
-            <ScreenCaptureButton
-              variant="ghost"
-              size="icon"
-              onCaptureComplete={handleScreenCaptureComplete}
-              disabled={isDisabled}
-              suppressToasts
-              mode="quick"
-            />
-          )}
-
-          {enableVoice && (
-            <button
-              type="button"
-              disabled={isDisabled}
-              onClick={handleVoiceButtonClick}
-              aria-pressed={isRecordingVoice}
-              className={cn(
-                'flex-shrink-0 rounded-xl p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                isRecordingVoice ? 'bg-red-500/20 text-red-200' : 'hover:bg-white/5',
-              )}
-              title={isRecordingVoice ? 'Click to finish recording' : 'Record a quick voice note'}
-            >
-              <Mic size={20} className={isRecordingVoice ? 'text-red-200' : 'text-slate-300'} />
-            </button>
-          )}
-
-          <div className="flex items-center gap-2">
-            {rightAccessory}
+            {rightAccessory ? <div className="hidden sm:block">{rightAccessory}</div> : null}
             <button
               type="submit"
               disabled={!content.trim() || isDisabled}
-              className="flex h-11 min-w-[44px] items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 px-4 text-sm font-semibold text-white shadow disabled:cursor-not-allowed disabled:bg-gray-500 disabled:text-gray-200"
+              className="inline-flex h-11 min-w-[46px] items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 px-4 text-sm font-semibold text-white shadow disabled:cursor-not-allowed disabled:from-zinc-700 disabled:to-zinc-700 disabled:text-zinc-300"
               title="Send message"
             >
               <Send size={18} />
@@ -424,9 +428,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         </div>
       </form>
 
-      <div className="px-4 pb-3 text-xs text-slate-500">
-        Press <span className="font-mono text-slate-300">Enter</span> to send,{' '}
-        <span className="font-mono text-slate-300">Shift+Enter</span> for a new line
+      <div className="px-4 pb-3 text-xs text-zinc-500">
+        Press <span className="font-mono text-zinc-200">Enter</span> to send,{' '}
+        <span className="font-mono text-zinc-200">Shift+Enter</span> for a new line
       </div>
     </div>
   );

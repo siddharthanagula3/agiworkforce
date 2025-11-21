@@ -6,6 +6,25 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 
+const buildTaskRouting = (defaults: {
+  openai: string;
+  anthropic: string;
+  google: string;
+  ollama: string;
+  xai: string;
+  deepseek: string;
+  qwen: string;
+  mistral: string;
+}) => ({
+  search: { provider: 'openai' as Provider, model: defaults.openai },
+  code: { provider: 'anthropic' as Provider, model: defaults.anthropic },
+  docs: { provider: 'anthropic' as Provider, model: defaults.anthropic },
+  chat: { provider: 'openai' as Provider, model: defaults.openai },
+  vision: { provider: 'openai' as Provider, model: defaults.openai },
+  image: { provider: 'google' as Provider, model: defaults.google },
+  video: { provider: 'google' as Provider, model: defaults.google },
+});
+
 // Mock Tauri API
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -13,6 +32,17 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 describe('settingsStore', () => {
   beforeEach(() => {
+    const defaultModels = {
+      openai: 'gpt-4o-mini',
+      anthropic: 'claude-3-5-sonnet-20241022',
+      google: 'gemini-1.5-flash',
+      ollama: 'llama3.3',
+      xai: 'grok-4',
+      deepseek: 'deepseek-chat',
+      qwen: 'qwen-max',
+      mistral: 'mistral-large-latest',
+    };
+
     // Reset store state before each test
     useSettingsStore.setState({
       apiKeys: {
@@ -29,16 +59,8 @@ describe('settingsStore', () => {
         defaultProvider: 'openai',
         temperature: 0.7,
         maxTokens: 4096,
-        defaultModels: {
-          openai: 'gpt-4o-mini',
-          anthropic: 'claude-3-5-sonnet-20241022',
-          google: 'gemini-1.5-flash',
-          ollama: 'llama3.3',
-          xai: 'grok-4',
-          deepseek: 'deepseek-chat',
-          qwen: 'qwen-max',
-          mistral: 'mistral-large-latest',
-        },
+        defaultModels,
+        taskRouting: buildTaskRouting(defaultModels),
         favoriteModels: [],
       },
       windowPreferences: {
@@ -345,6 +367,16 @@ describe('settingsStore', () => {
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
           },
+          taskRouting: buildTaskRouting({
+            openai: 'gpt-4',
+            anthropic: 'claude-3-opus',
+            google: 'gemini-pro',
+            ollama: 'llama3',
+            xai: 'grok-beta',
+            deepseek: 'deepseek-chat',
+            qwen: 'qwen-turbo',
+            mistral: 'mistral-small',
+          }),
           favoriteModels: [],
         },
         windowPreferences: {
@@ -411,6 +443,16 @@ describe('settingsStore', () => {
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
           },
+          taskRouting: buildTaskRouting({
+            openai: 'gpt-4',
+            anthropic: 'claude-3-opus',
+            google: 'gemini-pro',
+            ollama: 'llama3',
+            xai: 'grok-beta',
+            deepseek: 'deepseek-chat',
+            qwen: 'qwen-turbo',
+            mistral: 'mistral-small',
+          }),
           favoriteModels: [],
         },
         windowPreferences: {
@@ -521,6 +563,17 @@ describe('settingsStore', () => {
                 qwen: 'qwen-turbo',
                 mistral: 'mistral-small',
               },
+              taskRouting: buildTaskRouting({
+                openai: 'gpt-4o-mini',
+                anthropic: 'claude-3-5-sonnet-20241022',
+                google: 'gemini-1.5-flash',
+                ollama: 'llama3',
+                xai: 'grok-beta',
+                deepseek: 'deepseek-chat',
+                qwen: 'qwen-turbo',
+                mistral: 'mistral-small',
+              }),
+              favoriteModels: [],
             },
             windowPreferences: {
               theme: 'system' as const,

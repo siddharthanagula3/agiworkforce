@@ -184,9 +184,21 @@ fn main() {
             // Initialize terminal session manager
             let session_manager =
                 agiworkforce_desktop::terminal::SessionManager::new(app.handle().clone());
-            app.manage(session_manager);
+            app.manage(session_manager.clone());
 
             tracing::info!("Terminal session manager initialized");
+
+            // Initialize LLM router for terminal AI
+            let terminal_llm_router = Arc::new(agiworkforce_desktop::router::LLMRouter::new());
+
+            // Initialize terminal AI assistant
+            let terminal_ai = agiworkforce_desktop::terminal::TerminalAI::new(
+                terminal_llm_router,
+                Arc::new(session_manager),
+            );
+            app.manage(terminal_ai);
+
+            tracing::info!("Terminal AI assistant initialized");
 
             // Initialize productivity state
             app.manage(ProductivityState::new());
@@ -750,6 +762,9 @@ fn main() {
             agiworkforce_desktop::commands::design_suggest_improvements,
             agiworkforce_desktop::commands::design_tokens_to_css,
             agiworkforce_desktop::commands::design_check_accessibility,
+            // Media generation commands
+            agiworkforce_desktop::commands::media_generate_image,
+            agiworkforce_desktop::commands::media_generate_video,
             // Debugging commands
             agiworkforce_desktop::commands::debug_parse_error,
             agiworkforce_desktop::commands::debug_suggest_fixes,
@@ -887,6 +902,11 @@ fn main() {
             agiworkforce_desktop::commands::terminal_kill,
             agiworkforce_desktop::commands::terminal_list_sessions,
             agiworkforce_desktop::commands::terminal_get_history,
+            // Terminal AI commands
+            agiworkforce_desktop::commands::terminal_ai_suggest_command,
+            agiworkforce_desktop::commands::terminal_ai_explain_error,
+            agiworkforce_desktop::commands::terminal_smart_commit,
+            agiworkforce_desktop::commands::terminal_ai_suggest_improvements,
             // API commands
             agiworkforce_desktop::commands::api_request,
             agiworkforce_desktop::commands::api_get,
