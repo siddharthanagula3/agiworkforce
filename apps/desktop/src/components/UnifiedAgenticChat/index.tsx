@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Layers, Square } from 'lucide-react';
+import { Layers, Square, Brain } from 'lucide-react';
 
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
@@ -19,6 +19,8 @@ import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { MediaLab } from './MediaLab';
 import { ChatStream } from './ChatStream';
 import { DynamicSidecar, type DynamicPanelType } from './DynamicSidecar';
+import { QuickModelSelector } from './QuickModelSelector';
+import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 
 export const UnifiedAgenticChat: React.FC<{
   className?: string;
@@ -45,6 +47,7 @@ export const UnifiedAgenticChat: React.FC<{
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+  const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -215,8 +218,9 @@ export const UnifiedAgenticChat: React.FC<{
 
     const enrichedOptions: SendOptions = {
       ...options,
-      providerId: options.providerId ?? routingOverrides.providerId ?? providerForMessage,
-      modelId: options.modelId ?? routingOverrides.modelId ?? modelForMessage,
+      providerId:
+        options.providerId ?? routingOverrides.providerId ?? providerForMessage ?? 'openai',
+      modelId: options.modelId ?? routingOverrides.modelId ?? modelForMessage ?? 'gpt-4o',
     };
 
     const entryPoint = content.trim();
@@ -305,12 +309,23 @@ export const UnifiedAgenticChat: React.FC<{
   const headerRight = null;
 
   const composer = (
-    <ChatInputArea
-      onSend={handleSendMessage}
-      placeholder="Type a prompt or describe a workflow..."
-      enableAttachments
-      className="bg-transparent"
-    />
+    <div className="relative">
+      {agentStatus && agentStatus.status === 'running' && (
+        <div className="absolute bottom-full mb-4 left-0 right-0 flex justify-center">
+          <div className="bg-zinc-800/80 border border-white/10 px-3 py-1.5 rounded-full text-xs text-zinc-300 flex items-center gap-2 shadow-lg backdrop-blur-sm">
+            <Brain className="w-3 h-3 animate-pulse" />
+            <span>{agentStatus.currentStep || agentStatus.currentGoal || 'Processing...'}</span>
+          </div>
+        </div>
+      )}
+      <ChatInputArea
+        onSend={handleSendMessage}
+        placeholder="Type a prompt or describe a workflow..."
+        enableAttachments
+        className="bg-transparent"
+        rightAccessory={<QuickModelSelector className="mr-2" />}
+      />
+    </div>
   );
 
   const sidecarNode = (
@@ -342,6 +357,7 @@ export const UnifiedAgenticChat: React.FC<{
         isEmptyState={!hasMessages}
         composer={composer}
       >
+        <BudgetAlertsPanel />
         <ChatStream onOpenSidecar={openSidecar} />
       </AppLayout>
 

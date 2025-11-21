@@ -258,6 +258,53 @@ export type SidecarSection =
 export type ConversationMode = 'safe' | 'full_control';
 
 // ============================================================================
+// ID Translation Layer (Backend DB IDs ↔ Frontend UUIDs)
+// ============================================================================
+
+interface IdMapping {
+  dbIdToUuid: Record<number, string>;
+  uuidToDbId: Record<string, number>;
+}
+
+let idMappings: IdMapping = { dbIdToUuid: {}, uuidToDbId: {} };
+
+// Load mappings from localStorage on initialization
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem('id-mappings');
+    if (stored) {
+      idMappings = JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error('[UnifiedChatStore] Failed to load ID mappings:', error);
+  }
+}
+
+function persistIdMappings() {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('id-mappings', JSON.stringify(idMappings));
+    } catch (error) {
+      console.error('[UnifiedChatStore] Failed to persist ID mappings:', error);
+    }
+  }
+}
+
+export function dbIdToUuid(dbId: number): string {
+  if (!idMappings.dbIdToUuid[dbId]) {
+    const uuid = crypto.randomUUID();
+    idMappings.dbIdToUuid[dbId] = uuid;
+    idMappings.uuidToDbId[uuid] = dbId;
+    persistIdMappings();
+  }
+  return idMappings.dbIdToUuid[dbId];
+}
+
+export function uuidToDbId(uuid: string): number | undefined {
+  return idMappings.uuidToDbId[uuid];
+}
+
+// ============================================================================
 // Store State Interface
 // ============================================================================
 

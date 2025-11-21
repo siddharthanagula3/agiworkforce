@@ -145,6 +145,47 @@ Self-healing element finding with natural language queries.
 browser.click_semantic("the login button").await?;  // Survives UI changes
 ```
 
+### Unified Chat Architecture (Nov 21, 2025)
+
+**Grand Unification Refactor**: Consolidated chat experience into a single, Claude Desktop-inspired architecture.
+
+**Architecture:**
+
+- **Single Store**: `unifiedChatStore.ts` (replaces legacy `chatStore.ts`)
+- **Single UI**: `UnifiedAgenticChat` component (replaces `ChatInterface`)
+- **ID Translation**: Backend numeric IDs ↔ Frontend UUIDs via localStorage
+- **Layout**: Centered column (`max-w-3xl`) with floating input (no sidebar/sidecar)
+
+**Key Components:**
+
+- `UnifiedAgenticChat/index.tsx` - Main chat container with agent status integration
+- `ChatInputArea.tsx` - Floating input with Claude Desktop aesthetic (`rounded-2xl backdrop-blur-xl`)
+- `ChatMessageList.tsx` - Virtual scrolling messages with "Thinking..." + Brain icon
+- `MessageBubble.tsx` - Markdown rendering, tool cards, approval UI
+- `QuickModelSelector` - AI-powered model recommendations (integrated in input)
+- `BudgetAlertsPanel` - Token budget warnings (integrated at top)
+- `AppLayout.tsx` - Simplified centered layout (removed 3-panel complexity)
+
+**Features:**
+
+- **Thinking Indicator**: Brain icon with `animate-pulse` (not Sparkles)
+- **Agent Status Pill**: Floating pill above input showing current step/goal
+- **Model Fallback**: Defaults to `openai/gpt-4o` if undefined (prevents "no reply" bug)
+- **Floating Input**: `w-full max-w-3xl mx-auto mb-6 relative z-20`
+- **Clean UX**: No footer text, tool toggles, or token counters in input area
+
+**Deleted Legacy:**
+
+- `components/Chat/ChatInterface.tsx` ❌
+- `stores/chatStore.ts` ❌
+- All related test files ❌
+
+**Migration Notes:**
+
+- `MissionControlPanel` updated to use `useUnifiedChatStore`
+- All imports point to `unifiedChatStore` and `UnifiedAgenticChat`
+- Backend `chat_send_message` command remains unchanged (backward compatible)
+
 ### Claude Code/Cursor Features
 
 1. **Command Palette** - Recent commands, frequency tracking, fuzzy search

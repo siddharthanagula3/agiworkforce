@@ -4,7 +4,7 @@ import { VariableSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { MessageBubble } from './MessageBubble';
-import { Search, Download, Trash2, Sparkles } from 'lucide-react';
+import { Search, Download, Trash2, Brain } from 'lucide-react';
 
 export interface ChatMessageListProps {
   className?: string;
@@ -224,7 +224,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       {isStreaming && (
         <div className="px-4 py-2 border-t border-white/5 bg-zinc-800/40">
           <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <Sparkles size={14} className="text-zinc-500" />
+            <Brain size={14} className="animate-pulse text-zinc-500" />
             Thinking...
           </div>
         </div>

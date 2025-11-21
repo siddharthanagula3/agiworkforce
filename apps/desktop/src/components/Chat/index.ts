@@ -4,8 +4,7 @@
  * This file exports all chat-related components for easy importing
  */
 
-// Core chat components
-export { ChatInterface } from './ChatInterface';
+// Core chat components (ChatInterface deprecated - use UnifiedAgenticChat)
 export { Message } from './Message';
 export { MessageList } from './MessageList';
 export { InputComposer } from './InputComposer';

@@ -165,8 +165,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   return (
-    <div className={cn('flex justify-center px-4 pb-6', className)}>
-      <div className="w-full max-w-3xl rounded-2xl border border-white/5 bg-zinc-800/50 text-zinc-100 shadow-2xl backdrop-blur-sm">
+    <div className={cn('w-full max-w-3xl mx-auto mb-6 relative z-20', className)}>
+      <div className="rounded-2xl border border-zinc-700/50 bg-zinc-800/90 text-zinc-100 shadow-2xl backdrop-blur-xl">
         {activeContext.length > 0 && (
           <div className="border-b border-white/5 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
