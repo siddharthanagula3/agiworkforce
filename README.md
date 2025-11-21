@@ -10,6 +10,8 @@ _Built with Tauri 2.0, Rust, React 18, and TypeScript_
 
 **Status:** Beta (Active Development - November 2025)
 
+**Latest Update (Nov 21, 2025):** Grand Unification refactor complete! Chat experience now features Claude Desktop-inspired UI with centered layout, floating input, and streamlined agent feedback.
+
 ---
 
 ## What is AGI Workforce?
@@ -26,29 +28,34 @@ AGI Workforce is a desktop automation platform that combines AI language models 
 ### Core Capabilities
 
 **1. Software Development Tasks**
+
 - Generate code components and boilerplate
 - Run build commands and tests
 - Modify existing code files
 - Execute npm/cargo/git commands
 
 **2. Desktop Automation**
+
 - Click UI elements by coordinates or text
 - Type text into input fields
 - Take screenshots for analysis
 - Extract text via OCR
 
 **3. Web Automation**
+
 - Navigate to URLs
 - Interact with web pages
 - Extract data from websites
 - Fill forms automatically
 
 **4. File Management**
+
 - Read and write files
 - Organize and process documents
 - Extract data from various formats
 
 **5. System Tasks**
+
 - Execute shell commands
 - Monitor system resources
 - Manage processes
@@ -124,30 +131,38 @@ The system can automatically select the appropriate provider based on task requi
 The platform includes tools for various automation tasks:
 
 **File Operations:**
+
 - `file_read` - Read file contents
 - `file_write` - Create or modify files
 
 **UI Automation (Windows):**
+
 - `ui_screenshot` - Capture screen regions
 - `ui_click` - Click UI elements
 - `ui_type` - Type text input
 
 **Visual Processing:**
+
 - `image_ocr` - Extract text from images
 
 **Browser Automation:**
+
 - `browser_navigate` - Control web browsers
 
 **Code Execution:**
+
 - `code_execute` - Run shell commands
 
 **Database:**
+
 - `db_query` - Query PostgreSQL, MySQL, MongoDB, Redis
 
 **API Integration:**
+
 - `api_call` - Make HTTP requests
 
 **Code Analysis:**
+
 - `code_analyze` - Analyze code structure
 
 ### 3. Agent System
@@ -174,6 +189,7 @@ The agent system includes:
 ### Tech Stack
 
 **Frontend:**
+
 - React 18 + TypeScript 5.4+
 - Zustand (state management)
 - Radix UI + Tailwind CSS
@@ -181,6 +197,7 @@ The agent system includes:
 - xterm.js (terminal)
 
 **Backend:**
+
 - Tauri 2.0 (desktop framework)
 - Rust 1.90+
 - Tokio (async runtime)
@@ -189,6 +206,7 @@ The agent system includes:
 - windows-rs (Windows API)
 
 **LLM Integration:**
+
 - Multi-provider router
 - SSE streaming support
 - Function calling
@@ -355,21 +373,25 @@ pnpm test -- chatStore.test.ts
 You need at least one LLM provider configured:
 
 **OpenAI:**
+
 1. Get API key from https://platform.openai.com/api-keys
 2. Settings → LLM Providers → OpenAI
 3. Recommended: GPT-4o for general tasks
 
 **Anthropic:**
+
 1. Get API key from https://console.anthropic.com/
 2. Settings → LLM Providers → Anthropic
 3. Recommended: Claude 3.5 Sonnet
 
 **Google:**
+
 1. Get API key from https://makersuite.google.com/app/apikey
 2. Settings → LLM Providers → Google
 3. Recommended: Gemini 1.5 Pro
 
 **Ollama (Free, Local):**
+
 1. Install from https://ollama.com
 2. Pull a model: `ollama pull llama3`
 3. Start service: `ollama serve`
