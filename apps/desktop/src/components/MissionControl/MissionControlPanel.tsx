@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Cpu, Layers3, ListChecks, Pause, Play, X } from 'lucide-react';
-import { useChatStore } from '../../stores/chatStore';
+import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useOrchestrationStore } from '../../stores/orchestrationStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -67,9 +67,9 @@ export function MissionControlPanel({ className, onClose }: MissionControlPanelP
     executionLogs: state.executionLogs,
   }));
 
-  const conversations = useChatStore((state) => state.conversations);
-  const messages = useChatStore((state) => state.messages);
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const conversations = useUnifiedChatStore((state) => state.conversations);
+  const messages = useUnifiedChatStore((state) => state.messages);
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
 
   const [activeTab, setActiveTab] = useState('plan');
   const lastUpdateTimestamp =
