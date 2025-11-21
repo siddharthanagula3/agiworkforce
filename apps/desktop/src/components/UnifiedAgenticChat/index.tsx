@@ -40,15 +40,12 @@ export const UnifiedAgenticChat: React.FC<{
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
-  const _setConversationMode = useUnifiedChatStore((state) => state.setConversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
   const hasMessages = messages.length > 0;
   const conversations = useUnifiedChatStore((state) => state.conversations);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
-  const _isAutonomousMode = useUnifiedChatStore((state) => state.isAutonomousMode);
-  const _setAutonomousMode = useUnifiedChatStore((state) => state.setAutonomousMode);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -65,11 +62,6 @@ export const UnifiedAgenticChat: React.FC<{
     type: DynamicPanelType;
     payload?: Record<string, unknown>;
   }>({ type: null });
-  const [_capabilities, _setCapabilities] = useState({
-    computer: true,
-    internet: true,
-    safe: conversationMode === 'safe',
-  });
 
   const _tokenStats = useMemo(() => {
     let input = 0;
@@ -118,10 +110,6 @@ export const UnifiedAgenticChat: React.FC<{
       setSidecarOpen(false);
     }
   }, [sidecarState.type, sidecarOpen, setSidecarOpen]);
-
-  useEffect(() => {
-    setCapabilities((prev) => ({ ...prev, safe: conversationMode === 'safe' }));
-  }, [conversationMode]);
 
   useEffect(() => {
     if (!budget.enabled) return;
