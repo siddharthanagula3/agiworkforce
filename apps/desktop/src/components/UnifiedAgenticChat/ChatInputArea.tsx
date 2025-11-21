@@ -1,5 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Image as ImageIcon, Mic, Paperclip, Send, X } from 'lucide-react';
+import {
+  Camera,
+  Cpu,
+  Globe,
+  Image as ImageIcon,
+  Mic,
+  Paperclip,
+  Send,
+  Shield,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '../../lib/utils';
@@ -24,6 +34,12 @@ export interface ChatInputAreaProps {
   enableScreenshot?: boolean;
   className?: string;
   rightAccessory?: React.ReactNode;
+  modelLabel?: string;
+  capabilityState?: { computer: boolean; internet: boolean; safe: boolean };
+  onCapabilityChange?: (
+    key: keyof NonNullable<ChatInputAreaProps['capabilityState']>,
+    value: boolean,
+  ) => void;
 }
 
 const MAX_ROWS = 10;
@@ -39,9 +55,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   enableScreenshot = true,
   className = '',
   rightAccessory,
+  modelLabel,
+  capabilityState,
+  onCapabilityChange,
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [capabilities, setCapabilities] = useState(
+    capabilityState ?? { computer: true, internet: false, safe: true },
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadersRef = useRef<FileReader[]>([]);
@@ -66,6 +88,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
   }, [content]);
+
+  useEffect(() => {
+    if (capabilityState) {
+      setCapabilities(capabilityState);
+    }
+  }, [capabilityState]);
 
   useEffect(() => {
     return () => {
@@ -278,6 +306,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         className,
       )}
     >
+      {modelLabel ? (
+        <div className="flex items-center gap-2 border-b border-zinc-700/60 px-4 py-2 text-xs text-zinc-300">
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-100">
+            {modelLabel}
+          </span>
+          <span className="text-zinc-500">Model router</span>
+        </div>
+      ) : null}
+
       {activeContext.length > 0 && (
         <div className="border-b border-zinc-700/60 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -308,23 +345,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="inline-flex items-center gap-2 rounded-lg bg-zinc-900/70 px-3 py-2 text-sm text-zinc-100"
+                className="inline-flex min-w-[220px] items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-3 text-sm text-zinc-100 shadow-inner shadow-black/20"
               >
                 {attachment.type === 'image' ? (
-                  <ImageIcon size={16} className="text-zinc-300" />
+                  <ImageIcon size={18} className="text-zinc-300" />
                 ) : attachment.type === 'screenshot' ? (
-                  <Camera size={16} className="text-zinc-300" />
+                  <Camera size={18} className="text-zinc-300" />
                 ) : attachment.mimeType?.startsWith('audio/') ? (
-                  <Mic size={16} className="text-zinc-300" />
+                  <Mic size={18} className="text-zinc-300" />
                 ) : (
-                  <Paperclip size={16} className="text-zinc-300" />
+                  <Paperclip size={18} className="text-zinc-300" />
                 )}
-                <span className="max-w-[200px] truncate">{attachment.name}</span>
-                {attachment.size && (
-                  <span className="text-xs text-zinc-400">
-                    ({Math.round(attachment.size / 1024)}KB)
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium">{attachment.name}</span>
+                  <span className="text-xs text-zinc-500">
+                    {attachment.size
+                      ? `${Math.round(attachment.size / 1024)}KB`
+                      : attachment.mimeType}
                   </span>
-                )}
+                </div>
                 <button
                   type="button"
                   onClick={() => removeAttachment(attachment.id)}
@@ -406,6 +445,39 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 <Mic size={18} />
               </button>
             )}
+
+            <div className="ml-2 flex items-center gap-1 rounded-xl border border-zinc-700 bg-zinc-900/60 px-2 py-1">
+              {(['computer', 'internet', 'safe'] as const).map((key) => {
+                const Icon = key === 'computer' ? Cpu : key === 'internet' ? Globe : Shield;
+                const enabled = capabilities[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      const next = { ...capabilities, [key]: !enabled };
+                      setCapabilities(next);
+                      onCapabilityChange?.(key, !enabled);
+                    }}
+                    className={cn(
+                      'flex h-9 w-9 items-center justify-center rounded-lg border border-transparent transition',
+                      enabled
+                        ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                        : 'text-zinc-400 hover:text-white',
+                    )}
+                    title={
+                      key === 'computer'
+                        ? 'Enable computer use'
+                        : key === 'internet'
+                          ? 'Enable internet'
+                          : 'Safe mode'
+                    }
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
