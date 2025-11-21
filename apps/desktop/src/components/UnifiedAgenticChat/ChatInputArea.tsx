@@ -1,15 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Camera,
-  Cpu,
-  Globe,
-  Image as ImageIcon,
-  Mic,
-  Paperclip,
-  Send,
-  Shield,
-  X,
-} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Camera, Image as ImageIcon, Mic, Paperclip, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '../../lib/utils';
@@ -46,7 +36,6 @@ export interface ChatInputAreaProps {
 }
 
 const MAX_ROWS = 10;
-const APPROX_TOKENS_PER_CHAR = 0.25;
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
@@ -58,17 +47,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   enableScreenshot = true,
   className = '',
   rightAccessory,
-  modelLabel,
-  capabilityState,
-  onCapabilityChange,
+  modelLabel: _modelLabel,
+  capabilityState: _capabilityState,
+  onCapabilityChange: _onCapabilityChange,
   isAutonomousMode = false,
   onAutonomousToggle,
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [capabilities, setCapabilities] = useState(
-    capabilityState ?? { computer: true, internet: false, safe: true },
-  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadersRef = useRef<FileReader[]>([]);
@@ -93,12 +79,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
   }, [content]);
-
-  useEffect(() => {
-    if (capabilityState) {
-      setCapabilities(capabilityState);
-    }
-  }, [capabilityState]);
 
   useEffect(() => {
     return () => {
@@ -127,12 +107,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       recordedChunksRef.current = [];
     };
   }, []);
-
-  const estimatedTokens = useMemo(
-    () => Math.ceil(content.length * APPROX_TOKENS_PER_CHAR),
-    [content.length],
-  );
-  const charCount = content.length;
 
   const handleSubmit = (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -307,19 +281,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-zinc-700 bg-zinc-800/50 text-zinc-100 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-sm',
+        'mx-auto w-full max-w-5xl rounded-2xl border border-zinc-700 bg-zinc-800/50 text-zinc-100 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-sm',
         className,
       )}
     >
-      {modelLabel ? (
-        <div className="flex items-center gap-2 border-b border-zinc-700/60 px-4 py-2 text-xs text-zinc-300">
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-100">
-            {modelLabel}
-          </span>
-          <span className="text-zinc-500">Model router</span>
-        </div>
-      ) : null}
-
       {activeContext.length > 0 && (
         <div className="border-b border-zinc-700/60 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -460,48 +425,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 <Mic size={18} />
               </button>
             )}
-
-            <div className="ml-2 flex items-center gap-1 rounded-xl border border-zinc-700 bg-zinc-900/60 px-2 py-1">
-              {(['computer', 'internet', 'safe'] as const).map((key) => {
-                const Icon = key === 'computer' ? Cpu : key === 'internet' ? Globe : Shield;
-                const enabled = capabilities[key];
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      const next = { ...capabilities, [key]: !enabled };
-                      setCapabilities(next);
-                      onCapabilityChange?.(key, !enabled);
-                    }}
-                    className={cn(
-                      'flex h-9 w-9 items-center justify-center rounded-lg border border-transparent transition',
-                      enabled
-                        ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                        : 'text-zinc-400 hover:text-white',
-                    )}
-                    title={
-                      key === 'computer'
-                        ? 'Enable computer use'
-                        : key === 'internet'
-                          ? 'Enable internet'
-                          : 'Safe mode'
-                    }
-                  >
-                    <Icon className="h-4 w-4" />
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 text-xs text-zinc-400 sm:flex">
-              <span>{estimatedTokens} tokens</span>
-              <span className={charCount > maxLength * 0.9 ? 'text-orange-400' : undefined}>
-                {charCount}/{maxLength}
-              </span>
-            </div>
             {rightAccessory ? <div className="hidden sm:block">{rightAccessory}</div> : null}
             <button
               type="submit"

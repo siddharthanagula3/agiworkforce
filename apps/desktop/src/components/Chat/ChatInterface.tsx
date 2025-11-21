@@ -2,9 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, memo } from 'react';
 import { MessageList } from './MessageList';
 import { InputComposer } from './InputComposer';
-import { TokenCounter } from './TokenCounter';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
-import { StatusBar } from '../Layout/StatusBar';
 import { ProgressIndicator } from '../AGI/ProgressIndicator';
 import { useChatStore } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -54,8 +52,8 @@ export const ChatInterface = memo(function ChatInterface({ className }: ChatInte
     }
   }, [messages, budget.enabled, addTokenUsage]);
 
-  // Get model-specific context window size
-  const maxContextTokens = useMemo(() => {
+  // Get model-specific context window size (not displayed but tracked)
+  const _maxContextTokens = useMemo(() => {
     const selectedModel = llmConfig.defaultModels[llmConfig.defaultProvider];
     if (selectedModel) {
       return getModelContextWindow(selectedModel);
@@ -63,8 +61,8 @@ export const ChatInterface = memo(function ChatInterface({ className }: ChatInte
     return llmConfig.maxTokens; // Fallback to settings
   }, [llmConfig.defaultProvider, llmConfig.defaultModels, llmConfig.maxTokens]);
 
-  // Calculate current token count from conversation messages
-  const currentTokenCount = useMemo(() => {
+  // Calculate current token count from conversation messages (not displayed but tracked)
+  const _currentTokenCount = useMemo(() => {
     return messages.reduce((total, msg) => {
       // Use stored token count if available, otherwise estimate
       if (msg.tokens !== undefined && msg.tokens !== null) {
@@ -75,6 +73,10 @@ export const ChatInterface = memo(function ChatInterface({ className }: ChatInte
       return total + estimateTokens(msg.content, isCode);
     }, 0);
   }, [messages]);
+
+  // Mark as intentionally unused for TypeScript
+  void _maxContextTokens;
+  void _currentTokenCount;
 
   const handleSendMessage = useCallback(
     async (
@@ -175,33 +177,11 @@ export const ChatInterface = memo(function ChatInterface({ className }: ChatInte
         />
       </div>
 
-      {/* Token Counter - show when there are messages */}
-      {messages.length > 0 && (
-        <div className="border-t border-border px-4 py-3">
-          <TokenCounter
-            currentTokens={currentTokenCount}
-            maxTokens={maxContextTokens}
-            budgetLimit={budget.enabled ? budget.limit : undefined}
-            compact={true}
-            showDetails={true}
-          />
-        </div>
-      )}
-
       <InputComposer
         onSend={handleSendMessage}
         disabled={loading}
         isSending={loading}
         {...(activeConversationId != null ? { conversationId: activeConversationId } : {})}
-      />
-
-      {/* Status Bar */}
-      <StatusBar
-        provider={llmConfig.defaultProvider}
-        model={llmConfig.defaultModels[llmConfig.defaultProvider]}
-        currentTokens={currentTokenCount}
-        maxTokens={maxContextTokens}
-        isSending={loading}
       />
     </div>
   );
