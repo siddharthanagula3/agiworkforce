@@ -79,7 +79,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* Left Sidebar */}
       <aside
         className={cn(
-          'flex h-full flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur transition-all duration-200',
+          'flex h-full flex-shrink-0 flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur transition-all duration-200',
         )}
         style={{ width: navWidth }}
       >
@@ -146,7 +146,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <main className="flex flex-1 min-h-0 overflow-hidden">
+          <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
             <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col px-6 py-8">
               {isEmptyState ? (
                 <div className="flex flex-1 items-center justify-center">
