@@ -38,10 +38,7 @@ export const AgentStatusBanner = () => {
   };
 
   return (
-    <div className={cn(
-      'flex items-center gap-3 px-4 py-2 border-b',
-      getStatusColor()
-    )}>
+    <div className={cn('flex items-center gap-3 px-4 py-2 border-b', getStatusColor())}>
       <div className="flex items-center gap-2">
         {getStatusIcon()}
         <span className="text-sm font-medium">
@@ -56,12 +53,6 @@ export const AgentStatusBanner = () => {
               style={{ width: `${agentStatus.progress}%` }}
             />
           </div>
-        </div>
-      )}
-      {agentStatus.resourceUsage && (
-        <div className="text-xs opacity-70">
-          CPU: {agentStatus.resourceUsage.cpu.toFixed(1)}% |
-          MEM: {agentStatus.resourceUsage.memory.toFixed(1)}%
         </div>
       )}
     </div>
