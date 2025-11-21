@@ -310,3 +310,4 @@ agiworkforce/
 - `MCP_IMPLEMENTATION.md` - MCP architecture details
 - `IMPLEMENTATION_SUMMARY.md` - Feature implementation details
 - `docs/architecture/` - 30+ architecture documents
+- use frontend-design skill for frontend

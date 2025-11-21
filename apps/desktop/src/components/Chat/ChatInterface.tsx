@@ -1,159 +1,226 @@
-// Updated Nov 16, 2025: Added React.memo and performance optimizations
-import { useCallback, useEffect, useMemo, useRef, memo } from 'react';
-import { MessageList } from './MessageList';
-import { InputComposer } from './InputComposer';
+// Updated Nov 21, 2025: Brain Transplant - Unified Store Integration
+import { useCallback, useEffect, useRef, memo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { ChatMessageList } from '../UnifiedAgenticChat/ChatMessageList';
+import { ChatInputArea, type SendOptions } from '../UnifiedAgenticChat/ChatInputArea';
+import { QuickModelSelector } from './QuickModelSelector';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ProgressIndicator } from '../AGI/ProgressIndicator';
-import { useChatStore } from '../../stores/chatStore';
+import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useModelStore } from '../../stores/modelStore';
 import { useTokenBudgetStore, selectBudget } from '../../stores/tokenBudgetStore';
-import { estimateTokens } from '../../utils/tokenCount';
-import { getModelContextWindow } from '../../constants/llm';
+import { sha256 } from '../../lib/hash';
+import { deriveTaskMetadata } from '../../lib/taskMetadata';
+import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import type { CaptureResult } from '../../hooks/useScreenCapture';
-import type { ChatRoutingPreferences } from '../../types/chat';
-import type { Message as MessagePresentation } from './Message';
 
 interface ChatInterfaceProps {
   className?: string;
 }
 
 export const ChatInterface = memo(function ChatInterface({ className }: ChatInterfaceProps) {
-  const {
-    messages,
-    loading,
-    loadConversations,
-    sendMessage,
-    activeConversationId,
-    editMessage,
-    deleteMessage,
-  } = useChatStore();
+  // Unified Store
+  const messages = useUnifiedChatStore((state) => state.messages);
+  const isLoading = useUnifiedChatStore((state) => state.isLoading);
+  const addMessage = useUnifiedChatStore((state) => state.addMessage);
+  const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
+  const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
+  const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
+  const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
 
+  // Settings & Model Selection
   const llmConfig = useSettingsStore((state) => state.llmConfig);
+  const selectedProvider = useModelStore((state) => state.selectedProvider);
+  const selectedModel = useModelStore((state) => state.selectedModel);
+
+  // Budget Tracking
   const budget = useTokenBudgetStore(selectBudget);
   const addTokenUsage = useTokenBudgetStore((state) => state.addTokenUsage);
+  const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // Load conversations on mount
+  // Track token usage
   useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
-
-  // Updated Nov 16, 2025: Track which messages have been counted to prevent duplicates
-  const countedMessageIdsRef = useRef<Set<number>>(new Set());
-
-  // Track token usage in budget system when messages change
-  useEffect(() => {
-    if (budget.enabled && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.tokens && !countedMessageIdsRef.current.has(lastMessage.id)) {
-        addTokenUsage(lastMessage.tokens);
-        countedMessageIdsRef.current.add(lastMessage.id);
-      }
+    if (!budget.enabled) return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+    const messageId = String((lastMessage as any).id ?? crypto.randomUUID());
+    if (countedMessageIdsRef.current.has(messageId)) {
+      return;
     }
+    const tokens =
+      lastMessage.metadata?.tokenCount ?? Math.ceil((lastMessage.content?.length ?? 0) * 0.25);
+    addTokenUsage(tokens);
+    countedMessageIdsRef.current.add(messageId);
   }, [messages, budget.enabled, addTokenUsage]);
 
-  // Get model-specific context window size (not displayed but tracked)
-  const _maxContextTokens = useMemo(() => {
-    const selectedModel = llmConfig.defaultModels[llmConfig.defaultProvider];
-    if (selectedModel) {
-      return getModelContextWindow(selectedModel);
-    }
-    return llmConfig.maxTokens; // Fallback to settings
-  }, [llmConfig.defaultProvider, llmConfig.defaultModels, llmConfig.maxTokens]);
-
-  // Calculate current token count from conversation messages (not displayed but tracked)
-  const _currentTokenCount = useMemo(() => {
-    return messages.reduce((total, msg) => {
-      // Use stored token count if available, otherwise estimate
-      if (msg.tokens !== undefined && msg.tokens !== null) {
-        return total + msg.tokens;
-      }
-      // Estimate based on content length
-      const isCode = msg.role === 'assistant'; // Assistant often includes code
-      return total + estimateTokens(msg.content, isCode);
-    }, 0);
-  }, [messages]);
-
-  // Mark as intentionally unused for TypeScript
-  void _maxContextTokens;
-  void _currentTokenCount;
+  // Determine provider and model
+  const fallbackProvider = llmConfig.defaultProvider;
+  const providerForMessage = selectedProvider ?? fallbackProvider ?? undefined;
+  const fallbackModelForProvider =
+    providerForMessage && llmConfig.defaultModels
+      ? llmConfig.defaultModels[providerForMessage]
+      : undefined;
+  const modelForMessage = selectedModel ?? fallbackModelForProvider ?? undefined;
 
   const handleSendMessage = useCallback(
-    async (
-      content: string,
-      attachments?: File[],
-      captures?: CaptureResult[],
-      routing?: ChatRoutingPreferences,
-      contextItems?: unknown[],
-    ) => {
-      await sendMessage(content, attachments, captures, routing, contextItems);
+    async (content: string, options: SendOptions = {}) => {
+      // Task classification for routing
+      const classifyTask = (
+        text: string,
+      ): 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video' => {
+        const lc = text.toLowerCase();
+        if (
+          lc.includes('search') ||
+          lc.includes('browse') ||
+          lc.includes('find news') ||
+          lc.includes('look up')
+        ) {
+          return 'search';
+        }
+        if (lc.includes('image') || lc.includes('logo') || lc.includes('picture')) {
+          return 'image';
+        }
+        if (lc.includes('video') || lc.includes('render') || lc.includes('clip')) {
+          return 'video';
+        }
+        if (lc.includes('vision') || lc.includes('screenshot')) {
+          return 'vision';
+        }
+        if (lc.includes('pdf') || lc.includes('doc') || lc.includes('document')) {
+          return 'docs';
+        }
+        if (
+          lc.includes('code') ||
+          lc.includes('bug') ||
+          lc.includes('compile') ||
+          lc.includes('function') ||
+          lc.includes('test') ||
+          lc.includes('git') ||
+          lc.includes('build')
+        ) {
+          return 'code';
+        }
+        return 'chat';
+      };
+
+      const applyRouting = (): { providerId?: string; modelId?: string } => {
+        const task = classifyTask(content);
+        const routing = llmConfig.taskRouting?.[task];
+        if (routing) {
+          return { providerId: routing.provider, modelId: routing.model };
+        }
+        return {};
+      };
+
+      // Safe mode validation
+      if (conversationMode === 'safe') {
+        const riskyPatterns = [
+          'rm -rf',
+          'format c:',
+          'shutdown',
+          'del /f /s /q',
+          'poweroff',
+          'wipe',
+          'disable antivirus',
+          'registry delete',
+          'ignore previous instructions',
+          'system prompt',
+        ];
+        const lower = content.toLowerCase();
+        const matched = riskyPatterns.find((p) => lower.includes(p));
+        if (matched) {
+          const confirmed = window.confirm(
+            `This request contains a risky instruction ("${matched}"). Proceed anyway?`,
+          );
+          if (!confirmed) {
+            return;
+          }
+        }
+      }
+
+      const routingOverrides = applyRouting();
+
+      const enrichedOptions: SendOptions = {
+        ...options,
+        providerId: options.providerId ?? routingOverrides.providerId ?? providerForMessage,
+        modelId: options.modelId ?? routingOverrides.modelId ?? modelForMessage,
+      };
+
+      // Set workflow context
+      const entryPoint = content.trim();
+      const workflowHash = await sha256(entryPoint || crypto.randomUUID());
+      setWorkflowContext({
+        hash: workflowHash,
+        description: entryPoint,
+        entryPoint,
+      });
+      if (isTauri) {
+        try {
+          await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
+        } catch (error) {
+          console.error('[ChatInterface] Failed to set workflow hash', error);
+        }
+      }
+
+      const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
+
+      // Add user message
+      addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
+
+      // Add assistant message placeholder
+      const assistantMessageId = crypto.randomUUID();
+      addMessage({
+        role: 'assistant',
+        content: '',
+        metadata: { streaming: true },
+      });
+      setStreamingMessage(assistantMessageId);
+
+      // Send to backend
+      try {
+        const response = await invoke<any>('chat_send_message', {
+          request: {
+            content,
+            providerOverride: enrichedOptions.providerId,
+            modelOverride: enrichedOptions.modelId,
+            stream: false,
+            enableTools: true,
+            conversationMode,
+            workflowHash,
+            taskMetadata,
+          },
+        });
+
+        updateMessage(assistantMessageId, {
+          content: response.assistant_message?.content || 'No response',
+          metadata: {
+            streaming: false,
+            model: response.assistant_message?.model,
+            provider: response.assistant_message?.provider,
+            tokenCount: response.assistant_message?.tokens,
+            cost: response.assistant_message?.cost,
+          },
+        });
+      } catch (error) {
+        updateMessage(assistantMessageId, {
+          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          metadata: { streaming: false },
+        });
+      } finally {
+        setStreamingMessage(null);
+      }
     },
-    [sendMessage],
-  );
-
-  // Convert backend data to UI format for components
-  const messagesUI = useMemo(
-    () =>
-      messages.map((msg) => ({
-        id: msg.id.toString(),
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        tokens: msg.tokens,
-        cost: msg.cost,
-        sourceId: msg.id,
-      })),
-    [messages],
-  );
-
-  const handleRegenerateMessage = useCallback(
-    async (targetMessage: MessagePresentation) => {
-      const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
-      if (Number.isNaN(sourceId)) {
-        return;
-      }
-
-      const targetIndex = messages.findIndex((msg) => msg.id === sourceId);
-      if (targetIndex === -1) {
-        return;
-      }
-
-      const previousUserMessage = [...messages.slice(0, targetIndex)]
-        .reverse()
-        .find((msg) => msg.role === 'user');
-
-      if (!previousUserMessage) {
-        console.warn('[ChatInterface] Unable to find user message to regenerate from.');
-        return;
-      }
-
-      await sendMessage(previousUserMessage.content);
-    },
-    [messages, sendMessage],
-  );
-
-  const handleEditMessage = useCallback(
-    async (targetMessage: MessagePresentation, content: string) => {
-      const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
-      if (Number.isNaN(sourceId)) {
-        return;
-      }
-
-      await editMessage(sourceId, content);
-    },
-    [editMessage],
-  );
-
-  const handleDeleteMessage = useCallback(
-    async (targetMessage: MessagePresentation) => {
-      const sourceId = targetMessage.sourceId ?? Number.parseInt(targetMessage.id, 10);
-      if (Number.isNaN(sourceId)) {
-        return;
-      }
-
-      await deleteMessage(sourceId);
-    },
-    [deleteMessage],
+    [
+      llmConfig,
+      conversationMode,
+      providerForMessage,
+      modelForMessage,
+      addMessage,
+      updateMessage,
+      setStreamingMessage,
+      setWorkflowContext,
+    ],
   );
 
   return (
@@ -166,23 +233,21 @@ export const ChatInterface = memo(function ChatInterface({ className }: ChatInte
         <ProgressIndicator compact={false} autoHide={true} autoHideDelay={5000} />
       </div>
 
+      {/* Modern Chat Messages */}
       <div className="flex-1 overflow-hidden min-h-0">
-        <MessageList
-          messages={messagesUI}
-          loading={loading}
-          conversationId={activeConversationId}
-          onRegenerateMessage={handleRegenerateMessage}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-        />
+        <ChatMessageList />
       </div>
 
-      <InputComposer
-        onSend={handleSendMessage}
-        disabled={loading}
-        isSending={loading}
-        {...(activeConversationId != null ? { conversationId: activeConversationId } : {})}
-      />
+      {/* Modern Input with Model Selector */}
+      <div className="max-w-3xl mx-auto w-full px-6 pb-6">
+        <ChatInputArea
+          onSend={handleSendMessage}
+          disabled={isLoading}
+          rightAccessory={<QuickModelSelector className="mr-2" />}
+          placeholder="Type your message..."
+          enableAttachments
+        />
+      </div>
     </div>
   );
 });
