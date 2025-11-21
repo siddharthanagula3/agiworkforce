@@ -46,33 +46,36 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
     e.stopPropagation();
   }, []);
 
-  const validateFile = (file: File): boolean => {
-    const fileSizeMB = file.size / (1024 * 1024);
-    if (fileSizeMB > maxSize) {
-      console.warn(`File ${file.name} exceeds ${maxSize}MB limit`);
-      return false;
-    }
-
-    if (accept !== '*/*') {
-      const acceptedTypes = accept.split(',').map((t) => t.trim());
-      const fileType = file.type;
-      const fileExt = `.${file.name.split('.').pop()}`;
-
-      const isAccepted = acceptedTypes.some(
-        (type) =>
-          type === fileType ||
-          type === fileExt ||
-          (type.endsWith('/*') && fileType.startsWith(type.replace('/*', ''))),
-      );
-
-      if (!isAccepted) {
-        console.warn(`File ${file.name} type not accepted`);
+  const validateFile = useCallback(
+    (file: File): boolean => {
+      const fileSizeMB = file.size / (1024 * 1024);
+      if (fileSizeMB > maxSize) {
+        console.warn(`File ${file.name} exceeds ${maxSize}MB limit`);
         return false;
       }
-    }
 
-    return true;
-  };
+      if (accept !== '*/*') {
+        const acceptedTypes = accept.split(',').map((t) => t.trim());
+        const fileType = file.type;
+        const fileExt = `.${file.name.split('.').pop()}`;
+
+        const isAccepted = acceptedTypes.some(
+          (type) =>
+            type === fileType ||
+            type === fileExt ||
+            (type.endsWith('/*') && fileType.startsWith(type.replace('/*', ''))),
+        );
+
+        if (!isAccepted) {
+          console.warn(`File ${file.name} type not accepted`);
+          return false;
+        }
+      }
+
+      return true;
+    },
+    [accept, maxSize],
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {

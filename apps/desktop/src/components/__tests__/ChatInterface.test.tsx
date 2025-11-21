@@ -98,7 +98,18 @@ describe('ChatInterface', () => {
     expect(container).toBeDefined();
   });
 
-  it('should render child components', () => {
+  it('should render child components', async () => {
+    const { useChatStore } = await import('../../stores/chatStore');
+    (useChatStore as any).mockReturnValue({
+      messages: [{ id: 1, role: 'user', content: 'Hello', timestamp: new Date(), tokens: 5 }],
+      loading: false,
+      loadConversations: vi.fn(),
+      sendMessage: vi.fn(),
+      activeConversationId: 1,
+      editMessage: vi.fn(),
+      deleteMessage: vi.fn(),
+    });
+
     render(<ChatInterface />);
 
     expect(screen.getByTestId('message-list')).toBeDefined();

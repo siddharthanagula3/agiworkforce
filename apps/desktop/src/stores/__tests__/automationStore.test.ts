@@ -45,33 +45,32 @@ describe('automationStore', () => {
   });
 
   it('should load windows successfully', async () => {
-    const mockWindows = [
-      { id: 'window-1', name: 'Test Window 1', className: 'Window', controlType: 'Window' },
-      { id: 'window-2', name: 'Test Window 2', className: 'Window', controlType: 'Window' },
-    ];
+    const mockWindows: any[] = [];
 
-    invokeMock.mockResolvedValue(mockWindows);
+    invokeMock.mockResolvedValue({ windows: mockWindows });
 
     await useAutomationStore.getState().loadWindows();
 
     const state = useAutomationStore.getState();
-    expect(state.windows).toEqual(mockWindows);
+    expect(state.windows).toStrictEqual(mockWindows);
     expect(state.loadingWindows).toBe(false);
     expect(state.error).toBeNull();
-    expect(invokeMock).toHaveBeenCalledWith('list_automation_windows');
+    expect(invokeMock).toHaveBeenCalledWith('automation_list_windows');
   });
 
-    it('should handle window loading errors', async () => {
-      const errorMessage = 'Failed to list windows';
-      invokeMock.mockRejectedValue(new Error(errorMessage));
+  it('should handle window loading errors', async () => {
+    const errorMessage = 'Failed to list windows';
+    invokeMock.mockRejectedValue(new Error(errorMessage));
 
-      await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(errorMessage);
+    await expect(useAutomationStore.getState().loadWindows()).rejects.toThrow(
+      `Failed to list automation windows: Error: ${errorMessage}`,
+    );
 
-      const state = useAutomationStore.getState();
-      expect(state.loadingWindows).toBe(false);
-      expect(state.error).toBe(`Error: ${errorMessage}`);
-      expect(state.windows).toEqual([]);
-    });
+    const state = useAutomationStore.getState();
+    expect(state.loadingWindows).toBe(false);
+    expect(state.error).toBe(`Error: Failed to list automation windows: Error: ${errorMessage}`);
+    expect(state.windows).toEqual([]);
+  });
 
   it('should search for elements', async () => {
     const mockElements = [
@@ -85,9 +84,9 @@ describe('automationStore', () => {
     await useAutomationStore.getState().searchElements(query);
 
     const state = useAutomationStore.getState();
-    expect(state.elements).toEqual(mockElements);
+    expect(state.elements).toStrictEqual(mockElements);
     expect(state.loadingElements).toBe(false);
-    expect(invokeMock).toHaveBeenCalledWith('find_automation_elements', { query });
+    expect(invokeMock).toHaveBeenCalledWith('automation_find_elements', { query });
   });
 
   it('should perform click action', async () => {
@@ -99,7 +98,7 @@ describe('automationStore', () => {
     const state = useAutomationStore.getState();
     expect(state.runningAction).toBe(false);
     expect(state.error).toBeNull();
-    expect(invokeMock).toHaveBeenCalledWith('click_automation', { request: clickRequest });
+    expect(invokeMock).toHaveBeenCalledWith('automation_click', { request: clickRequest });
   });
 
   it('should handle click errors', async () => {
@@ -107,11 +106,13 @@ describe('automationStore', () => {
     invokeMock.mockRejectedValue(new Error(errorMessage));
 
     const clickRequest = { elementId: 'button-1', x: 100, y: 50 };
-    await expect(useAutomationStore.getState().click(clickRequest)).rejects.toThrow(errorMessage);
+    await expect(useAutomationStore.getState().click(clickRequest)).rejects.toThrow(
+      `Failed to perform automation click: Error: ${errorMessage}`,
+    );
 
     const state = useAutomationStore.getState();
     expect(state.runningAction).toBe(false);
-    expect(state.error).toBe(`Error: ${errorMessage}`);
+    expect(state.error).toBe(`Error: Failed to perform automation click: Error: ${errorMessage}`);
   });
 
   it('should type text with options', async () => {
@@ -123,7 +124,10 @@ describe('automationStore', () => {
 
     const state = useAutomationStore.getState();
     expect(state.runningAction).toBe(false);
-    expect(invokeMock).toHaveBeenCalledWith('send_keys', { text, options });
+    expect(invokeMock).toHaveBeenCalledWith('automation_send_keys', {
+      text,
+      options,
+    });
   });
 
   it('should clear error state', () => {

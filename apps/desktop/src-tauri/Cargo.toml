@@ -45,6 +45,7 @@ serde_json = "1.0"
 bincode = "1.3"
 
 once_cell = "1.19"
+shlex = "1.3"
 
 
 # Error Handling
@@ -90,8 +91,12 @@ windows = { version = "0.56", features = [
     "Win32_UI_Shell",
     "Win32_Security",
     "Win32_System_Memory",
-    "Win32_System_SystemServices"
+    "Win32_System_SystemServices",
+    "Media_SpeechRecognition",
+    "Storage_Streams",
+    "Globalization"
 ] }
+clipboard-win = "5.4"
 # Input monitoring and screen capture (Windows-specific, GTK on Linux causes build issues)
 rdev = "0.5"
 screenshots = "0.8"
