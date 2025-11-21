@@ -1,5 +1,5 @@
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { Loader2, CheckCircle2, XCircle, Pause, AlertCircle } from 'lucide-react';
+import { Brain, CheckCircle2, XCircle, Pause, AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export const AgentStatusBanner = () => {
@@ -10,31 +10,21 @@ export const AgentStatusBanner = () => {
   const getStatusIcon = () => {
     switch (agentStatus.status) {
       case 'running':
-        return <Loader2 className="h-4 w-4 animate-spin" />;
+        return <Brain className="h-4 w-4 text-zinc-400" />;
       case 'completed':
-        return <CheckCircle2 className="h-4 w-4" />;
+        return <CheckCircle2 className="h-4 w-4 text-zinc-400" />;
       case 'failed':
-        return <XCircle className="h-4 w-4" />;
+        return <XCircle className="h-4 w-4 text-zinc-400" />;
       case 'paused':
-        return <Pause className="h-4 w-4" />;
+        return <Pause className="h-4 w-4 text-zinc-400" />;
       default:
-        return <AlertCircle className="h-4 w-4" />;
+        return <AlertCircle className="h-4 w-4 text-zinc-400" />;
     }
   };
 
   const getStatusColor = () => {
-    switch (agentStatus.status) {
-      case 'running':
-        return 'bg-blue-500/10 border-blue-500/20 text-blue-600';
-      case 'completed':
-        return 'bg-green-500/10 border-green-500/20 text-green-600';
-      case 'failed':
-        return 'bg-red-500/10 border-red-500/20 text-red-600';
-      case 'paused':
-        return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-600';
-      default:
-        return 'bg-gray-500/10 border-gray-500/20 text-gray-600';
-    }
+    // Neutral zinc colors for all statuses
+    return 'bg-zinc-800/50 border-white/5 text-zinc-300';
   };
 
   return (
