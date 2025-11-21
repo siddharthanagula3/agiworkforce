@@ -1,22 +1,11 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  Activity,
-  CircleUserRound,
-  Globe2,
-  Layers,
-  Shield,
-  ShieldOff,
-  Square,
-  X,
-} from 'lucide-react';
+import { CircleUserRound, Layers, Shield, ShieldOff, Square } from 'lucide-react';
 
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
-import { ChatMessageList } from './ChatMessageList';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { AppLayout } from './AppLayout';
-import { SidecarPanel } from './SidecarPanel';
 import { AgentStatusBanner } from './AgentStatusBanner';
 import { ApprovalModal } from './ApprovalModal';
 import { Button } from '../ui/Button';
@@ -31,18 +20,18 @@ import { sha256 } from '../../lib/hash';
 import { isTauri } from '../../lib/tauri-mock';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { MediaLab } from './MediaLab';
+import { ChatStream } from './ChatStream';
+import { DynamicSidecar, type DynamicPanelType } from './DynamicSidecar';
 
 export const UnifiedAgenticChat: React.FC<{
   className?: string;
   layout?: 'default' | 'compact' | 'immersive';
-  sidecarPosition?: 'right' | 'left' | 'bottom';
   defaultSidecarOpen?: boolean;
   onSendMessage?: (content: string, options: SendOptions) => Promise<void>;
   onOpenSettings?: () => void;
 }> = ({
   className = '',
   layout = 'default',
-  sidecarPosition = 'right',
   defaultSidecarOpen = true,
   onSendMessage,
   onOpenSettings,
@@ -51,17 +40,14 @@ export const UnifiedAgenticChat: React.FC<{
   const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
   const addMessage = useUnifiedChatStore((state) => state.addMessage);
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
-  const deleteMessage = useUnifiedChatStore((state) => state.deleteMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
   const setConversationMode = useUnifiedChatStore((state) => state.setConversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
-  const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
   const conversations = useUnifiedChatStore((state) => state.conversations);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
-  const hasMessages = messages.length > 0;
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -72,9 +58,17 @@ export const UnifiedAgenticChat: React.FC<{
   const { overview, loadOverview, loadingOverview } = useCostStore();
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
-  const [isStopping, setIsStopping] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [mediaLabOpen, setMediaLabOpen] = useState(false);
+  const [sidecarState, setSidecarState] = useState<{
+    type: DynamicPanelType;
+    payload?: Record<string, unknown>;
+  }>({ type: null });
+  const [capabilities, setCapabilities] = useState({
+    computer: true,
+    internet: true,
+    safe: conversationMode === 'safe',
+  });
 
   const tokenStats = useMemo(() => {
     let input = 0;
@@ -127,6 +121,16 @@ export const UnifiedAgenticChat: React.FC<{
   }, [defaultSidecarOpen, setSidecarOpen]);
 
   useEffect(() => {
+    if (!sidecarState.type && sidecarOpen) {
+      setSidecarOpen(false);
+    }
+  }, [sidecarState.type, sidecarOpen, setSidecarOpen]);
+
+  useEffect(() => {
+    setCapabilities((prev) => ({ ...prev, safe: conversationMode === 'safe' }));
+  }, [conversationMode]);
+
+  useEffect(() => {
     if (!budget.enabled) return;
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return;
@@ -140,7 +144,6 @@ export const UnifiedAgenticChat: React.FC<{
     countedMessageIdsRef.current.add(messageId);
   }, [messages, budget.enabled, addTokenUsage]);
 
-  const toggleSidecar = () => setSidecarOpen(!sidecarOpen);
   const fallbackProvider = llmConfig.defaultProvider;
   const providerForMessage = selectedProvider ?? fallbackProvider ?? undefined;
   const fallbackModelForProvider =
@@ -301,30 +304,10 @@ export const UnifiedAgenticChat: React.FC<{
     }
   };
 
-  const handleMessageDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this message?')) {
-      deleteMessage(id);
-    }
-  };
-
-  const handleMessageEdit = (id: string, content: string) => updateMessage(id, { content });
-  const handleMessageRegenerate = (id: string) => console.log('Regenerate message:', id);
-
   const layoutClasses = {
     default: '',
     compact: '',
     immersive: '',
-  };
-
-  const handleStopAgent = async () => {
-    setIsStopping(true);
-    try {
-      await invoke('agent_stop_current_task');
-    } catch (error) {
-      console.error('[UnifiedAgenticChat] Failed to stop agent', error);
-    } finally {
-      setIsStopping(false);
-    }
   };
 
   const handleNewChat = useCallback(() => {
@@ -332,17 +315,35 @@ export const UnifiedAgenticChat: React.FC<{
     selectConversation(id);
   }, [createConversation, selectConversation]);
 
+  const openSidecar = (panel: DynamicPanelType, payload?: Record<string, unknown>) => {
+    setSidecarState({ type: panel, payload });
+    setSidecarOpen(true);
+  };
+
   const headerLeft = (
     <div className="flex items-center gap-3">
-      <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm">
-        <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Model</span>
-        <QuickModelSelector className="w-[220px]" />
+      <div className="flex flex-col">
+        <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Conversation</p>
+        <h2 className="text-lg font-semibold text-zinc-50">{conversationTitle}</h2>
+      </div>
+      <div className="hidden items-center gap-2 text-xs text-zinc-400 sm:flex">
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+          {providerForMessage || 'auto'}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+          ${sessionCost.toFixed(3)} · Month{' '}
+          {loadingOverview ? '…' : `$${(overview?.month_total ?? 0).toFixed(2)}`}
+        </span>
       </div>
     </div>
   );
 
   const headerRight = (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
+      <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2 py-1 sm:flex">
+        <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Model</span>
+        <QuickModelSelector className="w-[200px]" />
+      </div>
       <button
         type="button"
         onClick={() => setConversationMode(conversationMode === 'safe' ? 'full_control' : 'safe')}
@@ -363,120 +364,11 @@ export const UnifiedAgenticChat: React.FC<{
       <button
         type="button"
         onClick={onOpenSettings}
-        className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/90 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-zinc-700 hover:text-white"
+        className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/90 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-white/30 hover:text-white"
       >
         <CircleUserRound className="h-5 w-5" />
-        <span className="hidden sm:inline">You</span>
+        <span className="hidden sm:inline">Profile</span>
       </button>
-    </div>
-  );
-
-  const metrics = (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-      <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-        {providerForMessage || 'auto'} • {modelForMessage || 'default model'}
-      </span>
-      <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-        Input {tokenStats.input.toLocaleString()} / Output {tokenStats.output.toLocaleString()} tok
-      </span>
-      <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-        {`Session $${sessionCost.toFixed(3)} · Month `}
-        {loadingOverview ? '...' : `$${(overview?.month_total ?? 0).toFixed(2)}`}
-      </span>
-      {budget.enabled && (
-        <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-          Budget {budget.currentUsage.toLocaleString()} / {budget.limit.toLocaleString()} tok
-        </span>
-      )}
-      {agentStatus && (
-        <span className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-          <Activity className="h-3 w-3 text-emerald-400" />
-          <span className="capitalize">{agentStatus.status}</span>
-          {typeof agentStatus.progress === 'number' && (
-            <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-200">
-              {Math.round(agentStatus.progress)}%
-            </span>
-          )}
-        </span>
-      )}
-    </div>
-  );
-
-  const actionButtons = (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2 border-zinc-800 bg-zinc-900/70 text-zinc-100 hover:border-zinc-700 hover:bg-zinc-800"
-        onClick={() => {
-          void invoke('browser_start_session').catch((error) =>
-            console.error('[UnifiedAgenticChat] Failed to start browser session', error),
-          );
-        }}
-      >
-        <Globe2 className="h-4 w-4" />
-        Browser
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2 border-zinc-800 bg-zinc-900/70 text-zinc-100 hover:border-zinc-700 hover:bg-zinc-800"
-        onClick={() => setMediaLabOpen(true)}
-      >
-        Media
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2 border-zinc-800 bg-zinc-900/70 text-zinc-100 hover:border-zinc-700 hover:bg-zinc-800"
-        onClick={() => setWorkspaceOpen(true)}
-      >
-        <Layers className="h-4 w-4" />
-        Workspace
-      </Button>
-      {agentStatus && agentStatus.status === 'running' && (
-        <Button
-          variant="destructive"
-          size="sm"
-          className="gap-2"
-          disabled={isStopping}
-          onClick={() => void handleStopAgent()}
-        >
-          <Square className="h-4 w-4" />
-          {isStopping ? 'Stopping...' : 'Stop'}
-        </Button>
-      )}
-    </div>
-  );
-
-  const bodyContent = hasMessages ? (
-    <div className="flex h-full flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Conversation</p>
-          <h2 className="text-xl font-semibold text-zinc-50">{conversationTitle}</h2>
-          {metrics}
-        </div>
-        {actionButtons}
-      </div>
-      <AgentStatusBanner />
-      <div className="flex-1 min-h-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
-        <ChatMessageList
-          className="h-full"
-          onMessageEdit={handleMessageEdit}
-          onMessageDelete={handleMessageDelete}
-          onMessageRegenerate={handleMessageRegenerate}
-        />
-      </div>
-    </div>
-  ) : (
-    <div className="flex flex-col items-center gap-3 text-center">
-      <p className="text-xs uppercase tracking-[0.35em] text-zinc-500">Conversation</p>
-      <h1 className="text-3xl font-semibold text-zinc-50">Ready when you are.</h1>
-      <p className="max-w-2xl text-base text-zinc-400">
-        Start a conversation in your AGI workspace. The composer sits below and stays centered; your
-        model and safety live in the header.
-      </p>
     </div>
   );
 
@@ -487,15 +379,27 @@ export const UnifiedAgenticChat: React.FC<{
       enableAttachments
       enableScreenshot
       className="bg-transparent"
+      modelLabel={`${providerForMessage || 'Auto'} · ${modelForMessage || 'Default'}`}
+      capabilityState={capabilities}
+      onCapabilityChange={(key, value) => {
+        if (key === 'safe') {
+          setConversationMode(value ? 'safe' : 'full_control');
+        }
+        setCapabilities((prev) => ({ ...prev, [key]: value }));
+      }}
     />
   );
 
-  const sidecarContent = (
-    <SidecarPanel
-      isOpen={sidecarOpen}
-      onToggle={toggleSidecar}
-      position={sidecarPosition}
-      className="h-full"
+  const sidecarNode = (
+    <DynamicSidecar
+      panelType={sidecarState.type}
+      payload={sidecarState.payload}
+      allowedDirectory={sidecarState.payload?.allowedDirectory as string | undefined}
+      allowStatus={sidecarState.payload?.restricted ? 'restricted' : 'allowed'}
+      onClose={() => {
+        setSidecarOpen(false);
+        setSidecarState({ type: null });
+      }}
     />
   );
 
@@ -508,13 +412,13 @@ export const UnifiedAgenticChat: React.FC<{
         headerRight={headerRight}
         sidebarItems={sidebarItems}
         onNewChat={handleNewChat}
-        sidecar={sidecarContent}
+        sidecar={sidecarNode}
         sidecarOpen={sidecarOpen}
-        onToggleSidecar={toggleSidecar}
+        onToggleSidecar={() => setSidecarOpen(!sidecarOpen)}
         composer={composer}
-        isEmptyState={!hasMessages}
       >
-        {bodyContent}
+        <AgentStatusBanner />
+        <ChatStream onOpenSidecar={openSidecar} />
       </AppLayout>
 
       {workspaceOpen && (
@@ -535,7 +439,7 @@ export const UnifiedAgenticChat: React.FC<{
                   className="gap-2"
                   onClick={() => setWorkspaceOpen(false)}
                 >
-                  <X className="h-4 w-4" />
+                  <Square className="h-4 w-4" />
                   Close
                 </Button>
               </div>
