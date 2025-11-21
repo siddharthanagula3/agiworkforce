@@ -186,7 +186,6 @@ export function Sidebar({
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
-        {!collapsed && <div className="text-base font-semibold text-white">AGI Workforce</div>}
         {!collapsed && (
           <Button
             size="icon"
