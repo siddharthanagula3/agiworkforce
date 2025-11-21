@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs';
 import { ScrollArea } from '../components/ui/ScrollArea';
 import { DollarSign, Activity, FileText } from 'lucide-react';
-import { PricingHero } from '../components/pricing/PricingHero';
 import { PlansTab } from '../components/pricing/PlansTab';
 import { UsageTab } from '../components/pricing/UsageTab';
 import { InvoicesTab } from '../components/pricing/InvoicesTab';
@@ -35,13 +34,23 @@ export function PricingPage() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Hero Section */}
-      <PricingHero />
+      {/* Header */}
+      <div className="px-6 pt-8 pb-4">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+          Billing & Plans
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Manage your subscription and outcome-based usage.
+        </p>
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-border/60">
         <div className="px-6">
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as typeof activeTab)}
+          >
             <TabsList className="h-12 bg-transparent border-b-0">
               <TabsTrigger
                 value="plans"

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, GripVertical, PanelRightClose, PanelRightOpen, Plus } from 'lucide-react';
+import { ChevronLeft, GripVertical, Plus } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 
@@ -32,7 +32,7 @@ const MAX_SIDECAR_WIDTH = 960;
 export const AppLayout: React.FC<AppLayoutProps> = ({
   headerLeft,
   headerRight,
-  activeModel,
+  activeModel: _activeModel,
   sidebarItems,
   onNewChat,
   children,
@@ -40,7 +40,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   isEmptyState = false,
   sidecar,
   sidecarOpen,
-  onToggleSidecar,
+  onToggleSidecar: _onToggleSidecar,
 }) => {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [sidecarWidth, setSidecarWidth] = useState(() => {
@@ -75,11 +75,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const sidecarStyle = useMemo(() => ({ width: sidecarWidth }), [sidecarWidth]);
 
   return (
-    <div className="flex h-full w-full bg-zinc-950 font-sans text-zinc-100">
+    <div className="flex h-full w-full bg-zinc-950 font-sans text-zinc-100 antialiased">
       {/* Left Sidebar */}
       <aside
         className={cn(
-          'flex h-full flex-col border-r border-white/10 bg-zinc-900/90 backdrop-blur transition-all duration-200',
+          'flex h-full flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur transition-all duration-200',
         )}
         style={{ width: navWidth }}
       >
@@ -140,33 +140,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
       {/* Main + Sidecar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[60px] items-center justify-between border-b border-white/10 bg-zinc-950/90 px-6 backdrop-blur">
+        <header className="flex h-[48px] items-center justify-between border-b border-white/5 bg-transparent px-6">
           <div className="flex items-center gap-3">{headerLeft}</div>
-          <div className="flex items-center gap-3">
-            {activeModel ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-100">
-                ✦ {activeModel}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              onClick={onToggleSidecar}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-zinc-900/70 text-zinc-300 transition hover:border-white/30 hover:text-white"
-              aria-label={sidecarOpen ? 'Hide side panel' : 'Show side panel'}
-            >
-              {sidecarOpen ? (
-                <PanelRightClose className="h-5 w-5" />
-              ) : (
-                <PanelRightOpen className="h-5 w-5" />
-              )}
-            </button>
-            {headerRight}
-          </div>
+          <div className="flex items-center gap-3">{headerRight}</div>
         </header>
 
         <div className="flex min-h-0 flex-1">
           <main className="flex flex-1 min-h-0 overflow-hidden">
-            <div className="mx-auto flex h-full min-h-0 w-full max-w-[800px] flex-col px-6 py-8">
+            <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col px-6 py-8">
               {isEmptyState ? (
                 <div className="flex flex-1 items-center justify-center">
                   {composer ? <motion.div layoutId="composer">{composer}</motion.div> : null}
@@ -188,7 +169,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <AnimatePresence>
             {sidecarOpen && sidecar ? (
               <motion.aside
-                className="relative flex h-full shrink-0 flex-col border-l border-white/10 bg-zinc-900/90 backdrop-blur"
+                className="relative flex h-full shrink-0 flex-col border-l border-white/5 bg-zinc-900/50 backdrop-blur"
                 style={sidecarStyle}
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: sidecarWidth, opacity: 1 }}
