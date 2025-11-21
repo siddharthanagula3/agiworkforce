@@ -6,7 +6,6 @@ import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { AppLayout } from './AppLayout';
-import { AgentStatusBanner } from './AgentStatusBanner';
 import { ApprovalModal } from './ApprovalModal';
 import { Button } from '../ui/Button';
 import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
@@ -343,7 +342,6 @@ export const UnifiedAgenticChat: React.FC<{
         isEmptyState={!hasMessages}
         composer={composer}
       >
-        <AgentStatusBanner />
         <ChatStream onOpenSidecar={openSidecar} />
       </AppLayout>
 
