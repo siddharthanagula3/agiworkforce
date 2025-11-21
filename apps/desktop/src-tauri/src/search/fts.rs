@@ -188,7 +188,7 @@ impl FullTextSearch {
                     snippet(messages_fts, 2, '<mark>', '</mark>', '...', ?1) as snippet,
                     rank
              FROM messages_fts
-             WHERE messages_fts MATCH ?2"
+             WHERE messages_fts MATCH ?2",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
@@ -267,7 +267,7 @@ impl FullTextSearch {
                     snippet(conversations_fts, 1, '<mark>', '</mark>', '...', ?1) as snippet,
                     rank
              FROM conversations_fts
-             WHERE conversations_fts MATCH ?2"
+             WHERE conversations_fts MATCH ?2",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
@@ -397,7 +397,10 @@ impl FullTextSearch {
     pub fn optimize(&self) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
 
-        conn.execute("INSERT INTO messages_fts(messages_fts) VALUES('optimize')", [])?;
+        conn.execute(
+            "INSERT INTO messages_fts(messages_fts) VALUES('optimize')",
+            [],
+        )?;
         conn.execute(
             "INSERT INTO conversations_fts(conversations_fts) VALUES('optimize')",
             [],
@@ -413,12 +416,18 @@ impl FullTextSearch {
     pub fn rebuild_index(&self) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
 
-        conn.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')", [])?;
+        conn.execute(
+            "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')",
+            [],
+        )?;
         conn.execute(
             "INSERT INTO conversations_fts(conversations_fts) VALUES('rebuild')",
             [],
         )?;
-        conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES('rebuild')", [])?;
+        conn.execute(
+            "INSERT INTO knowledge_fts(knowledge_fts) VALUES('rebuild')",
+            [],
+        )?;
 
         Ok(())
     }

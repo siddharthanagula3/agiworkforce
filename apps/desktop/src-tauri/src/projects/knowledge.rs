@@ -314,7 +314,11 @@ impl KnowledgeBase {
         Ok(())
     }
 
-    pub fn get_project_memories(&self, project_id: &str, limit: usize) -> Result<Vec<ProjectMemory>> {
+    pub fn get_project_memories(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> Result<Vec<ProjectMemory>> {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
@@ -374,7 +378,10 @@ impl KnowledgeBase {
         let conn = Connection::open(&self.db_path)?;
 
         // Chunks will be deleted automatically due to CASCADE
-        conn.execute("DELETE FROM knowledge_documents WHERE id = ?1", [document_id])?;
+        conn.execute(
+            "DELETE FROM knowledge_documents WHERE id = ?1",
+            [document_id],
+        )?;
 
         Ok(())
     }
@@ -388,8 +395,14 @@ impl KnowledgeBase {
     pub fn clear_project_knowledge(&self, project_id: &str) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
 
-        conn.execute("DELETE FROM knowledge_documents WHERE project_id = ?1", [project_id])?;
-        conn.execute("DELETE FROM project_memory WHERE project_id = ?1", [project_id])?;
+        conn.execute(
+            "DELETE FROM knowledge_documents WHERE project_id = ?1",
+            [project_id],
+        )?;
+        conn.execute(
+            "DELETE FROM project_memory WHERE project_id = ?1",
+            [project_id],
+        )?;
 
         Ok(())
     }

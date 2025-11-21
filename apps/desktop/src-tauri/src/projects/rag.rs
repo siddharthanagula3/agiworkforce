@@ -40,10 +40,7 @@ impl RAGEngine {
         Self { chunking_config }
     }
 
-    pub fn chunk_document(
-        &self,
-        document: &KnowledgeDocument,
-    ) -> Result<Vec<KnowledgeChunk>> {
+    pub fn chunk_document(&self, document: &KnowledgeDocument) -> Result<Vec<KnowledgeChunk>> {
         let content = &document.content;
 
         let chunks = if self.chunking_config.split_on_sentences {
@@ -75,11 +72,7 @@ impl RAGEngine {
 
             if current_chunk.len() + sentence_trimmed.len() > self.chunking_config.chunk_size {
                 if current_chunk.len() >= self.chunking_config.min_chunk_size {
-                    chunks.push(self.create_chunk(
-                        &current_chunk,
-                        document,
-                        chunk_index,
-                    )?);
+                    chunks.push(self.create_chunk(&current_chunk, document, chunk_index)?);
                     chunk_index += 1;
 
                     // Keep overlap
@@ -150,10 +143,13 @@ impl RAGEngine {
             content: content.to_string(),
             chunk_index,
             embedding: None, // Will be generated separately
-            metadata: Some(serde_json::json!({
-                "source_file": document.file_name,
-                "file_type": document.file_type,
-            }).to_string()),
+            metadata: Some(
+                serde_json::json!({
+                    "source_file": document.file_name,
+                    "file_type": document.file_type,
+                })
+                .to_string(),
+            ),
             created_at: chrono::Utc::now().to_rfc3339(),
         })
     }
@@ -246,18 +242,16 @@ impl RAGEngine {
         // Combine FTS and semantic search results
         // Use a simple score fusion: 0.4 * FTS + 0.6 * Semantic
 
-        let semantic_results = self.find_similar_chunks(query_embedding, semantic_chunks, top_k * 2);
+        let semantic_results =
+            self.find_similar_chunks(query_embedding, semantic_chunks, top_k * 2);
 
         // Simple implementation: prioritize semantic results that also appear in FTS
         let mut final_results: Vec<RAGResult> = semantic_results
             .into_iter()
             .filter(|result| {
-                text_results.iter().any(|text| {
-                    result
-                        .content
-                        .to_lowercase()
-                        .contains(&text.to_lowercase())
-                })
+                text_results
+                    .iter()
+                    .any(|text| result.content.to_lowercase().contains(&text.to_lowercase()))
             })
             .take(top_k)
             .collect();
@@ -332,7 +326,8 @@ mod tests {
             file_name: "test.txt".to_string(),
             file_type: "txt".to_string(),
             size: 1000,
-            content: "This is sentence one. This is sentence two. This is sentence three.".to_string(),
+            content: "This is sentence one. This is sentence two. This is sentence three."
+                .to_string(),
             metadata: None,
             indexed_at: chrono::Utc::now().to_rfc3339(),
             created_at: chrono::Utc::now().to_rfc3339(),
