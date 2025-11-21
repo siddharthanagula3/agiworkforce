@@ -26,6 +26,7 @@ import {
   type Provider,
   createDefaultLLMConfig,
   createDefaultWindowPreferences,
+  type TaskCategory,
 } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
@@ -148,6 +149,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     setTemperature,
     setMaxTokens,
     setDefaultModel,
+    setTaskRouting,
     setTheme,
     setStartupPosition,
     setDockOnStartup,
@@ -330,11 +332,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="claude-3-5-sonnet-20241022">
-                            Claude 3.5 Sonnet
-                          </SelectItem>
-                          <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
-                          <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
+                          <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
+                          <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
+                          <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -349,6 +349,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="gemini-2.0-pro">Gemini 2.0 Pro</SelectItem>
                           <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                           <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                         </SelectContent>
@@ -365,11 +366,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="llama3.3">Llama 3.3</SelectItem>
+                          <SelectItem value="llama3.2">Llama 3.2</SelectItem>
+                          <SelectItem value="llama3.1">Llama 3.1</SelectItem>
                           <SelectItem value="llama3">Llama 3</SelectItem>
-                          <SelectItem value="qwen2.5">Qwen 2.5</SelectItem>
+                          <SelectItem value="llama3.2-coder">Llama 3.2 Coder</SelectItem>
                           <SelectItem value="deepseek-coder">DeepSeek Coder</SelectItem>
-                          <SelectItem value="codellama">Code Llama</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -384,9 +385,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="grok-4">Grok 4</SelectItem>
-                          <SelectItem value="grok-3">Grok 3</SelectItem>
                           <SelectItem value="grok-2">Grok 2</SelectItem>
+                          <SelectItem value="grok-1.5">Grok 1.5</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -401,8 +401,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="deepseek-chat">DeepSeek V3.2</SelectItem>
-                          <SelectItem value="deepseek-coder">DeepSeek Coder V2</SelectItem>
+                          <SelectItem value="deepseek-v3">DeepSeek V3</SelectItem>
+                          <SelectItem value="deepseek-coder">DeepSeek Coder</SelectItem>
                           <SelectItem value="deepseek-reasoner">DeepSeek Reasoner</SelectItem>
                         </SelectContent>
                       </Select>
@@ -418,9 +418,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="qwen-max">Qwen 2.5 Max</SelectItem>
-                          <SelectItem value="qwen-plus">Qwen 2.5 Plus</SelectItem>
-                          <SelectItem value="qwen-coder">Qwen 3 Coder</SelectItem>
+                          <SelectItem value="qwen-max">Qwen Max</SelectItem>
+                          <SelectItem value="qwen-plus">Qwen Plus</SelectItem>
+                          <SelectItem value="qwen-coder">Qwen Coder</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -435,11 +435,78 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="mistral-large-latest">Mistral Large 2</SelectItem>
+                          <SelectItem value="mistral-large-2">Mistral Large 2</SelectItem>
                           <SelectItem value="codestral-latest">Codestral</SelectItem>
                           <SelectItem value="mistral-small-latest">Mistral Small</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-muted/30 p-4">
+                    <div>
+                      <h4 className="text-sm font-semibold">Task-aware routing</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Choose defaults per task type. You can override per request in chat.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(
+                        [
+                          'search',
+                          'code',
+                          'docs',
+                          'chat',
+                          'vision',
+                          'image',
+                          'video',
+                        ] as TaskCategory[]
+                      ).map((category) => {
+                        const routing = resolvedLLMConfig.taskRouting?.[category];
+                        return (
+                          <div key={category} className="space-y-2">
+                            <Label className="capitalize">{category}</Label>
+                            <Select
+                              value={routing?.provider ?? resolvedLLMConfig.defaultProvider}
+                              onValueChange={(provider) =>
+                                setTaskRouting(
+                                  category,
+                                  provider as Provider,
+                                  routing?.model ??
+                                    resolvedLLMConfig.defaultModels[provider as Provider] ??
+                                    '',
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Provider" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="openai">OpenAI</SelectItem>
+                                <SelectItem value="anthropic">Anthropic</SelectItem>
+                                <SelectItem value="google">Google</SelectItem>
+                                <SelectItem value="ollama">Ollama</SelectItem>
+                                <SelectItem value="xai">xAI</SelectItem>
+                                <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                <SelectItem value="qwen">Qwen</SelectItem>
+                                <SelectItem value="mistral">Mistral</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              value={routing?.model ?? ''}
+                              placeholder="Model id (e.g., gpt-4.1, claude-3.5-sonnet)"
+                              onChange={(event) =>
+                                setTaskRouting(
+                                  category,
+                                  (routing?.provider ??
+                                    resolvedLLMConfig.defaultProvider) as Provider,
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 

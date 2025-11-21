@@ -1,6 +1,7 @@
 use crate::commands::AppDatabase;
 use crate::db::models::PermissionType;
 use crate::security::permissions::PermissionManager;
+use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -1187,7 +1188,7 @@ pub async fn file_read_binary(file_path: String) -> Result<String, String> {
 
     let data = fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-    Ok(base64::encode(&data))
+    Ok(general_purpose::STANDARD.encode(&data))
 }
 
 /// Write binary file from base64
@@ -1196,7 +1197,7 @@ pub async fn file_write_binary(file_path: String, base64_content: String) -> Res
     validate_path_security(&file_path)?;
 
     let data =
-        base64::decode(&base64_content).map_err(|e| format!("Failed to decode base64: {}", e))?;
+        general_purpose::STANDARD.decode(&base64_content).map_err(|e| format!("Failed to decode base64: {}", e))?;
 
     // Create parent directory if needed
     if let Some(parent) = Path::new(&file_path).parent() {

@@ -12,6 +12,11 @@ pub mod create_excel;
 pub mod create_pdf;
 pub mod create_word;
 
+// Editing modules
+pub mod edit_word;
+pub mod edit_excel;
+pub mod edit_pdf;
+
 // Re-exports (reading)
 pub use excel::ExcelHandler;
 pub use pdf::PdfHandler;
@@ -21,6 +26,11 @@ pub use word::WordHandler;
 pub use create_excel::{ExcelCell, ExcelDocumentConfig, ExcelDocumentCreator, ExcelSheet};
 pub use create_pdf::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
 pub use create_word::{WordContent, WordDocumentConfig, WordDocumentCreator};
+
+// Re-exports (editing)
+pub use edit_word::{WordEdit, WordEditor};
+pub use edit_excel::{ExcelEdit, ExcelEditor};
+pub use edit_pdf::{PdfEdit, PdfEditor};
 
 use serde::{Deserialize, Serialize};
 

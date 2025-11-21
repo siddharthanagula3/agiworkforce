@@ -46,6 +46,16 @@ interface TerminalState {
   removeOutputListener: (sessionId: string) => void;
   getSessionById: (sessionId: string) => TerminalSession | undefined;
   reset: () => void;
+
+  // AI assistant methods
+  aiSuggestCommand: (intent: string, shellType: ShellTypeLiteral, cwd?: string) => Promise<string>;
+  aiExplainError: (
+    errorOutput: string,
+    command?: string,
+    shellType?: ShellTypeLiteral,
+  ) => Promise<string>;
+  smartCommit: (sessionId: string) => Promise<string>;
+  aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
 }
 
 export const useTerminalStore = create<TerminalState>()(
@@ -132,6 +142,30 @@ export const useTerminalStore = create<TerminalState>()(
       },
 
       sendInput: async (sessionId: string, data: string) => {
+        const text = data.trim().toLowerCase();
+        const dangerousPatterns = [
+          'rm -rf /',
+          'rm -rf',
+          'del /f /s /q',
+          'format c:',
+          'shutdown',
+          'poweroff',
+          'mkfs',
+          'rd /s /q',
+          'chmod -r',
+          'chown -r',
+          ':(){:|:&};:',
+        ];
+        const hit = dangerousPatterns.find((p) => text.includes(p));
+        if (hit) {
+          const confirmed = window.confirm(
+            `This command looks destructive ("${hit}"). Are you sure you want to run it?`,
+          );
+          if (!confirmed) {
+            return;
+          }
+        }
+
         try {
           await invoke('terminal_send_input', { sessionId, data });
         } catch (error) {
@@ -242,6 +276,64 @@ export const useTerminalStore = create<TerminalState>()(
           availableShells: [],
           listeners: new Map(),
         });
+      },
+
+      // AI assistant methods
+      aiSuggestCommand: async (intent: string, shellType: ShellTypeLiteral, cwd?: string) => {
+        try {
+          const command = await invoke<string>('terminal_ai_suggest_command', {
+            intent,
+            shellType,
+            cwd,
+          });
+          return command;
+        } catch (error) {
+          console.error('Failed to get AI command suggestion:', error);
+          throw error;
+        }
+      },
+
+      aiExplainError: async (
+        errorOutput: string,
+        command?: string,
+        shellType?: ShellTypeLiteral,
+      ) => {
+        try {
+          const explanation = await invoke<string>('terminal_ai_explain_error', {
+            errorOutput,
+            command,
+            shellType: shellType || 'PowerShell',
+          });
+          return explanation;
+        } catch (error) {
+          console.error('Failed to get AI error explanation:', error);
+          throw error;
+        }
+      },
+
+      smartCommit: async (sessionId: string) => {
+        try {
+          const result = await invoke<string>('terminal_smart_commit', {
+            sessionId,
+          });
+          return result;
+        } catch (error) {
+          console.error('Smart commit failed:', error);
+          throw error;
+        }
+      },
+
+      aiSuggestImprovements: async (command: string, shellType: ShellTypeLiteral) => {
+        try {
+          const suggestions = await invoke<string | null>('terminal_ai_suggest_improvements', {
+            command,
+            shellType,
+          });
+          return suggestions;
+        } catch (error) {
+          console.error('Failed to get AI command improvements:', error);
+          throw error;
+        }
       },
     }),
     {

@@ -65,8 +65,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
         syncingRef.current = false;
       }, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflowNodes]);
+  }, [workflowNodes, setLocalNodes]);
 
   React.useEffect(() => {
     if (!syncingRef.current) {
@@ -76,8 +75,7 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
         syncingRef.current = false;
       }, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflowEdges]);
+  }, [workflowEdges, setLocalEdges]);
 
   // Update store when nodes change (with debouncing to prevent rapid updates)
   const nodesChanged = React.useRef(false);
@@ -89,7 +87,6 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
       }, 100);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     return undefined;
   }, [nodes, setNodes]);
 
@@ -103,7 +100,6 @@ function WorkflowCanvasInner({ className }: WorkflowCanvasProps) {
       }, 100);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     return undefined;
   }, [edges, setEdges]);
 

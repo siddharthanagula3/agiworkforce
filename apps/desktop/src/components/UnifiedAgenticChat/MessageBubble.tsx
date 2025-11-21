@@ -47,16 +47,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     [isUser, isSystem],
   );
 
-  const bubbleBg = useMemo(
-    () =>
-      isUser
-        ? 'bg-blue-50 dark:bg-blue-900/20'
-        : isSystem
-          ? 'bg-gray-50 dark:bg-gray-800/50'
-          : 'bg-white dark:bg-gray-800',
-    [isUser, isSystem],
-  );
-
   const formattedTime = useMemo(() => {
     const date = new Date(message.timestamp);
     return date.toLocaleTimeString('en-US', {
@@ -112,9 +102,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         </div>
 
         {/* Message Content */}
-        <div
-          className={`rounded-lg px-4 py-3 ${bubbleBg} border border-gray-200 dark:border-gray-700`}
-        >
+        <div className="rounded-xl border border-white/10 bg-[#0b0c14] px-4 py-3 shadow-sm">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            {message.metadata?.model && <span>Model: {message.metadata.model}</span>}
+            {message.metadata?.provider && <span>Provider: {message.metadata.provider}</span>}
+            {message.metadata?.tokenCount && <span>{message.metadata.tokenCount} tokens</span>}
+            {message.metadata?.cost && <span>${message.metadata.cost.toFixed(4)}</span>}
+          </div>
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
