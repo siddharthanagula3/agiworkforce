@@ -21,7 +21,7 @@ const TitleBar = ({
   actions,
   onOpenCommandPalette,
   commandShortcutHint,
-  sidebarCollapsed,
+  sidebarCollapsed: _sidebarCollapsed,
   onToggleSidebar,
 }: TitleBarProps) => {
   return (
@@ -53,9 +53,6 @@ const TitleBar = ({
         </button>
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
           <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
-          <p className="text-xs text-muted-foreground leading-none mt-0.5 truncate">
-            {sidebarCollapsed ? 'Sidebar hidden' : state.focused ? 'Ready' : 'Inactive'}
-          </p>
         </div>
       </div>
 

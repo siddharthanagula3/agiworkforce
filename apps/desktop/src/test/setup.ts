@@ -106,7 +106,6 @@ vi.mock('@xterm/xterm', () => ({
 }));
 
 // Mock canvas context to avoid jsdom "not implemented" errors (xterm webgl, charts)
-// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
 (HTMLCanvasElement.prototype as any).getContext = vi.fn(() => ({
   fillRect: vi.fn(),
   clearRect: vi.fn(),
