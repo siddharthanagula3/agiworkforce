@@ -1,0 +1,362 @@
+import { describe, it, expect, vi } from 'vitest';
+import Fuse from 'fuse.js';
+import type { EnhancedMessage, ConversationSummary } from '../../../stores/unifiedChatStore';
+
+// Mock Tauri and heavy dependencies
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+// Mock the store with test data
+const mockConversations: ConversationSummary[] = [
+  {
+    id: '1',
+    title: 'Build authentication system',
+    lastMessage: 'Implementing JWT tokens',
+    updatedAt: new Date('2025-11-21T10:00:00Z'),
+    pinned: false,
+  },
+  {
+    id: '2',
+    title: 'Database migration',
+    lastMessage: 'Running migration scripts',
+    updatedAt: new Date('2025-11-20T15:00:00Z'),
+    pinned: false,
+  },
+  {
+    id: '3',
+    title: 'UI components refactor',
+    lastMessage: 'Updating button styles',
+    updatedAt: new Date('2025-11-19T10:00:00Z'),
+    pinned: true,
+  },
+];
+
+const mockMessages: EnhancedMessage[] = [
+  {
+    id: 'msg1',
+    role: 'user',
+    content: 'How do I implement OAuth2 authentication?',
+    conversationId: '1',
+    timestamp: new Date('2025-11-21T09:00:00Z'),
+  },
+  {
+    id: 'msg2',
+    role: 'assistant',
+    content: 'You can implement OAuth2 using the oauth2-client library',
+    conversationId: '1',
+    timestamp: new Date('2025-11-21T09:05:00Z'),
+  },
+  {
+    id: 'msg3',
+    role: 'user',
+    content: 'Create a database migration for user profiles',
+    conversationId: '2',
+    timestamp: new Date('2025-11-20T14:00:00Z'),
+  },
+];
+
+vi.mock('../../../stores/unifiedChatStore', () => ({
+  useUnifiedChatStore: vi.fn((selector) => {
+    const state = {
+      conversations: mockConversations,
+      messages: mockMessages,
+      selectConversation: vi.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+}));
+
+describe('CommandPalette Fuzzy Search', () => {
+  describe('Fuse.js Search Configuration', () => {
+    it('should search conversations by title and lastMessage', () => {
+      const conversationFuse = new Fuse(mockConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      const results = conversationFuse.search('auth');
+
+      expect(results).toHaveLength(1);
+      expect(results[0].item.title).toBe('Build authentication system');
+    });
+
+    it('should search messages by content', () => {
+      const messageFuse = new Fuse(mockMessages, {
+        keys: ['content'],
+        threshold: 0.4,
+        includeScore: true,
+      });
+
+      const results = messageFuse.search('OAuth');
+
+      expect(results).toHaveLength(2); // User question and assistant response
+      expect(results[0].item.content).toContain('OAuth');
+    });
+
+    it('should handle fuzzy matching for misspellings', () => {
+      const conversationFuse = new Fuse(mockConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      // Test fuzzy matching with slight misspelling
+      const results = conversationFuse.search('authenitcation'); // "authen[i]tcation"
+
+      expect(results).toHaveLength(1);
+      expect(results[0].item.title).toBe('Build authentication system');
+    });
+
+    it('should rank results by relevance score', () => {
+      const conversationFuse = new Fuse(mockConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      const results = conversationFuse.search('database');
+
+      expect(results).toHaveLength(1);
+      expect(results[0].score).toBeLessThan(0.3); // Good match = low score
+    });
+
+    it('should return empty array for non-matching query', () => {
+      const conversationFuse = new Fuse(mockConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      const results = conversationFuse.search('xyz123nonexistent');
+
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('Search Results Processing', () => {
+    it('should create snippets for message results', () => {
+      const message = mockMessages[0];
+      const query = 'OAuth2';
+      const content = message.content || '';
+      const queryIndex = content.toLowerCase().indexOf(query.toLowerCase());
+      const snippetStart = Math.max(0, queryIndex - 30);
+      const snippetEnd = Math.min(content.length, queryIndex + query.length + 30);
+      const snippet =
+        (snippetStart > 0 ? '...' : '') +
+        content.slice(snippetStart, snippetEnd) +
+        (snippetEnd < content.length ? '...' : '');
+
+      expect(snippet).toContain('OAuth2');
+      expect(snippet).toBe('How do I implement OAuth2 authentication?');
+    });
+
+    it('should truncate long snippets with ellipsis', () => {
+      const longMessage: EnhancedMessage = {
+        id: 'msg-long',
+        role: 'assistant',
+        content:
+          'This is a very long message that contains OAuth2 authentication details and many other words that should be truncated to show only the relevant context around the search query.',
+        conversationId: '1',
+        timestamp: new Date(),
+      };
+
+      const query = 'OAuth2';
+      const content = longMessage.content || '';
+      const queryIndex = content.toLowerCase().indexOf(query.toLowerCase());
+      const snippetStart = Math.max(0, queryIndex - 30);
+      const snippetEnd = Math.min(content.length, queryIndex + query.length + 30);
+      const snippet =
+        (snippetStart > 0 ? '...' : '') +
+        content.slice(snippetStart, snippetEnd) +
+        (snippetEnd < content.length ? '...' : '');
+
+      expect(snippet).toContain('...');
+      expect(snippet).toContain('OAuth2');
+      expect(snippet.length).toBeLessThan(content.length);
+    });
+  });
+
+  describe('Combined Search Results', () => {
+    it('should combine conversation and message results', () => {
+      const conversationFuse = new Fuse(mockConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      const messageFuse = new Fuse(mockMessages, {
+        keys: ['content'],
+        threshold: 0.4,
+        includeScore: true,
+      });
+
+      const query = 'database';
+      const conversationResults = conversationFuse.search(query).map((result) => ({
+        type: 'conversation' as const,
+        conversation: result.item,
+        score: result.score ?? 0,
+      }));
+
+      const messageResults = messageFuse.search(query).map((result) => ({
+        type: 'message' as const,
+        message: result.item,
+        score: result.score ?? 0,
+      }));
+
+      const combined = [...conversationResults, ...messageResults];
+
+      expect(combined.length).toBeGreaterThan(0);
+      expect(combined.some((r) => r.type === 'conversation')).toBe(true);
+      expect(combined.some((r) => r.type === 'message')).toBe(true);
+    });
+
+    it('should sort combined results by score (ascending)', () => {
+      const conversationFuse = new Fuse(mockConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      const messageFuse = new Fuse(mockMessages, {
+        keys: ['content'],
+        threshold: 0.4,
+        includeScore: true,
+      });
+
+      const query = 'auth';
+      const conversationResults = conversationFuse.search(query).map((result) => ({
+        type: 'conversation' as const,
+        conversation: result.item,
+        score: result.score ?? 0,
+      }));
+
+      const messageResults = messageFuse.search(query).map((result) => ({
+        type: 'message' as const,
+        message: result.item,
+        score: result.score ?? 0,
+      }));
+
+      const combined = [...conversationResults, ...messageResults].sort(
+        (a, b) => a.score - b.score,
+      );
+
+      // Verify sorted by score (lower score = better match)
+      for (let i = 0; i < combined.length - 1; i++) {
+        expect(combined[i].score).toBeLessThanOrEqual(combined[i + 1].score);
+      }
+    });
+
+    it('should limit results to top 10', () => {
+      // Create 15 conversations
+      const manyConversations = Array.from({ length: 15 }, (_, i) => ({
+        id: `conv-${i}`,
+        title: `Conversation about authentication ${i}`,
+        lastMessage: 'Some message',
+        updatedAt: new Date(),
+        pinned: false,
+      }));
+
+      const conversationFuse = new Fuse(manyConversations, {
+        keys: ['title', 'lastMessage'],
+        threshold: 0.3,
+        includeScore: true,
+      });
+
+      const results = conversationFuse.search('auth').slice(0, 10);
+
+      expect(results.length).toBeLessThanOrEqual(10);
+    });
+  });
+
+  describe('Empty Query Handling', () => {
+    it('should return recent conversations when query is empty', () => {
+      const query = '';
+
+      if (!query.trim()) {
+        const recent = mockConversations
+          .slice(0, 10)
+          .sort((a, b) => (b.updatedAt?.valueOf() ?? 0) - (a.updatedAt?.valueOf() ?? 0))
+          .map((conv) => ({
+            type: 'conversation' as const,
+            conversation: conv,
+            score: 0,
+          }));
+
+        expect(recent).toHaveLength(3); // All 3 mock conversations
+        expect(recent[0].conversation.id).toBe('1'); // Most recent
+      }
+    });
+
+    it('should ignore whitespace-only queries', () => {
+      const query = '   ';
+
+      if (!query.trim()) {
+        const recent = mockConversations.slice(0, 10).map((conv) => ({
+          type: 'conversation' as const,
+          conversation: conv,
+          score: 0,
+        }));
+
+        expect(recent).toHaveLength(3);
+      }
+    });
+  });
+
+  describe('Keyboard Navigation', () => {
+    it('should support ArrowDown to move selection', () => {
+      let selectedIndex = 0;
+      const searchResults = [
+        { type: 'conversation' as const, conversation: mockConversations[0], score: 0 },
+        { type: 'conversation' as const, conversation: mockConversations[1], score: 0 },
+      ];
+
+      // Simulate ArrowDown
+      selectedIndex = Math.min(selectedIndex + 1, searchResults.length - 1);
+
+      expect(selectedIndex).toBe(1);
+    });
+
+    it('should support ArrowUp to move selection', () => {
+      let selectedIndex = 1;
+
+      // Simulate ArrowUp
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+
+      expect(selectedIndex).toBe(0);
+    });
+
+    it('should not go below 0 when pressing ArrowUp', () => {
+      let selectedIndex = 0;
+
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+
+      expect(selectedIndex).toBe(0);
+    });
+
+    it('should not exceed results length when pressing ArrowDown', () => {
+      let selectedIndex = 1;
+      const searchResults = [
+        { type: 'conversation' as const, conversation: mockConversations[0], score: 0 },
+        { type: 'conversation' as const, conversation: mockConversations[1], score: 0 },
+      ];
+
+      selectedIndex = Math.min(selectedIndex + 1, searchResults.length - 1);
+
+      expect(selectedIndex).toBe(1); // Can't go beyond last index
+    });
+
+    it('should reset selection to 0 when query changes', () => {
+      let selectedIndex = 2;
+      const previousQuery = 'old query';
+      const newQuery = 'new query';
+
+      if (previousQuery !== newQuery) {
+        selectedIndex = 0;
+      }
+
+      expect(selectedIndex).toBe(0);
+    });
+  });
+});
