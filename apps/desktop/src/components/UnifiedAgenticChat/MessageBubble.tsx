@@ -15,10 +15,12 @@ import {
   Globe2,
   FileText,
   Image,
-  Brain,
 } from 'lucide-react';
-import { EnhancedMessage } from '../../stores/unifiedChatStore';
+import { EnhancedMessage, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { CodeBlock } from './Visualizations/CodeBlock';
+import { ReasoningAccordion } from './ReasoningAccordion';
+import { parseCitations } from './CitationBadge';
+import { StatusTrail } from './StatusTrail';
 import { emit } from '@tauri-apps/api/event';
 import { isTauri } from '../../lib/tauri-mock';
 import 'katex/dist/katex.min.css';
@@ -47,6 +49,20 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onToggleSidecar,
 }) => {
   const [showActions, setShowActions] = React.useState(false);
+  const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
+  const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
+  const sidecar = useUnifiedChatStore((state) => state.sidecar);
+
+  // Auto-trigger sidecar for relevant content
+  React.useEffect(() => {
+    if (!sidecar.autoTrigger || sidecar.isOpen) return;
+
+    const suggestedMode = getSuggestedSidecarMode(message);
+    if (suggestedMode) {
+      // Auto-open sidecar with suggested mode
+      openSidecar(suggestedMode, message.id);
+    }
+  }, [message, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
 
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -245,15 +261,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   };
 
   if (thinkingMatch) {
-    const firstLine = thinkingMatch
-      .split('\n')
-      .find((line) => line.trim().length > 0)
-      ?.trim();
     const summary =
-      (message.metadata as any)?.thinkingSummary ||
-      (message.metadata as any)?.summary ||
-      firstLine ||
-      'Planning task...';
+      (message.metadata as any)?.thinkingSummary || (message.metadata as any)?.summary;
+    const duration = (message.metadata as any)?.duration;
+    const steps = (message.metadata as any)?.steps;
 
     return (
       <div
@@ -266,16 +277,16 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             AI
           </div>
         )}
-        <div className="flex-1">
-          <details className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
-            <summary className="flex cursor-pointer items-center gap-2 px-4 py-2 text-xs text-zinc-400">
-              <Brain className="h-3 w-3 text-zinc-400" />
-              <span className="font-semibold text-zinc-200">{summary}</span>
-            </summary>
-            <pre className="max-h-96 overflow-auto bg-zinc-900 px-4 py-3 text-sm leading-relaxed text-zinc-200">
-              {thinkingMatch}
-            </pre>
-          </details>
+        <div className="flex-1 relative">
+          {/* Status Trail */}
+          <StatusTrail messageId={message.id} />
+
+          {/* Reasoning Accordion */}
+          <ReasoningAccordion
+            content={thinkingMatch}
+            summary={summary}
+            metadata={{ duration, steps }}
+          />
         </div>
       </div>
     );
@@ -316,7 +327,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 relative">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             {isUser ? 'You' : isSystem ? 'System' : 'Assistant'}
@@ -329,6 +340,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             </span>
           )}
         </div>
+
+        {/* Status Trail for streaming messages */}
+        {message.metadata?.streaming && <StatusTrail messageId={message.id} />}
 
         <div className="rounded-xl border border-white/10 bg-[#0b0c14] px-4 py-3 shadow-sm">
           <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -379,6 +393,20 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                       {children}
                     </a>
                   );
+                },
+                // Parse citations in text nodes
+                p({ children }) {
+                  if (typeof children === 'string') {
+                    return <p>{parseCitations(children)}</p>;
+                  }
+                  return <p>{children}</p>;
+                },
+                // Also parse citations in list items
+                li({ children }) {
+                  if (typeof children === 'string') {
+                    return <li>{parseCitations(children)}</li>;
+                  }
+                  return <li>{children}</li>;
                 },
               }}
             >

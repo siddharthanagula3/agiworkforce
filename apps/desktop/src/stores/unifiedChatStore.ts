@@ -257,6 +257,48 @@ export type SidecarSection =
 
 export type ConversationMode = 'safe' | 'full_control';
 
+// Focus Modes (Perplexity-style)
+export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
+
+// Sidecar Modes (Polymorphic panel)
+export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff';
+
+// Enhanced Sidecar State
+export interface SidecarState {
+  isOpen: boolean;
+  activeMode: SidecarMode;
+  contextId: string | null; // File path, URL, or Tool Call ID
+  autoTrigger: boolean;
+}
+
+// Action Trail Entry (for live status updates)
+export interface ActionTrailEntry {
+  id: string;
+  type: 'thinking' | 'searching' | 'coding' | 'running' | 'completed' | 'error';
+  message: string;
+  timestamp: Date;
+  fadeAfter?: number; // milliseconds before fading out
+  metadata?: Record<string, unknown>;
+}
+
+// Token Usage Tracking
+export interface TokenUsage {
+  current: number;
+  max: number;
+  percentage: number;
+}
+
+// Citation for inline references
+export interface Citation {
+  id: string;
+  index: number;
+  url: string;
+  title?: string;
+  snippet?: string;
+  favicon?: string;
+  timestamp: Date;
+}
+
 // ============================================================================
 // ID Translation Layer (Backend DB IDs ↔ Frontend UUIDs)
 // ============================================================================
@@ -355,6 +397,13 @@ export interface UnifiedChatState {
   missionControlOpen: boolean;
   selectedMessage: string | null;
 
+  // Focus Modes & Workspace
+  focusMode: FocusMode;
+  sidecar: SidecarState;
+  actionTrail: ActionTrailEntry[];
+  tokenUsage: TokenUsage;
+  citations: Citation[];
+
   // Filters
   filters: {
     fileOperations: FileOperationType[];
@@ -440,6 +489,24 @@ export interface UnifiedChatState {
   setTerminalStatusFilter: (statuses: ('success' | 'error')[]) => void;
   setToolNameFilter: (names: string[]) => void;
 
+  // Actions - Focus Modes & Workspace
+  setFocusMode: (mode: FocusMode) => void;
+  setSidecar: (state: Partial<SidecarState>) => void;
+  openSidecar: (mode: SidecarMode, contextId?: string) => void;
+  closeSidecar: () => void;
+  addActionTrailEntry: (entry: Omit<ActionTrailEntry, 'id' | 'timestamp'>) => void;
+  removeActionTrailEntry: (id: string) => void;
+  clearActionTrail: () => void;
+  updateTokenUsage: (usage: Partial<TokenUsage>) => void;
+  addCitation: (citation: Omit<Citation, 'id' | 'timestamp'>) => void;
+  getCitationByIndex: (index: number) => Citation | undefined;
+  clearCitations: () => void;
+
+  // Computed Selectors
+  getTokenPercentage: () => number;
+  getActiveActionTrail: (messageId?: string) => ActionTrailEntry[];
+  getSuggestedSidecarMode: (message: EnhancedMessage) => SidecarMode | null;
+
   // Actions - Utilities
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
@@ -486,6 +553,22 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       isAutonomousMode: false,
       missionControlOpen: false,
       selectedMessage: null,
+
+      // Focus Modes & Workspace (new)
+      focusMode: null,
+      sidecar: {
+        isOpen: false,
+        activeMode: 'code',
+        contextId: null,
+        autoTrigger: true,
+      },
+      actionTrail: [],
+      tokenUsage: {
+        current: 0,
+        max: 128000, // Default to 128k context
+        percentage: 0,
+      },
+      citations: [],
 
       filters: {
         fileOperations: [],
@@ -998,6 +1081,152 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.filters.toolNames = names;
         }),
 
+      // Focus Modes & Workspace Actions
+      setFocusMode: (mode) =>
+        set((state) => {
+          state.focusMode = mode;
+        }),
+
+      setSidecar: (updates) =>
+        set((state) => {
+          state.sidecar = { ...state.sidecar, ...updates };
+        }),
+
+      openSidecar: (mode, contextId) =>
+        set((state) => {
+          state.sidecar = {
+            isOpen: true,
+            activeMode: mode,
+            contextId: contextId ?? null,
+            autoTrigger: state.sidecar.autoTrigger,
+          };
+          // Also update legacy sidecarOpen for backward compatibility
+          state.sidecarOpen = true;
+        }),
+
+      closeSidecar: () =>
+        set((state) => {
+          state.sidecar.isOpen = false;
+          state.sidecarOpen = false;
+        }),
+
+      addActionTrailEntry: (entry) =>
+        set((state) => {
+          const newEntry: ActionTrailEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            ...entry,
+          };
+          state.actionTrail.push(newEntry);
+
+          // Auto-remove after fadeAfter duration if specified
+          if (entry.fadeAfter) {
+            setTimeout(() => {
+              const current = get();
+              current.removeActionTrailEntry(newEntry.id);
+            }, entry.fadeAfter);
+          }
+        }),
+
+      removeActionTrailEntry: (id) =>
+        set((state) => {
+          state.actionTrail = state.actionTrail.filter((entry) => entry.id !== id);
+        }),
+
+      clearActionTrail: () =>
+        set((state) => {
+          state.actionTrail = [];
+        }),
+
+      updateTokenUsage: (usage) =>
+        set((state) => {
+          state.tokenUsage = { ...state.tokenUsage, ...usage };
+          // Recalculate percentage
+          if (state.tokenUsage.max > 0) {
+            state.tokenUsage.percentage = (state.tokenUsage.current / state.tokenUsage.max) * 100;
+          }
+        }),
+
+      addCitation: (citation) =>
+        set((state) => {
+          const newCitation: Citation = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            ...citation,
+          };
+          state.citations.push(newCitation);
+        }),
+
+      getCitationByIndex: (index) => {
+        const state = get();
+        return state.citations.find((c) => c.index === index);
+      },
+
+      clearCitations: () =>
+        set((state) => {
+          state.citations = [];
+        }),
+
+      // Computed Selectors
+      getTokenPercentage: () => {
+        const state = get();
+        return state.tokenUsage.percentage;
+      },
+
+      getActiveActionTrail: (messageId) => {
+        const state = get();
+        if (!messageId) {
+          return state.actionTrail;
+        }
+        // Filter action trail by message ID if metadata includes it
+        return state.actionTrail.filter((entry) => entry.metadata?.messageId === messageId);
+      },
+
+      getSuggestedSidecarMode: (message) => {
+        // Analyze message content to suggest appropriate sidecar mode
+        const content = message.content.toLowerCase();
+
+        // Check for code blocks (>15 lines)
+        const codeBlockMatches = message.content.match(/```[\s\S]+?```/g);
+        if (
+          codeBlockMatches &&
+          codeBlockMatches.some((block) => {
+            const lines = block.split('\n').length;
+            return lines > 15;
+          })
+        ) {
+          return 'code';
+        }
+
+        // Check for browser/URL operations
+        if (
+          content.includes('http://') ||
+          content.includes('https://') ||
+          message.operations?.some(
+            (op) => op.type === 'tool' && op.data?.toolName?.includes('browser'),
+          )
+        ) {
+          return 'browser';
+        }
+
+        // Check for terminal commands
+        if (message.operations?.some((op) => op.type === 'terminal')) {
+          return 'terminal';
+        }
+
+        // Check for file diffs
+        if (content.includes('diff') || (content.includes('---') && content.includes('+++'))) {
+          return 'diff';
+        }
+
+        // Default to preview for other content
+        if (codeBlockMatches || content.includes('```')) {
+          return 'preview';
+        }
+
+        return null;
+      },
+
       // Utility Actions
       clearHistory: () =>
         set((state) => {
@@ -1021,6 +1250,10 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.plan = null;
           state.isStreaming = false;
           state.currentStreamingMessageId = null;
+          // Clear workspace state
+          state.actionTrail = [];
+          state.citations = [];
+          state.focusMode = null;
         }),
 
       exportConversation: async () => {
@@ -1046,6 +1279,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         sidecarSection: state.sidecarSection,
         sidecarWidth: state.sidecarWidth,
         filters: state.filters,
+        // Workspace state
+        focusMode: state.focusMode,
+        sidecar: state.sidecar,
       }),
     },
   ),
