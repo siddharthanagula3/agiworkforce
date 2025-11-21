@@ -14,6 +14,7 @@ export interface MessageMetadata {
   cost?: number;
   duration?: number;
   streaming?: boolean;
+  type?: 'reasoning' | 'response';
 }
 
 export interface Attachment {
@@ -248,6 +249,8 @@ export type SidecarSection =
   | 'approvals'
   | 'files'
   | 'terminal'
+  | 'browser'
+  | 'media'
   | 'tools'
   | 'tasks'
   | 'agents';
@@ -300,6 +303,8 @@ export interface UnifiedChatState {
   sidecarOpen: boolean;
   sidecarSection: SidecarSection;
   sidecarWidth: number;
+  sidecarUserSelected: boolean;
+  isAutonomousMode: boolean;
   missionControlOpen: boolean;
   selectedMessage: string | null;
 
@@ -377,9 +382,11 @@ export interface UnifiedChatState {
   // Actions - UI State
   setSidecarOpen: (open: boolean) => void;
   setSidecarSection: (section: SidecarSection) => void;
+  setSidecarSectionFromEvent: (event: string) => void;
   setSidecarWidth: (width: number) => void;
   setMissionControlOpen: (open: boolean) => void;
   setSelectedMessage: (id: string | null) => void;
+  setAutonomousMode: (value: boolean) => void;
 
   // Actions - Filters
   setFileOperationFilter: (types: FileOperationType[]) => void;
@@ -428,6 +435,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       sidecarOpen: false,
       sidecarSection: 'operations',
       sidecarWidth: 400,
+      sidecarUserSelected: false,
+      isAutonomousMode: false,
       missionControlOpen: false,
       selectedMessage: null,
 
@@ -866,11 +875,44 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       setSidecarOpen: (open) =>
         set((state) => {
           state.sidecarOpen = open;
+          if (!open) {
+            state.sidecarUserSelected = false;
+          }
         }),
 
       setSidecarSection: (section) =>
         set((state) => {
           state.sidecarSection = section;
+          state.sidecarUserSelected = true;
+        }),
+
+      setSidecarSectionFromEvent: (eventType) =>
+        set((state) => {
+          if (state.sidecarUserSelected) return;
+          const lowered = eventType.toLowerCase();
+          let target: SidecarSection | null = null;
+          if (lowered.includes('terminal') || lowered.includes('execute')) {
+            target = 'terminal';
+          } else if (
+            lowered.includes('read_file') ||
+            lowered.includes('edit_file') ||
+            lowered.includes('file')
+          ) {
+            target = 'files';
+          } else if (lowered.includes('browser')) {
+            target = 'browser';
+          } else if (
+            lowered.includes('generate_image') ||
+            lowered.includes('generate_video') ||
+            lowered.includes('media')
+          ) {
+            target = 'media';
+          }
+          if (!target) return;
+          if (!state.sidecarOpen) {
+            state.sidecarOpen = true;
+          }
+          state.sidecarSection = target;
         }),
 
       setSidecarWidth: (width) =>
@@ -886,6 +928,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       setSelectedMessage: (id) =>
         set((state) => {
           state.selectedMessage = id;
+        }),
+
+      setAutonomousMode: (value) =>
+        set((state) => {
+          state.isAutonomousMode = value;
         }),
 
       // Filter Actions

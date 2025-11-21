@@ -1,12 +1,21 @@
 import React, { useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, Braces, MousePointerClick, PanelTopOpen, Terminal, Wand2 } from 'lucide-react';
+import {
+  Activity,
+  Braces,
+  FileText,
+  MousePointerClick,
+  PanelTopOpen,
+  Terminal,
+  Wand2,
+  Image as ImageIcon,
+} from 'lucide-react';
 
 import { Button } from '../ui/Button';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { MessageBubble } from './MessageBubble';
 
-export type SidecarPanelType = 'browser' | 'terminal' | 'code' | 'video';
+export type SidecarPanelType = 'browser' | 'terminal' | 'code' | 'video' | 'media' | 'files';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarPanelType, payload?: Record<string, unknown>) => void;
@@ -45,6 +54,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
           {panel === 'browser' && <MousePointerClick className="h-4 w-4 text-sky-300" />}
           {panel === 'code' && <Braces className="h-4 w-4 text-purple-300" />}
           {panel === 'video' && <PanelTopOpen className="h-4 w-4 text-orange-300" />}
+          {panel === 'media' && <ImageIcon className="h-4 w-4 text-indigo-300" />}
+          {panel === 'files' && <FileText className="h-4 w-4 text-slate-300" />}
           <span className="font-medium">{label}</span>
         </div>
         <Button size="sm" variant="outline" onClick={() => onOpenSidecar?.(panel, payload)}>
@@ -82,12 +93,16 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
               ? 'browser'
               : meta.tool === 'code'
                 ? 'code'
-                : undefined);
+                : meta.tool === 'media'
+                  ? 'media'
+                  : meta.tool === 'files'
+                    ? 'files'
+                    : undefined);
 
         if (meta.phase === 'thinking' || meta.thinking) {
           return renderThought(
             message.id,
-            meta.thinking?.title || 'Planning task…',
+            meta.thinking?.title || 'Planning task...',
             meta.thinking?.details || message.content || 'The agent is reasoning about this task.',
           );
         }
@@ -119,6 +134,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
             showAvatar
             showTimestamp
             enableActions
+            onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
           />
         );
       })}

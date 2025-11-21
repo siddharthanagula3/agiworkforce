@@ -16,6 +16,7 @@ import { cn } from '../../lib/utils';
 import type { CaptureResult } from '../../types/capture';
 import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
 import { Attachment, ContextItem, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { Switch } from '../ui/Switch';
 
 export interface SendOptions {
   attachments?: Attachment[];
@@ -40,6 +41,8 @@ export interface ChatInputAreaProps {
     key: keyof NonNullable<ChatInputAreaProps['capabilityState']>,
     value: boolean,
   ) => void;
+  isAutonomousMode?: boolean;
+  onAutonomousToggle?: (value: boolean) => void;
 }
 
 const MAX_ROWS = 10;
@@ -58,6 +61,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   modelLabel,
   capabilityState,
   onCapabilityChange,
+  isAutonomousMode = false,
+  onAutonomousToggle,
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -324,7 +329,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 key={item.id}
                 className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-2 py-1 text-xs text-indigo-100"
               >
-                <span>{item.icon ?? '�'}</span>
+                <span>{item.icon ?? '[ctx]'}</span>
                 <span className="max-w-[180px] truncate">{item.name}</span>
                 <button
                   type="button"
@@ -395,7 +400,17 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t border-zinc-700/60 px-3 py-3">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/60 px-2 py-1">
+              <Switch
+                checked={isAutonomousMode}
+                onCheckedChange={(val) => onAutonomousToggle?.(Boolean(val))}
+                id="autonomous-switch"
+              />
+              <label htmlFor="autonomous-switch" className="text-xs font-medium text-zinc-200">
+                Auto-Pilot
+              </label>
+            </div>
             {enableAttachments && (
               <>
                 <button
