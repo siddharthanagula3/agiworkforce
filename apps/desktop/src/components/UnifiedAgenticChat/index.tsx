@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { CircleUserRound, Layers, Shield, ShieldOff, Square } from 'lucide-react';
+import { Layers, Square } from 'lucide-react';
 
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
@@ -9,8 +9,6 @@ import { AppLayout } from './AppLayout';
 import { AgentStatusBanner } from './AgentStatusBanner';
 import { ApprovalModal } from './ApprovalModal';
 import { Button } from '../ui/Button';
-import { cn } from '../../lib/utils';
-import { QuickModelSelector } from '../Chat/QuickModelSelector';
 import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -34,7 +32,7 @@ export const UnifiedAgenticChat: React.FC<{
   layout = 'default',
   defaultSidecarOpen = true,
   onSendMessage,
-  onOpenSettings,
+  onOpenSettings: _onOpenSettings,
 }) => {
   const sidecarOpen = useUnifiedChatStore((state) => state.sidecarOpen);
   const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
@@ -58,7 +56,7 @@ export const UnifiedAgenticChat: React.FC<{
   const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
   const budget = useTokenBudgetStore(selectBudget);
   const addTokenUsage = useTokenBudgetStore((state) => state.addTokenUsage);
-  const { overview, loadOverview, loadingOverview } = useCostStore();
+  const { loadOverview } = useCostStore();
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -73,7 +71,7 @@ export const UnifiedAgenticChat: React.FC<{
     safe: conversationMode === 'safe',
   });
 
-  const tokenStats = useMemo(() => {
+  const _tokenStats = useMemo(() => {
     let input = 0;
     let output = 0;
     let cost = 0;
@@ -92,13 +90,8 @@ export const UnifiedAgenticChat: React.FC<{
     return { input, output, cost };
   }, [messages]);
 
-  const sessionCost = useMemo(() => {
-    if (tokenStats.cost > 0) {
-      return tokenStats.cost;
-    }
-    const estimate = (tokenStats.input + tokenStats.output) * 0.0000025;
-    return Number(estimate.toFixed(4));
-  }, [tokenStats]);
+  // Mark as intentionally unused for TypeScript
+  void _tokenStats;
 
   const sidebarItems = useMemo(
     () =>
@@ -111,9 +104,6 @@ export const UnifiedAgenticChat: React.FC<{
       })),
     [conversations, activeConversationId, selectConversation],
   );
-
-  const conversationTitle =
-    conversations.find((c) => c.id === activeConversationId)?.title || 'New chat';
 
   useAgenticEvents();
 
@@ -323,57 +313,9 @@ export const UnifiedAgenticChat: React.FC<{
     setSidecarOpen(true);
   };
 
-  const headerLeft = (
-    <div className="flex items-center gap-3">
-      <div className="flex flex-col">
-        <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Conversation</p>
-        <h2 className="text-lg font-semibold text-zinc-50">{conversationTitle}</h2>
-      </div>
-      <div className="hidden items-center gap-2 text-xs text-zinc-400 sm:flex">
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
-          {providerForMessage || 'auto'}
-        </span>
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
-          ${sessionCost.toFixed(3)} / Month{' '}
-          {loadingOverview ? '...' : `$${(overview?.month_total ?? 0).toFixed(2)}`}
-        </span>
-      </div>
-    </div>
-  );
+  const headerLeft = null;
 
-  const headerRight = (
-    <div className="flex items-center gap-2">
-      <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2 py-1 sm:flex">
-        <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Model</span>
-        <QuickModelSelector className="w-[200px]" />
-      </div>
-      <button
-        type="button"
-        onClick={() => setConversationMode(conversationMode === 'safe' ? 'full_control' : 'safe')}
-        className={cn(
-          'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition',
-          conversationMode === 'safe'
-            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:border-emerald-500/60'
-            : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-zinc-600',
-        )}
-      >
-        {conversationMode === 'safe' ? (
-          <Shield className="h-4 w-4" />
-        ) : (
-          <ShieldOff className="h-4 w-4" />
-        )}
-        <span>{conversationMode === 'safe' ? 'Safe mode' : 'Full control'}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onOpenSettings}
-        className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/90 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-white/30 hover:text-white"
-      >
-        <CircleUserRound className="h-5 w-5" />
-        <span className="hidden sm:inline">Profile</span>
-      </button>
-    </div>
-  );
+  const headerRight = null;
 
   const composer = (
     <ChatInputArea
