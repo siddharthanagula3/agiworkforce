@@ -1196,8 +1196,9 @@ pub async fn file_read_binary(file_path: String) -> Result<String, String> {
 pub async fn file_write_binary(file_path: String, base64_content: String) -> Result<(), String> {
     validate_path_security(&file_path)?;
 
-    let data =
-        general_purpose::STANDARD.decode(&base64_content).map_err(|e| format!("Failed to decode base64: {}", e))?;
+    let data = general_purpose::STANDARD
+        .decode(&base64_content)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
 
     // Create parent directory if needed
     if let Some(parent) = Path::new(&file_path).parent() {
