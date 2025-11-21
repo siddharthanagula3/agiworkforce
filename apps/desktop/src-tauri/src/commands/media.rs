@@ -76,7 +76,9 @@ pub struct MediaVideoResponse {
 
 /// Generate images with a concrete provider (Imagen/DALL-E/SDXL)
 #[tauri::command]
-pub async fn media_generate_image(request: MediaImageRequest) -> Result<MediaImageResponse, String> {
+pub async fn media_generate_image(
+    request: MediaImageRequest,
+) -> Result<MediaImageResponse, String> {
     let provider = map_image_provider(request.provider.as_deref());
     let provider_str = provider_to_label(&provider);
 
@@ -138,15 +140,17 @@ pub async fn media_generate_image(request: MediaImageRequest) -> Result<MediaIma
 
 /// Generate video via Veo 3.1 (Google DeepMind) with optional Pro/Max gating
 #[tauri::command]
-pub async fn media_generate_video(request: MediaVideoRequest) -> Result<MediaVideoResponse, String> {
+pub async fn media_generate_video(
+    request: MediaVideoRequest,
+) -> Result<MediaVideoResponse, String> {
     if let Some(plan) = request.plan.as_deref() {
         if !plan_allows_video(plan) {
             return Err("Video generation requires Pro or Max subscription".to_string());
         }
     }
 
-    let api_key = resolve_api_key("google")
-        .map_err(|e| format!("API key for Veo/Google missing: {}", e))?;
+    let api_key =
+        resolve_api_key("google").map_err(|e| format!("API key for Veo/Google missing: {}", e))?;
 
     let client = Veo3Client::new(RequestConfig {
         api_key,
@@ -176,7 +180,10 @@ pub async fn media_generate_video(request: MediaVideoRequest) -> Result<MediaVid
         .map_err(|e| format!("Video generation failed: {}", e))?;
 
     let mut final_response = initial.clone();
-    if matches!(initial.status, VideoStatus::Processing | VideoStatus::Queued) {
+    if matches!(
+        initial.status,
+        VideoStatus::Processing | VideoStatus::Queued
+    ) {
         // Poll for completion with a generous timeout
         final_response = client
             .wait_for_completion(&initial.id, 240)
@@ -261,7 +268,7 @@ fn resolve_api_key(provider: &str) -> Result<String, APIError> {
 
 fn estimate_image_cost(provider: &ImageProvider, count: u32) -> Option<f64> {
     let unit = match provider {
-        ImageProvider::GoogleImagen => 0.025,      // estimated per image (pro quality)
+        ImageProvider::GoogleImagen => 0.025, // estimated per image (pro quality)
         ImageProvider::GoogleImagenLite => 0.0035, // "banana" nano tier
         ImageProvider::DALLE => 0.04,
         ImageProvider::StableDiffusion => 0.01,

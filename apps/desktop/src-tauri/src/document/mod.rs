@@ -13,9 +13,9 @@ pub mod create_pdf;
 pub mod create_word;
 
 // Editing modules
-pub mod edit_word;
 pub mod edit_excel;
 pub mod edit_pdf;
+pub mod edit_word;
 
 // Re-exports (reading)
 pub use excel::ExcelHandler;
@@ -28,9 +28,9 @@ pub use create_pdf::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
 pub use create_word::{WordContent, WordDocumentConfig, WordDocumentCreator};
 
 // Re-exports (editing)
-pub use edit_word::{WordEdit, WordEditor};
 pub use edit_excel::{ExcelEdit, ExcelEditor};
 pub use edit_pdf::{PdfEdit, PdfEditor};
+pub use edit_word::{WordEdit, WordEditor};
 
 use serde::{Deserialize, Serialize};
 

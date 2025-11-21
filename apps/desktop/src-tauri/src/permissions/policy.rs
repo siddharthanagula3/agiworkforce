@@ -20,7 +20,7 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_mb: Some(1024),       // 1GB
+            max_memory_mb: Some(1024), // 1GB
             max_cpu_percent: Some(80),
             max_execution_time_ms: Some(60000), // 1 minute
             max_file_size_mb: Some(100),
@@ -122,7 +122,11 @@ impl ToolPermissionPolicy {
 
         // If there are allowed paths, check if path is in one of them
         if !self.file_permissions.allowed_paths.is_empty() {
-            return self.file_permissions.allowed_paths.iter().any(|allowed| path.starts_with(allowed));
+            return self
+                .file_permissions
+                .allowed_paths
+                .iter()
+                .any(|allowed| path.starts_with(allowed));
         }
 
         // Default: allow if not in blocklist
@@ -134,18 +138,27 @@ impl ToolPermissionPolicy {
             return true; // No restrictions
         }
 
-        self.file_permissions.allowed_extensions.contains(&extension.to_string())
+        self.file_permissions
+            .allowed_extensions
+            .contains(&extension.to_string())
     }
 
     pub fn is_domain_allowed(&self, domain: &str) -> bool {
         // Check blocked domains first
-        if self.network_permissions.blocked_domains.contains(&domain.to_string()) {
+        if self
+            .network_permissions
+            .blocked_domains
+            .contains(&domain.to_string())
+        {
             return false;
         }
 
         // If there are allowed domains, check if domain is in list
         if !self.network_permissions.allowed_domains.is_empty() {
-            return self.network_permissions.allowed_domains.contains(&domain.to_string());
+            return self
+                .network_permissions
+                .allowed_domains
+                .contains(&domain.to_string());
         }
 
         // Default: allow if not in blocklist
@@ -188,7 +201,7 @@ impl ToolPermissionPolicy {
     pub fn grant_temporary_access(&mut self, duration_hours: u32) {
         self.permission_level = PermissionLevel::Allow;
         self.expires_at = Some(
-            (chrono::Utc::now() + chrono::Duration::hours(duration_hours as i64)).to_rfc3339()
+            (chrono::Utc::now() + chrono::Duration::hours(duration_hours as i64)).to_rfc3339(),
         );
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
@@ -202,12 +215,16 @@ mod tests {
     fn test_permission_policy_creation() {
         let policy = ToolPermissionPolicy::new("test-tool".to_string(), "Test Tool".to_string());
         assert_eq!(policy.tool_id, "test-tool");
-        assert!(matches!(policy.permission_level, PermissionLevel::AskEveryTime));
+        assert!(matches!(
+            policy.permission_level,
+            PermissionLevel::AskEveryTime
+        ));
     }
 
     #[test]
     fn test_file_path_allowed() {
-        let mut policy = ToolPermissionPolicy::new("test-tool".to_string(), "Test Tool".to_string());
+        let mut policy =
+            ToolPermissionPolicy::new("test-tool".to_string(), "Test Tool".to_string());
         policy.file_permissions.allowed_paths = vec!["C:\\Users\\".to_string()];
         policy.file_permissions.blocked_paths = vec!["C:\\Windows\\".to_string()];
 
@@ -217,7 +234,8 @@ mod tests {
 
     #[test]
     fn test_expiration() {
-        let mut policy = ToolPermissionPolicy::new("test-tool".to_string(), "Test Tool".to_string());
+        let mut policy =
+            ToolPermissionPolicy::new("test-tool".to_string(), "Test Tool".to_string());
 
         // Set expiry in the past
         policy.expires_at = Some("2020-01-01T00:00:00Z".to_string());
