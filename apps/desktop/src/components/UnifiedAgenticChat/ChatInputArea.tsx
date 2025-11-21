@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, Image as ImageIcon, Mic, Paperclip, Send, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { cn } from '../../lib/utils';
 import { Attachment, ContextItem, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { FocusSelector } from './FocusSelector';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface SendOptions {
   attachments?: Attachment[];
@@ -44,8 +47,31 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
+  const messages = useUnifiedChatStore((state) => state.messages);
+  const focusMode = useUnifiedChatStore((state) => state.focusMode);
+  const tokenUsage = useUnifiedChatStore((state) => state.tokenUsage);
+  const prefersReducedMotion = useReducedMotion();
 
   const isDisabled = disabled || isLoading;
+  const isEmptyState = messages.length === 0 && !content.trim();
+
+  // Determine halo effect based on focus mode
+  const getHaloShadow = () => {
+    switch (focusMode) {
+      case 'deep-research':
+        return 'shadow-halo-research';
+      case 'code':
+        return 'shadow-halo-coder';
+      case 'web':
+        return 'shadow-halo-web';
+      case 'academic':
+        return 'shadow-halo-academic';
+      case 'reasoning':
+        return 'shadow-halo-terra';
+      default:
+        return 'shadow-halo-default';
+    }
+  };
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -165,8 +191,49 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   return (
-    <div className={cn('w-full max-w-3xl mx-auto mb-6 relative z-20', className)}>
-      <div className="rounded-2xl border border-zinc-700/50 bg-zinc-800/90 text-zinc-100 shadow-2xl backdrop-blur-xl">
+    <motion.div
+      layoutId="cockpit-input"
+      className={cn(
+        'w-full mx-auto relative z-20',
+        isEmptyState ? 'h-[50vh] flex items-center justify-center max-w-2xl' : 'max-w-3xl mb-6',
+      )}
+      transition={
+        prefersReducedMotion
+          ? { duration: 0.15 }
+          : {
+              type: 'spring',
+              stiffness: 350,
+              damping: 30,
+            }
+      }
+      style={{ willChange: prefersReducedMotion ? 'auto' : 'transform' }}
+    >
+      {/* FocusSelector - visible only in active state */}
+      <AnimatePresence>
+        {!isEmptyState && (
+          <motion.div
+            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
+            className="mb-3"
+            style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity, transform' }}
+          >
+            <FocusSelector />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        className={cn(
+          'border border-zinc-700/50 bg-zinc-800/90 text-zinc-100 shadow-2xl backdrop-blur-xl transition-all duration-300',
+          isEmptyState ? 'rounded-3xl' : 'rounded-2xl',
+          getHaloShadow(),
+          className,
+        )}
+        layout
+        style={{ willChange: prefersReducedMotion ? 'auto' : 'transform' }}
+      >
         {activeContext.length > 0 && (
           <div className="border-b border-white/5 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -182,8 +249,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     type="button"
                     onClick={() => removeContextItem(item.id)}
                     className="ml-1 text-indigo-200/70 transition hover:text-white"
+                    aria-label={`Remove ${item.name} from context`}
                   >
-                    <X size={12} />
+                    <X size={12} aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -220,8 +288,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     type="button"
                     onClick={() => removeAttachment(attachment.id)}
                     className="rounded p-1 text-zinc-300 transition hover:bg-zinc-800"
+                    aria-label={`Remove ${attachment.name} attachment`}
                   >
-                    <X size={14} />
+                    <X size={14} aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -243,6 +312,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               rows={1}
               className="w-full resize-none rounded-xl bg-transparent px-3 py-2 text-base leading-relaxed text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
               style={{ minHeight: '72px' }}
+              aria-label="Message input"
+              aria-describedby={tokenUsage.percentage > 0 ? 'token-usage-gauge' : undefined}
             />
           </div>
 
@@ -256,8 +327,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     disabled={isDisabled}
                     className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/5 bg-zinc-900/70 text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
                     title="Attach files"
+                    aria-label="Attach files to message"
                   >
-                    <Paperclip size={18} />
+                    <Paperclip size={18} aria-hidden="true" />
                   </button>
                   <input
                     ref={fileInputRef}
@@ -266,6 +338,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     onChange={handleFileSelect}
                     className="hidden"
                     accept="*/*"
+                    aria-label="File upload input"
                   />
                 </>
               )}
@@ -278,14 +351,50 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 disabled={!content.trim() || isDisabled}
                 className="inline-flex h-11 min-w-[46px] items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 px-4 text-sm font-semibold text-white shadow disabled:cursor-not-allowed disabled:from-zinc-700 disabled:to-zinc-700 disabled:text-zinc-300"
                 title="Send message"
+                aria-label="Send message"
               >
-                <Send size={18} />
+                <Send size={18} aria-hidden="true" />
               </button>
             </div>
           </div>
         </form>
-      </div>
-    </div>
+
+        {/* Context Fuel Gauge */}
+        <motion.div
+          id="token-usage-gauge"
+          className={cn(
+            'h-0.5 w-full rounded-b-2xl overflow-hidden',
+            isEmptyState && 'rounded-b-3xl',
+          )}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: tokenUsage.percentage > 0 ? 1 : 0 }}
+          transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
+          style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity' }}
+          role="progressbar"
+          aria-label="Token usage"
+          aria-valuenow={tokenUsage.percentage}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <motion.div
+            className={cn(
+              'h-full transition-colors duration-300',
+              tokenUsage.percentage < 50 && 'bg-emerald-500',
+              tokenUsage.percentage >= 50 && tokenUsage.percentage < 80 && 'bg-amber-500',
+              tokenUsage.percentage >= 80 && 'bg-rose-500',
+            )}
+            initial={{ width: 0 }}
+            animate={{ width: `${tokenUsage.percentage}%` }}
+            transition={
+              prefersReducedMotion
+                ? { duration: 0.2 }
+                : { type: 'spring', stiffness: 100, damping: 20 }
+            }
+            style={{ willChange: prefersReducedMotion ? 'auto' : 'width' }}
+          />
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 };
 
