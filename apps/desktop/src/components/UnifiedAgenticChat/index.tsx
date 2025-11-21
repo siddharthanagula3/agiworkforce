@@ -40,15 +40,15 @@ export const UnifiedAgenticChat: React.FC<{
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
-  const setConversationMode = useUnifiedChatStore((state) => state.setConversationMode);
+  const _setConversationMode = useUnifiedChatStore((state) => state.setConversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
   const hasMessages = messages.length > 0;
   const conversations = useUnifiedChatStore((state) => state.conversations);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
-  const isAutonomousMode = useUnifiedChatStore((state) => state.isAutonomousMode);
-  const setAutonomousMode = useUnifiedChatStore((state) => state.setAutonomousMode);
+  const _isAutonomousMode = useUnifiedChatStore((state) => state.isAutonomousMode);
+  const _setAutonomousMode = useUnifiedChatStore((state) => state.setAutonomousMode);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -65,7 +65,7 @@ export const UnifiedAgenticChat: React.FC<{
     type: DynamicPanelType;
     payload?: Record<string, unknown>;
   }>({ type: null });
-  const [capabilities, setCapabilities] = useState({
+  const [_capabilities, _setCapabilities] = useState({
     computer: true,
     internet: true,
     safe: conversationMode === 'safe',
@@ -322,18 +322,7 @@ export const UnifiedAgenticChat: React.FC<{
       onSend={handleSendMessage}
       placeholder="Type a prompt or describe a workflow..."
       enableAttachments
-      enableScreenshot
       className="bg-transparent"
-      modelLabel={`${providerForMessage || 'Auto'} / ${modelForMessage || 'Default'}`}
-      capabilityState={capabilities}
-      onCapabilityChange={(key, value) => {
-        if (key === 'safe') {
-          setConversationMode(value ? 'safe' : 'full_control');
-        }
-        setCapabilities((prev) => ({ ...prev, [key]: value }));
-      }}
-      isAutonomousMode={isAutonomousMode}
-      onAutonomousToggle={(value) => setAutonomousMode(value)}
     />
   );
 
