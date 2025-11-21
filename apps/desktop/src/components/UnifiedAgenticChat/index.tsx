@@ -44,10 +44,13 @@ export const UnifiedAgenticChat: React.FC<{
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
   const setConversationMode = useUnifiedChatStore((state) => state.setConversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
+  const hasMessages = messages.length > 0;
   const conversations = useUnifiedChatStore((state) => state.conversations);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+  const isAutonomousMode = useUnifiedChatStore((state) => state.isAutonomousMode);
+  const setAutonomousMode = useUnifiedChatStore((state) => state.setAutonomousMode);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -331,8 +334,8 @@ export const UnifiedAgenticChat: React.FC<{
           {providerForMessage || 'auto'}
         </span>
         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
-          ${sessionCost.toFixed(3)} · Month{' '}
-          {loadingOverview ? '…' : `$${(overview?.month_total ?? 0).toFixed(2)}`}
+          ${sessionCost.toFixed(3)} / Month{' '}
+          {loadingOverview ? '...' : `$${(overview?.month_total ?? 0).toFixed(2)}`}
         </span>
       </div>
     </div>
@@ -379,7 +382,7 @@ export const UnifiedAgenticChat: React.FC<{
       enableAttachments
       enableScreenshot
       className="bg-transparent"
-      modelLabel={`${providerForMessage || 'Auto'} · ${modelForMessage || 'Default'}`}
+      modelLabel={`${providerForMessage || 'Auto'} / ${modelForMessage || 'Default'}`}
       capabilityState={capabilities}
       onCapabilityChange={(key, value) => {
         if (key === 'safe') {
@@ -387,6 +390,8 @@ export const UnifiedAgenticChat: React.FC<{
         }
         setCapabilities((prev) => ({ ...prev, [key]: value }));
       }}
+      isAutonomousMode={isAutonomousMode}
+      onAutonomousToggle={(value) => setAutonomousMode(value)}
     />
   );
 
@@ -410,11 +415,13 @@ export const UnifiedAgenticChat: React.FC<{
       <AppLayout
         headerLeft={headerLeft}
         headerRight={headerRight}
+        activeModel={`${providerForMessage || 'Auto'} ${modelForMessage || ''}`.trim()}
         sidebarItems={sidebarItems}
         onNewChat={handleNewChat}
         sidecar={sidecarNode}
         sidecarOpen={sidecarOpen}
         onToggleSidecar={() => setSidecarOpen(!sidecarOpen)}
+        isEmptyState={!hasMessages}
         composer={composer}
       >
         <AgentStatusBanner />
