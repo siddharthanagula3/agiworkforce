@@ -1,4 +1,4 @@
-use crate::terminal::{detect_available_shells, SessionManager, ShellInfo, ShellType};
+use crate::terminal::{detect_available_shells, SessionManager, ShellInfo, ShellType, TerminalAI};
 use tauri::State;
 
 #[tauri::command]
@@ -93,4 +93,72 @@ pub async fn terminal_get_history(
         .await
         .map_err(|e| format!("Failed to get history: {}", e))?;
     Ok(history)
+}
+
+// AI-assisted terminal commands
+
+#[tauri::command]
+pub async fn terminal_ai_suggest_command(
+    intent: String,
+    shell_type: String,
+    cwd: Option<String>,
+    ai_state: State<'_, TerminalAI>,
+) -> Result<String, String> {
+    tracing::info!("AI suggesting command for intent: {}", intent);
+
+    let command = ai_state
+        .suggest_command(&intent, &shell_type, cwd.as_deref())
+        .await
+        .map_err(|e| format!("Failed to generate command: {}", e))?;
+
+    tracing::info!("AI suggested: {}", command);
+    Ok(command)
+}
+
+#[tauri::command]
+pub async fn terminal_ai_explain_error(
+    error_output: String,
+    command: Option<String>,
+    shell_type: String,
+    ai_state: State<'_, TerminalAI>,
+) -> Result<String, String> {
+    tracing::info!("AI explaining error");
+
+    let explanation = ai_state
+        .explain_error(&error_output, command.as_deref(), &shell_type)
+        .await
+        .map_err(|e| format!("Failed to explain error: {}", e))?;
+
+    Ok(explanation)
+}
+
+#[tauri::command]
+pub async fn terminal_smart_commit(
+    session_id: String,
+    ai_state: State<'_, TerminalAI>,
+) -> Result<String, String> {
+    tracing::info!("AI smart commit for session: {}", session_id);
+
+    let result = ai_state
+        .smart_commit(&session_id)
+        .await
+        .map_err(|e| format!("Smart commit failed: {}", e))?;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn terminal_ai_suggest_improvements(
+    command: String,
+    shell_type: String,
+    ai_state: State<'_, TerminalAI>,
+) -> Result<Option<String>, String> {
+    tracing::info!("AI analyzing command: {}", command);
+
+    let suggestions = ai_state
+        .suggest_improvements(&command, &shell_type)
+        .await
+        .map_err(|e| format!("Failed to analyze command: {}", e))?;
+
+    Ok(suggestions)
 }

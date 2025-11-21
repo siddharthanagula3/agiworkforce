@@ -13,6 +13,18 @@ export type Provider =
   | 'mistral';
 export type Theme = 'light' | 'dark' | 'system';
 
+export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
+
+export interface TaskRouting {
+  search: { provider: Provider; model: string };
+  code: { provider: Provider; model: string };
+  docs: { provider: Provider; model: string };
+  chat: { provider: Provider; model: string };
+  vision: { provider: Provider; model: string };
+  image: { provider: Provider; model: string };
+  video: { provider: Provider; model: string };
+}
+
 interface APIKeys {
   openai: string;
   anthropic: string;
@@ -38,6 +50,7 @@ interface LLMConfig {
     qwen: string;
     mistral: string;
   };
+  taskRouting: TaskRouting;
   favoriteModels: string[]; // Quick-access models in format "provider/model"
 }
 
@@ -64,6 +77,7 @@ interface SettingsState {
   setTemperature: (temperature: number) => void;
   setMaxTokens: (maxTokens: number) => void;
   setDefaultModel: (provider: Provider, model: string) => void;
+  setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => void;
   setFavoriteModels: (models: string[]) => void;
   addFavoriteModel: (model: string) => void;
   removeFavoriteModel: (model: string) => void;
@@ -94,26 +108,35 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      // November 2025 latest models
-      openai: 'gpt-5', // Released Aug 2025 - most capable
-      anthropic: 'claude-sonnet-4-5', // Released Sep 2025 - best coding
-      google: 'gemini-2.5-pro', // 1M token context window
-      ollama: 'llama4-maverick', // Latest local model with 1M context
-      xai: 'grok-4', // Real-time data access
-      deepseek: 'deepseek-v3', // Coding specialist
+      // November 2025 top-performing models (workhorse defaults)
+      openai: 'gpt-4.1', // general + code, strong reasoning
+      anthropic: 'claude-3-5-sonnet', // coding/docs strength
+      google: 'gemini-2.0-pro', // long-context + multimodal
+      ollama: 'llama3.2', // local fallback
+      xai: 'grok-2', // real-time data access
+      deepseek: 'deepseek-v3', // code-focused
       qwen: 'qwen-max',
       mistral: 'mistral-large-2',
     },
     favoriteModels: [
-      'ollama/llama3',
-      'ollama/llama4-maverick',
-      'openai/gpt-4',
-      'openai/gpt-5',
-      'anthropic/claude-3-sonnet',
-      'anthropic/claude-sonnet-4-5',
-      'google/gemini-2.5-pro',
+      'openai/gpt-4.1',
+      'openai/gpt-4o',
+      'anthropic/claude-3-5-sonnet',
+      'google/gemini-2.0-pro',
       'deepseek/deepseek-v3',
+      'mistral/mistral-large-2',
+      'qwen/qwen-max',
+      'ollama/llama3.2',
     ],
+    taskRouting: {
+      search: { provider: 'openai', model: 'gpt-4.1' },
+      code: { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      docs: { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      chat: { provider: 'openai', model: 'gpt-4.1' },
+      vision: { provider: 'openai', model: 'gpt-4o' },
+      image: { provider: 'google', model: 'imagen-3' },
+      video: { provider: 'google', model: 'veo-3.1' },
+    },
   },
   windowPreferences: {
     theme: 'system',
@@ -251,6 +274,18 @@ export const useSettingsStore = create<SettingsState>()(
           llmConfig: {
             ...state.llmConfig,
             defaultModels: { ...state.llmConfig.defaultModels, [provider]: model },
+          },
+        }));
+      },
+
+      setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => {
+        set((state) => ({
+          llmConfig: {
+            ...state.llmConfig,
+            taskRouting: {
+              ...state.llmConfig.taskRouting,
+              [category]: { provider, model },
+            },
           },
         }));
       },
@@ -481,7 +516,8 @@ export const useSettingsStore = create<SettingsState>()(
             ...currentState.llmConfig.defaultModels,
             ...(persisted?.llmConfig?.defaultModels ?? {}),
           },
-          favoriteModels: persisted?.llmConfig?.favoriteModels ?? currentState.llmConfig.favoriteModels,
+          favoriteModels:
+            persisted?.llmConfig?.favoriteModels ?? currentState.llmConfig.favoriteModels,
         };
 
         const mergedWindowPreferences: WindowPreferences = {

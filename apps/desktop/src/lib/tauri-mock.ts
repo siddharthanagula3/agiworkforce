@@ -57,30 +57,80 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_conversations':
     case 'load_conversations':
     case 'chat_get_conversations':
-      return [] as T; // Return empty array for conversations
+      return [
+        {
+          id: 1,
+          title: 'Test Conversation',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      ] as T; // Seed conversations for tests
 
     case 'get_messages':
     case 'load_messages':
     case 'chat_get_messages':
-      return [] as T; // Return empty array for messages
+      return [
+        {
+          id: 1,
+          conversation_id: 1,
+          role: 'user',
+          content: 'Hello',
+          created_at: '2024-01-01T00:00:00Z',
+        },
+        {
+          id: 2,
+          conversation_id: 1,
+          role: 'assistant',
+          content: 'Hi there!',
+          created_at: '2024-01-01T00:00:01Z',
+        },
+      ] as T;
 
     case 'chat_get_conversation_stats':
       return {
-        message_count: 0,
-        token_count: 0,
-        last_activity: Date.now(),
+        message_count: 2,
+        total_tokens: 100,
+        total_cost: 0.01,
       } as T;
 
     case 'create_conversation':
     case 'chat_create_conversation':
-      return { id: `conv-${Date.now()}`, title: args?.['title'] || 'New Conversation' } as T;
+      return {
+        id: 1,
+        title: (args?.['request'] as any)?.title ?? args?.['title'] ?? 'New Conversation',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      } as T;
 
     case 'send_message':
     case 'chat_send_message':
       return {
-        id: `msg-${Date.now()}`,
-        content: 'Mock response',
-        role: 'assistant',
+        conversation: {
+          id: 1,
+          title: 'Test Conversation',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+        user_message: {
+          id: 1,
+          conversation_id: 1,
+          role: 'user',
+          content: (args?.['request'] as any)?.content ?? 'User message',
+          created_at: '2024-01-01T00:00:00Z',
+        },
+        assistant_message: {
+          id: 2,
+          conversation_id: 1,
+          role: 'assistant',
+          content: 'Mock response',
+          created_at: '2024-01-01T00:00:01Z',
+        },
+        stats: {
+          message_count: 2,
+          total_tokens: 100,
+          total_cost: 0.01,
+        },
+        last_message: 'Mock response',
       } as T;
 
     case 'router_suggestions':
