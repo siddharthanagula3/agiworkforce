@@ -62,9 +62,14 @@ vi.mock('../Sidecar/DiffViewer', () => ({
 }));
 
 // Mock store
-const mockSidecarState = {
+const mockSidecarState: {
+  isOpen: boolean;
+  activeMode: 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas';
+  contextId: string | null;
+  autoTrigger: boolean;
+} = {
   isOpen: true,
-  activeMode: 'code' as const,
+  activeMode: 'code',
   contextId: 'test-context-123',
   autoTrigger: false,
 };
@@ -295,7 +300,13 @@ describe('SidecarPanel Integration Tests', () => {
   describe('Mode Switching', () => {
     it('should switch between different modes', () => {
       // Test each mode independently rather than trying to switch
-      const modes = ['code', 'browser', 'terminal', 'diff', 'preview'] as const;
+      const modes: Array<'code' | 'browser' | 'terminal' | 'diff' | 'preview' | 'canvas'> = [
+        'code',
+        'browser',
+        'terminal',
+        'diff',
+        'preview',
+      ];
 
       modes.forEach((mode) => {
         mockSidecarState.activeMode = mode;

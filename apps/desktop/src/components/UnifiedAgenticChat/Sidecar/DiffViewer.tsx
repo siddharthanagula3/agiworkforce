@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Copy, Loader2, FileCode, AlertCircle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
