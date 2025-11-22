@@ -14,6 +14,9 @@ import {
   Smartphone,
   Monitor,
   Edit3,
+  Database,
+  Table,
+  Filter,
 } from 'lucide-react';
 import { useUnifiedChatStore, SidecarMode } from '../../stores/unifiedChatStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -303,12 +306,80 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({ className }) => {
           </div>
         );
 
+      // FIX: Added Data Mode
+      case 'data' as any:
+        return (
+          <div className="flex-1 flex flex-col">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-teal-500" />
+                <h3 className="font-medium text-sm">Data Analysis</h3>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                  <Filter className="h-3 w-3" /> Filter
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                  <Download className="h-3 w-3" /> Export CSV
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 p-0 overflow-auto">
+              <div className="w-full min-w-max">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 dark:bg-gray-800 text-xs uppercase text-gray-500 sticky top-0">
+                    <tr>
+                      {['ID', 'Name', 'Status', 'Value', 'Date', 'Category'].map((h) => (
+                        <th
+                          key={h}
+                          className="px-6 py-3 font-medium border-b border-gray-200 dark:border-gray-700"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-6 py-3 font-mono text-xs text-gray-500">#{1000 + i}</td>
+                        <td className="px-6 py-3 font-medium">Project Alpha Item {i}</td>
+                        <td className="px-6 py-3">
+                          <span
+                            className={cn(
+                              'px-2 py-0.5 rounded-full text-xs font-medium',
+                              i % 3 === 0
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : i % 3 === 1
+                                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
+                            )}
+                          >
+                            {i % 3 === 0 ? 'Completed' : i % 3 === 1 ? 'Pending' : 'Archived'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 font-mono">${(i * 1234.56).toFixed(2)}</td>
+                        <td className="px-6 py-3 text-gray-500">2024-03-{10 + i}</td>
+                        <td className="px-6 py-3 text-gray-500">Finance</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="border-t border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900 text-xs text-gray-500 flex justify-between">
+              <span>8 rows selected</span>
+              <span>Total: $45,320.00</span>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
   };
 
-  const getModeIcon = (mode: SidecarMode) => {
+  const getModeIcon = (mode: SidecarMode | 'data') => {
     switch (mode) {
       case 'code':
         return <Code2 className="h-4 w-4" />;
@@ -322,12 +393,14 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({ className }) => {
         return <Edit3 className="h-4 w-4" />;
       case 'diff':
         return <FileText className="h-4 w-4" />;
+      case 'data':
+        return <Table className="h-4 w-4" />;
       default:
         return null;
     }
   };
 
-  const getModeLabel = (mode: SidecarMode) => {
+  const getModeLabel = (mode: string) => {
     return mode.charAt(0).toUpperCase() + mode.slice(1);
   };
 
@@ -361,16 +434,24 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({ className }) => {
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
               {/* Mode Tabs */}
-              <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-x-auto max-w-[400px] scrollbar-hide">
                 {(
-                  ['code', 'preview', 'canvas', 'browser', 'terminal', 'diff'] as SidecarMode[]
+                  [
+                    'code',
+                    'preview',
+                    'canvas',
+                    'browser',
+                    'terminal',
+                    'diff',
+                    'data',
+                  ] as SidecarMode[]
                 ).map((mode) => (
                   <Button
                     key={mode}
                     size="sm"
                     variant={sidecar.activeMode === mode ? 'default' : 'ghost'}
                     onClick={() => setSidecar({ activeMode: mode })}
-                    className="flex items-center gap-1 px-2 py-1"
+                    className="flex items-center gap-1 px-2 py-1 whitespace-nowrap"
                   >
                     {getModeIcon(mode)}
                     <span className="text-xs">{getModeLabel(mode)}</span>
