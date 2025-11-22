@@ -6,16 +6,17 @@
   :root {
     color-scheme: light;
     font-family:
-      'Segoe UI',
+      'FK Grotesk',
       'Inter',
+      'Segoe UI',
       system-ui,
       -apple-system,
       BlinkMacSystemFont,
       sans-serif;
     background-color: transparent;
 
-    /* Design System Colors - Light Theme */
-    --background: 0 0% 100%;
+    /* Design System Colors - Light Theme (Premium Cream) */
+    --background: 39 33% 98%; /* cream-50 */
     --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
@@ -49,8 +50,8 @@
   .dark {
     color-scheme: dark;
 
-    /* Design System Colors - Dark Theme */
-    --background: 222.2 84% 4.9%;
+    /* Design System Colors - Dark Theme (Warm Charcoal) */
+    --background: 120 2% 13%; /* charcoal-900 */
     --foreground: 210 40% 98%;
 
     --card: 222.2 84% 4.9%;
@@ -90,6 +91,7 @@
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+    line-height: 1.6;
     overflow: hidden;
   }
 
@@ -99,6 +101,78 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+}
+
+@layer components {
+  /* Floating Input Cockpit */
+  .floating-input {
+    @apply fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4;
+    z-index: 40;
+  }
+
+  .floating-input-container {
+    @apply bg-white/90 dark:bg-charcoal-800/90 backdrop-blur-xl rounded-2xl shadow-floating-input border border-gray-200 dark:border-gray-700;
+  }
+
+  /* Focus Mode Pills */
+  .focus-pill {
+    @apply px-3 py-1 text-xs font-medium rounded-full transition-all duration-200;
+  }
+
+  .focus-pill-active {
+    @apply bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100;
+  }
+
+  .focus-pill-inactive {
+    @apply bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700;
+  }
+
+  /* Token Usage Gauge */
+  .token-gauge {
+    @apply h-0.5 w-full bg-gray-200 dark:bg-gray-700;
+  }
+
+  .token-gauge-fill {
+    @apply h-full transition-all duration-300;
+  }
+
+  .token-gauge-safe {
+    @apply bg-emerald-500;
+  }
+
+  .token-gauge-warning {
+    @apply bg-amber-500;
+  }
+
+  .token-gauge-danger {
+    @apply bg-rose-500;
+  }
+
+  /* Thinking Blocks */
+  .thinking-block {
+    @apply bg-gray-50/50 dark:bg-gray-900/50 border-l-2 border-teal-500 pl-4 py-3 my-2;
+  }
+
+  /* Status Trail */
+  .status-trail {
+    @apply flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400;
+  }
+
+  .status-trail-item {
+    @apply flex items-center gap-1 animate-fade-in;
+  }
+
+  /* Sidecar Styles */
+  .sidecar-resizable {
+    @apply border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-900;
+  }
+
+  /* Spring Morph Animation */
+  .spring-morph {
+    transition:
+      transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 0.3s ease;
   }
 }
 
