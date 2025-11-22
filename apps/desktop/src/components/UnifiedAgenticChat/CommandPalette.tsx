@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Clock, MessageSquare, FileText, Terminal, Globe, X } from 'lucide-react';
+import { Search, Clock, MessageSquare, FileText, Globe, X } from 'lucide-react';
 import Fuse from 'fuse.js';
 import {
   useUnifiedChatStore,
@@ -29,8 +29,18 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const prefersReducedMotion = useReducedMotion();
 
   const conversations = useUnifiedChatStore((state) => state.conversations);
-  const messages = useUnifiedChatStore((state) => state.messages);
   const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+
+  // Handle selection
+  const handleSelect = useCallback(
+    (result: SearchResult) => {
+      if (result.type === 'conversation' && result.conversation) {
+        selectConversation(result.conversation.id);
+      }
+      onClose();
+    },
+    [selectConversation, onClose],
+  );
 
   // Create search index
   const searchResults = useMemo(() => {
@@ -46,7 +56,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         }));
     }
 
-    // Search conversations
+    // Search conversations only
     const conversationFuse = new Fuse(conversations, {
       keys: ['title', 'lastMessage'],
       threshold: 0.3,
@@ -59,36 +69,8 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       score: result.score ?? 0,
     }));
 
-    // Search messages
-    const messageFuse = new Fuse(messages, {
-      keys: ['content'],
-      threshold: 0.4,
-      includeScore: true,
-    });
-
-    const messageResults = messageFuse.search(query).map((result) => {
-      const content = result.item.content || '';
-      const queryIndex = content.toLowerCase().indexOf(query.toLowerCase());
-      const snippetStart = Math.max(0, queryIndex - 30);
-      const snippetEnd = Math.min(content.length, queryIndex + query.length + 30);
-      const snippet =
-        (snippetStart > 0 ? '...' : '') +
-        content.slice(snippetStart, snippetEnd) +
-        (snippetEnd < content.length ? '...' : '');
-
-      return {
-        type: 'message' as const,
-        message: result.item,
-        score: result.score ?? 0,
-        snippet,
-      };
-    });
-
-    // Combine and sort by score
-    const combined = [...conversationResults, ...messageResults].sort((a, b) => a.score - b.score);
-
-    return combined.slice(0, 10);
-  }, [query, conversations, messages]);
+    return conversationResults.slice(0, 10);
+  }, [query, conversations]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -132,28 +114,9 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     }
   }, [isOpen]);
 
-  const handleSelect = useCallback(
-    (result: SearchResult) => {
-      if (result.type === 'conversation' && result.conversation) {
-        selectConversation(result.conversation.id);
-      } else if (result.type === 'message' && result.message) {
-        // Select conversation containing the message
-        const conv = conversations.find((c) => c.id === result.message?.conversationId);
-        if (conv) {
-          selectConversation(conv.id);
-          // TODO: Scroll to message in the conversation
-        }
-      }
-      onClose();
-    },
-    [conversations, selectConversation, onClose],
-  );
-
   const getResultIcon = (result: SearchResult) => {
     if (result.type === 'conversation') {
       return <MessageSquare className="h-4 w-4" />;
-    } else if (result.message?.type === 'tool') {
-      return <Terminal className="h-4 w-4" />;
     } else {
       return <FileText className="h-4 w-4" />;
     }
@@ -239,7 +202,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
               <div className="py-2">
                 {searchResults.map((result, index) => (
                   <button
-                    key={`${result.type}-${result.conversation?.id || result.message?.id || index}`}
+                    key={`${result.type}-${result.conversation?.id || index}`}
                     id={`result-${index}`}
                     onClick={() => handleSelect(result)}
                     className={cn(
@@ -267,13 +230,9 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="truncate text-sm font-semibold text-zinc-100">
-                          {result.type === 'conversation'
-                            ? result.conversation?.title || 'Untitled'
-                            : result.message?.role === 'user'
-                              ? 'User Message'
-                              : 'Assistant Message'}
+                          {result.conversation?.title || 'Untitled'}
                         </span>
-                        {result.type === 'conversation' && result.conversation?.updatedAt && (
+                        {result.conversation?.updatedAt && (
                           <span className="flex items-center gap-1 text-xs text-zinc-500">
                             <Clock className="h-3 w-3" />
                             {formatRelativeTime(result.conversation.updatedAt)}
@@ -281,9 +240,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                         )}
                       </div>
                       <p className="mt-1 truncate text-xs text-zinc-500">
-                        {result.type === 'conversation'
-                          ? result.conversation?.lastMessage || 'No activity'
-                          : result.snippet || 'No content'}
+                        {result.conversation?.lastMessage || 'No activity'}
                       </p>
                     </div>
 
