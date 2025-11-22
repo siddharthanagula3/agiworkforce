@@ -88,7 +88,9 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
           break;
         case 'Enter':
           e.preventDefault();
-          handleSelect(searchResults[selectedIndex]);
+          if (searchResults[selectedIndex]) {
+            handleSelect(searchResults[selectedIndex]);
+          }
           break;
         case 'Escape':
           e.preventDefault();
