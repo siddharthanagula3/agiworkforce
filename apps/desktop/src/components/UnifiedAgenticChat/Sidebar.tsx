@@ -87,6 +87,7 @@ export function Sidebar({
   const [expandedGroups, setExpandedGroups] = useState<Set<TemporalGroup>>(
     new Set(['today', 'yesterday', 'thisWeek']),
   );
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 
   useEffect(() => {
     ensureActiveConversation();
@@ -126,6 +127,17 @@ export function Sidebar({
 
     return groups;
   }, [filtered]);
+
+  // Flat list of visible conversations for keyboard navigation
+  const visibleConversations = useMemo(() => {
+    const visible: ConversationSummary[] = [];
+    Array.from(groupedConversations.entries()).forEach(([group, convs]) => {
+      if (expandedGroups.has(group)) {
+        visible.push(...convs);
+      }
+    });
+    return visible;
+  }, [groupedConversations, expandedGroups]);
 
   const handleCreateConversation = useCallback(() => {
     createConversation('New chat');
@@ -169,12 +181,45 @@ export function Sidebar({
       if (e.key === 'Escape') {
         setShowSearch(false);
         setSearchQuery('');
+        setFocusedIndex(-1);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Handle keyboard navigation (arrow keys + Enter)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle if sidebar is focused and not editing
+      if (editingId || showSearch) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = prev + 1;
+          return next >= visibleConversations.length ? 0 : next;
+        });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = prev - 1;
+          return next < 0 ? visibleConversations.length - 1 : next;
+        });
+      } else if (e.key === 'Enter' && focusedIndex >= 0) {
+        e.preventDefault();
+        const conversation = visibleConversations[focusedIndex];
+        if (conversation) {
+          selectConversation(conversation.id);
+          setFocusedIndex(-1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingId, showSearch, focusedIndex, visibleConversations, selectConversation]);
 
   if (collapsed) {
     return (
@@ -344,64 +389,69 @@ export function Sidebar({
                       transition={{ duration: 0.2 }}
                       className="mt-1 space-y-1"
                     >
-                      {convs.map((conv) => (
-                        <div
-                          key={conv.id}
-                          className={cn(
-                            'group relative rounded-lg transition-all',
-                            conv.id === activeConversationId
-                              ? 'bg-teal-100 dark:bg-teal-900/30'
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-800',
-                          )}
-                        >
-                          {editingId === conv.id ? (
-                            <Input
-                              autoFocus
-                              value={editingTitle}
-                              onChange={(e) => setEditingTitle(e.target.value)}
-                              onBlur={() => handleRename(conv.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRename(conv.id);
-                                if (e.key === 'Escape') {
-                                  setEditingId(null);
-                                  setEditingTitle('');
-                                }
-                              }}
-                              className="w-full px-3 py-2 text-sm"
-                            />
-                          ) : (
-                            <button
-                              onClick={() => selectConversation(conv.id)}
-                              onDoubleClick={() => startEditing(conv)}
-                              className="w-full text-left px-3 py-2"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm truncate">{conv.title}</div>
-                                  {conv.lastMessage && (
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                      {conv.lastMessage}
-                                    </div>
-                                  )}
+                      {convs.map((conv) => {
+                        const globalIndex = visibleConversations.findIndex((c) => c.id === conv.id);
+                        const isKeyboardFocused = globalIndex === focusedIndex;
+                        return (
+                          <div
+                            key={conv.id}
+                            className={cn(
+                              'group relative rounded-lg transition-all',
+                              conv.id === activeConversationId
+                                ? 'bg-teal-100 dark:bg-teal-900/30'
+                                : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                              isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
+                            )}
+                          >
+                            {editingId === conv.id ? (
+                              <Input
+                                autoFocus
+                                value={editingTitle}
+                                onChange={(e) => setEditingTitle(e.target.value)}
+                                onBlur={() => handleRename(conv.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleRename(conv.id);
+                                  if (e.key === 'Escape') {
+                                    setEditingId(null);
+                                    setEditingTitle('');
+                                  }
+                                }}
+                                className="w-full px-3 py-2 text-sm"
+                              />
+                            ) : (
+                              <button
+                                onClick={() => selectConversation(conv.id)}
+                                onDoubleClick={() => startEditing(conv)}
+                                className="w-full text-left px-3 py-2"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-sm truncate">{conv.title}</div>
+                                    {conv.lastMessage && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                        {conv.lastMessage}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteConversation(conv.id);
+                                      }}
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteConversation(conv.id);
-                                    }}
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </motion.div>
                   )}
                 </AnimatePresence>

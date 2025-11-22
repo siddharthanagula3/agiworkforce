@@ -43,6 +43,8 @@ export interface EnhancedMessage {
   attachments?: Attachment[];
   operations?: Operation[];
   streaming?: boolean;
+  pending?: boolean; // Optimistic message not yet confirmed by backend
+  error?: string; // Error message if sending failed
 }
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
@@ -421,6 +423,10 @@ export interface UnifiedChatState {
 
   // Actions - Messages
   addMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => void;
+  addOptimisticMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => string; // Returns the optimistic message ID
+  confirmOptimisticMessage: (tempId: string, confirmedId?: string) => void;
+  failOptimisticMessage: (tempId: string, error: string) => void;
+  retryFailedMessage: (id: string) => void;
   updateMessage: (id: string, updates: Partial<EnhancedMessage>) => void;
   deleteMessage: (id: string) => void;
   setStreamingMessage: (id: string | null) => void;
@@ -690,6 +696,96 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (convo) {
             convo.lastMessage = newMessage.content;
             convo.updatedAt = newMessage.timestamp;
+          }
+        }),
+
+      // Optimistic Message Actions
+      addOptimisticMessage: (message) => {
+        const tempId = crypto.randomUUID();
+        set((state) => {
+          // Ensure a conversation is active
+          if (!state.activeConversationId) {
+            const id = crypto.randomUUID();
+            const convo: ConversationSummary = {
+              id,
+              title: 'New chat',
+              pinned: false,
+              lastMessage: '',
+              updatedAt: new Date(),
+            };
+            state.conversations.unshift(convo);
+            state.activeConversationId = id;
+            state.messagesByConversation[id] = [];
+          }
+          const convoId = state.activeConversationId as string;
+          const optimisticMessage: EnhancedMessage = {
+            ...message,
+            id: tempId,
+            timestamp: new Date(),
+            pending: true,
+          };
+          state.messages.push(optimisticMessage);
+          if (!state.messagesByConversation[convoId]) {
+            state.messagesByConversation[convoId] = [];
+          }
+          state.messagesByConversation[convoId].push(optimisticMessage);
+          const convo = state.conversations.find((c) => c.id === convoId);
+          if (convo) {
+            convo.lastMessage = optimisticMessage.content;
+            convo.updatedAt = optimisticMessage.timestamp;
+          }
+        });
+        return tempId;
+      },
+
+      confirmOptimisticMessage: (tempId, confirmedId) =>
+        set((state) => {
+          const applyConfirmation = (list: EnhancedMessage[]) => {
+            const idx = list.findIndex((m) => m.id === tempId);
+            if (idx !== -1 && list[idx]) {
+              delete list[idx].pending;
+              delete list[idx].error;
+              if (confirmedId) {
+                list[idx].id = confirmedId;
+              }
+            }
+          };
+          applyConfirmation(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyConfirmation(state.messagesByConversation[convoId]);
+          }
+        }),
+
+      failOptimisticMessage: (tempId, error) =>
+        set((state) => {
+          const applyFailure = (list: EnhancedMessage[]) => {
+            const idx = list.findIndex((m) => m.id === tempId);
+            if (idx !== -1 && list[idx]) {
+              delete list[idx].pending;
+              list[idx].error = error;
+            }
+          };
+          applyFailure(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyFailure(state.messagesByConversation[convoId]);
+          }
+        }),
+
+      retryFailedMessage: (id) =>
+        set((state) => {
+          const applyRetry = (list: EnhancedMessage[]) => {
+            const idx = list.findIndex((m) => m.id === id);
+            if (idx !== -1 && list[idx]) {
+              delete list[idx].error;
+              list[idx].pending = true;
+            }
+          };
+          applyRetry(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyRetry(state.messagesByConversation[convoId]);
           }
         }),
 

@@ -52,6 +52,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
+  const retryFailedMessage = useUnifiedChatStore((state) => state.retryFailedMessage);
 
   // Auto-trigger sidecar for relevant content
   React.useEffect(() => {
@@ -89,6 +90,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       console.error('Failed to copy message:', err);
     }
   }, [message.content, onCopy]);
+
+  const handleRetry = useCallback(() => {
+    retryFailedMessage(message.id);
+    // Trigger onRegenerate to re-send the message
+    onRegenerate?.();
+  }, [message.id, retryFailedMessage, onRegenerate]);
 
   const thinkingMatch = useMemo(() => {
     const explicit = message.metadata?.type === 'reasoning';
@@ -333,7 +340,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             {isUser ? 'You' : isSystem ? 'System' : 'Assistant'}
           </span>
           {showTimestamp && <span className="text-xs text-zinc-500">{formattedTime}</span>}
-          {message.metadata?.streaming && (
+          {message.pending && (
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+              <Loader2 size={12} className="animate-spin" />
+              Sending...
+            </span>
+          )}
+          {message.error && (
+            <span className="inline-flex items-center gap-1 text-xs text-red-500">
+              <span className="font-medium">Failed</span>
+              <span className="text-zinc-500">- {message.error}</span>
+            </span>
+          )}
+          {message.metadata?.streaming && !message.pending && (
             <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
               <span className="animate-pulse">...</span>
               Streaming...
@@ -344,7 +363,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         {/* Status Trail for streaming messages */}
         {message.metadata?.streaming && <StatusTrail messageId={message.id} />}
 
-        <div className="rounded-xl border border-white/10 bg-[#0b0c14] px-4 py-3 shadow-sm">
+        <div
+          className={`rounded-xl border border-white/10 bg-[#0b0c14] px-4 py-3 shadow-sm transition-opacity ${
+            message.pending ? 'opacity-60' : 'opacity-100'
+          } ${message.error ? 'border-red-500/30 bg-red-950/20' : ''}`}
+        >
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
@@ -440,7 +463,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           >
             <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
           </button>
-          {isAssistant && onRegenerate && (
+          {isAssistant && onRegenerate && !message.error && (
             <button
               onClick={onRegenerate}
               className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
@@ -449,7 +472,16 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               <RotateCw size={14} className="text-zinc-600 dark:text-zinc-400" />
             </button>
           )}
-          {isUser && onEdit && (
+          {message.error && onRegenerate && (
+            <button
+              onClick={handleRetry}
+              className="p-1.5 hover:bg-red-200 dark:hover:bg-red-900/30 rounded transition-colors"
+              title="Retry sending"
+            >
+              <RotateCw size={14} className="text-red-600 dark:text-red-400" />
+            </button>
+          )}
+          {isUser && onEdit && !message.error && (
             <button
               onClick={() => onEdit(message.content)}
               className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
