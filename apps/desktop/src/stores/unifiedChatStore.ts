@@ -261,7 +261,7 @@ export type ConversationMode = 'safe' | 'full_control';
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
 
 // Sidecar Modes (Polymorphic panel)
-export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff';
+export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas';
 
 // Enhanced Sidecar State
 export interface SidecarState {
@@ -1179,7 +1179,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           return state.actionTrail;
         }
         // Filter action trail by message ID if metadata includes it
-        return state.actionTrail.filter((entry) => entry.metadata?.messageId === messageId);
+        return state.actionTrail.filter((entry) => entry.metadata?.['messageId'] === messageId);
       },
 
       getSuggestedSidecarMode: (message) => {
