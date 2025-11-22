@@ -1,20 +1,26 @@
+#[cfg(windows)]
 use anyhow::{anyhow, Result};
+#[cfg(windows)]
 use std::time::Duration;
+#[cfg(windows)]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
     KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 
+#[cfg(windows)]
 pub struct KeyboardSimulator {
     typing_delay_ms: u64,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Clone)]
 pub struct MacroStep {
     pub action: MacroAction,
     pub delay_ms: u64,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Clone)]
 pub enum MacroAction {
     PressKey(u16),
@@ -23,6 +29,7 @@ pub enum MacroAction {
     Hotkey(Vec<u16>, u16),
 }
 
+#[cfg(windows)]
 impl KeyboardSimulator {
     pub fn new() -> Result<Self> {
         Ok(Self {
