@@ -122,6 +122,7 @@ export const UnifiedAgenticChat: React.FC<{
     );
   }, [loadOverview]);
 
+  // @ts-expect-error - Temporarily unused until ChatInputArea is re-integrated
   const _handleSendMessage = async (content: string, options: SendOptions) => {
     const classifyTask = (
       text: string,
