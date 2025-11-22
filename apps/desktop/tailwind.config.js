@@ -4,21 +4,36 @@ export default {
   darkMode: ['class'],
   theme: {
     extend: {
-      // Typography - Premium font stack
+      // Typography - Premium font stack with FK Grotesk priority
       fontFamily: {
         sans: [
-          'Söhne',
           'FK Grotesk',
           'Inter',
+          'Söhne',
           '-apple-system',
           'BlinkMacSystemFont',
           'system-ui',
           'sans-serif',
         ],
-        mono: ['Söhne Mono', 'Monaco', 'Cascadia Code', 'Consolas', 'monospace'],
+        mono: ['Berkeley Mono', 'Söhne Mono', 'Monaco', 'Cascadia Code', 'Consolas', 'monospace'],
+      },
+      // Line height for readability
+      lineHeight: {
+        chat: '1.6',
       },
       // Enhanced color system for Agentic Workspace
       colors: {
+        // Premium Light/Dark Mode Base Colors
+        cream: {
+          50: '#fcfcf9',
+          100: '#f9f9f6',
+          200: '#f5f5f2',
+        },
+        charcoal: {
+          900: '#1f2121',
+          800: '#2a2c2c',
+          700: '#363838',
+        },
         // Base system colors
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -108,8 +123,10 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
-      // Enhanced box shadows for halo effects
+      // Enhanced box shadows for halo effects and floating elements
       boxShadow: {
+        'floating-input': '0 8px 32px -4px rgba(0,0,0,0.08), 0 4px 12px -2px rgba(0,0,0,0.04)',
+        'halo-focus': '0 0 0 4px rgba(33, 128, 141, 0.15)',
         'halo-default': '0 0 40px rgba(113, 113, 122, 0.3)',
         'halo-research': '0 0 40px rgba(168, 85, 247, 0.4)',
         'halo-coder': '0 0 40px rgba(59, 130, 246, 0.4)',

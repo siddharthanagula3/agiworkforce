@@ -1,249 +1,406 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pin, Maximize2, Minimize2 } from 'lucide-react';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { CodeCanvas, BrowserPreview, TerminalView, DiffViewer } from './Sidecar';
+import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import {
+  X,
+  Maximize2,
+  Code2,
+  Globe,
+  Terminal,
+  FileText,
+  Eye,
+  Play,
+  Copy,
+  Download,
+  Smartphone,
+  Monitor,
+  Edit3,
+} from 'lucide-react';
+import { useUnifiedChatStore, SidecarMode } from '../../stores/unifiedChatStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '../ui/Button';
+import Editor from '@monaco-editor/react';
 
-export interface SidecarPanelProps {
+interface SidecarPanelProps {
   className?: string;
 }
 
-const MIN_WIDTH = 400;
-const MAX_WIDTH = 1200;
-const DEFAULT_WIDTH = 600;
+export const SidecarPanel: React.FC<SidecarPanelProps> = ({ className }) => {
+  const sidecar = useUnifiedChatStore((state) => state.sidecar);
+  const closeSidecar = useUnifiedChatStore((state) => state.closeSidecar);
+  const setSidecar = useUnifiedChatStore((state) => state.setSidecar);
 
-export function SidecarPanel({ className }: SidecarPanelProps) {
-  const { sidecar, closeSidecar } = useUnifiedChatStore();
-  const [width, setWidth] = React.useState(DEFAULT_WIDTH);
-  const [isResizing, setIsResizing] = React.useState(false);
-  const [isPinned, setIsPinned] = React.useState(false);
-  const [isMaximized, setIsMaximized] = React.useState(false);
-  const prefersReducedMotion = useReducedMotion();
+  const [isResizing, setIsResizing] = useState(false);
+  const [width, setWidth] = useState(600);
+  const [minWidth] = useState(400);
+  const [maxWidth] = useState(1200);
+  const [selectedText, setSelectedText] = useState('');
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [code, setCode] = useState('// Your code here');
 
-  const panelRef = React.useRef<HTMLDivElement>(null);
+  // Detach to new window (Tauri specific)
+  const handleDetach = useCallback(async () => {
+    // This would use Tauri APIs to open a new window
+    // In production: await invoke('open_sidecar_window', { mode: sidecar.activeMode });
+  }, []);
 
-  // Handle resize drag
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
+  // Handle text selection for Canvas mode
+  useEffect(() => {
+    if (sidecar.activeMode !== 'canvas') return;
 
-  React.useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-
-      const newWidth = window.innerWidth - e.clientX;
-      const clampedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
-      setWidth(clampedWidth);
+    const handleSelection = () => {
+      const selection = window.getSelection();
+      const text = selection?.toString();
+      if (text && text.length > 0) {
+        setSelectedText(text);
+      }
     };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+    document.addEventListener('mouseup', handleSelection);
+    return () => document.removeEventListener('mouseup', handleSelection);
+  }, [sidecar.activeMode]);
 
-    if (isResizing) {
+  // Handle resize
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
+
+      const startX = e.clientX;
+      const startWidth = width;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const delta = startX - e.clientX;
+        const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
+        setWidth(newWidth);
+      };
+
+      const handleMouseUp = () => {
+        setIsResizing(false);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-    }
+    },
+    [width, minWidth, maxWidth],
+  );
 
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
-
-  // Get mode label for header
-  const getModeLabel = () => {
+  const renderModeContent = () => {
     switch (sidecar.activeMode) {
       case 'code':
-        return 'Code Editor';
-      case 'browser':
-        return 'Browser Preview';
-      case 'terminal':
-        return 'Terminal Output';
-      case 'diff':
-        return 'Diff Viewer';
-      case 'preview':
-        return 'Preview';
-      default:
-        return 'Sidecar';
-    }
-  };
-
-  // Render mode-specific content
-  const renderContent = () => {
-    switch (sidecar.activeMode) {
-      case 'code':
-        return <CodeCanvas contextId={sidecar.contextId || undefined} className="h-full" />;
-      case 'browser':
-        return <BrowserPreview contextId={sidecar.contextId || undefined} className="h-full" />;
-      case 'terminal':
-        return <TerminalView contextId={sidecar.contextId || undefined} className="h-full" />;
-      case 'diff':
-        return <DiffViewer contextId={sidecar.contextId || undefined} className="h-full" />;
-      case 'preview':
         return (
-          <div className="flex h-full items-center justify-center bg-zinc-950">
-            <div className="text-center">
-              <p className="text-sm text-zinc-400">Preview mode</p>
-              <p className="mt-1 text-xs text-zinc-500">Content preview will appear here</p>
+          <div className="flex-1 flex flex-col">
+            {/* Code Editor */}
+            <div className="flex-1 border-b border-gray-200 dark:border-gray-700">
+              <Editor
+                height="70%"
+                defaultLanguage="typescript"
+                theme="vs-dark"
+                value={code}
+                onChange={(value) => setCode(value || '')}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  lineNumbers: 'on',
+                  wordWrap: 'on',
+                  automaticLayout: true,
+                }}
+              />
+            </div>
+
+            {/* Terminal Output */}
+            <div className="h-[30%] bg-black p-4 font-mono text-sm text-green-400 overflow-auto">
+              <div className="mb-2 text-gray-400">Terminal Output:</div>
+              {terminalOutput.length === 0 ? (
+                <div className="text-gray-600">Ready to run...</div>
+              ) : (
+                terminalOutput.map((line, i) => <div key={i}>{line}</div>)
+              )}
+            </div>
+
+            {/* Toolbar */}
+            <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => setTerminalOutput(['Running...', 'Output will appear here'])}
+                className="flex items-center gap-2"
+              >
+                <Play className="h-3 w-3" />
+                Run
+              </Button>
+              <Button size="sm" variant="outline" className="flex items-center gap-2">
+                <Copy className="h-3 w-3" />
+                Copy
+              </Button>
+              <Button size="sm" variant="outline" className="flex items-center gap-2">
+                <Download className="h-3 w-3" />
+                Apply to File
+              </Button>
             </div>
           </div>
         );
-      default:
+
+      case 'preview':
         return (
-          <div className="flex h-full items-center justify-center bg-zinc-950">
-            <div className="text-center">
-              <p className="text-sm text-zinc-400">No content to display</p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Sidecar will open automatically when relevant
-              </p>
+          <div className="flex-1 flex flex-col">
+            {/* Preview Toolbar */}
+            <div className="border-b border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={previewMode === 'desktop' ? 'default' : 'outline'}
+                  onClick={() => setPreviewMode('desktop')}
+                  className="flex items-center gap-2"
+                >
+                  <Monitor className="h-3 w-3" />
+                  Desktop
+                </Button>
+                <Button
+                  size="sm"
+                  variant={previewMode === 'mobile' ? 'default' : 'outline'}
+                  onClick={() => setPreviewMode('mobile')}
+                  className="flex items-center gap-2"
+                >
+                  <Smartphone className="h-3 w-3" />
+                  Mobile
+                </Button>
+              </div>
+              <Button size="sm" variant="outline" className="flex items-center gap-2">
+                <Eye className="h-3 w-3" />
+                Inspect
+              </Button>
+            </div>
+
+            {/* Preview Content */}
+            <div className="flex-1 p-4 bg-gray-50 dark:bg-gray-900 overflow-auto">
+              <div
+                className={cn(
+                  'mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg',
+                  previewMode === 'mobile' ? 'max-w-sm' : 'w-full',
+                )}
+                style={{ minHeight: '400px' }}
+              >
+                <iframe
+                  src="about:blank"
+                  className="w-full h-full rounded-lg"
+                  style={{ minHeight: '400px' }}
+                  sandbox="allow-scripts allow-same-origin"
+                  title="Preview"
+                />
+              </div>
             </div>
           </div>
         );
+
+      case 'canvas':
+        return (
+          <div className="flex-1 flex flex-col">
+            {/* Canvas Editor */}
+            <div className="flex-1 p-6 overflow-auto">
+              <div
+                className="prose prose-lg dark:prose-invert max-w-none"
+                contentEditable
+                suppressContentEditableWarning
+                onMouseUp={() => {
+                  // Handle selection for editing
+                }}
+              >
+                <h1>Document Title</h1>
+                <p>
+                  This is a rich text editor. You can select text to see editing options. The
+                  content here is fully editable and supports rich formatting.
+                </p>
+                <p>
+                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+                  incididunt ut labore et dolore magna aliqua.
+                </p>
+              </div>
+            </div>
+
+            {/* Floating Toolbar for selected text */}
+            {selectedText && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-20 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-2 flex items-center gap-1"
+              >
+                <Button size="sm" variant="ghost" className="text-xs">
+                  Shorten
+                </Button>
+                <Button size="sm" variant="ghost" className="text-xs">
+                  Rewrite
+                </Button>
+                <Button size="sm" variant="ghost" className="text-xs">
+                  Fix Grammar
+                </Button>
+                <Button size="sm" variant="ghost" className="text-xs">
+                  Change Tone
+                </Button>
+              </motion.div>
+            )}
+          </div>
+        );
+
+      case 'browser':
+        return (
+          <div className="flex-1 flex flex-col">
+            {/* URL Bar */}
+            <div className="border-b border-gray-200 dark:border-gray-700 p-3">
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <Globe className="h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Enter URL..."
+                  className="flex-1 bg-transparent outline-none text-sm"
+                  defaultValue={sidecar.contextId || ''}
+                />
+              </div>
+            </div>
+
+            {/* Browser Content */}
+            <div className="flex-1 bg-white dark:bg-gray-900">
+              <iframe
+                src={sidecar.contextId || 'about:blank'}
+                className="w-full h-full"
+                sandbox="allow-scripts allow-same-origin"
+                title="Browser"
+              />
+            </div>
+          </div>
+        );
+
+      case 'terminal':
+        return (
+          <div className="flex-1 bg-black p-4 font-mono text-sm text-green-400 overflow-auto">
+            <div className="mb-4 text-gray-400">Terminal Session</div>
+            <div className="space-y-2">
+              <div>$ npm install</div>
+              <div className="text-gray-500">Installing dependencies...</div>
+              <div>✓ Packages installed successfully</div>
+              <div className="mt-4">$ npm run dev</div>
+              <div className="text-blue-400">Server running at http://localhost:3000</div>
+            </div>
+          </div>
+        );
+
+      case 'diff':
+        return (
+          <div className="flex-1 flex flex-col">
+            <div className="border-b border-gray-200 dark:border-gray-700 p-3">
+              <h3 className="font-medium">File Changes</h3>
+            </div>
+            <div className="flex-1 p-4 font-mono text-sm overflow-auto">
+              <div className="space-y-2">
+                <div className="text-red-500">- Old line of code</div>
+                <div className="text-green-500">+ New line of code</div>
+                <div className="text-gray-500"> Unchanged line</div>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
-  if (!sidecar.isOpen) {
-    return null;
-  }
+  const getModeIcon = (mode: SidecarMode) => {
+    switch (mode) {
+      case 'code':
+        return <Code2 className="h-4 w-4" />;
+      case 'browser':
+        return <Globe className="h-4 w-4" />;
+      case 'terminal':
+        return <Terminal className="h-4 w-4" />;
+      case 'preview':
+        return <Eye className="h-4 w-4" />;
+      case 'canvas':
+        return <Edit3 className="h-4 w-4" />;
+      case 'diff':
+        return <FileText className="h-4 w-4" />;
+      default:
+        return null;
+    }
+  };
+
+  const getModeLabel = (mode: SidecarMode) => {
+    return mode.charAt(0).toUpperCase() + mode.slice(1);
+  };
+
+  if (!sidecar.isOpen) return null;
 
   return (
     <AnimatePresence>
       <motion.div
-        ref={panelRef}
-        initial={prefersReducedMotion ? { opacity: 1 } : { x: '100%', opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={prefersReducedMotion ? { opacity: 0 } : { x: '100%', opacity: 0 }}
-        transition={
-          prefersReducedMotion
-            ? { duration: 0.15 }
-            : {
-                type: 'spring',
-                stiffness: 300,
-                damping: 30,
-              }
-        }
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 350 }}
         className={cn(
-          'fixed right-0 top-0 z-40 flex h-screen flex-col',
-          'border-l border-zinc-800 bg-zinc-950',
-          'shadow-2xl',
+          'fixed right-0 top-0 h-full bg-white dark:bg-charcoal-900 shadow-2xl flex',
           className,
         )}
-        style={{
-          width: isMaximized ? '100vw' : `${width}px`,
-          willChange: isResizing ? 'width' : 'auto',
-        }}
+        style={{ width: `${width}px` }}
       >
         {/* Resize Handle */}
         <div
           className={cn(
-            'absolute left-0 top-0 bottom-0 w-1 hover:w-1.5',
-            'bg-transparent hover:bg-teal cursor-col-resize transition-all',
-            isResizing && 'bg-teal w-1.5',
+            'absolute left-0 top-0 h-full w-1 cursor-ew-resize hover:bg-teal-500 transition-colors',
+            isResizing && 'bg-teal-500',
           )}
           onMouseDown={handleMouseDown}
         />
 
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-3 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-zinc-200">{getModeLabel()}</h3>
-            {sidecar.contextId && (
-              <span className="text-xs text-zinc-500">
-                • {sidecar.contextId.slice(0, 20)}
-                {sidecar.contextId.length > 20 && '...'}
-              </span>
-            )}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              {/* Mode Tabs */}
+              <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                {(
+                  ['code', 'preview', 'canvas', 'browser', 'terminal', 'diff'] as SidecarMode[]
+                ).map((mode) => (
+                  <Button
+                    key={mode}
+                    size="sm"
+                    variant={sidecar.activeMode === mode ? 'default' : 'ghost'}
+                    onClick={() => setSidecar({ activeMode: mode })}
+                    className="flex items-center gap-1 px-2 py-1"
+                  >
+                    {getModeIcon(mode)}
+                    <span className="text-xs">{getModeLabel(mode)}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleDetach}
+                className="h-7 w-7"
+                title="Pop out to new window"
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={closeSidecar} className="h-7 w-7">
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1" role="toolbar" aria-label="Sidecar controls">
-            {/* Maximize/Minimize */}
-            <button
-              onClick={() => setIsMaximized(!isMaximized)}
-              className={cn(
-                'rounded-lg p-1.5 transition-colors',
-                'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200',
-              )}
-              title={isMaximized ? 'Restore size' : 'Maximize'}
-              aria-label={isMaximized ? 'Restore sidecar size' : 'Maximize sidecar'}
-              aria-pressed={isMaximized}
-            >
-              {isMaximized ? (
-                <Minimize2 size={14} aria-hidden="true" />
-              ) : (
-                <Maximize2 size={14} aria-hidden="true" />
-              )}
-            </button>
-
-            {/* Pin */}
-            <button
-              onClick={() => setIsPinned(!isPinned)}
-              className={cn(
-                'rounded-lg p-1.5 transition-colors',
-                isPinned
-                  ? 'bg-teal/20 text-teal'
-                  : 'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200',
-              )}
-              title={isPinned ? 'Unpin' : 'Pin'}
-              aria-label={isPinned ? 'Unpin sidecar' : 'Pin sidecar'}
-              aria-pressed={isPinned}
-            >
-              <Pin size={14} aria-hidden="true" />
-            </button>
-
-            {/* Close */}
-            <button
-              onClick={closeSidecar}
-              className={cn(
-                'rounded-lg p-1.5 transition-colors',
-                'hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200',
-              )}
-              title="Close sidecar"
-              aria-label="Close sidecar"
-            >
-              <X size={14} aria-hidden="true" />
-            </button>
-          </div>
+          {/* Content */}
+          {renderModeContent()}
         </div>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={sidecar.activeMode}
-              initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
-              transition={{ duration: prefersReducedMotion ? 0.1 : 0.15 }}
-              className="h-full"
-              style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity, transform' }}
-            >
-              {renderContent()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Auto-trigger indicator */}
-        {sidecar.autoTrigger && (
-          <div className="absolute bottom-4 left-4 right-4">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-lg border border-teal/30 bg-teal/10 px-3 py-2 backdrop-blur-sm"
-            >
-              <p className="text-xs text-teal">
-                <span className="font-semibold">Auto-opened</span> • This sidecar was automatically
-                triggered based on message content
-              </p>
-            </motion.div>
-          </div>
-        )}
       </motion.div>
     </AnimatePresence>
   );
-}
+};
 
 export default SidecarPanel;
