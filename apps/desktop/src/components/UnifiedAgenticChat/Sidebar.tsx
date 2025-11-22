@@ -2,20 +2,19 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Pin,
-  PinOff,
   Plus,
   Search,
   Trash2,
   Calendar,
   Clock,
+  Settings,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
-import { UserProfile } from '../Layout/UserProfile';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SidebarProps {
   className?: string;
@@ -78,13 +77,16 @@ export function Sidebar({
     selectConversation,
     renameConversation,
     deleteConversation,
-    togglePinnedConversation,
   } = useUnifiedChatStore();
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<TemporalGroup>>(
+    new Set(['today', 'yesterday', 'thisWeek']),
+  );
 
   useEffect(() => {
     ensureActiveConversation();
@@ -100,351 +102,333 @@ export function Sidebar({
     });
   }, [conversations, searchQuery]);
 
-  // Group by pinned
-  const pinned = useMemo(
-    () => filtered.filter((conv) => conv.pinned).sort(sortByUpdated),
-    [filtered],
-  );
+  // Group conversations by time
+  const groupedConversations = useMemo(() => {
+    const groups = new Map<TemporalGroup, ConversationSummary[]>();
 
-  // Group by temporal sections
-  const temporalGroups = useMemo(() => {
-    const unpinned = filtered.filter((conv) => !conv.pinned);
-    const groups: Record<TemporalGroup, ConversationSummary[]> = {
-      today: [],
-      yesterday: [],
-      thisWeek: [],
-      last7Days: [],
-      last30Days: [],
-      older: [],
-    };
-
-    unpinned.forEach((conv) => {
-      if (conv.updatedAt) {
-        const group = getTemporalGroup(conv.updatedAt);
-        groups[group].push(conv);
-      } else {
-        // If no updatedAt, put in older
-        groups.older.push(conv);
+    filtered.forEach((conv) => {
+      const group = getTemporalGroup(new Date(conv.updatedAt));
+      if (!groups.has(group)) {
+        groups.set(group, []);
       }
+      groups.get(group)?.push(conv);
     });
 
-    // Sort each group by updated date
-    Object.keys(groups).forEach((key) => {
-      groups[key as TemporalGroup].sort(sortByUpdated);
+    // Sort conversations within each group
+    groups.forEach((convs) => {
+      convs.sort((a, b) => {
+        // Pinned first
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        // Then by date
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
     });
 
     return groups;
   }, [filtered]);
 
-  const handleNewChat = useCallback(async () => {
-    const id = await createConversation('New chat');
-    selectConversation(id);
-  }, [createConversation, selectConversation]);
-
-  const handleSelect = useCallback(
-    (id: string) => {
-      selectConversation(id);
-    },
-    [selectConversation],
-  );
+  const handleCreateConversation = useCallback(() => {
+    createConversation('New chat');
+  }, [createConversation]);
 
   const handleRename = useCallback(
-    async (id: string) => {
-      const trimmed = editingTitle.trim();
-      if (trimmed) {
-        renameConversation(id, trimmed);
+    (id: string) => {
+      if (editingTitle.trim() && editingId === id) {
+        renameConversation(id, editingTitle);
+        setEditingId(null);
+        setEditingTitle('');
       }
-      setEditingId(null);
     },
-    [editingTitle, renameConversation],
+    [editingId, editingTitle, renameConversation],
   );
 
-  const renderConversation = useCallback(
-    (conversation: ConversationSummary) => {
-      const isActive = conversation.id === activeConversationId;
-      const isEditing = conversation.id === editingId;
-      const title = conversation.title?.trim() || 'Untitled chat';
-      const subtitle = conversation.lastMessage?.trim() || 'No activity yet';
+  const startEditing = useCallback((conv: ConversationSummary) => {
+    setEditingId(conv.id);
+    setEditingTitle(conv.title);
+  }, []);
 
-      // Format relative time
-      const relativeTime = conversation.updatedAt ? formatRelativeTime(conversation.updatedAt) : '';
+  const toggleGroup = useCallback((group: TemporalGroup) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) {
+        next.delete(group);
+      } else {
+        next.add(group);
+      }
+      return next;
+    });
+  }, []);
 
-      return (
-        <div
-          key={conversation.id}
-          className={cn(
-            'group flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-left transition-all',
-            isActive
-              ? 'bg-gradient-to-r from-teal/20 to-transparent border-l-2 border-teal'
-              : 'hover:bg-white/5 border-l-2 border-transparent',
-          )}
-        >
-          <button
-            type="button"
-            className="flex-1 text-left"
-            onClick={() => handleSelect(conversation.id)}
-            aria-label={`Open conversation: ${title}`}
-            aria-current={isActive ? 'page' : undefined}
+  // Handle Cmd+K search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+      if (e.key === 'Escape') {
+        setShowSearch(false);
+        setSearchQuery('');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  if (collapsed) {
+    return (
+      <div className="w-16 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800">
+        <div className="p-3 flex flex-col items-center gap-4">
+          <Button
+            onClick={onToggleCollapse}
+            variant="ghost"
+            size="icon"
+            className="text-gray-600 dark:text-gray-400"
           >
-            {isEditing ? (
-              <input
-                value={editingTitle}
-                onChange={(event) => setEditingTitle(event.target.value)}
-                onBlur={() => handleRename(conversation.id)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    handleRename(conversation.id);
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setEditingId(null);
-                  }
-                }}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 focus:border-teal focus:outline-none focus:ring-1 focus:ring-teal/50"
-                aria-label="Edit conversation title"
-                autoFocus
-              />
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <div className="truncate text-sm font-semibold text-zinc-100">{title}</div>
-                  {conversation.pinned && <Pin className="h-3 w-3 shrink-0 text-teal" />}
-                </div>
-                {!collapsed && (
-                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
-                    <Clock className="h-3 w-3" />
-                    <span>{relativeTime}</span>
-                    {conversation.lastMessage && <span>• {subtitle}</span>}
-                  </div>
-                )}
-              </>
-            )}
-          </button>
-          <div
-            className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
-            role="group"
-            aria-label="Conversation actions"
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={handleCreateConversation}
+            variant="ghost"
+            size="icon"
+            className="text-gray-600 dark:text-gray-400"
           >
-            <button
-              type="button"
-              className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
-              title={conversation.pinned ? 'Unpin' : 'Pin'}
-              aria-label={conversation.pinned ? `Unpin ${title}` : `Pin ${title}`}
-              aria-pressed={conversation.pinned}
-              onClick={() => togglePinnedConversation(conversation.id)}
-            >
-              {conversation.pinned ? (
-                <PinOff className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <Pin className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-            </button>
-            <button
-              type="button"
-              className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
-              title="Delete"
-              aria-label={`Delete ${title}`}
-              onClick={() => deleteConversation(conversation.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => setShowSearch(!showSearch)}
+            variant="ghost"
+            size="icon"
+            className="text-gray-600 dark:text-gray-400"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
         </div>
-      );
-    },
-    [
-      activeConversationId,
-      collapsed,
-      deleteConversation,
-      editingId,
-      editingTitle,
-      handleSelect,
-      handleRename,
-      togglePinnedConversation,
-    ],
-  );
+      </div>
+    );
+  }
 
   return (
-    <aside
-      className={cn(
-        'flex h-full w-[320px] flex-col border-r border-zinc-800 bg-zinc-950/95 backdrop-blur-xl transition-all duration-200',
-        collapsed && 'w-[72px]',
-        className,
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <button
-          type="button"
-          className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
-            'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
-          )}
-          onClick={onToggleCollapse}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-expanded={!collapsed}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          )}
-        </button>
-        {!collapsed && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className={cn(
-              'h-9 w-9 rounded-lg',
-              'bg-terra-cotta text-white hover:bg-terra-cotta/90',
-              'shadow-lg shadow-terra-cotta/20',
-            )}
-            onClick={handleNewChat}
-            title="New chat"
-            aria-label="Create new chat conversation"
+    <>
+      {/* Command Palette / Search Modal */}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowSearch(false)}
           >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </Button>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-white dark:bg-charcoal-800 rounded-xl shadow-2xl overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                  <Search className="h-5 w-5 text-gray-500" />
+                  <Input
+                    autoFocus
+                    placeholder="Search conversations..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1 border-0 bg-transparent focus:ring-0"
+                  />
+                  <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded">ESC</kbd>
+                </div>
+                <ScrollArea className="max-h-96">
+                  <div className="p-2">
+                    {filtered.slice(0, 10).map((conv) => (
+                      <button
+                        key={conv.id}
+                        onClick={() => {
+                          selectConversation(conv.id);
+                          setShowSearch(false);
+                          setSearchQuery('');
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 rounded-lg transition-colors',
+                          conv.id === activeConversationId
+                            ? 'bg-teal-100 dark:bg-teal-900/30'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                        )}
+                      >
+                        <div className="font-medium text-sm">{conv.title}</div>
+                        {conv.lastMessage && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">
+                            {conv.lastMessage}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
-      {/* Search */}
-      <div className="px-4 py-3">
-        {!collapsed && (
-          <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-              aria-hidden="true"
-            />
-            <Input
-              placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              className={cn(
-                'w-full rounded-lg border-zinc-800 bg-zinc-900 pl-10 text-sm',
-                'placeholder:text-zinc-500',
-                'focus:border-teal focus:ring-teal/20',
-              )}
-              role="searchbox"
-              aria-label="Search conversations"
-            />
+      <div
+        className={cn(
+          'w-64 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800',
+          className,
+        )}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-3">
+            <Button
+              onClick={onToggleCollapse}
+              variant="ghost"
+              size="icon"
+              className="text-gray-600 dark:text-gray-400"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={handleCreateConversation}
+              variant="default"
+              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white"
+            >
+              <Plus className="h-4 w-4" />
+              New Chat
+            </Button>
           </div>
-        )}
+          <button
+            onClick={() => setShowSearch(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Search className="h-4 w-4" />
+            <span>Search</span>
+            <div className="ml-auto flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">⌘</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">K</kbd>
+            </div>
+          </button>
+        </div>
+
+        {/* Conversations List */}
+        <ScrollArea className="flex-1">
+          <div className="p-2">
+            {Array.from(groupedConversations.entries()).map(([group, convs]) => (
+              <div key={group} className="mb-4">
+                <button
+                  onClick={() => toggleGroup(group)}
+                  className="w-full flex items-center gap-2 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  <ChevronRight
+                    className={cn(
+                      'h-3 w-3 transition-transform',
+                      expandedGroups.has(group) && 'rotate-90',
+                    )}
+                  />
+                  <span className="flex items-center gap-1">
+                    {group === 'today' && <Calendar className="h-3 w-3" />}
+                    {group === 'yesterday' && <Clock className="h-3 w-3" />}
+                    {TEMPORAL_LABELS[group]}
+                  </span>
+                  <span className="ml-auto text-gray-400">({convs.length})</span>
+                </button>
+
+                <AnimatePresence>
+                  {expandedGroups.has(group) && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="mt-1 space-y-1"
+                    >
+                      {convs.map((conv) => (
+                        <div
+                          key={conv.id}
+                          className={cn(
+                            'group relative rounded-lg transition-all',
+                            conv.id === activeConversationId
+                              ? 'bg-teal-100 dark:bg-teal-900/30'
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                          )}
+                        >
+                          {editingId === conv.id ? (
+                            <Input
+                              autoFocus
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              onBlur={() => handleRename(conv.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRename(conv.id);
+                                if (e.key === 'Escape') {
+                                  setEditingId(null);
+                                  setEditingTitle('');
+                                }
+                              }}
+                              className="w-full px-3 py-2 text-sm"
+                            />
+                          ) : (
+                            <button
+                              onClick={() => selectConversation(conv.id)}
+                              onDoubleClick={() => startEditing(conv)}
+                              className="w-full text-left px-3 py-2"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">{conv.title}</div>
+                                  {conv.lastMessage && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                      {conv.lastMessage}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteConversation(conv.id);
+                                    }}
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Profile Section */}
+        <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
+          <button
+            onClick={onOpenSettings}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500 text-white text-sm font-medium">
+              U
+            </div>
+            <div className="flex-1 text-left">
+              <div className="text-sm font-medium">You</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Pro Plan</div>
+            </div>
+            <Settings className="h-4 w-4 text-gray-500" />
+          </button>
+        </div>
       </div>
-
-      {/* Conversations List */}
-      <ScrollArea className="flex-1 px-2">
-        {/* Pinned Section */}
-        {!collapsed && pinned.length > 0 && (
-          <TemporalSection title="Pinned" icon={Pin}>
-            {pinned.map((conversation) => renderConversation(conversation))}
-          </TemporalSection>
-        )}
-
-        {/* Temporal Sections */}
-        {!collapsed &&
-          (
-            [
-              'today',
-              'yesterday',
-              'thisWeek',
-              'last7Days',
-              'last30Days',
-              'older',
-            ] as TemporalGroup[]
-          ).map((groupKey) => {
-            const convs = temporalGroups[groupKey];
-            if (convs.length === 0) return null;
-
-            return (
-              <TemporalSection key={groupKey} title={TEMPORAL_LABELS[groupKey]} icon={Calendar}>
-                {convs.map((conversation) => renderConversation(conversation))}
-              </TemporalSection>
-            );
-          })}
-
-        {/* Empty State */}
-        {!collapsed &&
-          pinned.length === 0 &&
-          Object.values(temporalGroups).every((g) => g.length === 0) && (
-            <EmptyState onNewChat={handleNewChat} />
-          )}
-      </ScrollArea>
-
-      {/* User Profile */}
-      <div className="border-t border-zinc-800 px-4 py-3">
-        <UserProfile
-          name="Siddhartha Nagula"
-          email="siddhartha@agiworkforce.com"
-          onSettingsClick={onOpenSettings}
-          onBillingClick={onOpenSettings}
-          collapsed={collapsed}
-        />
-      </div>
-    </aside>
+    </>
   );
 }
 
-interface TemporalSectionProps {
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-}
-
-const TemporalSection = ({ title, icon: Icon, children }: TemporalSectionProps) => (
-  <div className="mb-4 px-2">
-    <div className="mb-2 flex items-center gap-2 px-1">
-      <Icon className="h-3.5 w-3.5 text-zinc-500" />
-      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</div>
-    </div>
-    <div className="space-y-0.5">{children}</div>
-  </div>
-);
-
-const EmptyState = ({ onNewChat }: { onNewChat: () => void }) => (
-  <div className="mx-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center">
-    <div className="mb-3 flex justify-center">
-      <div className="rounded-full bg-teal/10 p-3">
-        <Plus className="h-6 w-6 text-teal" />
-      </div>
-    </div>
-    <div className="mb-2 text-sm font-semibold text-zinc-200">No conversations yet</div>
-    <p className="mb-4 text-xs text-zinc-500">
-      Start a new chat to begin your agentic workspace journey.
-    </p>
-    <Button
-      className={cn(
-        'w-full justify-center gap-2 rounded-lg',
-        'bg-teal text-white hover:bg-teal/90',
-        'shadow-lg shadow-teal/20',
-      )}
-      onClick={onNewChat}
-    >
-      <Plus className="h-4 w-4" />
-      <span>New Chat</span>
-    </Button>
-  </div>
-);
-
-function sortByUpdated(a: ConversationSummary, b: ConversationSummary) {
-  return (b.updatedAt?.valueOf?.() ?? 0) - (a.updatedAt?.valueOf?.() ?? 0);
-}
-
-// Format relative time
-function formatRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  // Format as date for older items
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+export default Sidebar;
