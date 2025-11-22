@@ -1,10 +1,10 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Layers, Square, Brain } from 'lucide-react';
+import { Layers, Square } from 'lucide-react';
 
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
-import { ChatInputArea, type SendOptions } from './ChatInputArea';
+import { type SendOptions } from './ChatInputArea';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { Button } from '../ui/Button';
@@ -18,8 +18,7 @@ import { isTauri } from '../../lib/tauri-mock';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { MediaLab } from './MediaLab';
 import { ChatStream } from './ChatStream';
-import { DynamicSidecar, type DynamicPanelType } from './DynamicSidecar';
-import { QuickModelSelector } from './QuickModelSelector';
+import { type DynamicPanelType } from './DynamicSidecar';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 
 export const UnifiedAgenticChat: React.FC<{
@@ -42,12 +41,6 @@ export const UnifiedAgenticChat: React.FC<{
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
-  const hasMessages = messages.length > 0;
-  const conversations = useUnifiedChatStore((state) => state.conversations);
-  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
-  const createConversation = useUnifiedChatStore((state) => state.createConversation);
-  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
-  const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -86,18 +79,6 @@ export const UnifiedAgenticChat: React.FC<{
 
   // Mark as intentionally unused for TypeScript
   void _tokenStats;
-
-  const sidebarItems = useMemo(
-    () =>
-      conversations.map((conversation) => ({
-        id: conversation.id,
-        title: conversation.title?.trim() || 'Untitled chat',
-        subtitle: conversation.lastMessage?.trim() || 'No messages yet',
-        active: conversation.id === activeConversationId,
-        onClick: () => selectConversation(conversation.id),
-      })),
-    [conversations, activeConversationId, selectConversation],
-  );
 
   useAgenticEvents();
 
@@ -141,7 +122,7 @@ export const UnifiedAgenticChat: React.FC<{
     );
   }, [loadOverview]);
 
-  const handleSendMessage = async (content: string, options: SendOptions) => {
+  const _handleSendMessage = async (content: string, options: SendOptions) => {
     const classifyTask = (
       text: string,
     ): 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video' => {
@@ -294,69 +275,16 @@ export const UnifiedAgenticChat: React.FC<{
     immersive: '',
   };
 
-  const handleNewChat = useCallback(() => {
-    const id = createConversation('New chat');
-    selectConversation(id);
-  }, [createConversation, selectConversation]);
-
   const openSidecar = (panel: DynamicPanelType, payload?: Record<string, unknown>) => {
     setSidecarState({ type: panel, payload });
     setSidecarOpen(true);
   };
 
-  const headerLeft = null;
-
-  const headerRight = null;
-
-  const composer = (
-    <div className="relative">
-      {agentStatus && agentStatus.status === 'running' && (
-        <div className="absolute bottom-full mb-4 left-0 right-0 flex justify-center">
-          <div className="bg-zinc-800/80 border border-white/10 px-3 py-1.5 rounded-full text-xs text-zinc-300 flex items-center gap-2 shadow-lg backdrop-blur-sm">
-            <Brain className="w-3 h-3 animate-pulse" />
-            <span>{agentStatus.currentStep || agentStatus.currentGoal || 'Processing...'}</span>
-          </div>
-        </div>
-      )}
-      <ChatInputArea
-        onSend={handleSendMessage}
-        placeholder="Type a prompt or describe a workflow..."
-        enableAttachments
-        className="bg-transparent"
-        rightAccessory={<QuickModelSelector className="mr-2" />}
-      />
-    </div>
-  );
-
-  const sidecarNode = (
-    <DynamicSidecar
-      panelType={sidecarState.type}
-      payload={sidecarState.payload}
-      allowedDirectory={sidecarState.payload?.['allowedDirectory'] as string | undefined}
-      allowStatus={sidecarState.payload?.['restricted'] ? 'restricted' : 'allowed'}
-      onClose={() => {
-        setSidecarOpen(false);
-        setSidecarState({ type: null });
-      }}
-    />
-  );
-
   return (
     <div
       className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
     >
-      <AppLayout
-        headerLeft={headerLeft}
-        headerRight={headerRight}
-        activeModel={`${providerForMessage || 'Auto'} ${modelForMessage || ''}`.trim()}
-        sidebarItems={sidebarItems}
-        onNewChat={handleNewChat}
-        sidecar={sidecarNode}
-        sidecarOpen={sidecarOpen}
-        onToggleSidecar={() => setSidecarOpen(!sidecarOpen)}
-        isEmptyState={!hasMessages}
-        composer={composer}
-      >
+      <AppLayout>
         <BudgetAlertsPanel />
         <ChatStream onOpenSidecar={openSidecar} />
       </AppLayout>
