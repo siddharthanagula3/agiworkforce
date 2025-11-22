@@ -1,20 +1,27 @@
+#[cfg(windows)]
 use crate::automation::uia::BoundingRectangle;
+#[cfg(windows)]
 use anyhow::{anyhow, Result};
+#[cfg(windows)]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
     MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
     MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT,
 };
+#[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::SetCursorPos;
 
+#[cfg(windows)]
 pub enum MouseButton {
     Left,
     Right,
     Middle,
 }
 
+#[cfg(windows)]
 pub struct MouseSimulator;
 
+#[cfg(windows)]
 impl MouseSimulator {
     pub fn new() -> Result<Self> {
         Ok(Self)

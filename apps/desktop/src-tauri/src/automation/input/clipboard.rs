@@ -1,17 +1,26 @@
+#[cfg(windows)]
 use anyhow::{anyhow, Result};
+#[cfg(windows)]
 use std::ffi::c_void;
+#[cfg(windows)]
 use windows::core::PCWSTR;
+#[cfg(windows)]
 use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
+#[cfg(windows)]
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
 };
+#[cfg(windows)]
 use windows::Win32::System::Memory::{
     GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
 };
+#[cfg(windows)]
 use windows::Win32::System::Ole::CF_UNICODETEXT;
 
+#[cfg(windows)]
 pub struct ClipboardManager;
 
+#[cfg(windows)]
 impl ClipboardManager {
     pub fn new() -> Result<Self> {
         Ok(Self)
