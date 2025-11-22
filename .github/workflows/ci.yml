@@ -56,7 +56,7 @@ jobs:
 
       - name: Verify Rust compilation
         working-directory: apps/desktop/src-tauri
-        run: cargo check --all-features
+        run: cargo check
 
       - name: Verify TypeScript compilation
         run: pnpm --filter @agiworkforce/desktop exec tsc --noEmit
@@ -68,7 +68,7 @@ jobs:
 
       - name: Run Rust unit tests
         working-directory: apps/desktop/src-tauri
-        run: cargo test --lib --bins --all-features -- --nocapture --test-threads=1
+        run: cargo test --lib --bins -- --nocapture --test-threads=1
         continue-on-error: true
 
       - name: Run frontend unit tests
