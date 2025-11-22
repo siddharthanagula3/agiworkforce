@@ -262,8 +262,8 @@ export type ConversationMode = 'safe' | 'full_control';
 // Focus Modes (Perplexity-style)
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
 
-// Sidecar Modes (Polymorphic panel)
-export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas';
+// FIX: Added 'data' to SidecarMode to support the new Data Grid
+export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas' | 'data';
 
 // Enhanced Sidecar State
 export interface SidecarState {
@@ -1294,6 +1294,15 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           return 'code';
         }
 
+        // FIX: Check for Data (CSV/JSON)
+        if (
+          content.includes('.csv') ||
+          content.includes('id,name,value') ||
+          content.includes('```csv')
+        ) {
+          return 'data';
+        }
+
         // Check for browser/URL operations
         if (
           content.includes('http://') ||
@@ -1383,6 +1392,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
   ),
 );
 
+// ... Rest of the file remains unchanged (Agent Status Listener) ...
 export type AgentStatusPayload = Partial<AgentStatus> & {
   id: string;
   status?: AgentStatus['status'] | string;

@@ -2,9 +2,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Layers, Square } from 'lucide-react';
 
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
-import { type SendOptions } from './ChatInputArea';
+import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { Button } from '../ui/Button';
@@ -32,10 +32,10 @@ export const UnifiedAgenticChat: React.FC<{
   layout = 'default',
   defaultSidecarOpen = true,
   onSendMessage,
-  onOpenSettings: _onOpenSettings,
+  onOpenSettings,
 }) => {
-  const sidecarOpen = useUnifiedChatStore((state) => state.sidecarOpen);
   const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
+  const openSidecarStore = useUnifiedChatStore((state) => state.openSidecar);
   const addMessage = useUnifiedChatStore((state) => state.addMessage);
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
@@ -53,10 +53,6 @@ export const UnifiedAgenticChat: React.FC<{
 
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [mediaLabOpen, setMediaLabOpen] = useState(false);
-  const [sidecarState, setSidecarState] = useState<{
-    type: DynamicPanelType;
-    payload?: Record<string, unknown>;
-  }>({ type: null });
 
   const _tokenStats = useMemo(() => {
     let input = 0;
@@ -77,7 +73,6 @@ export const UnifiedAgenticChat: React.FC<{
     return { input, output, cost };
   }, [messages]);
 
-  // Mark as intentionally unused for TypeScript
   void _tokenStats;
 
   useAgenticEvents();
@@ -87,12 +82,6 @@ export const UnifiedAgenticChat: React.FC<{
       setSidecarOpen(false);
     }
   }, [defaultSidecarOpen, setSidecarOpen]);
-
-  useEffect(() => {
-    if (!sidecarState.type && sidecarOpen) {
-      setSidecarOpen(false);
-    }
-  }, [sidecarState.type, sidecarOpen, setSidecarOpen]);
 
   useEffect(() => {
     if (!budget.enabled) return;
@@ -122,8 +111,7 @@ export const UnifiedAgenticChat: React.FC<{
     );
   }, [loadOverview]);
 
-  // @ts-expect-error - Temporarily unused until ChatInputArea is re-integrated
-  const _handleSendMessage = async (content: string, options: SendOptions) => {
+  const handleSendMessage = async (content: string, options: SendOptions) => {
     const classifyTask = (
       text: string,
     ): 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video' => {
@@ -241,6 +229,8 @@ export const UnifiedAgenticChat: React.FC<{
             content,
             providerOverride: enrichedOptions.providerId,
             modelOverride: enrichedOptions.modelId,
+            // FIX: Pass focusMode to the backend
+            focusMode: enrichedOptions.focusMode,
             stream: false,
             enableTools: true,
             conversationMode,
@@ -277,17 +267,28 @@ export const UnifiedAgenticChat: React.FC<{
   };
 
   const openSidecar = (panel: DynamicPanelType, payload?: Record<string, unknown>) => {
-    setSidecarState({ type: panel, payload });
-    setSidecarOpen(true);
+    // Map legacy DynamicPanelType to new SidecarMode
+    let mode: SidecarMode = 'code';
+
+    if (panel === 'browser') mode = 'browser';
+    else if (panel === 'terminal') mode = 'terminal';
+    else if (panel === 'code') mode = 'code';
+    else if (panel === 'data') mode = 'data';
+
+    openSidecarStore(mode, payload?.['contextId'] as string | undefined);
   };
 
   return (
     <div
       className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
     >
-      <AppLayout>
+      <AppLayout onOpenSettings={onOpenSettings}>
         <BudgetAlertsPanel />
         <ChatStream onOpenSidecar={openSidecar} />
+
+        {/* FIX: Removed the fixed bottom wrapper. 
+            ChatInputArea handles its own 'fixed' positioning to float in the center when empty. */}
+        <ChatInputArea onSend={handleSendMessage} />
       </AppLayout>
 
       {workspaceOpen && (
