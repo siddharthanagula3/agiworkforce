@@ -10,6 +10,9 @@ import {
   useUnifiedChatStore,
 } from '../../stores/unifiedChatStore';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { QuickModelSelector } from './QuickModelSelector';
+import { useModelStore } from '../../stores/modelStore';
+import { getModelMetadata } from '../../constants/llm';
 
 export interface SendOptions {
   attachments?: Attachment[];
@@ -74,10 +77,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const focusMode = useUnifiedChatStore((state) => state.focusMode);
   const setFocusMode = useUnifiedChatStore((state) => state.setFocusMode);
   const tokenUsage = useUnifiedChatStore((state) => state.tokenUsage);
+  const selectedModel = useModelStore((state) => state.selectedModel);
   const prefersReducedMotion = useReducedMotion();
+
+  // Get model display name
+  const modelDisplayName = selectedModel
+    ? (getModelMetadata(selectedModel)?.name ?? 'Claude')
+    : 'Claude';
 
   const isDisabled = disabled || isLoading;
   const isEmptyState = messages.length === 0 && !content.trim();
+
+  // Close model selector when model changes
+  useEffect(() => {
+    setShowModelSelector(false);
+  }, [selectedModel]);
 
   // Get dynamic placeholder based on focus mode
   const placeholder =
@@ -381,16 +395,45 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           <form onSubmit={handleSubmit} className="flex flex-col">
             <div className="flex items-start px-4 pt-4">
               {/* Model Selector (Left side inside input) */}
-              <button
-                type="button"
-                onClick={() => setShowModelSelector(!showModelSelector)}
-                className="mt-2 mr-2 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                aria-label="Select model"
-                aria-expanded={showModelSelector}
-              >
-                <span className="font-medium">Claude</span>
-                <ChevronDown size={14} />
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelector(!showModelSelector)}
+                  className="mt-2 mr-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                  aria-label="Select model"
+                  aria-expanded={showModelSelector}
+                >
+                  <span className="font-medium truncate max-w-[120px]">{modelDisplayName}</span>
+                  <ChevronDown
+                    size={14}
+                    className={cn('transition-transform', showModelSelector && 'rotate-180')}
+                  />
+                </button>
+
+                {/* Model Selector Popover */}
+                <AnimatePresence>
+                  {showModelSelector && (
+                    <>
+                      {/* Backdrop */}
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowModelSelector(false)}
+                        aria-hidden="true"
+                      />
+                      {/* Popover */}
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-0 top-full z-50 mt-2 w-[280px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-800 p-4 shadow-lg"
+                      >
+                        <QuickModelSelector className="w-full max-w-none" />
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {/* Text Input */}
               <textarea

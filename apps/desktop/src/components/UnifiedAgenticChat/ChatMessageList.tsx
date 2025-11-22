@@ -150,8 +150,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      {/* Toolbar - Sticky */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-900 backdrop-blur-sm">
         <button
           onClick={() => setShowSearch(!showSearch)}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
@@ -188,9 +188,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         </label>
       </div>
 
-      {/* Search Bar */}
+      {/* Search Bar - Sticky when visible */}
       {showSearch && (
-        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="sticky top-[52px] z-10 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-900">
           <input
             type="text"
             value={searchQuery}
