@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock Tauri and heavy dependencies
 vi.mock('@tauri-apps/api/event', () => ({
@@ -178,10 +178,8 @@ describe('Sidebar Temporal Grouping', () => {
         { id: '2', updatedAt: null },
       ];
 
-      const groups: Record<
-        TemporalGroup,
-        Array<{ id: string; updatedAt: Date | undefined | null }>
-      > = {
+      type Conv = { id: string; updatedAt: Date | undefined | null };
+      const groups: Record<TemporalGroup, Array<Conv>> = {
         today: [],
         yesterday: [],
         thisWeek: [],
@@ -190,7 +188,7 @@ describe('Sidebar Temporal Grouping', () => {
         older: [],
       };
 
-      conversations.forEach((conv) => {
+      conversations.forEach((conv: Conv) => {
         if (conv.updatedAt) {
           const group = getTemporalGroup(conv.updatedAt);
           groups[group].push(conv);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, ChevronDown, Clock, Layers } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';

@@ -132,7 +132,7 @@ export function parseCitations(text: string): React.ReactNode[] {
     }
 
     // Add citation badge
-    const index = parseInt(match[1], 10);
+    const index = match[1] ? parseInt(match[1], 10) : 0;
     parts.push(<CitationBadge key={`citation-${index}-${match.index}`} index={index} />);
 
     lastIndex = match.index + match[0].length;
