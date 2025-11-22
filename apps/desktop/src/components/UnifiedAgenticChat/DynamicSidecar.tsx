@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Terminal,
   Video,
+  Database,
 } from 'lucide-react';
 
 import { BrowserVisualization } from '../Browser/BrowserVisualization';
@@ -18,7 +19,16 @@ import { TerminalPanel } from '../execution/TerminalPanel';
 import { cn } from '../../lib/utils';
 import { MediaGallery } from '../Media/MediaGallery';
 
-export type DynamicPanelType = 'terminal' | 'browser' | 'code' | 'video' | 'media' | 'files' | null;
+// FIX: Added 'data' to supported types to match SidecarPanel
+export type DynamicPanelType =
+  | 'terminal'
+  | 'browser'
+  | 'code'
+  | 'video'
+  | 'media'
+  | 'files'
+  | 'data'
+  | null;
 
 interface DynamicSidecarProps {
   panelType: DynamicPanelType;
@@ -35,6 +45,7 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   video: <Video className="h-4 w-4 text-orange-300" />,
   media: <ImageIcon className="h-4 w-4 text-indigo-300" />,
   files: <FileText className="h-4 w-4 text-slate-200" />,
+  data: <Database className="h-4 w-4 text-blue-300" />, // FIX: Added Data icon
 };
 
 export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
@@ -96,6 +107,8 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         );
       case 'media':
         return <MediaGallery />;
+
+      // FIX: Video Mode Implementation
       case 'video':
         return (
           <div className="flex h-full flex-col gap-3">
@@ -103,7 +116,6 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
               <div className="text-sm text-zinc-200">{payload?.['title'] as string}</div>
             ) : null}
             <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/60">
-              {/* caption alternative is provided via aria-label for accessibility */}
               <video
                 className="h-auto w-full"
                 src={payload?.['src'] as string | undefined}
@@ -118,6 +130,43 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             </div>
           </div>
         );
+
+      // FIX: Data Mode Implementation (Matches SidecarPanel)
+      case 'data':
+        return (
+          <div className="flex h-full flex-col">
+            <div className="bg-black/40 p-2 text-xs text-zinc-400 border-b border-white/5">
+              Data Preview (Read-Only)
+            </div>
+            <div className="flex-1 overflow-auto p-0">
+              <table className="w-full text-sm text-left text-zinc-300">
+                <thead className="bg-white/5 text-xs uppercase text-zinc-500 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-2 border-b border-white/10">Key</th>
+                    <th className="px-4 py-2 border-b border-white/10">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {payload?.['data'] && typeof payload['data'] === 'object' ? (
+                    Object.entries(payload['data'] as Record<string, any>).map(([k, v]) => (
+                      <tr key={k} className="hover:bg-white/5">
+                        <td className="px-4 py-2 font-mono text-xs text-zinc-500">{k}</td>
+                        <td className="px-4 py-2">{String(v)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="px-4 py-4 text-center text-zinc-500 italic">
+                        No structured data available
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="flex h-full flex-col items-center justify-center text-sm text-zinc-400">

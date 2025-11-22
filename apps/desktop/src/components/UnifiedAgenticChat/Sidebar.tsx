@@ -8,6 +8,8 @@ import {
   Calendar,
   Clock,
   Settings,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
@@ -77,6 +79,7 @@ export function Sidebar({
     selectConversation,
     renameConversation,
     deleteConversation,
+    togglePinnedConversation,
   } = useUnifiedChatStore();
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
 
@@ -103,11 +106,22 @@ export function Sidebar({
     });
   }, [conversations, searchQuery]);
 
-  // Group conversations by time
+  // FIX: Separate Pinned Conversations
+  const pinnedConversations = useMemo(
+    () =>
+      filtered
+        .filter((c) => c.pinned)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    [filtered],
+  );
+
+  const unpinnedConversations = useMemo(() => filtered.filter((c) => !c.pinned), [filtered]);
+
+  // Group unpinned conversations by time
   const groupedConversations = useMemo(() => {
     const groups = new Map<TemporalGroup, ConversationSummary[]>();
 
-    filtered.forEach((conv) => {
+    unpinnedConversations.forEach((conv) => {
       const group = getTemporalGroup(new Date(conv.updatedAt));
       if (!groups.has(group)) {
         groups.set(group, []);
@@ -118,26 +132,23 @@ export function Sidebar({
     // Sort conversations within each group
     groups.forEach((convs) => {
       convs.sort((a, b) => {
-        // Pinned first
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        // Then by date
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
     });
 
     return groups;
-  }, [filtered]);
+  }, [unpinnedConversations]);
 
   // Flat list of visible conversations for keyboard navigation
   const visibleConversations = useMemo(() => {
-    const visible: ConversationSummary[] = [];
+    const visible: ConversationSummary[] = [...pinnedConversations];
     Array.from(groupedConversations.entries()).forEach(([group, convs]) => {
       if (expandedGroups.has(group)) {
         visible.push(...convs);
       }
     });
     return visible;
-  }, [groupedConversations, expandedGroups]);
+  }, [groupedConversations, expandedGroups, pinnedConversations]);
 
   const handleCreateConversation = useCallback(() => {
     createConversation('New chat');
@@ -220,6 +231,79 @@ export function Sidebar({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingId, showSearch, focusedIndex, visibleConversations, selectConversation]);
+
+  const renderConversationItem = (conv: ConversationSummary, isKeyboardFocused: boolean) => (
+    <div
+      key={conv.id}
+      className={cn(
+        'group relative rounded-lg transition-all mb-1',
+        conv.id === activeConversationId
+          ? 'bg-teal-100 dark:bg-teal-900/30'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+        isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
+      )}
+    >
+      {editingId === conv.id ? (
+        <Input
+          autoFocus
+          value={editingTitle}
+          onChange={(e) => setEditingTitle(e.target.value)}
+          onBlur={() => handleRename(conv.id)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRename(conv.id);
+            if (e.key === 'Escape') {
+              setEditingId(null);
+              setEditingTitle('');
+            }
+          }}
+          className="w-full px-3 py-2 text-sm"
+        />
+      ) : (
+        <div className="flex items-center">
+          <button
+            onClick={() => selectConversation(conv.id)}
+            onDoubleClick={() => startEditing(conv)}
+            className="flex-1 text-left px-3 py-2 overflow-hidden"
+          >
+            <div className="font-medium text-sm truncate">{conv.title || 'Untitled'}</div>
+            {conv.lastMessage && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {conv.lastMessage}
+              </div>
+            )}
+          </button>
+
+          {/* Hover Actions */}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePinnedConversation(conv.id);
+              }}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-teal-500"
+              title={conv.pinned ? 'Unpin' : 'Pin'}
+            >
+              {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+            </Button>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteConversation(conv.id);
+              }}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-red-500"
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   if (collapsed) {
     return (
@@ -360,6 +444,20 @@ export function Sidebar({
         {/* Conversations List */}
         <ScrollArea className="flex-1">
           <div className="p-2">
+            {/* Pinned Section */}
+            {pinnedConversations.length > 0 && (
+              <div className="mb-6">
+                <div className="px-3 mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  <Pin className="w-3 h-3" /> Pinned
+                </div>
+                {pinnedConversations.map((conv) => {
+                  const globalIndex = visibleConversations.findIndex((c) => c.id === conv.id);
+                  return renderConversationItem(conv, globalIndex === focusedIndex);
+                })}
+              </div>
+            )}
+
+            {/* Temporal Sections */}
             {Array.from(groupedConversations.entries()).map(([group, convs]) => (
               <div key={group} className="mb-4">
                 <button
@@ -391,66 +489,7 @@ export function Sidebar({
                     >
                       {convs.map((conv) => {
                         const globalIndex = visibleConversations.findIndex((c) => c.id === conv.id);
-                        const isKeyboardFocused = globalIndex === focusedIndex;
-                        return (
-                          <div
-                            key={conv.id}
-                            className={cn(
-                              'group relative rounded-lg transition-all',
-                              conv.id === activeConversationId
-                                ? 'bg-teal-100 dark:bg-teal-900/30'
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-800',
-                              isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
-                            )}
-                          >
-                            {editingId === conv.id ? (
-                              <Input
-                                autoFocus
-                                value={editingTitle}
-                                onChange={(e) => setEditingTitle(e.target.value)}
-                                onBlur={() => handleRename(conv.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleRename(conv.id);
-                                  if (e.key === 'Escape') {
-                                    setEditingId(null);
-                                    setEditingTitle('');
-                                  }
-                                }}
-                                className="w-full px-3 py-2 text-sm"
-                              />
-                            ) : (
-                              <button
-                                onClick={() => selectConversation(conv.id)}
-                                onDoubleClick={() => startEditing(conv)}
-                                className="w-full text-left px-3 py-2"
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm truncate">{conv.title}</div>
-                                    {conv.lastMessage && (
-                                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                        {conv.lastMessage}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteConversation(conv.id);
-                                      }}
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </button>
-                            )}
-                          </div>
-                        );
+                        return renderConversationItem(conv, globalIndex === focusedIndex);
                       })}
                     </motion.div>
                   )}
