@@ -715,16 +715,17 @@ impl StripeService {
                 .unwrap_or(false);
 
             // Extract card details if available
-            let (card_brand, card_last4, card_exp_month, card_exp_year) = if let Some(card) = pm.card {
-                (
-                    card.brand.map(|b| b.to_string()),
-                    card.last4,
-                    card.exp_month,
-                    card.exp_year,
-                )
-            } else {
-                (None, None, None, None)
-            };
+            let (card_brand, card_last4, card_exp_month, card_exp_year) =
+                if let Some(card) = pm.card {
+                    (
+                        card.brand.map(|b| b.to_string()),
+                        card.last4,
+                        card.exp_month,
+                        card.exp_year,
+                    )
+                } else {
+                    (None, None, None, None)
+                };
 
             let payment_method_info = PaymentMethodInfo {
                 id: pm_id.clone(),
@@ -796,16 +797,17 @@ impl StripeService {
         let now = Utc::now().timestamp();
 
         // Extract card details if available
-        let (card_brand, card_last4, card_exp_month, card_exp_year) = if let Some(card) = payment_method.card {
-            (
-                card.brand.map(|b| b.to_string()),
-                card.last4,
-                card.exp_month,
-                card.exp_year,
-            )
-        } else {
-            (None, None, None, None)
-        };
+        let (card_brand, card_last4, card_exp_month, card_exp_year) =
+            if let Some(card) = payment_method.card {
+                (
+                    card.brand.map(|b| b.to_string()),
+                    card.last4,
+                    card.exp_month,
+                    card.exp_year,
+                )
+            } else {
+                (None, None, None, None)
+            };
 
         let payment_method_info = PaymentMethodInfo {
             id: pm_db_id.clone(),

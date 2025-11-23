@@ -2,7 +2,7 @@
 mod tests {
     use crate::router::providers::openai::OpenAIProvider;
     use crate::router::{
-        ChatMessage, ContentPart, ImageInput, ImageDetail, ImageFormat, LLMProvider, LLMRequest,
+        ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMProvider, LLMRequest,
         ToolChoice, ToolDefinition,
     };
 
