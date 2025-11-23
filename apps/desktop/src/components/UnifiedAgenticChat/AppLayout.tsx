@@ -8,9 +8,10 @@ import { cn } from '../../lib/utils';
 interface AppLayoutProps {
   children: React.ReactNode;
   onOpenSettings?: () => void;
+  onOpenBilling?: () => void;
 }
 
-export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
+export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -67,6 +68,7 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
+        onOpenBilling={onOpenBilling}
       />
 
       {/* Main Content Area */}
@@ -83,25 +85,10 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
             <div className="mx-auto w-full max-w-3xl px-4 py-6">{children}</div>
           </div>
 
-          {/* Empty State Branding */}
+          {/* Empty State - Content behind input */}
           {isEmptyState && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center transform -translate-y-8">
-                <div className="mb-6 mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-lg shadow-teal-500/20">
-                  <span className="text-3xl font-bold text-white">AGI</span>
-                </div>
-                <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100 mb-3 tracking-tight">
-                  AGI Workforce
-                </h1>
-                <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto text-base leading-relaxed">
-                  Your intelligent workspace assistant. <br />
-                  <span className="text-sm opacity-80 mt-2 block">
-                    Press{' '}
-                    <kbd className="font-mono bg-gray-200 dark:bg-gray-800 px-1 rounded">Cmd+K</kbd>{' '}
-                    to start.
-                  </span>
-                </p>
-              </div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              {/* Quick action cards removed */}
             </div>
           )}
         </div>

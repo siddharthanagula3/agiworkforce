@@ -86,7 +86,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     : 'Claude';
 
   const isDisabled = disabled || isLoading;
-  const isEmptyState = messages.length === 0 && !content.trim();
+  const isEmptyState = messages.length === 0;
 
   // Close model selector when model changes
   useEffect(() => {
@@ -157,6 +157,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       document.removeEventListener('dragleave', handleDragLeave);
       document.removeEventListener('drop', handleDrop);
     };
+    // handleFilesAdded is stable (doesn't depend on props/state), safe to omit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFilesAdded = (files: File[]) => {
@@ -271,7 +273,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       </AnimatePresence>
 
       <motion.div
-        layoutId="cockpit-input"
         className={cn(
           'fixed z-40 w-full px-4',
           isEmptyState
@@ -279,6 +280,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             : 'bottom-6 max-w-3xl left-1/2 -translate-x-1/2',
           className,
         )}
+        initial={false}
+        animate={{
+          bottom: isEmptyState ? '50%' : '24px',
+          left: '50%',
+          x: '-50%',
+          y: isEmptyState ? '50%' : '0%',
+          maxWidth: isEmptyState ? '42rem' : '48rem',
+        }}
         transition={
           prefersReducedMotion
             ? { duration: 0.15 }
@@ -288,17 +297,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 damping: 30,
               }
         }
-        style={{ willChange: prefersReducedMotion ? 'auto' : 'transform' }}
+        style={{ willChange: 'transform' }}
       >
-        {/* Focus Mode Pills - Above input, visible by default when not empty */}
-        {!isEmptyState && (
-          <motion.div
-            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
-            transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
-            className="mb-3 flex items-center justify-center gap-2"
-          >
+        {/* Focus Mode Pills - Above input, always visible */}
+        <motion.div
+          initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+          transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
+          className="mb-3 flex items-center justify-center gap-2"
+        >
             {FOCUS_MODES.map((mode) => (
               <button
                 key={mode.value || 'all'}
@@ -313,16 +321,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 {mode.label}
               </button>
             ))}
-          </motion.div>
-        )}
+        </motion.div>
 
-        <motion.div
+        <div
           className={cn(
             'floating-input-container relative overflow-hidden',
             isEmptyState && 'shadow-2xl',
           )}
-          layout
-          style={{ willChange: prefersReducedMotion ? 'auto' : 'transform' }}
         >
           {/* Context Items */}
           {activeContext.length > 0 && (
@@ -529,7 +534,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               style={{ width: `${tokenUsage.percentage}%` }}
             />
           </div>
-        </motion.div>
+        </div>
       </motion.div>
     </>
   );

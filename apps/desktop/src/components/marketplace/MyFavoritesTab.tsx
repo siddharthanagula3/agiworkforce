@@ -3,6 +3,7 @@ import { Heart, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { WorkflowCard } from './WorkflowCard';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
+import { useAuthStore } from '../../stores/authStore';
 import { invoke } from '@tauri-apps/api/core';
 import type { PublishedWorkflow } from '../../types/marketplace';
 
@@ -20,8 +21,7 @@ export function MyFavoritesTab() {
     setIsLoading(true);
     setError(null);
     try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
+      const userId = useAuthStore.getState().getCurrentUserId();
       const favoritedWorkflows = await invoke<PublishedWorkflow[]>('get_user_favorites', {
         userId,
       });
@@ -36,8 +36,7 @@ export function MyFavoritesTab() {
 
   const handleUnfavorite = async (workflowId: string) => {
     try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
+      const userId = useAuthStore.getState().getCurrentUserId();
       await invoke('unfavorite_workflow', { workflowId, userId });
       setFavorites((prev) => prev.filter((w) => w.id !== workflowId));
     } catch (err) {

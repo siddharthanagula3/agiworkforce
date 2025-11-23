@@ -147,6 +147,7 @@ pub enum Provider {
     DeepSeek, // DeepSeek-V3, DeepSeek-Coder-V2
     Qwen,     // Qwen2.5-Max, Qwen3-Coder (Alibaba)
     Mistral,  // Mistral Large 2, Codestral
+    Moonshot, // Kimi K2 Thinking (November 2025)
 }
 
 impl Provider {
@@ -161,6 +162,7 @@ impl Provider {
             Provider::DeepSeek => "deepseek",
             Provider::Qwen => "qwen",
             Provider::Mistral => "mistral",
+            Provider::Moonshot => "moonshot",
         }
     }
 
@@ -175,6 +177,7 @@ impl Provider {
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
             "mistral" | "mistralai" => Some(Provider::Mistral),
+            "moonshot" | "kimi" => Some(Provider::Moonshot),
             _ => None,
         }
     }
@@ -190,6 +193,7 @@ impl Provider {
             Provider::DeepSeek => "deepseek-chat",
             Provider::Qwen => "qwen-max-2025-01-25",
             Provider::Mistral => "mistral-large-2",
+            Provider::Moonshot => "kimi-k2-thinking",
         }
     }
 
@@ -237,6 +241,10 @@ impl Provider {
             // Ollama defaults
             (Provider::Ollama, TaskType::CodeGeneration) => "codellama",
             (Provider::Ollama, _) => "llama3.1",
+
+            // Moonshot routing
+            (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2-thinking",
+            (Provider::Moonshot, _) => "kimi-k2-thinking",
         }
     }
 }

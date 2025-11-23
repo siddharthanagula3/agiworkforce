@@ -13,6 +13,7 @@ import { ScrollArea } from '../ui/ScrollArea';
 import { Separator } from '../ui/Separator';
 import { Textarea } from '../ui/Textarea';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
+import { useAuthStore } from '../../stores/authStore';
 import type { WorkflowDefinition } from '../../types/workflow';
 
 export function WorkflowDetailModal() {
@@ -42,8 +43,7 @@ export function WorkflowDetailModal() {
   const handleClone = async () => {
     setIsCloning(true);
     try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
+      const userId = useAuthStore.getState().getCurrentUserId();
       const userName = 'Current User';
 
       await cloneWorkflow({
@@ -74,8 +74,7 @@ export function WorkflowDetailModal() {
 
     setIsSubmittingReview(true);
     try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
+      const userId = useAuthStore.getState().getCurrentUserId();
 
       await rateWorkflow({
         workflow_id: selectedWorkflow.id,

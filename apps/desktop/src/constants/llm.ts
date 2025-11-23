@@ -9,59 +9,53 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   deepseek: 'DeepSeek',
   qwen: 'Qwen',
   mistral: 'Mistral',
+  moonshot: 'Moonshot AI',
 };
 
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
   openai: [
-    // November 2025 models
-    { value: 'gpt-5', label: 'GPT-5 ⭐ (Most Capable)' },
-    { value: 'gpt-4o', label: 'GPT-4o (Fast)' },
-    { value: 'o3', label: 'O3 (Deep Reasoning)' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Legacy)' },
+    // November 2025 Releases Only
+    { value: 'gpt-5.1', label: 'GPT-5.1 ⭐ (Nov 12, 2025 - Latest)' },
+    { value: 'gpt-5.1-instant', label: 'GPT-5.1 Instant (Quick Responses)' },
+    { value: 'gpt-5.1-thinking', label: 'GPT-5.1 Thinking 🧠 (Complex Tasks)' },
+    { value: 'gpt-5.1-codex-max', label: 'GPT-5.1-Codex-Max (Agentic Coding, 24h+ Tasks)' },
   ],
   anthropic: [
-    // November 2025 models
-    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 ⭐ (Best Coding)' },
+    // Best Claude Models
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 ⭐ (Best Coding - 77.2% SWE-bench)' },
     { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 ⚡ (4x Faster, Auto Mode)' },
-    { value: 'claude-opus-4', label: 'Claude Opus 4 (Deep Reasoning)' },
-    { value: 'claude-sonnet-4', label: 'Claude Sonnet 4 (Fast)' },
-    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Legacy)' },
+    { value: 'claude-opus-4-1', label: 'Claude Opus 4.1 🧠 (Deep Reasoning/Thinking)' },
   ],
   google: [
-    // November 2025 models
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro ⭐ (1M Context)' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Fast)' },
-    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Legacy)' },
-    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Legacy)' },
+    // November 2025 Releases Only
+    { value: 'gemini-3-pro', label: 'Gemini 3 Pro ⭐ (Nov 18, 2025 - Top Benchmarks)' },
+    { value: 'gemini-3-flash', label: 'Gemini 3 Flash (Fast)' },
+    { value: 'gemini-3-deep-think', label: 'Gemini 3 Deep Think 🧠 (Advanced Reasoning/Thinking)' },
   ],
   ollama: [
-    // November 2025 local models
-    { value: 'llama4-maverick', label: 'Llama 4 Maverick ⭐ (1M Context)' },
-    { value: 'deepseek-coder-v3', label: 'DeepSeek Coder V3 (Coding)' },
-    { value: 'llama3.3', label: 'Llama 3.3 (Legacy)' },
-    { value: 'llama3', label: 'Llama 3 (Legacy)' },
-    { value: 'mistral', label: 'Mistral (Legacy)' },
+    // November 2025 - Best Local Models
+    { value: 'llama4-maverick', label: 'Llama 4 Maverick ⭐ (1M Context, Local)' },
   ],
   xai: [
-    { value: 'grok-4', label: 'Grok 4 ⭐ (Real-time Data)' },
-    { value: 'grok-3', label: 'Grok 3' },
-    { value: 'grok-2', label: 'Grok 2' },
+    // Latest Grok Models (2025)
+    { value: 'grok-4.1', label: 'Grok 4.1 ⭐ (Nov 17, 2025 - Enhanced Reasoning)' },
+    { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast ⚡ (Tool-calling, 2M Context)' },
+    { value: 'grok-4', label: 'Grok 4 (July 9, 2025 - Advanced Reasoning)' },
+    { value: 'grok-3', label: 'Grok 3 (Previous Generation)' },
   ],
   deepseek: [
-    { value: 'deepseek-v3', label: 'DeepSeek V3 ⭐ (Coding)' },
-    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-    { value: 'deepseek-coder', label: 'DeepSeek Coder (Legacy)' },
+    // No November 2025 releases
   ],
   qwen: [
-    { value: 'qwen-max', label: 'Qwen Max' },
-    { value: 'qwen-turbo', label: 'Qwen Turbo' },
-    { value: 'qwen-plus', label: 'Qwen Plus' },
+    // November 2025 Releases Only
+    { value: 'qwen3-max', label: 'Qwen3-Max ⭐ 🧠 (Nov 2025 - Thinking Mode)' },
   ],
   mistral: [
-    { value: 'mistral-large-2', label: 'Mistral Large 2 ⭐' },
-    { value: 'mistral-large-latest', label: 'Mistral Large (Auto)' },
-    { value: 'mistral-small', label: 'Mistral Small' },
-    { value: 'mistral-medium', label: 'Mistral Medium' },
+    // No November 2025 releases
+  ],
+  moonshot: [
+    // November 2025 Releases Only
+    { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking ⭐ 🧠 (Nov 2025 - Advanced Reasoning)' },
   ],
 };
 
@@ -74,6 +68,7 @@ export const PROVIDERS_IN_ORDER: Provider[] = [
   'deepseek',
   'qwen',
   'mistral',
+  'moonshot',
 ];
 
 /**
@@ -82,63 +77,36 @@ export const PROVIDERS_IN_ORDER: Provider[] = [
  * Updated for November 2025 models
  */
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  // OpenAI models (November 2025)
-  'gpt-5': 128_000, // Released Aug 2025
-  'gpt-4o': 128_000,
-  o3: 128_000, // Reasoning model
-  'gpt-4o-mini': 128_000,
-  'gpt-4.1-mini': 128_000,
-  'gpt-4.1': 128_000,
-  'gpt-4-turbo': 128_000,
-  'gpt-4': 8_192,
-  'gpt-3.5-turbo': 16_384,
+  // OpenAI models - November 2025 releases
+  'gpt-5.1': 128_000, // Nov 12, 2025
+  'gpt-5.1-instant': 128_000,
+  'gpt-5.1-thinking': 128_000,
+  'gpt-5.1-codex-max': 256_000, // Agentic coding, 24h+ tasks
 
-  // Anthropic models (November 2025)
-  'claude-sonnet-4-5': 200_000, // Released Sep 2025 - best coding (77.2% SWE-bench)
-  'claude-haiku-4-5': 200_000, // 4-5x faster than Sonnet, 1/3 cost - ideal for auto mode
-  'claude-opus-4': 200_000, // May 2025 - deep reasoning
-  'claude-sonnet-4': 200_000,
-  'claude-3-5-sonnet-20241022': 200_000,
-  'claude-3-5-haiku-20241022': 200_000,
-  'claude-3-opus-20240229': 200_000,
-  'claude-3-sonnet-20240229': 200_000,
-  'claude-3-haiku-20240307': 200_000,
+  // Anthropic models - Best Claude Models
+  'claude-sonnet-4-5': 200_000, // Best coding (77.2% SWE-bench)
+  'claude-haiku-4-5': 200_000, // 4-5x faster than Sonnet, 1/3 cost
+  'claude-opus-4-1': 200_000, // Deep reasoning
 
-  // Google models (November 2025)
-  'gemini-2.5-pro': 1_000_000, // 1M token context
-  'gemini-2.5-flash': 1_000_000,
-  'gemini-1.5-flash': 1_000_000,
-  'gemini-1.5-pro': 2_000_000,
-  'gemini-1.0-pro': 32_768,
+  // Google models - November 2025 releases
+  'gemini-3-pro': 2_000_000, // Nov 18, 2025 - 2M token context
+  'gemini-3-flash': 2_000_000,
+  'gemini-3-deep-think': 2_000_000,
 
   // Ollama (local models) - November 2025
-  'llama4-maverick': 1_000_000, // 1M context, local inference
-  'deepseek-coder-v3': 64_000, // Coding specialist
-  'llama3.3': 8_192,
-  llama3: 8_192,
-  'llama3:70b': 8_192,
-  mistral: 32_768,
-  'mistral:7b': 32_768,
-  codellama: 16_384,
-  'deepseek-coder': 16_384,
+  'llama4-maverick': 1_000_000, // Nov 2025 - 1M context, local inference
 
-  // xAI (November 2025)
-  'grok-4': 128_000, // Real-time data access
-  'grok-3': 128_000,
-  'grok-2': 128_000,
+  // xAI - Latest Grok Models (2025)
+  'grok-4.1': 128_000, // Nov 17, 2025 - Enhanced reasoning
+  'grok-4.1-fast': 2_000_000, // 2M token context, tool-calling optimized
+  'grok-4': 128_000, // July 9, 2025 - Advanced reasoning, multimodal
+  'grok-3': 128_000, // Previous generation
 
-  // DeepSeek (November 2025)
-  'deepseek-v3': 64_000, // Coding specialist
-  'deepseek-chat': 32_768,
+  // Qwen - November 2025 releases
+  'qwen3-max': 128_000, // Nov 2025 - thinking mode
 
-  // Qwen / Mistral cloud
-  'qwen-max': 32_768,
-  'qwen-turbo': 32_768,
-  'qwen-plus': 32_768,
-  'mistral-large-2': 128_000, // Updated model
-  'mistral-large-latest': 65_536,
-  'mistral-small': 32_768,
-  'mistral-medium': 65_536,
+  // Moonshot AI - November 2025 releases
+  'kimi-k2-thinking': 256_000, // Nov 2025 - 256K context, thinking mode
 };
 
 /**
@@ -178,17 +146,40 @@ export interface ModelMetadata {
 
 /**
  * Complete model metadata catalog
- * Updated for November 2025 models
+ * November 2025 Releases Only
  */
 export const MODEL_METADATA: Record<string, ModelMetadata> = {
-  // OpenAI Models
-  'gpt-5': {
-    id: 'gpt-5',
-    name: 'GPT-5',
+  // OpenAI Models - November 2025
+  'gpt-5.1': {
+    id: 'gpt-5.1',
+    name: 'GPT-5.1',
     provider: 'openai',
     contextWindow: 128_000,
-    inputCost: 5.0,
-    outputCost: 15.0,
+    inputCost: 5.5,
+    outputCost: 16.5,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 68.0,
+      humaneval: 94.0,
+      mmlu: 90.5,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    bestFor: ['General Intelligence', 'Reduced Hallucinations', 'Better Prompt Adherence'],
+    released: 'November 12, 2025',
+  },
+  'gpt-5.1-instant': {
+    id: 'gpt-5.1-instant',
+    name: 'GPT-5.1 Instant',
+    provider: 'openai',
+    contextWindow: 128_000,
+    inputCost: 4.0,
+    outputCost: 12.0,
     capabilities: {
       streaming: true,
       tools: true,
@@ -197,67 +188,21 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     benchmarks: {
       swebench: 65.0,
-      humaneval: 92.5,
-      mmlu: 89.8,
-    },
-    speed: 'medium',
-    quality: 'excellent',
-    bestFor: ['General Intelligence', 'Complex Reasoning', 'Multimodal Tasks'],
-    released: 'August 2025',
-  },
-  'gpt-4o': {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    provider: 'openai',
-    contextWindow: 128_000,
-    inputCost: 2.5,
-    outputCost: 10.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 60.0,
-      humaneval: 90.2,
-      mmlu: 88.7,
+      humaneval: 92.0,
+      mmlu: 89.0,
     },
     speed: 'fast',
     quality: 'excellent',
-    bestFor: ['Fast Inference', 'Vision', 'Multimodal'],
-    released: 'May 2024',
+    bestFor: ['Quick Responses', 'Real-time Applications'],
+    released: 'November 12, 2025',
   },
-  o3: {
-    id: 'o3',
-    name: 'O3',
+  'gpt-5.1-thinking': {
+    id: 'gpt-5.1-thinking',
+    name: 'GPT-5.1 Thinking',
     provider: 'openai',
     contextWindow: 128_000,
-    inputCost: 10.0,
-    outputCost: 30.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 71.7,
-      humaneval: 96.7,
-      mmlu: 92.3,
-    },
-    speed: 'slow',
-    quality: 'excellent',
-    bestFor: ['Deep Reasoning', 'Complex Problems', 'Mathematics'],
-    released: 'December 2024',
-  },
-  'gpt-4o-mini': {
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o Mini',
-    provider: 'openai',
-    contextWindow: 128_000,
-    inputCost: 0.15,
-    outputCost: 0.6,
+    inputCost: 7.0,
+    outputCost: 21.0,
     capabilities: {
       streaming: true,
       tools: true,
@@ -265,17 +210,111 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
     },
     benchmarks: {
-      swebench: 48.0,
-      humaneval: 87.2,
-      mmlu: 82.0,
+      swebench: 72.0,
+      humaneval: 95.5,
+      mmlu: 91.5,
     },
-    speed: 'very-fast',
-    quality: 'good',
-    bestFor: ['Speed', 'Cost Efficiency', 'Simple Tasks'],
-    released: 'July 2024',
+    speed: 'slow',
+    quality: 'excellent',
+    bestFor: ['Complex Tasks', 'Deep Reasoning', 'Multi-step Problems'],
+    released: 'November 12, 2025',
+  },
+  'gpt-5.1-codex-max': {
+    id: 'gpt-5.1-codex-max',
+    name: 'GPT-5.1-Codex-Max',
+    provider: 'openai',
+    contextWindow: 256_000,
+    inputCost: 8.0,
+    outputCost: 24.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 75.0,
+      humaneval: 96.0,
+      mmlu: 92.0,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    bestFor: ['Agentic Coding', 'Long-running Tasks (24h+)', 'Complex Software Engineering'],
+    released: 'November 12, 2025',
   },
 
-  // Anthropic Models
+  // Google Models - November 2025
+  'gemini-3-pro': {
+    id: 'gemini-3-pro',
+    name: 'Gemini 3 Pro',
+    provider: 'google',
+    contextWindow: 2_000_000,
+    inputCost: 1.5,
+    outputCost: 6.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 62.0,
+      humaneval: 91.5,
+      mmlu: 89.5,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    bestFor: ['Reasoning', 'Multimodal Understanding', 'Agentic Coding', 'Enterprise Applications'],
+    released: 'November 18, 2025',
+  },
+  'gemini-3-flash': {
+    id: 'gemini-3-flash',
+    name: 'Gemini 3 Flash',
+    provider: 'google',
+    contextWindow: 2_000_000,
+    inputCost: 0.1,
+    outputCost: 0.4,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 55.0,
+      humaneval: 88.5,
+      mmlu: 87.0,
+    },
+    speed: 'very-fast',
+    quality: 'excellent',
+    bestFor: ['Speed', 'Cost Efficiency', 'Enterprise Applications'],
+    released: 'November 18, 2025',
+  },
+  'gemini-3-deep-think': {
+    id: 'gemini-3-deep-think',
+    name: 'Gemini 3 Deep Think',
+    provider: 'google',
+    contextWindow: 2_000_000,
+    inputCost: 3.0,
+    outputCost: 12.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 68.0,
+      humaneval: 93.0,
+      mmlu: 90.5,
+    },
+    speed: 'slow',
+    quality: 'excellent',
+    bestFor: ['Advanced Reasoning', 'Complex Enterprise Tasks'],
+    released: 'November 18, 2025',
+  },
+
+  // Anthropic Models - Best Claude Models
   'claude-sonnet-4-5': {
     id: 'claude-sonnet-4-5',
     name: 'Claude Sonnet 4.5',
@@ -322,9 +361,9 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     bestFor: ['Auto Mode', 'Fast Responses', 'Cost Efficiency'],
     released: 'October 2024',
   },
-  'claude-opus-4': {
-    id: 'claude-opus-4',
-    name: 'Claude Opus 4',
+  'claude-opus-4-1': {
+    id: 'claude-opus-4-1',
+    name: 'Claude Opus 4.1',
     provider: 'anthropic',
     contextWindow: 200_000,
     inputCost: 15.0,
@@ -336,88 +375,17 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
     },
     benchmarks: {
-      swebench: 73.5,
-      humaneval: 94.2,
-      mmlu: 90.7,
+      swebench: 74.0,
+      humaneval: 94.5,
+      mmlu: 91.0,
     },
     speed: 'slow',
     quality: 'excellent',
-    bestFor: ['Complex Reasoning', 'Research', 'Long Context'],
-    released: 'May 2025',
-  },
-  'claude-3-5-sonnet-20241022': {
-    id: 'claude-3-5-sonnet-20241022',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    inputCost: 3.0,
-    outputCost: 15.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 49.0,
-      humaneval: 92.0,
-      mmlu: 88.3,
-    },
-    speed: 'medium',
-    quality: 'excellent',
-    bestFor: ['Coding', 'Analysis', 'General Tasks'],
-    released: 'October 2024',
+    bestFor: ['Complex Reasoning', 'Research', 'Long Context', 'Deep Analysis'],
+    released: 'November 2025',
   },
 
-  // Google Models
-  'gemini-2.5-pro': {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    provider: 'google',
-    contextWindow: 1_000_000,
-    inputCost: 1.25,
-    outputCost: 5.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 55.0,
-      humaneval: 89.5,
-      mmlu: 87.9,
-    },
-    speed: 'fast',
-    quality: 'excellent',
-    bestFor: ['Long Context', 'Multimodal', 'Large Documents'],
-    released: 'February 2025',
-  },
-  'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    provider: 'google',
-    contextWindow: 1_000_000,
-    inputCost: 0.075,
-    outputCost: 0.3,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 48.0,
-      humaneval: 85.7,
-      mmlu: 84.0,
-    },
-    speed: 'very-fast',
-    quality: 'good',
-    bestFor: ['Speed', 'Cost', 'Long Context'],
-    released: 'February 2025',
-  },
-
-  // Ollama Local Models
+  // Ollama Local Models - November 2025
   'llama4-maverick': {
     id: 'llama4-maverick',
     name: 'Llama 4 Maverick',
@@ -441,31 +409,59 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     bestFor: ['Local Inference', 'Privacy', 'Zero Cost'],
     released: 'November 2025',
   },
-  'deepseek-coder-v3': {
-    id: 'deepseek-coder-v3',
-    name: 'DeepSeek Coder V3',
-    provider: 'ollama',
-    contextWindow: 64_000,
-    inputCost: 0,
-    outputCost: 0,
+
+  // xAI Models - Latest Grok Models (2025)
+  'grok-4.1': {
+    id: 'grok-4.1',
+    name: 'Grok 4.1',
+    provider: 'xai',
+    contextWindow: 128_000,
+    inputCost: 5.5,
+    outputCost: 16.5,
     capabilities: {
       streaming: true,
       tools: true,
-      vision: false,
+      vision: true,
       json: true,
     },
     benchmarks: {
-      swebench: 68.0,
-      humaneval: 91.2,
-      mmlu: 79.0,
+      swebench: 62.0,
+      humaneval: 90.0,
+      mmlu: 87.5,
     },
-    speed: 'medium',
+    speed: 'fast',
     quality: 'excellent',
-    bestFor: ['Coding', 'Local Development', 'Privacy'],
-    released: 'December 2024',
+    bestFor: [
+      'Enhanced Reasoning',
+      'Multimodal Understanding',
+      'Emotional Intelligence',
+      'Reduced Factual Errors',
+    ],
+    released: 'November 17, 2025',
   },
-
-  // xAI Models
+  'grok-4.1-fast': {
+    id: 'grok-4.1-fast',
+    name: 'Grok 4.1 Fast',
+    provider: 'xai',
+    contextWindow: 2_000_000,
+    inputCost: 4.0,
+    outputCost: 12.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 58.0,
+      humaneval: 88.5,
+      mmlu: 86.0,
+    },
+    speed: 'very-fast',
+    quality: 'excellent',
+    bestFor: ['Tool-calling', 'Agentic Workflows', '2M Token Context', 'Agent Tools API'],
+    released: 'November 17, 2025',
+  },
   'grok-4': {
     id: 'grok-4',
     name: 'Grok 4',
@@ -480,24 +476,27 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
     },
     benchmarks: {
-      swebench: 58.0,
-      humaneval: 88.5,
+      swebench: 60.0,
+      humaneval: 89.0,
       mmlu: 86.5,
     },
     speed: 'fast',
     quality: 'excellent',
-    bestFor: ['Real-time Data', 'Current Events', 'Humor'],
-    released: 'October 2025',
+    bestFor: [
+      'Advanced Reasoning',
+      'Multimodal Support',
+      'Specialized Coding',
+      'Real-time Data',
+    ],
+    released: 'July 9, 2025',
   },
-
-  // DeepSeek Cloud Models
-  'deepseek-v3': {
-    id: 'deepseek-v3',
-    name: 'DeepSeek V3',
-    provider: 'deepseek',
-    contextWindow: 64_000,
-    inputCost: 0.27,
-    outputCost: 1.1,
+  'grok-3': {
+    id: 'grok-3',
+    name: 'Grok 3',
+    provider: 'xai',
+    contextWindow: 128_000,
+    inputCost: 3.0,
+    outputCost: 9.0,
     capabilities: {
       streaming: true,
       tools: true,
@@ -505,23 +504,48 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
     },
     benchmarks: {
-      swebench: 68.0,
-      humaneval: 91.2,
-      mmlu: 79.0,
+      swebench: 55.0,
+      humaneval: 85.0,
+      mmlu: 84.0,
     },
-    speed: 'fast',
-    quality: 'excellent',
-    bestFor: ['Coding', 'Mathematics', 'Cost Efficiency'],
-    released: 'December 2024',
+    speed: 'medium',
+    quality: 'good',
+    bestFor: ['General Purpose', 'Text Generation', 'Previous Generation'],
+    released: '2024',
   },
 
-  // Mistral Models
-  'mistral-large-2': {
-    id: 'mistral-large-2',
-    name: 'Mistral Large 2',
-    provider: 'mistral',
+  // Qwen Models - November 2025
+  'qwen3-max': {
+    id: 'qwen3-max',
+    name: 'Qwen3-Max',
+    provider: 'qwen',
     contextWindow: 128_000,
-    inputCost: 2.0,
+    inputCost: 2.5,
+    outputCost: 10.0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+    },
+    benchmarks: {
+      swebench: 70.0,
+      humaneval: 92.5,
+      mmlu: 89.0,
+    },
+    speed: 'medium',
+    quality: 'excellent',
+    bestFor: ['Thinking Mode', 'Advanced Reasoning', 'Foundation Model Performance'],
+    released: 'November 2025',
+  },
+
+  // Moonshot AI Models - November 2025
+  'kimi-k2-thinking': {
+    id: 'kimi-k2-thinking',
+    name: 'Kimi K2 Thinking',
+    provider: 'moonshot',
+    contextWindow: 256_000,
+    inputCost: 1.5,
     outputCost: 6.0,
     capabilities: {
       streaming: true,
@@ -530,14 +554,20 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       json: true,
     },
     benchmarks: {
-      swebench: 52.0,
-      humaneval: 86.0,
-      mmlu: 84.0,
+      swebench: 71.3, // SWE-bench Verified
+      humaneval: 91.0,
+      mmlu: 88.5,
     },
-    speed: 'fast',
+    speed: 'medium',
     quality: 'excellent',
-    bestFor: ['European Data Residency', 'Multilingual', 'Code'],
-    released: 'July 2024',
+    bestFor: [
+      'Advanced Reasoning',
+      'Agentic Tasks',
+      'Thinking Mode',
+      'Complex Problem Solving',
+      '200-300 Sequential Tool Calls',
+    ],
+    released: 'November 2025',
   },
 };
 
@@ -575,11 +605,7 @@ export function formatCost(inputCost: number, outputCost: number): string {
 /**
  * Calculate estimated cost for a conversation
  */
-export function estimateCost(
-  modelId: string,
-  inputTokens: number,
-  outputTokens: number,
-): number {
+export function estimateCost(modelId: string, inputTokens: number, outputTokens: number): number {
   const metadata = getModelMetadata(modelId);
   if (!metadata) return 0;
 

@@ -58,6 +58,7 @@ describe('settingsStore', () => {
         deepseek: '',
         qwen: '',
         mistral: '',
+        moonshot: '',
       },
       llmConfig: createDefaultLLMConfig(),
       windowPreferences: createDefaultWindowPreferences(),

@@ -319,7 +319,7 @@ impl Default for HookExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::types::HookEventType;
+    use crate::hooks::types::HookEventType;
     use super::*;
 
     #[tokio::test]
