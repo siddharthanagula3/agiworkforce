@@ -15,6 +15,27 @@ export interface MessageMetadata {
   duration?: number;
   streaming?: boolean;
   type?: 'reasoning' | 'response';
+  // Tool-related fields
+  tool?: string;
+  tool_call?: string;
+  name?: string;
+  event?: string;
+  status?: string;
+  state?: string;
+  stage?: string;
+  command?: string;
+  requiresApproval?: boolean;
+  actionId?: string;
+  action_id?: string;
+  sidecarType?: 'browser' | 'terminal' | 'code' | 'video' | 'media' | 'files' | 'data';
+  thinking?: {
+    title?: string;
+    details?: string;
+  };
+  phase?: string;
+  label?: string;
+  summary?: string;
+  preview?: string;
 }
 
 export interface Attachment {

@@ -1,5 +1,15 @@
 /**
  * Stripe service - Frontend wrapper for Tauri billing commands
+ * 
+ * Note: Stripe MCP tools are also available for the AGI agent to use directly.
+ * When Stripe MCP server is enabled and connected, the agent can use Stripe MCP tools
+ * (e.g., mcp_stripe_create_customer, mcp_stripe_list_customers, etc.) for billing operations.
+ * 
+ * To enable Stripe MCP:
+ * 1. Store your Stripe secret key in Windows Credential Manager:
+ *    - Service: agiworkforce-mcp-stripe
+ *    - Key: STRIPE_SECRET_KEY
+ * 2. Enable Stripe MCP in MCP configuration at %APPDATA%/agiworkforce/mcp-servers-config.json
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -71,6 +81,10 @@ export class StripeService {
 
   /**
    * Initialize the Stripe service with API keys
+   * 
+   * Note: This initializes the Rust-based Stripe client. Stripe MCP tools are available
+   * separately when the Stripe MCP server is enabled and connected. The AGI agent can
+   * use either the Tauri commands (via this service) or Stripe MCP tools directly.
    */
   static async initialize(stripeApiKey: string, webhookSecret: string): Promise<void> {
     await invoke('billing_initialize', {

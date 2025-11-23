@@ -249,8 +249,8 @@ impl IncrementalIndexer {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_should_index_file() {
+    #[tokio::test]
+    async fn test_should_index_file() {
         let indexer = IncrementalIndexer::new(
             PathBuf::from("."),
             Arc::new(Mutex::new(
@@ -267,8 +267,8 @@ mod tests {
         assert!(!indexer.should_index_file(Path::new("test.json")));
     }
 
-    #[test]
-    fn test_should_ignore() {
+    #[tokio::test]
+    async fn test_should_ignore() {
         let indexer = IncrementalIndexer::new(
             PathBuf::from("."),
             Arc::new(Mutex::new(

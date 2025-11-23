@@ -33,7 +33,7 @@ pub struct PublishedWorkflow {
 }
 
 /// Workflow categories for organization
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowCategory {
     CustomerSupport,

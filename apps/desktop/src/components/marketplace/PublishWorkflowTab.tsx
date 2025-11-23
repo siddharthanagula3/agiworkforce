@@ -15,6 +15,7 @@ import {
 } from '../ui/Select';
 import { Alert } from '../ui/Alert';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
+import { useAuthStore } from '../../stores/authStore';
 import { WORKFLOW_CATEGORIES, type WorkflowLicense } from '../../types/marketplace';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -50,8 +51,7 @@ export function PublishWorkflowTab() {
   const loadUserWorkflows = async () => {
     setLoadingWorkflows(true);
     try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
+      const userId = useAuthStore.getState().getCurrentUserId();
       const workflows = await invoke<UserWorkflow[]>('get_user_workflows', { userId });
       setUserWorkflows(workflows);
     } catch (error) {

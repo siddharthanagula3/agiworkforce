@@ -138,6 +138,7 @@ fn parse_sse_event(
         crate::router::Provider::DeepSeek => parse_openai_sse(event), // DeepSeek uses OpenAI-compatible format
         crate::router::Provider::Qwen => parse_openai_sse(event), // Qwen uses OpenAI-compatible format
         crate::router::Provider::Mistral => parse_openai_sse(event), // Mistral uses OpenAI-compatible format
+        crate::router::Provider::Moonshot => parse_openai_sse(event), // Moonshot uses OpenAI-compatible format
     }
 }
 
