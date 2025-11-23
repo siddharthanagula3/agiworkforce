@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Badge } from '../ui/Badge';
 import { invoke } from '@tauri-apps/api/core';
 import { WORKFLOW_CATEGORIES } from '../../types/marketplace';
+import { useAuthStore } from '../../stores/authStore';
 
 interface ClonedWorkflow {
   clone_id: string;
@@ -31,8 +32,7 @@ export function MyClonesTab() {
     setIsLoading(true);
     setError(null);
     try {
-      // TODO: Get user ID from auth context
-      const userId = 'current_user_id';
+      const userId = useAuthStore.getState().getCurrentUserId();
       const userClones = await invoke<ClonedWorkflow[]>('get_user_clones', {
         userId,
       });

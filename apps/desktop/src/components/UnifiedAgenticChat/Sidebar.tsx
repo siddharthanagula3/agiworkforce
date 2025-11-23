@@ -7,7 +7,6 @@ import {
   Trash2,
   Calendar,
   Clock,
-  Settings,
   Pin,
   PinOff,
 } from 'lucide-react';
@@ -17,10 +16,12 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
 import { motion, AnimatePresence } from 'framer-motion';
+import { UserProfile } from '../Layout/UserProfile';
 
 interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
+  onOpenBilling?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -69,6 +70,7 @@ function getTemporalGroup(date: Date): TemporalGroup {
 export function Sidebar({
   className,
   onOpenSettings,
+  onOpenBilling,
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
@@ -501,19 +503,13 @@ export function Sidebar({
 
         {/* Profile Section */}
         <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
-          <button
-            onClick={onOpenSettings}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500 text-white text-sm font-medium">
-              U
-            </div>
-            <div className="flex-1 text-left">
-              <div className="text-sm font-medium">You</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Pro Plan</div>
-            </div>
-            <Settings className="h-4 w-4 text-gray-500" />
-          </button>
+          <UserProfile
+            name="Siddhartha Nagula"
+            email="siddhartha@agiworkforce.com"
+            onSettingsClick={onOpenSettings}
+            onBillingClick={onOpenBilling}
+            collapsed={collapsed}
+          />
         </div>
       </div>
     </>

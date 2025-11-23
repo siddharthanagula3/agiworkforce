@@ -11,12 +11,14 @@ import { Badge } from '../ui/Badge';
 import { Separator } from '../ui/Separator';
 import { ScrollArea } from '../ui/ScrollArea';
 import { usePricingStore } from '../../stores/pricingStore';
+import { useBillingStore } from '../../stores/billingStore';
 import { Download, Mail, CheckCircle2, XCircle } from 'lucide-react';
 import type { InvoiceStatus } from '../../types/pricing';
 
 export function InvoiceDetailModal() {
   const { selectedInvoice, isInvoiceDetailModalOpen, closeInvoiceDetailModal, downloadInvoice } =
     usePricingStore();
+  const { customer } = useBillingStore();
 
   if (!selectedInvoice) return null;
 
@@ -28,9 +30,54 @@ export function InvoiceDetailModal() {
     }
   };
 
-  const handleEmail = () => {
-    // TODO: Implement email invoice
-    console.log('Email invoice:', selectedInvoice.id);
+  const handleEmail = async () => {
+    try {
+      // Get customer email from billing store or use default
+      const customerEmail = customer?.email || 'siddhartha@agiworkforce.com';
+
+      // Generate invoice email content
+      const subject = `Invoice #${selectedInvoice.invoice_number} - AGI Workforce`;
+      const body = `Dear Customer,
+
+Please find your invoice #${selectedInvoice.invoice_number} attached.
+
+Invoice Details:
+- Period: ${new Date(selectedInvoice.period_start).toLocaleDateString()} - ${new Date(selectedInvoice.period_end).toLocaleDateString()}
+- Total Amount: $${selectedInvoice.total_amount_usd.toFixed(2)}
+- Status: ${selectedInvoice.status}
+- Automations Run: ${selectedInvoice.automations_run}
+- Value Delivered: $${selectedInvoice.value_delivered_usd.toLocaleString()}
+
+${selectedInvoice.hosted_invoice_url ? `View online: ${selectedInvoice.hosted_invoice_url}` : ''}
+
+Thank you for using AGI Workforce!
+
+Best regards,
+AGI Workforce Team`;
+
+      // Use Tauri to open default email client with pre-filled invoice
+      if (typeof window !== 'undefined' && 'tauri' in window) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('send_invoice_email', {
+          invoiceId: selectedInvoice.id,
+          recipientEmail: customerEmail,
+          subject,
+          body,
+        });
+      } else {
+        // Fallback: Use mailto link
+        const mailtoLink = `mailto:${customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.open(mailtoLink, '_blank');
+      }
+
+      // Show success message
+      const { toast } = await import('sonner');
+      toast.success('Invoice email prepared');
+    } catch (error) {
+      console.error('Failed to email invoice:', error);
+      const { toast } = await import('sonner');
+      toast.error('Failed to send invoice email');
+    }
   };
 
   const periodStart = new Date(selectedInvoice.period_start);

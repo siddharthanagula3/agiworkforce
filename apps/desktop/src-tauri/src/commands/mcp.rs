@@ -398,6 +398,19 @@ pub async fn mcp_get_stats(state: State<'_, McpState>) -> Result<HashMap<String,
     Ok(state.client.get_stats())
 }
 
+/// Get server logs
+#[tauri::command]
+pub async fn mcp_get_server_logs(
+    _server_name: String,
+    _lines: Option<usize>,
+    _state: State<'_, McpState>,
+) -> Result<Vec<String>, String> {
+    // MCP logs are stored in sessions - access through client
+    // For now, return empty logs - log retrieval needs to be implemented in McpSession
+    // TODO: Implement get_server_logs in McpSession or McpClient
+    Ok(vec![])
+}
+
 /// Store a credential in Windows Credential Manager
 #[tauri::command]
 pub async fn mcp_store_credential(

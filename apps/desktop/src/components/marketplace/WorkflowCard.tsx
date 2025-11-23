@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import type { PublishedWorkflow } from '../../types/marketplace';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
+import { useAuthStore } from '../../stores/authStore';
 
 interface WorkflowCardProps {
   workflow: PublishedWorkflow;
@@ -39,8 +40,7 @@ export const WorkflowCard = memo(function WorkflowCard({
       e.stopPropagation();
       setIsCloning(true);
       try {
-        // TODO: Get user ID from auth context
-        const userId = 'current_user_id';
+        const userId = useAuthStore.getState().getCurrentUserId();
         const userName = 'Current User';
 
         await cloneWorkflow({

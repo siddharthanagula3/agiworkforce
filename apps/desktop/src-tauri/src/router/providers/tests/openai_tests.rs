@@ -2,7 +2,7 @@
 mod tests {
     use crate::router::providers::openai::OpenAIProvider;
     use crate::router::{
-        ChatMessage, ContentPart, ImageData, ImageDetail, ImageFormat, LLMProvider, LLMRequest,
+        ChatMessage, ContentPart, ImageInput, ImageDetail, ImageFormat, LLMProvider, LLMRequest,
         ToolChoice, ToolDefinition,
     };
 
@@ -70,7 +70,7 @@ mod tests {
                         text: "What do you see?".to_string(),
                     },
                     ContentPart::Image {
-                        image: ImageData {
+                        image: ImageInput {
                             data: image_data.clone(),
                             format: ImageFormat::Png,
                             detail: ImageDetail::High,
@@ -213,7 +213,7 @@ mod tests {
         ];
 
         for (format, _expected_mime) in formats {
-            let image_data = ImageData {
+            let image_data = ImageInput {
                 data: vec![1, 2, 3, 4],
                 format,
                 detail: ImageDetail::Auto,
@@ -227,7 +227,7 @@ mod tests {
         let details = vec![ImageDetail::Low, ImageDetail::High, ImageDetail::Auto];
 
         for detail in details {
-            let image_data = ImageData {
+            let image_data = ImageInput {
                 data: vec![1, 2, 3],
                 format: ImageFormat::Png,
                 detail,

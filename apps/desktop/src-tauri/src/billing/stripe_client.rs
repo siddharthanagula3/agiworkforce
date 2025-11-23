@@ -7,8 +7,9 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use stripe::{
-    Client, CreateCustomer, CreateSubscription, Customer, CustomerId, Invoice, InvoiceId,
-    ListInvoices, PaymentIntent, PaymentMethod, PaymentMethodId, SubscriptionId,
+    Client, CreateCustomer, CreateSetupIntent, CreateSubscription, Customer, CustomerId, Invoice,
+    InvoiceId, ListInvoices, PaymentIntent, PaymentMethod, PaymentMethodId, SetupIntent,
+    SetupIntentId, SubscriptionId, UpdateCustomer,
 };
 use uuid::Uuid;
 
@@ -668,6 +669,263 @@ impl StripeService {
         } else {
             Ok(None)
         }
+    }
+
+    /// Get payment methods for a customer
+    pub async fn get_payment_methods(
+        &self,
+        customer_stripe_id: &str,
+    ) -> Result<Vec<PaymentMethodInfo>> {
+        let customer_id = CustomerId::from(customer_stripe_id);
+
+        let mut list_params = stripe::ListPaymentMethods::new();
+        list_params.customer = Some(customer_id);
+        list_params.limit = Some(100);
+
+        let payment_methods = PaymentMethod::list(&self.client, &list_params).await?;
+
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock database"))?;
+
+        // Get customer DB ID
+        let customer_db_id: String = db.query_row(
+            "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
+            rusqlite::params![customer_stripe_id],
+            |row| row.get(0),
+        )?;
+
+        // Get default payment method from customer
+        let customer = Customer::retrieve(&self.client, &customer_id, &[]).await?;
+        let default_payment_method_id = customer
+            .invoice_settings
+            .as_ref()
+            .and_then(|settings| settings.default_payment_method.as_ref())
+            .map(|pm| pm.to_string());
+
+        let mut payment_method_infos = Vec::new();
+        let now = Utc::now().timestamp();
+
+        for pm in payment_methods.data {
+            let pm_id = Uuid::new_v4().to_string();
+            let is_default = default_payment_method_id
+                .as_ref()
+                .map(|id| id == &pm.id.to_string())
+                .unwrap_or(false);
+
+            // Extract card details if available
+            let (card_brand, card_last4, card_exp_month, card_exp_year) = if let Some(card) = pm.card {
+                (
+                    card.brand.map(|b| b.to_string()),
+                    card.last4,
+                    card.exp_month,
+                    card.exp_year,
+                )
+            } else {
+                (None, None, None, None)
+            };
+
+            let payment_method_info = PaymentMethodInfo {
+                id: pm_id.clone(),
+                customer_id: customer_db_id.clone(),
+                stripe_payment_method_id: pm.id.to_string(),
+                payment_type: pm.r#type.to_string(),
+                card_brand,
+                card_last4,
+                card_exp_month,
+                card_exp_year,
+                is_default,
+                created_at: now,
+                updated_at: now,
+            };
+
+            // Upsert into database
+            db.execute(
+                "INSERT OR REPLACE INTO billing_payment_methods (
+                    id, customer_id, stripe_payment_method_id, type, card_brand, card_last4,
+                    card_exp_month, card_exp_year, is_default, created_at, updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                rusqlite::params![
+                    &payment_method_info.id,
+                    &payment_method_info.customer_id,
+                    &payment_method_info.stripe_payment_method_id,
+                    &payment_method_info.payment_type,
+                    &payment_method_info.card_brand,
+                    &payment_method_info.card_last4,
+                    &payment_method_info.card_exp_month,
+                    &payment_method_info.card_exp_year,
+                    if payment_method_info.is_default { 1 } else { 0 },
+                    payment_method_info.created_at,
+                    payment_method_info.updated_at,
+                ],
+            )?;
+
+            payment_method_infos.push(payment_method_info);
+        }
+
+        Ok(payment_method_infos)
+    }
+
+    /// Attach a payment method to a customer
+    pub async fn attach_payment_method(
+        &self,
+        customer_stripe_id: &str,
+        payment_method_id: &str,
+    ) -> Result<PaymentMethodInfo> {
+        let customer_id = CustomerId::from(customer_stripe_id);
+        let pm_id = PaymentMethodId::from(payment_method_id);
+
+        // Attach payment method to customer
+        let mut attach_params = stripe::AttachPaymentMethod::new(customer_id.clone());
+        let payment_method = PaymentMethod::attach(&self.client, &pm_id, attach_params).await?;
+
+        // Get customer DB ID
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock database"))?;
+
+        let customer_db_id: String = db.query_row(
+            "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
+            rusqlite::params![customer_stripe_id],
+            |row| row.get(0),
+        )?;
+
+        let pm_db_id = Uuid::new_v4().to_string();
+        let now = Utc::now().timestamp();
+
+        // Extract card details if available
+        let (card_brand, card_last4, card_exp_month, card_exp_year) = if let Some(card) = payment_method.card {
+            (
+                card.brand.map(|b| b.to_string()),
+                card.last4,
+                card.exp_month,
+                card.exp_year,
+            )
+        } else {
+            (None, None, None, None)
+        };
+
+        let payment_method_info = PaymentMethodInfo {
+            id: pm_db_id.clone(),
+            customer_id: customer_db_id.clone(),
+            stripe_payment_method_id: payment_method.id.to_string(),
+            payment_type: payment_method.r#type.to_string(),
+            card_brand,
+            card_last4,
+            card_exp_month,
+            card_exp_year,
+            is_default: false, // Newly attached methods are not default by default
+            created_at: now,
+            updated_at: now,
+        };
+
+        // Insert into database
+        db.execute(
+            "INSERT INTO billing_payment_methods (
+                id, customer_id, stripe_payment_method_id, type, card_brand, card_last4,
+                card_exp_month, card_exp_year, is_default, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            rusqlite::params![
+                &payment_method_info.id,
+                &payment_method_info.customer_id,
+                &payment_method_info.stripe_payment_method_id,
+                &payment_method_info.payment_type,
+                &payment_method_info.card_brand,
+                &payment_method_info.card_last4,
+                &payment_method_info.card_exp_month,
+                &payment_method_info.card_exp_year,
+                0, // is_default
+                payment_method_info.created_at,
+                payment_method_info.updated_at,
+            ],
+        )?;
+
+        Ok(payment_method_info)
+    }
+
+    /// Set default payment method for a customer
+    pub async fn set_default_payment_method(
+        &self,
+        customer_stripe_id: &str,
+        payment_method_id: &str,
+    ) -> Result<()> {
+        let customer_id = CustomerId::from(customer_stripe_id);
+        let pm_id = PaymentMethodId::from(payment_method_id);
+
+        // Update customer's default payment method in Stripe
+        let mut update_params = stripe::UpdateCustomer::new();
+        update_params.invoice_settings = Some(stripe::InvoiceSettingsParams {
+            default_payment_method: Some(pm_id.clone()),
+            ..Default::default()
+        });
+
+        Customer::update(&self.client, &customer_id, update_params).await?;
+
+        // Update database
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock database"))?;
+
+        let customer_db_id: String = db.query_row(
+            "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
+            rusqlite::params![customer_stripe_id],
+            |row| row.get(0),
+        )?;
+
+        let now = Utc::now().timestamp();
+
+        // Unset all other payment methods as default
+        db.execute(
+            "UPDATE billing_payment_methods SET is_default = 0, updated_at = ?1 WHERE customer_id = ?2",
+            rusqlite::params![now, customer_db_id],
+        )?;
+
+        // Set this payment method as default
+        db.execute(
+            "UPDATE billing_payment_methods SET is_default = 1, updated_at = ?1 
+             WHERE customer_id = ?2 AND stripe_payment_method_id = ?3",
+            rusqlite::params![now, customer_db_id, payment_method_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Create a Setup Intent for adding a new payment method
+    pub async fn create_setup_intent(&self, customer_stripe_id: &str) -> Result<String> {
+        let customer_id = CustomerId::from(customer_stripe_id);
+
+        let mut params = CreateSetupIntent::new();
+        params.customer = Some(customer_id);
+        params.usage = Some(stripe::SetupIntentUsage::OffSession);
+        params.payment_method_types = Some(vec![stripe::PaymentMethodType::Card]);
+
+        let setup_intent = SetupIntent::create(&self.client, params).await?;
+
+        Ok(setup_intent.client_secret.unwrap_or_default())
+    }
+
+    /// Detach (delete) a payment method
+    pub async fn detach_payment_method(&self, payment_method_id: &str) -> Result<()> {
+        let pm_id = PaymentMethodId::from(payment_method_id);
+
+        // Detach payment method from customer in Stripe
+        PaymentMethod::detach(&self.client, &pm_id, Default::default()).await?;
+
+        // Remove from database
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock database"))?;
+
+        db.execute(
+            "DELETE FROM billing_payment_methods WHERE stripe_payment_method_id = ?1",
+            rusqlite::params![payment_method_id],
+        )?;
+
+        Ok(())
     }
 }
 

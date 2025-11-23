@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMcpStore } from '../../stores/mcpStore';
+import { toast } from 'sonner';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -23,6 +24,7 @@ import {
   Download,
 } from 'lucide-react';
 import type { McpServerInfo } from '../../types/mcp';
+import { MCPLogsViewer } from './MCPLogsViewer';
 
 interface ServerConfigDialogProps {
   server: McpServerInfo | null;
@@ -269,6 +271,8 @@ export function MCPServerManager() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<McpServerInfo | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [logsViewerOpen, setLogsViewerOpen] = useState(false);
+  const [logsServerName, setLogsServerName] = useState<string>('');
 
   useEffect(() => {
     initialize();
@@ -322,14 +326,40 @@ export function MCPServerManager() {
   };
 
   const handleViewLogs = (serverName: string) => {
-    // TODO: Implement logs viewer
-    console.log('View logs for', serverName);
+    setLogsServerName(serverName);
+    setLogsViewerOpen(true);
   };
 
   const handleUninstall = async (serverName: string) => {
-    if (confirm(`Are you sure you want to uninstall ${serverName}?`)) {
-      // TODO: Implement uninstall
-      console.log('Uninstall', serverName);
+    if (!confirm(`Are you sure you want to uninstall ${serverName}? This will remove the server configuration.`)) {
+      return;
+    }
+
+    setActionLoading(serverName);
+    try {
+      // Disconnect server first if connected
+      await disconnectServer(serverName);
+      
+      // Remove server from config
+      const { invoke } = await import('@tauri-apps/api/core');
+      const currentConfig = await invoke<any>('mcp_get_config');
+      const updatedServers = { ...(currentConfig.servers || {}) };
+      delete updatedServers[serverName];
+      
+      await invoke('mcp_update_config', { 
+        config: {
+          ...currentConfig,
+          servers: updatedServers,
+        },
+      });
+      
+      await refreshServers();
+      toast.success(`Server ${serverName} uninstalled`);
+    } catch (err) {
+      console.error('Failed to uninstall server:', err);
+      toast.error('Failed to uninstall server');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -516,6 +546,15 @@ export function MCPServerManager() {
         open={configDialogOpen}
         onClose={() => setConfigDialogOpen(false)}
         onSave={handleSaveConfig}
+      />
+
+      <MCPLogsViewer
+        serverName={logsServerName}
+        open={logsViewerOpen}
+        onClose={() => {
+          setLogsViewerOpen(false);
+          setLogsServerName('');
+        }}
       />
     </div>
   );

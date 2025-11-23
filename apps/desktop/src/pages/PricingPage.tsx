@@ -7,17 +7,18 @@
 import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs';
 import { ScrollArea } from '../components/ui/ScrollArea';
-import { DollarSign, Activity, FileText } from 'lucide-react';
+import { DollarSign, Activity, FileText, CreditCard } from 'lucide-react';
 import { PlansTab } from '../components/pricing/PlansTab';
 import { UsageTab } from '../components/pricing/UsageTab';
 import { InvoicesTab } from '../components/pricing/InvoicesTab';
+import { PaymentMethodsTab } from '../components/pricing/PaymentMethodsTab';
 import { InvoiceDetailModal } from '../components/pricing/InvoiceDetailModal';
 import { PlanChangeModal } from '../components/pricing/PlanChangeModal';
 import { usePricingStore } from '../stores/pricingStore';
 
 export function PricingPage() {
   const { fetchPlans, fetchCurrentPlan } = usePricingStore();
-  const [activeTab, setActiveTab] = useState<'plans' | 'usage' | 'invoices'>('plans');
+  const [activeTab, setActiveTab] = useState<'plans' | 'usage' | 'invoices' | 'payment-methods'>('plans');
 
   // Initialize data on mount
   useEffect(() => {
@@ -33,16 +34,7 @@ export function PricingPage() {
   }, [fetchPlans, fetchCurrentPlan]);
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      {/* Header */}
-      <div className="px-6 pt-8 pb-4">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-          Billing & Plans
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your subscription and outcome-based usage.
-        </p>
-      </div>
+    <div className="flex h-full flex-col bg-zinc-950">
 
       {/* Tabs */}
       <div className="border-b border-border/60">
@@ -73,6 +65,13 @@ export function PricingPage() {
                 <FileText className="mr-2 h-4 w-4" />
                 Invoices
               </TabsTrigger>
+              <TabsTrigger
+                value="payment-methods"
+                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Payment Methods
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -91,6 +90,10 @@ export function PricingPage() {
 
           <TabsContent value="invoices" className="mt-0">
             <InvoicesTab />
+          </TabsContent>
+
+          <TabsContent value="payment-methods" className="mt-0">
+            <PaymentMethodsTab />
           </TabsContent>
         </Tabs>
       </ScrollArea>

@@ -27,6 +27,11 @@ const OnboardingWizard = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
+const BillingPageDialog = lazy(() =>
+  import('./components/pricing/BillingPageDialog').then((m) => ({
+    default: m.BillingPageDialog,
+  })),
+);
 const UnifiedAgenticChat = lazy(() =>
   import('./components/UnifiedAgenticChat').then((m) => ({
     default: m.UnifiedAgenticChat,
@@ -47,6 +52,7 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [billingPageOpen, setBillingPageOpen] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
 
@@ -285,6 +291,7 @@ const DesktopShell = () => {
               layout="default"
               defaultSidecarOpen={true}
               onOpenSettings={() => setSettingsPanelOpen(true)}
+              onOpenBilling={() => setBillingPageOpen(true)}
             />
           </Suspense>
         </div>
@@ -296,6 +303,9 @@ const DesktopShell = () => {
       />
       <Suspense fallback={null}>
         <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <BillingPageDialog open={billingPageOpen} onOpenChange={setBillingPageOpen} />
       </Suspense>
       <ErrorToastContainer position="top-right" />
     </div>

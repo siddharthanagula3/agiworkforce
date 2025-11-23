@@ -2,7 +2,7 @@
 mod tests {
     use crate::router::providers::anthropic::AnthropicProvider;
     use crate::router::{
-        ChatMessage, ContentPart, ImageData, ImageFormat, LLMProvider, LLMRequest, ToolDefinition,
+        ChatMessage, ContentPart, ImageInput, ImageFormat, LLMProvider, LLMRequest, ToolDefinition,
     };
 
     #[test]
@@ -69,7 +69,7 @@ mod tests {
                         text: "What's in this picture?".to_string(),
                     },
                     ContentPart::Image {
-                        image: ImageData {
+                        image: ImageInput {
                             data: image_data.clone(),
                             format: ImageFormat::Png,
                             detail: crate::router::ImageDetail::High,
@@ -186,7 +186,7 @@ mod tests {
         let formats = vec![ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::Webp];
 
         for format in formats {
-            let image_data = ImageData {
+            let image_data = ImageInput {
                 data: vec![1, 2, 3, 4],
                 format,
                 detail: crate::router::ImageDetail::Auto,
@@ -395,7 +395,7 @@ mod tests {
                         text: "Image 1:".to_string(),
                     },
                     ContentPart::Image {
-                        image: ImageData {
+                        image: ImageInput {
                             data: vec![1, 2, 3],
                             format: ImageFormat::Png,
                             detail: crate::router::ImageDetail::Auto,
@@ -405,7 +405,7 @@ mod tests {
                         text: "Image 2:".to_string(),
                     },
                     ContentPart::Image {
-                        image: ImageData {
+                        image: ImageInput {
                             data: vec![4, 5, 6],
                             format: ImageFormat::Jpeg,
                             detail: crate::router::ImageDetail::Auto,

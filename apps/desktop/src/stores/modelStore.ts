@@ -90,6 +90,7 @@ const defaultUsageStats: UsageStats = {
     deepseek: { tokens: 0, cost: 0, messages: 0 },
     qwen: { tokens: 0, cost: 0, messages: 0 },
     mistral: { tokens: 0, cost: 0, messages: 0 },
+    moonshot: { tokens: 0, cost: 0, messages: 0 },
   },
   byModel: {},
 };
@@ -128,6 +129,7 @@ export const useModelStore = create<ModelState>()(
         deepseek: null,
         qwen: null,
         mistral: null,
+        moonshot: null,
       },
       usageStats: null,
       loading: false,
@@ -214,6 +216,7 @@ export const useModelStore = create<ModelState>()(
             'deepseek',
             'qwen',
             'mistral',
+            'moonshot',
           ];
 
           await Promise.all(providers.map((p) => get().checkProviderStatus(p)));
@@ -278,6 +281,7 @@ export const useModelStore = create<ModelState>()(
             deepseek: null,
             qwen: null,
             mistral: null,
+            moonshot: null,
           },
           usageStats: null,
           loading: false,
