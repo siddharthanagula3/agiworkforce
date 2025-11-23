@@ -848,12 +848,19 @@ async fn chat_send_message_streaming(
                                 Ok(result) => {
                                     let formatted = executor.format_tool_result(tool_call, &result);
                                     tool_results.push((tool_call.id.clone(), formatted));
-                                    tracing::info!("[Chat Streaming] Tool {} succeeded", tool_call.name);
+                                    tracing::info!(
+                                        "[Chat Streaming] Tool {} succeeded",
+                                        tool_call.name
+                                    );
                                 }
                                 Err(e) => {
                                     let error_msg = format!("Tool execution failed: {}", e);
                                     tool_results.push((tool_call.id.clone(), error_msg));
-                                    tracing::error!("[Chat Streaming] Tool {} failed: {}", tool_call.name, e);
+                                    tracing::error!(
+                                        "[Chat Streaming] Tool {} failed: {}",
+                                        tool_call.name,
+                                        e
+                                    );
                                 }
                             }
                         }
