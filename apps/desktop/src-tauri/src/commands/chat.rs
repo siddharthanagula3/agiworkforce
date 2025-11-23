@@ -17,7 +17,6 @@ use crate::router::{
     llm_router::{CostPriority, RouteOutcome, RouterContext, RouterPreferences, RoutingStrategy},
     ChatMessage as RouterChatMessage, LLMRequest, LLMResponse, Provider,
 };
-use anyhow::anyhow;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use futures_util::StreamExt;
 use rusqlite::Connection;
@@ -646,9 +645,58 @@ async fn chat_send_message_streaming(
             "deepseek" => settings.llm_config.default_models.deepseek.clone(),
             "qwen" => settings.llm_config.default_models.qwen.clone(),
             "mistral" => settings.llm_config.default_models.mistral.clone(),
+            "moonshot" => settings.llm_config.default_models.moonshot.clone(),
             _ => settings.llm_config.default_models.openai.clone(),
         }
     };
+
+    // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees (same as non-streaming)
+    let (tool_definitions, tool_executor) = if request.enable_tools.unwrap_or(true) {
+        use crate::agi::tools::ToolRegistry;
+        use crate::commands::McpState;
+        use crate::router::tool_executor::ToolExecutor;
+        use std::sync::Arc;
+
+        match ToolRegistry::new() {
+            Ok(registry) => {
+                let tool_registry = Arc::new(registry);
+                let mut tool_executor =
+                    ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
+
+                // 🔒 Set conversation mode for security checks
+                tool_executor.set_conversation_mode(request.conversation_mode.clone());
+
+                let mut tool_defs = tool_executor.get_tool_definitions(None);
+
+                // ✅ Add MCP tools if available
+                if let Some(mcp_state) = app_handle.try_state::<McpState>() {
+                    let mcp_tools = mcp_state.registry.get_all_tool_definitions();
+                    if !mcp_tools.is_empty() {
+                        tracing::info!(
+                            "[Chat Streaming] Adding {} MCP tools to function definitions",
+                            mcp_tools.len()
+                        );
+                        tool_defs.extend(mcp_tools);
+                    }
+                }
+
+                // TODO: AI Employees integration (future feature)
+                // AI employee tools will be added here when the marketplace feature is ready
+
+                (Some(tool_defs), Some(tool_executor))
+            }
+            Err(e) => {
+                tracing::warn!("[Chat Streaming] Failed to initialize tool registry: {}", e);
+                (None, None)
+            }
+        }
+    } else {
+        (None, None)
+    };
+
+    let has_tools = tool_definitions.is_some();
+    let tool_defs_for_follow_up = tool_definitions.clone();
+    let router_messages_clone = router_messages.clone(); // Clone for potential follow-up request
 
     let llm_request = LLMRequest {
         messages: router_messages,
@@ -656,8 +704,12 @@ async fn chat_send_message_streaming(
         temperature: None,
         max_tokens: None,
         stream: true,
-        tools: None,
-        tool_choice: None,
+        tools: tool_definitions, // ✅ Enable tools in streaming
+        tool_choice: if has_tools {
+            Some(crate::router::ToolChoice::Auto) // ✅ Let LLM decide when to use tools
+        } else {
+            None
+        },
     };
 
     let preferences = RouterPreferences {
@@ -708,6 +760,8 @@ async fn chat_send_message_streaming(
                     }
                 }
 
+                // Note: finish_reason is captured but tool execution is determined by has_tools flag
+
                 if chunk.done {
                     // Token usage will be updated via database on message save
                     break;
@@ -732,11 +786,137 @@ async fn chat_send_message_streaming(
     }
 
     // Update assistant message with final content
-    let assistant_msg = {
+    let mut assistant_msg = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         repository::update_message_content(&conn, assistant_message_id, accumulated_content.clone())
             .map_err(|e| format!("Failed to update assistant message: {}", e))?
     };
+
+    // ✅ Check for tool calls after streaming completes
+    // Since streaming doesn't include tool calls in chunks, we make a follow-up non-streaming request
+    // if tools are enabled to check for and execute tool calls
+    if has_tools && tool_executor.is_some() {
+        // Make a non-streaming request with the accumulated content to check for tool calls
+        let follow_up_request = LLMRequest {
+            messages: {
+                let mut msgs = router_messages_clone;
+                msgs.push(crate::router::ChatMessage {
+                    role: "assistant".to_string(),
+                    content: accumulated_content.clone(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                });
+                msgs
+            },
+            model: llm_request.model.clone(),
+            temperature: None,
+            max_tokens: None,
+            stream: false, // Non-streaming to get tool calls
+            tools: tool_defs_for_follow_up.clone(),
+            tool_choice: Some(crate::router::ToolChoice::Auto),
+        };
+
+        let candidates = {
+            let router = llm_state.router.lock().await;
+            router.candidates(&follow_up_request, &preferences)
+        };
+
+        if let Some(candidate) = candidates.first() {
+            if let Ok(outcome) = {
+                let router = llm_state.router.lock().await;
+                router.invoke_candidate(candidate, &follow_up_request).await
+            } {
+                // Check if we got tool calls
+                if let Some(tool_calls) = &outcome.response.tool_calls {
+                    if let Some(ref executor) = tool_executor {
+                        tracing::info!(
+                            "[Chat Streaming] Found {} tool calls, executing...",
+                            tool_calls.len()
+                        );
+
+                        // Execute tool calls
+                        let mut tool_results = Vec::new();
+                        for tool_call in tool_calls {
+                            tracing::info!(
+                                "[Chat Streaming] Executing tool: {} ({})",
+                                tool_call.name,
+                                tool_call.id
+                            );
+
+                            match executor.execute_tool_call(tool_call).await {
+                                Ok(result) => {
+                                    let formatted = executor.format_tool_result(tool_call, &result);
+                                    tool_results.push((tool_call.id.clone(), formatted));
+                                    tracing::info!("[Chat Streaming] Tool {} succeeded", tool_call.name);
+                                }
+                                Err(e) => {
+                                    let error_msg = format!("Tool execution failed: {}", e);
+                                    tool_results.push((tool_call.id.clone(), error_msg));
+                                    tracing::error!("[Chat Streaming] Tool {} failed: {}", tool_call.name, e);
+                                }
+                            }
+                        }
+
+                        // Add tool results to conversation
+                        for (tool_call_id, result_content) in tool_results {
+                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let tool_result_msg = Message::new(
+                                conversation_id,
+                                MessageRole::System,
+                                format!("Tool result [{}]: {}", tool_call_id, result_content),
+                            );
+                            repository::create_message(&conn, &tool_result_msg)
+                                .map_err(|e| format!("Failed to save tool result: {}", e))?;
+                        }
+
+                        // Continue conversation with tool results (make another request)
+                        let updated_history = {
+                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            repository::list_messages(&conn, conversation_id)
+                                .map_err(|e| format!("Failed to list messages: {}", e))?
+                        };
+
+                        let updated_messages: Vec<RouterChatMessage> = updated_history
+                            .iter()
+                            .map(|message| RouterChatMessage {
+                                role: message.role.as_str().to_string(),
+                                content: message.content.clone(),
+                                tool_calls: None,
+                                tool_call_id: None,
+                                multimodal_content: None,
+                            })
+                            .collect();
+
+                        let final_request = LLMRequest {
+                            messages: updated_messages,
+                            model: llm_request.model.clone(),
+                            temperature: None,
+                            max_tokens: None,
+                            stream: false,
+                            tools: tool_defs_for_follow_up.clone(),
+                            tool_choice: Some(crate::router::ToolChoice::Auto),
+                        };
+
+                        // Get final response with tool results
+                        if let Ok(final_outcome) = {
+                            let router = llm_state.router.lock().await;
+                            router.invoke_candidate(candidate, &final_request).await
+                        } {
+                            // Update assistant message with final response
+                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            assistant_msg = repository::update_message_content(
+                                &conn,
+                                assistant_message_id,
+                                final_outcome.response.content.clone(),
+                            )
+                            .map_err(|e| format!("Failed to update assistant message: {}", e))?;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Fetch final conversation state
     let (conversation, user_msg, messages) = {
@@ -770,6 +950,7 @@ async fn chat_send_message_streaming(
         warn!("Failed to emit streaming metrics event: {}", err);
     }
 
+    let assistant_content = assistant_msg.content.clone();
     Ok(ChatSendMessageResponse {
         conversation,
         user_message: user_msg,
@@ -779,7 +960,7 @@ async fn chat_send_message_streaming(
             total_tokens: total_tokens_sum,
             total_cost,
         },
-        last_message: Some(accumulated_content),
+        last_message: Some(assistant_content),
     })
 }
 
@@ -898,9 +1079,8 @@ pub async fn chat_send_message(
     // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees
     let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
-        use crate::commands::{AIEmployeeState, McpState};
+        use crate::commands::McpState;
         use crate::router::tool_executor::ToolExecutor;
-        use crate::router::ToolDefinition;
         use std::sync::Arc;
 
         match ToolRegistry::new() {
@@ -926,59 +1106,8 @@ pub async fn chat_send_message(
                     }
                 }
 
-                // ✅ Add AI Employees as tools if available
-                if let Some(ai_employee_state) = app_handle.try_state::<AIEmployeeState>() {
-                    // Get user's hired employees (using default-user for now)
-                    if let Ok(marketplace) = ai_employee_state.marketplace.lock() {
-                        if let Ok(user_employees) = marketplace.get_user_employees("default-user") {
-                            if !user_employees.is_empty() {
-                                tracing::info!(
-                                    "[Chat] Adding {} AI Employee tools to function definitions",
-                                    user_employees.len()
-                                );
-
-                                // Convert each hired employee to a tool definition
-                                for user_employee in user_employees.iter() {
-                                    if user_employee.is_active {
-                                        // Get the full employee details
-                                        if let Ok(employee) = marketplace
-                                            .get_employee_by_id(&user_employee.employee_id)
-                                        {
-                                            let tool_def = ToolDefinition {
-                                                name: format!(
-                                                    "ai_employee_{}",
-                                                    employee.id.replace("-", "_")
-                                                ),
-                                                description: format!(
-                                                    "{} - {}. Capabilities: {}",
-                                                    employee.name,
-                                                    employee.description,
-                                                    employee.capabilities.join(", ")
-                                                ),
-                                                parameters: serde_json::json!({
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "task_description": {
-                                                            "type": "string",
-                                                            "description": "Description of the task to delegate to this AI employee"
-                                                        },
-                                                        "task_data": {
-                                                            "type": "object",
-                                                            "description": "Additional data required for the task",
-                                                            "additionalProperties": true
-                                                        }
-                                                    },
-                                                    "required": ["task_description"]
-                                                }),
-                                            };
-                                            tool_defs.push(tool_def);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // TODO: AI Employees integration (future feature)
+                // AI employee tools will be added here when the marketplace feature is ready
 
                 (Some(tool_defs), Some(tool_executor))
             }
@@ -1039,6 +1168,7 @@ pub async fn chat_send_message(
             "deepseek" => settings.llm_config.default_models.deepseek.clone(),
             "qwen" => settings.llm_config.default_models.qwen.clone(),
             "mistral" => settings.llm_config.default_models.mistral.clone(),
+            "moonshot" => settings.llm_config.default_models.moonshot.clone(),
             _ => settings.llm_config.default_models.openai.clone(),
         }
     };
@@ -1274,8 +1404,8 @@ pub async fn chat_send_message(
 
     let outcome = outcome.ok_or_else(|| {
         last_error
-            .unwrap_or_else(|| anyhow!("All providers failed"))
-            .to_string()
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "All providers failed with unknown errors.".to_string())
     })?;
 
     let (conversation, assistant_message, stats, last_message) = {

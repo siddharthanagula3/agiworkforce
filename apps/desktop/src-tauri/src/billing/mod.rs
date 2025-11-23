@@ -24,6 +24,9 @@ pub struct InvoiceInfo;
 #[cfg(not(feature = "billing"))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageStats;
+#[cfg(not(feature = "billing"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaymentMethodInfo;
 
 use std::sync::{Arc, Mutex};
 
@@ -105,6 +108,11 @@ impl Default for BillingStateWrapper {
 // All Tauri commands require the billing feature
 #[cfg(feature = "billing")]
 /// Initialize billing service with Stripe API key
+/// 
+/// Note: Stripe MCP tools are also available when the Stripe MCP server is enabled.
+/// The AGI agent can use either these Tauri commands (Rust Stripe client) or
+/// Stripe MCP tools directly (e.g., mcp_stripe_create_customer, mcp_stripe_list_customers).
+/// Both systems can coexist - MCP tools are available to the agent via the MCP tool registry.
 #[tauri::command]
 pub async fn billing_initialize(
     stripe_api_key: String,
@@ -412,6 +420,189 @@ pub async fn stripe_process_webhook(
         .map_err(|e| format!("Failed to process webhook: {}", e))
 }
 
+#[cfg(feature = "billing")]
+/// Get payment methods for a customer
+#[tauri::command]
+pub async fn stripe_get_payment_methods(
+    customer_stripe_id: String,
+    state: State<'_, BillingStateWrapper>,
+) -> Result<Vec<PaymentMethodInfo>, String> {
+    let billing = state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+
+    let service = billing
+        .stripe_service()
+        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+
+    service
+        .get_payment_methods(&customer_stripe_id)
+        .await
+        .map_err(|e| format!("Failed to get payment methods: {}", e))
+}
+
+#[cfg(feature = "billing")]
+/// Attach a payment method to a customer
+#[tauri::command]
+pub async fn stripe_attach_payment_method(
+    customer_stripe_id: String,
+    payment_method_id: String,
+    state: State<'_, BillingStateWrapper>,
+) -> Result<PaymentMethodInfo, String> {
+    let billing = state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+
+    let service = billing
+        .stripe_service()
+        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+
+    service
+        .attach_payment_method(&customer_stripe_id, &payment_method_id)
+        .await
+        .map_err(|e| format!("Failed to attach payment method: {}", e))
+}
+
+#[cfg(feature = "billing")]
+/// Set default payment method for a customer
+#[tauri::command]
+pub async fn stripe_set_default_payment_method(
+    customer_stripe_id: String,
+    payment_method_id: String,
+    state: State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    let billing = state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+
+    let service = billing
+        .stripe_service()
+        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+
+    service
+        .set_default_payment_method(&customer_stripe_id, &payment_method_id)
+        .await
+        .map_err(|e| format!("Failed to set default payment method: {}", e))
+}
+
+#[cfg(feature = "billing")]
+/// Create a Setup Intent for adding a payment method
+#[tauri::command]
+pub async fn stripe_create_setup_intent(
+    customer_stripe_id: String,
+    state: State<'_, BillingStateWrapper>,
+) -> Result<String, String> {
+    let billing = state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+
+    let service = billing
+        .stripe_service()
+        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+
+    service
+        .create_setup_intent(&customer_stripe_id)
+        .await
+        .map_err(|e| format!("Failed to create setup intent: {}", e))
+}
+
+#[cfg(feature = "billing")]
+/// Detach (delete) a payment method
+#[tauri::command]
+pub async fn stripe_delete_payment_method(
+    payment_method_id: String,
+    state: State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    let billing = state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+
+    let service = billing
+        .stripe_service()
+        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+
+    service
+        .detach_payment_method(&payment_method_id)
+        .await
+        .map_err(|e| format!("Failed to delete payment method: {}", e))
+}
+
+#[cfg(feature = "billing")]
+/// Send invoice via email
+#[tauri::command]
+pub async fn send_invoice_email(
+    invoice_id: String,
+    recipient_email: String,
+    subject: String,
+    body: String,
+    state: State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    // Try to use configured SMTP if available, otherwise fall back to mailto (handled by frontend)
+    let smtp_host = std::env::var("SMTP_HOST").ok();
+    let smtp_port = std::env::var("SMTP_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(587);
+    let smtp_user = std::env::var("SMTP_USER").ok();
+    let smtp_password = std::env::var("SMTP_PASSWORD").ok();
+    let smtp_from = std::env::var("SMTP_FROM")
+        .ok()
+        .unwrap_or_else(|| smtp_user.clone().unwrap_or_else(|| "noreply@agiworkforce.com".to_string()));
+
+    // If SMTP is configured, use lettre to send email
+    if let (Some(host), Some(user), Some(password)) = (smtp_host, smtp_user, smtp_password) {
+        use crate::communications::smtp_client::{OutgoingEmail, SmtpClient};
+        use crate::communications::EmailAddress;
+
+        match SmtpClient::new(&host, smtp_port, &user, &password, true).await {
+            Ok(client) => {
+                let email = OutgoingEmail {
+                    from: EmailAddress {
+                        name: Some("AGI Workforce".to_string()),
+                        email: smtp_from,
+                    },
+                    to: vec![EmailAddress {
+                        name: None,
+                        email: recipient_email.clone(),
+                    }],
+                    cc: vec![],
+                    bcc: vec![],
+                    reply_to: None,
+                    subject: subject.clone(),
+                    body_text: Some(body.clone()),
+                    body_html: Some(format!(
+                        "<html><body><pre style='font-family: monospace; white-space: pre-wrap;'>{}</pre></body></html>",
+                        body.replace('\n', "<br>")
+                    )),
+                    attachments: vec![],
+                };
+
+                match client.send(email).await {
+                    Ok(_) => {
+                        tracing::info!("Invoice email sent successfully via SMTP to {}", recipient_email);
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to send email via SMTP: {}. Falling back to mailto.", e);
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize SMTP client: {}. Falling back to mailto.", e);
+            }
+        }
+    }
+
+    // Fallback: Frontend will handle mailto link
+    tracing::info!("Using mailto fallback for invoice email to {}", recipient_email);
+    Ok(())
+}
+
 #[cfg(not(feature = "billing"))]
 const BILLING_DISABLED_MSG: &str = "Billing feature is not enabled";
 
@@ -545,6 +736,65 @@ pub fn stripe_get_active_subscription(
 pub async fn stripe_process_webhook(
     _payload: String,
     _signature: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_create_setup_intent(
+    _customer_stripe_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<String, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_get_payment_methods(
+    _customer_stripe_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<Vec<PaymentMethodInfo>, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_attach_payment_method(
+    _customer_stripe_id: String,
+    _payment_method_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<PaymentMethodInfo, String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_set_default_payment_method(
+    _customer_stripe_id: String,
+    _payment_method_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn stripe_delete_payment_method(
+    _payment_method_id: String,
+    _state: tauri::State<'_, BillingStateWrapper>,
+) -> Result<(), String> {
+    Err(BILLING_DISABLED_MSG.to_string())
+}
+
+#[cfg(not(feature = "billing"))]
+#[tauri::command]
+pub async fn send_invoice_email(
+    _invoice_id: String,
+    _recipient_email: String,
+    _subject: String,
+    _body: String,
     _state: tauri::State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
     Err(BILLING_DISABLED_MSG.to_string())

@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Card } from '../ui/Card';
 import { Loader2 } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
 
 interface PeriodStats {
   total_time_saved_hours: number;
@@ -39,7 +40,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange>('today');
-  const userId = 'default'; // TODO: Get from auth context
+  const userId = useAuthStore((state) => state.getCurrentUserId());
 
   // Updated Nov 16, 2025: Fixed missing dependency and potential memory leak
   const loadStats = React.useCallback(async () => {

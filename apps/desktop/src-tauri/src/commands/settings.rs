@@ -26,6 +26,7 @@ pub struct DefaultModels {
     pub deepseek: String,
     pub qwen: String,
     pub mistral: String,
+    pub moonshot: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,14 +63,15 @@ impl SettingsState {
                     temperature: 0.7,
                     max_tokens: 4096,
                     default_models: DefaultModels {
-                        openai: "gpt-4o-mini".to_string(),
-                        anthropic: "claude-3-5-sonnet-20241022".to_string(),
-                        google: "gemini-1.5-flash".to_string(),
-                        ollama: "llama3.3".to_string(),
-                        xai: "grok-4".to_string(),
-                        deepseek: "deepseek-chat".to_string(),
-                        qwen: "qwen-max".to_string(),
-                        mistral: "mistral-large-latest".to_string(),
+                        openai: "gpt-5.1".to_string(),
+                        anthropic: "claude-sonnet-4-5".to_string(),
+                        google: "gemini-3-pro".to_string(),
+                        ollama: "llama4-maverick".to_string(),
+                        xai: "grok-4.1".to_string(),
+                        deepseek: "".to_string(),
+                        qwen: "qwen3-max".to_string(),
+                        mistral: "".to_string(),
+                        moonshot: "kimi-k2-thinking".to_string(),
                     },
                 },
                 window_preferences: WindowPreferences {
@@ -87,8 +89,14 @@ pub async fn settings_save_api_key(provider: String, key: String) -> Result<(), 
     let entry = Entry::new(SERVICE_NAME, &format!("api_key_{}", provider))
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
 
+    // Trim the key to remove any whitespace before saving
+    let trimmed_key = key.trim();
+    if trimmed_key.is_empty() {
+        return Err("API key cannot be empty".to_string());
+    }
+
     entry
-        .set_password(&key)
+        .set_password(trimmed_key)
         .map_err(|e| format!("Failed to save API key: {}", e))?;
 
     Ok(())
@@ -99,9 +107,12 @@ pub async fn settings_get_api_key(provider: String) -> Result<String, String> {
     let entry = Entry::new(SERVICE_NAME, &format!("api_key_{}", provider))
         .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
 
-    entry
+    let key = entry
         .get_password()
-        .map_err(|e| format!("Failed to get API key: {}", e))
+        .map_err(|e| format!("Failed to get API key: {}", e))?;
+    
+    // Trim the key when retrieving to ensure no extra whitespace
+    Ok(key.trim().to_string())
 }
 
 #[tauri::command]

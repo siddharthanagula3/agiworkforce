@@ -108,24 +108,15 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   }, [message]);
 
   const isToolCall = useMemo(() => {
-    const meta = message.metadata as any;
+    const meta = message.metadata;
     return !!(meta?.tool || meta?.tool_call || meta?.event === 'tool');
   }, [message.metadata]);
 
-  const toolName =
-    (message.metadata as any)?.tool ||
-    (message.metadata as any)?.tool_call ||
-    (message.metadata as any)?.name;
-  const toolStatus =
-    (message.metadata as any)?.status ||
-    (message.metadata as any)?.state ||
-    (message.metadata as any)?.stage;
-  const toolCommand = (message.metadata as any)?.command || message.content;
-  const requiresApproval = Boolean((message.metadata as any)?.requiresApproval);
-  const actionId =
-    (message.metadata as any)?.actionId ||
-    (message.metadata as any)?.action_id ||
-    (message.metadata as any)?.id;
+  const toolName = message.metadata?.tool || message.metadata?.tool_call || message.metadata?.name;
+  const toolStatus = message.metadata?.status || message.metadata?.state || message.metadata?.stage;
+  const toolCommand = message.metadata?.command || message.content;
+  const requiresApproval = Boolean(message.metadata?.requiresApproval);
+  const actionId = message.metadata?.actionId || message.metadata?.action_id;
   const [approvalState, setApprovalState] = React.useState<
     'idle' | 'approving' | 'denying' | 'approved' | 'denied'
   >('idle');

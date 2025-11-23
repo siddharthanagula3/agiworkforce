@@ -176,6 +176,7 @@ impl LLMRouter {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Mistral,
+            Provider::Moonshot,
             Provider::Ollama,
             Provider::XAI,
         ];
@@ -266,6 +267,10 @@ impl LLMRouter {
         self.set_provider(Provider::Mistral, provider);
     }
 
+    pub fn set_moonshot(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Moonshot, provider);
+    }
+
     pub fn has_provider(&self, provider: Provider) -> bool {
         self.providers
             .get(&provider)
@@ -347,6 +352,7 @@ impl LLMRouter {
                 Provider::DeepSeek,
                 Provider::Qwen,
                 Provider::Mistral,
+                Provider::Moonshot,
             ] {
                 if order.iter().any(|c| c.provider == provider) {
                     continue;
@@ -666,6 +672,11 @@ impl LLMRouter {
                 TaskCategory::Simple => "mistral-large-2".to_string(),
                 TaskCategory::Complex => "mistral-large-2".to_string(),
                 TaskCategory::Creative => "mistral-large-2".to_string(),
+            },
+            Provider::Moonshot => match task {
+                TaskCategory::Simple => "kimi-k2-thinking".to_string(),
+                TaskCategory::Complex => "kimi-k2-thinking".to_string(),
+                TaskCategory::Creative => "kimi-k2-thinking".to_string(),
             },
         }
     }

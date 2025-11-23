@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from '../ui/AlertDialog';
 import { useMarketplaceStore } from '../../stores/marketplaceStore';
+import { useAuthStore } from '../../stores/authStore';
 
 export function MyWorkflowsTab() {
   const { myPublishedWorkflows, isLoading, fetchMyWorkflows, openShareModal, unpublishWorkflow } =
@@ -23,8 +24,7 @@ export function MyWorkflowsTab() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
-    // TODO: Get user ID from auth context
-    const userId = 'current_user_id';
+    const userId = useAuthStore.getState().getCurrentUserId();
     fetchMyWorkflows(userId);
   }, [fetchMyWorkflows]);
 

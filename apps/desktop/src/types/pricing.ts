@@ -60,6 +60,7 @@ export interface Invoice {
   items: BillableEvent[];
   created_at: number;
   paid_at?: number;
+  hosted_invoice_url?: string; // Stripe hosted invoice URL
 }
 
 export interface CurrentBill {

@@ -176,6 +176,27 @@ impl McpServersConfig {
             },
         );
 
+        // Stripe server (official MCP server)
+        mcp_servers.insert(
+            "stripe".to_string(),
+            McpServerConfig {
+                command: "npx".to_string(),
+                args: vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-stripe".to_string(),
+                ],
+                env: {
+                    let mut env = HashMap::new();
+                    env.insert(
+                        "STRIPE_SECRET_KEY".to_string(),
+                        "<from_credential_manager>".to_string(),
+                    );
+                    env
+                },
+                enabled: false, // Disabled by default until API key is configured
+            },
+        );
+
         McpServersConfig { mcp_servers }
     }
 
