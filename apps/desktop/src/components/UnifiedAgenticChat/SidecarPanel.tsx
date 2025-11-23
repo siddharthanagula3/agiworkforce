@@ -306,8 +306,8 @@ export const SidecarPanel: React.FC<SidecarPanelProps> = ({ className }) => {
           </div>
         );
 
-      // FIX: Added Data Mode
-      case 'data' as any:
+      // Data Mode
+      case 'data':
         return (
           <div className="flex-1 flex flex-col">
             <div className="border-b border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">

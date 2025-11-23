@@ -1,6 +1,7 @@
 // Updated Nov 16, 2025: Added React.memo and performance optimizations
 import React, { useState, useCallback, memo } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
+import { useAuthStore } from '../../stores/authStore';
 import type { TeamMember, Team, TeamRole } from '../../types/teams';
 import { hasPermission, Permission, canModifyRole, canRemoveRole } from '../../types/teams';
 import { Button } from '../ui/Button';
@@ -21,7 +22,7 @@ const TeamMemberListComponent: React.FC<TeamMemberListProps> = ({
   const { removeMember, updateMemberRole } = useTeamStore();
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
-  const currentUserId = 'default-user'; // TODO: Get from auth context
+  const currentUserId = useAuthStore((state) => state.getCurrentUserId());
   const currentUserMember = members.find((m) => m.userId === currentUserId);
   const currentUserRole = currentUserMember?.role || ('viewer' as TeamRole);
 

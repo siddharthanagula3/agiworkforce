@@ -84,9 +84,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
       </AnimatePresence>
 
       {items.map((message) => {
-        const meta = (message as any)?.metadata || {};
+        const meta = message.metadata || {};
         const kind: SidecarPanelType | undefined =
-          meta.sidecarType ||
+          (meta.sidecarType as SidecarPanelType | undefined) ||
           (meta.tool === 'terminal'
             ? 'terminal'
             : meta.tool === 'browser'

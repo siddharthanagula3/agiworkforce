@@ -13,10 +13,12 @@ import { Button } from '../ui/Button';
 import { Checkbox } from '../ui/Checkbox';
 import { cn } from '../../lib/utils';
 import { useApprovalActions } from '../../hooks/useApprovalActions';
+import { useErrorToast } from '../errors/ErrorToast';
 
 export const ApprovalModal = () => {
   const pendingApprovals = useUnifiedChatStore((s) => s.pendingApprovals);
   const { resolveApproval } = useApprovalActions();
+  const { showError } = useErrorToast();
 
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -35,7 +37,11 @@ export const ApprovalModal = () => {
       console.log('[ApprovalModal] Operation approved:', currentApproval.id);
     } catch (error) {
       console.error('[ApprovalModal] Failed to approve:', error);
-      // TODO: Show error toast
+      showError(
+        'APPROVAL_ERROR',
+        'Failed to approve operation',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
     } finally {
       setIsApproving(false);
     }
@@ -53,7 +59,11 @@ export const ApprovalModal = () => {
       console.log('[ApprovalModal] Operation rejected:', currentApproval.id);
     } catch (error) {
       console.error('[ApprovalModal] Failed to reject:', error);
-      // TODO: Show error toast
+      showError(
+        'APPROVAL_ERROR',
+        'Failed to reject operation',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
     } finally {
       setIsRejecting(false);
     }

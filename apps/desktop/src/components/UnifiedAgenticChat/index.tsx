@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Layers, Square } from 'lucide-react';
 
 import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
@@ -10,7 +11,7 @@ import { ApprovalModal } from './ApprovalModal';
 import { Button } from '../ui/Button';
 import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
 import { useModelStore } from '../../stores/modelStore';
-import { useSettingsStore } from '../../stores/settingsStore';
+import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import { useTokenBudgetStore, selectBudget } from '../../stores/tokenBudgetStore';
 import { useCostStore } from '../../stores/costStore';
 import { sha256 } from '../../lib/hash';
@@ -27,12 +28,14 @@ export const UnifiedAgenticChat: React.FC<{
   defaultSidecarOpen?: boolean;
   onSendMessage?: (content: string, options: SendOptions) => Promise<void>;
   onOpenSettings?: () => void;
+  onOpenBilling?: () => void;
 }> = ({
   className = '',
   layout = 'default',
   defaultSidecarOpen = true,
   onSendMessage,
   onOpenSettings,
+  onOpenBilling,
 }) => {
   const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
   const openSidecarStore = useUnifiedChatStore((state) => state.openSidecar);
@@ -41,6 +44,7 @@ export const UnifiedAgenticChat: React.FC<{
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
+  // const streamingMessageId = useUnifiedChatStore((state) => state.currentStreamingMessageId); // Unused for now
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
@@ -77,6 +81,74 @@ export const UnifiedAgenticChat: React.FC<{
 
   useAgenticEvents();
 
+  // Listen to chat streaming events
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const unlistenPromises: Promise<() => void>[] = [];
+
+    // Listen for stream start
+    unlistenPromises.push(
+      listen<{ conversation_id: number; message_id: number; created_at: string }>(
+        'chat:stream-start',
+        ({ payload }) => {
+          // Stream started - message is already created
+          console.log('[UnifiedAgenticChat] Stream started:', payload);
+        },
+      ),
+    );
+
+    // Listen for stream chunks
+    unlistenPromises.push(
+      listen<{ conversation_id: number; message_id: number; delta: string; content: string }>(
+        'chat:stream-chunk',
+        ({ payload }) => {
+          // Backend uses numeric IDs, but we use UUIDs
+          // Find the currently streaming message and update it
+          const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
+          if (currentStreamingId) {
+            useUnifiedChatStore.getState().updateMessage(currentStreamingId, {
+              content: payload.content,
+              metadata: { streaming: true },
+            });
+          } else {
+            // Fallback: find the last assistant message that's streaming
+            const allMessages = useUnifiedChatStore.getState().messages;
+            const lastStreaming = allMessages
+              .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
+              .pop();
+            if (lastStreaming) {
+              useUnifiedChatStore.getState().updateMessage(lastStreaming.id, {
+                content: payload.content,
+                metadata: { streaming: true },
+              });
+            }
+          }
+        },
+      ),
+    );
+
+    // Listen for stream end
+    unlistenPromises.push(
+      listen<{ conversation_id: number; message_id: number }>('chat:stream-end', ({ payload: _payload }) => {
+        const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
+        if (currentStreamingId) {
+          useUnifiedChatStore.getState().updateMessage(currentStreamingId, {
+            metadata: { streaming: false },
+          });
+        }
+        useUnifiedChatStore.getState().setStreamingMessage(null);
+      }),
+    );
+
+    // Cleanup listeners on unmount
+    return () => {
+      Promise.all(unlistenPromises).then((unlisteners) => {
+        unlisteners.forEach((unlisten) => unlisten());
+      });
+    };
+  }, [updateMessage, setStreamingMessage]);
+
   useEffect(() => {
     if (defaultSidecarOpen === false) {
       setSidecarOpen(false);
@@ -87,7 +159,7 @@ export const UnifiedAgenticChat: React.FC<{
     if (!budget.enabled) return;
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return;
-    const messageId = String((lastMessage as any).id ?? crypto.randomUUID());
+    const messageId = String(lastMessage.id ?? crypto.randomUUID());
     if (countedMessageIdsRef.current.has(messageId)) {
       return;
     }
@@ -189,8 +261,8 @@ export const UnifiedAgenticChat: React.FC<{
     const enrichedOptions: SendOptions = {
       ...options,
       providerId:
-        options.providerId ?? routingOverrides.providerId ?? providerForMessage ?? 'openai',
-      modelId: options.modelId ?? routingOverrides.modelId ?? modelForMessage ?? 'gpt-4o',
+        options.providerId ?? routingOverrides.providerId ?? providerForMessage ?? llmConfig.defaultProvider,
+      modelId: options.modelId ?? routingOverrides.modelId ?? modelForMessage ?? llmConfig.defaultModels[llmConfig.defaultProvider] ?? 'gpt-5.1',
     };
 
     const entryPoint = content.trim();
@@ -210,6 +282,24 @@ export const UnifiedAgenticChat: React.FC<{
 
     const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
 
+    // Ensure provider is configured with API key before sending
+    if (isTauri && enrichedOptions.providerId && enrichedOptions.providerId !== 'ollama') {
+      try {
+        const { getAPIKey } = useSettingsStore.getState();
+        const apiKey = await getAPIKey(enrichedOptions.providerId as Provider);
+        if (apiKey && apiKey.trim()) {
+          await invoke('llm_configure_provider', {
+            provider: enrichedOptions.providerId,
+            apiKey: apiKey.trim(),
+            baseUrl: null,
+          });
+        }
+      } catch (error) {
+        console.warn('[UnifiedAgenticChat] Failed to configure provider before sending:', error);
+        // Continue anyway - the backend will handle the error
+      }
+    }
+
     addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
 
     const assistantMessageId = crypto.randomUUID();
@@ -224,14 +314,14 @@ export const UnifiedAgenticChat: React.FC<{
       if (onSendMessage) {
         await onSendMessage(content, enrichedOptions);
       } else {
+        // Enable streaming for better UX
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
             providerOverride: enrichedOptions.providerId,
             modelOverride: enrichedOptions.modelId,
-            // FIX: Pass focusMode to the backend
             focusMode: enrichedOptions.focusMode,
-            stream: false,
+            stream: true, // Enable streaming
             enableTools: true,
             conversationMode,
             workflowHash,
@@ -239,21 +329,29 @@ export const UnifiedAgenticChat: React.FC<{
           },
         });
 
-        updateMessage(assistantMessageId, {
-          content: response.assistant_message?.content || 'No response',
-          metadata: {
-            streaming: false,
-            model: response.assistant_message?.model,
-            provider: response.assistant_message?.provider,
-            tokenCount: response.assistant_message?.tokens,
-            cost: response.assistant_message?.cost,
-          },
-        });
+        // For streaming mode, content will be updated via events
+        // For non-streaming mode, update directly
+        if (response.assistant_message?.content) {
+          updateMessage(assistantMessageId, {
+            content: response.assistant_message.content,
+            metadata: {
+              streaming: false,
+              model: response.assistant_message.model,
+              provider: response.assistant_message.provider,
+              tokenCount: response.assistant_message.tokens,
+              cost: response.assistant_message.cost,
+            },
+          });
+        }
+        // If streaming, the events will handle the content updates
       }
     } catch (error) {
+      console.error('[UnifiedAgenticChat] Error sending message:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       updateMessage(assistantMessageId, {
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Error: ${errorMessage}. Please check your API key in Settings > API Keys.`,
         metadata: { streaming: false },
+        error: errorMessage,
       });
     } finally {
       setStreamingMessage(null);
@@ -282,7 +380,7 @@ export const UnifiedAgenticChat: React.FC<{
     <div
       className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
     >
-      <AppLayout onOpenSettings={onOpenSettings}>
+      <AppLayout onOpenSettings={onOpenSettings} onOpenBilling={onOpenBilling}>
         <BudgetAlertsPanel />
         <ChatStream onOpenSidecar={openSidecar} />
 

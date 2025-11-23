@@ -10,7 +10,8 @@ export type Provider =
   | 'xai'
   | 'deepseek'
   | 'qwen'
-  | 'mistral';
+  | 'mistral'
+  | 'moonshot';
 export type Theme = 'light' | 'dark' | 'system';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
@@ -34,6 +35,7 @@ interface APIKeys {
   deepseek: string;
   qwen: string;
   mistral: string;
+  moonshot: string;
 }
 
 interface LLMConfig {
@@ -49,6 +51,7 @@ interface LLMConfig {
     deepseek: string;
     qwen: string;
     mistral: string;
+    moonshot: string;
   };
   taskRouting: TaskRouting;
   favoriteModels: string[]; // Quick-access models in format "provider/model"
@@ -102,38 +105,47 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
     deepseek: '',
     qwen: '',
     mistral: '',
+    moonshot: '',
   },
   llmConfig: {
     defaultProvider: 'anthropic', // Claude 4.5 is best for coding (77.2% SWE-bench)
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      // November 2025 top-performing models (workhorse defaults)
-      openai: 'gpt-4.1', // general + code, strong reasoning
-      anthropic: 'claude-3-5-sonnet', // coding/docs strength
-      google: 'gemini-2.0-pro', // long-context + multimodal
-      ollama: 'llama3.2', // local fallback
-      xai: 'grok-2', // real-time data access
-      deepseek: 'deepseek-v3', // code-focused
-      qwen: 'qwen-max',
-      mistral: 'mistral-large-2',
+      // November 2025 releases only
+      openai: 'gpt-5.1', // Latest (Nov 12, 2025)
+      anthropic: 'claude-sonnet-4-5', // Best coding (77.2% SWE-bench)
+      google: 'gemini-3-pro', // Latest (Nov 18, 2025)
+      ollama: 'llama4-maverick', // November 2025
+      xai: 'grok-4.1', // Latest (Nov 17, 2025)
+      deepseek: '', // No November 2025 release
+      qwen: 'qwen3-max', // November 2025
+      mistral: '', // No November 2025 release
+      moonshot: 'kimi-k2-thinking', // November 2025
     },
     favoriteModels: [
-      'openai/gpt-4.1',
-      'openai/gpt-4o',
-      'anthropic/claude-3-5-sonnet',
-      'google/gemini-2.0-pro',
-      'deepseek/deepseek-v3',
-      'mistral/mistral-large-2',
-      'qwen/qwen-max',
-      'ollama/llama3.2',
+      'openai/gpt-5.1',
+      'openai/gpt-5.1-instant',
+      'openai/gpt-5.1-thinking',
+      'openai/gpt-5.1-codex-max',
+      'anthropic/claude-sonnet-4-5',
+      'anthropic/claude-haiku-4-5',
+      'anthropic/claude-opus-4-1',
+      'google/gemini-3-pro',
+      'google/gemini-3-flash',
+      'google/gemini-3-deep-think',
+      'xai/grok-4.1',
+      'xai/grok-4.1-fast',
+      'qwen/qwen3-max',
+      'ollama/llama4-maverick',
+      'moonshot/kimi-k2-thinking',
     ],
     taskRouting: {
-      search: { provider: 'openai', model: 'gpt-4.1' },
-      code: { provider: 'anthropic', model: 'claude-3-5-sonnet' },
-      docs: { provider: 'anthropic', model: 'claude-3-5-sonnet' },
-      chat: { provider: 'openai', model: 'gpt-4.1' },
-      vision: { provider: 'openai', model: 'gpt-4o' },
+      search: { provider: 'openai', model: 'gpt-5.1' },
+      code: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
+      docs: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
+      chat: { provider: 'openai', model: 'gpt-5.1' },
+      vision: { provider: 'google', model: 'gemini-3-pro' },
       image: { provider: 'google', model: 'imagen-3' },
       video: { provider: 'google', model: 'veo-3.1' },
     },
@@ -182,10 +194,13 @@ export const useSettingsStore = create<SettingsState>()(
       setAPIKey: async (provider: Provider, key: string) => {
         set({ loading: true, error: null });
         try {
+          // Trim the key to remove any whitespace
+          const trimmedKey = key.trim();
+          
           // Save to keyring via backend
-          await invoke('settings_save_api_key', { provider, key });
+          await invoke('settings_save_api_key', { provider, key: trimmedKey });
 
-          // Configure the provider with the new key
+          // Configure the provider with the trimmed key
           if (provider === 'ollama') {
             await invoke('llm_configure_provider', {
               provider,
@@ -195,13 +210,13 @@ export const useSettingsStore = create<SettingsState>()(
           } else {
             await invoke('llm_configure_provider', {
               provider,
-              apiKey: key,
+              apiKey: trimmedKey,
               baseUrl: null,
             });
           }
 
           set((state) => ({
-            apiKeys: { ...state.apiKeys, [provider]: key },
+            apiKeys: { ...state.apiKeys, [provider]: trimmedKey },
             loading: false,
           }));
         } catch (error) {
@@ -225,11 +240,31 @@ export const useSettingsStore = create<SettingsState>()(
       testAPIKey: async (provider: Provider) => {
         set({ loading: true, error: null });
         try {
-          // Send a simple test message
+          // Ensure the API key is loaded from credential manager and provider is configured
+          const key = await get().getAPIKey(provider);
+          if (!key || !key.trim()) {
+            throw new Error(`No API key found for ${provider}. Please save your API key first.`);
+          }
+
+          // Configure the provider with the key from credential manager (ensures it's the saved version)
+          if (provider !== 'ollama') {
+            await invoke('llm_configure_provider', {
+              provider,
+              apiKey: key.trim(),
+              baseUrl: null,
+            });
+          }
+
+          // Send a simple test message with a valid model for the provider
+          const defaultModel = get().llmConfig.defaultModels[provider];
+          if (!defaultModel || !defaultModel.trim()) {
+            throw new Error(`No default model configured for provider: ${provider}. Please set a default model in settings.`);
+          }
+          
           await invoke('llm_send_message', {
             request: {
-              messages: [{ role: 'user', content: 'Hello' }],
-              model: null,
+              messages: [{ role: 'user', content: 'Hi' }],
+              model: defaultModel.trim(),
               provider,
               temperature: null,
               max_tokens: 10,
@@ -239,7 +274,8 @@ export const useSettingsStore = create<SettingsState>()(
           return true;
         } catch (error) {
           console.error(`API key test failed for ${provider}:`, error);
-          set({ error: String(error), loading: false });
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          set({ error: errorMessage, loading: false });
           return false;
         }
       },
@@ -387,6 +423,7 @@ export const useSettingsStore = create<SettingsState>()(
             'deepseek',
             'qwen',
             'mistral',
+            'moonshot',
           ];
 
           // Parallel API key loading
@@ -411,6 +448,7 @@ export const useSettingsStore = create<SettingsState>()(
             deepseek: '',
             qwen: '',
             mistral: '',
+            moonshot: '',
           };
 
           // Collect API keys from results

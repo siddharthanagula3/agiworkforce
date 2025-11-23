@@ -172,16 +172,16 @@ mod keyboard_tests {
     // to avoid disrupting the development environment.
     // Run with: cargo test -- --ignored
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn test_send_text_integration() {
+    async fn test_send_text_integration() {
         // This test requires manual verification
         // It will type text into the currently focused window
         let keyboard = KeyboardSimulator::new().unwrap();
 
         // WARNING: This will type into whatever window has focus!
         // Only run in isolated test environment
-        let result = keyboard.send_text("test");
+        let result = keyboard.send_text("test").await;
         assert!(result.is_ok(), "send_text should succeed");
     }
 

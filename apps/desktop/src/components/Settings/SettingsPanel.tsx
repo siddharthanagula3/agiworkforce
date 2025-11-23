@@ -28,6 +28,7 @@ import {
   createDefaultWindowPreferences,
   type TaskCategory,
 } from '../../stores/settingsStore';
+import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { EmployeesPage } from '../../pages/EmployeesPage';
@@ -71,12 +72,28 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
     setTesting(true);
     setTestResult(null);
     try {
+      // First save the key to ensure it's stored and provider is configured
+      const currentKey = apiKeys[provider as keyof typeof apiKeys];
+      if (localKey.trim() !== currentKey) {
+        await setAPIKey(provider, localKey.trim());
+      }
+      // Now test the API key
       const success = await testAPIKey(provider);
-      setTestResult(success ? 'success' : 'error');
-      setTimeout(() => setTestResult(null), 3000);
+      if (success) {
+        setTestResult('success');
+        setTimeout(() => setTestResult(null), 3000);
+      } else {
+        // Error is already set in the store by testAPIKey
+        setTestResult('error');
+        setTimeout(() => setTestResult(null), 5000); // Show error longer
+      }
     } catch (error) {
+      console.error('API key test failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Display error to user
+      useSettingsStore.getState().set({ error: errorMessage });
       setTestResult('error');
-      setTimeout(() => setTestResult(null), 3000);
+      setTimeout(() => setTestResult(null), 5000); // Show error longer
     } finally {
       setTesting(false);
     }
@@ -181,27 +198,28 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Settings</DialogTitle>
-          <DialogDescription>
-            Configure your API keys, LLM preferences, and application settings
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-7xl max-h-[90vh] w-full p-0 overflow-hidden">
+        <div className="h-[90vh] overflow-y-auto">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle className="text-2xl font-bold">Settings</DialogTitle>
+            <DialogDescription>
+              Configure your API keys, LLM preferences, and application settings
+            </DialogDescription>
+          </DialogHeader>
 
-        {error && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="mx-6 mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-        {loading && !llmConfig ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          /* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */
-          <Tabs defaultValue="api-keys" className="mt-6">
+          {loading && !llmConfig ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            /* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */
+            <Tabs defaultValue="api-keys" className="mt-6 px-6">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="api-keys" className="flex items-center gap-2">
                 <Key className="h-4 w-4" />
@@ -296,6 +314,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                         <SelectItem value="deepseek">DeepSeek</SelectItem>
                         <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
                         <SelectItem value="mistral">Mistral AI</SelectItem>
+                        <SelectItem value="moonshot">Moonshot AI</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
@@ -304,143 +323,45 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="openaiModel">OpenAI Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.openai}
-                        onValueChange={(value) => setDefaultModel('openai', value)}
-                      >
-                        <SelectTrigger id="openaiModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                          <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                          <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                          <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {(
+                      [
+                        'openai',
+                        'anthropic',
+                        'google',
+                        'ollama',
+                        'xai',
+                        'deepseek',
+                        'qwen',
+                        'mistral',
+                        'moonshot',
+                      ] as Provider[]
+                    ).map((provider) => {
+                      const models = MODEL_PRESETS[provider];
+                      if (models.length === 0) return null;
 
-                    <div className="space-y-2">
-                      <Label htmlFor="anthropicModel">Anthropic Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.anthropic}
-                        onValueChange={(value) => setDefaultModel('anthropic', value)}
-                      >
-                        <SelectTrigger id="anthropicModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
-                          <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
-                          <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="googleModel">Google AI Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.google}
-                        onValueChange={(value) => setDefaultModel('google', value)}
-                      >
-                        <SelectTrigger id="googleModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="gemini-2.0-pro">Gemini 2.0 Pro</SelectItem>
-                          <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                          <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ollamaModel">Ollama Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.ollama}
-                        onValueChange={(value) => setDefaultModel('ollama', value)}
-                      >
-                        <SelectTrigger id="ollamaModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="llama3.2">Llama 3.2</SelectItem>
-                          <SelectItem value="llama3.1">Llama 3.1</SelectItem>
-                          <SelectItem value="llama3">Llama 3</SelectItem>
-                          <SelectItem value="llama3.2-coder">Llama 3.2 Coder</SelectItem>
-                          <SelectItem value="deepseek-coder">DeepSeek Coder</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="xaiModel">XAI Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.xai}
-                        onValueChange={(value) => setDefaultModel('xai', value)}
-                      >
-                        <SelectTrigger id="xaiModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="grok-2">Grok 2</SelectItem>
-                          <SelectItem value="grok-1.5">Grok 1.5</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="deepseekModel">DeepSeek Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.deepseek}
-                        onValueChange={(value) => setDefaultModel('deepseek', value)}
-                      >
-                        <SelectTrigger id="deepseekModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="deepseek-v3">DeepSeek V3</SelectItem>
-                          <SelectItem value="deepseek-coder">DeepSeek Coder</SelectItem>
-                          <SelectItem value="deepseek-reasoner">DeepSeek Reasoner</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="qwenModel">Qwen Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.qwen}
-                        onValueChange={(value) => setDefaultModel('qwen', value)}
-                      >
-                        <SelectTrigger id="qwenModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="qwen-max">Qwen Max</SelectItem>
-                          <SelectItem value="qwen-plus">Qwen Plus</SelectItem>
-                          <SelectItem value="qwen-coder">Qwen Coder</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="mistralModel">Mistral Model</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultModels.mistral}
-                        onValueChange={(value) => setDefaultModel('mistral', value)}
-                      >
-                        <SelectTrigger id="mistralModel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="mistral-large-2">Mistral Large 2</SelectItem>
-                          <SelectItem value="codestral-latest">Codestral</SelectItem>
-                          <SelectItem value="mistral-small-latest">Mistral Small</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                      return (
+                        <div key={provider} className="space-y-2">
+                          <Label htmlFor={`${provider}Model`}>
+                            {PROVIDER_LABELS[provider]} Model
+                          </Label>
+                          <Select
+                            value={resolvedLLMConfig.defaultModels[provider] || ''}
+                            onValueChange={(value) => setDefaultModel(provider, value)}
+                          >
+                            <SelectTrigger id={`${provider}Model`}>
+                              <SelectValue placeholder={`Select ${PROVIDER_LABELS[provider]} model`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {models.map((model) => (
+                                <SelectItem key={model.value} value={model.value}>
+                                  {model.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="space-y-3 rounded-lg border border-muted/30 p-4">
@@ -490,6 +411,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                                 <SelectItem value="deepseek">DeepSeek</SelectItem>
                                 <SelectItem value="qwen">Qwen</SelectItem>
                                 <SelectItem value="mistral">Mistral</SelectItem>
+                                <SelectItem value="moonshot">Moonshot AI</SelectItem>
                               </SelectContent>
                             </Select>
                             <Input
@@ -629,11 +551,12 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           </Tabs>
         )}
 
-        <div className="flex justify-end gap-3 mt-6 pt-6 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSaveSettings}>Save Changes</Button>
+          <div className="flex justify-end gap-3 mt-6 pt-6 border-t px-6 pb-6">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveSettings}>Save Changes</Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

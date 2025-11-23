@@ -986,6 +986,7 @@ fn main() {
             agiworkforce_desktop::commands::mcp_enable_server,
             agiworkforce_desktop::commands::mcp_disable_server,
             agiworkforce_desktop::commands::mcp_get_stats,
+            agiworkforce_desktop::commands::mcp_get_server_logs,
             agiworkforce_desktop::commands::mcp_store_credential,
             agiworkforce_desktop::commands::mcp_get_tool_schemas,
             agiworkforce_desktop::commands::mcp_get_health,
@@ -1085,6 +1086,14 @@ fn main() {
             agiworkforce_desktop::billing::stripe_create_portal_session,
             agiworkforce_desktop::billing::stripe_get_active_subscription,
             agiworkforce_desktop::billing::stripe_process_webhook,
+            // Payment method commands
+            agiworkforce_desktop::billing::stripe_get_payment_methods,
+            agiworkforce_desktop::billing::stripe_create_setup_intent,
+            agiworkforce_desktop::billing::stripe_attach_payment_method,
+            agiworkforce_desktop::billing::stripe_set_default_payment_method,
+            agiworkforce_desktop::billing::stripe_delete_payment_method,
+            // Email invoice command
+            agiworkforce_desktop::billing::send_invoice_email,
             // Subscription management commands
             agiworkforce_desktop::commands::subscribe_to_plan,
             agiworkforce_desktop::commands::upgrade_plan,

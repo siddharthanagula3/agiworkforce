@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ApprovalRequest } from '../../stores/governanceStore';
 import { useGovernanceStore } from '../../stores/governanceStore';
+import { useAuthStore } from '../../stores/authStore';
 import { Button } from '../ui/Button';
 import { X, CheckCircle, XCircle } from 'lucide-react';
 
@@ -16,7 +17,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentUserId = 'default-user'; // TODO: Get from auth context
+  const currentUserId = useAuthStore((state) => state.getCurrentUserId());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

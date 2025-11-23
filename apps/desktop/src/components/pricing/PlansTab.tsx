@@ -1,25 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Star } from 'lucide-react';
 import { usePricingStore } from '../../stores/pricingStore';
-import { PricingCalculator } from './PricingCalculator';
 import { cn } from '../../lib/utils';
 import type { PricingPlan } from '../../types/pricing';
-import { useCostStore } from '../../stores/costStore';
-import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 
 export function PlansTab() {
   const { plans, currentPlan, fetchPlans, subscribeToPlan, upgradePlan } = usePricingStore();
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
-  const { overview, loadOverview, loadingOverview } = useCostStore();
-  const budget = useTokenBudgetStore(selectBudget);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
 
   useEffect(() => {
     void fetchPlans();
-    void loadOverview();
-  }, [fetchPlans, loadOverview]);
+  }, [fetchPlans]);
 
   const handleSelectPlan = async (planId: string) => {
     try {
@@ -33,199 +25,122 @@ export function PlansTab() {
     }
   };
 
-  // Hardcoded plans for demo (backend will provide these)
+  // Filter to show only Free, Pro, and Max/Enterprise plans
   const demoPlans: PricingPlan[] = [
     {
       id: 'free',
-      name: 'Free',
+      name: 'Free Plan',
       pricing_model: 'free',
       included_hours: 10,
       features: [
-        '10 hours automation/month',
-        'Basic support',
-        'Community access',
-        'Core automation features',
-        'Single user',
+        'Track up to 5 automations',
+        'Access to basic automation features',
+        'Mobile access for tracking on-the-go',
+        'Basic automation insights',
+        'Limited workflow management',
       ],
-      description: 'Perfect for individuals getting started',
-    },
-    {
-      id: 'pay-per-result',
-      name: 'Pay-Per-Result',
-      pricing_model: 'pay_per_result',
-      price_per_automation_usd: 0.5,
-      features: [
-        '$0.50 per successful automation',
-        'Pay only for what works',
-        'Failed automations free',
-        'Email support',
-        'All automation features',
-        'Unlimited users',
-      ],
-      description: 'Zero risk, only pay for results',
+      description: 'For beginners to explore our platform and start their automation journey.',
     },
     {
       id: 'pro',
-      name: 'Pro',
+      name: 'Pro Plan',
       pricing_model: 'pro',
-      base_price_usd: 29,
-      annual_price_usd: 24.99,
+      base_price_usd: 80,
+      annual_price_usd: 66.67, // ~20% discount
       is_popular: true,
       features: [
-        'Unlimited automations',
-        'Priority support',
-        'Advanced analytics',
-        'ROI dashboard',
-        'Custom integrations',
-        'Unlimited users',
-        'API access',
-        'Veọ 3.1 access (Pro)',
+        'Track unlimited automations',
+        'Advanced analytics and performance tracking',
+        'Custom alerts for automation events',
+        'Expert-curated automation templates',
+        'Priority support assistance',
+        'Export data to CSV/PDF',
       ],
-      description: 'Best value for growing teams',
+      description: 'For active users who want advanced tools to grow their automation portfolio.',
     },
     {
       id: 'max',
-      name: 'Max',
+      name: 'Advance Plan',
       pricing_model: 'max',
       base_price_usd: 249,
       annual_price_usd: 199.99,
       features: [
-        'All Pro features',
-        'Fastest routing & premium models',
-        'Highest priority support',
-        'Enterprise-grade guardrails',
-        'Veo 3.1 Pro + premium image models',
+        'Dedicated account manager',
+        'Customizable automation tools',
+        'Integration with third-party services',
+        'Advanced AI-driven insights',
+        'Team collaboration tools',
       ],
-      description: 'Maximum performance and priority access',
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      pricing_model: 'enterprise',
-      features: [
-        'Custom pricing',
-        'ROI guarantees',
-        'Dedicated support',
-        'Custom integrations',
-        'SLA 99.9% uptime',
-        'On-premise deployment',
-        'Advanced security',
-        'Training & onboarding',
-      ],
-      description: 'For organizations at scale',
+      description: 'For institutions or high-net-worth individuals seeking tailored solutions.',
     },
   ];
 
-  const displayPlans = plans.length > 0 ? plans : demoPlans;
-  const monthlySpend = overview?.month_total ?? 0;
-  const monthlyBudget = overview?.monthly_budget ?? null;
-  const remainingBudget = overview?.remaining_budget ?? null;
-  const budgetPct =
-    monthlyBudget && monthlyBudget > 0
-      ? Math.min(100, Math.round((monthlySpend / monthlyBudget) * 100))
-      : null;
-  const tokenUsage = budget.currentUsage;
-  const tokenLimit = budget.limit;
+  const displayPlans = plans.length > 0 ? plans.filter((p) => ['free', 'pro', 'max', 'enterprise'].includes(p.id)) : demoPlans;
+  // Ensure we have exactly 3 plans
+  const threePlans = displayPlans.slice(0, 3);
 
   return (
-    <div className="p-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-        <div className="rounded-lg border border-muted/30 bg-muted/10 p-4 shadow-sm">
-          <p className="text-sm text-muted-foreground">LLM spend (month-to-date)</p>
-          <div className="mt-1 text-2xl font-semibold">
-            {loadingOverview ? '…' : `$${monthlySpend.toFixed(2)}`}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <div className="mx-auto max-w-7xl px-6 py-16">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="inline-block px-3 py-1 text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+            Pricing
           </div>
-          <p className="text-xs text-muted-foreground">
-            Today ${overview?.today_total?.toFixed(2) ?? '0.00'} · Cursor-style credit meter
-          </p>
-          {monthlyBudget && (
-            <div className="mt-3">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted/50">
-                <div
-                  className="h-2 rounded-full bg-primary transition-all"
-                  style={{ width: `${budgetPct ?? 0}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Budget ${monthlyBudget.toFixed(2)} · Remaining ${remainingBudget?.toFixed(2) ?? 0}
-              </p>
-            </div>
-          )}
-        </div>
-        <div className="rounded-lg border border-muted/30 bg-muted/10 p-4 shadow-sm">
-          <p className="text-sm text-muted-foreground">Input / Output tokens</p>
-          <div className="mt-1 text-lg font-semibold">
-            {tokenUsage.toLocaleString()}{' '}
-            {budget.enabled ? `of ${tokenLimit.toLocaleString()}` : ''} tokens
-          </div>
-          <p className="text-xs text-muted-foreground">
-            We meter like Cursor: input + output tokens roll up to credits with model-aware pricing.
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-zinc-100">
+            Plans and Pricing
+          </h1>
+          <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
+            Choose a plan that fits your automation goals, whether you're just starting or scaling
+            your operations.
           </p>
         </div>
-        <div className="rounded-lg border border-muted/30 bg-muted/10 p-4 shadow-sm">
-          <p className="text-sm text-muted-foreground">Default credits policy</p>
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-            <li>• Input: ~3k prompt tokens = 1 credit</li>
-            <li>• Output: ~1k generation tokens = 1 credit</li>
-            <li>• Premium models (Veo/Imagen Pro) burn 2× credits</li>
-          </ul>
+
+        {/* Billing Toggle */}
+        <div className="flex items-center justify-center gap-4 mb-12">
+          <button
+            type="button"
+            onClick={() => setBillingCycle('monthly')}
+            className={cn(
+              'px-6 py-2 rounded-lg font-medium transition-all',
+              billingCycle === 'monthly'
+                ? 'bg-zinc-800 text-zinc-100 shadow-lg'
+                : 'text-zinc-500 hover:text-zinc-300',
+            )}
+          >
+            Bill Monthly
+          </button>
+          <button
+            type="button"
+            onClick={() => setBillingCycle('annual')}
+            className={cn(
+              'px-6 py-2 rounded-lg font-medium transition-all',
+              billingCycle === 'annual'
+                ? 'bg-zinc-800 text-zinc-100 shadow-lg'
+                : 'text-zinc-500 hover:text-zinc-300',
+            )}
+          >
+            Bill Annually
+          </button>
         </div>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
         {/* Plans Grid */}
-        <div className="lg:col-span-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {displayPlans.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                isCurrentPlan={currentPlan?.id === plan.id}
-                onSelect={() => handleSelectPlan(plan.id)}
-                billingCycle={billingCycle}
-              />
-            ))}
-          </div>
-
-          {/* Feature Comparison */}
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold mb-4">Compare Features</h3>
-            <div className="bg-muted/30 rounded-lg p-4 text-sm text-muted-foreground">
-              All plans include: Core automation features, Desktop & browser control, API
-              integrations, Knowledge base access, Regular updates, and data encryption.
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          {threePlans.map((plan, index) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              isCurrentPlan={currentPlan?.id === plan.id}
+              onSelect={() => handleSelectPlan(plan.id)}
+              billingCycle={billingCycle}
+              index={index}
+            />
+          ))}
         </div>
 
-        {/* Calculator */}
-        <div className="lg:col-span-1">
-          <div className="mb-4 flex items-center justify-between rounded-lg border border-muted/40 bg-muted/20 px-3 py-2">
-            <span className="text-sm text-muted-foreground">Billing</span>
-            <div className="flex items-center gap-2 text-sm">
-              <button
-                className={cn(
-                  'rounded px-2 py-1 transition',
-                  billingCycle === 'monthly'
-                    ? 'bg-primary text-white'
-                    : 'bg-transparent text-muted-foreground',
-                )}
-                onClick={() => setBillingCycle('monthly')}
-              >
-                Monthly
-              </button>
-              <button
-                className={cn(
-                  'rounded px-2 py-1 transition',
-                  billingCycle === 'annual'
-                    ? 'bg-primary text-white'
-                    : 'bg-transparent text-muted-foreground',
-                )}
-                onClick={() => setBillingCycle('annual')}
-              >
-                Annual (save more)
-              </button>
-            </div>
-          </div>
-          <PricingCalculator />
+        {/* Footer */}
+        <div className="text-center text-sm text-zinc-500">
+          Start your journey risk free - No credit card needed
         </div>
       </div>
     </div>
@@ -237,89 +152,110 @@ interface PlanCardProps {
   isCurrentPlan: boolean;
   onSelect: () => void;
   billingCycle: 'monthly' | 'annual';
+  index: number;
 }
 
-function PlanCard({ plan, isCurrentPlan, onSelect, billingCycle }: PlanCardProps) {
+function PlanCard({ plan, isCurrentPlan, onSelect, billingCycle, index }: PlanCardProps) {
   const isPopular = plan.is_popular;
   const isFree = plan.pricing_model === 'free';
-  const isEnterprise = plan.pricing_model === 'enterprise';
-  const isPayPerResult = plan.pricing_model === 'pay_per_result';
+  const isEnterprise = plan.pricing_model === 'enterprise' || plan.pricing_model === 'max';
+
+  // Color schemes for each card
+  const colorSchemes: Array<{ icon: string; border: string }> = [
+    { icon: 'bg-blue-500', border: 'border-blue-500/20' }, // Free - Blue
+    { icon: 'bg-white', border: 'border-white/20' }, // Pro - White
+    { icon: 'bg-emerald-500', border: 'border-emerald-500/20' }, // Advance - Green
+  ];
+
+  const safeIndex = Math.min(Math.max(0, index), colorSchemes.length - 1);
+  const colors = colorSchemes[safeIndex]!; // Always defined due to safeIndex bounds
 
   const getPrice = () => {
     if (isFree) return '$0';
-    if (isPayPerResult) return '$0.50';
     if (isEnterprise) return 'Custom';
     const annual = billingCycle === 'annual' && plan.annual_price_usd;
-    return annual ? `$${annual}` : `$${plan.base_price_usd}`;
+    return annual ? `$${Math.round(plan.annual_price_usd || 0)}` : `$${plan.base_price_usd || 0}`;
   };
 
   const getPriceLabel = () => {
     if (isFree) return '/month';
-    if (isPayPerResult) return '/automation';
-    if (isEnterprise) return 'pricing';
-    return billingCycle === 'annual' ? '/month (annual)' : '/month';
+    if (isEnterprise) return '';
+    return '/month';
   };
 
   const getButtonText = () => {
     if (isCurrentPlan) return 'Current Plan';
-    if (isFree) return 'Start Free';
-    if (isEnterprise) return 'Contact Sales';
+    if (isFree) return 'Start for Free';
+    if (isEnterprise) return 'Contact Us';
+    if (isPopular) return 'Start Free 7 Days Trial';
     return 'Get Started';
   };
 
-  const getButtonVariant = () => {
-    if (isCurrentPlan) return 'outline';
-    if (isPopular) return 'default';
-    return 'outline';
-  };
-
   return (
-    <Card
+    <div
       className={cn(
-        'relative overflow-hidden transition-all hover:shadow-lg',
-        isPopular && 'border-primary shadow-md',
+        'relative rounded-2xl border-2 bg-zinc-900/50 backdrop-blur-sm p-8 transition-all hover:shadow-2xl hover:scale-105',
+        isPopular && 'border-white/30 shadow-xl',
+        !isPopular && colors.border,
       )}
     >
+      {/* Icon */}
+      <div className={cn('w-12 h-12 rounded-lg mb-6', colors.icon)} />
+
+      {/* Popular Badge */}
       {isPopular && (
-        <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-xs font-semibold rounded-bl-lg flex items-center gap-1">
-          <Sparkles className="h-3 w-3" />
-          Most Popular
+        <div className="absolute top-6 right-6 flex items-center gap-1 text-xs font-semibold text-zinc-300">
+          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+          <span>POPULAR</span>
         </div>
       )}
 
-      <CardHeader>
-        <CardTitle className="text-2xl">{plan.name}</CardTitle>
-        <CardDescription>{plan.description}</CardDescription>
-        <div className="mt-4">
-          <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-bold">{getPrice()}</span>
-            <span className="text-muted-foreground">{getPriceLabel()}</span>
-          </div>
-        </div>
-      </CardHeader>
+      {/* Plan Name */}
+      <h3 className="text-2xl font-bold mb-2 text-zinc-100">{plan.name}</h3>
 
-      <CardContent>
+      {/* Price */}
+      <div className="mb-4">
+        <div className="flex items-baseline gap-1">
+          <span className="text-4xl font-bold text-zinc-100">{getPrice()}</span>
+          {getPriceLabel() && (
+            <span className="text-lg text-zinc-400">/month</span>
+          )}
+        </div>
+      </div>
+
+      {/* Description */}
+      <p className="text-sm text-zinc-400 mb-6 leading-relaxed">{plan.description}</p>
+
+      {/* CTA Button */}
+      <Button
+        className={cn(
+          'w-full mb-8 font-semibold transition-all',
+          isPopular
+            ? 'bg-white text-zinc-900 hover:bg-zinc-100'
+            : 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700',
+          isCurrentPlan && 'opacity-50 cursor-not-allowed',
+        )}
+        size="lg"
+        onClick={onSelect}
+        disabled={isCurrentPlan}
+      >
+        {getButtonText()}
+      </Button>
+
+      {/* Features */}
+      <div className="border-t border-zinc-800 pt-6">
+        <h4 className="text-sm font-semibold text-zinc-300 mb-4 uppercase tracking-wider">
+          Stand Out Features
+        </h4>
         <ul className="space-y-3">
-          {plan.features.map((feature, index) => (
-            <li key={index} className="flex items-start gap-2">
-              <Check className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-              <span className="text-sm">{feature}</span>
+          {plan.features.map((feature, idx) => (
+            <li key={idx} className="flex items-start gap-3">
+              <Check className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <span className="text-sm text-zinc-400 leading-relaxed">{feature}</span>
             </li>
           ))}
         </ul>
-      </CardContent>
-
-      <CardFooter>
-        <Button
-          className="w-full"
-          variant={getButtonVariant() as 'default' | 'outline'}
-          size="lg"
-          onClick={onSelect}
-          disabled={isCurrentPlan}
-        >
-          {getButtonText()}
-        </Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
