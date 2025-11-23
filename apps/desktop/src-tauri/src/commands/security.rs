@@ -355,14 +355,16 @@ mod tests {
         // Unit tests cannot directly create State instances
         // For now, we test the AuthManager directly
         let manager = state.read();
-        
+
         // Test registration
-        let user_id = manager.register_user(
-            "test@example.com",
-            "password123",
-            &crate::security::UserRole::Editor,
-        ).unwrap();
-        
+        let user_id = manager
+            .register_user(
+                "test@example.com",
+                "password123",
+                &crate::security::UserRole::Editor,
+            )
+            .unwrap();
+
         assert!(!user_id.is_empty());
 
         // Test login

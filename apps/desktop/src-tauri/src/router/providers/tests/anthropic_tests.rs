@@ -2,7 +2,7 @@
 mod tests {
     use crate::router::providers::anthropic::AnthropicProvider;
     use crate::router::{
-        ChatMessage, ContentPart, ImageInput, ImageFormat, LLMProvider, LLMRequest, ToolDefinition,
+        ChatMessage, ContentPart, ImageFormat, ImageInput, LLMProvider, LLMRequest, ToolDefinition,
     };
 
     #[test]

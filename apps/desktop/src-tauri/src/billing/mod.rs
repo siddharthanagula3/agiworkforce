@@ -108,7 +108,7 @@ impl Default for BillingStateWrapper {
 // All Tauri commands require the billing feature
 #[cfg(feature = "billing")]
 /// Initialize billing service with Stripe API key
-/// 
+///
 /// Note: Stripe MCP tools are also available when the Stripe MCP server is enabled.
 /// The AGI agent can use either these Tauri commands (Rust Stripe client) or
 /// Stripe MCP tools directly (e.g., mcp_stripe_create_customer, mcp_stripe_list_customers).
@@ -550,9 +550,11 @@ pub async fn send_invoice_email(
         .unwrap_or(587);
     let smtp_user = std::env::var("SMTP_USER").ok();
     let smtp_password = std::env::var("SMTP_PASSWORD").ok();
-    let smtp_from = std::env::var("SMTP_FROM")
-        .ok()
-        .unwrap_or_else(|| smtp_user.clone().unwrap_or_else(|| "noreply@agiworkforce.com".to_string()));
+    let smtp_from = std::env::var("SMTP_FROM").ok().unwrap_or_else(|| {
+        smtp_user
+            .clone()
+            .unwrap_or_else(|| "noreply@agiworkforce.com".to_string())
+    });
 
     // If SMTP is configured, use lettre to send email
     if let (Some(host), Some(user), Some(password)) = (smtp_host, smtp_user, smtp_password) {
@@ -584,22 +586,34 @@ pub async fn send_invoice_email(
 
                 match client.send(email).await {
                     Ok(_) => {
-                        tracing::info!("Invoice email sent successfully via SMTP to {}", recipient_email);
+                        tracing::info!(
+                            "Invoice email sent successfully via SMTP to {}",
+                            recipient_email
+                        );
                         return Ok(());
                     }
                     Err(e) => {
-                        tracing::warn!("Failed to send email via SMTP: {}. Falling back to mailto.", e);
+                        tracing::warn!(
+                            "Failed to send email via SMTP: {}. Falling back to mailto.",
+                            e
+                        );
                     }
                 }
             }
             Err(e) => {
-                tracing::warn!("Failed to initialize SMTP client: {}. Falling back to mailto.", e);
+                tracing::warn!(
+                    "Failed to initialize SMTP client: {}. Falling back to mailto.",
+                    e
+                );
             }
         }
     }
 
     // Fallback: Frontend will handle mailto link
-    tracing::info!("Using mailto fallback for invoice email to {}", recipient_email);
+    tracing::info!(
+        "Using mailto fallback for invoice email to {}",
+        recipient_email
+    );
     Ok(())
 }
 

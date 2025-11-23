@@ -110,7 +110,7 @@ pub async fn settings_get_api_key(provider: String) -> Result<String, String> {
     let key = entry
         .get_password()
         .map_err(|e| format!("Failed to get API key: {}", e))?;
-    
+
     // Trim the key when retrieving to ensure no extra whitespace
     Ok(key.trim().to_string())
 }
