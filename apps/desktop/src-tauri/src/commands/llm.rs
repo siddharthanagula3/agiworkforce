@@ -157,22 +157,28 @@ pub async fn llm_send_message(
             Err(err) => {
                 let error_msg = err.to_string();
                 error_messages.push(format!("{}: {}", candidate.provider.as_string(), error_msg));
-                
+
                 // Check for specific error types
-                if error_msg.contains("401") || error_msg.contains("Unauthorized") || error_msg.contains("invalid_api_key") {
+                if error_msg.contains("401")
+                    || error_msg.contains("Unauthorized")
+                    || error_msg.contains("invalid_api_key")
+                {
                     return Err(format!(
                         "API key authentication failed for {}. Please check your API key in Settings > API Keys.",
                         candidate.provider.as_string()
                     ));
                 }
-                if error_msg.contains("decode") || error_msg.contains("deserialize") || error_msg.contains("JSON") {
+                if error_msg.contains("decode")
+                    || error_msg.contains("deserialize")
+                    || error_msg.contains("JSON")
+                {
                     return Err(format!(
                         "Error decoding response from {}: {}. This may indicate an API issue or invalid response format.",
                         candidate.provider.as_string(),
                         error_msg
                     ));
                 }
-                
+
                 last_error = Some(err);
             }
         }
@@ -180,14 +186,17 @@ pub async fn llm_send_message(
 
     // Return detailed error message
     if let Some(err) = last_error {
-        let mut error_text = format!("All providers failed. Errors: {}", error_messages.join("; "));
+        let mut error_text = format!(
+            "All providers failed. Errors: {}",
+            error_messages.join("; ")
+        );
         let err_str = err.to_string();
         if !err_str.is_empty() {
             error_text = format!("{} Last error: {}", error_text, err_str);
         }
         return Err(error_text);
     }
-    
+
     Err("All providers failed with unknown errors.".to_string())
 }
 

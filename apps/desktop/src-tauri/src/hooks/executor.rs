@@ -319,8 +319,8 @@ impl Default for HookExecutor {
 
 #[cfg(test)]
 mod tests {
-    use crate::hooks::types::HookEventType;
     use super::*;
+    use crate::hooks::types::HookEventType;
 
     #[tokio::test]
     async fn test_add_remove_hook() {
