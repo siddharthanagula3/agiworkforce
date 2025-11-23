@@ -91,7 +91,7 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
       console.error('API key test failed:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       // Display error to user
-      useSettingsStore.getState().set({ error: errorMessage });
+      useSettingsStore.setState({ error: errorMessage });
       setTestResult('error');
       setTimeout(() => setTestResult(null), 5000); // Show error longer
     } finally {
