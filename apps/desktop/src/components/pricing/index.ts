@@ -8,6 +8,8 @@ export { PricingCalculator } from './PricingCalculator';
 export { PlansTab } from './PlansTab';
 export { UsageTab } from './UsageTab';
 export { InvoicesTab } from './InvoicesTab';
+export { PaymentMethodsTab } from './PaymentMethodsTab';
 export { InvoiceDetailModal } from './InvoiceDetailModal';
 export { PlanChangeModal } from './PlanChangeModal';
 export { ROIGuaranteeTracker } from './ROIGuaranteeTracker';
+export { BillingPageDialog } from './BillingPageDialog';

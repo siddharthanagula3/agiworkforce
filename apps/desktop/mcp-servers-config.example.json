@@ -35,6 +35,14 @@
         "BRAVE_API_KEY": "<from_credential_manager>"
       },
       "enabled": false
+    },
+    "stripe": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-stripe"],
+      "env": {
+        "STRIPE_SECRET_KEY": "<from_credential_manager>"
+      },
+      "enabled": false
     }
   }
 }

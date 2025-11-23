@@ -77,6 +77,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       deepseek: [],
       qwen: [],
       mistral: [],
+      moonshot: [],
     };
 
     filteredModels.forEach((model) => {

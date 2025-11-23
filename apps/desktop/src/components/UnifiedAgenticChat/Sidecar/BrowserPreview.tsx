@@ -47,6 +47,33 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     }
   }, [contextId]);
 
+  // Browser navigation handlers
+  const handleGoBack = useCallback(async () => {
+    if (!tabId) return;
+    try {
+      setIsLoading(true);
+      setError(null);
+      await invoke('browser_go_back', { tabId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to go back');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [tabId]);
+
+  const handleGoForward = useCallback(async () => {
+    if (!tabId) return;
+    try {
+      setIsLoading(true);
+      setError(null);
+      await invoke('browser_go_forward', { tabId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to go forward');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [tabId]);
+
   // Navigate to URL
   const handleNavigate = useCallback(
     async (targetUrl: string) => {
@@ -119,18 +146,20 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     <div className={cn('flex h-full flex-col bg-zinc-950', className)}>
       {/* Navigation Bar */}
       <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/50 px-4 py-2">
-        {/* Back/Forward buttons (currently disabled - would need browser history state) */}
+        {/* Back/Forward buttons */}
         <button
-          disabled
-          className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-30"
-          title="Go back (not implemented)"
+          onClick={handleGoBack}
+          disabled={!tabId || isLoading}
+          className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
+          title="Go back"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <button
-          disabled
-          className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-30"
-          title="Go forward (not implemented)"
+          onClick={handleGoForward}
+          disabled={!tabId || isLoading}
+          className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
+          title="Go forward"
         >
           <ArrowRight className="h-4 w-4" />
         </button>

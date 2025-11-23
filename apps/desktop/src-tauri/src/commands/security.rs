@@ -329,6 +329,7 @@ pub async fn update_restore_backup(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::security::SecretManager;
     use rusqlite::Connection;
     use std::sync::Mutex;
 
@@ -350,39 +351,29 @@ mod tests {
         let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager)));
         let state = AuthManagerState(auth_manager);
 
-        // Register
-        let user_id = auth_register(
-            "test@example.com".to_string(),
-            "password123".to_string(),
-            "editor".to_string(),
-            State::from(&state),
-        )
-        .await
-        .unwrap();
-
+        // Note: These tests require integration testing with Tauri's State system
+        // Unit tests cannot directly create State instances
+        // For now, we test the AuthManager directly
+        let manager = state.read();
+        
+        // Test registration
+        let user_id = manager.register_user(
+            "test@example.com",
+            "password123",
+            &crate::security::UserRole::Editor,
+        ).unwrap();
+        
         assert!(!user_id.is_empty());
 
-        // Login
-        let token = auth_login(
-            "test@example.com".to_string(),
-            "password123".to_string(),
-            State::from(&state),
-        )
-        .await
-        .unwrap();
-
+        // Test login
+        let token = manager.login("test@example.com", "password123").unwrap();
         assert!(!token.access_token.is_empty());
 
-        // Validate
-        let valid = auth_validate_token(token.access_token.clone(), State::from(&state))
-            .await
-            .unwrap();
-
+        // Test validation
+        let valid = manager.validate_token(&token.access_token).is_ok();
         assert!(valid);
 
-        // Logout
-        auth_logout(token.access_token, State::from(&state))
-            .await
-            .unwrap();
+        // Test logout
+        manager.logout(&token.access_token).unwrap();
     }
 }

@@ -8,7 +8,6 @@ use crate::router::{
     llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
     ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider,
 };
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,6 +142,7 @@ pub async fn llm_send_message(
     }
 
     let mut last_error: Option<anyhow::Error> = None;
+    let mut error_messages: Vec<String> = Vec::new();
 
     for candidate in candidates {
         let res = {
@@ -155,14 +155,40 @@ pub async fn llm_send_message(
                 return Ok(outcome.response);
             }
             Err(err) => {
+                let error_msg = err.to_string();
+                error_messages.push(format!("{}: {}", candidate.provider.as_string(), error_msg));
+                
+                // Check for specific error types
+                if error_msg.contains("401") || error_msg.contains("Unauthorized") || error_msg.contains("invalid_api_key") {
+                    return Err(format!(
+                        "API key authentication failed for {}. Please check your API key in Settings > API Keys.",
+                        candidate.provider.as_string()
+                    ));
+                }
+                if error_msg.contains("decode") || error_msg.contains("deserialize") || error_msg.contains("JSON") {
+                    return Err(format!(
+                        "Error decoding response from {}: {}. This may indicate an API issue or invalid response format.",
+                        candidate.provider.as_string(),
+                        error_msg
+                    ));
+                }
+                
                 last_error = Some(err);
             }
         }
     }
 
-    Err(last_error
-        .unwrap_or_else(|| anyhow!("All providers failed"))
-        .to_string())
+    // Return detailed error message
+    if let Some(err) = last_error {
+        let mut error_text = format!("All providers failed. Errors: {}", error_messages.join("; "));
+        let err_str = err.to_string();
+        if !err_str.is_empty() {
+            error_text = format!("{} Last error: {}", error_text, err_str);
+        }
+        return Err(error_text);
+    }
+    
+    Err("All providers failed with unknown errors.".to_string())
 }
 
 // Updated Nov 16, 2025: Added input validation for API keys
@@ -178,18 +204,19 @@ pub async fn llm_configure_provider(
         return Err("Provider name cannot be empty".to_string());
     }
 
-    // Validate API key if provided
+    // Validate API key if provided (check trimmed length)
     if let Some(ref key) = api_key {
-        if key.trim().is_empty() {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
             return Err("API key cannot be empty".to_string());
         }
-        if key.len() < 10 {
+        if trimmed.len() < 10 {
             return Err("API key too short. Minimum length is 10 characters".to_string());
         }
-        if key.len() > 500 {
+        if trimmed.len() > 500 {
             return Err(format!(
                 "API key too long: {} characters. Maximum is 500",
-                key.len()
+                trimmed.len()
             ));
         }
     }
@@ -215,7 +242,8 @@ pub async fn llm_configure_provider(
     match provider.as_str() {
         "openai" => {
             if let Some(key) = api_key {
-                router.set_openai(Box::new(OpenAIProvider::new(key)));
+                let trimmed_key = key.trim().to_string();
+                router.set_openai(Box::new(OpenAIProvider::new(trimmed_key)));
                 Ok(())
             } else {
                 Err("OpenAI requires an API key".to_string())
@@ -223,7 +251,8 @@ pub async fn llm_configure_provider(
         }
         "anthropic" => {
             if let Some(key) = api_key {
-                router.set_anthropic(Box::new(AnthropicProvider::new(key)));
+                let trimmed_key = key.trim().to_string();
+                router.set_anthropic(Box::new(AnthropicProvider::new(trimmed_key)));
                 Ok(())
             } else {
                 Err("Anthropic requires an API key".to_string())
@@ -231,7 +260,8 @@ pub async fn llm_configure_provider(
         }
         "google" => {
             if let Some(key) = api_key {
-                router.set_google(Box::new(GoogleProvider::new(key)));
+                let trimmed_key = key.trim().to_string();
+                router.set_google(Box::new(GoogleProvider::new(trimmed_key)));
                 Ok(())
             } else {
                 Err("Google requires an API key".to_string())
@@ -243,7 +273,8 @@ pub async fn llm_configure_provider(
         }
         "xai" | "grok" => {
             if let Some(key) = api_key {
-                router.set_xai(Box::new(XAIProvider::new(Some(key))));
+                let trimmed_key = key.trim().to_string();
+                router.set_xai(Box::new(XAIProvider::new(Some(trimmed_key))));
                 Ok(())
             } else {
                 Err("XAI requires an API key".to_string())
@@ -251,7 +282,8 @@ pub async fn llm_configure_provider(
         }
         "deepseek" => {
             if let Some(key) = api_key {
-                router.set_deepseek(Box::new(DeepSeekProvider::new(Some(key))));
+                let trimmed_key = key.trim().to_string();
+                router.set_deepseek(Box::new(DeepSeekProvider::new(Some(trimmed_key))));
                 Ok(())
             } else {
                 Err("DeepSeek requires an API key".to_string())
@@ -259,7 +291,8 @@ pub async fn llm_configure_provider(
         }
         "qwen" | "alibaba" => {
             if let Some(key) = api_key {
-                router.set_qwen(Box::new(QwenProvider::new(Some(key))));
+                let trimmed_key = key.trim().to_string();
+                router.set_qwen(Box::new(QwenProvider::new(Some(trimmed_key))));
                 Ok(())
             } else {
                 Err("Qwen requires an API key".to_string())
@@ -267,7 +300,8 @@ pub async fn llm_configure_provider(
         }
         "mistral" | "mistralai" => {
             if let Some(key) = api_key {
-                router.set_mistral(Box::new(MistralProvider::new(Some(key))));
+                let trimmed_key = key.trim().to_string();
+                router.set_mistral(Box::new(MistralProvider::new(Some(trimmed_key))));
                 Ok(())
             } else {
                 Err("Mistral requires an API key".to_string())

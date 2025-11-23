@@ -176,20 +176,83 @@ export function MissionControlPanel({ className, onClose }: MissionControlPanelP
     ];
   }, [executionLogs]);
 
+  const messages = useUnifiedChatStore((state) => state.messages);
+
   const latestArtifacts = useMemo(() => {
     const codeArtifacts: { id: string; title: string; language?: string; excerpt: string }[] = [];
 
-    // TODO: Re-implement artifacts when the unified message structure supports them
-    // For now, return sample data
-    codeArtifacts.push({
-      id: 'sample-artifact',
-      title: 'VectorRouter.ts',
-      language: 'typescript',
-      excerpt: `export function routeProvider(task: TaskDescription): ProviderChoice {\n  if (task.type === 'code_review') {\n    return Providers.DeepCode;\n  }\n  return Providers.Omni;\n}`,
-    });
+    // Extract artifacts from messages
+    for (const message of messages) {
+      // Check for attachments that are code files
+      if (message.attachments) {
+        for (const attachment of message.attachments) {
+          if (attachment.type === 'file' && attachment.name) {
+            const fileName = attachment.name;
+            const extension = fileName.split('.').pop()?.toLowerCase();
+            const language = extension === 'ts' || extension === 'tsx' ? 'typescript' :
+                            extension === 'js' || extension === 'jsx' ? 'javascript' :
+                            extension === 'py' ? 'python' :
+                            extension === 'rs' ? 'rust' :
+                            extension === 'go' ? 'go' :
+                            extension === 'java' ? 'java' :
+                            extension === 'cpp' || extension === 'cc' ? 'cpp' :
+                            extension === 'c' ? 'c' :
+                            extension === 'html' ? 'html' :
+                            extension === 'css' ? 'css' :
+                            extension === 'json' ? 'json' :
+                            extension === 'md' ? 'markdown' : undefined;
 
-    return codeArtifacts;
-  }, []);
+            // Extract code from content if available
+            let excerpt = '';
+            if (message.content) {
+              // Try to find code blocks in markdown
+              const codeBlockMatch = message.content.match(/```[\w]*\n([\s\S]*?)```/);
+              if (codeBlockMatch && codeBlockMatch[1]) {
+                excerpt = codeBlockMatch[1].slice(0, 200);
+              } else {
+                excerpt = message.content.slice(0, 200);
+              }
+            }
+
+            codeArtifacts.push({
+              id: attachment.id || `${message.id}-${fileName}`,
+              title: fileName,
+              language,
+              excerpt: excerpt || `File: ${fileName}`,
+            });
+          }
+        }
+      }
+
+      // Check metadata for tool results with artifacts
+      if (message.metadata) {
+        const toolName = message.metadata.tool || message.metadata.tool_call;
+        if (toolName && message.content) {
+          // Extract code from tool execution results
+          const codeMatch = message.content.match(/```[\w]*\n([\s\S]*?)```/);
+          if (codeMatch && codeMatch[1]) {
+            const code = codeMatch[1];
+            const firstLine = code.split('\n')[0] || '';
+            const language = firstLine.match(/^(function|class|export|import|def |pub |package |#include)/) 
+              ? (firstLine.includes('function') || firstLine.includes('export') ? 'typescript' :
+                 firstLine.includes('def ') ? 'python' :
+                 firstLine.includes('pub ') ? 'rust' : 'javascript')
+              : undefined;
+
+            codeArtifacts.push({
+              id: `${message.id}-tool-result`,
+              title: `${toolName} result`,
+              language,
+              excerpt: code.slice(0, 200),
+            });
+          }
+        }
+      }
+    }
+
+    // Return most recent artifacts (limit to 5)
+    return codeArtifacts.slice(-5).reverse();
+  }, [messages]);
 
   return (
     <aside

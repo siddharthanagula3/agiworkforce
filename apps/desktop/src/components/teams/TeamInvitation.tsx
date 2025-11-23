@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
+import { useAuthStore } from '../../stores/authStore';
 import type { TeamInvitation as TeamInvitationType, Team } from '../../types/teams';
 import { Button } from '../ui/Button';
 import { Mail, Copy, Check } from 'lucide-react';
@@ -22,7 +23,7 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const currentUserId = 'default-user'; // TODO: Get from auth context
+  const currentUserId = useAuthStore((state) => state.getCurrentUserId());
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -15,6 +15,7 @@ const buildTaskRouting = (defaults: {
   deepseek: string;
   qwen: string;
   mistral: string;
+  moonshot: string;
 }) => ({
   search: { provider: 'openai' as Provider, model: defaults.openai },
   code: { provider: 'anthropic' as Provider, model: defaults.anthropic },
@@ -41,6 +42,7 @@ describe('settingsStore', () => {
       deepseek: 'deepseek-chat',
       qwen: 'qwen-max',
       mistral: 'mistral-large-latest',
+      moonshot: 'kimi-k2-thinking',
     };
 
     // Reset store state before each test
@@ -54,6 +56,7 @@ describe('settingsStore', () => {
         deepseek: '',
         qwen: '',
         mistral: '',
+        moonshot: '',
       },
       llmConfig: {
         defaultProvider: 'openai',
@@ -366,6 +369,7 @@ describe('settingsStore', () => {
             deepseek: 'deepseek-chat',
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
+            moonshot: 'kimi-k2-thinking',
           },
           taskRouting: buildTaskRouting({
             openai: 'gpt-4',
@@ -376,6 +380,7 @@ describe('settingsStore', () => {
             deepseek: 'deepseek-chat',
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
+            moonshot: 'kimi-k2-thinking',
           }),
           favoriteModels: [],
         },
@@ -442,6 +447,7 @@ describe('settingsStore', () => {
             deepseek: 'deepseek-chat',
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
+            moonshot: 'kimi-k2-thinking',
           },
           taskRouting: buildTaskRouting({
             openai: 'gpt-4',
@@ -452,6 +458,7 @@ describe('settingsStore', () => {
             deepseek: 'deepseek-chat',
             qwen: 'qwen-turbo',
             mistral: 'mistral-small',
+            moonshot: 'kimi-k2-thinking',
           }),
           favoriteModels: [],
         },
@@ -572,6 +579,7 @@ describe('settingsStore', () => {
                 deepseek: 'deepseek-chat',
                 qwen: 'qwen-turbo',
                 mistral: 'mistral-small',
+                moonshot: 'kimi-k2-thinking',
               }),
               favoriteModels: [],
             },
