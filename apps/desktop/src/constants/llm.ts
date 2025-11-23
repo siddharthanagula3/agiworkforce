@@ -37,11 +37,9 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
     { value: 'llama4-maverick', label: 'Llama 4 Maverick ⭐ (1M Context, Local)' },
   ],
   xai: [
-    // Latest Grok Models (2025)
+    // Latest Grok Models (November 2025)
     { value: 'grok-4.1', label: 'Grok 4.1 ⭐ (Nov 17, 2025 - Enhanced Reasoning)' },
     { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast ⚡ (Tool-calling, 2M Context)' },
-    { value: 'grok-4', label: 'Grok 4 (July 9, 2025 - Advanced Reasoning)' },
-    { value: 'grok-3', label: 'Grok 3 (Previous Generation)' },
   ],
   deepseek: [
     // No November 2025 releases
@@ -96,11 +94,9 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   // Ollama (local models) - November 2025
   'llama4-maverick': 1_000_000, // Nov 2025 - 1M context, local inference
 
-  // xAI - Latest Grok Models (2025)
+  // xAI - Latest Grok Models (November 2025)
   'grok-4.1': 128_000, // Nov 17, 2025 - Enhanced reasoning
   'grok-4.1-fast': 2_000_000, // 2M token context, tool-calling optimized
-  'grok-4': 128_000, // July 9, 2025 - Advanced reasoning, multimodal
-  'grok-3': 128_000, // Previous generation
 
   // Qwen - November 2025 releases
   'qwen3-max': 128_000, // Nov 2025 - thinking mode
@@ -461,57 +457,6 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     quality: 'excellent',
     bestFor: ['Tool-calling', 'Agentic Workflows', '2M Token Context', 'Agent Tools API'],
     released: 'November 17, 2025',
-  },
-  'grok-4': {
-    id: 'grok-4',
-    name: 'Grok 4',
-    provider: 'xai',
-    contextWindow: 128_000,
-    inputCost: 5.0,
-    outputCost: 15.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 60.0,
-      humaneval: 89.0,
-      mmlu: 86.5,
-    },
-    speed: 'fast',
-    quality: 'excellent',
-    bestFor: [
-      'Advanced Reasoning',
-      'Multimodal Support',
-      'Specialized Coding',
-      'Real-time Data',
-    ],
-    released: 'July 9, 2025',
-  },
-  'grok-3': {
-    id: 'grok-3',
-    name: 'Grok 3',
-    provider: 'xai',
-    contextWindow: 128_000,
-    inputCost: 3.0,
-    outputCost: 9.0,
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      json: true,
-    },
-    benchmarks: {
-      swebench: 55.0,
-      humaneval: 85.0,
-      mmlu: 84.0,
-    },
-    speed: 'medium',
-    quality: 'good',
-    bestFor: ['General Purpose', 'Text Generation', 'Previous Generation'],
-    released: '2024',
   },
 
   // Qwen Models - November 2025
