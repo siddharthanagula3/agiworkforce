@@ -100,11 +100,7 @@ impl Categorizable for ToolError {
     fn category(&self) -> ErrorCategory {
         match self {
             ToolError::BrowserError(msg) => {
-                if msg.contains("timeout") || msg.contains("Timeout") {
-                    ErrorCategory::Transient
-                } else if msg.contains("element not found") || msg.contains("Element not found") {
-                    ErrorCategory::Transient
-                } else if msg.contains("crashed") || msg.contains("Crashed") {
+                if msg.contains("crashed") || msg.contains("Crashed") {
                     ErrorCategory::Permanent
                 } else {
                     ErrorCategory::Transient
@@ -122,18 +118,14 @@ impl Categorizable for ToolError {
                 }
             }
             ToolError::DatabaseError(msg) => {
-                if msg.contains("locked") || msg.contains("Locked") {
-                    ErrorCategory::Transient
-                } else if msg.contains("corrupted") || msg.contains("Corrupted") {
+                if msg.contains("corrupted") || msg.contains("Corrupted") {
                     ErrorCategory::Permanent
                 } else {
                     ErrorCategory::Transient
                 }
             }
             ToolError::ApiError(msg) => {
-                if msg.contains("timeout") || msg.contains("Timeout") {
-                    ErrorCategory::Transient
-                } else if msg.contains("rate limit") || msg.contains("429") {
+                if msg.contains("rate limit") || msg.contains("429") {
                     ErrorCategory::ResourceLimit
                 } else if msg.contains("401") || msg.contains("403") {
                     ErrorCategory::Permission
@@ -144,9 +136,7 @@ impl Categorizable for ToolError {
                 }
             }
             ToolError::UIAutomationError(msg) => {
-                if msg.contains("timeout") || msg.contains("element not found") {
-                    ErrorCategory::Transient
-                } else if msg.contains("permission") {
+                if msg.contains("permission") {
                     ErrorCategory::Permission
                 } else {
                     ErrorCategory::Transient

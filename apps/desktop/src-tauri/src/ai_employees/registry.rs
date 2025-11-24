@@ -195,10 +195,8 @@ impl AIEmployeeRegistry {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         let mut result = Vec::new();
-        for emp in employees {
-            if let Ok(e) = emp {
-                result.push(e);
-            }
+        for e in employees.flatten() {
+            result.push(e);
         }
 
         Ok(result)

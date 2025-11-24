@@ -123,8 +123,8 @@ impl RAGSystem {
             }
 
             // Detect end of function/block
-            if line == "}" || line == "};" {
-                if current_function.is_some() {
+            if (line == "}" || line == "};")
+                && current_function.is_some() {
                     let chunk = CodeChunk {
                         id: uuid::Uuid::new_v4().to_string(),
                         file_path: file_path.clone(),
@@ -144,7 +144,6 @@ impl RAGSystem {
                     current_function = None;
                     doc_comment = None;
                 }
-            }
         }
 
         // If no functions found, create one chunk for entire file

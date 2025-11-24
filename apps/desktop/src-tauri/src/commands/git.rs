@@ -640,7 +640,7 @@ fn get_ahead_behind_count(path: &str) -> Result<(usize, usize), String> {
     }
 
     let counts = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = counts.trim().split_whitespace().collect();
+    let parts: Vec<&str> = counts.split_whitespace().collect();
 
     let ahead = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
     let behind = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);

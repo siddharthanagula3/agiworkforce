@@ -16,6 +16,12 @@ pub struct McpState {
     pub health_monitor: Arc<McpHealthMonitor>,
 }
 
+impl Default for McpState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpState {
     pub fn new() -> Self {
         let client = Arc::new(McpClient::new());

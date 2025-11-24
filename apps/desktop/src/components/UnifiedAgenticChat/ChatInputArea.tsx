@@ -1,18 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Camera, ChevronDown, Image as ImageIcon, Mic, Paperclip, Send, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useRef, useState } from 'react';
 
+import { getModelMetadata } from '../../constants/llm';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { cn } from '../../lib/utils';
+import { useModelStore } from '../../stores/modelStore';
 import {
   Attachment,
   ContextItem,
   FocusMode,
   useUnifiedChatStore,
 } from '../../stores/unifiedChatStore';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { QuickModelSelector } from './QuickModelSelector';
-import { useModelStore } from '../../stores/modelStore';
-import { getModelMetadata } from '../../constants/llm';
 
 export interface SendOptions {
   attachments?: Attachment[];
@@ -307,26 +307,29 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
           className="mb-3 flex items-center justify-center gap-2"
         >
-            {FOCUS_MODES.map((mode) => (
-              <button
-                key={mode.value || 'all'}
-                onClick={() => setFocusMode(mode.value)}
-                className={cn(
-                  'focus-pill',
-                  focusMode === mode.value ? 'focus-pill-active' : 'focus-pill-inactive',
-                )}
-                aria-pressed={focusMode === mode.value}
-                aria-label={`Set focus mode to ${mode.label}`}
-              >
-                {mode.label}
-              </button>
-            ))}
+          {FOCUS_MODES.map((mode) => (
+            <button
+              key={mode.value || 'all'}
+              onClick={() => setFocusMode(mode.value)}
+              className={cn(
+                'focus-pill',
+                focusMode === mode.value ? 'focus-pill-active' : 'focus-pill-inactive',
+              )}
+              aria-pressed={focusMode === mode.value}
+              aria-label={`Set focus mode to ${mode.label}`}
+            >
+              {mode.label}
+            </button>
+          ))}
         </motion.div>
 
         <div
           className={cn(
-            'floating-input-container relative overflow-hidden',
-            isEmptyState && 'shadow-2xl',
+            'floating-input-container relative overflow-hidden rounded-2xl bg-white dark:bg-gray-900',
+            'border border-gray-200 dark:border-gray-700',
+            'shadow-lg transition-all duration-200 ease-out',
+            'focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/20',
+            isEmptyState ? 'shadow-2xl' : 'shadow-xl',
           )}
         >
           {/* Context Items */}

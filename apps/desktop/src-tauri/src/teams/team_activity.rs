@@ -178,8 +178,7 @@ impl TeamActivityManager {
 
         let metadata_json = metadata
             .as_ref()
-            .map(|m| serde_json::to_string(m).ok())
-            .flatten();
+            .and_then(|m| serde_json::to_string(m).ok());
 
         let conn = self
             .db

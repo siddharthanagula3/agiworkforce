@@ -121,7 +121,7 @@ fn cleanup_old_logs(log_dir: &PathBuf, max_files: usize) -> Result<(), Box<dyn s
             .metadata()
             .ok()
             .and_then(|m| m.modified().ok())
-            .map(|t| std::cmp::Reverse(t))
+            .map(std::cmp::Reverse)
     });
 
     // Remove old files beyond max_files
