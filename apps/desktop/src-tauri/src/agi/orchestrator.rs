@@ -65,6 +65,12 @@ pub struct ResourceLock {
     ui_element_locks: Arc<RwLock<HashSet<String>>>,
 }
 
+impl Default for ResourceLock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResourceLock {
     pub fn new() -> Self {
         Self {

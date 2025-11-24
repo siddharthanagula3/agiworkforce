@@ -280,7 +280,7 @@ impl WorkflowExecutor {
         sleep(Duration::from_millis(100)).await;
 
         // Set outputs in context
-        for (_key, var_name) in &data.output_mapping {
+        for var_name in data.output_mapping.values() {
             context.set_variable(
                 var_name.clone(),
                 Value::String(format!("Output from {}", data.label)),

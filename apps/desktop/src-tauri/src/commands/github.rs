@@ -78,7 +78,7 @@ pub async fn github_clone_repo(
         // Pull latest changes
         let output = Command::new("git")
             .current_dir(&local_path)
-            .args(&["pull", "origin", branch.as_deref().unwrap_or("main")])
+            .args(["pull", "origin", branch.as_deref().unwrap_or("main")])
             .output()
             .map_err(|e| format!("Failed to pull repository: {}", e))?;
 
@@ -274,7 +274,7 @@ async fn build_repo_context(
 fn generate_file_tree(path: &PathBuf) -> Result<String, String> {
     let output = Command::new("tree")
         .current_dir(path)
-        .args(&["-L", "3", "-I", "node_modules|target|dist|.git"])
+        .args(["-L", "3", "-I", "node_modules|target|dist|.git"])
         .output();
 
     match output {
@@ -285,7 +285,7 @@ fn generate_file_tree(path: &PathBuf) -> Result<String, String> {
             // Fallback: use ls if tree is not available
             let output = Command::new("ls")
                 .current_dir(path)
-                .args(&["-R"])
+                .args(["-R"])
                 .output()
                 .map_err(|e| format!("Failed to list files: {}", e))?;
 

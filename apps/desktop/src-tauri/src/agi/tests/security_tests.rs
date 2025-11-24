@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod security_tests {
-    use serde_json::json;
-    use std::path::PathBuf;
 
     /// Security validation utilities for testing
     struct SecurityValidator;

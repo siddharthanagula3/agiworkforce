@@ -5,6 +5,19 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
+/// Request object for publishing a workflow
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublishWorkflowRequest {
+    pub workflow: WorkflowDefinition,
+    pub publisher_id: String,
+    pub publisher_name: String,
+    pub category: WorkflowCategory,
+    pub tags: Vec<String>,
+    pub estimated_time_saved: u64,
+    pub estimated_cost_saved: f64,
+    pub thumbnail_url: Option<String>,
+}
+
 /// Published workflow in the marketplace
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublishedWorkflow {
@@ -93,16 +106,10 @@ impl WorkflowPublisher {
     }
 
     /// Publish a workflow to the marketplace
+    /// Publish a workflow to the marketplace
     pub fn publish_workflow(
         &self,
-        workflow: WorkflowDefinition,
-        publisher_id: &str,
-        publisher_name: &str,
-        category: WorkflowCategory,
-        tags: Vec<String>,
-        estimated_time_saved: u64,
-        estimated_cost_saved: f64,
-        thumbnail_url: Option<String>,
+        request: PublishWorkflowRequest,
     ) -> Result<PublishedWorkflow, String> {
         let conn = self
             .db
@@ -114,12 +121,12 @@ impl WorkflowPublisher {
         let now = Utc::now().timestamp();
 
         // Serialize workflow definition
-        let workflow_json = serde_json::to_string(&workflow)
+        let workflow_json = serde_json::to_string(&request.workflow)
             .map_err(|e| format!("Failed to serialize workflow: {}", e))?;
 
         // Serialize tags
         let tags_json =
-            serde_json::to_string(&tags).map_err(|e| format!("Failed to serialize tags: {}", e))?;
+            serde_json::to_string(&request.tags).map_err(|e| format!("Failed to serialize tags: {}", e))?;
 
         conn.execute(
             "INSERT INTO published_workflows (
@@ -131,13 +138,13 @@ impl WorkflowPublisher {
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
             rusqlite::params![
                 &published_id,
-                &workflow.name,
-                &workflow.description.as_ref().map(|s| s.as_str()).unwrap_or(""),
-                category.to_string(),
-                publisher_id,
-                publisher_name,
+                &request.workflow.name,
+                &request.workflow.description.as_deref().unwrap_or(""),
+                request.category.to_string(),
+                &request.publisher_id,
+                &request.publisher_name,
                 &workflow_json,
-                &thumbnail_url,
+                &request.thumbnail_url,
                 &share_url,
                 0_u64,  // clone_count
                 0_u64,  // view_count
@@ -145,8 +152,8 @@ impl WorkflowPublisher {
                 0.0_f64, // avg_rating
                 0_u64,  // rating_count
                 &tags_json,
-                estimated_time_saved as i64,
-                estimated_cost_saved,
+                request.estimated_time_saved as i64,
+                request.estimated_cost_saved,
                 false, // is_verified
                 false, // is_featured
                 now,
@@ -156,22 +163,22 @@ impl WorkflowPublisher {
 
         Ok(PublishedWorkflow {
             id: published_id,
-            title: workflow.name,
-            description: workflow.description.unwrap_or_default(),
-            category,
-            creator_id: publisher_id.to_string(),
-            creator_name: publisher_name.to_string(),
+            title: request.workflow.name,
+            description: request.workflow.description.unwrap_or_default(),
+            category: request.category,
+            creator_id: request.publisher_id,
+            creator_name: request.publisher_name,
             creator_avatar: None,
-            thumbnail_url,
+            thumbnail_url: request.thumbnail_url,
             share_url,
             clone_count: 0,
             view_count: 0,
             favorite_count: 0,
             rating: 0.0,
             rating_count: 0,
-            tags,
-            estimated_time_saved,
-            estimated_cost_saved,
+            tags: request.tags,
+            estimated_time_saved: request.estimated_time_saved,
+            estimated_cost_saved: request.estimated_cost_saved,
             is_verified: false,
             is_featured: false,
             workflow_definition: workflow_json,

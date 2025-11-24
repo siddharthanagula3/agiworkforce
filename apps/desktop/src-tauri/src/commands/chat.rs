@@ -600,7 +600,51 @@ async fn chat_send_message_streaming(
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
 
-    let router_messages: Vec<RouterChatMessage> = history
+    // Construct messages for the router
+    let mut router_messages: Vec<RouterChatMessage> = Vec::new();
+
+    // Add System Prompt with Tool Usage + Thinking Process instructions
+    router_messages.push(RouterChatMessage {
+        role: "system".to_string(),
+        content: "You are AGI Workforce, an intelligent AI assistant with access to powerful automation tools.
+
+TOOL USAGE - CRITICAL:
+You have access to tools for file operations, web searches, terminal commands, screenshots, and more. 
+When a user requests an action, automatically identify and call the appropriate tools:
+
+Common patterns:
+- \"read [file]\" or \"show me [file]\" → Use file_read tool
+- \"create [file]\" or \"write to [file]\" → Use file_write tool  
+- \"search for [query]\" or \"find information about [topic]\" → Use web_search tool
+- \"run [command]\" or \"execute [command]\" → Use terminal_execute tool
+- \"take a screenshot\" or \"show me the screen\" → Use screenshot_capture tool
+- \"list files in [directory]\" → Use file_list tool
+
+IMPORTANT: You should proactively use tools when they would help answer the user's question. 
+Don"
+.to_string() + "'t wait for explicit \"use tool\" commands. Be intelligent and helpful.
+
+THINKING PROCESS:
+For complex problems, show your reasoning using <thinking> tags before the final answer:
+<thinking>
+1. Analyze the user's request → Identify required tools
+2. Plan tool execution → Determine parameters
+3. Review tool results → Synthesize response
+</thinking>
+
+RESPONSE STYLE:
+- Be concise and clear
+- Explain what tools you're using and why
+- Synthesize tool results into helpful answers
+- If a tool fails, explain the error and suggest alternatives
+
+Remember: You are an autonomous agent. Use tools proactively to provide the best assistance.",
+        tool_calls: None,
+        tool_call_id: None,
+        multimodal_content: None,
+    });
+
+    router_messages.extend(history
         .iter()
         .filter(|m| m.id != assistant_message_id) // Exclude placeholder
         .map(|message| RouterChatMessage {
@@ -609,8 +653,7 @@ async fn chat_send_message_streaming(
             tool_calls: None,
             tool_call_id: None,
             multimodal_content: None,
-        })
-        .collect();
+        }));
 
     let provider_override = request
         .provider_override
@@ -844,23 +887,54 @@ async fn chat_send_message_streaming(
                                 tool_call.id
                             );
 
+                            let start_time = std::time::Instant::now();
                             match executor.execute_tool_call(tool_call).await {
                                 Ok(result) => {
+                                    let duration = start_time.elapsed().as_millis() as u64;
                                     let formatted = executor.format_tool_result(tool_call, &result);
                                     tool_results.push((tool_call.id.clone(), formatted));
                                     tracing::info!(
                                         "[Chat Streaming] Tool {} succeeded",
                                         tool_call.name
                                     );
+
+                                    // Emit tool execution event
+                                    let input_map: std::collections::HashMap<String, serde_json::Value> =
+                                        serde_json::from_str(&tool_call.arguments).unwrap_or_default();
+                                    
+                                    let event = crate::events::frontend_events::create_tool_execution_event(
+                                        &tool_call.name,
+                                        &input_map,
+                                        Some(serde_json::json!(result)),
+                                        None,
+                                        duration,
+                                        true
+                                    );
+                                    crate::events::frontend_events::emit_tool_execution(&app_handle, event);
                                 }
                                 Err(e) => {
+                                    let duration = start_time.elapsed().as_millis() as u64;
                                     let error_msg = format!("Tool execution failed: {}", e);
-                                    tool_results.push((tool_call.id.clone(), error_msg));
+                                    tool_results.push((tool_call.id.clone(), error_msg.clone()));
                                     tracing::error!(
                                         "[Chat Streaming] Tool {} failed: {}",
                                         tool_call.name,
                                         e
                                     );
+
+                                    // Emit tool execution event
+                                    let input_map: std::collections::HashMap<String, serde_json::Value> =
+                                        serde_json::from_str(&tool_call.arguments).unwrap_or_default();
+
+                                    let event = crate::events::frontend_events::create_tool_execution_event(
+                                        &tool_call.name,
+                                        &input_map,
+                                        None,
+                                        Some(e.to_string()),
+                                        duration,
+                                        false
+                                    );
+                                    crate::events::frontend_events::emit_tool_execution(&app_handle, event);
                                 }
                             }
                         }

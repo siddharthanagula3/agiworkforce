@@ -89,7 +89,7 @@ impl InstantDemo {
             employee_id: "inbox_manager".to_string(),
             employee_name: "Inbox Manager".to_string(),
             task_description: "Process and categorize 50 sample emails".to_string(),
-            input_summary: format!("50 unread emails in inbox"),
+            input_summary: "50 unread emails in inbox".to_string(),
             output_summary: format!(
                 "Categorized: {} urgent, {} important, {} spam, {} newsletters. {} responses drafted, {} escalated",
                 urgent_count, important_count, spam_count, newsletter_count, response_count, urgent_count

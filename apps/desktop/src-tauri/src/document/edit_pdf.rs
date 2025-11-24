@@ -26,6 +26,12 @@ pub enum PdfEdit {
 
 pub struct PdfEditor;
 
+impl Default for PdfEditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PdfEditor {
     pub fn new() -> Self {
         Self

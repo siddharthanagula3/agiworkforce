@@ -78,7 +78,7 @@ impl CollaborationSession {
     }
 
     fn assign_color(user_id: &str) -> String {
-        let colors = vec!["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"];
+        let colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"];
         let index = user_id.as_bytes().first().copied().unwrap_or(0) as usize % colors.len();
         colors[index].to_string()
     }
