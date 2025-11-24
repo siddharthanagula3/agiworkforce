@@ -95,9 +95,7 @@ impl ExcelEditor {
                 col,
                 value,
             } => {
-                let worksheet = sheets
-                    .entry(sheet.clone())
-                    .or_insert_with(Worksheet::new);
+                let worksheet = sheets.entry(sheet.clone()).or_insert_with(Worksheet::new);
 
                 // Try to parse as number
                 if let Ok(num) = value.parse::<f64>() {
@@ -112,15 +110,11 @@ impl ExcelEditor {
                 col,
                 formula,
             } => {
-                let worksheet = sheets
-                    .entry(sheet.clone())
-                    .or_insert_with(Worksheet::new);
+                let worksheet = sheets.entry(sheet.clone()).or_insert_with(Worksheet::new);
                 worksheet.write_formula(row, col, formula.as_str())?;
             }
             ExcelEdit::InsertRow { sheet, row, values } => {
-                let worksheet = sheets
-                    .entry(sheet.clone())
-                    .or_insert_with(Worksheet::new);
+                let worksheet = sheets.entry(sheet.clone()).or_insert_with(Worksheet::new);
 
                 for (idx, value) in values.iter().enumerate() {
                     if let Ok(num) = value.parse::<f64>() {

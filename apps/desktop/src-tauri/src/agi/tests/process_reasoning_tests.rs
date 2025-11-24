@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod process_reasoning_tests {
-    use crate::agi::process_reasoning::{
-        Outcome, OutcomeScore, ProcessType, Strategy,
-    };
+    use crate::agi::process_reasoning::{Outcome, OutcomeScore, ProcessType, Strategy};
     use serde_json::json;
 
     #[test]

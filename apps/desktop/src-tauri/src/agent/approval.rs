@@ -377,10 +377,7 @@ impl TrustedWorkflowStore {
     }
 
     fn record_trust(&mut self, workflow_hash: &str, signature: &str) -> Result<()> {
-        let entry = self
-            .entries
-            .entry(workflow_hash.to_string())
-            .or_default();
+        let entry = self.entries.entry(workflow_hash.to_string()).or_default();
         if entry.insert(signature.to_string()) {
             self.persist()?;
         }
