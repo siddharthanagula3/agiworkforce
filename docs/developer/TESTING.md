@@ -67,7 +67,7 @@ apps/desktop/
 │   ├── __tests__/
 │   │   ├── stores/
 │   │   │   ├── agiStore.test.ts              # NEW: AGI store tests
-│   │   │   ├── chatStore.test.ts
+│   │   │   ├── unifiedChatStore.test.ts
 │   │   │   └── automationStore.test.ts
 │   │   ├── hooks/
 │   │   └── components/
@@ -331,7 +331,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 Tests run automatically on:
 
-- **Push** to main, develop, or claude/** branches
+- **Push** to main, develop, or claude/\*\* branches
 - **Pull requests** to main or develop
 - **Daily schedule** at 2 AM UTC
 
@@ -395,6 +395,7 @@ open apps/desktop/coverage/index.html
 ### Coverage Reports in CI
 
 Coverage reports are automatically:
+
 - Generated on every push
 - Uploaded to Codecov
 - Commented on pull requests
@@ -558,6 +559,7 @@ enable_all_validations = true
 ### Tests Hanging
 
 If tests hang, check for:
+
 - Deadlocks in async code
 - Missing `.await` on futures
 - Infinite loops
@@ -574,6 +576,7 @@ async fn test_with_timeout() {
 ### Flaky Tests
 
 If tests pass/fail randomly:
+
 - Check for race conditions
 - Verify test isolation
 - Add proper waits in E2E tests
@@ -591,6 +594,7 @@ await page.waitForSelector('[data-testid="result"]');
 ### Memory Leaks in Tests
 
 If tests consume too much memory:
+
 - Ensure cleanup after tests
 - Use scoped fixtures
 - Drop large objects
@@ -623,6 +627,7 @@ When adding new features:
 5. Verify CI passes before requesting review
 
 Minimum requirements for PR approval:
+
 - All tests passing
 - Coverage >= 70%
 - No security test failures
