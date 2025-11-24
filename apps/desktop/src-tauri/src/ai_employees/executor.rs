@@ -438,10 +438,8 @@ impl AIEmployeeExecutor {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         let mut result = Vec::new();
-        for task in tasks {
-            if let Ok(t) = task {
-                result.push(t);
-            }
+        for t in tasks.flatten() {
+            result.push(t);
         }
 
         Ok(result)

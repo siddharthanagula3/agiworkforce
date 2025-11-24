@@ -49,16 +49,13 @@ pub struct RouteOutcome {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CostPriority {
     Low,
+    #[default]
     Balanced,
 }
 
-impl Default for CostPriority {
-    fn default() -> Self {
-        CostPriority::Balanced
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

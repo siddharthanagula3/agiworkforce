@@ -7,6 +7,12 @@ use tokio::sync::RwLock;
 /// Hook registry state wrapper for Tauri
 pub struct HookRegistryState(pub Arc<RwLock<Option<Arc<HookRegistry>>>>);
 
+impl Default for HookRegistryState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HookRegistryState {
     pub fn new() -> Self {
         Self(Arc::new(RwLock::new(None)))

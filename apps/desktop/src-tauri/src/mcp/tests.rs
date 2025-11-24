@@ -6,7 +6,6 @@
 mod tests {
     use crate::mcp::{
         client::McpClient, config::McpServerConfig, protocol::*, session::McpSession,
-        transport::StdioTransport,
     };
     use std::collections::HashMap;
 

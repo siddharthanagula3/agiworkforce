@@ -84,7 +84,7 @@ pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, St
 
     Ok(EncryptedSecret {
         ciphertext: general_purpose::STANDARD.encode(&ciphertext),
-        nonce: general_purpose::STANDARD.encode(&nonce_bytes),
+        nonce: general_purpose::STANDARD.encode(nonce_bytes),
     })
 }
 

@@ -73,6 +73,12 @@ pub struct RecorderService {
     state: Arc<Mutex<RecorderState>>,
 }
 
+impl Default for RecorderService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RecorderService {
     pub fn new() -> Self {
         Self {

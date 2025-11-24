@@ -147,7 +147,7 @@ impl ExtensionBridge {
         match response {
             ExtensionResponse::Success { data } => {
                 let cookies: Vec<Cookie> =
-                    serde_json::from_value(data).map_err(|e| Error::from(e))?;
+                    serde_json::from_value(data).map_err(Error::from)?;
                 Ok(cookies)
             }
             ExtensionResponse::Error { message } => Err(Error::Generic(message)),

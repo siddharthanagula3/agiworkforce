@@ -78,7 +78,7 @@ impl IntelligentFileAccess {
         // Step 1: Try direct file access first
         match self.try_direct_access(file_path).await {
             Ok(content) => {
-                return Ok(FileAccessResult {
+                Ok(FileAccessResult {
                     success: true,
                     content: Some(content),
                     method: AccessMethod::DirectFileRead,
@@ -87,7 +87,7 @@ impl IntelligentFileAccess {
                     analysis: None,
                     solution: None,
                     error: None,
-                });
+                })
             }
             Err(e) => {
                 tracing::warn!("Direct file access failed for {:?}: {}", file_path, e);
@@ -181,7 +181,7 @@ impl IntelligentFileAccess {
     ) -> Result<VisualAnalysis> {
         // Build analysis prompt
         let mut prompt =
-            format!("Analyze this screenshot to understand why file access failed.\n\n");
+            "Analyze this screenshot to understand why file access failed.\n\n".to_string();
 
         prompt.push_str(&format!("**File Path:** {:?}\n", screenshot_path));
         prompt.push_str(&format!("**Error:** {}\n", error));
@@ -442,9 +442,9 @@ Provide your analysis in a clear, structured format."#
                 if let Some(ref text) = element.text {
                     solution.push_str(&format!(": {}", text));
                 }
-                solution.push_str("\n");
+                solution.push('\n');
             }
-            solution.push_str("\n");
+            solution.push('\n');
         }
 
         if !analysis.suggested_actions.is_empty() {
@@ -452,7 +452,7 @@ Provide your analysis in a clear, structured format."#
             for (i, action) in analysis.suggested_actions.iter().enumerate() {
                 solution.push_str(&format!("{}. {}\n", i + 1, action));
             }
-            solution.push_str("\n");
+            solution.push('\n');
         }
 
         // Generate code solution if applicable

@@ -106,8 +106,8 @@ impl SecureStorage {
 
         Ok(EncryptedData {
             ciphertext: general_purpose::STANDARD.encode(&ciphertext),
-            nonce: general_purpose::STANDARD.encode(&nonce_bytes),
-            salt: general_purpose::STANDARD.encode(&generate_salt()),
+            nonce: general_purpose::STANDARD.encode(nonce_bytes),
+            salt: general_purpose::STANDARD.encode(generate_salt()),
         })
     }
 

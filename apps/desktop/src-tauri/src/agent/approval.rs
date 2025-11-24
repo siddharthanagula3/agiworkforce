@@ -380,7 +380,7 @@ impl TrustedWorkflowStore {
         let entry = self
             .entries
             .entry(workflow_hash.to_string())
-            .or_insert_with(BTreeSet::new);
+            .or_default();
         if entry.insert(signature.to_string()) {
             self.persist()?;
         }

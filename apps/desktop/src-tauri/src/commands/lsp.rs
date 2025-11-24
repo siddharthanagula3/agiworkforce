@@ -643,6 +643,12 @@ pub struct LSPState {
     clients: Mutex<HashMap<String, Arc<Mutex<LSPClient>>>>,
 }
 
+impl Default for LSPState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LSPState {
     pub fn new() -> Self {
         Self {

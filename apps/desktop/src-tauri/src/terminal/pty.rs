@@ -73,7 +73,7 @@ impl PtySession {
             .take_writer()
             .map_err(|e| Error::Other(format!("Failed to get writer: {}", e)))?
             .write_all(data.as_bytes())
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
         Ok(())
     }
 
