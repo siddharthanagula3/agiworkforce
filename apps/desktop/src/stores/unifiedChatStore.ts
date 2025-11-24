@@ -443,7 +443,7 @@ export interface UnifiedChatState {
   togglePinnedConversation: (id: string) => void;
 
   // Actions - Messages
-  addMessage: (message: Omit<EnhancedMessage, 'timestamp'> & { id?: string }) => string;
+  addMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'> & { id?: string }) => string;
   addOptimisticMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => string; // Returns the optimistic message ID
   confirmOptimisticMessage: (tempId: string, confirmedId?: string) => void;
   failOptimisticMessage: (tempId: string, error: string) => void;
