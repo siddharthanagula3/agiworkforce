@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AGI Workforce is an autonomous desktop automation platform built on **Tauri 2.0, React 18, TypeScript, and Rust**. Windows-first agent that orchestrates desktop automation, browser control, API workflows, and marketplace extensions while routing intelligently across multiple LLMs (including local models via Ollama).
 
-**Status:** Production Ready (Nov 2025) - A+ Grade. 19 tools, 4 LLM providers, 266 Tauri commands. TypeScript errors: ~1,200 → <100. Real SSE streaming, MCP integration (1000+ tools), 9 Claude Code/Cursor features implemented.
+**Status:** Production Ready (Nov 2025) - A+ Grade. 19 tools, 9+ LLM providers, 266 Tauri commands. TypeScript errors: ~1,200 → <100. Real SSE streaming, MCP integration (1000+ tools), 9 Claude Code/Cursor features implemented.
 
 ## Essential Commands
 
@@ -35,7 +35,7 @@ cargo fmt                                        # Format code
 # Debugging
 $env:RUST_LOG="agiworkforce_desktop::agi=debug"  # Debug AGI
 $env:RUST_LOG="debug"                            # Debug all
-pnpm test -- chatStore.test.ts                   # Single test file
+pnpm test -- unifiedChatStore.test.ts           # Single test file
 pnpm lint:fix                                    # Auto-fix lint errors
 ```
 
@@ -90,10 +90,11 @@ pnpm lint:fix                                    # Auto-fix lint errors
 
 ### Multi-LLM Router (`router/`)
 
-- **Providers:** OpenAI, Anthropic, Google, Ollama (local)
+- **Providers:** OpenAI, Anthropic, Google, Ollama (local), xAI, Moonshot, DeepSeek, Qwen, Mistral
 - **Strategy:** Prioritize Ollama (free), fallback to cloud based on quality/cost
 - **Features:** Real SSE streaming, function calling, cost tracking, response caching
 - **Credentials:** Windows Credential Manager (DPAPI), never SQLite
+- **Latest Models:** Grok 4.1, Claude Sonnet 4.5, Gemini 2.5 Pro, Kimi K2 Thinking (Nov 2025)
 
 ### MCP Code Execution
 
