@@ -285,7 +285,7 @@ impl LLMProvider for OpenAIProvider {
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
         let uses_new_param = Self::uses_max_completion_tokens(&request.model);
-        
+
         let openai_request = OpenAIRequest {
             model: request.model.clone(),
             messages: request
@@ -332,8 +332,16 @@ impl LLMProvider for OpenAIProvider {
                 })
                 .collect(),
             temperature: request.temperature,
-            max_tokens: if uses_new_param { None } else { request.max_tokens },
-            max_completion_tokens: if uses_new_param { request.max_tokens } else { None },
+            max_tokens: if uses_new_param {
+                None
+            } else {
+                request.max_tokens
+            },
+            max_completion_tokens: if uses_new_param {
+                request.max_tokens
+            } else {
+                None
+            },
             stream: if request.stream { Some(false) } else { None },
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
             tool_choice: request
@@ -360,7 +368,16 @@ impl LLMProvider for OpenAIProvider {
             return Err(format!("OpenAI API error {}: {}", status, error_text).into());
         }
 
-        let openai_response: OpenAIResponse = response.json().await?;
+        let response_text = response.text().await?;
+        tracing::debug!("OpenAI response body: {}", response_text);
+
+        let openai_response: OpenAIResponse =
+            serde_json::from_str(&response_text).map_err(|e| {
+                format!(
+                    "Failed to parse OpenAI response: {}. Body: {}",
+                    e, response_text
+                )
+            })?;
 
         let choice = openai_response
             .choices
@@ -432,7 +449,7 @@ impl LLMProvider for OpenAIProvider {
         Box<dyn Error + Send + Sync>,
     > {
         let uses_new_param = Self::uses_max_completion_tokens(&request.model);
-        
+
         let openai_request = OpenAIRequest {
             model: request.model.clone(),
             messages: request
@@ -447,8 +464,16 @@ impl LLMProvider for OpenAIProvider {
                 })
                 .collect(),
             temperature: request.temperature,
-            max_tokens: if uses_new_param { None } else { request.max_tokens },
-            max_completion_tokens: if uses_new_param { request.max_tokens } else { None },
+            max_tokens: if uses_new_param {
+                None
+            } else {
+                request.max_tokens
+            },
+            max_completion_tokens: if uses_new_param {
+                request.max_tokens
+            } else {
+                None
+            },
             stream: Some(true),
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
             tool_choice: request

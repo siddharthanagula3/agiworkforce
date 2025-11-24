@@ -229,7 +229,16 @@ impl LLMProvider for AnthropicProvider {
             return Err(format!("Anthropic API error {}: {}", status, error_text).into());
         }
 
-        let anthropic_response: AnthropicResponse = response.json().await?;
+        let response_text = response.text().await?;
+        tracing::debug!("Anthropic response body: {}", response_text);
+
+        let anthropic_response: AnthropicResponse =
+            serde_json::from_str(&response_text).map_err(|e| {
+                format!(
+                    "Failed to parse Anthropic response: {}. Body: {}",
+                    e, response_text
+                )
+            })?;
 
         // ✅ Parse content blocks (text and tool_use)
         let mut text_content = String::new();
