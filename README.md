@@ -10,7 +10,7 @@ _Built with Tauri 2.0, Rust, React 18, and TypeScript_
 
 **Status:** Beta (Active Development - November 2025)
 
-**Latest Update (Nov 21, 2025):** Grand Unification refactor complete! Chat experience now features Claude Desktop-inspired UI with centered layout, floating input, and streamlined agent feedback.
+**Latest Update (Nov 24, 2025):** Feature completion milestone! Added Calendar Workspace (Month/Week/Day views), API Workspace (Auth + Headers + History), enhanced Database Workspace, implemented `search_web` tool, and completed comprehensive system verification.
 
 ---
 
@@ -142,9 +142,14 @@ The system can automatically select the appropriate provider based on task requi
 - **Model Selection:** Quick model selector integrated in input area
 - **Tool Execution:** Automatic tool calling with visual feedback
 
-### 3. 19 Automation Tools
+### 3. 20 Automation Tools
 
 The platform includes tools for various automation tasks:
+
+**Web Tools:**
+
+- `search_web` - Search the web via DuckDuckGo
+- `browser_navigate` - Control web browsers
 
 **File Operations:**
 
@@ -326,7 +331,11 @@ pnpm test -- unifiedChatStore.test.ts
 
 - **Unified Chat Interface** - Claude Desktop-inspired UI with centered layout
 - **Multi-Provider LLM Support** - 9+ providers with latest November 2025 models
-- **19 Automation Tools** - File ops, UI automation, browser, DB, API, vision, code exec
+- **20 Automation Tools** - File ops, UI automation, browser, web search, DB, API, vision, code exec
+- **Calendar Workspace** - Month/Week/Day views with OAuth integration (Google, Outlook)
+- **API Workspace** - Full HTTP client with Auth (Bearer, Basic, API Key), request history
+- **Database Workspace** - Query editor, schema browser, transaction controls (PostgreSQL, MySQL, MongoDB, Redis, SQLite)
+- **Email Workspace** - IMAP/SMTP client with rich composer
 - **Windows UI Automation** - Native Windows UI Automation integration
 - **Browser Automation** - Playwright-based web automation
 - **File System Operations** - Read, write, create, delete with safety checks

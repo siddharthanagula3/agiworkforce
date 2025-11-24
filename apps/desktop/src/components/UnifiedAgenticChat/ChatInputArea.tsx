@@ -17,8 +17,8 @@ import { QuickModelSelector } from './QuickModelSelector';
 export interface SendOptions {
   attachments?: Attachment[];
   context?: ContextItem[];
-  modelId?: string;
-  providerId?: string;
+  modelOverride?: string;
+  providerOverride?: string;
   focusMode?: FocusMode;
 }
 
@@ -78,6 +78,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const setFocusMode = useUnifiedChatStore((state) => state.setFocusMode);
   const tokenUsage = useUnifiedChatStore((state) => state.tokenUsage);
   const selectedModel = useModelStore((state) => state.selectedModel);
+  const selectedProvider = useModelStore((state) => state.selectedProvider);
   const prefersReducedMotion = useReducedMotion();
 
   // Get model display name
@@ -181,6 +182,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       attachments: attachments.length > 0 ? attachments : undefined,
       context: activeContext.length > 0 ? activeContext : undefined,
       focusMode: focusMode,
+      modelOverride: selectedModel ? selectedModel : undefined,
+      providerOverride: selectedProvider ? selectedProvider : undefined,
     });
     setContent('');
     setAttachments([]);
@@ -411,7 +414,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   aria-label="Select model"
                   aria-expanded={showModelSelector}
                 >
-                  <span className="font-medium truncate max-w-[120px]">{modelDisplayName}</span>
+                  <span className="font-medium truncate max-w-[200px]">{modelDisplayName}</span>
                   <ChevronDown
                     size={14}
                     className={cn('transition-transform', showModelSelector && 'rotate-180')}
