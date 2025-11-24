@@ -443,7 +443,7 @@ export interface UnifiedChatState {
   togglePinnedConversation: (id: string) => void;
 
   // Actions - Messages
-  addMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => void;
+  addMessage: (message: Omit<EnhancedMessage, 'timestamp'> & { id?: string }) => string;
   addOptimisticMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => string; // Returns the optimistic message ID
   confirmOptimisticMessage: (tempId: string, confirmedId?: string) => void;
   failOptimisticMessage: (tempId: string, error: string) => void;
@@ -686,7 +686,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         }),
 
       // Message Actions
-      addMessage: (message) =>
+      addMessage: (message) => {
+        const assignedId = message.id ?? crypto.randomUUID();
         set((state) => {
           // ensure a conversation is active
           if (!state.activeConversationId) {
@@ -705,7 +706,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const convoId = state.activeConversationId as string;
           const newMessage: EnhancedMessage = {
             ...message,
-            id: crypto.randomUUID(),
+            id: assignedId,
             timestamp: new Date(),
           };
           state.messages.push(newMessage);
@@ -718,7 +719,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             convo.lastMessage = newMessage.content;
             convo.updatedAt = newMessage.timestamp;
           }
-        }),
+        });
+        return assignedId;
+      },
 
       // Optimistic Message Actions
       addOptimisticMessage: (message) => {
