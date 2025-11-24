@@ -1,18 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke, isTauri } from './lib/tauri-mock';
 
-import TitleBar from './components/Layout/TitleBar';
-import { useWindowManager } from './hooks/useWindowManager';
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
+import TitleBar from './components/Layout/TitleBar';
 import { useTheme } from './hooks/useTheme';
+import { useWindowManager } from './hooks/useWindowManager';
 import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
 // Unused imports removed Nov 16, 2025 (for future use)
+import { CircleUserRound, Maximize2, Minimize2, Moon, Plus, RefreshCcw, Sun } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorToastContainer from './components/errors/ErrorToast';
-import useErrorStore from './stores/errorStore';
-import { errorReportingService } from './services/errorReporting';
-import { Plus, Sun, Moon, Minimize2, Maximize2, RefreshCcw, CircleUserRound } from 'lucide-react';
 import { Spinner } from './components/ui/Spinner';
+import { errorReportingService } from './services/errorReporting';
+import useErrorStore from './stores/errorStore';
 // Lazy load heavy components for better bundle splitting
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -143,7 +143,14 @@ const DesktopShell = () => {
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
-        const status = await invoke<{ completed: boolean }>('get_onboarding_status');
+        // Add timeout to prevent infinite loading
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Onboarding status check timed out')), 3000),
+        );
+
+        const statusPromise = invoke<{ completed: boolean }>('get_onboarding_status');
+
+        const status = await Promise.race([statusPromise, timeoutPromise]);
         setOnboardingComplete(status.completed);
       } catch (error) {
         console.error('Failed to check onboarding status:', error);
@@ -153,7 +160,8 @@ const DesktopShell = () => {
           message: 'Failed to check onboarding status',
           details: error instanceof Error ? error.message : String(error),
         });
-        setOnboardingComplete(true); // Assume complete on error
+        // Default to true (skip onboarding) on error to prevent app from being stuck
+        setOnboardingComplete(true);
       }
     };
     void checkOnboarding();
