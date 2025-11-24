@@ -119,14 +119,30 @@ Executable location: `apps/desktop/src-tauri/target/release/agiworkforce-desktop
 
 Connect to multiple LLM providers with automatic routing:
 
-- **OpenAI:** GPT-4, GPT-4o, GPT-4o-mini
-- **Anthropic:** Claude 3.5 Sonnet, Claude 3 Opus
-- **Google:** Gemini 1.5 Pro, Gemini 1.5 Flash
-- **Ollama:** Local LLMs (Llama 3, Mistral, etc.) - Free, runs locally
+- **OpenAI:** GPT-4o, GPT-4o-mini, GPT-5
+- **Anthropic:** Claude Sonnet 4.5, Claude Haiku 4.5, Claude Opus 4.1
+- **Google:** Gemini 2.5 Pro, Gemini 2.5 Flash
+- **Ollama:** Local LLMs (Llama 4, Mistral, etc.) - Free, runs locally
+- **xAI:** Grok 4.1, Grok 4.1 Fast
+- **Moonshot:** Kimi K2 Thinking
+- **DeepSeek:** DeepSeek V3, DeepSeek Coder V3
+- **Qwen:** Qwen2.5-Max, Qwen3-Coder
+- **Mistral:** Mistral Large 2, Codestral
 
-The system can automatically select the appropriate provider based on task requirements.
+The system can automatically select the appropriate provider based on task requirements. Latest models from November 2025 are included.
 
-### 2. 19 Automation Tools
+### 2. Unified Chat Architecture
+
+**Grand Unification (Nov 21, 2025):** The chat experience has been consolidated into a single, Claude Desktop-inspired architecture:
+
+- **Unified Store:** `unifiedChatStore` - Single source of truth for all chat state
+- **Unified UI:** `UnifiedAgenticChat` - Centered column layout with floating input
+- **Real-time Streaming:** See responses as they generate with "Thinking..." indicator
+- **Agent Status:** Floating pill showing current agent step/goal
+- **Model Selection:** Quick model selector integrated in input area
+- **Tool Execution:** Automatic tool calling with visual feedback
+
+### 3. 19 Automation Tools
 
 The platform includes tools for various automation tasks:
 
@@ -165,7 +181,7 @@ The platform includes tools for various automation tasks:
 
 - `code_analyze` - Analyze code structure
 
-### 3. Agent System
+### 4. Agent System
 
 The agent system includes:
 
@@ -174,7 +190,7 @@ The agent system includes:
 - **Knowledge Base** - SQLite database for storing task patterns
 - **Resource Monitoring** - Tracks CPU, memory, network usage
 
-### 4. Advanced Features
+### 5. Advanced Features
 
 - **Real-time streaming** - See LLM responses as they generate
 - **Function calling** - LLMs can invoke tools directly
@@ -289,7 +305,7 @@ pnpm --filter @agiworkforce/desktop dev
 pnpm --filter @agiworkforce/desktop build
 
 # Run specific test file
-pnpm test -- chatStore.test.ts
+pnpm test -- unifiedChatStore.test.ts
 ```
 
 ---
@@ -308,18 +324,22 @@ pnpm test -- chatStore.test.ts
 
 ### Implemented Features
 
-- Core chat interface with multiple LLM providers
-- 19 working automation tools
-- Windows UI automation
-- Browser automation (Playwright)
-- File system operations
-- Database connectivity
-- Terminal integration
-- Agent planning and execution system
-- Real-time streaming responses
-- Error handling and recovery
-- Settings management
-- Credential storage (Windows Credential Manager)
+- **Unified Chat Interface** - Claude Desktop-inspired UI with centered layout
+- **Multi-Provider LLM Support** - 9+ providers with latest November 2025 models
+- **19 Automation Tools** - File ops, UI automation, browser, DB, API, vision, code exec
+- **Windows UI Automation** - Native Windows UI Automation integration
+- **Browser Automation** - Playwright-based web automation
+- **File System Operations** - Read, write, create, delete with safety checks
+- **Database Connectivity** - PostgreSQL, MySQL, MongoDB, Redis, SQLite
+- **Terminal Integration** - Full PTY terminal emulation with xterm.js
+- **Agent Planning & Execution** - Multi-step task planning with dependency resolution
+- **Real-time Streaming** - SSE streaming with "Thinking..." indicator
+- **Tool Execution** - Automatic tool calling with visual feedback
+- **Error Handling & Recovery** - Production-grade retry and recovery strategies
+- **Settings Management** - Comprehensive settings with API key management
+- **Credential Storage** - Windows Credential Manager (DPAPI) integration
+- **MCP Integration** - 1000+ tools via Model Context Protocol
+- **Hook System** - Custom scripts on 14 event types
 
 ### Known Limitations
 
@@ -382,13 +402,13 @@ You need at least one LLM provider configured:
 
 1. Get API key from https://console.anthropic.com/
 2. Settings → LLM Providers → Anthropic
-3. Recommended: Claude 3.5 Sonnet
+3. Recommended: Claude Sonnet 4.5 (best for coding)
 
 **Google:**
 
 1. Get API key from https://makersuite.google.com/app/apikey
 2. Settings → LLM Providers → Google
-3. Recommended: Gemini 1.5 Pro
+3. Recommended: Gemini 2.5 Pro
 
 **Ollama (Free, Local):**
 
