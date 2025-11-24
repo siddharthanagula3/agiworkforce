@@ -130,15 +130,18 @@ export const UnifiedAgenticChat: React.FC<{
 
     // Listen for stream end
     unlistenPromises.push(
-      listen<{ conversation_id: number; message_id: number }>('chat:stream-end', ({ payload: _payload }) => {
-        const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
-        if (currentStreamingId) {
-          useUnifiedChatStore.getState().updateMessage(currentStreamingId, {
-            metadata: { streaming: false },
-          });
-        }
-        useUnifiedChatStore.getState().setStreamingMessage(null);
-      }),
+      listen<{ conversation_id: number; message_id: number }>(
+        'chat:stream-end',
+        ({ payload: _payload }) => {
+          const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
+          if (currentStreamingId) {
+            useUnifiedChatStore.getState().updateMessage(currentStreamingId, {
+              metadata: { streaming: false },
+            });
+          }
+          useUnifiedChatStore.getState().setStreamingMessage(null);
+        },
+      ),
     );
 
     // Cleanup listeners on unmount
@@ -261,8 +264,16 @@ export const UnifiedAgenticChat: React.FC<{
     const enrichedOptions: SendOptions = {
       ...options,
       providerId:
-        options.providerId ?? routingOverrides.providerId ?? providerForMessage ?? llmConfig.defaultProvider,
-      modelId: options.modelId ?? routingOverrides.modelId ?? modelForMessage ?? llmConfig.defaultModels[llmConfig.defaultProvider] ?? 'gpt-5.1',
+        options.providerId ??
+        routingOverrides.providerId ??
+        providerForMessage ??
+        llmConfig.defaultProvider,
+      modelId:
+        options.modelId ??
+        routingOverrides.modelId ??
+        modelForMessage ??
+        llmConfig.defaultModels[llmConfig.defaultProvider] ??
+        'gpt-5.1',
     };
 
     const entryPoint = content.trim();
@@ -302,8 +313,7 @@ export const UnifiedAgenticChat: React.FC<{
 
     addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
 
-    const assistantMessageId = crypto.randomUUID();
-    addMessage({
+    const assistantMessageId = addMessage({
       role: 'assistant',
       content: '',
       metadata: { streaming: true },
