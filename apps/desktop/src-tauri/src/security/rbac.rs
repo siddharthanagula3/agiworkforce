@@ -56,10 +56,7 @@ impl RBACManager {
         for row in rows {
             let (role_str, permission_name) = row?;
             if let Some(role) = UserRole::from_str(&role_str) {
-                cache
-                    .entry(role)
-                    .or_default()
-                    .insert(permission_name);
+                cache.entry(role).or_default().insert(permission_name);
             }
         }
 

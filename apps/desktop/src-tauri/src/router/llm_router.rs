@@ -56,7 +56,6 @@ pub enum CostPriority {
     Balanced,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RouterContext {
