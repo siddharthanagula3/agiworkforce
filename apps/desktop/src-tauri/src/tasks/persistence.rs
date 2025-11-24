@@ -24,7 +24,7 @@ impl TaskPersistence {
         let result_json = task
             .result
             .as_ref()
-            .map(|r| serde_json::to_string(r))
+            .map(serde_json::to_string)
             .transpose()
             .context("Failed to serialize task result")?;
 

@@ -1337,7 +1337,7 @@ impl AGIExecutor {
                     let status = parameters
                         .get("status")
                         .and_then(|v| v.as_str())
-                        .map(|s| Self::map_task_status(s))
+                        .map(Self::map_task_status)
                         .unwrap_or(TaskStatus::Todo);
                     task.status = status;
 
@@ -1888,11 +1888,7 @@ impl AGIExecutor {
 
         // 5. Calculate outcome score if process reasoning available
         let outcome_score = if let Some(ref pr) = self.process_reasoning {
-            if let Some(pt) = process_type {
-                Some(pr.evaluate_outcome(pt, &tracked_outcomes, context))
-            } else {
-                None
-            }
+            process_type.map(|pt| pr.evaluate_outcome(pt, &tracked_outcomes, context))
         } else {
             None
         };

@@ -173,7 +173,7 @@ impl ToolExecutionGuard {
         Self {
             allowed_tools,
             rate_limiters: Arc::new(Mutex::new(HashMap::new())),
-            allowed_paths: vec![PathBuf::from("/tmp"), PathBuf::from(std::env::temp_dir())],
+            allowed_paths: vec![PathBuf::from("/tmp"), std::env::temp_dir()],
             blocked_domains: vec![
                 "localhost".to_string(),
                 "127.0.0.1".to_string(),

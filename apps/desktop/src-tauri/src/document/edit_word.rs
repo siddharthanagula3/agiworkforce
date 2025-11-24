@@ -38,6 +38,12 @@ pub enum WordEdit {
 
 pub struct WordEditor;
 
+impl Default for WordEditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WordEditor {
     pub fn new() -> Self {
         Self

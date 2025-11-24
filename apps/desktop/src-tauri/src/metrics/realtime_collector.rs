@@ -92,6 +92,7 @@ impl Default for PeriodStats {
 
 /// Real-time statistics across different time periods
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct RealtimeStats {
     pub today: PeriodStats,
     pub this_week: PeriodStats,
@@ -99,16 +100,6 @@ pub struct RealtimeStats {
     pub all_time: PeriodStats,
 }
 
-impl Default for RealtimeStats {
-    fn default() -> Self {
-        Self {
-            today: PeriodStats::default(),
-            this_week: PeriodStats::default(),
-            this_month: PeriodStats::default(),
-            all_time: PeriodStats::default(),
-        }
-    }
-}
 
 /// Employee performance metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,8 +181,7 @@ impl RealtimeMetricsCollector {
     /// Store metrics in database
     fn store_metrics(&self, metrics: &MetricsSnapshot) -> SqliteResult<()> {
         let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Database lock poisoned: {}", e),
             )))
         })?;
@@ -280,8 +270,7 @@ impl RealtimeMetricsCollector {
     /// Check if milestone has been recorded
     fn is_milestone_recorded(&self, user_id: &str, milestone_type: &str) -> SqliteResult<bool> {
         let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Database lock poisoned: {}", e),
             )))
         })?;
@@ -302,8 +291,7 @@ impl RealtimeMetricsCollector {
         _cost_saved: f64,
     ) -> SqliteResult<()> {
         let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Database lock poisoned: {}", e),
             )))
         })?;
@@ -351,8 +339,7 @@ impl RealtimeMetricsCollector {
     /// Aggregate metrics for a specific time period (in days)
     async fn aggregate_period(&self, user_id: &str, days: i64) -> SqliteResult<PeriodStats> {
         let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Database lock poisoned: {}", e),
             )))
         })?;
@@ -395,8 +382,7 @@ impl RealtimeMetricsCollector {
     /// Aggregate all-time metrics
     async fn aggregate_all_time(&self, user_id: &str) -> SqliteResult<PeriodStats> {
         let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Database lock poisoned: {}", e),
             )))
         })?;
@@ -442,8 +428,7 @@ impl RealtimeMetricsCollector {
         cutoff_timestamp: Option<i64>,
     ) -> SqliteResult<Vec<EmployeePerformance>> {
         let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Database lock poisoned: {}", e),
             )))
         })?;

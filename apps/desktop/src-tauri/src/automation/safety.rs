@@ -8,6 +8,12 @@ static DANGEROUS_KEYS: OnceLock<Vec<String>> = OnceLock::new();
 
 pub struct ComputerUseSafety;
 
+impl Default for ComputerUseSafety {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComputerUseSafety {
     pub fn new() -> Self {
         // Initialize dangerous patterns

@@ -96,7 +96,7 @@ impl CloudSyncClient {
     pub async fn sync_batch(&self, batch: SyncBatch) -> Result<SyncResponse> {
         let response = self
             .client
-            .post(&format!("{}/batch", self.config.api_endpoint))
+            .post(format!("{}/batch", self.config.api_endpoint))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("X-Device-ID", &self.device_id)
             .json(&batch)
@@ -121,7 +121,7 @@ impl CloudSyncClient {
     ) -> Result<Vec<RemoteUpdate>> {
         let response = self
             .client
-            .get(&format!("{}/updates", self.config.api_endpoint))
+            .get(format!("{}/updates", self.config.api_endpoint))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("X-Device-ID", &self.device_id)
             .query(&[("since", since_timestamp), ("user_id", user_id)])
@@ -154,7 +154,7 @@ impl CloudSyncClient {
 
         let response = self
             .client
-            .post(&format!("{}/resolve-conflict", self.config.api_endpoint))
+            .post(format!("{}/resolve-conflict", self.config.api_endpoint))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("X-Device-ID", &self.device_id)
             .json(&payload)
@@ -174,7 +174,7 @@ impl CloudSyncClient {
     pub async fn get_sync_status(&self, user_id: &str) -> Result<SyncStatus> {
         let response = self
             .client
-            .get(&format!("{}/status", self.config.api_endpoint))
+            .get(format!("{}/status", self.config.api_endpoint))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("X-Device-ID", &self.device_id)
             .query(&[("user_id", user_id)])
@@ -203,7 +203,7 @@ impl CloudSyncClient {
 
         let response = self
             .client
-            .post(&format!("{}/devices/register", self.config.api_endpoint))
+            .post(format!("{}/devices/register", self.config.api_endpoint))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .json(&payload)
             .send()
@@ -222,7 +222,7 @@ impl CloudSyncClient {
     pub async fn unregister_device(&self, user_id: &str) -> Result<()> {
         let response = self
             .client
-            .delete(&format!(
+            .delete(format!(
                 "{}/devices/{}",
                 self.config.api_endpoint, self.device_id
             ))
@@ -249,7 +249,7 @@ impl CloudSyncClient {
 
         let response = self
             .client
-            .post(&format!("{}/files/upload", self.config.api_endpoint))
+            .post(format!("{}/files/upload", self.config.api_endpoint))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("X-Device-ID", &self.device_id)
             .multipart(form)
@@ -275,7 +275,7 @@ impl CloudSyncClient {
     pub async fn download_file(&self, file_id: &str) -> Result<Vec<u8>> {
         let response = self
             .client
-            .get(&format!("{}/files/{}", self.config.api_endpoint, file_id))
+            .get(format!("{}/files/{}", self.config.api_endpoint, file_id))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("X-Device-ID", &self.device_id)
             .send()

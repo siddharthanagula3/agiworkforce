@@ -192,8 +192,7 @@ impl TemplateManager {
     /// Get all available templates
     pub fn get_all_templates(&self) -> Result<Vec<AgentTemplate>> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -245,8 +244,7 @@ impl TemplateManager {
     /// Get template by ID
     pub fn get_template_by_id(&self, id: &str) -> Result<Option<AgentTemplate>> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -297,8 +295,7 @@ impl TemplateManager {
 
     pub fn uninstall_template(&self, user_id: &str, template_id: &str) -> Result<()> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -317,8 +314,7 @@ impl TemplateManager {
         category: TemplateCategory,
     ) -> Result<Vec<AgentTemplate>> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -371,8 +367,7 @@ impl TemplateManager {
     /// Install a template for a user
     pub fn install_template(&self, user_id: &str, template_id: &str) -> Result<()> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -400,8 +395,7 @@ impl TemplateManager {
     /// Get installed templates for a user
     pub fn get_installed_templates(&self, user_id: &str) -> Result<Vec<AgentTemplate>> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -455,8 +449,7 @@ impl TemplateManager {
     /// Search templates by query (searches name and description)
     pub fn search_templates(&self, query: &str) -> Result<Vec<AgentTemplate>> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
@@ -511,8 +504,7 @@ impl TemplateManager {
     /// Save a template to the database
     pub fn save_template(&self, template: &AgentTemplate) -> Result<()> {
         let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 "Failed to lock database",
             )))
         })?;
