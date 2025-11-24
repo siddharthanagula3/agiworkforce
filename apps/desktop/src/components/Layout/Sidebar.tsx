@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
@@ -85,14 +85,13 @@ export function Sidebar({
       const isActive = conversation.id === activeConversationId;
       const isEditing = conversation.id === editingId;
       const title = conversation.title?.trim() || 'Untitled chat';
-      const subtitle = conversation.lastMessage?.trim() || 'No activity yet';
 
       return (
         <div
           key={conversation.id}
           className={cn(
-            'group flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left transition-all',
-            isActive ? 'bg-white/10 text-white' : 'hover:bg-white/5',
+            'sidebar-item group flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left transition-all',
+            isActive ? 'active bg-white/10 text-white' : 'hover:bg-white/5',
           )}
         >
           <button
@@ -120,8 +119,7 @@ export function Sidebar({
               />
             ) : (
               <>
-                <div className="truncate text-sm font-medium">{title}</div>
-                {!collapsed && <div className="truncate text-xs text-slate-400">{subtitle}</div>}
+                <span className="truncate text-sm font-semibold text-slate-200">{title}</span>
               </>
             )}
           </button>
@@ -159,7 +157,6 @@ export function Sidebar({
     },
     [
       activeConversationId,
-      collapsed,
       deleteConversation,
       editingId,
       editingTitle,
@@ -172,28 +169,29 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        'flex h-full w-[320px] flex-col border-r border-white/10 bg-[#0b0c14]/80 backdrop-blur-lg transition-all duration-200',
-        collapsed && 'w-[72px]',
+        'flex h-full flex-col border-r border-white/10 glass-card transition-all duration-400',
+        collapsed ? 'sidebar-collapsed' : 'sidebar-expanded',
         className,
       )}
     >
-      <div className="flex items-center justify-between px-3 py-3">
+      <div className="flex items-center justify-between px-3 py-3 border-b border-white/10 bg-gradient-to-r from-teal-500/5 to-transparent">
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-white transition hover:bg-white/10"
+          className="flex h-10 w-10 items-center justify-center rounded-xl glass-hover text-white transition"
           onClick={onToggleCollapse}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </button>
         {!collapsed && (
           <Button
             size="icon"
             variant="ghost"
-            className="h-9 w-9"
+            className="h-9 w-9 btn-premium text-white"
             onClick={() => void handleNewChat()}
+            title="New chat"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-5 w-5" />
           </Button>
         )}
       </div>

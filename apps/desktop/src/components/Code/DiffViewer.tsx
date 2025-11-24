@@ -71,9 +71,9 @@ export function DiffViewer({
   }, [originalValue, modifiedValue]);
 
   const handleEditorDidMount: DiffOnMount = (editor) => {
-    // Configure editor options
+    // Configure editor options - renderSideBySide is set via DiffEditor prop
+    // Only set options that are valid for the individual editors
     editor.updateOptions({
-      renderSideBySide: true,
       ignoreTrimWhitespace: false,
       renderIndicators: true,
       originalEditable: false,

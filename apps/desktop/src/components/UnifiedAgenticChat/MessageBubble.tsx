@@ -19,6 +19,7 @@ import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { isTauri } from '../../lib/tauri-mock';
+import { cn } from '../../lib/utils';
 import { EnhancedMessage, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { parseCitations } from './CitationBadge';
 import { ReasoningAccordion } from './ReasoningAccordion';
@@ -325,34 +326,34 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {showAvatar && (
+      {showAvatar && !isUser && (
         <div
           className={`flex-shrink-0 w-8 h-8 rounded-full ${avatarBg} flex items-center justify-center text-white text-sm font-medium`}
         >
-          {isUser ? 'U' : isSystem ? 'S' : 'AI'}
+          {isSystem ? 'S' : 'AI'}
         </div>
       )}
 
-      <div className="flex-1 min-w-0 relative">
+      <div className={cn('min-w-0 relative', isUser ? 'max-w-[60%] ml-auto' : 'flex-1')}>
         <div className="flex items-center gap-2 mb-1">
           <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             {isUser ? 'You' : isSystem ? 'System' : 'Assistant'}
           </span>
-          {showTimestamp && <span className="text-xs text-zinc-500">{formattedTime}</span>}
+          {showTimestamp && <span className="message-meta text-zinc-500">{formattedTime}</span>}
           {message.pending && (
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+            <span className="inline-flex items-center gap-1 message-meta text-zinc-500">
               <Loader2 size={12} className="animate-spin" />
               Sending...
             </span>
           )}
           {message.error && (
-            <span className="inline-flex items-center gap-1 text-xs text-red-500">
+            <span className="inline-flex items-center gap-1 message-meta text-red-500">
               <span className="font-medium">Failed</span>
               <span className="text-zinc-500">- {message.error}</span>
             </span>
           )}
           {message.metadata?.streaming && !message.pending && (
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+            <span className="inline-flex items-center gap-1 message-meta text-zinc-500">
               <span className="animate-pulse">...</span>
               Streaming...
             </span>
@@ -363,9 +364,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         {message.metadata?.streaming && <StatusTrail messageId={message.id} />}
 
         <div
-          className={`rounded-xl border border-white/10 bg-[#0b0c14] px-4 py-3 shadow-sm transition-opacity ${
+          className={`prose prose-sm dark:prose-invert max-w-none transition-opacity ${
             message.pending ? 'opacity-60' : 'opacity-100'
-          } ${message.error ? 'border-red-500/30 bg-red-950/20' : ''}`}
+          } ${message.error ? 'text-red-500' : ''}`}
         >
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
@@ -437,75 +438,96 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
 
+        {/* Attachments with Previews */}
         {Array.isArray(message.attachments) && message.attachments.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {message.attachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className="flex items-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm"
+          <div className="mt-3 flex flex-wrap gap-3">
+            {message.attachments.map((attachment) => {
+              const isImage = attachment.mimeType?.startsWith('image/');
+              return (
+                <div key={attachment.id} className="attachment-preview max-w-xs">
+                  {isImage && attachment.dataUrl ? (
+                    <img src={attachment.dataUrl} alt={attachment.name} className="rounded-lg" />
+                  ) : (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+                      <FileText className="h-5 w-5 text-zinc-500" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          {attachment.name}
+                        </div>
+                        {attachment.size && (
+                          <div className="text-xs text-zinc-500 message-meta">
+                            {(attachment.size / 1024).toFixed(1)} KB
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Message Actions - Below content, centered */}
+        {enableActions && (
+          <div
+            className={cn(
+              'flex items-center justify-center gap-1 mt-2 transition-opacity',
+              showActions ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            <button
+              onClick={handleCopy}
+              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+              title="Copy message"
+            >
+              <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
+            </button>
+            {isAssistant && onRegenerate && !message.error && (
+              <button
+                onClick={onRegenerate}
+                className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+                title="Regenerate"
               >
-                <span className="text-zinc-600 dark:text-zinc-400">{attachment.name}</span>
-              </div>
-            ))}
+                <RotateCw size={14} className="text-zinc-600 dark:text-zinc-400" />
+              </button>
+            )}
+            {message.error && onRegenerate && (
+              <button
+                onClick={handleRetry}
+                className="p-1.5 hover:bg-red-200 dark:hover:bg-red-900/30 rounded transition-colors"
+                title="Retry sending"
+              >
+                <RotateCw size={14} className="text-red-600 dark:text-red-400" />
+              </button>
+            )}
+            {isUser && onEdit && !message.error && (
+              <button
+                onClick={() => onEdit(message.content)}
+                className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+                title="Edit"
+              >
+                <Edit2 size={14} className="text-zinc-600 dark:text-zinc-400" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+                title="Delete"
+              >
+                <Trash2 size={14} className="text-zinc-600 dark:text-zinc-400" />
+              </button>
+            )}
+            <button
+              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+              title="More actions"
+            >
+              <MoreVertical size={14} className="text-zinc-600 dark:text-zinc-400" />
+            </button>
           </div>
         )}
       </div>
-
-      {enableActions && (
-        <div
-          className={`flex-shrink-0 flex items-start gap-1 transition-opacity ${showActions ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <button
-            onClick={handleCopy}
-            className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-            title="Copy message"
-          >
-            <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
-          </button>
-          {isAssistant && onRegenerate && !message.error && (
-            <button
-              onClick={onRegenerate}
-              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-              title="Regenerate"
-            >
-              <RotateCw size={14} className="text-zinc-600 dark:text-zinc-400" />
-            </button>
-          )}
-          {message.error && onRegenerate && (
-            <button
-              onClick={handleRetry}
-              className="p-1.5 hover:bg-red-200 dark:hover:bg-red-900/30 rounded transition-colors"
-              title="Retry sending"
-            >
-              <RotateCw size={14} className="text-red-600 dark:text-red-400" />
-            </button>
-          )}
-          {isUser && onEdit && !message.error && (
-            <button
-              onClick={() => onEdit(message.content)}
-              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-              title="Edit"
-            >
-              <Edit2 size={14} className="text-zinc-600 dark:text-zinc-400" />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              onClick={onDelete}
-              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-              title="Delete"
-            >
-              <Trash2 size={14} className="text-zinc-600 dark:text-zinc-400" />
-            </button>
-          )}
-          <button
-            className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-            title="More actions"
-          >
-            <MoreVertical size={14} className="text-zinc-600 dark:text-zinc-400" />
-          </button>
-        </div>
-      )}
     </div>
   );
 };

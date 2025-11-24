@@ -52,7 +52,7 @@ pub mod providers;
 pub mod security;
 
 // Modular Control Primitives (MCPs)
-pub mod mcps;
+// pub mod mcps; // REMOVED duplicate
 
 // Event system
 pub mod events;
@@ -171,3 +171,30 @@ pub mod utils;
 // Test utilities (only compiled in test builds)
 #[cfg(test)]
 pub mod test_utils;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        // Initialize DB with singleton connection
+        .manage(commands::chat::AppDatabase { 
+            conn: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::db::init_db("agi.db").expect("Failed to init DB")
+            )) 
+        })
+        .manage(crate::billing::BillingStateWrapper::default())
+        .manage(commands::llm::LLMState::default())
+        .manage(commands::settings::SettingsState::default())
+        // Register All Commands
+        .invoke_handler(tauri::generate_handler![
+            commands::chat::chat_send_message,
+            commands::chat::chat_get_conversations,
+            commands::security::auth_login,
+            commands::mcp::mcp_list_servers,
+            commands::subscription::get_user_credits, // NEW: Billing command
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

@@ -297,7 +297,7 @@ const DesktopShell = () => {
             <UnifiedAgenticChat
               className="h-full w-full"
               layout="default"
-              defaultSidecarOpen={true}
+              defaultSidecarOpen={false}
               onOpenSettings={() => setSettingsPanelOpen(true)}
               onOpenBilling={() => setBillingPageOpen(true)}
             />

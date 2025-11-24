@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Button } from '../ui/Button';
 import { Check, Star } from 'lucide-react';
-import { usePricingStore } from '../../stores/pricingStore';
+import { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
+import { usePricingStore } from '../../stores/pricingStore';
 import type { PricingPlan } from '../../types/pricing';
+import { Button } from '../ui/Button';
 
 export function PlansTab() {
   const { plans, currentPlan, fetchPlans, subscribeToPlan, upgradePlan } = usePricingStore();
@@ -28,54 +28,53 @@ export function PlansTab() {
   // Filter to show only Free, Pro, and Max/Enterprise plans
   const demoPlans: PricingPlan[] = [
     {
-      id: 'free',
-      name: 'Free Plan',
+      id: 'hobby',
+      name: 'Hobby',
       pricing_model: 'free',
-      included_hours: 10,
+      included_hours: 0,
       features: [
-        'Track up to 5 automations',
-        'Access to basic automation features',
-        'Mobile access for tracking on-the-go',
-        'Basic automation insights',
-        'Limited workflow management',
+        'Unlimited Local LLMs (Ollama)',
+        'Basic Automation Tools',
+        'Community Support',
+        'Standard Response Speed',
       ],
-      description: 'For beginners to explore our platform and start their automation journey.',
+      description: 'Perfect for exploring local AI capabilities on your own hardware.',
     },
     {
       id: 'pro',
-      name: 'Pro Plan',
+      name: 'Pro',
       pricing_model: 'pro',
-      base_price_usd: 80,
-      annual_price_usd: 66.67, // ~20% discount
+      base_price_usd: 29,
+      annual_price_usd: 24.99,
       is_popular: true,
       features: [
-        'Track unlimited automations',
-        'Advanced analytics and performance tracking',
-        'Custom alerts for automation events',
-        'Expert-curated automation templates',
-        'Priority support assistance',
-        'Export data to CSV/PDF',
+        'Everything in Hobby',
+        '$20/mo Cloud Credits (GPT-4o, Claude 3.5)',
+        'Rollover Unused Credits',
+        'Priority Support',
+        'Access to Premium Models',
       ],
-      description: 'For active users who want advanced tools to grow their automation portfolio.',
+      description: 'For power users who need access to the best cloud models.',
     },
     {
       id: 'max',
-      name: 'Advance Plan',
+      name: 'Max',
       pricing_model: 'max',
-      base_price_usd: 249,
-      annual_price_usd: 199.99,
+      base_price_usd: 299,
+      annual_price_usd: 249.99,
       features: [
-        'Dedicated account manager',
-        'Customizable automation tools',
-        'Integration with third-party services',
-        'Advanced AI-driven insights',
-        'Team collaboration tools',
+        'Everything in Pro',
+        '$300/mo Cloud Credits',
+        'Dedicated Support Channel',
+        'Early Access to New Features',
+        'Higher Rate Limits',
       ],
-      description: 'For institutions or high-net-worth individuals seeking tailored solutions.',
+      description: 'For professionals and teams demanding maximum performance.',
     },
   ];
 
-  const displayPlans = plans.length > 0 ? plans.filter((p) => ['free', 'pro', 'max', 'enterprise'].includes(p.id)) : demoPlans;
+  const displayPlans =
+    plans.length > 0 ? plans.filter((p) => ['hobby', 'pro', 'max'].includes(p.id)) : demoPlans;
   // Ensure we have exactly 3 plans
   const threePlans = displayPlans.slice(0, 3);
 
@@ -87,9 +86,7 @@ export function PlansTab() {
           <div className="inline-block px-3 py-1 text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">
             Pricing
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-zinc-100">
-            Plans and Pricing
-          </h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-zinc-100">Plans and Pricing</h1>
           <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
             Choose a plan that fits your automation goals, whether you're just starting or scaling
             your operations.
@@ -218,7 +215,12 @@ function PlanCard({ plan, isCurrentPlan, onSelect, billingCycle, index }: PlanCa
         <div className="flex items-baseline gap-1">
           <span className="text-4xl font-bold text-zinc-100">{getPrice()}</span>
           {getPriceLabel() && (
-            <span className="text-lg text-zinc-400">/month</span>
+            <div className="flex flex-col">
+              <span className="text-lg text-zinc-400">/month</span>
+              {billingCycle === 'annual' && !isFree && !isEnterprise && (
+                <span className="text-xs text-emerald-400 font-medium">billed annually</span>
+              )}
+            </div>
           )}
         </div>
       </div>

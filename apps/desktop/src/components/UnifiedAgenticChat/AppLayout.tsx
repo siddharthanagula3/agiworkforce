@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { CommandPalette } from './CommandPalette';
+import { EmptyState } from './EmptyState';
 import { Sidebar } from './Sidebar';
 import { SidecarPanel } from './SidecarPanel';
-import { CommandPalette } from './CommandPalette';
-import { cn } from '../../lib/utils';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -18,11 +19,20 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
   const messages = useUnifiedChatStore((state) => state.messages);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
+  const addMessage = useUnifiedChatStore((state) => state.addMessage);
 
   // Handle New Chat Action
   const handleNewChat = useCallback(() => {
     createConversation('New chat');
   }, [createConversation]);
+
+  // Handle suggestion click
+  const handleSuggestionClick = useCallback(
+    (prompt: string) => {
+      addMessage({ role: 'user', content: prompt });
+    },
+    [addMessage],
+  );
 
   // Global Shortcuts (Cmd+K, Cmd+Shift+O, Cmd+Shift+S)
   useEffect(() => {
@@ -86,11 +96,7 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
           </div>
 
           {/* Empty State - Content behind input */}
-          {isEmptyState && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              {/* Quick action cards removed */}
-            </div>
-          )}
+          {isEmptyState && <EmptyState onSuggestionClick={handleSuggestionClick} />}
         </div>
       </main>
 
