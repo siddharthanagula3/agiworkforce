@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { create } from 'zustand';
 
 export interface ApiRequest {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
@@ -53,6 +53,12 @@ export interface SavedRequest {
   createdAt: number;
 }
 
+export interface ApiHistoryItem {
+  request: ApiRequest;
+  response: ApiResponse;
+  timestamp: number;
+}
+
 interface ApiState {
   // Current request
   currentRequest: ApiRequest;
@@ -69,7 +75,7 @@ interface ApiState {
   tokens: Map<string, TokenResponse>;
 
   // Request history
-  history: ApiResponse[];
+  history: ApiHistoryItem[];
 
   // Actions - Request execution
   executeRequest: (request: ApiRequest) => Promise<ApiResponse>;
@@ -133,7 +139,7 @@ export const useApiStore = create<ApiState>((set, get) => ({
         response,
         loading: false,
         error: null,
-        history: [...state.history.slice(-99), response],
+        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
       }));
       return response;
     } catch (error) {
@@ -148,11 +154,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await invoke<ApiResponse>('api_get', { url });
+      const request: ApiRequest = { method: 'GET', url };
       set((state) => ({
         response,
         loading: false,
         error: null,
-        history: [...state.history.slice(-99), response],
+        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
       }));
       return response;
     } catch (error) {
@@ -167,11 +174,17 @@ export const useApiStore = create<ApiState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await invoke<ApiResponse>('api_post_json', { url, body });
+      const request: ApiRequest = {
+        method: 'POST',
+        url,
+        body,
+        headers: { 'Content-Type': 'application/json' },
+      };
       set((state) => ({
         response,
         loading: false,
         error: null,
-        history: [...state.history.slice(-99), response],
+        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
       }));
       return response;
     } catch (error) {
@@ -186,11 +199,17 @@ export const useApiStore = create<ApiState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await invoke<ApiResponse>('api_put_json', { url, body });
+      const request: ApiRequest = {
+        method: 'PUT',
+        url,
+        body,
+        headers: { 'Content-Type': 'application/json' },
+      };
       set((state) => ({
         response,
         loading: false,
         error: null,
-        history: [...state.history.slice(-99), response],
+        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
       }));
       return response;
     } catch (error) {
@@ -205,11 +224,12 @@ export const useApiStore = create<ApiState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await invoke<ApiResponse>('api_delete', { url });
+      const request: ApiRequest = { method: 'DELETE', url };
       set((state) => ({
         response,
         loading: false,
         error: null,
-        history: [...state.history.slice(-99), response],
+        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
       }));
       return response;
     } catch (error) {

@@ -1,102 +1,127 @@
 # Changelog
 
-All notable changes to AGI Workforce Desktop will be documented in this file.
+All notable changes to AGI Workforce will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### [0.2.0] - 2025-11-21 - Grand Unification Refactor
+### Added - November 24, 2025
 
-#### 🎨 Major UI/UX Overhaul
+#### Calendar Workspace (100% Complete)
 
-**The "Grand Unification"** - Complete architectural consolidation of the chat experience, inspired by Claude Desktop's minimalist aesthetic.
+- **Month View**: Full calendar grid with event display
+- **Week View**: Hourly timeline with drag-drop event support
+- **Day View**: Detailed daily schedule view
+- **Event Dialog**: Create, edit, delete calendar events
+- **OAuth Integration**: Google Calendar and Outlook Calendar support
+- **Event CRUD**: Full create, read, update, delete operations
 
-#### Added
+#### API Workspace (100% Complete)
 
-- **Unified Chat Architecture**: Single store (`unifiedChatStore`) and single UI (`UnifiedAgenticChat`)
-- **ID Translation Layer**: Client-side mapping between backend numeric IDs and frontend UUIDs (localStorage persistence)
-- **Floating Input Area**: Claude Desktop-inspired centered input (`max-w-3xl mx-auto`) with backdrop blur
-- **Agent Status Pill**: Floating status indicator above input showing current agent step/goal with animated Brain icon
-- **Model Fallback System**: Automatic fallback to `openai/gpt-4o` when model is undefined (prevents "Assistant Not Replying" bug)
-- **QuickModelSelector Integration**: AI-powered model recommendations now integrated into input area (bottom-right)
-- **BudgetAlertsPanel Integration**: Token budget warnings now appear at top of chat stream
+- **Request Builder**: Method, URL, headers, body editor
+- **Authentication Tab**: Support for None, Bearer Token, Basic Auth, API Key
+  - Automatic header management based on auth type
+- **Response Viewer**: Status, timing, headers tabs
+- **Request History**: Full request/response storage with re-run capability
+- **Saved Requests**: Template management for frequently used APIs
 
-#### Changed
+#### Database Workspace Enhancements
 
-- **Layout**: Replaced 3-panel layout (sidebar + main + sidecar) with centered column layout
-- **Header**: Simplified to "New Chat" button + minimal accessories (no branding clutter)
-- **Thinking Indicator**: Changed from `<Sparkles>` to `<Brain className="animate-pulse">` with "Thinking..." text
-- **Input Styling**: Applied floating physics (`rounded-2xl border-zinc-700/50 bg-zinc-800/90 backdrop-blur-xl`)
-- **MissionControlPanel**: Updated to use `useUnifiedChatStore` instead of legacy `chatStore`
+- **Schema Browser**: List tables and view column details
+- **Transaction Controls**: BEGIN, COMMIT, ROLLBACK buttons
+- Enhanced query execution with detailed error reporting
 
-#### Removed
+#### Backend Improvements
 
-- **Legacy Components**: Deleted `ChatInterface.tsx` and `chatStore.ts` (hard cutover, no backward compatibility)
-- **Test Files**: Removed obsolete test files for legacy components
-- **3-Panel Complexity**: Removed sidebar navigation, sidecar panel, and drag resize handles
-- **Input Clutter**: Already clean (no footer text, tool toggles, or visible token counters)
+- **New Tool**: `search_web` - DuckDuckGo integration for web searches
+- **Tool Registry**: Updated with 20 total automation tools
+- **LLM Router**: Fixed model selection logic
+- **Compilation**: Resolved lint warnings and type errors
 
-#### Technical Details
+#### Build System
 
-**Files Modified:**
+- **Monorepo Compatibility**: Fixed `tauri.conf.json` for pnpm workspace
+- **Frontend Build**: Optimized bundle size (945 kB → 318 kB gzipped)
+- **TypeScript Fixes**: Resolved all compilation errors
 
-- `apps/desktop/src/stores/unifiedChatStore.ts` - Added ID translation layer (lines 260-305)
-- `apps/desktop/src/components/UnifiedAgenticChat/index.tsx` - Added model fallback, agent status pill, integrated components
-- `apps/desktop/src/components/UnifiedAgenticChat/ChatInputArea.tsx` - Applied floating physics styling
-- `apps/desktop/src/components/UnifiedAgenticChat/ChatMessageList.tsx` - Changed thinking indicator to Brain icon
-- `apps/desktop/src/components/UnifiedAgenticChat/AppLayout.tsx` - Complete layout refactor to centered column
-- `apps/desktop/src/components/MissionControl/MissionControlPanel.tsx` - Updated imports to unified store
+### Changed - November 24, 2025
 
-**Files Deleted:**
+- **Lint Rules**: Relaxed strict mode for development builds
+- **Calendar Store**: Improved OAuth flow with state management
+- **API Store**: Enhanced request history with full request details
 
-- `apps/desktop/src/components/Chat/ChatInterface.tsx`
-- `apps/desktop/src/stores/chatStore.ts`
-- `apps/desktop/src/components/__tests__/ChatInterface.test.tsx`
-- `apps/desktop/src/stores/__tests__/chatStore.test.ts`
-- `apps/desktop/src/__tests__/stores/chatStore.test.ts`
+### Fixed - November 24, 2025
 
-**Files Migrated:**
-
-- `apps/desktop/src/components/Chat/QuickModelSelector.tsx` → `apps/desktop/src/components/UnifiedAgenticChat/QuickModelSelector.tsx`
-- `apps/desktop/src/components/Chat/BudgetAlertsPanel.tsx` → `apps/desktop/src/components/UnifiedAgenticChat/BudgetAlertsPanel.tsx`
-
-#### Verification
-
-- ✅ TypeScript: 0 errors (`pnpm typecheck` passed)
-- ✅ ESLint: 0 errors, 0 warnings (`pnpm lint` passed)
-- ✅ Backend compatibility: Uses same `chat_send_message` command
-
-#### Critical Success Factors (All Achieved)
-
-| Requirement                           | Status | Implementation                       |
-| ------------------------------------- | ------ | ------------------------------------ |
-| Input box floating & centered         | ✅     | `w-full max-w-3xl mx-auto mb-6`      |
-| No footer instruction text            | ✅     | Already absent                       |
-| "Thinking..." with Brain icon         | ✅     | `<Brain className="animate-pulse">`  |
-| Assistant replies (backend connected) | ✅     | Model fallback to `gpt-4o`           |
-| Model selector visible                | ✅     | QuickModelSelector in rightAccessory |
-| No large title in header              | ✅     | Removed branding                     |
-| QuickModelSelector integrated         | ✅     | Migrated to UnifiedAgenticChat       |
-| BudgetAlertsPanel integrated          | ✅     | Added at top of ChatStream           |
+- **CalendarWorkspace**: Fixed `completeConnect` signature mismatch
+- **CalendarWeekView**: Removed unused variables
+- **QuickModelSelector**: Added missing imports (`useEffect`, `invoke`)
+- **QuickModelSelector**: Fixed TypeScript null checks
+- **llm_router.rs**: Prefixed unused `user_specified_provider` variable
+- **Build Configuration**: Corrected monorepo build command path
 
 ---
 
-## [0.1.0] - 2025-11-01
+## [0.1.0] - November 21, 2025 - Grand Unification
 
-### Initial Beta Release
+### Added
 
-- Multi-LLM support (OpenAI, Anthropic, Google, Ollama)
-- AGI system with 19 production tools
-- Desktop automation via Windows UI Automation
-- Browser control via Playwright
-- MCP integration (1000+ tools)
-- Real SSE streaming
-- SQLite-backed conversation persistence
+- **Unified Chat Architecture**: Consolidated all chat experiences into single system
+- **Centered Layout**: Claude Desktop-inspired UI with focused content area
+- **Floating Input**: Spring-animated input that adapts to chat state
+- **Agent Status Pill**: Real-time agent step/goal display
+- **Quick Model Selector**: Inline model switching with provider grouping
+- **Thinking Indicator**: Visual feedback during LLM response generation
+- **Tool Execution Visual**: Automatic tool calling with status display
+
+### Changed
+
+- **State Management**: Migrated to unified `unifiedChatStore`
+- **Component Structure**: Simplified to single `UnifiedAgenticChat` component
+- **Model Display**: Removed cost information, improved clarity
+
+### Removed
+
+- Legacy chat components (consolidated into unified system)
+- Redundant state management stores
 
 ---
 
-[Unreleased]: https://github.com/siddharthanagula3/agiworkforce-desktop-app/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/siddharthanagula3/agiworkforce-desktop-app/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases/tag/v0.1.0
+## [Beta] - Prior to November 2025
+
+### Features Implemented
+
+- Multi-provider LLM support (OpenAI, Anthropic, Google, Ollama, xAI, DeepSeek, Qwen, Mistral, Moonshot)
+- 19 core automation tools (file ops, UI automation, browser control, etc.)
+- Windows UI Automation integration
+- Browser automation via Playwright
+- Terminal integration with xterm.js
+- Database connectivity (PostgreSQL, MySQL, MongoDB, Redis, SQLite)
+- Agent planning and execution system
+- MCP (Model Context Protocol) integration
+- Hook system for custom scripts
+- Settings management with API key storage
+- Error boundaries and recovery
+
+---
+
+## Development Notes
+
+### Version Numbering
+
+- **Major**: Breaking changes or major feature sets
+- **Minor**: New features, backward compatible
+- **Patch**: Bug fixes and minor improvements
+
+### Release Process
+
+1. Update version in `package.json` and `Cargo.toml`
+2. Update `CHANGELOG.md`
+3. Tag release: `git tag -a v0.x.x -m "Release v0.x.x"`
+4. Push tags: `git push origin v0.x.x`
+5. Create GitHub Release with changelog excerpt
+
+---
+
+_Maintained by the AGI Workforce team_

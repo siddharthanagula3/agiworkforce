@@ -1,27 +1,35 @@
 // Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { open } from '@tauri-apps/plugin-shell';
+import { format as formatDate } from 'date-fns';
+import {
+  Calendar,
+  CalendarRange,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  Plus,
+  RefreshCcw,
+  Rows,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Calendar, Link, Plus, RefreshCcw, CalendarRange, Pencil, Trash2 } from 'lucide-react';
-import { format as formatDate, parseISO } from 'date-fns';
 
 import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '../ui/Dialog';
-import { ScrollArea } from '../ui/ScrollArea';
 import { useCalendarStore, type CalendarConnectConfig } from '../../stores/calendarStore';
-import type { CalendarEvent, EventDateTime, CalendarProvider } from '../../types/calendar';
-import CalendarMonthView from './CalendarMonthView';
+import type {
+  CalendarEvent,
+  CalendarProvider,
+  CreateEventRequest,
+  UpdateEventRequest,
+} from '../../types/calendar';
+import { Button } from '../ui/Button';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
+import { Input } from '../ui/Input';
+import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
+import CalendarDayView from './CalendarDayView';
+import CalendarMonthView from './CalendarMonthView';
+import CalendarWeekView from './CalendarWeekView';
+import { EventDialog } from './EventDialog';
 
 interface CalendarWorkspaceProps {
   className?: string;
@@ -32,26 +40,7 @@ const PROVIDER_OPTIONS = [
   { value: 'outlook' as const, label: 'Microsoft Outlook' },
 ];
 
-const formatDateTimeLocal = (date: Date) => {
-  const pad = (value: number) => value.toString().padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
-    date.getMinutes(),
-  )}`;
-};
-
-const eventDateTimeToLocalInput = (value: EventDateTime) => {
-  if (value.kind === 'dateTime') {
-    return formatDateTimeLocal(new Date(value.date_time));
-  }
-  return `${value.date}T00:00`;
-};
-
-const eventDateTimeToDate = (value: EventDateTime): Date => {
-  if (value.kind === 'dateTime') {
-    return parseISO(value.date_time);
-  }
-  return parseISO(value.date);
-};
+type CalendarView = 'month' | 'week' | 'day';
 
 export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
   const {
@@ -61,7 +50,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
     selectedAccountId,
     selectedCalendarId,
     loading,
-    error,
+    // error,
     pendingAuth,
     refreshAccounts,
     beginConnect,
@@ -84,102 +73,37 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
   const [authCode, setAuthCode] = useState('');
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
+  const [currentView, setCurrentView] = useState<CalendarView>('month');
+  const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
   // Updated Nov 16, 2025: Use accessible dialogs
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  const createDefaultForm = useCallback(() => {
-    const base = selectedDate ? new Date(selectedDate) : new Date();
-
-    if (selectedDate) {
-      base.setHours(9, 0, 0, 0);
-    } else {
-      base.setSeconds(0, 0);
-      const minuteOffset = base.getMinutes() % 5;
-      if (minuteOffset !== 0) {
-        base.setMinutes(base.getMinutes() + (5 - minuteOffset));
-      }
-    }
-
-    const end = new Date(base.getTime() + 60 * 60 * 1000);
-
-    return {
-      title: '',
-      description: '',
-      location: '',
-      start: formatDateTimeLocal(base),
-      end: formatDateTimeLocal(end),
-    };
-  }, [selectedDate]);
-  const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [eventForm, setEventForm] = useState(() => createDefaultForm());
-
-  useEffect(() => {
-    refreshAccounts();
-  }, [refreshAccounts]);
-
-  useEffect(() => {
-    if (error) {
-      console.error('[calendar]', error);
-    }
-  }, [error]);
-
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.account_id === selectedAccountId) ?? null,
-    [accounts, selectedAccountId],
-  );
-
-  const selectedCalendar = useMemo(
-    () => calendars.find((calendar) => calendar.id === selectedCalendarId) ?? null,
-    [calendars, selectedCalendarId],
-  );
-
+  // Group events by day for month/week views
   const eventsByDay = useMemo(() => {
-    const map: Record<string, CalendarEvent[]> = {};
+    const grouped: Record<string, CalendarEvent[]> = {};
     events.forEach((event) => {
-      const startDate = eventDateTimeToDate(event.start);
-      const key = formatDate(startDate, 'yyyy-MM-dd');
-      if (!map[key]) {
-        map[key] = [];
+      const dateKey =
+        event.start.kind === 'dateTime' ? event.start.date_time.split('T')[0] : event.start.date;
+
+      if (!dateKey) return;
+
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
       }
-      map[key].push(event);
+      grouped[dateKey].push(event);
     });
-
-    Object.values(map).forEach((list) => {
-      list.sort(
-        (a, b) => eventDateTimeToDate(a.start).getTime() - eventDateTimeToDate(b.start).getTime(),
-      );
-    });
-
-    return map;
+    return grouped;
   }, [events]);
 
-  const selectedDayKey = useMemo(
-    () => (selectedDate ? formatDate(selectedDate, 'yyyy-MM-dd') : null),
-    [selectedDate],
-  );
+  // Filter events for day view
+  const dayEvents = useMemo(() => {
+    const dateKey = formatDate(viewDate, 'yyyy-MM-dd');
+    return eventsByDay[dateKey] || [];
+  }, [eventsByDay, viewDate]);
 
-  const selectedDayEvents = useMemo(() => {
-    if (selectedDayKey) {
-      return eventsByDay[selectedDayKey] ?? [];
-    }
-    return events;
-  }, [events, eventsByDay, selectedDayKey]);
-
-  const sortedSelectedEvents = useMemo(() => {
-    if (selectedDayEvents.length === 0) {
-      return [];
-    }
-    return [...selectedDayEvents].sort(
-      (a, b) => eventDateTimeToDate(a.start).getTime() - eventDateTimeToDate(b.start).getTime(),
-    );
-  }, [selectedDayEvents]);
-
-  const hasSelectedDayEvents = sortedSelectedEvents.length > 0;
-  const selectedDateLabel = selectedDate ? formatDate(selectedDate, 'PPP') : null;
-
-  const handleBeginConnect = async () => {
+  const handleConnect = async () => {
     if (!connectConfig.clientId || !connectConfig.clientSecret || !connectConfig.redirectUri) {
       toast.error('Client ID, secret, and redirect URI are required.');
       return;
@@ -187,9 +111,9 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
 
     try {
       await beginConnect(connectConfig);
-      setConnectOpen(false);
-    } catch {
-      // errors handled in store
+      // await open(url); // Handled by store
+    } catch (err) {
+      toast.error('Failed to start connection flow');
     }
   };
 
@@ -201,112 +125,39 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
 
     try {
       await completeConnect(authCode.trim());
+      setConnectOpen(false);
       setAuthCode('');
-    } catch {
-      // handled upstream
+      toast.success('Calendar connected successfully');
+    } catch (err) {
+      toast.error('Failed to complete connection');
     }
   };
 
-  const handleRefresh = async () => {
-    await refreshAccounts();
-    if (selectedAccountId && selectedCalendarId) {
-      await refreshEvents();
-    }
-  };
-
-  const resetEventDialog = () => {
-    setEditingEvent(null);
-    setEventForm(createDefaultForm());
-  };
-
-  const renderEventTime = (dateTime: EventDateTime): string => {
-    if (dateTime.kind === 'date') {
-      return dateTime.date;
-    }
-    const date = new Date(dateTime.date_time);
-    return date.toLocaleString();
-  };
-
-  const handleOpenCreate = () => {
-    if (!selectedCalendarId) {
-      toast.error('Select a calendar before creating events.');
-      return;
-    }
-    resetEventDialog();
-    setEventDialogOpen(true);
-  };
-
-  const handleEditEvent = (event: CalendarEvent) => {
-    setEditingEvent(event);
-    const eventStartDate = eventDateTimeToDate(event.start);
-    setSelectedDate(eventStartDate);
-    setViewDate(eventStartDate);
-    setEventForm({
-      title: event.title,
-      description: event.description ?? '',
-      location: event.location ?? '',
-      start: eventDateTimeToLocalInput(event.start),
-      end: eventDateTimeToLocalInput(event.end),
-    });
-    setEventDialogOpen(true);
-  };
-
-  const handleEventSubmit = async () => {
-    if (!selectedCalendarId) {
-      toast.error('Select a calendar before creating events.');
-      return;
-    }
-
-    if (!eventForm.title.trim()) {
-      toast.error('Event title is required.');
-      return;
-    }
-
-    if (!eventForm.start || !eventForm.end) {
-      toast.error('Start and end times are required.');
-      return;
-    }
-
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const startIso = new Date(eventForm.start).toISOString();
-    const endIso = new Date(eventForm.end).toISOString();
-    const descriptionValue = eventForm.description.trim();
-    const locationValue = eventForm.location.trim();
-
+  const handleCreateEvent = async (data: CreateEventRequest | UpdateEventRequest) => {
     try {
-      if (editingEvent) {
-        await updateEvent(editingEvent.calendar_id, editingEvent.id, {
-          title: eventForm.title.trim(),
-          description: descriptionValue === '' ? null : descriptionValue,
-          location: locationValue === '' ? null : locationValue,
-          start: { kind: 'dateTime', date_time: startIso, timezone },
-          end: { kind: 'dateTime', date_time: endIso, timezone },
-        });
+      if (selectedEvent) {
+        await updateEvent(selectedEvent.calendar_id, selectedEvent.id, data as UpdateEventRequest);
+        toast.success('Event updated');
       } else {
-        await createEvent({
-          calendar_id: selectedCalendarId,
-          title: eventForm.title.trim(),
-          description: descriptionValue === '' ? null : descriptionValue,
-          location: locationValue === '' ? null : locationValue,
-          start: { kind: 'dateTime', date_time: startIso, timezone },
-          end: { kind: 'dateTime', date_time: endIso, timezone },
-          attendees: [],
-          reminders: [],
-          recurrence: null,
-        });
+        if (!selectedCalendarId) {
+          toast.error('Select a calendar before creating events.');
+          return;
+        }
+        await createEvent({ ...(data as CreateEventRequest), calendar_id: selectedCalendarId });
+        toast.success('Event created');
       }
       setEventDialogOpen(false);
-      resetEventDialog();
-    } catch {
-      // errors handled in store
+      setSelectedEvent(null);
+      refreshEvents();
+    } catch (err) {
+      toast.error('Failed to save event');
     }
   };
 
-  // Updated Nov 16, 2025: Use accessible ConfirmDialog instead of window.confirm
-  const handleDeleteEvent = async (event: CalendarEvent) => {
+  const handleDeleteEvent = async (eventId: string) => {
     const confirmed = await confirm({
       title: 'Delete event?',
-      description: `Are you sure you want to delete "${event.title}"? This action cannot be undone.`,
+      description: `Are you sure you want to delete this event? This action cannot be undone.`,
       confirmText: 'Delete',
       variant: 'destructive',
     });
@@ -314,409 +165,303 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
     if (!confirmed) {
       return;
     }
+
     try {
-      await deleteEvent(event.calendar_id, event.id);
-    } catch {
-      // store handles error
+      if (selectedCalendarId) {
+        await deleteEvent(selectedCalendarId, eventId);
+        toast.success('Event deleted');
+        setEventDialogOpen(false);
+        setSelectedEvent(null);
+        refreshEvents();
+      } else {
+        toast.error('No calendar selected to delete event from.');
+      }
+    } catch (err) {
+      toast.error('Failed to delete event');
     }
   };
 
-  const handleSelectDate = useCallback((date: Date) => {
-    setSelectedDate(date);
-    setViewDate(date);
-  }, []);
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setEventDialogOpen(true);
+  };
 
-  const handleChangeMonth = useCallback((date: Date) => {
-    setViewDate(date);
-  }, []);
+  const handleNewEvent = () => {
+    setSelectedEvent(null);
+    setEventDialogOpen(true);
+  };
 
-  return (
-    <div className={cn('flex h-full bg-background', className)}>
-      <aside className="w-72 border-r border-border/80 bg-muted/10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-sm font-semibold leading-tight">Calendar Accounts</p>
-              <p className="text-xs text-muted-foreground">Manage providers & schedules</p>
-            </div>
-          </div>
-          <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
-            <DialogTrigger asChild>
-              <Button size="icon" variant="outline">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Connect Calendar Provider</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground">
-                    Provider
-                  </label>
-                  <select
-                    value={connectConfig.provider}
-                    onChange={(event) =>
-                      setConnectConfig((prev) => ({
-                        ...prev,
-                        provider: event.target.value as CalendarProvider,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    {PROVIDER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground">
-                      Client ID
-                    </label>
+  // Initial load
+  useEffect(() => {
+    refreshAccounts();
+  }, [refreshAccounts]);
+
+  // Load events when calendar changes
+  useEffect(() => {
+    if (selectedCalendarId) {
+      // Load a wide range around current view
+      const start = new Date(viewDate);
+      start.setMonth(start.getMonth() - 1);
+      const end = new Date(viewDate);
+      end.setMonth(end.getMonth() + 2); // Load next 2 months
+
+      refreshEvents({
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+      });
+    }
+  }, [selectedCalendarId, viewDate, refreshEvents]);
+
+  if (!selectedAccountId) {
+    return (
+      <div
+        className={cn(
+          'flex h-full flex-col items-center justify-center p-8 text-center',
+          className,
+        )}
+      >
+        <div className="mb-6 rounded-full bg-primary/10 p-6">
+          <CalendarRange className="h-12 w-12 text-primary" />
+        </div>
+        <h2 className="mb-2 text-2xl font-bold">Connect Your Calendar</h2>
+        <p className="mb-8 max-w-md text-muted-foreground">
+          Connect your Google or Outlook calendar to manage events, schedule meetings, and stay
+          organized directly from AGI Workforce.
+        </p>
+
+        <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
+          <DialogTrigger asChild>
+            <Button size="lg">
+              <Plus className="mr-2 h-5 w-5" />
+              Add Calendar Account
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Connect Calendar Account</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Provider</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={connectConfig.provider}
+                  onChange={(e) =>
+                    setConnectConfig({
+                      ...connectConfig,
+                      provider: e.target.value as CalendarProvider,
+                    })
+                  }
+                >
+                  {PROVIDER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!pendingAuth ? (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Client ID</label>
                     <Input
                       value={connectConfig.clientId}
-                      onChange={(event) =>
-                        setConnectConfig((prev) => ({ ...prev, clientId: event.target.value }))
+                      onChange={(e) =>
+                        setConnectConfig({ ...connectConfig, clientId: e.target.value })
                       }
-                      placeholder="OAuth client ID"
+                      placeholder="OAuth Client ID"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground">
-                      Client Secret
-                    </label>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Client Secret</label>
                     <Input
                       type="password"
                       value={connectConfig.clientSecret}
-                      onChange={(event) =>
-                        setConnectConfig((prev) => ({ ...prev, clientSecret: event.target.value }))
+                      onChange={(e) =>
+                        setConnectConfig({ ...connectConfig, clientSecret: e.target.value })
                       }
-                      placeholder="OAuth client secret"
+                      placeholder="OAuth Client Secret"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground">
-                      Redirect URI
-                    </label>
+                  <Button
+                    onClick={handleConnect}
+                    disabled={!connectConfig.clientId || !connectConfig.clientSecret}
+                  >
+                    Start Connection
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-md bg-muted p-4 text-sm">
+                    Please complete the authentication in your browser, then paste the authorization
+                    code below.
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Authorization Code</label>
                     <Input
-                      value={connectConfig.redirectUri}
-                      onChange={(event) =>
-                        setConnectConfig((prev) => ({ ...prev, redirectUri: event.target.value }))
-                      }
-                      placeholder="http://localhost:5173/auth/callback"
+                      value={authCode}
+                      onChange={(e) => setAuthCode(e.target.value)}
+                      placeholder="Paste code here"
                     />
                   </div>
+                  <Button onClick={handleCompleteConnect} disabled={!authCode}>
+                    Complete Connection
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  After clicking connect we will open the authorization page in your browser.
-                  Complete the prompt and copy the verification code to finish connecting.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConnectOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleBeginConnect} disabled={loading}>
-                  Connect
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <div className="border-t border-border/80 px-3 py-3">
-          <Button variant="ghost" size="sm" onClick={handleRefresh} className="w-full">
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-        </div>
-        <div className="border-t border-border/80 px-3 py-2">
-          {accounts.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-xs text-muted-foreground">
-              Connect a calendar provider to begin.
+              )}
             </div>
-          ) : (
+          </DialogContent>
+        </Dialog>
+
+        {accounts.length > 0 && (
+          <div className="mt-8 w-full max-w-md">
+            <h3 className="mb-4 text-sm font-medium text-muted-foreground">Connected Accounts</h3>
             <div className="space-y-2">
               {accounts.map((account) => (
                 <button
                   key={account.account_id}
-                  type="button"
                   onClick={() => selectAccount(account.account_id)}
-                  className={cn(
-                    'w-full rounded-md border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/40',
-                    account.account_id === selectedAccountId &&
-                      'border-primary/70 bg-primary/10 text-primary',
-                  )}
+                  className="flex w-full items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent hover:text-accent-foreground"
                 >
-                  <p className="text-sm font-semibold leading-tight">
-                    {account.display_name ?? account.email ?? account.account_id}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{account.provider}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                      <Calendar className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">{account.display_name || account.email}</div>
+                      <div className="text-xs text-muted-foreground capitalize">
+                        {account.provider}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>
               ))}
             </div>
-          )}
-        </div>
-        {pendingAuth && (
-          <div className="border-t border-border/80 px-3 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Complete Connection
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Paste the authorization code from the provider to finish connecting.
-            </p>
-            <Input
-              value={authCode}
-              onChange={(event) => setAuthCode(event.target.value)}
-              placeholder="Authorization code"
-              className="mt-2"
-            />
-            <Button onClick={handleCompleteConnect} className="mt-2 w-full">
-              Finish Connection
-            </Button>
           </div>
         )}
-      </aside>
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-border/80 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold">Schedules</p>
-              <p className="text-xs text-muted-foreground">
-                {selectedAccount
-                  ? `Synced with ${selectedAccount.display_name ?? selectedAccount.email ?? selectedAccount.account_id}`
-                  : 'Select an account to view calendars.'}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {selectedCalendar && (
-                <div className="rounded-md border border-border/70 px-3 py-1 text-xs text-muted-foreground">
-                  Viewing {selectedCalendar.name}
-                </div>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOpenCreate}
-                disabled={!selectedCalendarId}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                New Event
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => refreshEvents()}>
-                <CalendarRange className="mr-2 h-4 w-4" />
-                Refresh Events
-              </Button>
-            </div>
-          </div>
-        </header>
-        <div className="grid flex-1 grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="border-r border-border/80">
-            <ScrollArea className="h-full">
-              <div className="space-y-2 px-3 py-3">
-                {calendars.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-xs text-muted-foreground">
-                    No calendars available.
-                  </div>
-                ) : (
-                  calendars.map((calendar) => (
-                    <button
-                      key={calendar.id}
-                      type="button"
-                      onClick={() => selectCalendar(calendar.id)}
-                      className={cn(
-                        'w-full rounded-md border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/40',
-                        calendar.id === selectedCalendarId &&
-                          'border-primary/70 bg-primary/10 text-primary',
-                      )}
-                    >
-                      <p className="text-sm font-semibold">{calendar.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {calendar.timezone} • {calendar.access_role}
-                      </p>
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </aside>
-          <section className="flex min-w-0 flex-1 flex-col">
-            <CalendarMonthView
-              currentMonth={viewDate}
-              onChangeMonth={handleChangeMonth}
-              selectedDate={selectedDate}
-              onSelectDate={handleSelectDate}
-              eventsByDay={eventsByDay}
-            />
-            <div className="flex-1 border-t border-border/80">
-              {events.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-                  <Calendar className="h-12 w-12 opacity-30" />
-                  <p className="mt-2 text-sm">No events scheduled for this calendar.</p>
-                </div>
-              ) : hasSelectedDayEvents ? (
-                <ScrollArea className="h-full">
-                  <div className="space-y-3 px-4 py-4">
-                    {sortedSelectedEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-md border border-border/70 bg-background px-4 py-3 shadow-sm"
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold">{event.title}</p>
-                          <div className="flex items-center gap-1">
-                            {event.meeting_url && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs"
-                                onClick={() => open(event.meeting_url!)}
-                              >
-                                <Link className="mr-2 h-3 w-3" />
-                                Join
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-muted-foreground"
-                              onClick={() => handleEditEvent(event)}
-                              title="Edit event"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() => handleDeleteEvent(event)}
-                              title="Delete event"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {renderEventTime(event.start)} - {renderEventTime(event.end)}
-                        </p>
-                        {event.location && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Location: {event.location}
-                          </p>
-                        )}
-                        {event.description && (
-                          <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
-                            {event.description}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-                  <Calendar className="h-12 w-12 opacity-30" />
-                  <p className="mt-2 text-sm">
-                    {selectedDateLabel
-                      ? `No events on ${selectedDateLabel}.`
-                      : 'Select a date to view events.'}
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-      </main>
-      <Dialog
-        open={eventDialogOpen}
-        onOpenChange={(open) => {
-          setEventDialogOpen(open);
-          if (!open) {
-            resetEventDialog();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingEvent ? 'Edit Event' : 'Create Event'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Title</label>
-              <Input
-                value={eventForm.title}
-                onChange={(event) =>
-                  setEventForm((prev) => ({ ...prev, title: event.target.value }))
-                }
-                placeholder="Event title"
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">Starts</label>
-                <Input
-                  type="datetime-local"
-                  value={eventForm.start}
-                  onChange={(event) =>
-                    setEventForm((prev) => ({ ...prev, start: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">Ends</label>
-                <Input
-                  type="datetime-local"
-                  value={eventForm.end}
-                  onChange={(event) =>
-                    setEventForm((prev) => ({ ...prev, end: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Location</label>
-              <Input
-                value={eventForm.location}
-                onChange={(event) =>
-                  setEventForm((prev) => ({ ...prev, location: event.target.value }))
-                }
-                placeholder="Optional location"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Description</label>
-              <Textarea
-                value={eventForm.description}
-                onChange={(event) =>
-                  setEventForm((prev) => ({ ...prev, description: event.target.value }))
-                }
-                placeholder="Details, agenda, notes..."
-                rows={4}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEventDialogOpen(false);
-                resetEventDialog();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleEventSubmit}>
-              {editingEvent ? 'Save Changes' : 'Create Event'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </div>
+    );
+  }
 
-      {/* Updated Nov 16, 2025: Render accessible dialogs */}
+  return (
+    <div className={cn('flex h-full flex-col', className)}>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between border-b border-border bg-background px-4 py-2">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={selectedAccountId || ''}
+              onChange={(e) => selectAccount(e.target.value)}
+            >
+              {accounts.map((acc) => (
+                <option key={acc.account_id} value={acc.account_id}>
+                  {acc.display_name || acc.email}
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={selectedCalendarId || ''}
+              onChange={(e) => selectCalendar(e.target.value)}
+            >
+              {calendars.map((cal) => (
+                <option key={cal.id} value={cal.id}>
+                  {cal.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-4 w-px bg-border" />
+
+          <Tabs value={currentView} onValueChange={(v) => setCurrentView(v as CalendarView)}>
+            <TabsList className="h-8">
+              <TabsTrigger value="month" className="h-7 px-3 text-xs">
+                <LayoutGrid className="mr-2 h-3.5 w-3.5" />
+                Month
+              </TabsTrigger>
+              <TabsTrigger value="week" className="h-7 px-3 text-xs">
+                <List className="mr-2 h-3.5 w-3.5" />
+                Week
+              </TabsTrigger>
+              <TabsTrigger value="day" className="h-7 px-3 text-xs">
+                <Rows className="mr-2 h-3.5 w-3.5" />
+                Day
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => refreshEvents()}
+            disabled={loading}
+            title="Refresh events"
+          >
+            <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
+          <Button onClick={handleNewEvent} size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            New Event
+          </Button>
+        </div>
+      </div>
+
+      {/* Main View */}
+      <div className="flex-1 overflow-hidden">
+        {currentView === 'month' && (
+          <CalendarMonthView
+            currentMonth={viewDate}
+            onChangeMonth={setViewDate}
+            selectedDate={selectedDate}
+            onSelectDate={(date) => {
+              setSelectedDate(date);
+              setViewDate(date);
+            }}
+            eventsByDay={eventsByDay}
+          />
+        )}
+        {currentView === 'week' && (
+          <CalendarWeekView
+            currentDate={viewDate}
+            onChangeDate={setViewDate}
+            selectedDate={selectedDate}
+            onSelectDate={(date) => {
+              setSelectedDate(date);
+              setViewDate(date);
+            }}
+            eventsByDay={eventsByDay}
+            onEventClick={handleEventClick}
+          />
+        )}
+        {currentView === 'day' && (
+          <CalendarDayView
+            currentDate={viewDate}
+            onChangeDate={setViewDate}
+            events={dayEvents}
+            onEventClick={handleEventClick}
+          />
+        )}
+      </div>
+
+      {/* Event Dialog */}
+      {selectedCalendarId && (
+        <EventDialog
+          open={eventDialogOpen}
+          onOpenChange={setEventDialogOpen}
+          selectedDate={selectedDate}
+          existingEvent={selectedEvent}
+          onSave={handleCreateEvent}
+          onDelete={handleDeleteEvent}
+          calendarId={selectedCalendarId}
+        />
+      )}
+
       {confirmDialog}
     </div>
   );
