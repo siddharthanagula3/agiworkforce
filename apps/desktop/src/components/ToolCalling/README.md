@@ -5,6 +5,7 @@ Comprehensive React components for displaying AI tool/function calls and their r
 ## Overview
 
 These components align with 2026 AI interface design trends:
+
 - **Agentic AI**: Show autonomous agent decision-making process
 - **Multi-step workflows**: Display complex tool chains visually
 - **Transparency**: Make AI actions explainable and auditable
@@ -15,6 +16,7 @@ These components align with 2026 AI interface design trends:
 ### Core Components
 
 #### `ToolCallCard`
+
 Display individual tool invocations with parameters, status, and timing.
 
 ```tsx
@@ -36,10 +38,11 @@ import { ToolCallCard } from '@/components/ToolCalling';
   onReject={(id) => console.log('Reject:', id)}
   showParameters={true}
   defaultExpanded={false}
-/>
+/>;
 ```
 
 **Features:**
+
 - Expandable/collapsible parameter view
 - Real-time status updates (pending, in_progress, completed, failed)
 - Streaming indicator
@@ -48,6 +51,7 @@ import { ToolCallCard } from '@/components/ToolCalling';
 - Execution timing information
 
 #### `ToolResultCard`
+
 Display tool results with intelligent visualization based on output type.
 
 ```tsx
@@ -66,6 +70,7 @@ import { ToolResultCard } from '@/components/ToolCalling';
 ```
 
 **Supported Output Types:**
+
 - `json` - JSON data with collapsible tree view
 - `table` - Database query results with sorting/filtering
 - `image` - Screenshots and images with zoom/download
@@ -76,6 +81,7 @@ import { ToolResultCard } from '@/components/ToolCalling';
 - `error` - Beautiful error messages
 
 #### `ToolErrorDisplay`
+
 Beautiful error messages with troubleshooting tips and retry functionality.
 
 ```tsx
@@ -88,10 +94,11 @@ import { ToolErrorDisplay } from '@/components/ToolCalling';
   parameters={{ path: '/etc/config', content: '...' }}
   retryable={true}
   onRetry={() => retryOperation()}
-/>
+/>;
 ```
 
 **Error Types:**
+
 - `timeout` - Operation took too long
 - `permission_denied` - Insufficient permissions
 - `not_found` - Resource not found
@@ -99,6 +106,7 @@ import { ToolErrorDisplay } from '@/components/ToolCalling';
 - `cancelled` - User cancelled operation
 
 #### `ToolApprovalDialog`
+
 Modal dialog for approving dangerous tool operations before execution.
 
 ```tsx
@@ -112,19 +120,21 @@ import { ToolApprovalDialog } from '@/components/ToolCalling';
     tool_name: 'Execute Code',
     parameters: { language: 'bash', code: 'rm -rf /' },
     reason: 'This command can delete system files',
-    risk_level: 'high'
+    risk_level: 'high',
   }}
   onApprove={() => approveExecution()}
   onReject={() => rejectExecution()}
-/>
+/>;
 ```
 
 **Risk Levels:**
+
 - `high` - Can modify system state or delete data (red)
 - `medium` - May access sensitive information (orange)
 - `low` - Minor side effects (yellow)
 
 #### `ToolExecutionTimeline`
+
 Visualize multi-step agent workflows with a timeline view.
 
 ```tsx
@@ -142,20 +152,25 @@ import { ToolExecutionTimeline } from '@/components/ToolCalling';
     steps: [
       {
         step_number: 1,
-        tool_call: { /* ... */ },
-        result: { /* ... */ }
+        tool_call: {
+          /* ... */
+        },
+        result: {
+          /* ... */
+        },
       },
       // More steps...
-    ]
+    ],
   }}
   onCancelTool={(id) => cancelTool(id)}
   onApproveTool={(id) => approveTool(id)}
   onRejectTool={(id) => rejectTool(id)}
   onRetryTool={(id) => retryTool(id)}
-/>
+/>;
 ```
 
 **Features:**
+
 - Visual timeline with step numbers
 - Progress bar for overall workflow
 - Nested sub-tasks (dependencies)
@@ -165,6 +180,7 @@ import { ToolExecutionTimeline } from '@/components/ToolCalling';
 ### Visualization Components
 
 #### `JsonViewer`
+
 Interactive JSON data viewer with search, expand/collapse, and syntax highlighting.
 
 ```tsx
@@ -173,15 +189,16 @@ import { JsonViewer } from '@/components/ToolCalling';
 <JsonViewer
   data={{
     user: { name: 'John', age: 30 },
-    orders: [{ id: 1, total: 99.99 }]
+    orders: [{ id: 1, total: 99.99 }],
   }}
   maxHeight="400px"
   defaultExpanded={true}
   searchable={true}
-/>
+/>;
 ```
 
 #### `TableViewer`
+
 Database query results with sorting, filtering, pagination, and CSV export.
 
 ```tsx
@@ -191,19 +208,20 @@ import { TableViewer } from '@/components/ToolCalling';
   data={{
     columns: [
       { key: 'id', label: 'ID', type: 'number' },
-      { key: 'name', label: 'Name', type: 'string' }
+      { key: 'name', label: 'Name', type: 'string' },
     ],
     rows: [
       { id: 1, name: 'Alice' },
-      { id: 2, name: 'Bob' }
-    ]
+      { id: 2, name: 'Bob' },
+    ],
   }}
   maxHeight="400px"
   paginated={true}
-/>
+/>;
 ```
 
 #### `ImagePreview`
+
 Display screenshots and images with zoom, fullscreen, and OCR text extraction.
 
 ```tsx
@@ -216,15 +234,16 @@ import { ImagePreview } from '@/components/ToolCalling';
     name: 'screenshot.png',
     data: 'base64_encoded_image',
     mime_type: 'image/png',
-    size: 102400
+    size: 102400,
   }}
   maxHeight="400px"
   showMetadata={true}
   ocrText="Extracted text from OCR..."
-/>
+/>;
 ```
 
 #### `DiffViewer`
+
 File modification diffs with syntax highlighting for additions/deletions.
 
 ```tsx
@@ -243,14 +262,14 @@ import { DiffViewer } from '@/components/ToolCalling';
           { type: 'context', content: 'const port = 3000;' },
           { type: 'remove', content: 'const host = "localhost";' },
           { type: 'add', content: 'const host = "0.0.0.0";' },
-          { type: 'add', content: 'const secure = true;' }
-        ]
-      }
-    ]
+          { type: 'add', content: 'const secure = true;' },
+        ],
+      },
+    ],
   }}
   maxHeight="400px"
   defaultExpanded={true}
-/>
+/>;
 ```
 
 ## Integration with Chat Interface
@@ -272,21 +291,21 @@ interface MessageWithTools extends MessageUI {
 Add tool calling handlers to your chat store:
 
 ```typescript
-// In chatStore.ts
+// In unifiedChatStore.ts
 import { listen } from '@tauri-apps/api/event';
 import type { ToolCallStartPayload, ToolCallCompletePayload } from '../types/toolCalling';
 
 // Listen for tool execution events
 await listen<ToolCallStartPayload>('tool:call:start', ({ payload }) => {
   // Add tool call to current message
-  useChatStore.setState((state) => {
+  useUnifiedChatStore.setState((state) => {
     // Update messages with new tool call
   });
 });
 
 await listen<ToolCallCompletePayload>('tool:call:complete', ({ payload }) => {
   // Add tool result to current message
-  useChatStore.setState((state) => {
+  useUnifiedChatStore.setState((state) => {
     // Update messages with tool result
   });
 });
