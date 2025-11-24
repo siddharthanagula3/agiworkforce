@@ -644,16 +644,18 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
         multimodal_content: None,
     });
 
-    router_messages.extend(history
-        .iter()
-        .filter(|m| m.id != assistant_message_id) // Exclude placeholder
-        .map(|message| RouterChatMessage {
-            role: message.role.as_str().to_string(),
-            content: message.content.clone(),
-            tool_calls: None,
-            tool_call_id: None,
-            multimodal_content: None,
-        }));
+    router_messages.extend(
+        history
+            .iter()
+            .filter(|m| m.id != assistant_message_id) // Exclude placeholder
+            .map(|message| RouterChatMessage {
+                role: message.role.as_str().to_string(),
+                content: message.content.clone(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }),
+    );
 
     let provider_override = request
         .provider_override
@@ -899,18 +901,25 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                                     );
 
                                     // Emit tool execution event
-                                    let input_map: std::collections::HashMap<String, serde_json::Value> =
-                                        serde_json::from_str(&tool_call.arguments).unwrap_or_default();
-                                    
-                                    let event = crate::events::frontend_events::create_tool_execution_event(
-                                        &tool_call.name,
-                                        &input_map,
-                                        Some(serde_json::json!(result)),
-                                        None,
-                                        duration,
-                                        true
+                                    let input_map: std::collections::HashMap<
+                                        String,
+                                        serde_json::Value,
+                                    > = serde_json::from_str(&tool_call.arguments)
+                                        .unwrap_or_default();
+
+                                    let event =
+                                        crate::events::frontend_events::create_tool_execution_event(
+                                            &tool_call.name,
+                                            &input_map,
+                                            Some(serde_json::json!(result)),
+                                            None,
+                                            duration,
+                                            true,
+                                        );
+                                    crate::events::frontend_events::emit_tool_execution(
+                                        &app_handle,
+                                        event,
                                     );
-                                    crate::events::frontend_events::emit_tool_execution(&app_handle, event);
                                 }
                                 Err(e) => {
                                     let duration = start_time.elapsed().as_millis() as u64;
@@ -923,18 +932,25 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                                     );
 
                                     // Emit tool execution event
-                                    let input_map: std::collections::HashMap<String, serde_json::Value> =
-                                        serde_json::from_str(&tool_call.arguments).unwrap_or_default();
+                                    let input_map: std::collections::HashMap<
+                                        String,
+                                        serde_json::Value,
+                                    > = serde_json::from_str(&tool_call.arguments)
+                                        .unwrap_or_default();
 
-                                    let event = crate::events::frontend_events::create_tool_execution_event(
-                                        &tool_call.name,
-                                        &input_map,
-                                        None,
-                                        Some(e.to_string()),
-                                        duration,
-                                        false
+                                    let event =
+                                        crate::events::frontend_events::create_tool_execution_event(
+                                            &tool_call.name,
+                                            &input_map,
+                                            None,
+                                            Some(e.to_string()),
+                                            duration,
+                                            false,
+                                        );
+                                    crate::events::frontend_events::emit_tool_execution(
+                                        &app_handle,
+                                        event,
                                     );
-                                    crate::events::frontend_events::emit_tool_execution(&app_handle, event);
                                 }
                             }
                         }

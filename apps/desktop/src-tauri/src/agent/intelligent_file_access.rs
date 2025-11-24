@@ -77,18 +77,16 @@ impl IntelligentFileAccess {
     ) -> Result<FileAccessResult> {
         // Step 1: Try direct file access first
         match self.try_direct_access(file_path).await {
-            Ok(content) => {
-                Ok(FileAccessResult {
-                    success: true,
-                    content: Some(content),
-                    method: AccessMethod::DirectFileRead,
-                    screenshot_path: None,
-                    ocr_text: None,
-                    analysis: None,
-                    solution: None,
-                    error: None,
-                })
-            }
+            Ok(content) => Ok(FileAccessResult {
+                success: true,
+                content: Some(content),
+                method: AccessMethod::DirectFileRead,
+                screenshot_path: None,
+                ocr_text: None,
+                analysis: None,
+                solution: None,
+                error: None,
+            }),
             Err(e) => {
                 tracing::warn!("Direct file access failed for {:?}: {}", file_path, e);
 
