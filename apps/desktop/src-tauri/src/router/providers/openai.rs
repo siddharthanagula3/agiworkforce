@@ -96,6 +96,8 @@ struct OpenAIRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    max_completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<OpenAITool>>,
@@ -137,6 +139,15 @@ impl OpenAIProvider {
             client: Client::new(),
             base_url: "https://api.openai.com/v1".to_string(),
         }
+    }
+
+    /// Check if model uses max_completion_tokens instead of max_tokens
+    /// GPT-5, O3, and other newer models require max_completion_tokens
+    fn uses_max_completion_tokens(model: &str) -> bool {
+        model.starts_with("gpt-5")
+            || model.starts_with("o3")
+            || model.starts_with("o1")
+            || model == "gpt-4-turbo-2024-04-09"
     }
 
     /// Convert ImageFormat and ImageDetail to OpenAI format
@@ -273,6 +284,8 @@ impl LLMProvider for OpenAIProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        let uses_new_param = Self::uses_max_completion_tokens(&request.model);
+        
         let openai_request = OpenAIRequest {
             model: request.model.clone(),
             messages: request
@@ -319,7 +332,8 @@ impl LLMProvider for OpenAIProvider {
                 })
                 .collect(),
             temperature: request.temperature,
-            max_tokens: request.max_tokens,
+            max_tokens: if uses_new_param { None } else { request.max_tokens },
+            max_completion_tokens: if uses_new_param { request.max_tokens } else { None },
             stream: if request.stream { Some(false) } else { None },
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
             tool_choice: request
@@ -417,6 +431,8 @@ impl LLMProvider for OpenAIProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
+        let uses_new_param = Self::uses_max_completion_tokens(&request.model);
+        
         let openai_request = OpenAIRequest {
             model: request.model.clone(),
             messages: request
@@ -431,7 +447,8 @@ impl LLMProvider for OpenAIProvider {
                 })
                 .collect(),
             temperature: request.temperature,
-            max_tokens: request.max_tokens,
+            max_tokens: if uses_new_param { None } else { request.max_tokens },
+            max_completion_tokens: if uses_new_param { request.max_tokens } else { None },
             stream: Some(true),
             tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
             tool_choice: request
