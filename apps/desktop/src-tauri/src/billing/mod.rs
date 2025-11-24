@@ -2,6 +2,7 @@
 pub mod stripe_client;
 #[cfg(feature = "billing")]
 pub mod webhooks;
+pub mod models;
 
 #[cfg(not(feature = "billing"))]
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,18 @@ impl BillingState {
         self.webhook_handler
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Webhook handler not initialized"))
+    }
+
+    pub fn check_cloud_access(&self) -> bool {
+        if let Some(service) = &self.stripe_service {
+            match service.get_primary_subscription() {
+                Ok(Some(_)) => true,
+                _ => false,
+            }
+        } else {
+            // If billing is enabled but not initialized, block access
+            false
+        }
     }
 }
 

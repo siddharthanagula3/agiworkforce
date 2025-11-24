@@ -147,7 +147,7 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
       provider,
       email: trimmedEmail,
       password: credentials.password,
-      ...(trimmedDisplayName ? { display_name: trimmedDisplayName } : {}),
+      display_name: trimmedDisplayName || undefined,
     };
 
     if (!payload.email || !payload.password) {
