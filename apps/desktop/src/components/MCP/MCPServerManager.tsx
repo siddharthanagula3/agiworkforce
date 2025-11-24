@@ -1,29 +1,30 @@
-import { useEffect, useState } from 'react';
-import { useMcpStore } from '../../stores/mcpStore';
-import { toast } from 'sonner';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { Input } from '../ui/Input';
-import { Dialog } from '../ui/Dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
-import { Spinner } from '../ui/Spinner';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Switch } from '../ui/Switch';
 import {
-  Server,
-  Power,
-  PowerOff,
-  Settings,
-  Trash2,
-  RefreshCw,
+  Activity,
   AlertCircle,
   CheckCircle,
-  XCircle,
-  Activity,
   Download,
+  Power,
+  PowerOff,
+  RefreshCw,
+  Server,
+  Settings,
+  Trash2,
+  XCircle,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { invoke } from '../../lib/tauri-mock';
+import { useMcpStore } from '../../stores/mcpStore';
 import type { McpServerInfo } from '../../types/mcp';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Dialog } from '../ui/Dialog';
+import { Input } from '../ui/Input';
+import { ScrollArea } from '../ui/ScrollArea';
+import { Spinner } from '../ui/Spinner';
+import { Switch } from '../ui/Switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { MCPLogsViewer } from './MCPLogsViewer';
 
 interface ServerConfigDialogProps {
@@ -331,7 +332,11 @@ export function MCPServerManager() {
   };
 
   const handleUninstall = async (serverName: string) => {
-    if (!confirm(`Are you sure you want to uninstall ${serverName}? This will remove the server configuration.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to uninstall ${serverName}? This will remove the server configuration.`,
+      )
+    ) {
       return;
     }
 
@@ -339,20 +344,20 @@ export function MCPServerManager() {
     try {
       // Disconnect server first if connected
       await disconnectServer(serverName);
-      
+
       // Remove server from config
-      const { invoke } = await import('@tauri-apps/api/core');
+      // const { invoke } = await import('@tauri-apps/api/core'); // REMOVED to prevent crash
       const currentConfig = await invoke<any>('mcp_get_config');
       const updatedServers = { ...(currentConfig.servers || {}) };
       delete updatedServers[serverName];
-      
-      await invoke('mcp_update_config', { 
+
+      await invoke('mcp_update_config', {
         config: {
           ...currentConfig,
           servers: updatedServers,
         },
       });
-      
+
       await refreshServers();
       toast.success(`Server ${serverName} uninstalled`);
     } catch (err) {

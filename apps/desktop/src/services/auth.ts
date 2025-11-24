@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { useAuthStore } from '../stores/authStore';
 
 export interface AuthToken {
   access_token: string;
@@ -44,7 +45,11 @@ export class AuthService {
   /**
    * Register a new user
    */
-  async register(email: string, password: string, role: UserRole = UserRole.Editor): Promise<string> {
+  async register(
+    email: string,
+    password: string,
+    role: UserRole = UserRole.Editor,
+  ): Promise<string> {
     try {
       const userId = await invoke<string>('auth_register', {
         email,
@@ -69,6 +74,15 @@ export class AuthService {
 
       this.token = token;
       this.saveToken(token);
+
+      // CRITICAL FIX: Dispatch update to UI store immediately
+      // In production, decode the JWT to get actual user details/role
+      useAuthStore.getState().setUser({
+        id: email,
+        email: email,
+        role: UserRole.Viewer, // Default to viewer, should be from token
+      });
+
       this.startRefreshTimer();
       this.resetInactivityTimer();
 

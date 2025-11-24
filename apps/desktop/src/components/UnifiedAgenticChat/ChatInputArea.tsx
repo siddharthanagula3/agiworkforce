@@ -86,6 +86,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     ? (getModelMetadata(selectedModel)?.name ?? 'Claude')
     : 'Claude';
 
+  // Handle input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= maxLength) {
+      setContent(value);
+    }
+  };
+
   const isDisabled = disabled || isLoading;
   const isEmptyState = messages.length === 0;
 
@@ -214,7 +222,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     });
   };
 
-  const handlePaste = (event: React.ClipboardEvent) => {
+  const _handlePaste = (event: React.ClipboardEvent) => {
     const items = Array.from(event.clipboardData.items).filter((item) =>
       item.type.startsWith('image/'),
     );
@@ -450,15 +458,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               <textarea
                 ref={textareaRef}
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
                 placeholder={placeholder}
                 disabled={isDisabled}
-                maxLength={maxLength}
+                className="chat-input flex-1 resize-none border-none bg-transparent py-3 pr-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400"
                 rows={1}
-                className="flex-1 resize-none bg-transparent px-2 py-2 text-base leading-relaxed text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ minHeight: '44px' }}
+                style={{
+                  maxHeight: '200px',
+                  overflowY: content.length > 100 ? 'auto' : 'hidden',
+                }}
                 aria-label="Message input"
                 aria-describedby={tokenUsage.percentage > 0 ? 'token-usage-gauge' : undefined}
               />

@@ -671,6 +671,52 @@ impl StripeService {
         }
     }
 
+    /// Get ANY active subscription (for single-user desktop mode)
+    pub fn get_primary_subscription(&self) -> Result<Option<SubscriptionInfo>> {
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock database"))?;
+
+        let mut stmt = db.prepare(
+            "SELECT id, customer_id, stripe_subscription_id, stripe_price_id, plan_name, billing_interval,
+                    status, current_period_start, current_period_end, cancel_at_period_end,
+                    cancel_at, canceled_at, trial_start, trial_end, amount, currency,
+                    created_at, updated_at
+             FROM billing_subscriptions
+             WHERE status IN ('active', 'trialing')
+             ORDER BY created_at DESC
+             LIMIT 1",
+        )?;
+
+        let mut rows = stmt.query([])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(SubscriptionInfo {
+                id: row.get(0)?,
+                customer_id: row.get(1)?,
+                stripe_subscription_id: row.get(2)?,
+                stripe_price_id: row.get(3)?,
+                plan_name: row.get(4)?,
+                billing_interval: row.get(5)?,
+                status: row.get(6)?,
+                current_period_start: row.get(7)?,
+                current_period_end: row.get(8)?,
+                cancel_at_period_end: row.get(9)?,
+                cancel_at: row.get(10)?,
+                canceled_at: row.get(11)?,
+                trial_start: row.get(12)?,
+                trial_end: row.get(13)?,
+                amount: row.get(14)?,
+                currency: row.get(15)?,
+                created_at: row.get(16)?,
+                updated_at: row.get(17)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Get payment methods for a customer
     pub async fn get_payment_methods(
         &self,

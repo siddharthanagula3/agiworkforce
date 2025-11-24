@@ -20,6 +20,7 @@ import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { type DynamicPanelType } from './DynamicSidecar';
+import { FloatingModelSelector } from './FloatingModelSelector';
 import { MediaLab } from './MediaLab';
 
 export const UnifiedAgenticChat: React.FC<{
@@ -449,6 +450,9 @@ export const UnifiedAgenticChat: React.FC<{
       )}
 
       <ApprovalModal />
+
+      {/* Floating Model Selector - Bottom Right */}
+      <FloatingModelSelector />
     </div>
   );
 };
