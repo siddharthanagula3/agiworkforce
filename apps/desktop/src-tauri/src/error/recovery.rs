@@ -4,7 +4,8 @@ use std::future::Future;
 use std::pin::Pin;
 use tracing::{debug, info, warn};
 
-type RecoveryHandler = dyn Fn(&AGIError) -> Pin<Box<dyn Future<Output = Result<RecoveryAction>> + Send>> + Send + Sync;
+type RecoveryHandler =
+    dyn Fn(&AGIError) -> Pin<Box<dyn Future<Output = Result<RecoveryAction>> + Send>> + Send + Sync;
 
 /// Action to take after error recovery attempt
 #[derive(Debug, Clone, Serialize, Deserialize)]

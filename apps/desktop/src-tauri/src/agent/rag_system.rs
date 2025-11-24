@@ -123,27 +123,26 @@ impl RAGSystem {
             }
 
             // Detect end of function/block
-            if (line == "}" || line == "};")
-                && current_function.is_some() {
-                    let chunk = CodeChunk {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        file_path: file_path.clone(),
-                        content: lines[current_chunk_start..=i].join("\n"),
-                        start_line: current_chunk_start,
-                        end_line: i,
-                        language: language.clone(),
-                        function_name: current_function.clone(),
-                        class_name: current_class.clone(),
-                        doc_comment: doc_comment.clone(),
-                        dependencies: self
-                            .extract_dependencies(&lines[current_chunk_start..=i].join("\n")),
-                        embedding: None, // Would generate embedding here
-                        metadata: HashMap::new(),
-                    };
-                    chunks.push(chunk);
-                    current_function = None;
-                    doc_comment = None;
-                }
+            if (line == "}" || line == "};") && current_function.is_some() {
+                let chunk = CodeChunk {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    file_path: file_path.clone(),
+                    content: lines[current_chunk_start..=i].join("\n"),
+                    start_line: current_chunk_start,
+                    end_line: i,
+                    language: language.clone(),
+                    function_name: current_function.clone(),
+                    class_name: current_class.clone(),
+                    doc_comment: doc_comment.clone(),
+                    dependencies: self
+                        .extract_dependencies(&lines[current_chunk_start..=i].join("\n")),
+                    embedding: None, // Would generate embedding here
+                    metadata: HashMap::new(),
+                };
+                chunks.push(chunk);
+                current_function = None;
+                doc_comment = None;
+            }
         }
 
         // If no functions found, create one chunk for entire file
