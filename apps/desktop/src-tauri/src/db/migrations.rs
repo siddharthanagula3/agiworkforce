@@ -3899,5 +3899,5 @@ fn apply_migration_v41(conn: &Connection) -> Result<()> {
 fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
     let mut stmt =
         conn.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE lower(name) = lower(?2)")?;
-    Ok(stmt.exists([table, column])?)
+    stmt.exists([table, column])
 }

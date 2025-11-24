@@ -129,6 +129,12 @@ pub struct GlobalHookRegistry {
     registry: RwLock<Option<Arc<HookRegistry>>>,
 }
 
+impl Default for GlobalHookRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GlobalHookRegistry {
     /// Create a new global registry wrapper
     pub const fn new() -> Self {

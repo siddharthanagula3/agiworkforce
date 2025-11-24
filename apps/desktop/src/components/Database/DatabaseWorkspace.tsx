@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useDatabaseStore, type ConnectionConfig } from '../../stores/databaseStore';
+import { Database, History, Link, Link2Off, Play, Plus, Table } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { useDatabaseStore, type ConnectionConfig } from '../../stores/databaseStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Database, Plus, Play, Link, Link2Off, History, Table } from 'lucide-react';
-import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 
 interface DatabaseWorkspaceProps {
@@ -372,6 +372,10 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
               <History className="h-3 w-3 mr-1" />
               History
             </TabsTrigger>
+            <TabsTrigger value="schema">
+              <Database className="h-3 w-3 mr-1" />
+              Schema
+            </TabsTrigger>
           </TabsList>
 
           {/* Query Tab */}
@@ -386,11 +390,47 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                     className="w-full h-full p-3 border border-border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
-                <div className="px-3 py-2 border-t border-border">
+                <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
                   <Button onClick={handleExecuteQuery} disabled={loading}>
                     <Play className="h-4 w-4 mr-2" />
                     Execute
                   </Button>
+                  <div className="flex items-center gap-1 ml-auto">
+                    <span className="text-xs text-muted-foreground mr-2">Transaction:</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCurrentQuery('BEGIN');
+                        handleExecuteQuery();
+                      }}
+                      disabled={loading}
+                    >
+                      BEGIN
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCurrentQuery('COMMIT');
+                        handleExecuteQuery();
+                      }}
+                      disabled={loading}
+                    >
+                      COMMIT
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCurrentQuery('ROLLBACK');
+                        handleExecuteQuery();
+                      }}
+                      disabled={loading}
+                    >
+                      ROLLBACK
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : activeConnection.type === 'MongoDB' ? (
@@ -500,6 +540,11 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
               </div>
             )}
           </TabsContent>
+
+          {/* Schema Tab */}
+          <TabsContent value="schema" className="flex-1 overflow-hidden p-4">
+            <SchemaExplorer activeConnection={activeConnection} loading={loading} />
+          </TabsContent>
         </Tabs>
       ) : (
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -512,6 +557,156 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Schema Explorer Component
+function SchemaExplorer({
+  activeConnection,
+  loading: _loading,
+}: {
+  activeConnection: any;
+  loading: boolean;
+}) {
+  const [tables, setTables] = useState<string[]>([]);
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [tableSchema, setTableSchema] = useState<any>(null);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [loadingSchema, setLoadingSchema] = useState(false);
+
+  const loadTables = useCallback(async () => {
+    if (!activeConnection) return;
+
+    setLoadingTables(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<string[]>('db_mysql_list_tables', {
+        connectionId: activeConnection.id,
+      });
+      setTables(result);
+    } catch (error) {
+      toast.error(`Failed to load tables: ${error}`);
+    } finally {
+      setLoadingTables(false);
+    }
+  }, [activeConnection]);
+
+  useEffect(() => {
+    if (activeConnection && activeConnection.type === 'SQL') {
+      loadTables();
+    }
+  }, [activeConnection, loadTables]);
+
+  const handleTableClick = async (tableName: string) => {
+    setSelectedTable(tableName);
+    setLoadingSchema(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke('db_mysql_describe_table', {
+        connectionId: activeConnection.id,
+        tableName,
+      });
+      setTableSchema(result);
+    } catch (error) {
+      toast.error(`Failed to describe table: ${error}`);
+    } finally {
+      setLoadingSchema(false);
+    }
+  };
+
+  if (activeConnection && activeConnection.type !== 'SQL') {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <p className="text-sm">Schema browser is only available for SQL connections</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-[250px_minmax(0,1fr)] gap-4 h-full">
+      {/* Tables List */}
+      <div className="border border-border rounded-md overflow-hidden">
+        <div className="bg-muted/30 px-3 py-2 border-b border-border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Tables</span>
+            {loadingTables && <span className="text-xs text-muted-foreground">Loading...</span>}
+          </div>
+        </div>
+        <div className="overflow-auto max-h-[calc(100vh-300px)]">
+          {tables.length === 0 ? (
+            <div className="px-3 py-8 text-xs text-muted-foreground text-center">
+              {loadingTables ? 'Loading tables...' : 'No tables found'}
+            </div>
+          ) : (
+            <div className="space-y-1 p-2">
+              {tables.map((table) => (
+                <button
+                  key={table}
+                  onClick={() => handleTableClick(table)}
+                  className={cn(
+                    'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
+                    selectedTable === table
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'hover:bg-muted/50 text-foreground',
+                  )}
+                >
+                  <Table className="h-3 w-3 inline mr-2" />
+                  {table}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Table Schema */}
+      <div className="border border-border rounded-md overflow-hidden">
+        {selectedTable ? (
+          <>
+            <div className="bg-muted/30 px-4 py-2 border-b border-border">
+              <h3 className="text-sm font-semibold">{selectedTable}</h3>
+            </div>
+            <div className="overflow-auto max-h-[calc(100vh-300px)] p-4">
+              {loadingSchema ? (
+                <div className="text-xs text-muted-foreground">Loading schema...</div>
+              ) : tableSchema ? (
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 border-b border-border">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Column</th>
+                      <th className="px-3 py-2 text-left font-medium">Type</th>
+                      <th className="px-3 py-2 text-left font-medium">Nullable</th>
+                      <th className="px-3 py-2 text-left font-medium">Key</th>
+                      <th className="px-3 py-2 text-left font-medium">Default</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.isArray(tableSchema.rows) &&
+                      tableSchema.rows.map((row: any[], i: number) => (
+                        <tr key={i} className="border-b border-border hover:bg-muted/30">
+                          <td className="px-3 py-2 font-mono text-xs font-semibold">{row[0]}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                            {row[1]}
+                          </td>
+                          <td className="px-3 py-2 text-xs">{row[2]}</td>
+                          <td className="px-3 py-2 text-xs">{row[3]}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                            {row[4] ?? '-'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <p className="text-sm">Select a table to view its schema</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

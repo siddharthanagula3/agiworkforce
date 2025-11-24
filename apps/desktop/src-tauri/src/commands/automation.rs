@@ -222,13 +222,13 @@ pub async fn automation_send_keys(
 
     // Validate coordinates if provided
     if let (Some(x), Some(y)) = (request.x, request.y) {
-        if x < -10_000 || x > 100_000 {
+        if !(-10_000..=100_000).contains(&x) {
             return Err(format!(
                 "Invalid x coordinate: {}. Must be between -10,000 and 100,000",
                 x
             ));
         }
-        if y < -10_000 || y > 100_000 {
+        if !(-10_000..=100_000).contains(&y) {
             return Err(format!(
                 "Invalid y coordinate: {}. Must be between -10,000 and 100,000",
                 y
@@ -262,13 +262,13 @@ pub fn automation_click(
 
     // Validate coordinates if provided directly
     if let (Some(x), Some(y)) = (request.x, request.y) {
-        if x < -10_000 || x > 100_000 {
+        if !(-10_000..=100_000).contains(&x) {
             return Err(format!(
                 "Invalid x coordinate: {}. Must be between -10,000 and 100,000",
                 x
             ));
         }
-        if y < -10_000 || y > 100_000 {
+        if !(-10_000..=100_000).contains(&y) {
             return Err(format!(
                 "Invalid y coordinate: {}. Must be between -10,000 and 100,000",
                 y

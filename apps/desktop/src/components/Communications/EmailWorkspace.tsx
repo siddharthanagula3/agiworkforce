@@ -1,13 +1,24 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { open } from '@tauri-apps/plugin-shell';
+import { Check, Circle, Inbox, Mail, Plus, RefreshCcw, Search, Send, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { open } from '@tauri-apps/plugin-shell';
-import { Inbox, Mail, Plus, RefreshCcw, Send, Trash2, Check, Circle, Search } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
+import {
+  useEmailStore,
+  type ConnectAccountPayload,
+  type SendEmailPayload,
+} from '../../stores/emailStore';
+import type {
+  Contact,
+  EmailAddress,
+  EmailFilter,
+  EmailMessage,
+  EmailProviderConfig,
+} from '../../types/email';
 import { sanitizeEmailHtml } from '../../utils/security';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -16,22 +27,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/Dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
+import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
-import { Badge } from '../ui/Badge';
 import { Separator } from '../ui/Separator';
-import {
-  useEmailStore,
-  type ConnectAccountPayload,
-  type SendEmailPayload,
-} from '../../stores/emailStore';
-import type {
-  EmailAddress,
-  EmailMessage,
-  EmailFilter,
-  Contact,
-  EmailProviderConfig,
-} from '../../types/email';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
+import { Textarea } from '../ui/Textarea';
 
 const PROVIDER_OPTIONS = [
   { value: 'gmail', label: 'Gmail' },
@@ -102,6 +102,7 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
     subject: '',
     body_text: '',
   });
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [tabValue, setTabValue] = useState<'all' | 'unread'>('all');
 
@@ -191,11 +192,13 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
       bcc: parseRecipients(composeDraft.bcc),
       subject: composeDraft.subject,
       body_text: composeDraft.body_text,
+      attachments, // Add attachments to payload
     };
 
     try {
       await sendEmail(payload);
       setComposeDraft({ to: '', cc: '', bcc: '', subject: '', body_text: '' });
+      setAttachments([]); // Clear attachments
       setComposeOpen(false);
     } catch {
       // handled upstream
@@ -585,6 +588,47 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                       rows={10}
                       placeholder="Write your message..."
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Attachments
+                    </label>
+                    <Input
+                      type="file"
+                      multiple
+                      onChange={async (event) => {
+                        const files = Array.from(event.target.files || []);
+                        const paths: string[] = [];
+                        for (const file of files) {
+                          // For Tauri, we need file paths not File objects
+                          // In real implementation, use Tauri's file dialog or convert to path
+                          paths.push(file.name); // Simplified - needs actual path
+                        }
+                        setAttachments((prev) => [...prev, ...paths]);
+                      }}
+                      className="mb-2"
+                    />
+                    {attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {attachments.map((attachment, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs"
+                          >
+                            <span>{attachment}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAttachments((prev) => prev.filter((_, index) => index !== i))
+                              }
+                              className="hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>

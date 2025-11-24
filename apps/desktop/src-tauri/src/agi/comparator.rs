@@ -148,7 +148,7 @@ impl ResultComparator {
                 output.push_str(&format!("  Error: {}\n", error));
             }
 
-            output.push_str("\n");
+            output.push('\n');
         }
 
         output

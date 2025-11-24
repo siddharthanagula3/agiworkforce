@@ -536,7 +536,7 @@ Respond with ONLY "true" or "false"."#,
                     response.trim()
                 );
 
-                return Ok(is_met);
+                Ok(is_met)
             }
             Err(e) => {
                 tracing::warn!(
@@ -544,7 +544,7 @@ Respond with ONLY "true" or "false"."#,
                     e
                 );
                 // On error, conservatively assume criterion not met
-                return Ok(false);
+                Ok(false)
             }
         }
     }

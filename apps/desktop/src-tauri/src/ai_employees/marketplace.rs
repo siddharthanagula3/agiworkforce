@@ -36,10 +36,8 @@ impl EmployeeMarketplace {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         let mut result = Vec::new();
-        for emp in employees {
-            if let Ok(e) = emp {
-                result.push(e);
-            }
+        for e in employees.flatten() {
+            result.push(e);
         }
 
         Ok(result)
@@ -406,11 +404,9 @@ impl EmployeeMarketplace {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         let mut result = Vec::new();
-        for emp in employees {
-            if let Ok(e) = emp {
-                if e.role.category() == category {
-                    result.push(e);
-                }
+        for e in employees.flatten() {
+            if e.role.category() == category {
+                result.push(e);
             }
         }
 
@@ -454,10 +450,8 @@ impl EmployeeMarketplace {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         let mut result = Vec::new();
-        for emp in user_employees {
-            if let Ok(e) = emp {
-                result.push(e);
-            }
+        for e in user_employees.flatten() {
+            result.push(e);
         }
 
         Ok(result)

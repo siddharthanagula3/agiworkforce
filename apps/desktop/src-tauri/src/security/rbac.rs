@@ -58,7 +58,7 @@ impl RBACManager {
             if let Some(role) = UserRole::from_str(&role_str) {
                 cache
                     .entry(role)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(permission_name);
             }
         }

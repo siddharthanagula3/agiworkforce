@@ -261,7 +261,7 @@ impl ChangeTracker {
         state
             .changes
             .iter()
-            .filter(|c| c.can_revert && !c.reverted && task_id.map_or(true, |tid| c.task_id == tid))
+            .filter(|c| c.can_revert && !c.reverted && task_id.is_none_or(|tid| c.task_id == tid))
             .cloned()
             .collect()
     }

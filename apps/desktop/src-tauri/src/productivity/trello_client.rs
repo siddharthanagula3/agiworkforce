@@ -91,10 +91,10 @@ impl TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let member: TrelloMember = response.json().await.map_err(|e| Error::from(e))?;
+            let member: TrelloMember = response.json().await.map_err(Error::from)?;
             Ok(member.id)
         } else {
             let status = response.status();
@@ -115,10 +115,10 @@ impl TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let boards: Vec<TrelloBoard> = response.json().await.map_err(|e| Error::from(e))?;
+            let boards: Vec<TrelloBoard> = response.json().await.map_err(Error::from)?;
             Ok(boards)
         } else {
             Err(Error::Provider(format!(
@@ -137,10 +137,10 @@ impl TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let lists: Vec<TrelloList> = response.json().await.map_err(|e| Error::from(e))?;
+            let lists: Vec<TrelloList> = response.json().await.map_err(Error::from)?;
             Ok(lists)
         } else {
             Err(Error::Provider(format!(
@@ -159,10 +159,10 @@ impl TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let cards: Vec<TrelloCard> = response.json().await.map_err(|e| Error::from(e))?;
+            let cards: Vec<TrelloCard> = response.json().await.map_err(Error::from)?;
             Ok(cards)
         } else {
             Err(Error::Provider(format!(
@@ -181,10 +181,10 @@ impl TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let cards: Vec<TrelloCard> = response.json().await.map_err(|e| Error::from(e))?;
+            let cards: Vec<TrelloCard> = response.json().await.map_err(Error::from)?;
             Ok(cards)
         } else {
             Err(Error::Provider(format!(
@@ -222,10 +222,10 @@ impl TrelloClient {
             .post(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let card: TrelloCard = response.json().await.map_err(|e| Error::from(e))?;
+            let card: TrelloCard = response.json().await.map_err(Error::from)?;
             Ok(card.id)
         } else {
             let status = response.status();
@@ -247,7 +247,7 @@ impl TrelloClient {
             .put(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
             Ok(())
@@ -269,10 +269,10 @@ impl TrelloClient {
             .post(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let comment: serde_json::Value = response.json().await.map_err(|e| Error::from(e))?;
+            let comment: serde_json::Value = response.json().await.map_err(Error::from)?;
             let comment_id = comment
                 .get("id")
                 .and_then(|id| id.as_str())
@@ -296,10 +296,10 @@ impl TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let list: TrelloList = response.json().await.map_err(|e| Error::from(e))?;
+            let list: TrelloList = response.json().await.map_err(Error::from)?;
             Ok(list.name)
         } else {
             Ok("Unknown".to_string())
@@ -413,7 +413,7 @@ impl UnifiedTaskProvider for TrelloClient {
             .delete(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
             Ok(())
@@ -433,10 +433,10 @@ impl UnifiedTaskProvider for TrelloClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         if response.status().is_success() {
-            let card: TrelloCard = response.json().await.map_err(|e| Error::from(e))?;
+            let card: TrelloCard = response.json().await.map_err(Error::from)?;
             Ok(self.card_to_task(&card).await)
         } else {
             Err(Error::Provider(format!(

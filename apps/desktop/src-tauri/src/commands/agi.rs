@@ -538,7 +538,7 @@ pub async fn get_system_resources() -> Result<SystemResourcesResponse, String> {
     // Get total system memory from sysinfo
     let mut sys = sysinfo::System::new_all();
     sys.refresh_memory();
-    let memory_total_mb = (sys.total_memory() / 1024 / 1024) as u64;
+    let memory_total_mb = sys.total_memory() / 1024 / 1024;
     let storage_total_mb = 1000000; // 1TB default - would need actual disk info
 
     Ok(SystemResourcesResponse {

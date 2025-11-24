@@ -531,10 +531,8 @@ impl ProcessOntology {
             })
         })?;
 
-        for template_result in templates {
-            if let Ok(template) = template_result {
-                self.templates.insert(template.process_type, template);
-            }
+        for template in templates.flatten() {
+            self.templates.insert(template.process_type, template);
         }
 
         Ok(())

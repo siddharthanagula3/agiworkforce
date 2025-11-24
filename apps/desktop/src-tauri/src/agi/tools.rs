@@ -39,6 +39,8 @@ pub enum ToolCapability {
     DataAnalysis,
     NetworkOperation,
     SystemOperation,
+    SystemCommand,   // Added for security tests
+    NetworkAccess,   // Added for security tests
     Learning,
     Planning,
 }
