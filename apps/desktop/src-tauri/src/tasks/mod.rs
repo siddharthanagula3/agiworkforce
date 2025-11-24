@@ -248,13 +248,13 @@ impl TaskManager {
                 match result {
                     Ok(output) => {
                         task.complete(TaskResult::success(output));
-                        self.persistence.save(&task)?;
-                        self.emit_event("task:completed", &task)?;
+                        self.persistence.save(task)?;
+                        self.emit_event("task:completed", task)?;
                     }
                     Err(e) => {
                         task.fail(e.to_string());
-                        self.persistence.save(&task)?;
-                        self.emit_event("task:failed", &task)?;
+                        self.persistence.save(task)?;
+                        self.emit_event("task:failed", task)?;
                     }
                 }
             }

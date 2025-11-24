@@ -429,10 +429,10 @@ impl CodeGenerator {
                 file.file_type
             ));
             if file.tests.is_some() {
-                summary.push_str(&format!("  - Includes tests\n"));
+                summary.push_str(&"  - Includes tests\n".to_string());
             }
             if file.documentation.is_some() {
-                summary.push_str(&format!("  - Includes documentation\n"));
+                summary.push_str(&"  - Includes documentation\n".to_string());
             }
         }
 

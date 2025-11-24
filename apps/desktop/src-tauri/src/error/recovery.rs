@@ -4,6 +4,8 @@ use std::future::Future;
 use std::pin::Pin;
 use tracing::{debug, info, warn};
 
+type RecoveryHandler = dyn Fn(&AGIError) -> Pin<Box<dyn Future<Output = Result<RecoveryAction>> + Send>> + Send + Sync;
+
 /// Action to take after error recovery attempt
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RecoveryAction {
@@ -30,11 +32,7 @@ pub enum RecoveryAction {
 pub struct RecoveryStrategy {
     pub name: String,
     pub condition: Box<dyn Fn(&AGIError) -> bool + Send + Sync>,
-    pub handler: Box<
-        dyn Fn(&AGIError) -> Pin<Box<dyn Future<Output = Result<RecoveryAction>> + Send>>
-            + Send
-            + Sync,
-    >,
+    pub handler: Box<RecoveryHandler>,
 }
 
 impl RecoveryStrategy {

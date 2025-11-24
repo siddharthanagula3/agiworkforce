@@ -1,29 +1,29 @@
-import React, { useMemo, useCallback, memo } from 'react';
+import { emit } from '@tauri-apps/api/event';
+import 'katex/dist/katex.min.css';
+import {
+  CheckCircle2,
+  Copy,
+  Edit2,
+  FileText,
+  Globe2,
+  Image,
+  Loader2,
+  MoreVertical,
+  RotateCw,
+  Terminal as TerminalIcon,
+  Trash2,
+} from 'lucide-react';
+import React, { memo, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import {
-  Copy,
-  RotateCw,
-  Edit2,
-  Trash2,
-  MoreVertical,
-  Loader2,
-  CheckCircle2,
-  Terminal as TerminalIcon,
-  Globe2,
-  FileText,
-  Image,
-} from 'lucide-react';
-import { EnhancedMessage, useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { CodeBlock } from './Visualizations/CodeBlock';
-import { ReasoningAccordion } from './ReasoningAccordion';
-import { parseCitations } from './CitationBadge';
-import { StatusTrail } from './StatusTrail';
-import { emit } from '@tauri-apps/api/event';
 import { isTauri } from '../../lib/tauri-mock';
-import 'katex/dist/katex.min.css';
+import { EnhancedMessage, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { parseCitations } from './CitationBadge';
+import { ReasoningAccordion } from './ReasoningAccordion';
+import { StatusTrail } from './StatusTrail';
+import { CodeBlock } from './Visualizations/CodeBlock';
 
 export interface MessageBubbleProps {
   message: EnhancedMessage;
@@ -99,11 +99,16 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   const thinkingMatch = useMemo(() => {
     const explicit = message.metadata?.type === 'reasoning';
-    const regex = /<thinking>([\s\S]*?)<\/thinking>/i;
+    // Support both closed and open-ended (streaming) thinking tags
+    const regex = /<thinking>([\s\S]*?)(?:<\/thinking>|$)/i;
     const match = regex.exec(message.content);
-    if (match) {
-      return match[1]?.trim();
+
+    // If we found a match, but it's empty and we're not explicit, ignore it
+    // This prevents showing empty blocks if <thinking> is just starting
+    if (match && (match[1]?.trim() || message.metadata?.streaming)) {
+      return match[1]?.trim() || '';
     }
+
     return explicit ? message.content : null;
   }, [message]);
 
@@ -122,9 +127,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   >('idle');
 
   const renderToolCard = () => {
+    const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
     const statusIcon =
       toolStatus === 'success' || toolStatus === 'completed' || approvalState === 'approved' ? (
         <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+      ) : isExecuting ? (
+        <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
       ) : (
         <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
       );

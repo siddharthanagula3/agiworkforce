@@ -69,7 +69,7 @@ impl WorkflowSocial {
         rating: u8,
         comment: Option<String>,
     ) -> Result<(), String> {
-        if rating < 1 || rating > 5 {
+        if !(1..=5).contains(&rating) {
             return Err("Rating must be between 1 and 5".to_string());
         }
 

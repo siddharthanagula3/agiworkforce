@@ -167,7 +167,7 @@ impl KnowledgeBase {
         let embedding_bytes = chunk
             .embedding
             .as_ref()
-            .map(|e| bincode::serialize(e))
+            .map(bincode::serialize)
             .transpose()?;
 
         conn.execute(
@@ -291,7 +291,7 @@ impl KnowledgeBase {
         let embedding_bytes = memory
             .embedding
             .as_ref()
-            .map(|e| bincode::serialize(e))
+            .map(bincode::serialize)
             .transpose()?;
 
         conn.execute(

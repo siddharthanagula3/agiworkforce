@@ -96,7 +96,7 @@ impl ScheduledReportGenerator {
                     metric.cost_savings_usd
                 ));
             }
-            report.push_str("\n");
+            report.push('\n');
         }
 
         // Add tool usage

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod outcome_tracker_tests {
-    use crate::agi::outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
+    use crate::agi::outcome_tracker::{ProcessSuccessRate, TrackedOutcome};
     use serde_json::json;
 
     fn create_test_outcome(id: &str, achieved: bool, value: f64) -> TrackedOutcome {

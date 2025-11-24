@@ -138,7 +138,7 @@ impl ConflictResolver {
             report.push_str(&format!("Entity Type: {}\n", conflict.entity_type));
             report.push_str(&format!("Local Modified: {}\n", conflict.local_timestamp));
             report.push_str(&format!("Remote Modified: {}\n", conflict.remote_timestamp));
-            report.push_str("\n");
+            report.push('\n');
         }
 
         report

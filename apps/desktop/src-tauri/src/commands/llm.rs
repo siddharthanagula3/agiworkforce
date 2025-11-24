@@ -69,7 +69,7 @@ pub async fn llm_send_message(
 
     // Validate temperature if provided
     if let Some(temp) = request.temperature {
-        if temp < 0.0 || temp > 2.0 {
+        if !(0.0..=2.0).contains(&temp) {
             return Err(format!(
                 "Invalid temperature: {}. Must be between 0.0 and 2.0",
                 temp

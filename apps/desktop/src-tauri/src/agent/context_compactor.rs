@@ -226,7 +226,7 @@ impl ContextCompactor {
             for (i, req) in user_requests.iter().take(5).enumerate() {
                 summary.push_str(&format!("{}. {}\n", i + 1, req));
             }
-            summary.push_str("\n");
+            summary.push('\n');
         }
 
         if !code_blocks.is_empty() {

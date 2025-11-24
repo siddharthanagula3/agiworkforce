@@ -101,8 +101,7 @@ impl PresenceManager {
 
     fn persist_presence(&self, presence: &UserPresence) -> Result<(), rusqlite::Error> {
         let db = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                 format!("Failed to acquire database lock: {}", e),
             )))
         })?;

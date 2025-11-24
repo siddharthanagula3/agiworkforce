@@ -74,16 +74,18 @@ pub async fn publish_workflow_to_marketplace(
     let category_enum = WorkflowCategory::from_str(&category);
     let publisher = WorkflowPublisher::new(state.db.clone());
 
-    publisher.publish_workflow(
+    let request = crate::workflows::publishing::PublishWorkflowRequest {
         workflow,
-        &user_id,
-        &user_name,
-        category_enum,
+        publisher_id: user_id,
+        publisher_name: user_name,
+        category: category_enum,
         tags,
         estimated_time_saved,
         estimated_cost_saved,
         thumbnail_url,
-    )
+    };
+
+    publisher.publish_workflow(request)
 }
 
 /// Unpublish a workflow from the marketplace
