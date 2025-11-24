@@ -265,6 +265,29 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
+            id: "search_web".to_string(),
+            name: "Web Search".to_string(),
+            description: "Search the web for information".to_string(),
+            capabilities: vec![
+                ToolCapability::NetworkOperation,
+                ToolCapability::DataAnalysis,
+            ],
+            parameters: vec![ToolParameter {
+                name: "query".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Search query".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 2.0,
+            },
+            dependencies: vec!["browser_navigate".to_string()],
+        })?;
+
+        self.register_tool(Tool {
             id: "browser_click".to_string(),
             name: "Click Browser Element".to_string(),
             description: "Click an element in the browser using a CSS selector".to_string(),

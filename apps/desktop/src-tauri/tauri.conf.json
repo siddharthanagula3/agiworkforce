@@ -5,7 +5,7 @@
   "identifier": "com.agiworkforce.desktop",
   "build": {
     "beforeDevCommand": "pnpm run dev:vite",
-    "beforeBuildCommand": "pnpm run build:web",
+    "beforeBuildCommand": "cd ../.. && pnpm --filter @agiworkforce/desktop run build:web",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },

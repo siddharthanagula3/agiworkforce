@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useApiStore, type ApiRequest } from '../../stores/apiStore';
+import { FileJson, Globe, History, Key, Plus, Save, Send, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { useApiStore, type ApiRequest } from '../../stores/apiStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Send, Plus, Save, Trash2, History, Key, FileJson, Globe } from 'lucide-react';
-import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 
 interface APIWorkspaceProps {
@@ -50,6 +50,34 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
       clearError();
     }
   }, [error, clearError]);
+
+  const [authType, setAuthType] = useState<'none' | 'bearer' | 'basic' | 'apikey'>('none');
+  const [authToken, setAuthToken] = useState('');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authKey, setAuthKey] = useState('');
+  const [authValue, setAuthValue] = useState('');
+  const [authPlacement, setAuthPlacement] = useState<'header' | 'query'>('header');
+
+  // Update headers when auth changes
+  useEffect(() => {
+    const newHeaders = { ...currentRequest.headers };
+
+    // Clear existing auth headers
+    delete newHeaders['Authorization'];
+    if (authKey) delete newHeaders[authKey];
+
+    if (authType === 'bearer' && authToken) {
+      newHeaders['Authorization'] = `Bearer ${authToken}`;
+    } else if (authType === 'basic' && (authUsername || authPassword)) {
+      const basic = btoa(`${authUsername}:${authPassword}`);
+      newHeaders['Authorization'] = `Basic ${basic}`;
+    } else if (authType === 'apikey' && authKey && authValue && authPlacement === 'header') {
+      newHeaders[authKey] = authValue;
+    }
+
+    setCurrentRequest({ headers: newHeaders });
+  }, [authType, authToken, authUsername, authPassword, authKey, authValue, authPlacement]);
 
   const handleMethodChange = (method: ApiRequest['method']) => {
     setCurrentRequest({ method });
@@ -259,6 +287,10 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
                 <Key className="h-3 w-3 mr-1" />
                 Headers
               </TabsTrigger>
+              <TabsTrigger value="auth">
+                <Key className="h-3 w-3 mr-1" />
+                Auth
+              </TabsTrigger>
               <TabsTrigger value="saved">
                 <Save className="h-3 w-3 mr-1" />
                 Saved
@@ -312,6 +344,89 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
               </div>
             </TabsContent>
 
+            <TabsContent value="auth" className="flex-1 overflow-auto p-3 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Auth Type</label>
+                <select
+                  value={authType}
+                  onChange={(e) => setAuthType(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-border rounded-md bg-background"
+                >
+                  <option value="none">No Auth</option>
+                  <option value="bearer">Bearer Token</option>
+                  <option value="basic">Basic Auth</option>
+                  <option value="apikey">API Key</option>
+                </select>
+              </div>
+
+              {authType === 'bearer' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Token</label>
+                  <Input
+                    value={authToken}
+                    onChange={(e) => setAuthToken(e.target.value)}
+                    placeholder="Bearer token"
+                    type="password"
+                  />
+                </div>
+              )}
+
+              {authType === 'basic' && (
+                <div className="space-y-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Username</label>
+                    <Input
+                      value={authUsername}
+                      onChange={(e) => setAuthUsername(e.target.value)}
+                      placeholder="Username"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Password</label>
+                    <Input
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      placeholder="Password"
+                      type="password"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {authType === 'apikey' && (
+                <div className="space-y-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Key</label>
+                    <Input
+                      value={authKey}
+                      onChange={(e) => setAuthKey(e.target.value)}
+                      placeholder="Key (e.g. X-API-Key)"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Value</label>
+                    <Input
+                      value={authValue}
+                      onChange={(e) => setAuthValue(e.target.value)}
+                      placeholder="Value"
+                      type="password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Add To</label>
+                    <select
+                      value={authPlacement}
+                      onChange={(e) => setAuthPlacement(e.target.value as any)}
+                      className="w-full px-3 py-2 border border-border rounded-md bg-background"
+                    >
+                      <option value="header">Header</option>
+                      <option value="query">Query Params</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="saved" className="flex-1 overflow-auto p-3">
               {savedRequests.length > 0 ? (
                 <div className="space-y-1">
@@ -352,6 +467,7 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
           <Tabs defaultValue="response" className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="px-3">
               <TabsTrigger value="response">Response</TabsTrigger>
+              <TabsTrigger value="headers">Headers</TabsTrigger>
               <TabsTrigger value="history">
                 <History className="h-3 w-3 mr-1" />
                 History
@@ -388,26 +504,75 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
               )}
             </TabsContent>
 
+            <TabsContent value="headers" className="flex-1 overflow-auto p-3">
+              {response ? (
+                <div className="space-y-1">
+                  {Object.entries(response.headers || {}).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between p-2 border border-border rounded-md"
+                    >
+                      <div className="flex-1 font-mono text-sm">
+                        <span className="text-primary">{key}:</span> {value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <p className="text-sm">No response yet</p>
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="history" className="flex-1 overflow-auto p-3">
               {history.length > 0 ? (
                 <div className="space-y-2">
                   {history
                     .slice()
                     .reverse()
-                    .map((resp, i) => (
-                      <div key={i} className="p-3 border border-border rounded-md">
+                    .map((item, i) => (
+                      <div key={i} className="p-3 border border-border rounded-md group">
                         <div className="flex items-center justify-between mb-2">
-                          <span
-                            className={cn('font-medium text-sm', formatStatusColor(resp.status))}
-                          >
-                            {resp.status}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDuration(resp.duration_ms)}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'font-medium text-sm',
+                                formatStatusColor(item.response.status),
+                              )}
+                            >
+                              {item.response.status}
+                            </span>
+                            <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
+                              {item.request.method}
+                            </span>
+                            <span
+                              className="text-xs text-muted-foreground truncate max-w-[200px]"
+                              title={item.request.url}
+                            >
+                              {item.request.url}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDuration(item.response.duration_ms)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                              onClick={() => {
+                                setCurrentRequest(item.request);
+                                toast.success('Request loaded from history');
+                              }}
+                              title="Load request"
+                            >
+                              <Send className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3">
-                          {resp.body}
+                        <pre className="text-xs font-mono whitespace-pre-wrap line-clamp-3 text-muted-foreground">
+                          {item.response.body}
                         </pre>
                       </div>
                     ))}
