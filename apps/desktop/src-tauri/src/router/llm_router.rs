@@ -280,7 +280,7 @@ impl LLMRouter {
         preferences: &RouterPreferences,
     ) -> Vec<RouteCandidate> {
         let mut order = Vec::new();
-        let user_specified_provider = preferences.provider.is_some();
+        let _user_specified_provider = preferences.provider.is_some();
 
         if let Some(preferred) = preferences.provider {
             if self.has_provider(preferred) {
@@ -293,21 +293,22 @@ impl LLMRouter {
                     reason: "user-preference",
                 });
             }
+            // If user specified a provider, we strictly respect it and return only that candidate.
+            // We do not want to fallback to other providers or strategies.
+            return order;
         }
 
-        if !user_specified_provider {
-            if let Some(context) = &preferences.context {
-                let suggestion = self.suggest_for_context(context);
-                if !order
-                    .iter()
-                    .any(|existing| existing.provider == suggestion.provider)
-                {
-                    order.push(RouteCandidate {
-                        provider: suggestion.provider,
-                        model: suggestion.model,
-                        reason: "context-signal",
-                    });
-                }
+        if let Some(context) = &preferences.context {
+            let suggestion = self.suggest_for_context(context);
+            if !order
+                .iter()
+                .any(|existing| existing.provider == suggestion.provider)
+            {
+                order.push(RouteCandidate {
+                    provider: suggestion.provider,
+                    model: suggestion.model,
+                    reason: "context-signal",
+                });
             }
         }
 
@@ -326,40 +327,38 @@ impl LLMRouter {
             }
         }
 
-        if !user_specified_provider {
-            // Ensure default provider is present
-            if !order.iter().any(|c| c.provider == self.default_provider)
-                && self.has_provider(self.default_provider)
-            {
-                order.push(RouteCandidate {
-                    provider: self.default_provider,
-                    model: self.default_model(self.default_provider, task_type),
-                    reason: "default-provider",
-                });
-            }
+        // Ensure default provider is present
+        if !order.iter().any(|c| c.provider == self.default_provider)
+            && self.has_provider(self.default_provider)
+        {
+            order.push(RouteCandidate {
+                provider: self.default_provider,
+                model: self.default_model(self.default_provider, task_type),
+                reason: "default-provider",
+            });
+        }
 
-            // Add any remaining configured providers as fallbacks
-            for provider in [
-                Provider::OpenAI,
-                Provider::Anthropic,
-                Provider::Google,
-                Provider::Ollama,
-                Provider::XAI,
-                Provider::DeepSeek,
-                Provider::Qwen,
-                Provider::Mistral,
-                Provider::Moonshot,
-            ] {
-                if order.iter().any(|c| c.provider == provider) {
-                    continue;
-                }
-                if self.has_provider(provider) {
-                    order.push(RouteCandidate {
-                        provider,
-                        model: self.default_model(provider, task_type),
-                        reason: "fallback",
-                    });
-                }
+        // Add any remaining configured providers as fallbacks
+        for provider in [
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::Google,
+            Provider::Ollama,
+            Provider::XAI,
+            Provider::DeepSeek,
+            Provider::Qwen,
+            Provider::Mistral,
+            Provider::Moonshot,
+        ] {
+            if order.iter().any(|c| c.provider == provider) {
+                continue;
+            }
+            if self.has_provider(provider) {
+                order.push(RouteCandidate {
+                    provider,
+                    model: self.default_model(provider, task_type),
+                    reason: "fallback",
+                });
             }
         }
 

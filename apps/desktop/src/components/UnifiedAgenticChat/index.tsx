@@ -1,26 +1,26 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+﻿import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Layers, Square } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
-import { ChatInputArea, type SendOptions } from './ChatInputArea';
-import { AppLayout } from './AppLayout';
-import { ApprovalModal } from './ApprovalModal';
-import { Button } from '../ui/Button';
-import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
+import { sha256 } from '../../lib/hash';
+import { deriveTaskMetadata } from '../../lib/taskMetadata';
+import { isTauri } from '../../lib/tauri-mock';
+import { useCostStore } from '../../stores/costStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
-import { useTokenBudgetStore, selectBudget } from '../../stores/tokenBudgetStore';
-import { useCostStore } from '../../stores/costStore';
-import { sha256 } from '../../lib/hash';
-import { isTauri } from '../../lib/tauri-mock';
-import { deriveTaskMetadata } from '../../lib/taskMetadata';
-import { MediaLab } from './MediaLab';
+import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
+import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
+import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
+import { Button } from '../ui/Button';
+import { AppLayout } from './AppLayout';
+import { ApprovalModal } from './ApprovalModal';
+import { BudgetAlertsPanel } from './BudgetAlertsPanel';
+import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { type DynamicPanelType } from './DynamicSidecar';
-import { BudgetAlertsPanel } from './BudgetAlertsPanel';
+import { MediaLab } from './MediaLab';
 
 export const UnifiedAgenticChat: React.FC<{
   className?: string;
@@ -263,13 +263,13 @@ export const UnifiedAgenticChat: React.FC<{
 
     const enrichedOptions: SendOptions = {
       ...options,
-      providerId:
-        options.providerId ??
+      providerOverride:
+        options.providerOverride ??
         routingOverrides.providerId ??
         providerForMessage ??
         llmConfig.defaultProvider,
-      modelId:
-        options.modelId ??
+      modelOverride:
+        options.modelOverride ??
         routingOverrides.modelId ??
         modelForMessage ??
         llmConfig.defaultModels[llmConfig.defaultProvider] ??
@@ -294,13 +294,17 @@ export const UnifiedAgenticChat: React.FC<{
     const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
 
     // Ensure provider is configured with API key before sending
-    if (isTauri && enrichedOptions.providerId && enrichedOptions.providerId !== 'ollama') {
+    if (
+      isTauri &&
+      enrichedOptions.providerOverride &&
+      enrichedOptions.providerOverride !== 'ollama'
+    ) {
       try {
         const { getAPIKey } = useSettingsStore.getState();
-        const apiKey = await getAPIKey(enrichedOptions.providerId as Provider);
+        const apiKey = await getAPIKey(enrichedOptions.providerOverride as Provider);
         if (apiKey && apiKey.trim()) {
           await invoke('llm_configure_provider', {
-            provider: enrichedOptions.providerId,
+            provider: enrichedOptions.providerOverride,
             apiKey: apiKey.trim(),
             baseUrl: null,
           });
@@ -328,8 +332,8 @@ export const UnifiedAgenticChat: React.FC<{
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
-            providerOverride: enrichedOptions.providerId,
-            modelOverride: enrichedOptions.modelId,
+            providerOverride: enrichedOptions.providerOverride,
+            modelOverride: enrichedOptions.modelOverride,
             focusMode: enrichedOptions.focusMode,
             stream: true, // Enable streaming
             enableTools: true,

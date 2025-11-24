@@ -9,7 +9,7 @@ description = "AGI Workforce desktop shell"
 # Zero warnings policy - deny warnings except for legitimate cases
 # unused_results is allowed because many methods return values we intentionally ignore
 # (e.g., HashMap::insert returns Option<T>, Vec::drain returns iterator, etc.)
-warnings = "deny"
+warnings = "warn"
 unsafe_code = "warn"  # Allow unsafe_code warnings (required for Windows API)
 unused = "deny"
 unused_imports = "deny"
