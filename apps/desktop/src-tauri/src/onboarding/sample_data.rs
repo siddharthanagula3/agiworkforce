@@ -582,7 +582,8 @@ impl SampleInvoice {
     pub fn generate_batch(count: usize) -> Vec<Self> {
         let mut invoices = Vec::new();
 
-        let vendors = [(
+        let vendors = [
+            (
                 "Acme Office Supplies",
                 vec![
                     ("Copy Paper (500 sheets)", 10, 12.99),
@@ -620,7 +621,8 @@ impl SampleInvoice {
                     ("Contract Review", 2, 350.00),
                     ("Consultation (hourly)", 5, 200.00),
                 ],
-            )];
+            ),
+        ];
 
         for i in 0..count {
             let (vendor_name, items_template) = &vendors[i % vendors.len()];

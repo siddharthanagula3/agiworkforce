@@ -125,8 +125,8 @@ impl WorkflowPublisher {
             .map_err(|e| format!("Failed to serialize workflow: {}", e))?;
 
         // Serialize tags
-        let tags_json =
-            serde_json::to_string(&request.tags).map_err(|e| format!("Failed to serialize tags: {}", e))?;
+        let tags_json = serde_json::to_string(&request.tags)
+            .map_err(|e| format!("Failed to serialize tags: {}", e))?;
 
         conn.execute(
             "INSERT INTO published_workflows (
