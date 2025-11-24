@@ -28,26 +28,10 @@ const DesktopShell = () => {
           <Sidebar className="shrink-0" onOpenSettings={() => setSettingsPanelOpen(true)} />
         )}
         <div className="flex flex-1 overflow-hidden min-w-0">
-          {/* Agent Chat (Left) */}
-          {agentChatVisible && agentChatPosition === 'left' && (
-            <>
-              <AgentChatInterface className="w-96 shrink-0" position="left" />
-              <div className="w-px bg-border shrink-0" />
-            </>
-          )}
-
-          {/* Main Chat Interface */}
+          {/* Unified Chat Interface - Agent status integrated */}
           <div className="flex-1 overflow-hidden min-w-0">
-            <ChatInterface className="h-full" />
+            <UnifiedAgenticChat className="h-full" />
           </div>
-
-          {/* Agent Chat (Right) */}
-          {agentChatVisible && agentChatPosition === 'right' && (
-            <>
-              <div className="w-px bg-border shrink-0" />
-              <AgentChatInterface className="w-96 shrink-0" position="right" />
-            </>
-          )}
 
           {/* Toggle Button */}
           {!agentChatVisible && (
@@ -444,6 +428,7 @@ pub async fn execute_goal(app: AppHandle, goal: Goal) -> Result<(), Error> {
 ## Step 4: Test the Integration
 
 1. **Start the app in dev mode:**
+
    ```bash
    pnpm --filter @agiworkforce/desktop dev
    ```
@@ -522,16 +507,19 @@ export const useExecutionStore = create<ExecutionState>()(
 ## Troubleshooting
 
 ### Dashboard not appearing
+
 1. Check if ExecutionDashboard is imported in App.tsx
 2. Verify component is rendered in the return statement
 3. Check browser console for errors
 
 ### Events not working
+
 1. Verify Rust backend is emitting events correctly
 2. Check event payload types match TypeScript interfaces
 3. Open browser DevTools and check console for event listener errors
 
 ### Styling issues
+
 1. Ensure Tailwind CSS is configured correctly
 2. Check for z-index conflicts with other components
 3. Verify theme colors are defined in tailwind.config.js

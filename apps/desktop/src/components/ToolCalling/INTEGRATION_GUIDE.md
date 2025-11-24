@@ -212,7 +212,7 @@ if (typeof window !== 'undefined') {
 Add these action handlers to your chat store:
 
 ```typescript
-interface ChatState {
+interface UnifiedChatState {
   // ... existing state
   cancelToolExecution: (toolCallId: string) => Promise<void>;
   approveToolExecution: (toolCallId: string) => Promise<void>;
