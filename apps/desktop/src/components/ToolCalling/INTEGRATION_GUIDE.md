@@ -27,14 +27,14 @@ import { MessageWithTools } from './Chat/MessageWithTools';
   onApproveTool={handleApproveTool}
   onRejectTool={handleRejectTool}
   onRetryTool={handleRetryTool}
-/>
+/>;
 ```
 
 ## Chat Store Integration
 
 ### Step 1: Add Tool Event Listeners
 
-Update `apps/desktop/src/stores/chatStore.ts` to listen for tool execution events:
+Update `apps/desktop/src/stores/unifiedChatStore.ts` to listen for tool execution events:
 
 ```typescript
 import { listen } from '@tauri-apps/api/event';
@@ -51,10 +51,10 @@ async function initializeToolListeners() {
   try {
     // Tool execution started
     await listen<ToolCallStartPayload>('tool:call:start', ({ payload }) => {
-      useChatStore.setState((state) => {
+      useUnifiedChatStore.setState((state) => {
         // Find the message that initiated this tool call
         const messageIndex = state.messages.findIndex(
-          (msg) => msg.role === 'assistant' && msg.streaming
+          (msg) => msg.role === 'assistant' && msg.streaming,
         );
 
         if (messageIndex !== -1) {
@@ -85,15 +85,15 @@ async function initializeToolListeners() {
 
     // Tool execution progress
     await listen<ToolCallProgressPayload>('tool:call:progress', ({ payload }) => {
-      useChatStore.setState((state) => {
-        const messageIndex = state.messages.findIndex(
-          (msg) => msg.tool_calls?.some((tc) => tc.id === payload.tool_call_id)
+      useUnifiedChatStore.setState((state) => {
+        const messageIndex = state.messages.findIndex((msg) =>
+          msg.tool_calls?.some((tc) => tc.id === payload.tool_call_id),
         );
 
         if (messageIndex !== -1) {
           const message = state.messages[messageIndex];
           const toolCallIndex = message.tool_calls!.findIndex(
-            (tc) => tc.id === payload.tool_call_id
+            (tc) => tc.id === payload.tool_call_id,
           );
 
           if (toolCallIndex !== -1) {
@@ -114,15 +114,15 @@ async function initializeToolListeners() {
 
     // Tool execution completed
     await listen<ToolCallCompletePayload>('tool:call:complete', ({ payload }) => {
-      useChatStore.setState((state) => {
-        const messageIndex = state.messages.findIndex(
-          (msg) => msg.tool_calls?.some((tc) => tc.id === payload.tool_call_id)
+      useUnifiedChatStore.setState((state) => {
+        const messageIndex = state.messages.findIndex((msg) =>
+          msg.tool_calls?.some((tc) => tc.id === payload.tool_call_id),
         );
 
         if (messageIndex !== -1) {
           const message = state.messages[messageIndex];
           const toolCallIndex = message.tool_calls!.findIndex(
-            (tc) => tc.id === payload.tool_call_id
+            (tc) => tc.id === payload.tool_call_id,
           );
 
           if (toolCallIndex !== -1) {
@@ -151,15 +151,15 @@ async function initializeToolListeners() {
 
     // Tool execution error
     await listen<ToolCallErrorPayload>('tool:call:error', ({ payload }) => {
-      useChatStore.setState((state) => {
-        const messageIndex = state.messages.findIndex(
-          (msg) => msg.tool_calls?.some((tc) => tc.id === payload.tool_call_id)
+      useUnifiedChatStore.setState((state) => {
+        const messageIndex = state.messages.findIndex((msg) =>
+          msg.tool_calls?.some((tc) => tc.id === payload.tool_call_id),
         );
 
         if (messageIndex !== -1) {
           const message = state.messages[messageIndex];
           const toolCallIndex = message.tool_calls!.findIndex(
-            (tc) => tc.id === payload.tool_call_id
+            (tc) => tc.id === payload.tool_call_id,
           );
 
           if (toolCallIndex !== -1) {
@@ -193,9 +193,9 @@ async function initializeToolListeners() {
       });
     });
 
-    console.log('[chatStore] Tool execution listeners initialized');
+    console.log('[unifiedChatStore] Tool execution listeners initialized');
   } catch (error) {
-    console.error('[chatStore] Failed to initialize tool listeners:', error);
+    console.error('[unifiedChatStore] Failed to initialize tool listeners:', error);
   }
 }
 
@@ -221,7 +221,7 @@ interface ChatState {
 }
 
 // In your store implementation
-export const useChatStore = create<ChatState>()(
+export const useUnifiedChatStore = create<UnifiedChatState>()(
   persist(
     immer((set, get) => ({
       // ... existing state and actions
@@ -231,15 +231,13 @@ export const useChatStore = create<ChatState>()(
           await invoke('cancel_tool_execution', { toolCallId });
 
           set((state) => {
-            const messageIndex = state.messages.findIndex(
-              (msg) => msg.tool_calls?.some((tc) => tc.id === toolCallId)
+            const messageIndex = state.messages.findIndex((msg) =>
+              msg.tool_calls?.some((tc) => tc.id === toolCallId),
             );
 
             if (messageIndex !== -1) {
               const message = state.messages[messageIndex];
-              const toolCallIndex = message.tool_calls!.findIndex(
-                (tc) => tc.id === toolCallId
-              );
+              const toolCallIndex = message.tool_calls!.findIndex((tc) => tc.id === toolCallId);
 
               if (toolCallIndex !== -1) {
                 const updatedToolCalls = [...message.tool_calls!];
@@ -267,15 +265,13 @@ export const useChatStore = create<ChatState>()(
           await invoke('approve_tool_execution', { toolCallId });
 
           set((state) => {
-            const messageIndex = state.messages.findIndex(
-              (msg) => msg.tool_calls?.some((tc) => tc.id === toolCallId)
+            const messageIndex = state.messages.findIndex((msg) =>
+              msg.tool_calls?.some((tc) => tc.id === toolCallId),
             );
 
             if (messageIndex !== -1) {
               const message = state.messages[messageIndex];
-              const toolCallIndex = message.tool_calls!.findIndex(
-                (tc) => tc.id === toolCallId
-              );
+              const toolCallIndex = message.tool_calls!.findIndex((tc) => tc.id === toolCallId);
 
               if (toolCallIndex !== -1) {
                 const updatedToolCalls = [...message.tool_calls!];
@@ -304,15 +300,13 @@ export const useChatStore = create<ChatState>()(
           await invoke('reject_tool_execution', { toolCallId });
 
           set((state) => {
-            const messageIndex = state.messages.findIndex(
-              (msg) => msg.tool_calls?.some((tc) => tc.id === toolCallId)
+            const messageIndex = state.messages.findIndex((msg) =>
+              msg.tool_calls?.some((tc) => tc.id === toolCallId),
             );
 
             if (messageIndex !== -1) {
               const message = state.messages[messageIndex];
-              const toolCallIndex = message.tool_calls!.findIndex(
-                (tc) => tc.id === toolCallId
-              );
+              const toolCallIndex = message.tool_calls!.findIndex((tc) => tc.id === toolCallId);
 
               if (toolCallIndex !== -1) {
                 const updatedToolCalls = [...message.tool_calls!];
@@ -341,8 +335,8 @@ export const useChatStore = create<ChatState>()(
         try {
           // Get the original tool call
           const state = get();
-          const message = state.messages.find(
-            (msg) => msg.tool_calls?.some((tc) => tc.id === toolCallId)
+          const message = state.messages.find((msg) =>
+            msg.tool_calls?.some((tc) => tc.id === toolCallId),
           );
 
           if (!message) return;
@@ -386,7 +380,7 @@ import { MessageWithTools } from './MessageWithTools';
   onApproveTool={handleApproveTool}
   onRejectTool={handleRejectTool}
   onRetryTool={handleRetryTool}
-/>
+/>;
 ```
 
 ### Option 2: Extend Existing Message Component
@@ -396,42 +390,54 @@ Add tool calling sections to your existing Message component:
 ```tsx
 // In your existing Message.tsx, after the message content:
 
-{/* Tool Execution Workflow */}
-{message.workflow && (
-  <div className="mt-3">
-    <ToolExecutionTimeline
-      workflow={message.workflow}
-      onCancelTool={onCancelTool}
-      onApproveTool={onApproveTool}
-      onRejectTool={onRejectTool}
-      onRetryTool={onRetryTool}
-    />
-  </div>
-)}
-
-{/* Individual Tool Calls */}
-{!message.workflow && message.tool_calls && message.tool_calls.length > 0 && (
-  <div className="space-y-2 mt-3">
-    {message.tool_calls.map((toolCall) => (
-      <ToolCallCard
-        key={toolCall.id}
-        toolCall={toolCall}
-        onCancel={onCancelTool}
-        onApprove={onApproveTool}
-        onReject={onRejectTool}
+{
+  /* Tool Execution Workflow */
+}
+{
+  message.workflow && (
+    <div className="mt-3">
+      <ToolExecutionTimeline
+        workflow={message.workflow}
+        onCancelTool={onCancelTool}
+        onApproveTool={onApproveTool}
+        onRejectTool={onRejectTool}
+        onRetryTool={onRetryTool}
       />
-    ))}
-  </div>
-)}
+    </div>
+  );
+}
 
-{/* Tool Results */}
-{!message.workflow && message.tool_results && message.tool_results.length > 0 && (
-  <div className="space-y-2 mt-3">
-    {message.tool_results.map((result) => (
-      <ToolResultCard key={result.tool_call_id} result={result} />
-    ))}
-  </div>
-)}
+{
+  /* Individual Tool Calls */
+}
+{
+  !message.workflow && message.tool_calls && message.tool_calls.length > 0 && (
+    <div className="space-y-2 mt-3">
+      {message.tool_calls.map((toolCall) => (
+        <ToolCallCard
+          key={toolCall.id}
+          toolCall={toolCall}
+          onCancel={onCancelTool}
+          onApprove={onApproveTool}
+          onReject={onRejectTool}
+        />
+      ))}
+    </div>
+  );
+}
+
+{
+  /* Tool Results */
+}
+{
+  !message.workflow && message.tool_results && message.tool_results.length > 0 && (
+    <div className="space-y-2 mt-3">
+      {message.tool_results.map((result) => (
+        <ToolResultCard key={result.tool_call_id} result={result} />
+      ))}
+    </div>
+  );
+}
 ```
 
 ## Tauri Backend Events
@@ -604,7 +610,7 @@ pub async fn reject_tool_execution(
 ### Frontend Approval Handler
 
 ```typescript
-// In chatStore.ts or a dedicated approval handler
+// In unifiedChatStore.ts or a dedicated approval handler
 import { ToolApprovalDialog } from '../components/ToolCalling';
 
 // Listen for approval requests
@@ -695,11 +701,13 @@ test('tool execution workflow', async ({ page }) => {
 ### Tool Calls Not Appearing
 
 1. **Check event listeners are initialized:**
+
    ```typescript
    console.log('[DEBUG] Tool listeners initialized?');
    ```
 
 2. **Verify Tauri events are being emitted:**
+
    ```rust
    println!("[DEBUG] Emitting tool:call:start for {}", tool_call_id);
    ```
@@ -739,6 +747,7 @@ test('tool execution workflow', async ({ page }) => {
 ## Support
 
 For issues or questions:
+
 - Check the [main README](./README.md) for component documentation
 - Review example usage in [MessageWithTools.tsx](../Chat/MessageWithTools.tsx)
 - Examine type definitions in [toolCalling.ts](../../types/toolCalling.ts)
