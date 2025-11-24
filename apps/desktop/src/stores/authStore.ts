@@ -11,6 +11,7 @@ interface User {
   email: string;
   name?: string;
   avatar?: string;
+  role?: string;
 }
 
 interface AuthState {
@@ -66,4 +67,3 @@ if (typeof window !== 'undefined') {
     });
   }
 }
-
