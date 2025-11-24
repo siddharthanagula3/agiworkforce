@@ -144,7 +144,8 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
       search: { provider: 'openai', model: 'gpt-5.1' },
       code: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
       docs: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
-      chat: { provider: 'openai', model: 'gpt-5.1' },
+      // Default conversational tasks should respect the visible Claude picker
+      chat: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
       vision: { provider: 'google', model: 'gemini-3-pro' },
       image: { provider: 'google', model: 'imagen-3' },
       video: { provider: 'google', model: 'veo-3.1' },
@@ -196,7 +197,7 @@ export const useSettingsStore = create<SettingsState>()(
         try {
           // Trim the key to remove any whitespace
           const trimmedKey = key.trim();
-          
+
           // Save to keyring via backend
           await invoke('settings_save_api_key', { provider, key: trimmedKey });
 
@@ -258,9 +259,11 @@ export const useSettingsStore = create<SettingsState>()(
           // Send a simple test message with a valid model for the provider
           const defaultModel = get().llmConfig.defaultModels[provider];
           if (!defaultModel || !defaultModel.trim()) {
-            throw new Error(`No default model configured for provider: ${provider}. Please set a default model in settings.`);
+            throw new Error(
+              `No default model configured for provider: ${provider}. Please set a default model in settings.`,
+            );
           }
-          
+
           await invoke('llm_send_message', {
             request: {
               messages: [{ role: 'user', content: 'Hi' }],
