@@ -698,10 +698,11 @@ impl ToolExecutor {
                     .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing query parameter"))?;
-                
+
                 // Construct search URL (using DuckDuckGo for privacy)
-                let search_url = format!("https://duckduckgo.com/?q={}", urlencoding::encode(query));
-                
+                let search_url =
+                    format!("https://duckduckgo.com/?q={}", urlencoding::encode(query));
+
                 if let Some(ref app) = self.app_handle {
                     use crate::commands::BrowserStateWrapper;
                     use tauri::Manager;
@@ -711,28 +712,26 @@ impl ToolExecutor {
                     let tab_manager = browser_guard.tab_manager.lock().await;
 
                     match tab_manager.open_tab(&search_url).await {
-                        Ok(tab_id) => {
-                             Ok(ToolResult {
-                                success: true,
-                                data: json!({ 
-                                    "success": true, 
-                                    "message": "Opened search results in browser",
-                                    "url": search_url,
-                                    "tab_id": tab_id 
-                                }),
-                                error: None,
-                                metadata: HashMap::from([("query".to_string(), json!(query))]),
-                            })
-                        },
+                        Ok(tab_id) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "success": true,
+                                "message": "Opened search results in browser",
+                                "url": search_url,
+                                "tab_id": tab_id
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("query".to_string(), json!(query))]),
+                        }),
                         Err(e) => Ok(ToolResult {
                             success: false,
                             data: json!(null),
                             error: Some(format!("Failed to open search tab: {}", e)),
                             metadata: HashMap::new(),
-                        })
+                        }),
                     }
                 } else {
-                     Ok(ToolResult {
+                    Ok(ToolResult {
                         success: false,
                         data: json!(null),
                         error: Some("App handle not available for web search".to_string()),
@@ -1571,7 +1570,7 @@ mod tests {
     #[tokio::test]
     async fn test_tool_execution_file_write() {
         use tempfile::tempdir;
-        
+
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test_write.txt");
         let path_str = file_path.to_str().unwrap();
@@ -1582,48 +1581,51 @@ mod tests {
             arguments: serde_json::json!({
                 "path": path_str,
                 "content": "Written by test"
-            }).to_string(),
+            })
+            .to_string(),
         };
 
-        // We can't easily test the full execution without AppHandle, 
+        // We can't easily test the full execution without AppHandle,
         // but we can verify the arguments are parsed correctly in a real execution flow
-        // if we had a ToolExecutor instance. 
+        // if we had a ToolExecutor instance.
         // Since ToolExecutor::new() doesn't require AppHandle, we can try it.
-        
+
         let registry = std::sync::Arc::new(ToolRegistry::new().unwrap());
         // Register tools manually for the test since we don't have the full app setup
-        registry.register_tool(Tool {
-            id: "file_write".to_string(),
-            name: "Write File".to_string(),
-            description: "Write content to a file".to_string(),
-            capabilities: vec![ToolCapability::FileWrite],
-            parameters: vec![
-                ToolParameter {
-                    name: "path".to_string(),
-                    parameter_type: ParameterType::FilePath,
-                    required: true,
-                    description: "Path".to_string(),
-                    default: None,
+        registry
+            .register_tool(Tool {
+                id: "file_write".to_string(),
+                name: "Write File".to_string(),
+                description: "Write content to a file".to_string(),
+                capabilities: vec![ToolCapability::FileWrite],
+                parameters: vec![
+                    ToolParameter {
+                        name: "path".to_string(),
+                        parameter_type: ParameterType::FilePath,
+                        required: true,
+                        description: "Path".to_string(),
+                        default: None,
+                    },
+                    ToolParameter {
+                        name: "content".to_string(),
+                        parameter_type: ParameterType::String,
+                        required: true,
+                        description: "Content".to_string(),
+                        default: None,
+                    },
+                ],
+                estimated_resources: ResourceUsage {
+                    cpu_percent: 1.0,
+                    memory_mb: 10,
+                    network_mb: 0.0,
                 },
-                ToolParameter {
-                    name: "content".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Content".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 1.0,
-                memory_mb: 10,
-                network_mb: 0.0,
-            },
-            dependencies: vec![],
-        }).unwrap();
+                dependencies: vec![],
+            })
+            .unwrap();
 
         let executor = ToolExecutor::new(registry);
         let result = executor.execute_tool_call(&tool_call).await.unwrap();
-        
+
         assert!(result.success);
         let content = std::fs::read_to_string(path_str).unwrap();
         assert_eq!(content, "Written by test");
@@ -1636,11 +1638,15 @@ mod tests {
             name: "search_web".to_string(),
             arguments: serde_json::json!({
                 "query": "rust tauri"
-            }).to_string(),
+            })
+            .to_string(),
         };
 
         let args: HashMap<String, serde_json::Value> =
             serde_json::from_str(&tool_call.arguments).unwrap();
-        assert_eq!(args.get("query").and_then(|v| v.as_str()).unwrap(), "rust tauri");
+        assert_eq!(
+            args.get("query").and_then(|v| v.as_str()).unwrap(),
+            "rust tauri"
+        );
     }
 }
