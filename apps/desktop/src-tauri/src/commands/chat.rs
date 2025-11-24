@@ -1066,9 +1066,26 @@ pub async fn chat_send_message(
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
     settings_state: State<'_, crate::commands::settings::SettingsState>,
+    billing_state: State<'_, crate::billing::BillingStateWrapper>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
+    // Check billing for cloud providers
+    let is_cloud = match request.provider.as_deref() {
+        Some("ollama") => false,
+        _ => true, // Default to cloud if not specified or not ollama
+    };
+
+    if is_cloud {
+        #[cfg(feature = "billing")]
+        {
+            let billing = billing_state.0.lock().map_err(|e| e.to_string())?;
+            if !billing.check_cloud_access() {
+                 return Err("Cloud model access requires a Pro or Max subscription. Please upgrade your plan or use a local model (Ollama).".to_string());
+            }
+        }
+    }
+
     let stream_mode = request.stream.unwrap_or(false);
 
     // Use separate streaming path if requested

@@ -112,7 +112,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
       try {
         const entries = await invoke<DirEntry[]>('dir_list', { path });
         set({
-          currentPath: path,
+          currentPath: path as string,
           entries,
           loading: false,
           historyIndex: newIndex,
@@ -136,7 +136,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
       try {
         const entries = await invoke<DirEntry[]>('dir_list', { path });
         set({
-          currentPath: path,
+          currentPath: path as string,
           entries,
           loading: false,
           historyIndex: newIndex,

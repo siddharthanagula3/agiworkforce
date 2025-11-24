@@ -129,6 +129,14 @@ impl LLMProvider for OllamaProvider {
             None
         };
 
+        // Health Check: Fast timeout check to see if Ollama is up
+        if self.client.get(format!("{}/api/tags", self.base_url))
+            .timeout(std::time::Duration::from_secs(1))
+            .send().await.is_err() 
+        {
+            return Err("Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal.".into());
+        }
+
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
             messages: request
