@@ -1,7 +1,6 @@
-﻿import { invoke } from '@/lib/tauri-mock';
-import { listen } from '@tauri-apps/api/event';
+﻿import { invoke, listen } from '@/lib/tauri-mock';
 import { Layers, Square } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { sha256 } from '../../lib/hash';
@@ -19,8 +18,6 @@ import { ApprovalModal } from './ApprovalModal';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
-import { type DynamicPanelType } from './DynamicSidecar';
-import { FloatingModelSelector } from './FloatingModelSelector';
 import { MediaLab } from './MediaLab';
 
 export const UnifiedAgenticChat: React.FC<{
@@ -42,6 +39,7 @@ export const UnifiedAgenticChat: React.FC<{
   const openSidecarStore = useUnifiedChatStore((state) => state.openSidecar);
   const addMessage = useUnifiedChatStore((state) => state.addMessage);
   const updateMessage = useUnifiedChatStore((state) => state.updateMessage);
+  const setIsLoading = useUnifiedChatStore((state) => state.setIsLoading);
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
@@ -58,30 +56,12 @@ export const UnifiedAgenticChat: React.FC<{
 
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [mediaLabOpen, setMediaLabOpen] = useState(false);
-  
+
   // AbortController ref for cancelling ongoing requests
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const _tokenStats = useMemo(() => {
-    let input = 0;
-    let output = 0;
-    let cost = 0;
-
-    messages.forEach((msg) => {
-      const estimatedTokens =
-        msg.metadata?.tokenCount ?? Math.ceil((msg.content?.length ?? 0) * 0.25);
-      if (msg.role === 'assistant') {
-        output += estimatedTokens;
-        cost += msg.metadata?.cost ?? 0;
-      } else if (msg.role === 'user') {
-        input += estimatedTokens;
-      }
-    });
-
-    return { input, output, cost };
-  }, [messages]);
-
-  void _tokenStats;
+  // Token stats computation removed - was computed but never used (Bug #11)
+  // TODO: Re-enable when token stats display is implemented in the UI
 
   useAgenticEvents();
 
@@ -96,8 +76,9 @@ export const UnifiedAgenticChat: React.FC<{
       listen<{ conversation_id: number; message_id: number; created_at: string }>(
         'chat:stream-start',
         ({ payload }) => {
-          // Stream started - message is already created
           console.log('[UnifiedAgenticChat] Stream started:', payload);
+          // Clear loading state when streaming actually starts
+          useUnifiedChatStore.getState().setIsLoading(false);
         },
       ),
     );
@@ -107,25 +88,32 @@ export const UnifiedAgenticChat: React.FC<{
       listen<{ conversation_id: number; message_id: number; delta: string; content: string }>(
         'chat:stream-chunk',
         ({ payload }) => {
-          // Backend uses numeric IDs, but we use UUIDs
-          // Find the currently streaming message and update it
-          const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
+          // Get the current streaming message ID from the store
+          const state = useUnifiedChatStore.getState();
+          const currentStreamingId = state.currentStreamingMessageId;
+
           if (currentStreamingId) {
-            useUnifiedChatStore.getState().updateMessage(currentStreamingId, {
+            // Primary path: update the message we're tracking
+            state.updateMessage(currentStreamingId, {
               content: payload.content,
               metadata: { streaming: true },
             });
           } else {
-            // Fallback: find the last assistant message that's streaming
-            const allMessages = useUnifiedChatStore.getState().messages;
-            const lastStreaming = allMessages
+            // Fallback: If we somehow lost the ID, find the last streaming assistant message
+            // This should rarely happen, but provides robustness
+            console.warn(
+              '[UnifiedAgenticChat] Stream chunk received but no currentStreamingMessageId set',
+            );
+            const lastStreaming = state.messages
               .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
               .pop();
             if (lastStreaming) {
-              useUnifiedChatStore.getState().updateMessage(lastStreaming.id, {
+              state.updateMessage(lastStreaming.id, {
                 content: payload.content,
                 metadata: { streaming: true },
               });
+            } else {
+              console.error('[UnifiedAgenticChat] No streaming message found to update');
             }
           }
         },
@@ -137,13 +125,18 @@ export const UnifiedAgenticChat: React.FC<{
       listen<{ conversation_id: number; message_id: number }>(
         'chat:stream-end',
         ({ payload: _payload }) => {
-          const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
+          const state = useUnifiedChatStore.getState();
+          const currentStreamingId = state.currentStreamingMessageId;
+
           if (currentStreamingId) {
-            useUnifiedChatStore.getState().updateMessage(currentStreamingId, {
+            state.updateMessage(currentStreamingId, {
               metadata: { streaming: false },
             });
           }
-          useUnifiedChatStore.getState().setStreamingMessage(null);
+
+          // Clear streaming state and ensure loading is also cleared
+          state.setIsLoading(false);
+          state.setStreamingMessage(null);
         },
       ),
     );
@@ -191,6 +184,20 @@ export const UnifiedAgenticChat: React.FC<{
   }, [loadOverview]);
 
   const handleSendMessage = async (content: string, options: SendOptions) => {
+    // Handle edit-and-resend: remove the message being edited and all subsequent messages
+    const editingMessageId = useUnifiedChatStore.getState().editingMessageId;
+    if (editingMessageId) {
+      const currentMessages = useUnifiedChatStore.getState().messages;
+      const editIndex = currentMessages.findIndex((m) => m.id === editingMessageId);
+      if (editIndex !== -1) {
+        // Remove the message being edited and all messages after it
+        const newMessages = currentMessages.slice(0, editIndex);
+        useUnifiedChatStore.setState({ messages: newMessages });
+      }
+      // Clear editing state
+      useUnifiedChatStore.getState().cancelEditing();
+    }
+
     const classifyTask = (
       text: string,
     ): 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video' => {
@@ -326,6 +333,9 @@ export const UnifiedAgenticChat: React.FC<{
       content: '',
       metadata: { streaming: true },
     });
+
+    // Set loading state immediately - this covers the gap before streaming starts
+    setIsLoading(true);
     setStreamingMessage(assistantMessageId);
 
     try {
@@ -347,17 +357,22 @@ export const UnifiedAgenticChat: React.FC<{
           },
         });
 
+        // Clear loading state once we get a response
+        setIsLoading(false);
+
         // For streaming mode, content will be updated via events
         // For non-streaming mode, update directly
         if (response.assistant_message?.content) {
           updateMessage(assistantMessageId, {
             content: response.assistant_message.content,
+            artifacts: response.assistant_message.artifacts,
             metadata: {
               streaming: false,
               model: response.assistant_message.model,
               provider: response.assistant_message.provider,
               tokenCount: response.assistant_message.tokens,
               cost: response.assistant_message.cost,
+              artifacts: response.assistant_message.artifacts,
             },
           });
         }
@@ -372,6 +387,8 @@ export const UnifiedAgenticChat: React.FC<{
         error: errorMessage,
       });
     } finally {
+      // Clear both loading and streaming states
+      setIsLoading(false);
       setStreamingMessage(null);
     }
   };
@@ -384,6 +401,8 @@ export const UnifiedAgenticChat: React.FC<{
 
   // Handle stop generation - abort ongoing streaming
   const handleStopGeneration = async () => {
+    console.log('[UnifiedAgenticChat] Stopping generation...');
+
     // Abort any ongoing fetch requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -406,21 +425,14 @@ export const UnifiedAgenticChat: React.FC<{
         metadata: { streaming: false },
       });
     }
-    
-    // Clear streaming state
+
+    // Clear both loading and streaming states
+    setIsLoading(false);
     setStreamingMessage(null);
   };
 
-  const openSidecar = (panel: DynamicPanelType, payload?: Record<string, unknown>) => {
-    // Map legacy DynamicPanelType to new SidecarMode
-    let mode: SidecarMode = 'code';
-
-    if (panel === 'browser') mode = 'browser';
-    else if (panel === 'terminal') mode = 'terminal';
-    else if (panel === 'code') mode = 'code';
-    else if (panel === 'data') mode = 'data';
-
-    openSidecarStore(mode, payload?.['contextId'] as string | undefined);
+  const openSidecar = (panel: SidecarMode, payload?: Record<string, unknown>) => {
+    openSidecarStore(panel, payload?.['contextId'] as string | undefined);
   };
 
   return (
@@ -433,10 +445,7 @@ export const UnifiedAgenticChat: React.FC<{
 
         {/* FIX: Removed the fixed bottom wrapper. 
             ChatInputArea handles its own 'fixed' positioning to float in the center when empty. */}
-        <ChatInputArea 
-          onSend={handleSendMessage} 
-          onStopGeneration={handleStopGeneration}
-        />
+        <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
       </AppLayout>
 
       {workspaceOpen && (
@@ -485,9 +494,6 @@ export const UnifiedAgenticChat: React.FC<{
       )}
 
       <ApprovalModal />
-
-      {/* Floating Model Selector - Bottom Right */}
-      <FloatingModelSelector />
     </div>
   );
 };

@@ -267,8 +267,8 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onShare 
       <div className="p-6">
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-xl font-bold text-gray-900 flex-1">{workflow.title}</h3>
-          {workflow.is_verified && (
-            <span className="ml-2 text-blue-600" title="Verified">
+          {workflow.is_featured && (
+            <span className="ml-2 text-blue-600" title="Featured workflow">
               ✓
             </span>
           )}
@@ -291,7 +291,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onClone, onShare 
           <div className="flex items-center gap-1">
             <span>⭐</span>
             <span>
-              {workflow.rating.toFixed(1)} ({workflow.rating_count})
+              {(workflow.avg_rating || 0).toFixed(1)} ({workflow.total_reviews || 0})
             </span>
           </div>
           <div className="flex items-center gap-1">
