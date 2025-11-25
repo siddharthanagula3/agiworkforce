@@ -1,4 +1,4 @@
-﻿import { invoke } from '@tauri-apps/api/core';
+﻿import { invoke } from '@/lib/tauri-mock';
 import { listen } from '@tauri-apps/api/event';
 import { Layers, Square } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -58,6 +58,9 @@ export const UnifiedAgenticChat: React.FC<{
 
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [mediaLabOpen, setMediaLabOpen] = useState(false);
+  
+  // AbortController ref for cancelling ongoing requests
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const _tokenStats = useMemo(() => {
     let input = 0;
@@ -379,6 +382,35 @@ export const UnifiedAgenticChat: React.FC<{
     immersive: '',
   };
 
+  // Handle stop generation - abort ongoing streaming
+  const handleStopGeneration = async () => {
+    // Abort any ongoing fetch requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // Try to stop backend streaming via Tauri command
+    if (isTauri) {
+      try {
+        await invoke('chat_stop_generation');
+      } catch (error) {
+        console.warn('[UnifiedAgenticChat] Failed to stop generation:', error);
+      }
+    }
+
+    // Update the streaming message to indicate it was stopped
+    const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
+    if (currentStreamingId) {
+      updateMessage(currentStreamingId, {
+        metadata: { streaming: false },
+      });
+    }
+    
+    // Clear streaming state
+    setStreamingMessage(null);
+  };
+
   const openSidecar = (panel: DynamicPanelType, payload?: Record<string, unknown>) => {
     // Map legacy DynamicPanelType to new SidecarMode
     let mode: SidecarMode = 'code';
@@ -401,7 +433,10 @@ export const UnifiedAgenticChat: React.FC<{
 
         {/* FIX: Removed the fixed bottom wrapper. 
             ChatInputArea handles its own 'fixed' positioning to float in the center when empty. */}
-        <ChatInputArea onSend={handleSendMessage} />
+        <ChatInputArea 
+          onSend={handleSendMessage} 
+          onStopGeneration={handleStopGeneration}
+        />
       </AppLayout>
 
       {workspaceOpen && (

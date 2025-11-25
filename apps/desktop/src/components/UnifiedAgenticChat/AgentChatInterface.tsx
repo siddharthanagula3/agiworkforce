@@ -10,13 +10,13 @@
  * - LLM router for decision making
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { invoke } from '@/lib/tauri-mock';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
-import { Loader2, CheckCircle2, XCircle, Clock, Play } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, Play, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { ScrollArea } from '../ui/ScrollArea';
-import { cn } from '../../lib/utils';
 import { Textarea } from '../ui/Textarea';
 
 /// Timeline event types (matching Rust AgentRuntime)

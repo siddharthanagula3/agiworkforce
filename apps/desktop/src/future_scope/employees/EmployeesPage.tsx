@@ -3,17 +3,17 @@
  * Main page for the AI Employee Library marketplace
  */
 
-import { useEffect, useState } from 'react';
-import { ScrollArea } from '../components/ui/ScrollArea';
 import { Users } from 'lucide-react';
-import { EmployeeHero } from '../components/employees/EmployeeHero';
-import { EmployeeFilters } from '../components/employees/EmployeeFilters';
-import { EmployeeGrid } from '../components/employees/EmployeeGrid';
-import { EmployeeDetailModal } from '../components/employees/EmployeeDetailModal';
-import { DemoResultsModal } from '../components/employees/DemoResultsModal';
-import { MyEmployeesView } from '../components/employees/MyEmployeesView';
-import { useEmployeeStore } from '../stores/employeeStore';
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/Tabs';
+import { useEffect, useState } from 'react';
+import { ScrollArea } from '../../components/ui/ScrollArea';
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/Tabs';
+import { DemoResultsModal } from './components/DemoResultsModal';
+import { EmployeeDetailModal } from './components/EmployeeDetailModal';
+import { EmployeeFilters } from './components/EmployeeFilters';
+import { EmployeeGrid } from './components/EmployeeGrid';
+import { EmployeeHero } from './components/EmployeeHero';
+import { MyEmployeesView } from './components/MyEmployeesView';
+import { useEmployeeStore } from './employeeStore';
 
 export function EmployeesPage() {
   const {

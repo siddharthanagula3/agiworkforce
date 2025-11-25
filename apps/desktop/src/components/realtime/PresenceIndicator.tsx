@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { websocketClient, UserPresence } from '../../services/websocketClient';
+import { invoke } from '@/lib/tauri-mock';
+import React, { useCallback, useEffect, useState } from 'react';
+import { UserPresence, websocketClient } from '../../services/websocketClient';
 
 interface PresenceIndicatorProps {
   teamId: string;

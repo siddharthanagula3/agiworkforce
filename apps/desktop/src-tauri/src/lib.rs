@@ -46,7 +46,7 @@ pub mod telemetry;
 pub mod overlay;
 
 // LLM Providers
-pub mod providers;
+
 
 // Security and guardrails
 pub mod security;

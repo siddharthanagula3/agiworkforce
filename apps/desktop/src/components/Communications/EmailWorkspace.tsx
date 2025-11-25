@@ -5,27 +5,27 @@ import { toast } from 'sonner';
 
 import { cn } from '../../lib/utils';
 import {
-  useEmailStore,
-  type ConnectAccountPayload,
-  type SendEmailPayload,
+    useEmailStore,
+    type ConnectAccountPayload,
+    type SendEmailPayload,
 } from '../../stores/emailStore';
 import type {
-  Contact,
-  EmailAddress,
-  EmailFilter,
-  EmailMessage,
-  EmailProviderConfig,
+    Contact,
+    EmailAddress,
+    EmailFilter,
+    EmailMessage,
+    EmailProviderConfig,
 } from '../../types/email';
 import { sanitizeEmailHtml } from '../../utils/security';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from '../ui/Dialog';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -147,7 +147,7 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
       provider,
       email: trimmedEmail,
       password: credentials.password,
-      display_name: trimmedDisplayName || undefined,
+      ...(trimmedDisplayName ? { display_name: trimmedDisplayName } : {}),
     };
 
     if (!payload.email || !payload.password) {

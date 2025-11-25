@@ -3,9 +3,9 @@
  * Manages AI employee marketplace and hired employees state
  */
 
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import type { AIEmployee, DemoResult, EmployeeRole, EmployeeUsageStats } from '../types/employees';
+import { create } from 'zustand';
+import type { AIEmployee, DemoResult, EmployeeRole, EmployeeUsageStats } from '../../types/employees';
 
 interface EmployeeState {
   // State

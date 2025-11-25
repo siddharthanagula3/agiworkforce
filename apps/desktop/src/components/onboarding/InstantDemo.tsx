@@ -1,8 +1,8 @@
+import { invoke } from '@/lib/tauri-mock';
+import { Loader2, Play } from 'lucide-react';
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import { Loader2, Play } from 'lucide-react';
 import { DemoResults } from './DemoResults';
 
 interface AIEmployee {

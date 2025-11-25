@@ -77,6 +77,7 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
     }
 
     setCurrentRequest({ headers: newHeaders });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authType, authToken, authUsername, authPassword, authKey, authValue, authPlacement]);
 
   const handleMethodChange = (method: ApiRequest['method']) => {

@@ -136,7 +136,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'router_suggestions':
       return {
         provider: 'openai',
-        model: 'gpt-4o-mini',
+        model: 'gpt-5.1',
         reason: 'Mock suggestion: defaulting to OpenAI in web preview mode.',
       } as T;
 
@@ -158,6 +158,32 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       // Return empty array as default (safer than empty object)
       return Promise.resolve([] as T);
   }
+}
+
+/**
+ * Convert a file path to a URL that can be loaded by the webview
+ */
+export function convertFileSrc(filePath: string, protocol = 'asset'): string {
+  if (isTauri) {
+    // In real Tauri, we can't easily import this synchronously if we want to be safe,
+    // but convertFileSrc is usually synchronous in v2 core.
+    // However, since we are mocking, we can try to use the window.__TAURI__ object if available
+    // or just return a placeholder if we can't access the real API dynamically.
+    // For now, let's assume if we are in Tauri, we might need to rely on the real import in the component
+    // OR we can try to access it from window if exposed.
+    // But to keep it simple and consistent with invoke:
+    
+    // Note: convertFileSrc is synchronous.
+    // If we want to use the real one, we'd need to import it.
+    // But imports are static or async.
+    // So we'll just implement the standard transformation for Windows/Tauri v2.
+    
+    const encode = encodeURIComponent;
+    return `${protocol}://localhost/${encode(filePath)}`;
+  }
+  
+  // In web mode, just return the path or a placeholder
+  return filePath;
 }
 
 /**

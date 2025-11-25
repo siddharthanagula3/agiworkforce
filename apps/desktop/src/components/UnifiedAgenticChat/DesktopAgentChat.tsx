@@ -11,26 +11,26 @@
  * - Multi-step autonomous execution
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { invoke } from '@/lib/tauri-mock';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import {
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Send,
-  Cpu,
-  Terminal,
-  FileText,
-  Zap,
-  StopCircle,
+    CheckCircle2,
+    Clock,
+    Cpu,
+    FileText,
+    Loader2,
+    Send,
+    StopCircle,
+    Terminal,
+    XCircle,
+    Zap,
 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { ScrollArea } from '../ui/ScrollArea';
-import { cn } from '../../lib/utils';
 import { Textarea } from '../ui/Textarea';
-import ReactMarkdown from 'react-markdown';
 
 /// Message types
 interface ChatMessage {

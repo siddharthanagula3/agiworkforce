@@ -1,27 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileTree } from './FileTree';
-import { CodeEditor } from './CodeEditor';
-import { useCodeStore } from '../../stores/codeStore';
-import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
-import {
-  X,
-  Save,
-  FolderOpen,
-  ChevronLeft,
-  ChevronRight,
-  FileCode,
-  GitCompare,
-  MoveLeft,
-  MoveRight,
-  Copy,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { homeDir } from '@tauri-apps/api/path';
-import { Dialog, DialogContent } from '../ui/Dialog';
-import { DiffViewer } from './DiffViewer';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import {
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    FileCode,
+    FolderOpen,
+    GitCompare,
+    MoveLeft,
+    MoveRight,
+    Save,
+    X,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 import type { OpenFile } from '../../stores/codeStore';
+import { useCodeStore } from '../../stores/codeStore';
+import { Button } from '../ui/Button';
+import { Dialog, DialogContent } from '../ui/Dialog';
+import { CodeEditor } from './CodeEditor';
+import { DiffViewer } from './DiffViewer';
+import { FileTree } from './FileTree';
 
 interface CodeWorkspaceProps {
   className?: string;
@@ -447,7 +447,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           <FileTree
             rootPath={rootPath}
             onFileSelect={handleFileSelect}
-            {...(activeFilePath ? { selectedFile: activeFilePath } : {})}
+            {...(activeFilePath ? { selectedFile: activeFilePath } : { selectedFile: '' })}
             className="flex-1"
           />
         ) : null}

@@ -2,10 +2,10 @@
  * Monaco Editor with LSP Integration
  * Provides IDE-quality code editing with language server support
  */
-import React, { useEffect, useRef, useState } from 'react';
+import { invoke } from '@/lib/tauri-mock';
 import * as monaco from 'monaco-editor';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLSP } from '../../hooks/useLSP';
-import { invoke } from '@tauri-apps/api/core';
 
 interface MonacoEditorProps {
   value: string;
