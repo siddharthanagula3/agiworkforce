@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { useEffect, useRef } from 'react';
 import { useAutomationStore } from '../stores/automationStore';
-import type { Recording, RecordedAction } from '../types/automation-enhanced';
+import type { RecordedAction, Recording } from '../types/automation-enhanced';
 
 /**
  * Event payloads emitted from Tauri backend
@@ -96,7 +96,7 @@ export function useAutomationEvents() {
         'automation:recording_started',
         (event) => {
           if (!isMountedRef.current) return;
-          console.log('[useAutomationEvents] Recording started:', event.payload);
+
           handlersRef.current.handleRecordingStarted(event.payload);
         },
       );
@@ -107,7 +107,7 @@ export function useAutomationEvents() {
         'automation:recording_stopped',
         (event) => {
           if (!isMountedRef.current) return;
-          console.log('[useAutomationEvents] Recording stopped:', event.payload);
+
           handlersRef.current.handleRecordingStopped(event.payload.recording);
         },
       );
@@ -118,7 +118,7 @@ export function useAutomationEvents() {
         'automation:action_recorded',
         (event) => {
           if (!isMountedRef.current) return;
-          console.log('[useAutomationEvents] Action recorded:', event.payload);
+
           handlersRef.current.handleActionRecorded(event.payload.action);
         },
       );
@@ -127,7 +127,7 @@ export function useAutomationEvents() {
       // Shortcut Action Event
       const unlistenShortcutAction = await listen<string>('shortcut_action', (event) => {
         if (!isMountedRef.current) return;
-        console.log('[useAutomationEvents] Shortcut action triggered:', event.payload);
+
         handlersRef.current.handleShortcutAction(event.payload);
       });
       unlistenFns.current.push(unlistenShortcutAction);
@@ -135,7 +135,7 @@ export function useAutomationEvents() {
       // Shortcut Registered Event
       const unlistenShortcutRegistered = await listen<Shortcut>('shortcut_registered', (event) => {
         if (!isMountedRef.current) return;
-        console.log('[useAutomationEvents] Shortcut registered:', event.payload);
+
         handlersRef.current.handleShortcutRegistered(event.payload);
       });
       unlistenFns.current.push(unlistenShortcutRegistered);
@@ -145,13 +145,11 @@ export function useAutomationEvents() {
         'shortcut_unregistered',
         (event) => {
           if (!isMountedRef.current) return;
-          console.log('[useAutomationEvents] Shortcut unregistered:', event.payload);
+
           handlersRef.current.handleShortcutUnregistered(event.payload);
         },
       );
       unlistenFns.current.push(unlistenShortcutUnregistered);
-
-      console.log('[useAutomationEvents] All automation event listeners established');
     };
 
     setupListeners().catch((error) => {
@@ -161,7 +159,7 @@ export function useAutomationEvents() {
     // Cleanup: unlisten all events on unmount
     return () => {
       isMountedRef.current = false;
-      console.log('[useAutomationEvents] Cleaning up automation event listeners');
+
       unlistenFns.current.forEach((unlisten) => {
         unlisten();
       });

@@ -11,22 +11,22 @@
  * - Multi-step autonomous execution
  */
 
-import { invoke } from '@/lib/tauri-mock';
 import { listen } from '@tauri-apps/api/event';
 import {
-    CheckCircle2,
-    Clock,
-    Cpu,
-    FileText,
-    Loader2,
-    Send,
-    StopCircle,
-    Terminal,
-    XCircle,
-    Zap,
+  CheckCircle2,
+  Clock,
+  Cpu,
+  FileText,
+  Loader2,
+  Send,
+  StopCircle,
+  Terminal,
+  XCircle,
+  Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -118,7 +118,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
             },
           },
         });
-        console.log('[DesktopAgentChat] AGI system initialized');
       } catch (error) {
         console.error('[DesktopAgentChat] Failed to initialize AGI:', error);
         setMessages((prev) => [
@@ -144,7 +143,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
     unlistenPromises.push(
       listen<{ goal_id: string; description: string }>('agi:goal:submitted', (event) => {
         const { goal_id, description } = event.payload;
-        console.log('[AGI] Goal submitted:', goal_id);
 
         setMessages((prev) => [
           ...prev,
@@ -174,7 +172,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
         current_step?: string;
       }>('agi:goal:progress', (event) => {
         const { goal_id, progress_percent, current_step } = event.payload;
-        console.log(`[AGI] Goal progress: ${progress_percent}%`);
 
         setCurrentGoal((prev) =>
           prev?.goal_id === goal_id ? { ...prev, progress_percent, current_step } : prev,
@@ -185,7 +182,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
     unlistenPromises.push(
       listen<{ goal_id: string; result?: string }>('agi:goal:achieved', (event) => {
         const { goal_id, result } = event.payload;
-        console.log('[AGI] Goal achieved:', goal_id);
 
         setMessages((prev) => [
           ...prev,
@@ -241,7 +237,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
     unlistenPromises.push(
       listen<{ step_index: number; step_description: string }>('agi:step:started', (event) => {
         const { step_description } = event.payload;
-        console.log('[AGI] Step started:', step_description);
 
         setSystemStatus('executing');
         setActionLogs((prev) => [
@@ -259,7 +254,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
     unlistenPromises.push(
       listen<{ step_index: number; result: string }>('agi:step:completed', (event) => {
         const { result } = event.payload;
-        console.log('[AGI] Step completed');
 
         setActionLogs((prev) => [
           ...prev,
@@ -279,7 +273,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
     unlistenPromises.push(
       listen<{ tool_name: string; arguments: unknown }>('agi:tool:called', (event) => {
         const { tool_name } = event.payload;
-        console.log('[AGI] Tool called:', tool_name);
 
         setActionLogs((prev) => [
           ...prev,
@@ -317,7 +310,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
     unlistenPromises.push(
       listen<{ thought: string; duration_ms?: number }>('agi:reasoning', (event) => {
         const { thought, duration_ms } = event.payload;
-        console.log('[AGI] Reasoning:', thought);
 
         setSystemStatus('thinking');
         setReasoning((prev) => [
@@ -417,7 +409,7 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
 
     try {
       // Submit to AGI system
-      const response = await invoke<{ goal_id: string }>('agi_submit_goal', {
+      await invoke<{ goal_id: string }>('agi_submit_goal', {
         request: {
           description: taskDescription,
           priority: 'medium',
@@ -425,8 +417,6 @@ export function DesktopAgentChat({ className }: DesktopAgentChatProps) {
           success_criteria: null,
         },
       });
-
-      console.log('[DesktopAgentChat] Goal submitted:', response.goal_id);
 
       // The AGI will emit events as it executes
       // UI will update via event listeners
