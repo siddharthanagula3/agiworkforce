@@ -12,7 +12,8 @@ module.exports = {
     react: { version: '18.2' },
     'import/resolver': {
       typescript: {
-        project: './tsconfig.base.json',
+        // Root config plus per-package configs for path aliases
+        project: ['./tsconfig.base.json', './apps/desktop/tsconfig.json'],
       },
     },
   },
@@ -59,6 +60,16 @@ module.exports = {
     'prefer-const': 'off',
   },
   overrides: [
+    {
+      files: ['apps/desktop/**/*.{ts,tsx,js,jsx}'],
+      settings: {
+        'import/resolver': {
+          typescript: {
+            project: ['./apps/desktop/tsconfig.json'],
+          },
+        },
+      },
+    },
     {
       files: ['apps/extension/src/**/*.js'],
       globals: {

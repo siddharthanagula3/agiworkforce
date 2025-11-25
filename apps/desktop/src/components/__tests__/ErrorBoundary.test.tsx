@@ -235,6 +235,8 @@ describe('ErrorBoundary', () => {
     it('should report error on Report Error click', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
+      // Ensure isEnabled returns false so the button is visible
+      vi.mocked(errorReportingService.errorReportingService.isEnabled).mockReturnValue(false);
       vi.mocked(errorReportingService.errorReportingService.reportError).mockResolvedValue();
 
       render(
@@ -243,7 +245,7 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      const reportButton = screen.getByText('Report Error');
+      const reportButton = await screen.findByText('Report Error');
       fireEvent.click(reportButton);
 
       await waitFor(() => {

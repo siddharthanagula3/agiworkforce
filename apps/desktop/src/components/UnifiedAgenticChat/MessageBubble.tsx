@@ -1,17 +1,17 @@
 import { emit } from '@tauri-apps/api/event';
 import 'katex/dist/katex.min.css';
 import {
-    CheckCircle2,
-    Copy,
-    Edit2,
-    FileText,
-    Globe2,
-    Image,
-    Loader2,
-    MoreVertical,
-    RotateCw,
-    Terminal as TerminalIcon,
-    Trash2,
+  CheckCircle2,
+  Copy,
+  Edit2,
+  FileText,
+  Globe2,
+  Image,
+  Loader2,
+  MoreVertical,
+  RotateCw,
+  Terminal as TerminalIcon,
+  Trash2,
 } from 'lucide-react';
 import React, { memo, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -20,7 +20,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import { EnhancedMessage, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { EnhancedMessage, SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { parseCitations } from './CitationBadge';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { StatusTrail } from './StatusTrail';
@@ -35,7 +35,7 @@ export interface MessageBubbleProps {
   onEdit?: (content: string) => void;
   onDelete?: () => void;
   onCopy?: () => void;
-  onToggleSidecar?: (tab: 'files' | 'terminal' | 'browser' | 'code' | 'media') => void;
+  onToggleSidecar?: (tab: SidecarMode) => void;
 }
 
 const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
@@ -139,14 +139,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       );
 
     const lowerTool = (toolName || '').toString().toLowerCase();
-    const targetTab: 'terminal' | 'browser' | 'files' | 'code' | 'media' = lowerTool.includes(
-      'browser',
-    )
+    const targetTab: SidecarMode = lowerTool.includes('browser')
       ? 'browser'
       : lowerTool.includes('file') || lowerTool.includes('read') || lowerTool.includes('edit')
-        ? 'files'
+        ? 'code'
         : lowerTool.includes('image') || lowerTool.includes('video') || lowerTool.includes('media')
-          ? 'media'
+          ? 'preview'
           : lowerTool.includes('code')
             ? 'code'
             : 'terminal';
@@ -154,9 +152,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     const icon =
       targetTab === 'browser' ? (
         <Globe2 className="h-4 w-4" />
-      ) : targetTab === 'files' ? (
+      ) : targetTab === 'code' ? (
         <FileText className="h-4 w-4" />
-      ) : targetTab === 'media' ? (
+      ) : targetTab === 'preview' ? (
         <Image className="h-4 w-4" />
       ) : (
         <TerminalIcon className="h-4 w-4" />
@@ -446,7 +444,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               return (
                 <div key={attachment.id} className="attachment-preview max-w-xs">
                   {isImage && (attachment.content || attachment.path) ? (
-                    <img src={attachment.content || attachment.path} alt={attachment.name} className="rounded-lg" />
+                    <img
+                      src={attachment.content || attachment.path}
+                      alt={attachment.name}
+                      className="rounded-lg"
+                    />
                   ) : (
                     <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
                       <FileText className="h-5 w-5 text-zinc-500" />

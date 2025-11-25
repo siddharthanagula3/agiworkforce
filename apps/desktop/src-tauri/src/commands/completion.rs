@@ -59,28 +59,41 @@ pub async fn get_code_completion(
     let candidates = router.candidates(&llm_request, &preferences);
 
     if candidates.is_empty() {
-        return Err("No LLM providers configured".to_string());
+        return Err(
+            "No LLM providers configured. Please configure a provider in Settings.".to_string(),
+        );
     }
 
-    let outcome = router
-        .invoke_candidate(&candidates[0], &llm_request)
-        .await
-        .map_err(|e| format!("Completion failed: {}", e))?;
+    // Try candidates in order
+    for candidate in &candidates {
+        match router.invoke_candidate(candidate, &llm_request).await {
+            Ok(outcome) => {
+                let latency = start_time.elapsed().as_millis() as u64;
+                tracing::debug!(
+                    "[Completion] Generated completion using {:?} in {}ms",
+                    outcome.provider,
+                    latency
+                );
 
-    let latency = start_time.elapsed().as_millis() as u64;
+                return Ok(CompletionResponse {
+                    content: outcome.response.content,
+                    model: outcome.model,
+                    tokens: outcome.completion_tokens,
+                    latency,
+                });
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "[Completion] Provider {:?} failed: {}. Trying next candidate...",
+                    candidate.provider,
+                    e
+                );
+                continue;
+            }
+        }
+    }
 
-    tracing::debug!(
-        "[Completion] Generated completion using {:?} in {}ms",
-        outcome.provider,
-        latency
-    );
-
-    Ok(CompletionResponse {
-        content: outcome.response.content,
-        model: outcome.model,
-        tokens: outcome.completion_tokens,
-        latency,
-    })
+    Err("All configured LLM providers failed to generate a completion.".to_string())
 }
 
 /// Get inline completion (shorter, faster variant)

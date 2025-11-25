@@ -1,4 +1,3 @@
-import React, { useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -8,17 +7,16 @@ import {
   PanelTopOpen,
   Terminal,
   Wand2,
-  Image as ImageIcon,
 } from 'lucide-react';
+import React, { useMemo } from 'react';
 
+import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { ArtifactRenderer } from './ArtifactRenderer';
 import { Button } from '../ui/Button';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { MessageBubble } from './MessageBubble';
 
-export type SidecarPanelType = 'browser' | 'terminal' | 'code' | 'video' | 'media' | 'files';
-
 interface ChatStreamProps {
-  onOpenSidecar?: (panel: SidecarPanelType, payload?: Record<string, unknown>) => void;
+  onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
 }
 
 const card =
@@ -27,8 +25,15 @@ const card =
 export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
   const messages = useUnifiedChatStore((state) => state.messages);
   const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
+  const isLoading = useUnifiedChatStore((state) => state.isLoading);
+  const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
+  const startEditingMessage = useUnifiedChatStore((state) => state.startEditingMessage);
 
   const items = useMemo(() => messages ?? [], [messages]);
+
+  const handleRetry = (id: string, content: string) => {
+    startEditingMessage(id, content);
+  };
 
   const renderThought = (messageId: string, title: string, body: string) => (
     <details className={card} key={messageId} open>
@@ -44,7 +49,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
     messageId: string,
     label: string,
     body: string,
-    panel: SidecarPanelType,
+    panel: SidecarMode,
     payload?: Record<string, unknown>,
   ) => (
     <div className={card} key={messageId}>
@@ -53,9 +58,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
           {panel === 'terminal' && <Terminal className="h-4 w-4 text-emerald-300" />}
           {panel === 'browser' && <MousePointerClick className="h-4 w-4 text-sky-300" />}
           {panel === 'code' && <Braces className="h-4 w-4 text-purple-300" />}
-          {panel === 'video' && <PanelTopOpen className="h-4 w-4 text-orange-300" />}
-          {panel === 'media' && <ImageIcon className="h-4 w-4 text-indigo-300" />}
-          {panel === 'files' && <FileText className="h-4 w-4 text-slate-300" />}
+          {panel === 'preview' && <PanelTopOpen className="h-4 w-4 text-orange-300" />}
+          {panel === 'diff' && <FileText className="h-4 w-4 text-slate-300" />}
           <span className="font-medium">{label}</span>
         </div>
         <Button size="sm" variant="outline" onClick={() => onOpenSidecar?.(panel, payload)}>
@@ -69,7 +73,19 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
   return (
     <div className="flex flex-col gap-4">
       <AnimatePresence>
-        {agentStatus?.status === 'running' ? (
+        {/* Show thinking indicator when loading (before streaming starts) */}
+        {isLoading && !isStreaming ? (
+          <motion.div
+            key="thinking"
+            className="inline-flex items-center gap-2 self-start rounded-full border border-teal-400/50 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-100"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Wand2 className="h-3 w-3 animate-pulse" />
+            Claude is thinking...
+          </motion.div>
+        ) : agentStatus?.status === 'running' ? (
           <motion.div
             key="live-execution"
             className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100"
@@ -85,18 +101,18 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
 
       {items.map((message) => {
         const meta = message.metadata || {};
-        const kind: SidecarPanelType | undefined =
-          (meta.sidecarType as SidecarPanelType | undefined) ||
+        const kind: SidecarMode | undefined =
+          (meta.sidecarType as SidecarMode | undefined) ||
           (meta.tool === 'terminal'
             ? 'terminal'
             : meta.tool === 'browser'
               ? 'browser'
               : meta.tool === 'code'
                 ? 'code'
-                : meta.tool === 'media'
-                  ? 'media'
+                : meta.tool === 'media' || meta.tool === 'video'
+                  ? 'preview'
                   : meta.tool === 'files'
-                    ? 'files'
+                    ? 'code'
                     : undefined);
 
         if (meta.phase === 'thinking' || meta.thinking) {
@@ -128,14 +144,26 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
         }
 
         return (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            showAvatar
-            showTimestamp
-            enableActions
-            onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
-          />
+          <div key={message.id} className="space-y-3">
+            <MessageBubble
+              message={message}
+              showAvatar
+              showTimestamp
+              enableActions
+              onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
+              onRegenerate={() => handleRetry(message.id, message.content)}
+              onEdit={(content) => handleRetry(message.id, content)}
+            />
+            {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
+                  (artifact: any) => (
+                    <ArtifactRenderer key={artifact.id || artifact.title} artifact={artifact} />
+                  ),
+                )}
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>

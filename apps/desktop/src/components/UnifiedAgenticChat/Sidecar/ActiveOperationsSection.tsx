@@ -1,16 +1,16 @@
-import React from 'react';
-import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 import {
   Activity,
-  Loader2,
   CheckCircle,
-  XCircle,
   Clock,
-  Terminal,
   FileText,
-  Wrench,
+  Loader2,
+  Terminal,
   Users,
+  Wrench,
+  XCircle,
 } from 'lucide-react';
+import React from 'react';
+import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 
 export interface ActiveOperationsSectionProps {
   className?: string;
@@ -52,9 +52,18 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
           </h3>
         </div>
         {totalActive > 0 && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded text-xs text-blue-700 dark:text-blue-300">
-            <Loader2 size={12} className="animate-spin" />
-            {totalActive} active
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded text-xs text-blue-700 dark:text-blue-300">
+              <Loader2 size={12} className="animate-spin" />
+              {totalActive} active
+            </div>
+            <button
+              onClick={() => useUnifiedChatStore.getState().clearBackgroundTasks()}
+              className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+              title="Clear all tasks"
+            >
+              Clear
+            </button>
           </div>
         )}
       </div>

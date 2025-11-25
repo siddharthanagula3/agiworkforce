@@ -7,7 +7,8 @@
 import { Users } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { Skeleton } from '../../../components/ui/Skeleton';
-import { useEmployeeStore } from '../employeeStore';
+import { useEmployeeStore, selectFilteredEmployees } from '../employeeStore';
+import type { AIEmployee } from '../../../types/employees';
 import { EmployeeCard } from './EmployeeCard';
 
 // Updated Nov 16, 2025: Memoized LoadingSkeleton to prevent re-renders
@@ -56,7 +57,7 @@ const EmptyState = memo(function EmptyState() {
 
 // Updated Nov 16, 2025: Memoized EmployeeGrid to prevent unnecessary re-renders
 export const EmployeeGrid = memo(function EmployeeGrid() {
-  const filteredEmployees = useEmployeeStore(selectFilteredEmployees);
+  const filteredEmployees = useEmployeeStore(selectFilteredEmployees) as AIEmployee[];
   const isLoading = useEmployeeStore((state) => state.isLoading);
   const error = useEmployeeStore((state) => state.error);
 

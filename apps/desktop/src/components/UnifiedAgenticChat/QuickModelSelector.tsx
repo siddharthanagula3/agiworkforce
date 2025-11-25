@@ -1,10 +1,11 @@
 import { invoke } from '@/lib/tauri-mock';
+import { Check, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-    getModelMetadata,
-    getProviderModels,
-    PROVIDER_LABELS,
-    type ModelMetadata,
+  getModelMetadata,
+  getProviderModels,
+  PROVIDER_LABELS,
+  type ModelMetadata,
 } from '../../constants/llm';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { cn } from '../../lib/utils';
@@ -12,18 +13,10 @@ import { useModelStore } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from '../ui/Select';
 
 type QuickModelSelectorProps = {
   className?: string;
+  onClose?: () => void;
 };
 
 type RouterSuggestion = {
@@ -32,7 +25,7 @@ type RouterSuggestion = {
   reason: string;
 };
 
-export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
+export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorProps) => {
   const { selectedModel, favorites, recentModels, selectModel } = useModelStore((state) => ({
     selectedModel: state.selectedModel,
     favorites: state.favorites,
@@ -70,28 +63,21 @@ export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
       'moonshot',
     ];
 
-    // Initialize groups for all providers
     allProviders.forEach((p) => {
       groups[p] = [];
     });
 
-    // Helper to add model to group
     const addModel = (metadata: ModelMetadata) => {
       const providerGroup = groups[metadata.provider];
-      if (providerGroup) {
-        // Avoid duplicates
-        if (!providerGroup.some((m) => m.id === metadata.id)) {
-          providerGroup.push(metadata);
-        }
+      if (providerGroup && !providerGroup.some((m) => m.id === metadata.id)) {
+        providerGroup.push(metadata);
       }
     };
 
-    // Add models from all providers
     allProviders.forEach((provider) => {
       getProviderModels(provider).forEach(addModel);
     });
 
-    // Also ensure favorites/recent are included if they might be missing from default lists
     favorites.forEach((id) => {
       const meta = getModelMetadata(id);
       if (meta) addModel(meta);
@@ -145,28 +131,32 @@ export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
     }
 
     void selectModel(modelId, metadata.provider);
+    onClose?.();
   };
 
   const suggestedMetadata = suggestion ? getModelMetadata(suggestion.model) : null;
 
   return (
-    <div className={cn('flex w-full max-w-[280px] flex-col gap-2', className)}>
+    <div
+      className={cn(
+        'w-80 rounded-xl border border-gray-200/70 bg-white/95 p-4 text-left shadow-2xl backdrop-blur-xl',
+        'dark:border-gray-700 dark:bg-charcoal-900/95',
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between pb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          Models
+        </p>
+        <span className="text-[11px] text-gray-400 dark:text-gray-500">Choose a provider</span>
+      </div>
+
       {suggestion && suggestedMetadata && (
-        <div className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+        <div className="mb-3 rounded-lg border border-dashed border-teal-500/40 bg-teal-50/70 p-3 text-sm text-teal-800 dark:border-teal-500/40 dark:bg-teal-900/15 dark:text-teal-100">
           <div className="flex items-start justify-between gap-2">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-                Recommended
-              </p>
-              <p className="text-sm font-medium text-foreground">
-                {suggestedMetadata.name}{' '}
-                <span className="text-muted-foreground">
-                  ({PROVIDER_LABELS[suggestion.provider]})
-                </span>
-              </p>
-              <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-                {suggestion.reason}
-              </p>
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-200">
+              <Sparkles size={14} />
+              Recommended
             </div>
             <Button
               size="xs"
@@ -177,28 +167,58 @@ export const QuickModelSelector = ({ className }: QuickModelSelectorProps) => {
               Use
             </Button>
           </div>
+          <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {suggestedMetadata.name}{' '}
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+              ({PROVIDER_LABELS[suggestion.provider]})
+            </span>
+          </p>
+          <p className="mt-1 text-xs leading-snug text-gray-600 dark:text-gray-400">
+            {suggestion.reason}
+          </p>
         </div>
       )}
-      <Select value={selectedModel ?? undefined} onValueChange={handleModelChange}>
-        <SelectTrigger className="w-full text-sm" aria-label="Select model">
-          <SelectValue placeholder="Choose model" />
-        </SelectTrigger>
-        <SelectContent className="max-h-[300px]">
-          {Object.entries(modelGroups).map(([provider, models]) => {
-            if (models.length === 0) return null;
-            return (
-              <SelectGroup key={provider}>
-                <SelectLabel>{PROVIDER_LABELS[provider as Provider]}</SelectLabel>
-                {models.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            );
-          })}
-        </SelectContent>
-      </Select>
+
+      <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
+        {Object.entries(modelGroups).map(([provider, models]) => {
+          if (models.length === 0) return null;
+          return (
+            <div key={provider} className="space-y-1.5">
+              <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                {PROVIDER_LABELS[provider as Provider]}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {models.map((model) => {
+                  const isActive = model.id === selectedModel;
+                  return (
+                    <button
+                      key={model.id}
+                      onClick={() => handleModelChange(model.id)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors',
+                        isActive
+                          ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm dark:border-teal-500/60 dark:bg-teal-500/10 dark:text-teal-50'
+                          : 'border-gray-200 bg-white text-gray-900 hover:border-teal-500/70 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-teal-500/50 dark:hover:bg-charcoal-700',
+                      )}
+                    >
+                      <span className="truncate">{model.name}</span>
+                      {isActive ? (
+                        <Check size={16} className="text-teal-500 dark:text-teal-300" />
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {PROVIDER_LABELS[model.provider]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
+
+export default QuickModelSelector;

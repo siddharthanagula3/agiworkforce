@@ -15,6 +15,6 @@
     }
   },
   "include": ["src", "src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "src-tauri", "src/future_scope"]
+  "exclude": ["node_modules", "dist", "src-tauri"]
 }
 // Updated Nov 16, 2025: Added @types/node for proper Node.js type definitions

@@ -1,0 +1,27 @@
+src/components/Calendar/CalendarWorkspace.tsx(252,23): error TS2322: Type 'import("C:/Users/SIDDHARTHA NAGULA/agiworkforce/apps/desktop/src/types/calendar").CalendarProvider' is not assignable to type 'import("C:/Users/SIDDHARTHA NAGULA/agiworkforce/apps/desktop/src/stores/calendarStore").CalendarProvider'.
+  Type '"outlook"' is not assignable to type 'CalendarProvider'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(68,3): error TS6133: 'rightAccessory' is declared but its value is never read.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(294,39): error TS2339: Property 'used' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(294,67): error TS2339: Property 'limit' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(294,95): error TS2339: Property 'limit' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(295,28): error TS2339: Property 'used' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(295,46): error TS2339: Property 'limit' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(463,41): error TS2322: Type '{ onClose: () => void; }' is not assignable to type 'IntrinsicAttributes & QuickModelSelectorProps'.
+  Property 'onClose' does not exist on type 'IntrinsicAttributes & QuickModelSelectorProps'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(613,26): error TS2339: Property 'used' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(613,54): error TS2339: Property 'limit' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(629,32): error TS2339: Property 'used' does not exist on type 'TokenUsage'.
+src/components/UnifiedAgenticChat/ChatInputArea.tsx(629,76): error TS2339: Property 'limit' does not exist on type 'TokenUsage'.
+src/future_scope/employees/components/EmployeeGrid.tsx(59,46): error TS2552: Cannot find name 'selectFilteredEmployees'. Did you mean 'filteredEmployees'?
+src/future_scope/employees/components/EmployeeGrid.tsx(76,20): error TS18046: 'filteredEmployees' is of type 'unknown'.
+src/future_scope/employees/components/EmployeeGrid.tsx(86,7): error TS18046: 'filteredEmployees' is of type 'unknown'.
+src/future_scope/employees/components/EmployeeGrid.tsx(92,8): error TS18046: 'filteredEmployees' is of type 'unknown'.
+src/future_scope/employees/components/EmployeeGrid.tsx(92,31): error TS7006: Parameter 'employee' implicitly has an 'any' type.
+src/future_scope/marketplace/components/WorkflowMarketplace.tsx(270,21): error TS2339: Property 'is_verified' does not exist on type 'PublishedWorkflow'.
+src/future_scope/marketplace/components/WorkflowMarketplace.tsx(294,25): error TS2339: Property 'rating' does not exist on type 'PublishedWorkflow'.
+src/future_scope/marketplace/components/WorkflowMarketplace.tsx(294,55): error TS2339: Property 'rating_count' does not exist on type 'PublishedWorkflow'.
+src/hooks/useVoiceInput.ts(120,30): error TS18048: 'result' is possibly 'undefined'.
+src/hooks/useVoiceInput.ts(120,30): error TS2532: Object is possibly 'undefined'.
+src/hooks/useVoiceInput.ts(121,30): error TS18048: 'result' is possibly 'undefined'.
+src/hooks/useVoiceInput.ts(121,30): error TS2532: Object is possibly 'undefined'.
+src/hooks/useVoiceInput.ts(123,15): error TS18048: 'result' is possibly 'undefined'.

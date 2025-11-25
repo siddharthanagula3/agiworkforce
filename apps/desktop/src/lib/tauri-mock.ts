@@ -201,3 +201,65 @@ export function getMockStatus(): { isTauri: boolean; mode: string } {
     mode: isTauri ? 'tauri' : 'web-mock',
   };
 }
+
+/**
+ * Type definition for event callback
+ */
+export type EventCallback<T> = (event: { payload: T; id: number }) => void;
+
+/**
+ * Type definition for unlisten function
+ */
+export type UnlistenFn = () => void;
+
+/**
+ * Mock listen function for Tauri events
+ * In web mode, returns a no-op unsubscribe function
+ * In Tauri mode, delegates to the real listen function
+ */
+export async function listen<T>(event: string, handler: EventCallback<T>): Promise<UnlistenFn> {
+  if (isTauri) {
+    // Dynamically import Tauri API only in Tauri context
+    const { listen: tauriListen } = await import('@tauri-apps/api/event');
+    return tauriListen<T>(event, handler);
+  }
+
+  // In web mode, log the event registration and return no-op unlisten
+  console.debug(`[Tauri Mock] Registered listener for event: ${event}`);
+
+  // Return a no-op unlisten function
+  return () => {
+    console.debug(`[Tauri Mock] Unregistered listener for event: ${event}`);
+  };
+}
+
+/**
+ * Mock emit function for Tauri events
+ * In web mode, logs the event
+ * In Tauri mode, delegates to the real emit function
+ */
+export async function emit(event: string, payload?: unknown): Promise<void> {
+  if (isTauri) {
+    const { emit: tauriEmit } = await import('@tauri-apps/api/event');
+    return tauriEmit(event, payload);
+  }
+
+  console.debug(`[Tauri Mock] Emitted event: ${event}`, payload);
+}
+
+/**
+ * Mock once function for one-time event listeners
+ * In web mode, returns a no-op unsubscribe function
+ * In Tauri mode, delegates to the real once function
+ */
+export async function once<T>(event: string, handler: EventCallback<T>): Promise<UnlistenFn> {
+  if (isTauri) {
+    const { once: tauriOnce } = await import('@tauri-apps/api/event');
+    return tauriOnce<T>(event, handler);
+  }
+
+  console.debug(`[Tauri Mock] Registered one-time listener for event: ${event}`);
+  return () => {
+    console.debug(`[Tauri Mock] Unregistered one-time listener for event: ${event}`);
+  };
+}

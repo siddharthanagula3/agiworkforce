@@ -4,7 +4,8 @@ import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { CommandPalette } from './CommandPalette';
 import { EmptyState } from './EmptyState';
 import { Sidebar } from './Sidebar';
-import { SidecarPanel } from './SidecarPanel';
+// TODO: Re-implement SidecarPanel or remove if deprecated
+// import { SidecarPanel } from './SidecarPanel';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -17,11 +18,11 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
+  const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
   const messages = useUnifiedChatStore((state) => state.messages);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
-  const addMessage = useUnifiedChatStore((state) => state.addMessage);
-  
+
   // Ref for auto-scrolling
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,14 +31,6 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
   const handleNewChat = useCallback(() => {
     createConversation('New chat');
   }, [createConversation]);
-
-  // Handle suggestion click
-  const handleSuggestionClick = useCallback(
-    (prompt: string) => {
-      addMessage({ role: 'user', content: prompt });
-    },
-    [addMessage],
-  );
 
   // Auto-scroll to bottom when new messages arrive or during streaming
   useEffect(() => {
@@ -98,18 +91,13 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
 
       {/* Main Content Area */}
       <main
-        className={cn(
-          'flex flex-1 min-h-0 flex-col overflow-hidden transition-all duration-300',
-          sidecarState.isOpen && 'mr-[600px]', // Account for sidecar width
-        )}
+        className={cn('flex flex-1 min-h-0 flex-col overflow-hidden transition-all duration-300')}
+        style={{ marginRight: sidecarState.isOpen ? sidecarWidth : 0 }}
       >
         {/* Content Container */}
         <div className="relative flex h-full flex-col">
           {/* Message Area */}
-          <div 
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto pb-32 scroll-smooth"
-          >
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-32 scroll-smooth">
             <div className="mx-auto w-full max-w-3xl px-4 py-6">
               {children}
               {/* Scroll anchor for auto-scroll */}
@@ -118,12 +106,13 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
           </div>
 
           {/* Empty State - Content behind input */}
-          {isEmptyState && <EmptyState onSuggestionClick={handleSuggestionClick} />}
+          {isEmptyState && <EmptyState />}
         </div>
       </main>
 
       {/* Sidecar Panel - Fixed position */}
-      {sidecarState.isOpen && <SidecarPanel />}
+      {/* TODO: Re-implement SidecarPanel */}
+      {/* {sidecarState.isOpen && <SidecarPanel />} */}
 
       {/* Command Palette (Cmd+K) */}
       <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
