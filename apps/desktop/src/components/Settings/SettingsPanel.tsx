@@ -1,37 +1,38 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
-import {
-  Eye,
-  EyeOff,
-  Check,
-  X,
-  Loader2,
-  Key,
-  Settings2,
-  Monitor,
-  Shield,
-  Download,
-  Users,
-} from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-import { Label } from '../ui/Label';
-import { Input } from '../ui/Input';
-import { Button } from '../ui/Button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import {
-  useSettingsStore,
-  type Provider,
-  createDefaultLLMConfig,
-  createDefaultWindowPreferences,
-  type TaskCategory,
-} from '../../stores/settingsStore';
+    Activity,
+    Check,
+    Download,
+    Eye,
+    EyeOff,
+    Key,
+    Loader2,
+    Monitor,
+    Settings2,
+    Shield,
+    X
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
 import { cn } from '../../lib/utils';
+// import { EmployeesPage } from '../../pages/EmployeesPage';
+import {
+    createDefaultLLMConfig,
+    createDefaultWindowPreferences,
+    useSettingsStore,
+    type Provider,
+    type TaskCategory,
+} from '../../stores/settingsStore';
+import { ResourceMonitor } from '../ResourceMonitor';
+import { Button } from '../ui/Button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
+import { Input } from '../ui/Input';
+import { Label } from '../ui/Label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
-import { EmployeesPage } from '../../pages/EmployeesPage';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -229,10 +230,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <Settings2 className="h-4 w-4" />
                 Models
               </TabsTrigger>
-              <TabsTrigger value="agent-library" className="flex items-center gap-2">
+{/* <TabsTrigger value="agent-library" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Agent Library
-              </TabsTrigger>
+              </TabsTrigger> */}
               <TabsTrigger value="window" className="flex items-center gap-2">
                 <Monitor className="h-4 w-4" />
                 Window
@@ -240,6 +241,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <TabsTrigger value="data-privacy" className="flex items-center gap-2">
                 <Shield className="h-4 w-4" />
                 Privacy
+              </TabsTrigger>
+              <TabsTrigger value="system" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                System
               </TabsTrigger>
             </TabsList>
 
@@ -416,7 +421,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                             </Select>
                             <Input
                               value={routing?.model ?? ''}
-                              placeholder="Model id (e.g., gpt-4.1, claude-3.5-sonnet)"
+                              placeholder="Model id (e.g., gpt-5.1, claude-opus-4-5)"
                               onChange={(event) =>
                                 setTaskRouting(
                                   category,
@@ -476,11 +481,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
             </TabsContent>
 
-            <TabsContent value="agent-library" className="space-y-6 pt-6">
+            {/* <TabsContent value="agent-library" className="space-y-6 pt-6">
               <div className="h-[600px]">
                 <EmployeesPage />
               </div>
-            </TabsContent>
+            </TabsContent> */}
 
             <TabsContent value="window" className="space-y-6 pt-6">
               <div>
@@ -547,6 +552,16 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
             <TabsContent value="data-privacy" className="space-y-6 pt-6">
               <DataPrivacyTab />
+            </TabsContent>
+
+            <TabsContent value="system" className="space-y-6 pt-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Monitor your system performance and resource usage
+                </p>
+                <ResourceMonitor showTools={true} />
+              </div>
             </TabsContent>
           </Tabs>
         )}

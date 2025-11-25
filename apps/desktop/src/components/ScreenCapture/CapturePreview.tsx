@@ -1,14 +1,14 @@
+import { convertFileSrc } from '@/lib/tauri-mock';
+import { Copy, Eye, FileText, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
-import { X, Eye, Trash2, Copy, FileText } from 'lucide-react';
+import { toast } from 'sonner';
+import { useScreenCapture } from '../../hooks/useScreenCapture';
+import type { CaptureResult } from '../../types/capture';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Separator } from '../ui/Separator';
 import { OCRViewer } from './OCRViewer';
-import { useScreenCapture } from '../../hooks/useScreenCapture';
-import type { CaptureResult } from '../../types/capture';
-import { toast } from 'sonner';
-import { convertFileSrc } from '@tauri-apps/api/core';
 
 interface CapturePreviewProps {
   capture: CaptureResult;

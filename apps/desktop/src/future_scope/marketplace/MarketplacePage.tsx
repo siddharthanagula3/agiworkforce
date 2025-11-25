@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs';
-import { MarketplaceHero } from '../components/marketplace/MarketplaceHero';
-import { DiscoverTab } from '../components/marketplace/DiscoverTab';
-import { MyWorkflowsTab } from '../components/marketplace/MyWorkflowsTab';
-import { PublishWorkflowTab } from '../components/marketplace/PublishWorkflowTab';
-import { MyFavoritesTab } from '../components/marketplace/MyFavoritesTab';
-import { MyClonesTab } from '../components/marketplace/MyClonesTab';
-import { WorkflowDetailModal } from '../components/marketplace/WorkflowDetailModal';
-import { ShareModal } from '../components/marketplace/ShareModal';
-import { CloneSuccessModal } from '../components/marketplace/CloneSuccessModal';
-import { useMarketplaceStore } from '../stores/marketplaceStore';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/Tabs';
+import { CloneSuccessModal } from './components/CloneSuccessModal';
+import { DiscoverTab } from './components/DiscoverTab';
+import { MarketplaceHero } from './components/MarketplaceHero';
+import { MyClonesTab } from './components/MyClonesTab';
+import { MyFavoritesTab } from './components/MyFavoritesTab';
+import { MyWorkflowsTab } from './components/MyWorkflowsTab';
+import { PublishWorkflowTab } from './components/PublishWorkflowTab';
+import { ShareModal } from './components/ShareModal';
+import { WorkflowDetailModal } from './components/WorkflowDetailModal';
+import { useMarketplaceStore } from './marketplaceStore';
 
 export function MarketplacePage() {
   const {

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Copy, Loader2, FileCode, AlertCircle } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { DiffEditor } from '@monaco-editor/react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertCircle, Check, Copy, FileCode, Loader2, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../../lib/utils';
 
 interface DiffViewerProps {

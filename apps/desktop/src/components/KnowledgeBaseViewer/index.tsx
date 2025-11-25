@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { invoke } from '@/lib/tauri-mock';
 import {
-  Brain,
-  Search,
-  Filter,
-  Star,
-  Clock,
-  Tag,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
+    AlertCircle,
+    Brain,
+    ChevronDown,
+    ChevronUp,
+    Clock,
+    Filter,
+    Search,
+    Star,
+    Tag,
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import React, { useCallback, useEffect, useState } from 'react';
 
 export interface KnowledgeEntry {
   id: string;

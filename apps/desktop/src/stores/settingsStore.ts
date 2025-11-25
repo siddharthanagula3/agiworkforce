@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type Provider =
@@ -130,7 +130,7 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
       'openai/gpt-5.1-codex-max',
       'anthropic/claude-sonnet-4-5',
       'anthropic/claude-haiku-4-5',
-      'anthropic/claude-opus-4-1',
+      'anthropic/claude-opus-4-5',
       'google/gemini-3-pro',
       'google/gemini-3-flash',
       'google/gemini-3-deep-think',

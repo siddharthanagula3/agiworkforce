@@ -1,17 +1,17 @@
 import { emit } from '@tauri-apps/api/event';
 import 'katex/dist/katex.min.css';
 import {
-  CheckCircle2,
-  Copy,
-  Edit2,
-  FileText,
-  Globe2,
-  Image,
-  Loader2,
-  MoreVertical,
-  RotateCw,
-  Terminal as TerminalIcon,
-  Trash2,
+    CheckCircle2,
+    Copy,
+    Edit2,
+    FileText,
+    Globe2,
+    Image,
+    Loader2,
+    MoreVertical,
+    RotateCw,
+    Terminal as TerminalIcon,
+    Trash2,
 } from 'lucide-react';
 import React, { memo, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -445,8 +445,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               const isImage = attachment.mimeType?.startsWith('image/');
               return (
                 <div key={attachment.id} className="attachment-preview max-w-xs">
-                  {isImage && attachment.dataUrl ? (
-                    <img src={attachment.dataUrl} alt={attachment.name} className="rounded-lg" />
+                  {isImage && (attachment.content || attachment.path) ? (
+                    <img src={attachment.content || attachment.path} alt={attachment.name} className="rounded-lg" />
                   ) : (
                     <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
                       <FileText className="h-5 w-5 text-zinc-500" />

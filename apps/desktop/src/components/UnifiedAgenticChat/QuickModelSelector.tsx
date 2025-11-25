@@ -1,10 +1,10 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getModelMetadata,
-  getProviderModels,
-  PROVIDER_LABELS,
-  type ModelMetadata,
+    getModelMetadata,
+    getProviderModels,
+    PROVIDER_LABELS,
+    type ModelMetadata,
 } from '../../constants/llm';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { cn } from '../../lib/utils';
@@ -13,13 +13,13 @@ import type { Provider } from '../../stores/settingsStore';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
 } from '../ui/Select';
 
 type QuickModelSelectorProps = {
