@@ -1,11 +1,17 @@
-import { invoke } from '@/lib/tauri-mock';
 import { Calendar, Copy, ExternalLink } from 'lucide-react';
 import React, { useEffect } from 'react';
-import { useAuthStore } from '../../stores/authStore';
-import { WORKFLOW_CATEGORIES } from '../../types/marketplace';
-import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import { invoke } from '../../../lib/tauri-mock';
+import { useAuthStore } from '../../../stores/authStore';
+import { WORKFLOW_CATEGORIES } from '../../../types/marketplace';
 
 interface ClonedWorkflow {
   clone_id: string;

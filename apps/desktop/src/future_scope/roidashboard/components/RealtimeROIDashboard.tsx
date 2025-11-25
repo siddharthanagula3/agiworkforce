@@ -1,9 +1,9 @@
 // Updated Nov 16, 2025: Added React.memo and performance optimizations
-import { invoke } from '@/lib/tauri-mock';
 import { Loader2 } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { useAuthStore } from '../../stores/authStore';
-import { Card } from '../ui/Card';
+import { Card } from '../../../components/ui/Card';
+import { invoke } from '../../../lib/tauri-mock';
+import { useAuthStore } from '../../../stores/authStore';
 
 interface PeriodStats {
   total_time_saved_hours: number;

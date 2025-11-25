@@ -1,12 +1,12 @@
+import { ArrowRight, Flame, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
-import { Flame, Sparkles, ArrowRight } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Skeleton } from '../ui/Skeleton';
+import { Button } from '../../../components/ui/Button';
+import { ScrollArea } from '../../../components/ui/ScrollArea';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { WORKFLOW_CATEGORIES } from '../../../types/marketplace';
+import { useMarketplaceStore } from '../marketplaceStore';
 import { WorkflowCard } from './WorkflowCard';
 import { WorkflowSearch } from './WorkflowSearch';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { WORKFLOW_CATEGORIES } from '../../types/marketplace';
 
 export function DiscoverTab() {
   const {

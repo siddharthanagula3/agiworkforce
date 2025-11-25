@@ -1,14 +1,14 @@
-import { CheckCircle, Play, Settings, Share2, Sparkles, ArrowRight } from 'lucide-react';
+import { ArrowRight, CheckCircle, Play, Settings, Share2, Sparkles } from 'lucide-react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Card } from '../../../components/ui/Card';
 import {
   Dialog,
   DialogContent,
-  DialogTitle,
   DialogDescription,
-} from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
+  DialogTitle,
+} from '../../../components/ui/Dialog';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 export function CloneSuccessModal() {
   const { clonedWorkflow, showCloneSuccessModal, closeCloneSuccess, openShareModal } =
@@ -93,12 +93,7 @@ export function CloneSuccessModal() {
               </div>
             </div>
           </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={handleCustomize}
-            className="h-auto py-4"
-          >
+          <Button variant="outline" size="lg" onClick={handleCustomize} className="h-auto py-4">
             <div className="flex flex-col items-center gap-2">
               <Settings className="h-6 w-6" />
               <div>
@@ -123,12 +118,7 @@ export function CloneSuccessModal() {
                 After making improvements, publish your version to help the community and gain
                 recognition as a creator!
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleShareMyVersion}
-                className="gap-2"
-              >
+              <Button variant="outline" size="sm" onClick={handleShareMyVersion} className="gap-2">
                 <Share2 className="h-4 w-4" />
                 Share This Workflow
                 <ArrowRight className="h-4 w-4" />
@@ -154,8 +144,8 @@ export function CloneSuccessModal() {
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
               <span>
-                <strong>Customize for your needs:</strong> Adjust settings, triggers, and actions
-                to fit your specific use case
+                <strong>Customize for your needs:</strong> Adjust settings, triggers, and actions to
+                fit your specific use case
               </span>
             </li>
             <li className="flex items-start gap-2">

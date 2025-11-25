@@ -1,29 +1,6 @@
-import { invoke } from '@/lib/tauri-mock';
 import React, { useEffect, useState } from 'react';
-
-interface PublishedWorkflow {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  creator_id: string;
-  creator_name: string;
-  creator_avatar?: string;
-  thumbnail_url?: string;
-  share_url: string;
-  clone_count: number;
-  view_count: number;
-  favorite_count: number;
-  rating: number;
-  rating_count: number;
-  tags: string[];
-  estimated_time_saved: number;
-  estimated_cost_saved: number;
-  is_verified: boolean;
-  is_featured: boolean;
-  created_at: number;
-  updated_at: number;
-}
+import { invoke } from '../../../lib/tauri-mock';
+import { PublishedWorkflow } from '../../../types/marketplace';
 
 interface WorkflowTemplate {
   id: string;

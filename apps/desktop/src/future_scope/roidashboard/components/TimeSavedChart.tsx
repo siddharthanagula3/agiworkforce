@@ -3,19 +3,25 @@
  * Beautiful area chart showing time saved over time
  */
 
+import { format, parseISO } from 'date-fns';
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
   type TooltipProps,
 } from 'recharts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import { format, parseISO } from 'date-fns';
-import type { ChartDataPoint } from '../../types/roi';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import type { ChartDataPoint } from '../../../types/roi';
 
 interface TimeSavedChartProps {
   data: ChartDataPoint[];
@@ -32,9 +38,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps<number, string>)
       <p className="text-sm font-medium mb-1">
         {label ? format(parseISO(label), 'MMM dd, yyyy') : ''}
       </p>
-      <p className="text-sm text-primary font-semibold">
-        {payload[0]?.value?.toFixed(1)}h saved
-      </p>
+      <p className="text-sm text-primary font-semibold">{payload[0]?.value?.toFixed(1)}h saved</p>
     </div>
   );
 }
