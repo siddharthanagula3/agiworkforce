@@ -1,9 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { isTauri } from '../lib/tauri-mock';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { useEffect, useRef } from 'react';
 import { sha256 } from '../lib/hash';
-import { useUnifiedChatStore } from '../stores/unifiedChatStore';
+import { isTauri } from '../lib/tauri-mock';
 import type {
   ActionLogEntry,
   ActionLogEntryType,
@@ -18,6 +17,7 @@ import type {
   TerminalCommand,
   ToolExecution,
 } from '../stores/unifiedChatStore';
+import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 
 export interface FileOperationEvent {
   operation: FileOperation;
@@ -551,26 +551,26 @@ export function useAgenticEvents() {
       );
       push(unlistenApprovalDenied);
 
-      const unlistenGoalProgress = await listen<GoalProgressEvent>('agi:goal_progress', (event) => {
-        if (!isMountedRef.current) return;
-        console.log('[useAgenticEvents] Goal progress:', event.payload);
-      });
+      const unlistenGoalProgress = await listen<GoalProgressEvent>(
+        'agi:goal_progress',
+        (_event) => {
+          if (!isMountedRef.current) return;
+        },
+      );
       push(unlistenGoalProgress);
 
       const unlistenStepCompleted = await listen<StepCompletedEvent>(
         'agi:step_completed',
-        (event) => {
+        (_event) => {
           if (!isMountedRef.current) return;
-          console.log('[useAgenticEvents] Step completed:', event.payload);
         },
       );
       push(unlistenStepCompleted);
 
       const unlistenGoalCompleted = await listen<GoalCompletedEvent>(
         'agi:goal_completed',
-        (event) => {
+        (_event) => {
           if (!isMountedRef.current) return;
-          console.log('[useAgenticEvents] Goal completed:', event.payload);
         },
       );
       push(unlistenGoalCompleted);

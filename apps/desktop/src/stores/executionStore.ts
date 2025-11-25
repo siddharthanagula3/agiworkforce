@@ -9,8 +9,8 @@
  * - LLM reasoning streams
  */
 
-import { create } from 'zustand';
 import { listen } from '@tauri-apps/api/event';
+import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
 // ========================================
@@ -499,8 +499,6 @@ export async function initializeExecutionListeners() {
         accepted: null,
       });
     });
-
-    console.log('[ExecutionStore] Event listeners initialized');
   } catch (error) {
     console.error('[ExecutionStore] Failed to initialize event listeners:', error);
     listenersInitialized = false;

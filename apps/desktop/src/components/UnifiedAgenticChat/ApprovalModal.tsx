@@ -1,19 +1,19 @@
+import { AlertTriangle, CheckCircle, Info, Shield, XCircle } from 'lucide-react';
 import { useState } from 'react';
-import { Shield, AlertTriangle, Info, CheckCircle, XCircle } from 'lucide-react';
+import { useApprovalActions } from '../../hooks/useApprovalActions';
+import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { useErrorToast } from '../errors/ErrorToast';
+import { Button } from '../ui/Button';
+import { Checkbox } from '../ui/Checkbox';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { Checkbox } from '../ui/Checkbox';
-import { cn } from '../../lib/utils';
-import { useApprovalActions } from '../../hooks/useApprovalActions';
-import { useErrorToast } from '../errors/ErrorToast';
 
 export const ApprovalModal = () => {
   const pendingApprovals = useUnifiedChatStore((s) => s.pendingApprovals);
@@ -34,7 +34,6 @@ export const ApprovalModal = () => {
     try {
       await resolveApproval(currentApproval, 'approve', { trust: alwaysAllow });
       setAlwaysAllow(false);
-      console.log('[ApprovalModal] Operation approved:', currentApproval.id);
     } catch (error) {
       console.error('[ApprovalModal] Failed to approve:', error);
       showError(
@@ -56,7 +55,6 @@ export const ApprovalModal = () => {
         reason: 'User rejected from approval modal',
       });
       setAlwaysAllow(false);
-      console.log('[ApprovalModal] Operation rejected:', currentApproval.id);
     } catch (error) {
       console.error('[ApprovalModal] Failed to reject:', error);
       showError(
