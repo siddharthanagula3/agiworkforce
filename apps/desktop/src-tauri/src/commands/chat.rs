@@ -1066,7 +1066,10 @@ pub async fn chat_send_message(
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
     settings_state: State<'_, crate::commands::settings::SettingsState>,
-    billing_state: State<'_, crate::billing::BillingStateWrapper>,
+    #[cfg_attr(not(feature = "billing"), allow(unused_variables))] billing_state: State<
+        '_,
+        crate::billing::BillingStateWrapper,
+    >,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {

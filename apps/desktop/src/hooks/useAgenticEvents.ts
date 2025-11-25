@@ -1,5 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { invoke, listen, UnlistenFn } from '../lib/tauri-mock';
 import { useEffect, useRef } from 'react';
 import { sha256 } from '../lib/hash';
 import { isTauri } from '../lib/tauri-mock';

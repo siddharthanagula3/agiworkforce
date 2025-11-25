@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type { AppError } from '../stores/errorStore';
 
 interface SystemInfo {
@@ -66,23 +66,43 @@ class ErrorReportingService {
   };
 
   constructor() {
-    this.initializeSystemInfo();
+    // Initialize system info synchronously to avoid race conditions
+    this.initializeSystemInfoSync();
   }
 
   /**
-   * Initialize system information
+   * Initialize system information synchronously
+   * Uses try-catch for SSR/testing safety
    */
-  private async initializeSystemInfo(): Promise<void> {
+  private initializeSystemInfoSync(): void {
     try {
-      this.systemInfo = {
-        platform: navigator.platform,
-        osVersion: navigator.userAgent,
-        appVersion: import.meta.env['VITE_APP_VERSION'] || 'unknown',
-        architecture: navigator.userAgent.includes('x64') ? 'x64' : 'x86',
-        locale: navigator.language,
-      };
+      if (typeof navigator !== 'undefined') {
+        this.systemInfo = {
+          platform: navigator.platform || 'unknown',
+          osVersion: navigator.userAgent || 'unknown',
+          appVersion: import.meta.env['VITE_APP_VERSION'] || 'unknown',
+          architecture: navigator.userAgent?.includes('x64') ? 'x64' : 'x86',
+          locale: navigator.language || 'en-US',
+        };
+      } else {
+        // SSR/testing fallback
+        this.systemInfo = {
+          platform: 'unknown',
+          osVersion: 'unknown',
+          appVersion: import.meta.env['VITE_APP_VERSION'] || 'unknown',
+          architecture: 'unknown',
+          locale: 'en-US',
+        };
+      }
     } catch (error) {
       console.error('Failed to initialize system info:', error);
+      this.systemInfo = {
+        platform: 'unknown',
+        osVersion: 'unknown',
+        appVersion: 'unknown',
+        architecture: 'unknown',
+        locale: 'en-US',
+      };
     }
   }
 
@@ -224,7 +244,12 @@ class ErrorReportingService {
       console.error('Failed to send error batch:', error);
 
       // Re-queue errors if send failed (but limit queue size)
-      this.queue = [...errors, ...this.queue].slice(0, 50);
+      const combined = [...errors, ...this.queue];
+      if (combined.length > 50) {
+        const droppedCount = combined.length - 50;
+        console.warn(`[ErrorReporting] Queue full, dropping ${droppedCount} oldest error(s)`);
+      }
+      this.queue = combined.slice(0, 50);
     }
   }
 

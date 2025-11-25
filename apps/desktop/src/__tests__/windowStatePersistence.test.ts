@@ -6,23 +6,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWindowManager } from '../hooks/useWindowManager';
+import { invoke, listen } from '../lib/tauri-mock';
 
-const { mockInvoke, mockListen, mockGetCurrentWindow } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
-  mockListen: vi.fn(),
-  mockGetCurrentWindow: vi.fn(),
-}));
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...args: unknown[]) => mockInvoke(...args),
-}));
-
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: (...args: unknown[]) => mockListen(...args),
-}));
-
-vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: (...args: unknown[]) => mockGetCurrentWindow(...args),
+vi.mock('../lib/tauri-mock', () => ({
+  invoke: vi.fn(),
+  listen: vi.fn(),
+  isTauri: true, // Simulate Tauri environment in tests
 }));
 
 describe('Window State Persistence - Integration Tests', () => {
@@ -41,10 +30,6 @@ describe('Window State Persistence - Integration Tests', () => {
     fullscreen: false,
   };
 
-  const mockWindowInstance = {
-    minimize: vi.fn(),
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
     stateEventCallback = null;
@@ -58,41 +43,39 @@ describe('Window State Persistence - Integration Tests', () => {
       fullscreen: false,
     };
 
-    mockGetCurrentWindow.mockReturnValue(mockWindowInstance);
-
     // Updated Nov 16, 2025: Fixed incorrect mock implementation for toggle_maximize
     // Mock invoke to simulate backend persistence
-    mockInvoke.mockImplementation((command: string, args?: any) => {
+    vi.mocked(invoke).mockImplementation((command: string, args?: any) => {
       if (command === 'window_get_state') {
-        return Promise.resolve({ ...persistedState });
+        return Promise.resolve({ ...persistedState } as any);
       }
       if (command === 'window_set_fullscreen') {
         persistedState.fullscreen = args.fullscreen;
-        return Promise.resolve();
+        return Promise.resolve(undefined as any);
       }
       if (command === 'window_toggle_maximize') {
         // Bug fix: Toggle maximized state, not fullscreen
         // Maximize and fullscreen are different window states
         persistedState.maximized = !persistedState.maximized;
-        return Promise.resolve();
+        return Promise.resolve(undefined as any);
       }
       if (command === 'window_set_pinned') {
         persistedState.pinned = args.pinned;
-        return Promise.resolve();
+        return Promise.resolve(undefined as any);
       }
       if (command === 'window_set_always_on_top') {
         persistedState.alwaysOnTop = args.value;
-        return Promise.resolve();
+        return Promise.resolve(undefined as any);
       }
       if (command === 'window_dock') {
         persistedState.dock = args.position;
-        return Promise.resolve();
+        return Promise.resolve(undefined as any);
       }
-      return Promise.resolve();
+      return Promise.resolve(undefined as any);
     });
 
     // Mock event listeners
-    mockListen.mockImplementation((eventName: string, callback: (event: any) => void) => {
+    vi.mocked(listen).mockImplementation((eventName: string, callback: (event: any) => void) => {
       if (eventName === 'window://state') {
         stateEventCallback = callback;
       }
@@ -112,7 +95,7 @@ describe('Window State Persistence - Integration Tests', () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockInvoke).toHaveBeenCalledWith('window_get_state');
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_get_state');
         expect(result.current.state.fullscreen).toBe(true);
       });
     });
@@ -161,7 +144,7 @@ describe('Window State Persistence - Integration Tests', () => {
       });
 
       // Verify backend was called
-      expect(mockInvoke).toHaveBeenCalledWith('window_toggle_maximize');
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_toggle_maximize');
 
       // Simulate backend state update event (maximized, not fullscreen)
       await act(async () => {
@@ -318,14 +301,14 @@ describe('Window State Persistence - Integration Tests', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       // Mock failure
-      mockInvoke.mockImplementation((command: string) => {
+      vi.mocked(invoke).mockImplementation((command: string) => {
         if (command === 'window_toggle_maximize') {
           return Promise.reject(new Error('Window operation failed'));
         }
         if (command === 'window_get_state') {
-          return Promise.resolve({ ...persistedState });
+          return Promise.resolve({ ...persistedState } as any);
         }
-        return Promise.resolve();
+        return Promise.resolve(undefined as any);
       });
 
       const { result } = renderHook(() => useWindowManager());

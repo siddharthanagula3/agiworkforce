@@ -6,35 +6,34 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useWindowManager } from '../useWindowManager';
+import { invoke, listen } from '../../lib/tauri-mock';
 
-const { mockInvoke, mockListen, mockGetCurrentWindow } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
-  mockListen: vi.fn(),
-  mockGetCurrentWindow: vi.fn(),
+vi.mock('../../lib/tauri-mock', () => ({
+  invoke: vi.fn(),
+  listen: vi.fn(),
+  isTauri: true, // Simulate Tauri environment in tests
 }));
 
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: (...args: unknown[]) => mockListen(...args),
-}));
-
+const mockGetCurrentWindow = vi.fn();
 vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: (...args: unknown[]) => mockGetCurrentWindow(...args),
+  getCurrentWindow: () => mockGetCurrentWindow(),
 }));
 
 describe('useWindowManager - Fullscreen Functionality', () => {
   const mockWindowInstance = {
     minimize: vi.fn(),
+    close: vi.fn(),
   };
 
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
 
-    // Setup default mock implementations
+    // Setup mock window instance
     mockGetCurrentWindow.mockReturnValue(mockWindowInstance);
 
     // Mock window state with fullscreen false
-    mockInvoke.mockImplementation((command: string) => {
+    vi.mocked(invoke).mockImplementation((command: string) => {
       if (command === 'window_get_state') {
         return Promise.resolve({
           pinned: true,
@@ -42,14 +41,14 @@ describe('useWindowManager - Fullscreen Functionality', () => {
           dock: null,
           maximized: false,
           fullscreen: false,
-        });
+        } as any);
       }
-      return Promise.resolve();
+      return Promise.resolve(undefined as any);
     });
 
     // Mock event listeners with proper cleanup functions
     const mockUnlisten = vi.fn();
-    mockListen.mockResolvedValue(mockUnlisten);
+    vi.mocked(listen).mockResolvedValue(mockUnlisten);
   });
 
   afterEach(() => {
@@ -69,12 +68,12 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockInvoke).toHaveBeenCalledWith('window_get_state');
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_get_state');
       });
     });
 
     it('should restore fullscreen state from backend on mount', async () => {
-      mockInvoke.mockImplementation((command: string) => {
+      vi.mocked(invoke).mockImplementation((command: string) => {
         if (command === 'window_get_state') {
           return Promise.resolve({
             pinned: true,
@@ -107,12 +106,12 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         await result.current.actions.toggleMaximize();
       });
 
-      expect(mockInvoke).toHaveBeenCalledWith('window_toggle_maximize');
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_toggle_maximize');
     });
 
     it('should handle errors gracefully when toggle fails', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mockInvoke.mockImplementation((command: string) => {
+      vi.mocked(invoke).mockImplementation((command: string) => {
         if (command === 'window_toggle_maximize') {
           return Promise.reject(new Error('Toggle failed'));
         }
@@ -151,7 +150,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     it('should listen to window://state events and update fullscreen state', async () => {
       let stateEventCallback: ((event: any) => void) | null = null;
 
-      mockListen.mockImplementation((eventName: string, callback: (event: any) => void) => {
+      vi.mocked(listen).mockImplementation((eventName: string, callback: (event: any) => void) => {
         if (eventName === 'window://state') {
           stateEventCallback = callback;
         }
@@ -161,7 +160,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockListen).toHaveBeenCalledWith('window://state', expect.any(Function));
+        expect(vi.mocked(listen)).toHaveBeenCalledWith('window://state', expect.any(Function));
       });
 
       // Simulate fullscreen state change event
@@ -187,7 +186,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     it('should update fullscreen state to false when exiting fullscreen', async () => {
       let stateEventCallback: ((event: any) => void) | null = null;
 
-      mockListen.mockImplementation((eventName: string, callback: (event: any) => void) => {
+      vi.mocked(listen).mockImplementation((eventName: string, callback: (event: any) => void) => {
         if (eventName === 'window://state') {
           stateEventCallback = callback;
         }
@@ -195,7 +194,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       });
 
       // Start with fullscreen true
-      mockInvoke.mockImplementation((command: string) => {
+      vi.mocked(invoke).mockImplementation((command: string) => {
         if (command === 'window_get_state') {
           return Promise.resolve({
             pinned: true,
@@ -238,7 +237,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       type EventCallback = (event: any) => void;
       let stateEventCallback: EventCallback | null = null;
 
-      mockListen.mockImplementation((eventName: string, callback: EventCallback) => {
+      vi.mocked(listen).mockImplementation((eventName: string, callback: EventCallback) => {
         if (eventName === 'window://state') {
           stateEventCallback = callback;
         }
@@ -248,7 +247,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const { result, unmount } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockListen).toHaveBeenCalled();
+        expect(vi.mocked(listen)).toHaveBeenCalled();
       });
 
       unmount();
@@ -275,7 +274,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     it('should track fullscreen and maximized states independently', async () => {
       let stateEventCallback: ((event: any) => void) | null = null;
 
-      mockListen.mockImplementation((eventName: string, callback: (event: any) => void) => {
+      vi.mocked(listen).mockImplementation((eventName: string, callback: (event: any) => void) => {
         if (eventName === 'window://state') {
           stateEventCallback = callback;
         }
@@ -285,7 +284,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockListen).toHaveBeenCalled();
+        expect(vi.mocked(listen)).toHaveBeenCalled();
       });
 
       // Set both fullscreen and maximized to true
@@ -334,7 +333,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     it('should handle docked and fullscreen states together', async () => {
       let stateEventCallback: ((event: any) => void) | null = null;
 
-      mockListen.mockImplementation((eventName: string, callback: (event: any) => void) => {
+      vi.mocked(listen).mockImplementation((eventName: string, callback: (event: any) => void) => {
         if (eventName === 'window://state') {
           stateEventCallback = callback;
         }
@@ -344,7 +343,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockListen).toHaveBeenCalled();
+        expect(vi.mocked(listen)).toHaveBeenCalled();
       });
 
       // Set dock to left
@@ -449,7 +448,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       });
 
       await waitFor(() => {
-        expect(mockInvoke).toHaveBeenCalledWith('window_dock', { position: 'left' });
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_dock', { position: 'left' });
       });
     });
 
@@ -474,7 +473,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       });
 
       await waitFor(() => {
-        expect(mockInvoke).toHaveBeenCalledWith('window_dock', { position: 'right' });
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_dock', { position: 'right' });
       });
     });
 
@@ -499,7 +498,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       });
 
       await waitFor(() => {
-        expect(mockInvoke).toHaveBeenCalledWith('window_dock', { position: null });
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_dock', { position: null });
       });
     });
   });
@@ -511,7 +510,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const mockUnlisten3 = vi.fn();
 
       let unlistenCallCount = 0;
-      mockListen.mockImplementation(() => {
+      vi.mocked(listen).mockImplementation(() => {
         unlistenCallCount++;
         if (unlistenCallCount === 1) return Promise.resolve(mockUnlisten1);
         if (unlistenCallCount === 2) return Promise.resolve(mockUnlisten2);
@@ -521,7 +520,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const { unmount } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockListen).toHaveBeenCalledTimes(3); // state, focus, preview
+        expect(vi.mocked(listen)).toHaveBeenCalledTimes(3); // state, focus, preview
       });
 
       unmount();
@@ -540,7 +539,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const { unmount } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
-        expect(mockListen).toHaveBeenCalled();
+        expect(vi.mocked(listen)).toHaveBeenCalled();
       });
 
       unmount();

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type { Provider } from './settingsStore';
 import type { ModelMetadata } from '../constants/llm';
 import { getModelMetadata, getAllModels } from '../constants/llm';
