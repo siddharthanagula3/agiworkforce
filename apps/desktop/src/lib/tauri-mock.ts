@@ -33,7 +33,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
   }
 
   // Mock responses for common commands
-  console.log(`[Tauri Mock] ${command}`, args);
 
   switch (command) {
     case 'get_onboarding_status':
@@ -172,16 +171,16 @@ export function convertFileSrc(filePath: string, protocol = 'asset'): string {
     // For now, let's assume if we are in Tauri, we might need to rely on the real import in the component
     // OR we can try to access it from window if exposed.
     // But to keep it simple and consistent with invoke:
-    
+
     // Note: convertFileSrc is synchronous.
     // If we want to use the real one, we'd need to import it.
     // But imports are static or async.
     // So we'll just implement the standard transformation for Windows/Tauri v2.
-    
+
     const encode = encodeURIComponent;
     return `${protocol}://localhost/${encode(filePath)}`;
   }
-  
+
   // In web mode, just return the path or a placeholder
   return filePath;
 }

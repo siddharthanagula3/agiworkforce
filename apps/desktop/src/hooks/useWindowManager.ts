@@ -155,7 +155,6 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
 
   const minimize = useCallback(async () => {
     if (!isTauri) {
-      console.log('[Web Mock] Window minimize');
       return;
     }
 
@@ -195,7 +194,6 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
 
   const close = useCallback(async () => {
     if (!isTauri) {
-      console.log('[Web Mock] Window close');
       return;
     }
 

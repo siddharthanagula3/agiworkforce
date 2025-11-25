@@ -1,9 +1,10 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 /**
  * Platform detection for keyboard shortcuts
  */
-const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const isMac =
+  typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
 /**
  * Modifier keys for keyboard shortcuts
@@ -112,14 +113,9 @@ function normalizeKey(key: string): string {
  */
 export function useKeyboardShortcuts(
   shortcuts: KeyboardShortcut[],
-  options: UseKeyboardShortcutsOptions = {}
+  options: UseKeyboardShortcutsOptions = {},
 ): void {
-  const {
-    enabled = true,
-    enableOnFormElements = false,
-    scope,
-    debug = false,
-  } = options;
+  const { enabled = true, enableOnFormElements = false, scope } = options;
 
   // Use ref to avoid recreating listener on every render
   const shortcutsRef = useRef<KeyboardShortcut[]>(shortcuts);
@@ -162,13 +158,6 @@ export function useKeyboardShortcuts(
         }
 
         // Match found!
-        if (debug) {
-          console.log('[Keyboard Shortcut]', {
-            key: shortcut.key,
-            modifiers: shortcut.modifiers,
-            description: shortcut.description,
-          });
-        }
 
         // Prevent default behavior if requested
         if (shortcut.preventDefault !== false) {
@@ -189,7 +178,7 @@ export function useKeyboardShortcuts(
         break;
       }
     },
-    [enabled, enableOnFormElements, scope, debug]
+    [enabled, enableOnFormElements, scope],
   );
 
   useEffect(() => {
@@ -212,7 +201,7 @@ export function useKeyboardShortcut(
   key: string,
   action: (event: KeyboardEvent) => void | Promise<void>,
   modifiers?: Modifiers,
-  options?: UseKeyboardShortcutsOptions
+  options?: UseKeyboardShortcutsOptions,
 ): void {
   useKeyboardShortcuts(
     [
@@ -222,17 +211,14 @@ export function useKeyboardShortcut(
         action,
       },
     ],
-    options
+    options,
   );
 }
 
 /**
  * Helper to create platform-aware shortcuts (Cmd on Mac, Ctrl on Windows)
  */
-export function platformModifiers(options: {
-  shift?: boolean;
-  alt?: boolean;
-}): Modifiers {
+export function platformModifiers(options: { shift?: boolean; alt?: boolean }): Modifiers {
   if (isMac) {
     return {
       meta: true,
@@ -251,10 +237,7 @@ export function platformModifiers(options: {
 /**
  * Format shortcut for display (e.g., "Ctrl+K" or "Cmd+K")
  */
-export function formatShortcut(shortcut: {
-  key: string;
-  modifiers?: Modifiers;
-}): string {
+export function formatShortcut(shortcut: { key: string; modifiers?: Modifiers }): string {
   const parts: string[] = [];
 
   if (shortcut.modifiers) {

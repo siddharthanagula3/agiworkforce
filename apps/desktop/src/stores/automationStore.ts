@@ -379,7 +379,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       isRecording: true,
       currentRecording: recordingSession,
     });
-    console.log('[AutomationStore] Recording started:', recordingSession);
   },
 
   handleRecordingStopped: (recording) => {
@@ -388,23 +387,21 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       currentRecording: null,
       recordings: [recording, ...state.recordings],
     }));
-    console.log('[AutomationStore] Recording stopped:', recording);
   },
 
-  handleActionRecorded: (action) => {
+  handleActionRecorded: (_action) => {
     set((state) => {
       if (!state.currentRecording) {
         console.warn('[AutomationStore] Action recorded but no active recording session');
         return state;
       }
-      console.log('[AutomationStore] Action recorded:', action);
+
       return state;
     });
   },
 
   handleShortcutAction: (action) => {
     set({ lastTriggeredShortcut: action });
-    console.log('[AutomationStore] Shortcut action triggered:', action);
   },
 
   handleShortcutRegistered: (shortcut) => {
@@ -420,13 +417,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
         return { shortcuts: [...state.shortcuts, shortcut] };
       }
     });
-    console.log('[AutomationStore] Shortcut registered:', shortcut);
   },
 
   handleShortcutUnregistered: (shortcutId) => {
     set((state) => ({
       shortcuts: state.shortcuts.filter((s) => s.id !== shortcutId),
     }));
-    console.log('[AutomationStore] Shortcut unregistered:', shortcutId);
   },
 }));
