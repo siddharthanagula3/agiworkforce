@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Download, Eye, FileText, Image as ImageIcon } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@/lib/tauri-mock';
+import { Download, Eye, FileText, Image as ImageIcon, X } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { DownloadableFile } from './FileDownloadButton';
 
 interface FilePreviewModalProps {

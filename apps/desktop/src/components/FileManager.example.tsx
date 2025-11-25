@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { listen } from '@tauri-apps/api/event';
+import { useEffect, useState } from 'react';
 
 /**
  * File metadata interface matching Rust FileMetadata struct

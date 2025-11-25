@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { CommandPalette } from './CommandPalette';
@@ -18,8 +18,13 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
 
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
   const messages = useUnifiedChatStore((state) => state.messages);
+  const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const addMessage = useUnifiedChatStore((state) => state.addMessage);
+  
+  // Ref for auto-scrolling
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Handle New Chat Action
   const handleNewChat = useCallback(() => {
@@ -33,6 +38,16 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
     },
     [addMessage],
   );
+
+  // Auto-scroll to bottom when new messages arrive or during streaming
+  useEffect(() => {
+    if (messages.length > 0 || isStreaming) {
+      // Use requestAnimationFrame for smooth scrolling
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+  }, [messages.length, isStreaming]);
 
   // Global Shortcuts (Cmd+K, Cmd+Shift+O, Cmd+Shift+S)
   useEffect(() => {
@@ -91,8 +106,15 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
         {/* Content Container */}
         <div className="relative flex h-full flex-col">
           {/* Message Area */}
-          <div className="flex-1 overflow-y-auto pb-32 scroll-smooth">
-            <div className="mx-auto w-full max-w-3xl px-4 py-6">{children}</div>
+          <div 
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto pb-32 scroll-smooth"
+          >
+            <div className="mx-auto w-full max-w-3xl px-4 py-6">
+              {children}
+              {/* Scroll anchor for auto-scroll */}
+              <div ref={messagesEndRef} className="h-px" />
+            </div>
           </div>
 
           {/* Empty State - Content behind input */}

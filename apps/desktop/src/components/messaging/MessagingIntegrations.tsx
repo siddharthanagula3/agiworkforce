@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog';
+import { Input } from '../ui/Input';
 
 interface MessagingConnection {
   id: string;

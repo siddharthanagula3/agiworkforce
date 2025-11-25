@@ -4,7 +4,7 @@
 
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { beforeAll, afterEach, afterAll } from 'vitest';
+import { afterAll, afterEach, beforeAll } from 'vitest';
 
 // Define request handlers
 export const handlers = [
@@ -14,7 +14,7 @@ export const handlers = [
       id: 'chatcmpl-test',
       object: 'chat.completion',
       created: Date.now(),
-      model: 'gpt-4',
+      model: 'gpt-5.1',
       choices: [
         {
           index: 0,
@@ -45,7 +45,7 @@ export const handlers = [
           text: 'This is a test response from Anthropic',
         },
       ],
-      model: 'claude-3-opus-20240229',
+      model: 'claude-opus-4-5',
       stop_reason: 'end_turn',
       usage: {
         input_tokens: 10,

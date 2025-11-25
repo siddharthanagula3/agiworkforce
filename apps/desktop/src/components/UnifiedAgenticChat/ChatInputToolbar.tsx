@@ -1,8 +1,8 @@
 import { Shield, ShieldOff } from 'lucide-react';
-import { useUnifiedChatStore, type ConversationMode } from '../../stores/unifiedChatStore';
-import { QuickModelSelector } from '../Chat/QuickModelSelector';
-import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
+import { useUnifiedChatStore, type ConversationMode } from '../../stores/unifiedChatStore';
+import { Button } from '../ui/Button';
+import { QuickModelSelector } from './QuickModelSelector';
 
 export const ChatInputToolbar = () => {
   const conversationMode = useUnifiedChatStore((s) => s.conversationMode);

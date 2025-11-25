@@ -1,18 +1,18 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { invoke } from '@/lib/tauri-mock';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft,
-  ArrowRight,
-  RefreshCw,
-  ExternalLink,
-  Loader2,
-  AlertCircle,
-  Globe,
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    ExternalLink,
+    Globe,
+    Loader2,
+    RefreshCw,
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import { BrowserViewer } from '../../Browser/BrowserViewer';
-import { useBrowserStore } from '../../../stores/browserStore';
+import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../../lib/utils';
+import { useBrowserStore } from '../../../stores/browserStore';
+import { BrowserViewer } from '../../Browser/BrowserViewer';
 
 interface BrowserPreviewProps {
   contextId?: string;

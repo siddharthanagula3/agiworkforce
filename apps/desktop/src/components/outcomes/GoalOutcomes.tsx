@@ -1,5 +1,5 @@
+import { invoke } from '@/lib/tauri-mock';
 import React, { useCallback, useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 
 interface TrackedOutcome {
   id: string;
