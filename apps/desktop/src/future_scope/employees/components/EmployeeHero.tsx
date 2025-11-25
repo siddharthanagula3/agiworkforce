@@ -3,8 +3,8 @@
  * Eye-catching hero section for the AI Employee Library
  */
 
-import { Users, Clock, Star, TrendingUp } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Clock, Star, TrendingUp, Users } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
 
 export function EmployeeHero() {
   return (
@@ -20,8 +20,7 @@ export function EmployeeHero() {
               Your AI Workforce
             </h1>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl">
-              20+ pre-trained AI employees ready to work in seconds. No setup, no training
-              required.
+              20+ pre-trained AI employees ready to work in seconds. No setup, no training required.
             </p>
           </div>
 

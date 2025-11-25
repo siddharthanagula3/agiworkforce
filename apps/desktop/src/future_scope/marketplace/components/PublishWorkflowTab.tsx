@@ -1,23 +1,29 @@
-import { invoke } from '@/lib/tauri-mock';
 import { AlertCircle, CheckCircle, Plus, Upload, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { useAuthStore } from '../../stores/authStore';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { WORKFLOW_CATEGORIES, type WorkflowLicense } from '../../types/marketplace';
-import { Alert } from '../ui/Alert';
-import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import { Input } from '../ui/Input';
-import { Label } from '../ui/Label';
+import { Alert } from '../../../components/ui/Alert';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '../ui/Select';
-import { Textarea } from '../ui/Textarea';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import { Input } from '../../../components/ui/Input';
+import { Label } from '../../../components/ui/Label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/Select';
+import { Textarea } from '../../../components/ui/Textarea';
+import { invoke } from '../../../lib/tauri-mock';
+import { useAuthStore } from '../../../stores/authStore';
+import { WORKFLOW_CATEGORIES, type WorkflowLicense } from '../../../types/marketplace';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 interface UserWorkflow {
   id: string;
@@ -345,7 +351,10 @@ export function PublishWorkflowTab() {
             {/* License */}
             <div className="space-y-2">
               <Label htmlFor="license">License *</Label>
-              <Select value={license} onValueChange={(value) => setLicense(value as WorkflowLicense)}>
+              <Select
+                value={license}
+                onValueChange={(value) => setLicense(value as WorkflowLicense)}
+              >
                 <SelectTrigger id="license">
                   <SelectValue />
                 </SelectTrigger>
