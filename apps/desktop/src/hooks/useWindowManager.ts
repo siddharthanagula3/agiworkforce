@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { invoke, isTauri } from '../lib/tauri-mock';
+import { invoke, isTauri, listen } from '../lib/tauri-mock';
 
 export type DockPosition = 'left' | 'right';
 
@@ -75,34 +75,41 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     let isMounted = true;
     const cleaners: Array<() => void> = [];
 
-    (async () => {
-      const { listen } = await import('@tauri-apps/api/event');
+    const setupListeners = async () => {
+      try {
+        const windowStateListener = await listen<BackendWindowState>('window://state', (event) => {
+          if (!isMounted) return;
+          const payload = event.payload;
+          setState((current) => ({
+            ...current,
+            pinned: payload.pinned,
+            alwaysOnTop: payload.alwaysOnTop,
+            dock: payload.dock ?? null,
+            maximized: payload.maximized,
+            fullscreen: payload.fullscreen,
+          }));
+        });
 
-      const windowStateListener = await listen<BackendWindowState>('window://state', (event) => {
-        if (!isMounted) return;
-        const payload = event.payload;
-        setState((current) => ({
-          ...current,
-          pinned: payload.pinned,
-          alwaysOnTop: payload.alwaysOnTop,
-          dock: payload.dock ?? null,
-          maximized: payload.maximized,
-          fullscreen: payload.fullscreen,
-        }));
-      });
+        const focusListener = await listen<boolean>('window://focus', (event) => {
+          if (!isMounted) return;
+          setState((current) => ({ ...current, focused: event.payload }));
+        });
 
-      const focusListener = await listen<boolean>('window://focus', (event) => {
-        if (!isMounted) return;
-        setState((current) => ({ ...current, focused: event.payload }));
-      });
+        const previewListener = await listen<DockPreviewPayload>(
+          'window://dock-preview',
+          (event) => {
+            if (!isMounted) return;
+            setState((current) => ({ ...current, dockPreview: event.payload.preview }));
+          },
+        );
 
-      const previewListener = await listen<DockPreviewPayload>('window://dock-preview', (event) => {
-        if (!isMounted) return;
-        setState((current) => ({ ...current, dockPreview: event.payload.preview }));
-      });
+        cleaners.push(windowStateListener, focusListener, previewListener);
+      } catch (error) {
+        console.error('[useWindowManager] Failed to setup event listeners:', error);
+      }
+    };
 
-      cleaners.push(windowStateListener, focusListener, previewListener);
-    })();
+    setupListeners();
 
     return () => {
       isMounted = false;

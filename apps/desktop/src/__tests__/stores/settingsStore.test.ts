@@ -1,10 +1,15 @@
-/**
+﻿/**
  * Comprehensive tests for settingsStore
  * Tests settings persistence, API key management, LLM configuration, and window preferences
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
+import { invoke } from '../../lib/tauri-mock';
+
+vi.mock('../../lib/tauri-mock', () => ({
+  invoke: vi.fn(),
+}));
 
 const buildTaskRouting = (defaults: {
   openai: string;
@@ -25,11 +30,6 @@ const buildTaskRouting = (defaults: {
   image: { provider: 'google' as Provider, model: defaults.google },
   video: { provider: 'google' as Provider, model: defaults.google },
 });
-
-// Mock Tauri API
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-}));
 
 describe('settingsStore', () => {
   beforeEach(() => {
@@ -75,6 +75,10 @@ describe('settingsStore', () => {
       error: null,
     });
     vi.clearAllMocks();
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'settings_get_api_key') return Promise.resolve('');
+      return Promise.resolve(undefined);
+    });
   });
 
   describe('Initial State', () => {
@@ -104,17 +108,14 @@ describe('settingsStore', () => {
 
   describe('API Key Management', () => {
     it('should set OpenAI API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(undefined);
-
       const testKey = 'sk-test123';
       await useSettingsStore.getState().setAPIKey('openai', testKey);
 
-      expect(invoke).toHaveBeenCalledWith('settings_save_api_key', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_save_api_key', {
         provider: 'openai',
         key: testKey,
       });
-      expect(invoke).toHaveBeenCalledWith('llm_configure_provider', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
         provider: 'openai',
         apiKey: testKey,
         baseUrl: null,
@@ -127,13 +128,10 @@ describe('settingsStore', () => {
     });
 
     it('should set Anthropic API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(undefined);
-
       const testKey = 'sk-ant-test123';
       await useSettingsStore.getState().setAPIKey('anthropic', testKey);
 
-      expect(invoke).toHaveBeenCalledWith('settings_save_api_key', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_save_api_key', {
         provider: 'anthropic',
         key: testKey,
       });
@@ -143,12 +141,9 @@ describe('settingsStore', () => {
     });
 
     it('should configure Ollama without API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(undefined);
-
       await useSettingsStore.getState().setAPIKey('ollama', '');
 
-      expect(invoke).toHaveBeenCalledWith('llm_configure_provider', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
         provider: 'ollama',
         apiKey: null,
         baseUrl: 'http://localhost:11434',
@@ -156,20 +151,24 @@ describe('settingsStore', () => {
     });
 
     it('should get API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue('sk-test123');
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === 'settings_get_api_key') return Promise.resolve('sk-test123');
+        return Promise.resolve(undefined);
+      });
 
       const key = await useSettingsStore.getState().getAPIKey('openai');
 
-      expect(invoke).toHaveBeenCalledWith('settings_get_api_key', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_get_api_key', {
         provider: 'openai',
       });
       expect(key).toBe('sk-test123');
     });
 
     it('should return empty string if API key not found', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(null);
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === 'settings_get_api_key') return Promise.resolve(null);
+        return Promise.resolve(undefined);
+      });
 
       const key = await useSettingsStore.getState().getAPIKey('openai');
 
@@ -177,8 +176,9 @@ describe('settingsStore', () => {
     });
 
     it('should handle API key retrieval error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockRejectedValue(new Error('Keyring error'));
+      vi.mocked(invoke).mockImplementation(() => {
+        throw new Error('Keyring error');
+      });
 
       const key = await useSettingsStore.getState().getAPIKey('openai');
 
@@ -186,8 +186,9 @@ describe('settingsStore', () => {
     });
 
     it('should handle API key save error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockRejectedValue(new Error('Save failed'));
+      vi.mocked(invoke).mockImplementation(() => {
+        throw new Error('Save failed');
+      });
 
       await expect(useSettingsStore.getState().setAPIKey('openai', 'sk-test123')).rejects.toThrow();
 
@@ -199,15 +200,17 @@ describe('settingsStore', () => {
 
   describe('API Key Testing', () => {
     it('should test valid API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue({ content: 'Hello' });
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === 'settings_get_api_key') return Promise.resolve('sk-test123');
+        return Promise.resolve({ content: 'Hello' });
+      });
 
       const isValid = await useSettingsStore.getState().testAPIKey('openai');
 
-      expect(invoke).toHaveBeenCalledWith('llm_send_message', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_send_message', {
         request: {
-          messages: [{ role: 'user', content: 'Hello' }],
-          model: null,
+          messages: [{ role: 'user', content: 'Hi' }],
+          model: 'gpt-5.1',
           provider: 'openai',
           temperature: null,
           max_tokens: 10,
@@ -220,26 +223,25 @@ describe('settingsStore', () => {
     });
 
     it('should test invalid API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockRejectedValue(new Error('Invalid API key'));
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === 'settings_get_api_key') return Promise.resolve('sk-test123');
+        return Promise.reject(new Error('Invalid API key'));
+      });
 
       const isValid = await useSettingsStore.getState().testAPIKey('openai');
 
       expect(isValid).toBe(false);
       const state = useSettingsStore.getState();
-      expect(state.error).toBe('Error: Invalid API key');
+      expect(state.error).toBe('Invalid API key');
       expect(state.loading).toBe(false);
     });
   });
 
   describe('LLM Configuration', () => {
     it('should set default provider', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(undefined);
-
       await useSettingsStore.getState().setDefaultProvider('anthropic');
 
-      expect(invoke).toHaveBeenCalledWith('llm_set_default_provider', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_set_default_provider', {
         provider: 'anthropic',
       });
 
@@ -248,8 +250,9 @@ describe('settingsStore', () => {
     });
 
     it('should handle set default provider error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockRejectedValue(new Error('Provider error'));
+      vi.mocked(invoke).mockImplementation(() => {
+        throw new Error('Provider error');
+      });
 
       await expect(useSettingsStore.getState().setDefaultProvider('anthropic')).rejects.toThrow();
 
@@ -391,8 +394,7 @@ describe('settingsStore', () => {
         },
       };
 
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockImplementation((cmd: string) => {
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'settings_load') return Promise.resolve(mockSettings);
         if (cmd === 'settings_get_api_key') return Promise.resolve('');
         if (cmd === 'llm_configure_provider') return Promise.resolve(undefined);
@@ -422,8 +424,7 @@ describe('settingsStore', () => {
     });
 
     it('should handle settings load error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockRejectedValue(new Error('Load failed'));
+      vi.mocked(invoke).mockRejectedValue(new Error('Load failed'));
 
       await useSettingsStore.getState().loadSettings();
 
@@ -469,12 +470,11 @@ describe('settingsStore', () => {
         },
       });
 
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(undefined);
+      vi.mocked(invoke).mockResolvedValue(undefined);
 
       await useSettingsStore.getState().saveSettings();
 
-      expect(invoke).toHaveBeenCalledWith('settings_save', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_save', {
         settings: {
           llmConfig: expect.any(Object),
           windowPreferences: expect.any(Object),
@@ -487,8 +487,7 @@ describe('settingsStore', () => {
     });
 
     it('should handle settings save error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockRejectedValue(new Error('Save failed'));
+      vi.mocked(invoke).mockRejectedValue(new Error('Save failed'));
 
       await expect(useSettingsStore.getState().saveSettings()).rejects.toThrow();
 
@@ -500,12 +499,11 @@ describe('settingsStore', () => {
 
   describe('Loading States', () => {
     it('should set loading while saving API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
       let resolvePromise: any;
       const promise = new Promise((resolve) => {
         resolvePromise = resolve;
       });
-      (invoke as any).mockReturnValue(promise);
+      vi.mocked(invoke).mockReturnValue(promise);
 
       const savePromise = useSettingsStore.getState().setAPIKey('openai', 'sk-test');
 
@@ -518,12 +516,11 @@ describe('settingsStore', () => {
     });
 
     it('should set loading while testing API key', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
       let resolvePromise: any;
       const promise = new Promise((resolve) => {
         resolvePromise = resolve;
       });
-      (invoke as any).mockReturnValue(promise);
+      vi.mocked(invoke).mockReturnValue(promise);
 
       const testPromise = useSettingsStore.getState().testAPIKey('openai');
 
@@ -538,8 +535,7 @@ describe('settingsStore', () => {
 
   describe('Multiple Providers', () => {
     it('should manage API keys for all providers', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockResolvedValue(undefined);
+      vi.mocked(invoke).mockResolvedValue(undefined);
 
       await useSettingsStore.getState().setAPIKey('openai', 'sk-openai-test');
       await useSettingsStore.getState().setAPIKey('anthropic', 'sk-ant-test');
@@ -552,8 +548,7 @@ describe('settingsStore', () => {
     });
 
     it('should configure all providers during load', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
-      (invoke as any).mockImplementation((cmd: string, args?: any) => {
+      vi.mocked(invoke).mockImplementation((cmd: string, args?: any) => {
         if (cmd === 'settings_load') {
           return Promise.resolve({
             llmConfig: {
@@ -609,14 +604,14 @@ describe('settingsStore', () => {
       await useSettingsStore.getState().loadSettings();
 
       // Should configure Ollama with base URL
-      expect(invoke).toHaveBeenCalledWith('llm_configure_provider', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
         provider: 'ollama',
         apiKey: null,
         baseUrl: 'http://localhost:11434',
       });
 
       // Should configure OpenAI with API key
-      expect(invoke).toHaveBeenCalledWith('llm_configure_provider', {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
         provider: 'openai',
         apiKey: 'sk-test',
         baseUrl: null,

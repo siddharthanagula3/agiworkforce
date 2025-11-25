@@ -4,14 +4,14 @@ import { toast } from 'sonner';
 import { create } from 'zustand';
 
 import type {
-    CalendarAccount,
-    CalendarEvent,
-    CalendarProvider,
-    CalendarSummary,
-    CreateEventRequest,
-    EventDateTime,
-    ListEventsOptions,
-    UpdateEventRequest,
+  CalendarAccount,
+  CalendarEvent,
+  CalendarProvider,
+  CalendarSummary,
+  CreateEventRequest,
+  EventDateTime,
+  ListEventsOptions,
+  UpdateEventRequest,
 } from '../types/calendar';
 
 interface PendingAuthorization {
@@ -152,13 +152,15 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       const firstAccount = accounts[0];
 
       if (!selectedAccountId && firstAccount) {
-        await get().selectAccount(firstAccount?.account_id);
+        await get().selectAccount(firstAccount.account_id);
       } else if (
         selectedAccountId &&
-        firstAccount &&
         !accounts.some((account) => account.account_id === selectedAccountId)
       ) {
-        await get().selectAccount(firstAccount.account_id);
+        const fallbackAccount = accounts[0];
+        if (fallbackAccount) {
+          await get().selectAccount(fallbackAccount.account_id);
+        }
       }
     } catch (error) {
       console.error('[calendar] failed to load accounts', error);
@@ -238,10 +240,10 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       const calendars = await invoke<CalendarSummary[]>('calendar_list_calendars', {
         account_id: accountId,
       });
-      const firstCalendar = calendars[0] ?? null;
+      const firstCalendar = calendars[0];
       set({
         calendars,
-        selectedCalendarId: firstCalendar ? firstCalendar.id : null,
+        selectedCalendarId: firstCalendar?.id ?? null,
       });
 
       if (firstCalendar) {

@@ -53,6 +53,9 @@ const TitleBar = ({
         </button>
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
           <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
+          <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
+            {state.focused ? 'Ready' : 'Inactive'}
+          </p>
         </div>
       </div>
 

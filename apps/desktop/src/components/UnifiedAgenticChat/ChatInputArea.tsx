@@ -1,16 +1,28 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, ChevronDown, Image as ImageIcon, Loader2, Mic, Paperclip, Send, Square, X } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+﻿import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Camera,
+  ChevronDown,
+  Image as ImageIcon,
+  Loader2,
+  Mic,
+  MicOff,
+  Paperclip,
+  Send,
+  Square,
+  X,
+} from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { cn } from '../../lib/utils';
 import { useModelStore } from '../../stores/modelStore';
 import {
-    Attachment,
-    ContextItem,
-    FocusMode,
-    useUnifiedChatStore,
+  Attachment,
+  ContextItem,
+  FocusMode,
+  useUnifiedChatStore,
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
 
@@ -30,12 +42,11 @@ export interface ChatInputAreaProps {
   maxLength?: number;
   enableAttachments?: boolean;
   className?: string;
-  rightAccessory?: React.ReactNode;
 }
 
 const MAX_ROWS = 10;
 
-// Focus mode configuration
+// Focus mode configuration - matching Claude Desktop
 const FOCUS_MODES: { value: FocusMode; label: string; placeholder: string }[] = [
   { value: 'web', label: 'Web', placeholder: 'Search the web for information...' },
   { value: 'academic', label: 'Academic', placeholder: 'Search academic papers and research...' },
@@ -57,20 +68,22 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   onStopGeneration,
   disabled = false,
-  placeholder: defaultPlaceholder = 'Type a message...',
+  placeholder: defaultPlaceholder = 'Ask me anything...',
   maxLength = 10000,
   enableAttachments = true,
   className = '',
-  rightAccessory,
 }) => {
   const [content, setContent] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadersRef = useRef<FileReader[]>([]);
+  const modelSelectorRef = useRef<HTMLDivElement>(null);
 
   const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
@@ -80,39 +93,83 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const focusMode = useUnifiedChatStore((state) => state.focusMode);
   const setFocusMode = useUnifiedChatStore((state) => state.setFocusMode);
   const tokenUsage = useUnifiedChatStore((state) => state.tokenUsage);
+  const draftContent = useUnifiedChatStore((state) => state.draftContent);
+  const editingMessageId = useUnifiedChatStore((state) => state.editingMessageId);
+  const setDraftContent = useUnifiedChatStore((state) => state.setDraftContent);
+  const cancelEditing = useUnifiedChatStore((state) => state.cancelEditing);
   const selectedModel = useModelStore((state) => state.selectedModel);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const prefersReducedMotion = useReducedMotion();
 
-  // Local state to prevent double sends
-  const [isSending, setIsSending] = useState(false);
+  const {
+    isListening,
+    isSupported: isVoiceSupported,
+    interimTranscript,
+    error: voiceError,
+    toggleListening,
+  } = useVoiceInput({
+    continuous: false,
+    interimResults: true,
+    language: 'en-US',
+    onResult: useCallback(
+      (transcript: string, isFinal: boolean) => {
+        if (isFinal) {
+          setContent((prev) => {
+            const next = prev + (prev ? ' ' : '') + transcript;
+            setDraftContent(next);
+            return next;
+          });
+        }
+      },
+      [setDraftContent],
+    ),
+  });
 
-  // Get model display name
   const modelDisplayName = selectedModel
-    ? (getModelMetadata(selectedModel)?.name ?? 'Claude')
-    : 'Claude';
+    ? (getModelMetadata(selectedModel)?.name ?? 'GPT-5.1 Instant')
+    : 'GPT-5.1 Instant';
 
-  // Handle input change
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    if (value.length <= maxLength) {
-      setContent(value);
-    }
-  };
-
-  const isDisabled = disabled || isLoading || isSending;
+  const isDisabled = disabled || isLoading || isSending || isStreaming;
   const isEmptyState = messages.length === 0;
   const showStopButton = isStreaming && onStopGeneration;
 
-  // Close model selector when model changes
+  // Keep local content aligned with shared draft (for edit/resend flows)
+  useEffect(() => {
+    if (draftContent !== content) {
+      setContent(draftContent);
+    }
+  }, [draftContent, content]);
+
   useEffect(() => {
     setShowModelSelector(false);
   }, [selectedModel]);
 
-  // Get dynamic placeholder based on focus mode
+  // Close model selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelSelectorRef.current && !modelSelectorRef.current.contains(event.target as Node)) {
+        setShowModelSelector(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close the model selector with Escape for quick dismissal
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowModelSelector(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
+
   const placeholder =
     FOCUS_MODES.find((m) => m.value === focusMode)?.placeholder || defaultPlaceholder;
 
+  // Auto-resize textarea
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -124,6 +181,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [content]);
 
+  // Cleanup file readers and blob URLs
   useEffect(() => {
     return () => {
       fileReadersRef.current.forEach((reader) => {
@@ -140,41 +198,40 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     };
   }, [attachments]);
 
-  // Handle drag and drop
+  // Drag and drop handlers
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
       setIsDragging(true);
     };
-
     const handleDragLeave = (e: DragEvent) => {
       e.preventDefault();
-      if (e.target === document.body) {
-        setIsDragging(false);
-      }
+      if (e.target === document.body) setIsDragging(false);
     };
-
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-
       const files = Array.from(e.dataTransfer?.files || []);
-      if (files.length > 0) {
-        handleFilesAdded(files);
-      }
+      if (files.length > 0) handleFilesAdded(files);
     };
 
     document.addEventListener('dragover', handleDragOver);
     document.addEventListener('dragleave', handleDragLeave);
     document.addEventListener('drop', handleDrop);
-
     return () => {
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('dragleave', handleDragLeave);
       document.removeEventListener('drop', handleDrop);
     };
-    // handleFilesAdded is stable (doesn't depend on props/state), safe to omit
   }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= maxLength) {
+      setContent(value);
+      setDraftContent(value);
+    }
+  };
 
   const handleFilesAdded = (files: File[]) => {
     const newAttachments: Attachment[] = files.map((file) => ({
@@ -192,14 +249,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     event?.preventDefault();
     if (!content.trim() || isDisabled) return;
 
-    // Prevent double sends
     setIsSending(true);
-    
+    setSubmitError(null);
     const messageContent = content;
     const messageAttachments = attachments.length > 0 ? attachments : undefined;
-    
-    // Clear input immediately for better UX (optimistic)
+
     setContent('');
+    setDraftContent('');
     setAttachments([]);
 
     try {
@@ -210,12 +266,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         modelOverride: selectedModel ? selectedModel : undefined,
         providerOverride: selectedProvider ? selectedProvider : undefined,
       });
+      cancelEditing();
     } catch (error) {
-      // Restore content on error so user can retry
       setContent(messageContent);
-      if (messageAttachments) {
-        setAttachments(messageAttachments);
-      }
+      setDraftContent(messageContent);
+      if (messageAttachments) setAttachments(messageAttachments);
+      setSubmitError(error instanceof Error ? error.message : String(error));
       console.error('[ChatInputArea] Send failed:', error);
     } finally {
       setIsSending(false);
@@ -232,22 +288,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     handleFilesAdded(files);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeAttachment = (id: string) => {
     setAttachments((prev) => {
       const attachment = prev.find((item) => item.id === id);
-      if (attachment?.path && attachment.path.startsWith('blob:')) {
-        URL.revokeObjectURL(attachment.path);
-      }
+      if (attachment?.path?.startsWith('blob:')) URL.revokeObjectURL(attachment.path);
       return prev.filter((item) => item.id !== id);
     });
   };
 
-  const _handlePaste = (event: React.ClipboardEvent) => {
+  const handlePaste = (event: React.ClipboardEvent) => {
     const items = Array.from(event.clipboardData.items).filter((item) =>
       item.type.startsWith('image/'),
     );
@@ -257,7 +309,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     items.forEach((item) => {
       const file = item.getAsFile();
       if (!file) return;
-
       const reader = new FileReader();
       fileReadersRef.current.push(reader);
       reader.onload = (e) => {
@@ -273,12 +324,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         setAttachments((prev) => [...prev, attachment]);
         fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
       };
-      reader.onerror = () => {
-        fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
-      };
       reader.readAsDataURL(file);
     });
   };
+
+  // Calculate token usage percentage
+  const tokenPercentage =
+    tokenUsage?.current != null && tokenUsage?.max != null && tokenUsage.max > 0
+      ? Math.min((tokenUsage.current / tokenUsage.max) * 100, 100)
+      : 0;
 
   return (
     <>
@@ -308,6 +362,17 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         )}
       </AnimatePresence>
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,application/pdf,.doc,.docx,.txt,.md"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
+      {/* Main Input Container - Claude Desktop Style */}
       <motion.div
         className={cn(
           'fixed z-40 w-full px-4',
@@ -327,32 +392,28 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         transition={
           prefersReducedMotion
             ? { duration: 0.15 }
-            : {
-                type: 'spring',
-                stiffness: 350,
-                damping: 30,
-              }
+            : { type: 'spring', stiffness: 350, damping: 30 }
         }
         style={{ willChange: 'transform' }}
       >
-        {/* Focus Mode Pills - Above input, always visible */}
+        {/* Focus Mode Pills - Above input */}
         <motion.div
           initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
           transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
-          className="mb-3 flex items-center justify-center gap-2"
+          className="mb-3 flex items-center justify-center gap-2 flex-wrap"
         >
           {FOCUS_MODES.map((mode) => (
             <button
               key={mode.value || 'all'}
               onClick={() => setFocusMode(mode.value)}
               className={cn(
-                'focus-pill',
-                focusMode === mode.value ? 'focus-pill-active' : 'focus-pill-inactive',
+                'px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200',
+                focusMode === mode.value
+                  ? 'bg-teal-500 text-white shadow-md shadow-teal-500/25'
+                  : 'bg-white/80 dark:bg-charcoal-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-700 border border-gray-200 dark:border-gray-700',
               )}
               aria-pressed={focusMode === mode.value}
-              aria-label={`Set focus mode to ${mode.label}`}
             >
               {mode.label}
             </button>
@@ -361,34 +422,48 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
         <div
           className={cn(
-            'floating-input-container relative overflow-hidden rounded-2xl bg-white dark:bg-gray-900',
-            'border border-gray-200 dark:border-gray-700',
-            'shadow-lg transition-all duration-200 ease-out',
-            'focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/20',
-            isEmptyState ? 'shadow-2xl' : 'shadow-xl',
+            'relative overflow-visible rounded-2xl',
+            'bg-white/95 dark:bg-charcoal-800/95 backdrop-blur-xl',
+            'border border-gray-200/80 dark:border-gray-700/80',
+            'shadow-xl shadow-gray-200/50 dark:shadow-black/30',
+            'transition-all duration-200 ease-out',
+            'focus-within:border-teal-500/50 focus-within:ring-4 focus-within:ring-teal-500/10',
+            isEmptyState && 'shadow-2xl',
           )}
         >
+          {editingMessageId && (
+            <div className="flex items-center justify-between gap-2 border-b border-amber-200/60 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-100">
+              <span>Editing previous message</span>
+              <button
+                type="button"
+                className="text-xs font-semibold underline decoration-amber-500"
+                onClick={cancelEditing}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
           {/* Context Items */}
           {activeContext.length > 0 && (
-            <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+            <div className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <span className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500">
                   Context
                 </span>
                 {activeContext.map((item) => (
                   <div
                     key={item.id}
-                    className="inline-flex items-center gap-1 rounded-full bg-teal-100 dark:bg-teal-900/30 px-2.5 py-1 text-xs text-teal-800 dark:text-teal-200"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 dark:bg-teal-900/20 px-2.5 py-1 text-xs text-teal-700 dark:text-teal-300"
                   >
-                    <span>{item.icon ?? '📎'}</span>
+                    <span>{item.icon ?? 'CTX'}</span>
                     <span className="max-w-[180px] truncate">{item.name}</span>
                     <button
                       type="button"
                       onClick={() => removeContextItem(item.id)}
-                      className="ml-1 text-teal-600 dark:text-teal-300 transition hover:text-teal-800 dark:hover:text-teal-100"
-                      aria-label={`Remove ${item.name} from context`}
+                      className="ml-0.5 text-teal-500 hover:text-teal-700 transition"
                     >
-                      <X size={12} aria-hidden="true" />
+                      <X size={12} />
                     </button>
                   </div>
                 ))}
@@ -398,37 +473,31 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
           {/* Attachments */}
           {attachments.length > 0 && (
-            <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+            <div className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 {attachments.map((attachment) => (
                   <div
                     key={attachment.id}
-                    className="inline-flex min-w-[220px] items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm"
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-700 px-3 py-2 text-sm"
                   >
                     {attachment.type === 'image' ? (
-                      <ImageIcon size={18} className="text-gray-500" />
+                      <ImageIcon size={16} className="text-gray-400" />
                     ) : attachment.type === 'screenshot' ? (
-                      <Camera size={18} className="text-gray-500" />
+                      <Camera size={16} className="text-gray-400" />
                     ) : attachment.mimeType?.startsWith('audio/') ? (
-                      <Mic size={18} className="text-gray-500" />
+                      <Mic size={16} className="text-gray-400" />
                     ) : (
-                      <Paperclip size={18} className="text-gray-500" />
+                      <Paperclip size={16} className="text-gray-400" />
                     )}
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm font-medium">{attachment.name}</span>
-                      <span className="text-xs text-gray-500">
-                        {attachment.size
-                          ? `${Math.round(attachment.size / 1024)}KB`
-                          : attachment.mimeType}
-                      </span>
-                    </div>
+                    <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-300">
+                      {attachment.name}
+                    </span>
                     <button
                       type="button"
                       onClick={() => removeAttachment(attachment.id)}
-                      className="rounded p-1 text-gray-500 transition hover:bg-gray-200 dark:hover:bg-gray-700"
-                      aria-label={`Remove ${attachment.name} attachment`}
+                      className="text-gray-400 hover:text-gray-600 transition"
                     >
-                      <X size={14} aria-hidden="true" />
+                      <X size={14} />
                     </button>
                   </div>
                 ))}
@@ -436,171 +505,218 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col">
-            <div className="flex items-start px-4 pt-4">
-              {/* Model Selector (Left side inside input) */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowModelSelector(!showModelSelector)}
-                  className="mt-2 mr-2 flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-                  aria-label="Select model"
-                  aria-expanded={showModelSelector}
-                >
-                  <span className="font-medium truncate max-w-[200px]">{modelDisplayName}</span>
-                  <ChevronDown
-                    size={14}
-                    className={cn('transition-transform', showModelSelector && 'rotate-180')}
-                  />
-                </button>
+          {submitError && (
+            <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-600/60 dark:bg-rose-900/20 dark:text-rose-100">
+              {submitError}
+            </div>
+          )}
 
-                {/* Model Selector Popover */}
-                <AnimatePresence>
-                  {showModelSelector && (
-                    <>
-                      {/* Backdrop */}
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowModelSelector(false)}
-                        aria-hidden="true"
-                      />
-                      {/* Popover */}
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute left-0 top-full z-50 mt-2 w-[280px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-charcoal-800 p-4 shadow-lg"
-                      >
-                        <QuickModelSelector className="w-full max-w-none" />
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
+          {/* Main Input Row */}
+          <div className="flex items-end gap-2 p-3">
+            {/* Model Selector - Inside Input */}
+            <div className="relative" ref={modelSelectorRef}>
+              <button
+                type="button"
+                onClick={() => setShowModelSelector(!showModelSelector)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium',
+                  'bg-gray-100 dark:bg-charcoal-700 hover:bg-gray-200 dark:hover:bg-charcoal-600',
+                  'text-gray-700 dark:text-gray-300',
+                  'transition-colors duration-150',
+                  'border border-transparent hover:border-gray-300 dark:hover:border-gray-600',
+                )}
+              >
+                <span className="truncate max-w-[120px]">{modelDisplayName}</span>
+                <ChevronDown
+                  size={14}
+                  className={cn('transition-transform', showModelSelector && 'rotate-180')}
+                />
+              </button>
 
-              {/* Text Input */}
+              {/* Model Selector Dropdown */}
+              <AnimatePresence>
+                {showModelSelector && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute bottom-full left-0 z-50 mb-3 w-80"
+                  >
+                    <QuickModelSelector onClose={() => setShowModelSelector(false)} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Textarea */}
+            <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
                 value={content}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                onPaste={_handlePaste}
+                onPaste={handlePaste}
                 placeholder={placeholder}
                 disabled={isDisabled}
-                className="chat-input flex-1 resize-none border-none bg-transparent py-3 pr-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400"
                 rows={1}
-                style={{
-                  maxHeight: '200px',
-                  overflowY: content.length > 100 ? 'auto' : 'hidden',
-                }}
-                aria-label="Message input"
-                aria-describedby={tokenUsage.percentage > 0 ? 'token-usage-gauge' : undefined}
-              />
-
-              {/* Right side icons cluster */}
-              <div className="mt-2 ml-2 flex items-center gap-1">
-                {enableAttachments && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isDisabled}
-                    className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                    title="Attach files"
-                    aria-label="Attach files to message"
-                  >
-                    <Paperclip size={18} aria-hidden="true" />
-                  </button>
+                className={cn(
+                  'w-full resize-none bg-transparent py-2 px-1',
+                  'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
+                  'focus:outline-none',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'text-[15px] leading-6',
                 )}
-                <button
-                  type="button"
-                  disabled={isDisabled}
-                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                  title="Record audio"
-                  aria-label="Record audio message"
-                >
-                  <Mic size={18} aria-hidden="true" />
-                </button>
-              </div>
+                style={{ maxHeight: `${24 * MAX_ROWS}px` }}
+              />
             </div>
 
-            {/* Bottom bar with send button */}
-            <div className="mt-3 flex items-center justify-between px-4 pb-4">
-              <div className="flex items-center gap-2">
-                {rightAccessory}
-                {/* Keyboard shortcut hint */}
-                <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
-                  Enter to send · Shift+Enter for newline
-                </span>
-              </div>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1">
+              {/* Attachment Button */}
+              {enableAttachments && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isDisabled}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
+                    'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                  title="Attach files"
+                >
+                  <Paperclip size={18} />
+                </button>
+              )}
 
-              {/* Stop or Send button */}
+              {/* Mic Button - Voice Input */}
+              <button
+                type="button"
+                onClick={toggleListening}
+                disabled={isDisabled || !isVoiceSupported}
+                className={cn(
+                  'p-2 rounded-lg transition-all duration-200',
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+                title={
+                  isListening
+                    ? 'Stop recording'
+                    : isVoiceSupported
+                      ? 'Voice input'
+                      : 'Voice input not supported'
+                }
+              >
+                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+              </button>
+
+              {/* Send / Stop Button */}
               {showStopButton ? (
                 <button
                   type="button"
                   onClick={onStopGeneration}
                   className={cn(
-                    'inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all',
-                    'bg-red-500 text-white hover:bg-red-600',
+                    'p-2.5 rounded-xl transition-all duration-200',
+                    'bg-red-500 hover:bg-red-600 text-white',
+                    'shadow-lg shadow-red-500/25 animate-pulse',
                   )}
                   title="Stop generation"
-                  aria-label="Stop generation"
                 >
-                  <Square size={16} aria-hidden="true" />
-                  <span>Stop</span>
+                  <Square size={16} fill="currentColor" />
                 </button>
               ) : (
                 <button
-                  type="submit"
-                  disabled={!content.trim() || isDisabled}
+                  type="button"
+                  onClick={() => handleSubmit()}
+                  disabled={isDisabled || !content.trim()}
                   className={cn(
-                    'inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all',
-                    'bg-teal-500 text-white hover:bg-teal-600 disabled:bg-gray-300 dark:disabled:bg-gray-700',
-                    'disabled:cursor-not-allowed disabled:text-gray-500 dark:disabled:text-gray-400',
+                    'p-2.5 rounded-xl transition-all duration-200',
+                    content.trim() && !isDisabled
+                      ? 'bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white shadow-lg shadow-teal-500/25'
+                      : 'bg-gray-200 dark:bg-charcoal-700 text-gray-400 cursor-not-allowed',
                   )}
-                  title="Send message (Enter)"
-                  aria-label="Send message"
+                  title="Send message"
                 >
-                  {isSending ? (
-                    <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Send size={18} aria-hidden="true" />
-                  )}
+                  {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </button>
               )}
             </div>
-          </form>
+          </div>
 
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-            accept="*/*"
-            aria-label="File upload input"
-          />
+          {/* Voice Recording Indicator */}
+          <AnimatePresence>
+            {(isListening || interimTranscript) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-red-50 dark:bg-red-900/10"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                    </span>
+                    <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                      Recording
+                    </span>
+                  </div>
+                  {interimTranscript && (
+                    <span className="text-xs text-gray-600 dark:text-gray-400 italic truncate flex-1">
+                      {interimTranscript}
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* Context Fuel Gauge */}
-          <div
-            id="token-usage-gauge"
-            className="token-gauge absolute bottom-0 left-0 right-0"
-            role="progressbar"
-            aria-label="Token usage"
-            aria-valuenow={tokenUsage.percentage}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className={cn(
-                'token-gauge-fill',
-                tokenUsage.percentage < 50 && 'token-gauge-safe',
-                tokenUsage.percentage >= 50 && tokenUsage.percentage < 80 && 'token-gauge-warning',
-                tokenUsage.percentage >= 80 && 'token-gauge-danger',
-              )}
-              style={{ width: `${tokenUsage.percentage}%` }}
-            />
+          {/* Voice Error Display */}
+          <AnimatePresence>
+            {voiceError && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-amber-50 dark:bg-amber-900/10"
+              >
+                <span className="text-xs text-amber-600 dark:text-amber-400">{voiceError}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Hint Text & Token Usage */}
+          <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700/50">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              Enter to send / Shift+Enter for newline
+            </span>
+
+            {tokenUsage && (
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-300',
+                      tokenPercentage > 90
+                        ? 'bg-red-500'
+                        : tokenPercentage > 70
+                          ? 'bg-amber-500'
+                          : 'bg-teal-500',
+                    )}
+                    style={{ width: `${tokenPercentage}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {(tokenUsage.current ?? 0).toLocaleString()} /{' '}
+                  {(tokenUsage.max ?? 0).toLocaleString()}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
