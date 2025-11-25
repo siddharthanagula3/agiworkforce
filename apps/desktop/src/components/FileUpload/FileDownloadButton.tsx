@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Download, FileText, Image as ImageIcon, File, CheckCircle } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { save } from '@tauri-apps/plugin-dialog';
+import { CheckCircle, Download, File, FileText, Image as ImageIcon } from 'lucide-react';
+import React, { useState } from 'react';
 
 // Helper function for className merging
 const cn = (...classes: (string | undefined | false)[]) => classes.filter(Boolean).join(' ');

@@ -1,9 +1,9 @@
+import { invoke } from '@/lib/tauri-mock';
+import { Image as ImageIcon, Sparkles } from 'lucide-react';
 import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Sparkles, Image as ImageIcon } from 'lucide-react';
+import { Card } from '../ui/Card';
 import { ImageUpload, type UploadedImage } from './ImageUpload';
 import { VisionAnalysis, type VisionResponse } from './VisionAnalysis';
-import { Card } from '../ui/Card';
 
 export const VisionWorkspace: React.FC = () => {
   const [images, setImages] = useState<UploadedImage[]>([]);

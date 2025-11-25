@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
+import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useTheme } from '../../hooks/useTheme';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
-import { X, Check, ArrowLeft, ArrowRight } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface DiffViewerProps {
   originalValue: string;
@@ -184,6 +184,10 @@ export function DiffViewer({
           original={originalValue}
           modified={modifiedValue}
           theme={monacoTheme}
+          options={{
+            renderSideBySide: true,
+            readOnly,
+          }}
           onMount={handleEditorDidMount}
         />
       </div>

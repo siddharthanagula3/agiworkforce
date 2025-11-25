@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { create } from 'zustand';
 
 export interface FileMetadata {
   size: number;
@@ -21,7 +21,7 @@ export interface DirEntry {
 
 interface FilesystemState {
   // Current state
-  currentPath: string;
+  currentPath: string | undefined;
   entries: DirEntry[];
   selectedPath: string | null;
   fileContent: string;
@@ -63,7 +63,7 @@ interface FilesystemState {
 
 export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   // Initial state
-  currentPath: '',
+  currentPath: undefined,
   entries: [],
   selectedPath: null,
   fileContent: '',

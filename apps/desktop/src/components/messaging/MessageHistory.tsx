@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Card } from '../ui/Card';

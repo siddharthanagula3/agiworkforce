@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { invoke } from '@/lib/tauri-mock';
 import Editor, { Monaco, OnMount } from '@monaco-editor/react';
+import { Check, Copy, Download, RotateCcw, Save } from 'lucide-react';
 import type { editor } from 'monaco-editor';
-import { Save, RotateCcw, Copy, Check, Download } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { invoke } from '@tauri-apps/api/core';
 import { useTheme } from '../../hooks/useTheme';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';

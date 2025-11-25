@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import {
-  Eye,
-  FileText,
-  GitCompare,
-  Loader2,
-  Sparkles,
-  DollarSign,
-  Clock,
+    Clock,
+    DollarSign,
+    Eye,
+    FileText,
+    GitCompare,
+    Loader2,
+    Sparkles,
 } from 'lucide-react';
+import React, { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import type { UploadedImage } from './ImageUpload';

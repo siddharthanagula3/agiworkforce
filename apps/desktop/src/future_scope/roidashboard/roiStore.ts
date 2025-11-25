@@ -3,26 +3,26 @@
  * Zustand store for managing ROI dashboard state and real-time updates
  */
 
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type {
-  DayStats,
-  WeekStats,
-  MonthStats,
-  AllTimeStats,
-  Milestone,
-  ComparisonMode,
-  ComparisonData,
-  PeriodComparisonData,
-  BenchmarkComparisonData,
-  ActivityItem,
-  MetricsUpdate,
-  ExportOptions,
-  ChartDataPoint,
-  EmployeeChartData,
-} from '../types/roi';
+    ActivityItem,
+    AllTimeStats,
+    BenchmarkComparisonData,
+    ChartDataPoint,
+    ComparisonData,
+    ComparisonMode,
+    DayStats,
+    EmployeeChartData,
+    ExportOptions,
+    MetricsUpdate,
+    Milestone,
+    MonthStats,
+    PeriodComparisonData,
+    WeekStats,
+} from '../../types/roi';
 
 interface ROIState {
   // Real-time metrics

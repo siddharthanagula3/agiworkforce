@@ -15,7 +15,7 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
   openai: [
     // November 2025 Releases Only
-    { value: 'gpt-5.1', label: 'GPT-5.1 ⭐ (Nov 12, 2025 - Latest)' },
+    { value: 'gpt-5.1', label: 'GPT-5.1 ⭐ (Nov 24, 2025 - Latest)' },
     { value: 'gpt-5.1-instant', label: 'GPT-5.1 Instant (Quick Responses)' },
     { value: 'gpt-5.1-thinking', label: 'GPT-5.1 Thinking 🧠 (Complex Tasks)' },
     { value: 'gpt-5.1-codex-max', label: 'GPT-5.1-Codex-Max (Agentic Coding, 24h+ Tasks)' },
@@ -23,12 +23,12 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   anthropic: [
     // Best Claude Models
     { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 ⭐ (Best Coding - 77.2% SWE-bench)' },
-    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 ⚡ (4x Faster, Auto Mode)' },
-    { value: 'claude-opus-4-1', label: 'Claude Opus 4.1 🧠 (Deep Reasoning/Thinking)' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 ⚡ (Oct 15, 2025 - Fast & Cost Effective)' },
+    { value: 'claude-opus-4-5', label: 'Claude Opus 4.5 🧠 (Deep Reasoning/Thinking)' },
   ],
   google: [
     // November 2025 Releases Only
-    { value: 'gemini-3-pro', label: 'Gemini 3 Pro ⭐ (Nov 18, 2025 - Top Benchmarks)' },
+    { value: 'gemini-3-pro', label: 'Gemini 3 Pro ⭐ (Nov 24, 2025 - Top Benchmarks)' },
     { value: 'gemini-3-flash', label: 'Gemini 3 Flash (Fast)' },
     { value: 'gemini-3-deep-think', label: 'Gemini 3 Deep Think 🧠 (Advanced Reasoning/Thinking)' },
   ],
@@ -38,7 +38,7 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   ],
   xai: [
     // Latest Grok Models (November 2025)
-    { value: 'grok-4.1', label: 'Grok 4.1 ⭐ (Nov 17, 2025 - Enhanced Reasoning)' },
+    { value: 'grok-4.1', label: 'Grok 4.1 ⭐ (Nov 24, 2025 - Enhanced Reasoning)' },
     { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast ⚡ (Tool-calling, 2M Context)' },
   ],
   deepseek: [
@@ -46,14 +46,14 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
   ],
   qwen: [
     // November 2025 Releases Only
-    { value: 'qwen3-max', label: 'Qwen3-Max ⭐ 🧠 (Nov 2025 - Thinking Mode)' },
+    { value: 'qwen3-max', label: 'Qwen3-Max ⭐ 🧠 (Nov 24, 2025 - Thinking Mode)' },
   ],
   mistral: [
     // No November 2025 releases
   ],
   moonshot: [
     // November 2025 Releases Only
-    { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking ⭐ 🧠 (Nov 2025 - Advanced Reasoning)' },
+    { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking ⭐ 🧠 (Nov 24, 2025 - Advanced Reasoning)' },
   ],
 };
 
@@ -76,7 +76,7 @@ export const PROVIDERS_IN_ORDER: Provider[] = [
  */
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   // OpenAI models - November 2025 releases
-  'gpt-5.1': 128_000, // Nov 12, 2025
+  'gpt-5.1': 128_000, // Nov 24, 2025
   'gpt-5.1-instant': 128_000,
   'gpt-5.1-thinking': 128_000,
   'gpt-5.1-codex-max': 256_000, // Agentic coding, 24h+ tasks
@@ -84,25 +84,25 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   // Anthropic models - Best Claude Models
   'claude-sonnet-4-5': 200_000, // Best coding (77.2% SWE-bench)
   'claude-haiku-4-5': 200_000, // 4-5x faster than Sonnet, 1/3 cost
-  'claude-opus-4-1': 200_000, // Deep reasoning
+  'claude-opus-4-5': 200_000, // Deep reasoning
 
   // Google models - November 2025 releases
-  'gemini-3-pro': 2_000_000, // Nov 18, 2025 - 2M token context
+  'gemini-3-pro': 2_000_000, // Nov 24, 2025 - 2M token context
   'gemini-3-flash': 2_000_000,
   'gemini-3-deep-think': 2_000_000,
 
   // Ollama (local models) - November 2025
-  'llama4-maverick': 1_000_000, // Nov 2025 - 1M context, local inference
+  'llama4-maverick': 1_000_000, // Nov 24, 2025 - 1M context, local inference
 
   // xAI - Latest Grok Models (November 2025)
-  'grok-4.1': 128_000, // Nov 17, 2025 - Enhanced reasoning
+  'grok-4.1': 128_000, // Nov 24, 2025 - Enhanced reasoning
   'grok-4.1-fast': 2_000_000, // 2M token context, tool-calling optimized
 
   // Qwen - November 2025 releases
-  'qwen3-max': 128_000, // Nov 2025 - thinking mode
+  'qwen3-max': 128_000, // Nov 24, 2025 - thinking mode
 
   // Moonshot AI - November 2025 releases
-  'kimi-k2-thinking': 256_000, // Nov 2025 - 256K context, thinking mode
+  'kimi-k2-thinking': 256_000, // Nov 24, 2025 - 256K context, thinking mode
 };
 
 /**
@@ -167,7 +167,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'medium',
     quality: 'excellent',
     bestFor: ['General Intelligence', 'Reduced Hallucinations', 'Better Prompt Adherence'],
-    released: 'November 12, 2025',
+    released: 'November 24, 2025',
   },
   'gpt-5.1-instant': {
     id: 'gpt-5.1-instant',
@@ -190,7 +190,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'fast',
     quality: 'excellent',
     bestFor: ['Quick Responses', 'Real-time Applications'],
-    released: 'November 12, 2025',
+    released: 'November 24, 2025',
   },
   'gpt-5.1-thinking': {
     id: 'gpt-5.1-thinking',
@@ -213,7 +213,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'slow',
     quality: 'excellent',
     bestFor: ['Complex Tasks', 'Deep Reasoning', 'Multi-step Problems'],
-    released: 'November 12, 2025',
+    released: 'November 24, 2025',
   },
   'gpt-5.1-codex-max': {
     id: 'gpt-5.1-codex-max',
@@ -236,7 +236,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'medium',
     quality: 'excellent',
     bestFor: ['Agentic Coding', 'Long-running Tasks (24h+)', 'Complex Software Engineering'],
-    released: 'November 12, 2025',
+    released: 'November 24, 2025',
   },
 
   // Google Models - November 2025
@@ -261,7 +261,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'fast',
     quality: 'excellent',
     bestFor: ['Reasoning', 'Multimodal Understanding', 'Agentic Coding', 'Enterprise Applications'],
-    released: 'November 18, 2025',
+    released: 'November 24, 2025',
   },
   'gemini-3-flash': {
     id: 'gemini-3-flash',
@@ -284,7 +284,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'excellent',
     bestFor: ['Speed', 'Cost Efficiency', 'Enterprise Applications'],
-    released: 'November 18, 2025',
+    released: 'November 24, 2025',
   },
   'gemini-3-deep-think': {
     id: 'gemini-3-deep-think',
@@ -307,7 +307,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'slow',
     quality: 'excellent',
     bestFor: ['Advanced Reasoning', 'Complex Enterprise Tasks'],
-    released: 'November 18, 2025',
+    released: 'November 24, 2025',
   },
 
   // Anthropic Models - Best Claude Models
@@ -332,7 +332,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'medium',
     quality: 'excellent',
     bestFor: ['Coding', 'Software Engineering', 'Technical Writing'],
-    released: 'September 2025',
+    released: 'November 24, 2025',
   },
   'claude-haiku-4-5': {
     id: 'claude-haiku-4-5',
@@ -355,11 +355,11 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'excellent',
     bestFor: ['Auto Mode', 'Fast Responses', 'Cost Efficiency'],
-    released: 'October 2024',
+    released: 'October 15, 2025',
   },
-  'claude-opus-4-1': {
-    id: 'claude-opus-4-1',
-    name: 'Claude Opus 4.1',
+  'claude-opus-4-5': {
+    id: 'claude-opus-4-5',
+    name: 'Claude Opus 4.5',
     provider: 'anthropic',
     contextWindow: 200_000,
     inputCost: 15.0,
@@ -378,7 +378,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'slow',
     quality: 'excellent',
     bestFor: ['Complex Reasoning', 'Research', 'Long Context', 'Deep Analysis'],
-    released: 'November 2025',
+    released: 'November 24, 2025',
   },
 
   // Ollama Local Models - November 2025
@@ -403,7 +403,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'fast',
     quality: 'excellent',
     bestFor: ['Local Inference', 'Privacy', 'Zero Cost'],
-    released: 'November 2025',
+    released: 'November 24, 2025',
   },
 
   // xAI Models - Latest Grok Models (2025)
@@ -433,7 +433,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       'Emotional Intelligence',
       'Reduced Factual Errors',
     ],
-    released: 'November 17, 2025',
+    released: 'November 24, 2025',
   },
   'grok-4.1-fast': {
     id: 'grok-4.1-fast',
@@ -456,7 +456,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'very-fast',
     quality: 'excellent',
     bestFor: ['Tool-calling', 'Agentic Workflows', '2M Token Context', 'Agent Tools API'],
-    released: 'November 17, 2025',
+    released: 'November 24, 2025',
   },
 
   // Qwen Models - November 2025
@@ -481,7 +481,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     speed: 'medium',
     quality: 'excellent',
     bestFor: ['Thinking Mode', 'Advanced Reasoning', 'Foundation Model Performance'],
-    released: 'November 2025',
+    released: 'November 24, 2025',
   },
 
   // Moonshot AI Models - November 2025
@@ -512,7 +512,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       'Complex Problem Solving',
       '200-300 Sequential Tool Calls',
     ],
-    released: 'November 2025',
+    released: 'November 24, 2025',
   },
 };
 
