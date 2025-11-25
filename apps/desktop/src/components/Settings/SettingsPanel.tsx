@@ -2,28 +2,29 @@ import { invoke } from '@/lib/tauri-mock';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
-    Activity,
-    Check,
-    Download,
-    Eye,
-    EyeOff,
-    Key,
-    Loader2,
-    Monitor,
-    Settings2,
-    Shield,
-    X
+  Activity,
+  Check,
+  Database,
+  Download,
+  Eye,
+  EyeOff,
+  Key,
+  Loader2,
+  Monitor,
+  Settings2,
+  Shield,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 // import { EmployeesPage } from '../../pages/EmployeesPage';
 import {
-    createDefaultLLMConfig,
-    createDefaultWindowPreferences,
-    useSettingsStore,
-    type Provider,
-    type TaskCategory,
+  createDefaultLLMConfig,
+  createDefaultWindowPreferences,
+  useSettingsStore,
+  type Provider,
+  type TaskCategory,
 } from '../../stores/settingsStore';
 import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
@@ -221,350 +222,362 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           ) : (
             /* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */
             <Tabs defaultValue="api-keys" className="mt-6 px-6">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="api-keys" className="flex items-center gap-2">
-                <Key className="h-4 w-4" />
-                API Keys
-              </TabsTrigger>
-              <TabsTrigger value="llm-config" className="flex items-center gap-2">
-                <Settings2 className="h-4 w-4" />
-                Models
-              </TabsTrigger>
-{/* <TabsTrigger value="agent-library" className="flex items-center gap-2">
+              <TabsList className="grid w-full grid-cols-5">
+                <TabsTrigger value="api-keys" className="flex items-center gap-2">
+                  <Key className="h-4 w-4" />
+                  API Keys
+                </TabsTrigger>
+                <TabsTrigger value="llm-config" className="flex items-center gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Models
+                </TabsTrigger>
+                {/* <TabsTrigger value="agent-library" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Agent Library
               </TabsTrigger> */}
-              <TabsTrigger value="window" className="flex items-center gap-2">
-                <Monitor className="h-4 w-4" />
-                Window
-              </TabsTrigger>
-              <TabsTrigger value="data-privacy" className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                Privacy
-              </TabsTrigger>
-              <TabsTrigger value="system" className="flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                System
-              </TabsTrigger>
-            </TabsList>
+                <TabsTrigger value="window" className="flex items-center gap-2">
+                  <Monitor className="h-4 w-4" />
+                  Window
+                </TabsTrigger>
+                <TabsTrigger value="data-privacy" className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Privacy
+                </TabsTrigger>
+                <TabsTrigger value="system" className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  System
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="api-keys" className="space-y-6 pt-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">API Keys</h3>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Configure your API keys for different LLM providers. Keys are stored securely in
-                  your system keyring.
-                </p>
+              <TabsContent value="api-keys" className="space-y-6 pt-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">API Keys</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Configure your API keys for different LLM providers. Keys are stored securely in
+                    your system keyring.
+                  </p>
 
-                <div className="space-y-6">
-                  <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />
+                  <div className="space-y-6">
+                    <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />
 
-                  <APIKeyField
-                    provider="anthropic"
-                    label="Anthropic API Key"
-                    placeholder="sk-ant-..."
-                  />
+                    <APIKeyField
+                      provider="anthropic"
+                      label="Anthropic API Key"
+                      placeholder="sk-ant-..."
+                    />
 
-                  <APIKeyField provider="google" label="Google AI API Key" placeholder="AIza..." />
+                    <APIKeyField
+                      provider="google"
+                      label="Google AI API Key"
+                      placeholder="AIza..."
+                    />
 
-                  <APIKeyField provider="xai" label="XAI API Key" placeholder="xai-..." />
+                    <APIKeyField provider="xai" label="XAI API Key" placeholder="xai-..." />
 
-                  <APIKeyField provider="deepseek" label="DeepSeek API Key" placeholder="sk-..." />
+                    <APIKeyField
+                      provider="deepseek"
+                      label="DeepSeek API Key"
+                      placeholder="sk-..."
+                    />
 
-                  <APIKeyField provider="qwen" label="Qwen API Key" placeholder="sk-..." />
+                    <APIKeyField provider="qwen" label="Qwen API Key" placeholder="sk-..." />
 
-                  <APIKeyField provider="mistral" label="Mistral API Key" placeholder="..." />
+                    <APIKeyField provider="mistral" label="Mistral API Key" placeholder="..." />
 
-                  <div className="rounded-lg border border-border bg-muted/50 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-md bg-primary/10 p-2">
-                        <Key className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">Ollama (Local)</h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Ollama runs locally and doesn&apos;t require an API key. Make sure Ollama
-                          is running on http://localhost:11434
-                        </p>
+                    <div className="rounded-lg border border-border bg-muted/50 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-md bg-primary/10 p-2">
+                          <Key className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium">Ollama (Local)</h4>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Ollama runs locally and doesn&apos;t require an API key. Make sure
+                            Ollama is running on http://localhost:11434
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="llm-config" className="space-y-6 pt-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">LLM Configuration</h3>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Configure default settings for language model interactions
-                </p>
+              <TabsContent value="llm-config" className="space-y-6 pt-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">LLM Configuration</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Configure default settings for language model interactions
+                  </p>
 
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="defaultProvider">Default Provider</Label>
-                    <Select
-                      value={resolvedLLMConfig.defaultProvider}
-                      onValueChange={(value) => setDefaultProvider(value as Provider)}
-                    >
-                      <SelectTrigger id="defaultProvider">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="openai">OpenAI</SelectItem>
-                        <SelectItem value="anthropic">Anthropic</SelectItem>
-                        <SelectItem value="google">Google AI</SelectItem>
-                        <SelectItem value="ollama">Ollama (Local)</SelectItem>
-                        <SelectItem value="xai">XAI (Grok)</SelectItem>
-                        <SelectItem value="deepseek">DeepSeek</SelectItem>
-                        <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
-                        <SelectItem value="mistral">Mistral AI</SelectItem>
-                        <SelectItem value="moonshot">Moonshot AI</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      The system will automatically fall back to other providers if this one fails
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    {(
-                      [
-                        'openai',
-                        'anthropic',
-                        'google',
-                        'ollama',
-                        'xai',
-                        'deepseek',
-                        'qwen',
-                        'mistral',
-                        'moonshot',
-                      ] as Provider[]
-                    ).map((provider) => {
-                      const models = MODEL_PRESETS[provider];
-                      if (models.length === 0) return null;
-
-                      return (
-                        <div key={provider} className="space-y-2">
-                          <Label htmlFor={`${provider}Model`}>
-                            {PROVIDER_LABELS[provider]} Model
-                          </Label>
-                          <Select
-                            value={resolvedLLMConfig.defaultModels[provider] || ''}
-                            onValueChange={(value) => setDefaultModel(provider, value)}
-                          >
-                            <SelectTrigger id={`${provider}Model`}>
-                              <SelectValue placeholder={`Select ${PROVIDER_LABELS[provider]} model`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {models.map((model) => (
-                                <SelectItem key={model.value} value={model.value}>
-                                  {model.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="space-y-3 rounded-lg border border-muted/30 p-4">
-                    <div>
-                      <h4 className="text-sm font-semibold">Task-aware routing</h4>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="defaultProvider">Default Provider</Label>
+                      <Select
+                        value={resolvedLLMConfig.defaultProvider}
+                        onValueChange={(value) => setDefaultProvider(value as Provider)}
+                      >
+                        <SelectTrigger id="defaultProvider">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="anthropic">Anthropic</SelectItem>
+                          <SelectItem value="google">Google AI</SelectItem>
+                          <SelectItem value="ollama">Ollama (Local)</SelectItem>
+                          <SelectItem value="xai">XAI (Grok)</SelectItem>
+                          <SelectItem value="deepseek">DeepSeek</SelectItem>
+                          <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
+                          <SelectItem value="mistral">Mistral AI</SelectItem>
+                          <SelectItem value="moonshot">Moonshot AI</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <p className="text-xs text-muted-foreground">
-                        Choose defaults per task type. You can override per request in chat.
+                        The system will automatically fall back to other providers if this one fails
                       </p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+
+                    <div className="grid grid-cols-2 gap-6">
                       {(
                         [
-                          'search',
-                          'code',
-                          'docs',
-                          'chat',
-                          'vision',
-                          'image',
-                          'video',
-                        ] as TaskCategory[]
-                      ).map((category) => {
-                        const routing = resolvedLLMConfig.taskRouting?.[category];
+                          'openai',
+                          'anthropic',
+                          'google',
+                          'ollama',
+                          'xai',
+                          'deepseek',
+                          'qwen',
+                          'mistral',
+                          'moonshot',
+                        ] as Provider[]
+                      ).map((provider) => {
+                        const models = MODEL_PRESETS[provider];
+                        if (models.length === 0) return null;
+
                         return (
-                          <div key={category} className="space-y-2">
-                            <Label className="capitalize">{category}</Label>
+                          <div key={provider} className="space-y-2">
+                            <Label htmlFor={`${provider}Model`}>
+                              {PROVIDER_LABELS[provider]} Model
+                            </Label>
                             <Select
-                              value={routing?.provider ?? resolvedLLMConfig.defaultProvider}
-                              onValueChange={(provider) =>
-                                setTaskRouting(
-                                  category,
-                                  provider as Provider,
-                                  routing?.model ??
-                                    resolvedLLMConfig.defaultModels[provider as Provider] ??
-                                    '',
-                                )
-                              }
+                              value={resolvedLLMConfig.defaultModels[provider] || ''}
+                              onValueChange={(value) => setDefaultModel(provider, value)}
                             >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Provider" />
+                              <SelectTrigger id={`${provider}Model`}>
+                                <SelectValue
+                                  placeholder={`Select ${PROVIDER_LABELS[provider]} model`}
+                                />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="openai">OpenAI</SelectItem>
-                                <SelectItem value="anthropic">Anthropic</SelectItem>
-                                <SelectItem value="google">Google</SelectItem>
-                                <SelectItem value="ollama">Ollama</SelectItem>
-                                <SelectItem value="xai">xAI</SelectItem>
-                                <SelectItem value="deepseek">DeepSeek</SelectItem>
-                                <SelectItem value="qwen">Qwen</SelectItem>
-                                <SelectItem value="mistral">Mistral</SelectItem>
-                                <SelectItem value="moonshot">Moonshot AI</SelectItem>
+                                {models.map((model) => (
+                                  <SelectItem key={model.value} value={model.value}>
+                                    {model.label}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
-                            <Input
-                              value={routing?.model ?? ''}
-                              placeholder="Model id (e.g., gpt-5.1, claude-opus-4-5)"
-                              onChange={(event) =>
-                                setTaskRouting(
-                                  category,
-                                  (routing?.provider ??
-                                    resolvedLLMConfig.defaultProvider) as Provider,
-                                  event.target.value,
-                                )
-                              }
-                            />
                           </div>
                         );
                       })}
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="temperature">
-                      Temperature: {resolvedLLMConfig.temperature.toFixed(1)}
-                    </Label>
-                    <input
-                      id="temperature"
-                      type="range"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      value={resolvedLLMConfig.temperature}
-                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Lower values are more focused and deterministic. Higher values are more
-                      creative.
-                    </p>
-                  </div>
+                    <div className="space-y-3 rounded-lg border border-muted/30 p-4">
+                      <div>
+                        <h4 className="text-sm font-semibold">Task-aware routing</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Choose defaults per task type. You can override per request in chat.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {(
+                          [
+                            'search',
+                            'code',
+                            'docs',
+                            'chat',
+                            'vision',
+                            'image',
+                            'video',
+                          ] as TaskCategory[]
+                        ).map((category) => {
+                          const routing = resolvedLLMConfig.taskRouting?.[category];
+                          return (
+                            <div key={category} className="space-y-2">
+                              <Label className="capitalize">{category}</Label>
+                              <Select
+                                value={routing?.provider ?? resolvedLLMConfig.defaultProvider}
+                                onValueChange={(provider) =>
+                                  setTaskRouting(
+                                    category,
+                                    provider as Provider,
+                                    routing?.model ??
+                                      resolvedLLMConfig.defaultModels[provider as Provider] ??
+                                      '',
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Provider" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="openai">OpenAI</SelectItem>
+                                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                                  <SelectItem value="google">Google</SelectItem>
+                                  <SelectItem value="ollama">Ollama</SelectItem>
+                                  <SelectItem value="xai">xAI</SelectItem>
+                                  <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                  <SelectItem value="qwen">Qwen</SelectItem>
+                                  <SelectItem value="mistral">Mistral</SelectItem>
+                                  <SelectItem value="moonshot">Moonshot AI</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                value={routing?.model ?? ''}
+                                placeholder="Model id (e.g., gpt-5.1, claude-opus-4-5)"
+                                onChange={(event) =>
+                                  setTaskRouting(
+                                    category,
+                                    (routing?.provider ??
+                                      resolvedLLMConfig.defaultProvider) as Provider,
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="maxTokens">Max Tokens</Label>
-                    <Input
-                      id="maxTokens"
-                      type="number"
-                      min="256"
-                      max="32768"
-                      step="256"
-                      value={resolvedLLMConfig.maxTokens}
-                      onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Maximum number of tokens to generate in responses
-                    </p>
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="temperature">
+                        Temperature: {resolvedLLMConfig.temperature.toFixed(1)}
+                      </Label>
+                      <input
+                        id="temperature"
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={resolvedLLMConfig.temperature}
+                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Lower values are more focused and deterministic. Higher values are more
+                        creative.
+                      </p>
+                    </div>
 
-                  {/* Favorite Models Selector */}
-                  <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <FavoriteModelsSelector />
+                    <div className="space-y-2">
+                      <Label htmlFor="maxTokens">Max Tokens</Label>
+                      <Input
+                        id="maxTokens"
+                        type="number"
+                        min="256"
+                        max="32768"
+                        step="256"
+                        value={resolvedLLMConfig.maxTokens}
+                        onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Maximum number of tokens to generate in responses
+                      </p>
+                    </div>
+
+                    {/* Favorite Models Selector */}
+                    <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <FavoriteModelsSelector />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            {/* <TabsContent value="agent-library" className="space-y-6 pt-6">
+              {/* <TabsContent value="agent-library" className="space-y-6 pt-6">
               <div className="h-[600px]">
                 <EmployeesPage />
               </div>
             </TabsContent> */}
 
-            <TabsContent value="window" className="space-y-6 pt-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Customize window behavior and appearance
-                </p>
+              <TabsContent value="window" className="space-y-6 pt-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Customize window behavior and appearance
+                  </p>
 
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="theme">Theme</Label>
-                    <Select
-                      value={resolvedWindowPreferences.theme}
-                      onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
-                    >
-                      <SelectTrigger id="theme">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light">Light</SelectItem>
-                        <SelectItem value="dark">Dark</SelectItem>
-                        <SelectItem value="system">System</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="theme">Theme</Label>
+                      <Select
+                        value={resolvedWindowPreferences.theme}
+                        onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+                      >
+                        <SelectTrigger id="theme">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="light">Light</SelectItem>
+                          <SelectItem value="dark">Dark</SelectItem>
+                          <SelectItem value="system">System</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="startupPosition">Startup Position</Label>
-                    <Select
-                      value={resolvedWindowPreferences.startupPosition}
-                      onValueChange={(value) => setStartupPosition(value as 'center' | 'remember')}
-                    >
-                      <SelectTrigger id="startupPosition">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="center">Center Screen</SelectItem>
-                        <SelectItem value="remember">Remember Last Position</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="startupPosition">Startup Position</Label>
+                      <Select
+                        value={resolvedWindowPreferences.startupPosition}
+                        onValueChange={(value) =>
+                          setStartupPosition(value as 'center' | 'remember')
+                        }
+                      >
+                        <SelectTrigger id="startupPosition">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="center">Center Screen</SelectItem>
+                          <SelectItem value="remember">Remember Last Position</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="dockOnStartup">Dock on Startup</Label>
-                    <Select
-                      value={resolvedWindowPreferences.dockOnStartup || 'none'}
-                      onValueChange={(value) =>
-                        setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
-                      }
-                    >
-                      <SelectTrigger id="dockOnStartup">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Don&apos;t Dock</SelectItem>
-                        <SelectItem value="left">Dock Left</SelectItem>
-                        <SelectItem value="right">Dock Right</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-2">
+                      <Label htmlFor="dockOnStartup">Dock on Startup</Label>
+                      <Select
+                        value={resolvedWindowPreferences.dockOnStartup || 'none'}
+                        onValueChange={(value) =>
+                          setDockOnStartup(value === 'none' ? null : (value as 'left' | 'right'))
+                        }
+                      >
+                        <SelectTrigger id="dockOnStartup">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Don&apos;t Dock</SelectItem>
+                          <SelectItem value="left">Dock Left</SelectItem>
+                          <SelectItem value="right">Dock Right</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="data-privacy" className="space-y-6 pt-6">
-              <DataPrivacyTab />
-            </TabsContent>
+              <TabsContent value="data-privacy" className="space-y-6 pt-6">
+                <DataPrivacyTab />
+              </TabsContent>
 
-            <TabsContent value="system" className="space-y-6 pt-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">System Resources</h3>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Monitor your system performance and resource usage
-                </p>
-                <ResourceMonitor showTools={true} />
-              </div>
-            </TabsContent>
-          </Tabs>
-        )}
+              <TabsContent value="system" className="space-y-6 pt-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Monitor your system performance and resource usage
+                  </p>
+                  <ResourceMonitor showTools={true} />
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
 
           <div className="flex justify-end gap-3 mt-6 pt-6 border-t px-6 pb-6">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -771,6 +784,39 @@ function DataPrivacyTab() {
           <p className="text-xs text-muted-foreground mt-2">
             Your API keys are stored securely in your system keyring, separate from the database.
           </p>
+        </div>
+
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-md bg-red-500/10 p-3">
+              <Database className="h-6 w-6 text-red-500" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold mb-2 text-red-600 dark:text-red-400">
+                Clear Local Storage
+              </h4>
+              <p className="text-sm text-muted-foreground mb-4">
+                Reset the application to its initial state. This will clear all chat history,
+                settings, and cached data. This action cannot be undone.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (
+                    confirm(
+                      'Are you sure you want to clear all local storage? This will reset the app and reload the window.',
+                    )
+                  ) {
+                    localStorage.clear();
+                    window.location.reload();
+                  }
+                }}
+              >
+                Clear All Data
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-6">

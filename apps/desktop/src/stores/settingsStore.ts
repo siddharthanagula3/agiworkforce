@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -360,14 +360,16 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({
           windowPreferences: { ...state.windowPreferences, theme },
         }));
-        // Apply theme to document
-        if (
-          theme === 'dark' ||
-          (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        ) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
+        // Apply theme to document (with SSR/testing safety check)
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          if (
+            theme === 'dark' ||
+            (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          ) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
         }
       },
 

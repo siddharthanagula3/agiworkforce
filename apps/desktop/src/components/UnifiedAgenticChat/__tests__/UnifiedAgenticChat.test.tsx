@@ -13,39 +13,51 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { UnifiedAgenticChat } from '../index';
 
+// Stub matchMedia for framer-motion in JSDOM
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    media: query,
+    matches: false,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
+});
+
 describe('UnifiedAgenticChat', () => {
   it('should render without crashing', () => {
     render(<UnifiedAgenticChat />);
-    expect(screen.getByText(/AGI Workforce/i)).toBeInTheDocument();
+    expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
   });
 
   it('should display welcome message when no messages exist', () => {
     render(<UnifiedAgenticChat />);
-    expect(screen.getByText(/Ready when you are/i)).toBeInTheDocument();
+    expect(screen.getByText(/Start typing, drop in files/i)).toBeInTheDocument();
   });
 
   it('should render input area with placeholder', () => {
     render(<UnifiedAgenticChat />);
-    expect(screen.getByPlaceholderText('Ask anything...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Ask me anything...')).toBeInTheDocument();
   });
 
   it('should call onSendMessage when message is sent', async () => {
     const mockOnSend = vi.fn();
     render(<UnifiedAgenticChat onSendMessage={mockOnSend} />);
 
-    // Note: Full interaction testing would require user-event
-    // This is a minimal smoke test to verify component renders
-    expect(screen.getByText(/AGI Workforce/i)).toBeInTheDocument();
+    expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
   });
 
   it('should support different layout modes', () => {
     const { rerender } = render(<UnifiedAgenticChat layout="default" />);
-    expect(screen.getByText(/AGI Workforce/i)).toBeInTheDocument();
+    expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
 
     rerender(<UnifiedAgenticChat layout="compact" />);
-    expect(screen.getByText(/AGI Workforce/i)).toBeInTheDocument();
+    expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
 
     rerender(<UnifiedAgenticChat layout="immersive" />);
-    expect(screen.getByText(/AGI Workforce/i)).toBeInTheDocument();
+    expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
   });
 });

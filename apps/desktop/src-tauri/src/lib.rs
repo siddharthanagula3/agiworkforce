@@ -3,6 +3,8 @@
 #![allow(unused_qualifications)] // Some qualifications improve code clarity
 #![allow(clippy::should_implement_trait)]
 
+use tauri::Manager;
+
 // Core application modules
 pub mod commands;
 pub mod state;
@@ -177,22 +179,40 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // Initialize DB with singleton connection
-        .manage(commands::chat::AppDatabase {
-            conn: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::db::init_db("agi.db").expect("Failed to init DB"),
-            )),
+        .setup(|app| {
+            // Initialize database in proper app data directory (Bug #31 fix)
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
+
+            // Ensure directory exists
+            if let Some(parent) = app_data_dir.parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+            std::fs::create_dir_all(&app_data_dir).ok();
+
+            let db_path = app_data_dir.join("agi.db");
+            let db = crate::db::Database::new(db_path.to_str().expect("Invalid db path"))
+                .expect("Failed to init DB");
+
+            app.manage(commands::chat::AppDatabase {
+                conn: db.get_connection(),
+            });
+
+            app.manage(crate::billing::BillingStateWrapper::default());
+            app.manage(commands::llm::LLMState::default());
+            app.manage(commands::settings::SettingsState::default());
+
+            Ok(())
         })
-        .manage(crate::billing::BillingStateWrapper::default())
-        .manage(commands::llm::LLMState::default())
-        .manage(commands::settings::SettingsState::default())
         // Register All Commands
         .invoke_handler(tauri::generate_handler![
             commands::chat::chat_send_message,
             commands::chat::chat_get_conversations,
             commands::security::auth_login,
             commands::mcp::mcp_list_servers,
-            commands::subscription::get_user_credits, // NEW: Billing command
+            commands::tutorials::get_user_credits, // Tutorial rewards credits
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

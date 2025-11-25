@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 export interface RealtimeEvent {
   type: string;
@@ -30,7 +30,7 @@ export class WebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private eventHandlers: Map<string, Set<EventHandler>> = new Map();
   private userId: string | null = null;
   private teamId: string | null = null;
@@ -73,6 +73,8 @@ export class WebSocketClient {
       };
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error);
+      // Increment attempts on connect failure to prevent infinite loops
+      this.reconnectAttempts++;
       throw error;
     }
   }

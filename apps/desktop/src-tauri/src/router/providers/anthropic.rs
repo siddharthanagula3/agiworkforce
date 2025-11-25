@@ -47,6 +47,8 @@ struct AnthropicRequest {
     model: String,
     messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
@@ -194,16 +196,36 @@ impl LLMProvider for AnthropicProvider {
                 .collect()
         });
 
+        // ✅ Extract system messages for top-level system parameter
+        let system_message = request
+            .messages
+            .iter()
+            .filter(|m| m.role == "system")
+            .map(|m| m.content.clone())
+            .collect::<Vec<String>>()
+            .join("\n\n");
+
+        let system_param = if system_message.is_empty() {
+            None
+        } else {
+            Some(system_message)
+        };
+
+        // ✅ Filter out system messages from messages array
+        let messages: Vec<AnthropicMessage> = request
+            .messages
+            .iter()
+            .filter(|m| m.role != "system")
+            .map(|m| AnthropicMessage {
+                role: m.role.clone(),
+                content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
+            })
+            .collect();
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
-            messages: request
-                .messages
-                .iter()
-                .map(|m| AnthropicMessage {
-                    role: m.role.clone(),
-                    content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
-                })
-                .collect(),
+            messages,
+            system: system_param,
             max_tokens: request.max_tokens.or(Some(4096)),
             temperature: request.temperature,
             stream: if request.stream { Some(false) } else { None },
@@ -332,16 +354,36 @@ impl LLMProvider for AnthropicProvider {
                 .collect()
         });
 
+        // ✅ Extract system messages for top-level system parameter
+        let system_message = request
+            .messages
+            .iter()
+            .filter(|m| m.role == "system")
+            .map(|m| m.content.clone())
+            .collect::<Vec<String>>()
+            .join("\n\n");
+
+        let system_param = if system_message.is_empty() {
+            None
+        } else {
+            Some(system_message)
+        };
+
+        // ✅ Filter out system messages from messages array
+        let messages: Vec<AnthropicMessage> = request
+            .messages
+            .iter()
+            .filter(|m| m.role != "system")
+            .map(|m| AnthropicMessage {
+                role: m.role.clone(),
+                content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
+            })
+            .collect();
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
-            messages: request
-                .messages
-                .iter()
-                .map(|m| AnthropicMessage {
-                    role: m.role.clone(),
-                    content: Self::convert_content(&m.content, m.multimodal_content.as_ref()),
-                })
-                .collect(),
+            messages,
+            system: system_param,
             max_tokens: request.max_tokens.or(Some(4096)),
             temperature: request.temperature,
             stream: Some(true), // Enable streaming
