@@ -1,17 +1,17 @@
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
+import { create } from 'zustand';
 
 import type {
-  CalendarAccount,
-  CalendarSummary,
-  CalendarEvent,
-  EventDateTime,
-  ListEventsOptions,
-  CalendarProvider,
-  CreateEventRequest,
-  UpdateEventRequest,
+    CalendarAccount,
+    CalendarEvent,
+    CalendarProvider,
+    CalendarSummary,
+    CreateEventRequest,
+    EventDateTime,
+    ListEventsOptions,
+    UpdateEventRequest,
 } from '../types/calendar';
 
 interface PendingAuthorization {
@@ -152,7 +152,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       const firstAccount = accounts[0];
 
       if (!selectedAccountId && firstAccount) {
-        await get().selectAccount(firstAccount.account_id);
+        await get().selectAccount(firstAccount?.account_id);
       } else if (
         selectedAccountId &&
         firstAccount &&

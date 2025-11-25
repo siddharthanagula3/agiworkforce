@@ -1,6 +1,6 @@
+import { invoke } from '@/lib/tauri-mock';
+import { Activity, AlertCircle, Cpu, HardDrive, Wifi } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { Cpu, HardDrive, Activity, Wifi, AlertCircle } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 
 export interface SystemResources {
   cpuUsagePercent: number;

@@ -1,9 +1,9 @@
 // Updated Nov 16, 2025: Fixed test to actually test settingsStore instead of JavaScript primitives
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
-  useSettingsStore,
-  createDefaultLLMConfig,
-  createDefaultWindowPreferences,
+    createDefaultLLMConfig,
+    createDefaultWindowPreferences,
+    useSettingsStore,
 } from '../settingsStore';
 
 // Mock Tauri invoke
@@ -128,17 +128,17 @@ describe('settingsStore', () => {
   it('should set default model for provider', () => {
     const { setDefaultModel } = useSettingsStore.getState();
 
-    setDefaultModel('openai', 'gpt-4-turbo');
-    expect(useSettingsStore.getState().llmConfig.defaultModels.openai).toBe('gpt-4-turbo');
+    setDefaultModel('openai', 'gpt-5.1-thinking');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.openai).toBe('gpt-5.1-thinking');
 
-    setDefaultModel('anthropic', 'claude-3-opus');
-    expect(useSettingsStore.getState().llmConfig.defaultModels.anthropic).toBe('claude-3-opus');
+    setDefaultModel('anthropic', 'claude-opus-4-5');
+    expect(useSettingsStore.getState().llmConfig.defaultModels.anthropic).toBe('claude-opus-4-5');
   });
 
   it('should add favorite model', () => {
     const { addFavoriteModel } = useSettingsStore.getState();
     const initialFavorites = useSettingsStore.getState().llmConfig.favoriteModels;
-    const newModel = 'openai/gpt-4-turbo';
+    const newModel = 'openai/gpt-5.1-thinking';
 
     addFavoriteModel(newModel);
 
@@ -149,7 +149,7 @@ describe('settingsStore', () => {
 
   it('should not add duplicate favorite models', () => {
     const { addFavoriteModel } = useSettingsStore.getState();
-    const model = 'openai/gpt-4';
+    const model = 'openai/gpt-5.1';
 
     addFavoriteModel(model);
     const lengthAfterFirst = useSettingsStore.getState().llmConfig.favoriteModels.length;

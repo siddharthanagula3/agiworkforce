@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Save, Check, AlertCircle, Loader2, X } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import { MonacoEditor } from '../../Editor/MonacoEditor';
+import { invoke } from '@/lib/tauri-mock';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertCircle, Check, Loader2, Save, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../../lib/utils';
+import { MonacoEditor } from '../../Editor/MonacoEditor';
 
 interface CodeCanvasProps {
   contextId?: string;

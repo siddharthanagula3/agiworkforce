@@ -5,8 +5,8 @@
  * and cost estimation. Similar to Claude Code and Cursor token displays.
  */
 
+import { Activity, AlertTriangle, DollarSign, TrendingUp } from 'lucide-react';
 import { useMemo } from 'react';
-import { Activity, AlertTriangle, TrendingUp, DollarSign } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { formatTokens } from '../../utils/tokenCount';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';

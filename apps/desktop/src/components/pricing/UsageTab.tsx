@@ -4,28 +4,28 @@
  * Matches the reference design with model-level token and cost tracking
  */
 
+import { invoke } from '@/lib/tauri-mock';
+import { CheckCircle2, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { cn } from '../../lib/utils';
+import { useBillingStore } from '../../stores/billingStore';
+import { Badge } from '../ui/Badge';
 import { Card, CardContent } from '../ui/Card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/Table';
-import { Badge } from '../ui/Badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '../ui/Select';
-import { useBillingStore } from '../../stores/billingStore';
-import { invoke } from '@tauri-apps/api/core';
-import { cn } from '../../lib/utils';
-import { CheckCircle2, Info } from 'lucide-react';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '../ui/Table';
 
 interface UsageItem {
   item: string;

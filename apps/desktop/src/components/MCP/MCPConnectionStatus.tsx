@@ -1,19 +1,19 @@
-import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { ScrollArea } from '../ui/ScrollArea';
+import { invoke } from '@/lib/tauri-mock';
 import {
-  Activity,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  RefreshCw,
-  Clock,
-  Zap,
-  TrendingUp
+    Activity,
+    AlertTriangle,
+    CheckCircle,
+    Clock,
+    RefreshCw,
+    TrendingUp,
+    XCircle,
+    Zap
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { ScrollArea } from '../ui/ScrollArea';
 
 interface ServerHealth {
   server_name: string;

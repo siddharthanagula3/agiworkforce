@@ -3,7 +3,7 @@
  * Tests settings persistence, API key management, LLM configuration, and window preferences
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 
 const buildTaskRouting = (defaults: {
@@ -34,14 +34,14 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('settingsStore', () => {
   beforeEach(() => {
     const defaultModels = {
-      openai: 'gpt-4o-mini',
-      anthropic: 'claude-3-5-sonnet-20241022',
-      google: 'gemini-1.5-flash',
-      ollama: 'llama3.3',
-      xai: 'grok-4',
-      deepseek: 'deepseek-chat',
-      qwen: 'qwen-max',
-      mistral: 'mistral-large-latest',
+      openai: 'gpt-5.1',
+      anthropic: 'claude-sonnet-4-5',
+      google: 'gemini-3-pro',
+      ollama: 'llama4-maverick',
+      xai: 'grok-4.1',
+      deepseek: '',
+      qwen: 'qwen3-max',
+      mistral: '',
       moonshot: 'kimi-k2-thinking',
     };
 
@@ -91,14 +91,14 @@ describe('settingsStore', () => {
 
     it('should have correct default models', () => {
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultModels.openai).toBe('gpt-4o-mini');
-      expect(state.llmConfig.defaultModels.anthropic).toBe('claude-3-5-sonnet-20241022');
-      expect(state.llmConfig.defaultModels.google).toBe('gemini-1.5-flash');
-      expect(state.llmConfig.defaultModels.ollama).toBe('llama3.3');
-      expect(state.llmConfig.defaultModels.xai).toBe('grok-4');
-      expect(state.llmConfig.defaultModels.deepseek).toBe('deepseek-chat');
-      expect(state.llmConfig.defaultModels.qwen).toBe('qwen-max');
-      expect(state.llmConfig.defaultModels.mistral).toBe('mistral-large-latest');
+      expect(state.llmConfig.defaultModels.openai).toBe('gpt-5.1');
+      expect(state.llmConfig.defaultModels.anthropic).toBe('claude-sonnet-4-5');
+      expect(state.llmConfig.defaultModels.google).toBe('gemini-3-pro');
+      expect(state.llmConfig.defaultModels.ollama).toBe('llama4-maverick');
+      expect(state.llmConfig.defaultModels.xai).toBe('grok-4.1');
+      expect(state.llmConfig.defaultModels.deepseek).toBe('');
+      expect(state.llmConfig.defaultModels.qwen).toBe('qwen3-max');
+      expect(state.llmConfig.defaultModels.mistral).toBe('');
     });
   });
 
@@ -272,18 +272,18 @@ describe('settingsStore', () => {
     });
 
     it('should set default model for provider', () => {
-      useSettingsStore.getState().setDefaultModel('openai', 'gpt-4');
+      useSettingsStore.getState().setDefaultModel('openai', 'gpt-5.1-thinking');
 
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultModels.openai).toBe('gpt-4');
+      expect(state.llmConfig.defaultModels.openai).toBe('gpt-5.1-thinking');
     });
 
     it('should preserve other models when setting one', () => {
-      useSettingsStore.getState().setDefaultModel('anthropic', 'claude-3-opus');
+      useSettingsStore.getState().setDefaultModel('anthropic', 'claude-opus-4-5');
 
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultModels.anthropic).toBe('claude-3-opus');
-      expect(state.llmConfig.defaultModels.openai).toBe('gpt-4o-mini'); // unchanged
+      expect(state.llmConfig.defaultModels.anthropic).toBe('claude-opus-4-5');
+      expect(state.llmConfig.defaultModels.openai).toBe('gpt-5.1'); // unchanged
     });
   });
 
@@ -361,25 +361,25 @@ describe('settingsStore', () => {
           temperature: 0.8,
           maxTokens: 8192,
           defaultModels: {
-            openai: 'gpt-4',
-            anthropic: 'claude-3-opus',
-            google: 'gemini-pro',
-            ollama: 'llama3',
-            xai: 'grok-beta',
-            deepseek: 'deepseek-chat',
-            qwen: 'qwen-turbo',
-            mistral: 'mistral-small',
+            openai: 'gpt-5.1',
+            anthropic: 'claude-opus-4-5',
+            google: 'gemini-3-pro',
+            ollama: 'llama4-maverick',
+            xai: 'grok-4.1',
+            deepseek: '',
+            qwen: 'qwen3-max',
+            mistral: '',
             moonshot: 'kimi-k2-thinking',
           },
           taskRouting: buildTaskRouting({
-            openai: 'gpt-4',
-            anthropic: 'claude-3-opus',
-            google: 'gemini-pro',
-            ollama: 'llama3',
-            xai: 'grok-beta',
-            deepseek: 'deepseek-chat',
-            qwen: 'qwen-turbo',
-            mistral: 'mistral-small',
+            openai: 'gpt-5.1',
+            anthropic: 'claude-opus-4-5',
+            google: 'gemini-3-pro',
+            ollama: 'llama4-maverick',
+            xai: 'grok-4.1',
+            deepseek: '',
+            qwen: 'qwen3-max',
+            mistral: '',
             moonshot: 'kimi-k2-thinking',
           }),
           favoriteModels: [],
@@ -439,25 +439,25 @@ describe('settingsStore', () => {
           temperature: 0.8,
           maxTokens: 8192,
           defaultModels: {
-            openai: 'gpt-4',
-            anthropic: 'claude-3-opus',
-            google: 'gemini-pro',
-            ollama: 'llama3',
-            xai: 'grok-beta',
-            deepseek: 'deepseek-chat',
-            qwen: 'qwen-turbo',
-            mistral: 'mistral-small',
+            openai: 'gpt-5.1',
+            anthropic: 'claude-opus-4-5',
+            google: 'gemini-3-pro',
+            ollama: 'llama4-maverick',
+            xai: 'grok-4.1',
+            deepseek: '',
+            qwen: 'qwen3-max',
+            mistral: '',
             moonshot: 'kimi-k2-thinking',
           },
           taskRouting: buildTaskRouting({
-            openai: 'gpt-4',
-            anthropic: 'claude-3-opus',
-            google: 'gemini-pro',
-            ollama: 'llama3',
-            xai: 'grok-beta',
-            deepseek: 'deepseek-chat',
-            qwen: 'qwen-turbo',
-            mistral: 'mistral-small',
+            openai: 'gpt-5.1',
+            anthropic: 'claude-opus-4-5',
+            google: 'gemini-3-pro',
+            ollama: 'llama4-maverick',
+            xai: 'grok-4.1',
+            deepseek: '',
+            qwen: 'qwen3-max',
+            mistral: '',
             moonshot: 'kimi-k2-thinking',
           }),
           favoriteModels: [],
@@ -561,8 +561,8 @@ describe('settingsStore', () => {
               temperature: 0.7,
               maxTokens: 4096,
               defaultModels: {
-                openai: 'gpt-4o-mini',
-                anthropic: 'claude-3-5-sonnet-20241022',
+                openai: 'gpt-5.1',
+                anthropic: 'claude-sonnet-4-5',
                 google: 'gemini-1.5-flash',
                 ollama: 'llama3',
                 xai: 'grok-beta',
@@ -571,8 +571,8 @@ describe('settingsStore', () => {
                 mistral: 'mistral-small',
               },
               taskRouting: buildTaskRouting({
-                openai: 'gpt-4o-mini',
-                anthropic: 'claude-3-5-sonnet-20241022',
+                openai: 'gpt-5.1',
+                anthropic: 'claude-sonnet-4-5',
                 google: 'gemini-1.5-flash',
                 ollama: 'llama3',
                 xai: 'grok-beta',

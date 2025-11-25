@@ -1,7 +1,7 @@
 // Updated Nov 16, 2025: Added UnlistenFn import for cleanup
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { create } from 'zustand';
 
 export interface BrowserTab {
   id: string;
@@ -185,8 +185,10 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       // Listen for browser automation events with error handling
       const unlisten1 = await listen('browser:action', (event: any) => {
         try {
-          const action = event.payload as BrowserAction;
-          get().addAction(action);
+          const action = event?.payload as BrowserAction;
+          if (action) {
+            get().addAction(action);
+          }
         } catch (error) {
           console.error('[browserStore] Error handling browser:action event:', error);
         }
@@ -195,10 +197,12 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
       const unlisten2 = await listen('browser:console', (event: any) => {
         try {
-          const log = event.payload as ConsoleLog;
-          set((state) => ({
-            consoleLogs: [...state.consoleLogs, log],
-          }));
+          const log = event?.payload as ConsoleLog;
+          if (log) {
+            set((state) => ({
+              consoleLogs: [...state.consoleLogs, log],
+            }));
+          }
         } catch (error) {
           console.error('[browserStore] Error handling browser:console event:', error);
         }
@@ -207,10 +211,12 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
       const unlisten3 = await listen('browser:network', (event: any) => {
         try {
-          const request = event.payload as NetworkRequest;
-          set((state) => ({
-            networkRequests: [...state.networkRequests, request],
-          }));
+          const request = event?.payload as NetworkRequest;
+          if (request) {
+            set((state) => ({
+              networkRequests: [...state.networkRequests, request],
+            }));
+          }
         } catch (error) {
           console.error('[browserStore] Error handling browser:network event:', error);
         }
