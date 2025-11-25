@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { Artifact } from '../types/chat';
 import { invoke, isTauri } from '../lib/tauri-mock';
 
 // ============================================================================
@@ -14,6 +15,7 @@ export interface MessageMetadata {
   cost?: number;
   duration?: number;
   streaming?: boolean;
+  artifacts?: Artifact[];
   type?: 'reasoning' | 'response';
   // Tool-related fields
   tool?: string;
@@ -62,6 +64,7 @@ export interface EnhancedMessage {
   timestamp: Date;
   metadata?: MessageMetadata;
   attachments?: Attachment[];
+  artifacts?: Artifact[];
   operations?: Operation[];
   streaming?: boolean;
   pending?: boolean; // Optimistic message not yet confirmed by backend
@@ -434,6 +437,10 @@ export interface UnifiedChatState {
     toolNames: string[];
   };
 
+  // Composer Editing
+  draftContent: string;
+  editingMessageId: string | null;
+
   // Actions - Conversations
   ensureActiveConversation: () => void;
   createConversation: (title?: string) => string;
@@ -450,6 +457,7 @@ export interface UnifiedChatState {
   retryFailedMessage: (id: string) => void;
   updateMessage: (id: string, updates: Partial<EnhancedMessage>) => void;
   deleteMessage: (id: string) => void;
+  setIsLoading: (loading: boolean) => void;
   setStreamingMessage: (id: string | null) => void;
   appendToStreamingMessage: (content: string) => void;
 
@@ -477,6 +485,7 @@ export interface UnifiedChatState {
   updateTaskProgress: (id: string, progress: number) => void;
   addBackgroundTask: (task: Omit<BackgroundTask, 'createdAt'>) => void;
   updateBackgroundTask: (id: string, updates: Partial<BackgroundTask>) => void;
+  clearBackgroundTasks: () => void;
 
   // Actions - Plan & Workflow
   setWorkflowContext: (context: WorkflowContext | null) => void;
@@ -515,6 +524,11 @@ export interface UnifiedChatState {
   setFileOperationFilter: (types: FileOperationType[]) => void;
   setTerminalStatusFilter: (statuses: ('success' | 'error')[]) => void;
   setToolNameFilter: (names: string[]) => void;
+
+  // Actions - Composer Editing
+  setDraftContent: (value: string) => void;
+  startEditingMessage: (id: string, content: string) => void;
+  cancelEditing: () => void;
 
   // Actions - Focus Modes & Workspace
   setFocusMode: (mode: FocusMode) => void;
@@ -587,7 +601,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         isOpen: false,
         activeMode: 'code',
         contextId: null,
-        autoTrigger: true,
+        autoTrigger: false,
       },
       actionTrail: [],
       tokenUsage: {
@@ -602,6 +616,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         terminalStatus: [],
         toolNames: [],
       },
+      draftContent: '',
+      editingMessageId: null,
 
       // Conversation Actions
       ensureActiveConversation: () =>
@@ -839,6 +855,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           }
         }),
 
+      setIsLoading: (loading) =>
+        set((state) => {
+          state.isLoading = loading;
+        }),
+
       setStreamingMessage: (id) =>
         set((state) => {
           state.currentStreamingMessageId = id;
@@ -952,6 +973,10 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       addBackgroundTask: (task) =>
         set((state) => {
+          // Prevent duplicates
+          if (state.backgroundTasks.some((t) => t.id === task.id)) {
+            return;
+          }
           state.backgroundTasks.push({ ...task, createdAt: new Date() });
         }),
 
@@ -961,6 +986,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (index !== -1 && state.backgroundTasks[index]) {
             Object.assign(state.backgroundTasks[index], updates);
           }
+        }),
+
+      clearBackgroundTasks: () =>
+        set((state) => {
+          state.backgroundTasks = [];
         }),
 
       setWorkflowContext: (context) =>
@@ -1199,6 +1229,22 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       setToolNameFilter: (names) =>
         set((state) => {
           state.filters.toolNames = names;
+        }),
+
+      // Composer editing helpers
+      setDraftContent: (value) =>
+        set((state) => {
+          state.draftContent = value;
+        }),
+      startEditingMessage: (id, content) =>
+        set((state) => {
+          state.editingMessageId = id;
+          state.draftContent = content;
+        }),
+      cancelEditing: () =>
+        set((state) => {
+          state.editingMessageId = null;
+          state.draftContent = '';
         }),
 
       // Focus Modes & Workspace Actions

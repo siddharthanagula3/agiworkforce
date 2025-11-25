@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 export type ErrorSeverity = 'info' | 'warning' | 'error' | 'critical';
 
@@ -58,17 +58,17 @@ const useErrorStore = create<ErrorStore>()(
             e.type === errorData.type &&
             e.message === errorData.message &&
             !e.dismissed &&
-            now - e.timestamp < 5000
+            now - e.timestamp < 5000,
         );
 
         if (existingError) {
           // Increment count instead of creating duplicate
           set({
             errors: errors.map((e) =>
-              e.id === existingError.id ? { ...e, count: e.count + 1, timestamp: now } : e
+              e.id === existingError.id ? { ...e, count: e.count + 1, timestamp: now } : e,
             ),
             toasts: toasts.map((e) =>
-              e.id === existingError.id ? { ...e, count: e.count + 1, timestamp: now } : e
+              e.id === existingError.id ? { ...e, count: e.count + 1, timestamp: now } : e,
             ),
           });
           return;
@@ -76,7 +76,7 @@ const useErrorStore = create<ErrorStore>()(
 
         const newError: AppError = {
           ...errorData,
-          id: `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `error_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
           timestamp: now,
           dismissed: false,
           count: 1,
@@ -109,8 +109,8 @@ const useErrorStore = create<ErrorStore>()(
             errorData.severity === 'critical' || errorData.severity === 'error'
               ? console.error
               : errorData.severity === 'warning'
-              ? console.warn
-              : console.info;
+                ? console.warn
+                : console.info;
 
           consoleMethod(`[${errorData.severity.toUpperCase()}] ${errorData.message}`, {
             type: errorData.type,
@@ -206,8 +206,8 @@ const useErrorStore = create<ErrorStore>()(
         }
       },
     }),
-    { name: 'ErrorStore' }
-  )
+    { name: 'ErrorStore' },
+  ),
 );
 
 export default useErrorStore;

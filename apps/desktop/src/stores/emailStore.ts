@@ -105,10 +105,12 @@ export const useEmailStore = create<EmailState>((set, get) => ({
         await get().selectAccount(firstAccount.id);
       } else if (
         selectedAccountId &&
-        firstAccount &&
         !accounts.some((account) => account.id === selectedAccountId)
       ) {
-        await get().selectAccount(firstAccount.id);
+        const fallbackAccount = accounts[0];
+        if (fallbackAccount) {
+          await get().selectAccount(fallbackAccount.id);
+        }
       } else if (selectedAccountId) {
         await get().refreshFolders(selectedAccountId);
         await get().refreshEmails();
@@ -221,7 +223,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       if (firstEmail) {
         const currentSelected = get().selectedEmail;
         if (!currentSelected || currentSelected.id !== firstEmail.id) {
-          set({ selectedEmail: firstEmail });
+          set({ selectedEmail: firstEmail ?? null });
         }
       }
     } catch (error) {

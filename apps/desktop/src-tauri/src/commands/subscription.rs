@@ -255,11 +255,6 @@ fn get_plan_details(plan_id: &str) -> (String, String) {
     }
 }
 
-#[tauri::command]
-pub async fn get_user_credits() -> Result<f64, String> {
-    Ok(0.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

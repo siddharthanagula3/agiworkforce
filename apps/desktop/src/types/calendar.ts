@@ -1,4 +1,5 @@
-export type CalendarProvider = 'google' | 'outlook';
+// Providers supported across UI and backend OAuth flows
+export type CalendarProvider = 'google' | 'outlook' | 'microsoft' | 'apple';
 
 export interface CalendarAccount {
   account_id: string;

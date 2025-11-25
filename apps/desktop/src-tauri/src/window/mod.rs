@@ -74,7 +74,18 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
     let app_state = window.state::<AppState>().clone();
     let snapshot = app_state.snapshot();
 
-    window.set_always_on_top(snapshot.always_on_top)?;
+    // ALWAYS start with always_on_top disabled for normal window behavior
+    // Users can enable it via system tray if needed
+    window.set_always_on_top(false)?;
+    app_state.update(|state| {
+        if state.always_on_top {
+            state.always_on_top = false;
+            true
+        } else {
+            false
+        }
+    })?;
+
     window.set_decorations(false)?;
     window.set_focus()?;
     window.set_title("AGI Workforce")?;
