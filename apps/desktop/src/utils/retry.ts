@@ -47,7 +47,7 @@ export class RetryError extends Error {
   constructor(
     message: string,
     public readonly attempts: number,
-    public readonly lastError: Error
+    public readonly lastError: Error,
   ) {
     super(message);
     this.name = 'RetryError';
@@ -61,7 +61,7 @@ function calculateDelay(
   attempt: number,
   initialDelay: number,
   backoffMultiplier: number,
-  maxDelay: number
+  maxDelay: number,
 ): number {
   const delay = initialDelay * Math.pow(backoffMultiplier, attempt);
   return Math.min(delay, maxDelay);
@@ -87,7 +87,7 @@ function sleep(ms: number): Promise<void> {
  *     maxAttempts: 5,
  *     initialDelay: 1000,
  *     onRetry: (attempt, error) => {
- *       console.log(`Retry attempt ${attempt}: ${error.message}`);
+ *
  *     }
  *   }
  * );
@@ -95,7 +95,7 @@ function sleep(ms: number): Promise<void> {
  */
 export async function retry<T>(
   operation: () => Promise<T>,
-  options: RetryOptions = {}
+  options: RetryOptions = {},
 ): Promise<T> {
   const {
     maxAttempts = 3,
@@ -147,7 +147,7 @@ export async function retry<T>(
   throw new RetryError(
     `Operation failed after ${maxAttempts} attempts: ${lastError.message}`,
     maxAttempts,
-    lastError
+    lastError,
   );
 }
 
@@ -156,7 +156,7 @@ export async function retry<T>(
  */
 export async function retryWithStrategy<T>(
   operation: () => Promise<T>,
-  errorType: 'network' | 'database' | 'api' | 'filesystem'
+  errorType: 'network' | 'database' | 'api' | 'filesystem',
 ): Promise<T> {
   const strategies: Record<typeof errorType, RetryOptions> = {
     network: {
@@ -206,10 +206,10 @@ export async function retryWithStrategy<T>(
  */
 export async function retryBatch<T>(
   operations: Array<() => Promise<T>>,
-  options: RetryOptions = {}
+  options: RetryOptions = {},
 ): Promise<Array<T | Error>> {
   const results = await Promise.allSettled(
-    operations.map((operation) => retry(operation, options))
+    operations.map((operation) => retry(operation, options)),
   );
 
   return results.map((result) => {
@@ -226,7 +226,7 @@ export async function retryBatch<T>(
 export async function retryWithTimeout<T>(
   operation: () => Promise<T>,
   timeoutMs: number,
-  retryOptions: RetryOptions = {}
+  retryOptions: RetryOptions = {},
 ): Promise<T> {
   return retry(async () => {
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -242,7 +242,7 @@ export async function retryWithTimeout<T>(
  */
 export function makeRetriable<TArgs extends unknown[], TReturn>(
   fn: (...args: TArgs) => Promise<TReturn>,
-  options: RetryOptions = {}
+  options: RetryOptions = {},
 ): (...args: TArgs) => Promise<TReturn> {
   return (...args: TArgs) => {
     return retry(() => fn(...args), options);

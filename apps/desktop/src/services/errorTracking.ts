@@ -5,8 +5,8 @@
  * Note: Requires @sentry/react and @sentry/tauri to be installed
  */
 
-import { analytics } from './analytics';
 import { ErrorEventProperties } from '../types/analytics';
+import { analytics } from './analytics';
 
 // Import Sentry
 import * as Sentry from '@sentry/react';
@@ -87,7 +87,6 @@ class ErrorTrackingService {
       });
 
       this.initialized = true;
-      console.log('Error tracking initialized');
     } catch (error) {
       console.error('Failed to initialize error tracking:', error);
     }
@@ -191,7 +190,6 @@ class ErrorTrackingService {
    */
   public captureMessage(message: string, severity: ErrorSeverity = ErrorSeverity.LOW) {
     if (!this.config.enabled) {
-      console.log(message);
       return;
     }
 

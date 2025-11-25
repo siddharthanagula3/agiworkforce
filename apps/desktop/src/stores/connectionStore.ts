@@ -1,9 +1,9 @@
-import { create } from 'zustand';
 import {
   SignalingClient,
   type SignalingClientOptions,
   type SignalingEvent,
 } from '@agiworkforce/utils';
+import { create } from 'zustand';
 
 const SIGNALING_HTTP_URL =
   (import.meta.env?.['VITE_SIGNALING_HTTP_URL'] as string | undefined) ?? 'http://localhost:4000';
@@ -67,8 +67,8 @@ export const useConnectionStore = create<MobileCompanionState>((set, get) => {
 
   const handleControlEvent = (message: MessageEvent<string>) => {
     try {
-      const payload = JSON.parse(message.data) as Record<string, unknown>;
-      console.log('[mobile-companion] received control payload', payload);
+      JSON.parse(message.data) as Record<string, unknown>;
+
       // TODO: integrate with automation input handlers
     } catch (error) {
       console.warn('[mobile-companion] failed to parse control payload', error);
@@ -103,7 +103,6 @@ export const useConnectionStore = create<MobileCompanionState>((set, get) => {
           await peerConnection.addIceCandidate(candidate);
         } else if (event.kind === 'control') {
           // Forward to data channel handler if needed
-          console.log('[mobile-companion] received control signal', event.payload);
         }
         break;
       case 'peer_left':
