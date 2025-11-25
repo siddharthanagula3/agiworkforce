@@ -1,34 +1,34 @@
 // Updated Nov 16, 2025: Added accessible dialogs to replace window.prompt
-import { useState, useMemo } from 'react';
-import { Copy, Check, Download, Code2, BarChart3, Network, FileUp } from 'lucide-react';
+import { invoke } from '@/lib/tauri-mock';
+import { BarChart3, Check, Code2, Copy, Download, FileUp, Network } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Legend,
+    Line,
+    LineChart,
+    Pie,
+    PieChart,
+    Tooltip as RechartsTooltip,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from 'recharts';
-import { Button } from '../ui/Button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import { cn } from '../../lib/utils';
-import { useTheme } from '../../hooks/useTheme';
-import type { Artifact } from '../../types/chat';
-import { useCodeStore } from '../../stores/codeStore';
 import { toast } from 'sonner';
-import { invoke } from '@tauri-apps/api/core';
+import { useTheme } from '../../hooks/useTheme';
+import { cn } from '../../lib/utils';
+import { useCodeStore } from '../../stores/codeStore';
+import type { Artifact } from '../../types/chat';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { usePrompt } from '../ui/PromptDialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 
 interface ArtifactRendererProps {
   artifact: Artifact;

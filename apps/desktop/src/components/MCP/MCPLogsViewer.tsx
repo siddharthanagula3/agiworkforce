@@ -1,16 +1,16 @@
-import { useEffect, useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
+import { Download, RefreshCw, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { cn } from '../../lib/utils';
+import { Button } from '../ui/Button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
 } from '../ui/Dialog';
 import { ScrollArea } from '../ui/ScrollArea';
-import { Button } from '../ui/Button';
-import { RefreshCw, Download, X } from 'lucide-react';
-import { cn } from '../../lib/utils';
 
 interface MCPLogsViewerProps {
   serverName: string;

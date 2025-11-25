@@ -1,29 +1,29 @@
-import { useState, useEffect } from 'react';
-import { useFilesystemStore, type DirEntry, type FileMetadata } from '../../stores/filesystemStore';
-import { cn } from '../../lib/utils';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import {
-  Folder,
-  FolderOpen,
-  File,
-  FileText,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  Home,
-  RefreshCw,
-  Plus,
-  Trash2,
-  Search,
-  Info,
-  Edit2,
-  Save,
-  X,
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    Edit2,
+    File,
+    FileText,
+    Folder,
+    FolderOpen,
+    Home,
+    Info,
+    Plus,
+    RefreshCw,
+    Save,
+    Search,
+    Trash2,
+    X,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
+import { cn } from '../../lib/utils';
+import { useFilesystemStore, type DirEntry, type FileMetadata } from '../../stores/filesystemStore';
+import { Button } from '../ui/Button';
 import { useConfirm } from '../ui/ConfirmDialog'; // Updated Nov 16, 2025
+import { Input } from '../ui/Input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 
 interface FilesystemWorkspaceProps {
   className?: string;
@@ -202,6 +202,7 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     }
 
     try {
+      if (!currentPath) return;
       const results = await searchFiles(currentPath, searchPattern);
       setSearchResults(results);
       toast.success(`Found ${results.length} files`);

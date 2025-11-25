@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Search, BookOpen, Video, FileText, MessageCircle, X, ChevronRight } from 'lucide-react';
+import { invoke } from '@/lib/tauri-mock';
+import { BookOpen, ChevronRight, FileText, MessageCircle, Search, Video, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 
 interface HelpArticle {

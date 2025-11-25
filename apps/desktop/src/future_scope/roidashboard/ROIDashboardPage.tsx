@@ -3,19 +3,19 @@
  * Main page for the Real-Time ROI Dashboard
  */
 
+import { Clock, DollarSign, Download, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Clock, DollarSign, Zap, TrendingUp, Download, RefreshCw } from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { BigStatCard } from '../components/dashboard/BigStatCard';
-import { LiveIndicator } from '../components/dashboard/LiveIndicator';
-import { TimeSavedChart } from '../components/dashboard/TimeSavedChart';
-import { CostSavedChart } from '../components/dashboard/CostSavedChart';
-import { ComparisonSection } from '../components/dashboard/ComparisonSection';
-import { RecentActivityFeed } from '../components/dashboard/RecentActivityFeed';
-import { MilestoneToast } from '../components/dashboard/MilestoneToast';
-import { ExportReportModal } from '../components/dashboard/ExportReportModal';
-import { useROIStore } from '../stores/roiStore';
 import { toast } from 'sonner';
+import { Button } from '../../components/ui/Button';
+import { BigStatCard } from './components/BigStatCard';
+import { ComparisonSection } from './components/ComparisonSection';
+import { CostSavedChart } from './components/CostSavedChart';
+import { ExportReportModal } from './components/ExportReportModal';
+import { LiveIndicator } from './components/LiveIndicator';
+import { MilestoneToast } from './components/MilestoneToast';
+import { RecentActivityFeed } from './components/RecentActivityFeed';
+import { TimeSavedChart } from './components/TimeSavedChart';
+import { useROIStore } from './roiStore';
 
 export function ROIDashboardPage() {
   const {

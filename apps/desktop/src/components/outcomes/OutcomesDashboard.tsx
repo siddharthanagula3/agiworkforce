@@ -1,5 +1,5 @@
+import { invoke } from '@/lib/tauri-mock';
 import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 
 interface ProcessStat {
   process_type: string;

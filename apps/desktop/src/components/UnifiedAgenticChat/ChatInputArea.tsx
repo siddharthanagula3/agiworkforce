@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, ChevronDown, Image as ImageIcon, Mic, Paperclip, Send, X } from 'lucide-react';
+import { Camera, ChevronDown, Image as ImageIcon, Loader2, Mic, Paperclip, Send, Square, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { getModelMetadata } from '../../constants/llm';
@@ -7,10 +7,10 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { cn } from '../../lib/utils';
 import { useModelStore } from '../../stores/modelStore';
 import {
-  Attachment,
-  ContextItem,
-  FocusMode,
-  useUnifiedChatStore,
+    Attachment,
+    ContextItem,
+    FocusMode,
+    useUnifiedChatStore,
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
 
@@ -23,7 +23,8 @@ export interface SendOptions {
 }
 
 export interface ChatInputAreaProps {
-  onSend: (content: string, options: SendOptions) => void;
+  onSend: (content: string, options: SendOptions) => Promise<void> | void;
+  onStopGeneration?: () => void;
   disabled?: boolean;
   placeholder?: string;
   maxLength?: number;
@@ -54,6 +55,7 @@ const FOCUS_MODES: { value: FocusMode; label: string; placeholder: string }[] = 
 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
+  onStopGeneration,
   disabled = false,
   placeholder: defaultPlaceholder = 'Type a message...',
   maxLength = 10000,
@@ -73,6 +75,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
+  const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const messages = useUnifiedChatStore((state) => state.messages);
   const focusMode = useUnifiedChatStore((state) => state.focusMode);
   const setFocusMode = useUnifiedChatStore((state) => state.setFocusMode);
@@ -80,6 +83,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const selectedModel = useModelStore((state) => state.selectedModel);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const prefersReducedMotion = useReducedMotion();
+
+  // Local state to prevent double sends
+  const [isSending, setIsSending] = useState(false);
 
   // Get model display name
   const modelDisplayName = selectedModel
@@ -94,8 +100,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   };
 
-  const isDisabled = disabled || isLoading;
+  const isDisabled = disabled || isLoading || isSending;
   const isEmptyState = messages.length === 0;
+  const showStopButton = isStreaming && onStopGeneration;
 
   // Close model selector when model changes
   useEffect(() => {
@@ -167,7 +174,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       document.removeEventListener('drop', handleDrop);
     };
     // handleFilesAdded is stable (doesn't depend on props/state), safe to omit
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFilesAdded = (files: File[]) => {
@@ -182,19 +188,38 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     setAttachments((prev) => [...prev, ...newAttachments]);
   };
 
-  const handleSubmit = (event?: React.FormEvent) => {
+  const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (!content.trim() || isDisabled) return;
 
-    onSend(content, {
-      attachments: attachments.length > 0 ? attachments : undefined,
-      context: activeContext.length > 0 ? activeContext : undefined,
-      focusMode: focusMode,
-      modelOverride: selectedModel ? selectedModel : undefined,
-      providerOverride: selectedProvider ? selectedProvider : undefined,
-    });
+    // Prevent double sends
+    setIsSending(true);
+    
+    const messageContent = content;
+    const messageAttachments = attachments.length > 0 ? attachments : undefined;
+    
+    // Clear input immediately for better UX (optimistic)
     setContent('');
     setAttachments([]);
+
+    try {
+      await onSend(messageContent, {
+        attachments: messageAttachments,
+        context: activeContext.length > 0 ? activeContext : undefined,
+        focusMode: focusMode,
+        modelOverride: selectedModel ? selectedModel : undefined,
+        providerOverride: selectedProvider ? selectedProvider : undefined,
+      });
+    } catch (error) {
+      // Restore content on error so user can retry
+      setContent(messageContent);
+      if (messageAttachments) {
+        setAttachments(messageAttachments);
+      }
+      console.error('[ChatInputArea] Send failed:', error);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -460,6 +485,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 value={content}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onPaste={_handlePaste}
                 placeholder={placeholder}
                 disabled={isDisabled}
                 className="chat-input flex-1 resize-none border-none bg-transparent py-3 pr-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-0 dark:text-gray-100 dark:placeholder-gray-400"
@@ -500,21 +526,48 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
             {/* Bottom bar with send button */}
             <div className="mt-3 flex items-center justify-between px-4 pb-4">
-              <div className="flex items-center gap-2">{rightAccessory}</div>
+              <div className="flex items-center gap-2">
+                {rightAccessory}
+                {/* Keyboard shortcut hint */}
+                <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
+                  Enter to send · Shift+Enter for newline
+                </span>
+              </div>
 
-              <button
-                type="submit"
-                disabled={!content.trim() || isDisabled}
-                className={cn(
-                  'inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium transition-all',
-                  'bg-teal-500 text-white hover:bg-teal-600 disabled:bg-gray-300 dark:disabled:bg-gray-700',
-                  'disabled:cursor-not-allowed disabled:text-gray-500 dark:disabled:text-gray-400',
-                )}
-                title="Send message"
-                aria-label="Send message"
-              >
-                <Send size={18} aria-hidden="true" />
-              </button>
+              {/* Stop or Send button */}
+              {showStopButton ? (
+                <button
+                  type="button"
+                  onClick={onStopGeneration}
+                  className={cn(
+                    'inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all',
+                    'bg-red-500 text-white hover:bg-red-600',
+                  )}
+                  title="Stop generation"
+                  aria-label="Stop generation"
+                >
+                  <Square size={16} aria-hidden="true" />
+                  <span>Stop</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!content.trim() || isDisabled}
+                  className={cn(
+                    'inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all',
+                    'bg-teal-500 text-white hover:bg-teal-600 disabled:bg-gray-300 dark:disabled:bg-gray-700',
+                    'disabled:cursor-not-allowed disabled:text-gray-500 dark:disabled:text-gray-400',
+                  )}
+                  title="Send message (Enter)"
+                  aria-label="Send message"
+                >
+                  {isSending ? (
+                    <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send size={18} aria-hidden="true" />
+                  )}
+                </button>
+              )}
             </div>
           </form>
 

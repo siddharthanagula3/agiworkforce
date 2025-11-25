@@ -5,25 +5,25 @@
  * Allows users to save and restore conversation states safely.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 import {
-  GitBranch,
-  Save,
-  RotateCcw,
-  Trash2,
-  Plus,
-  Clock,
-  MessageSquare,
-  AlertCircle,
-  Check,
+    AlertCircle,
+    Check,
+    Clock,
+    GitBranch,
+    MessageSquare,
+    Plus,
+    RotateCcw,
+    Save,
+    Trash2,
 } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { Button } from '../ui/Button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
+import { Input } from '../ui/Input';
+import { Textarea } from '../ui/Textarea';
 
 export interface Checkpoint {
   id: string;

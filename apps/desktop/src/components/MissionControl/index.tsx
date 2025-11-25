@@ -7,7 +7,7 @@ import {
   type AgentStatusPayload,
   useUnifiedChatStore,
 } from '../../stores/unifiedChatStore';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri-mock';
 
 type ViewMode = 'grid' | 'list';
 type FilterMode = 'all' | 'running' | 'paused' | 'completed' | 'failed';

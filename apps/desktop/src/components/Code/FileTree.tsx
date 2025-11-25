@@ -1,35 +1,35 @@
 // Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm/prompt
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { invoke } from '../../utils/ipc';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
-  ChevronRight,
-  ChevronDown,
-  File,
-  Folder,
-  FolderOpen,
-  FileCode,
-  FileJson,
-  FileText,
-  Image as ImageIcon,
-  RefreshCw,
-  Trash,
-  Pencil,
-  PlusCircle,
+    ChevronDown,
+    ChevronRight,
+    File,
+    FileCode,
+    FileJson,
+    FileText,
+    Folder,
+    FolderOpen,
+    Image as ImageIcon,
+    Pencil,
+    PlusCircle,
+    RefreshCw,
+    Trash,
 } from 'lucide-react';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { cn, debounce } from '../../lib/utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { cn, debounce } from '../../lib/utils';
+import { invoke } from '../../utils/ipc';
+import { Button } from '../ui/Button';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { Input } from '../ui/Input';
 import { usePrompt } from '../ui/PromptDialog';
+import { ScrollArea } from '../ui/ScrollArea';
 
 export interface FileNode {
   name: string;
   path: string;
   isDirectory: boolean;
-  children?: FileNode[] | undefined;
+  children?: FileNode[];
   expanded?: boolean;
 }
 
