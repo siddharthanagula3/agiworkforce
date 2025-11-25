@@ -3,15 +3,16 @@ use reqwest::Client;
 use serde_json::Value;
 
 pub async fn send_managed_request(
-    req: &LLMRequest, 
-    token: &str, 
-    provider: &str
+    req: &LLMRequest,
+    token: &str,
+    provider: &str,
 ) -> Result<LLMResponse, String> {
     let client = Client::new();
     // Route via our gateway (handles Stripe usage metering)
-    let url = format!("https://api.agiworkforce.com/v1/proxy/{}", provider); 
-    
-    let res = client.post(url)
+    let url = format!("https://api.agiworkforce.com/v1/proxy/{}", provider);
+
+    let res = client
+        .post(url)
         .bearer_auth(token)
         .json(&req)
         .send()
