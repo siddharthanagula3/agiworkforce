@@ -4,11 +4,11 @@
  * Updated Nov 16, 2025: Added React.memo for performance optimization
  */
 
-import { memo, useMemo } from 'react';
 import { Users } from 'lucide-react';
-import { useEmployeeStore, selectFilteredEmployees } from '../../stores/employeeStore';
+import { memo, useMemo } from 'react';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { useEmployeeStore } from '../employeeStore';
 import { EmployeeCard } from './EmployeeCard';
-import { Skeleton } from '../ui/Skeleton';
 
 // Updated Nov 16, 2025: Memoized LoadingSkeleton to prevent re-renders
 const LoadingSkeleton = memo(function LoadingSkeleton() {

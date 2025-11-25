@@ -1,12 +1,19 @@
 // Updated Nov 16, 2025: Added React.memo and performance optimizations
-import React, { useState, useCallback, memo } from 'react';
-import { Copy, Eye, Star, Share2, Sparkles, Clock, DollarSign } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import type { PublishedWorkflow } from '../../types/marketplace';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { useAuthStore } from '../../stores/authStore';
+import { Clock, Copy, DollarSign, Eye, Share2, Sparkles, Star } from 'lucide-react';
+import React, { memo, useCallback, useState } from 'react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import { useAuthStore } from '../../../stores/authStore';
+import type { PublishedWorkflow } from '../../../types/marketplace';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 interface WorkflowCardProps {
   workflow: PublishedWorkflow;

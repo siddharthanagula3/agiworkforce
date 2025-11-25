@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Copy, Check, Twitter, Linkedin, Mail, Link, MessageSquare, Newspaper } from 'lucide-react';
+import { Check, Copy, Link, Linkedin, Mail, MessageSquare, Newspaper, Twitter } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Button } from '../../../components/ui/Button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-} from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { SHARE_PLATFORMS } from '../../types/marketplace';
+} from '../../../components/ui/Dialog';
+import { Input } from '../../../components/ui/Input';
+import { Textarea } from '../../../components/ui/Textarea'; // This import was not explicitly removed by the instruction, so keeping it.
+import { SHARE_PLATFORMS } from '../../../types/marketplace';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 export function ShareModal() {
   const { selectedWorkflow, showShareModal, closeShareModal, getShareUrl, getEmbedCode } =
@@ -89,8 +89,8 @@ export function ShareModal() {
         <DialogHeader>
           <DialogTitle>Share "{selectedWorkflow.title}"</DialogTitle>
           <DialogDescription>
-            Help others discover this workflow by sharing it on social media or embedding it on
-            your website
+            Help others discover this workflow by sharing it on social media or embedding it on your
+            website
           </DialogDescription>
         </DialogHeader>
 
@@ -162,12 +162,7 @@ export function ShareModal() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Embed on Website</label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopyEmbed}
-                className="text-xs"
-              >
+              <Button variant="ghost" size="sm" onClick={handleCopyEmbed} className="text-xs">
                 {embedCopied ? (
                   <>
                     <Check className="h-3 w-3 mr-1 text-green-500" />
@@ -181,12 +176,7 @@ export function ShareModal() {
                 )}
               </Button>
             </div>
-            <Textarea
-              value={embedCode}
-              readOnly
-              rows={4}
-              className="font-mono text-xs bg-muted"
-            />
+            <Textarea value={embedCode} readOnly rows={4} className="font-mono text-xs bg-muted" />
           </div>
 
           {/* Social Proof */}

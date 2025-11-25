@@ -3,21 +3,29 @@
  * Search and filter controls for the employee marketplace
  */
 
-import { Search, Users, Briefcase, Code, Settings as SettingsIcon, User, Check } from 'lucide-react';
-import { Input } from '../ui/Input';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { cn } from '../../lib/utils';
-import { useEmployeeStore } from '../../stores/employeeStore';
-import type { EmployeeRole } from '../../types/employees';
+import {
+  Briefcase,
+  Check,
+  Code,
+  Search,
+  Settings as SettingsIcon,
+  User,
+  Users,
+} from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/Select';
-import { useState } from 'react';
+} from '../../../components/ui/Select';
+import { cn } from '../../../lib/utils';
+import type { EmployeeRole } from '../../../types/employees';
+import { useEmployeeStore } from '../employeeStore';
 
 const CATEGORY_CONFIG: Array<{
   id: EmployeeRole | 'all';
@@ -33,13 +41,8 @@ const CATEGORY_CONFIG: Array<{
 ];
 
 export function EmployeeFilters() {
-  const {
-    searchQuery,
-    selectedCategory,
-    setSearchQuery,
-    setSelectedCategory,
-    myEmployees,
-  } = useEmployeeStore();
+  const { searchQuery, selectedCategory, setSearchQuery, setSelectedCategory, myEmployees } =
+    useEmployeeStore();
 
   const [showMyEmployeesOnly, setShowMyEmployeesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'popular' | 'newest' | 'time_saved' | 'rating'>('popular');
@@ -82,7 +85,7 @@ export function EmployeeFilters() {
             variant={showMyEmployeesOnly ? 'default' : 'outline'}
             className={cn(
               'gap-2 h-10',
-              showMyEmployeesOnly && 'bg-primary text-primary-foreground'
+              showMyEmployeesOnly && 'bg-primary text-primary-foreground',
             )}
             onClick={() => setShowMyEmployeesOnly(!showMyEmployeesOnly)}
           >
@@ -109,7 +112,7 @@ export function EmployeeFilters() {
                 size="sm"
                 className={cn(
                   'gap-2 transition-all',
-                  isActive && 'bg-primary text-primary-foreground shadow-sm'
+                  isActive && 'bg-primary text-primary-foreground shadow-sm',
                 )}
                 onClick={() => setSelectedCategory(category.id)}
               >
@@ -127,17 +130,14 @@ export function EmployeeFilters() {
             {searchQuery && (
               <Badge variant="secondary" className="gap-1">
                 Search: {searchQuery}
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="ml-1 hover:text-foreground"
-                >
+                <button onClick={() => setSearchQuery('')} className="ml-1 hover:text-foreground">
                   ×
                 </button>
               </Badge>
             )}
             {selectedCategory !== 'all' && (
               <Badge variant="secondary" className="gap-1">
-                {CATEGORY_CONFIG.find(c => c.id === selectedCategory)?.label}
+                {CATEGORY_CONFIG.find((c) => c.id === selectedCategory)?.label}
                 <button
                   onClick={() => setSelectedCategory('all')}
                   className="ml-1 hover:text-foreground"
