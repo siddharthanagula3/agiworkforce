@@ -3,16 +3,22 @@
  * Side-by-side comparison display for different comparison modes
  */
 
-import { User, Bot, TrendingUp, Clock, DollarSign, Target } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { useROIStore } from '../../stores/roiStore';
+import { Bot, Clock, DollarSign, Target, TrendingUp, User } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/Select';
 import type {
-  ComparisonMode,
-  ComparisonData,
-  PeriodComparisonData,
   BenchmarkComparisonData,
-} from '../../types/roi';
+  ComparisonData,
+  ComparisonMode,
+  PeriodComparisonData,
+} from '../../../types/roi';
+import { useROIStore } from '../roiStore';
 
 interface ComparisonColumnProps {
   title: string;
@@ -23,7 +29,14 @@ interface ComparisonColumnProps {
   color: 'muted' | 'primary';
 }
 
-function ComparisonColumn({ title, timeTaken, cost, quality, icon: Icon, color }: ComparisonColumnProps) {
+function ComparisonColumn({
+  title,
+  timeTaken,
+  cost,
+  quality,
+  icon: Icon,
+  color,
+}: ComparisonColumnProps) {
   const formatTime = (hours: number): string => {
     if (hours < 1) {
       return `${Math.round(hours * 60)}m`;
@@ -44,7 +57,9 @@ function ComparisonColumn({ title, timeTaken, cost, quality, icon: Icon, color }
     <div className="space-y-4">
       <div className="flex items-center gap-3 mb-4">
         <div className={`p-3 rounded-lg ${color === 'primary' ? 'bg-primary/10' : 'bg-muted'}`}>
-          <Icon className={`h-6 w-6 ${color === 'primary' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <Icon
+            className={`h-6 w-6 ${color === 'primary' ? 'text-primary' : 'text-muted-foreground'}`}
+          />
         </div>
         <h3 className="text-lg font-semibold">{title}</h3>
       </div>
@@ -113,9 +128,7 @@ function ManualVsAutoComparison({ data }: { data: ComparisonData }) {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-5xl font-bold text-primary">
-              {data.efficiencyGain.toFixed(1)}x
-            </p>
+            <p className="text-5xl font-bold text-primary">{data.efficiencyGain.toFixed(1)}x</p>
             <p className="text-sm text-muted-foreground mt-1">faster</p>
           </div>
         </div>
@@ -125,7 +138,10 @@ function ManualVsAutoComparison({ data }: { data: ComparisonData }) {
 }
 
 function PeriodComparison({ data }: { data: PeriodComparisonData }) {
-  const percentageColor = data.percentageChange >= 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500';
+  const percentageColor =
+    data.percentageChange >= 0
+      ? 'text-green-600 dark:text-green-500'
+      : 'text-red-600 dark:text-red-500';
 
   return (
     <div className="space-y-4">
@@ -135,7 +151,9 @@ function PeriodComparison({ data }: { data: PeriodComparisonData }) {
           <div className="space-y-2">
             <p className="text-lg font-semibold">{data.currentTimeSavedHours.toFixed(1)}h saved</p>
             <p className="text-lg font-semibold">${data.currentCostSavedUsd.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">{data.currentAutomationsRun} automations</p>
+            <p className="text-sm text-muted-foreground">
+              {data.currentAutomationsRun} automations
+            </p>
           </div>
         </div>
 
@@ -144,7 +162,9 @@ function PeriodComparison({ data }: { data: PeriodComparisonData }) {
           <div className="space-y-2">
             <p className="text-lg font-semibold">{data.previousTimeSavedHours.toFixed(1)}h saved</p>
             <p className="text-lg font-semibold">${data.previousCostSavedUsd.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">{data.previousAutomationsRun} automations</p>
+            <p className="text-sm text-muted-foreground">
+              {data.previousAutomationsRun} automations
+            </p>
           </div>
         </div>
       </div>
@@ -154,7 +174,10 @@ function PeriodComparison({ data }: { data: PeriodComparisonData }) {
           <p className="text-sm text-muted-foreground">Period-over-Period Change</p>
           <div className={`flex items-center gap-2 text-2xl font-bold ${percentageColor}`}>
             <TrendingUp className="h-6 w-6" />
-            <span>{data.percentageChange > 0 ? '+' : ''}{data.percentageChange.toFixed(1)}%</span>
+            <span>
+              {data.percentageChange > 0 ? '+' : ''}
+              {data.percentageChange.toFixed(1)}%
+            </span>
           </div>
         </div>
       </div>

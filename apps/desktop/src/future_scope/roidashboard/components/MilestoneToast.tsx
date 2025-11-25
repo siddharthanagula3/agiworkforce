@@ -3,12 +3,12 @@
  * Celebration toast when hitting milestones
  */
 
+import { Share2, Trophy, X } from 'lucide-react';
 import { useEffect } from 'react';
-import { Trophy, Share2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '../ui/Button';
-import { useROIStore } from '../../stores/roiStore';
-import type { Milestone } from '../../types/roi';
+import { Button } from '../../../components/ui/Button';
+import type { Milestone } from '../../../types/roi';
+import { useROIStore } from '../roiStore';
 
 interface MilestoneToastContentProps {
   milestone: Milestone;
@@ -27,12 +27,7 @@ function MilestoneToastContent({ milestone, onAcknowledge, onShare }: MilestoneT
             <p className="text-sm text-muted-foreground">{milestone.message}</p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 shrink-0"
-          onClick={onAcknowledge}
-        >
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onAcknowledge}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -47,20 +42,10 @@ function MilestoneToastContent({ milestone, onAcknowledge, onShare }: MilestoneT
       </div>
 
       <div className="flex gap-2">
-        <Button
-          variant="default"
-          size="sm"
-          className="flex-1"
-          onClick={onAcknowledge}
-        >
+        <Button variant="default" size="sm" className="flex-1" onClick={onAcknowledge}>
           Awesome!
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-1"
-          onClick={onShare}
-        >
+        <Button variant="outline" size="sm" className="flex items-center gap-1" onClick={onShare}>
           <Share2 className="h-3 w-3" />
           Share
         </Button>
@@ -89,13 +74,15 @@ export function MilestoneToast() {
         const shareText = `🎉 Just hit a milestone with AGI Workforce! I've saved ${milestone.value} so far. Next target: ${milestone.nextMilestone}! #Automation #ProductivityWins`;
 
         if (navigator.share) {
-          navigator.share({
-            title: 'AGI Workforce Milestone',
-            text: shareText,
-          }).catch((err) => {
-            console.error('Error sharing:', err);
-            copyToClipboard(shareText);
-          });
+          navigator
+            .share({
+              title: 'AGI Workforce Milestone',
+              text: shareText,
+            })
+            .catch((err) => {
+              console.error('Error sharing:', err);
+              copyToClipboard(shareText);
+            });
         } else {
           // Fallback to Twitter intent or clipboard
           const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
@@ -120,7 +107,7 @@ export function MilestoneToast() {
           id: milestone.id,
           duration: 10000, // 10 seconds
           position: 'top-right',
-        }
+        },
       );
     });
   }, [unacknowledgedMilestones, acknowledgeMilestone]);
@@ -137,7 +124,7 @@ function copyToClipboard(text: string) {
       (err) => {
         console.error('Failed to copy:', err);
         toast.error('Failed to copy to clipboard');
-      }
+      },
     );
   }
 }

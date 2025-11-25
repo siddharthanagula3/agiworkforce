@@ -4,12 +4,27 @@
  */
 
 import { formatDistanceToNow } from 'date-fns';
-import { Zap, UserPlus, Trophy, CheckCircle2, XCircle, AlertCircle, Clock, DollarSign } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Badge } from '../ui/Badge';
-import { cn } from '../../lib/utils';
-import type { ActivityItem } from '../../types/roi';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  Trophy,
+  UserPlus,
+  XCircle,
+  Zap,
+} from 'lucide-react';
+import { Badge } from '../../../components/ui/Badge';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import { ScrollArea } from '../../../components/ui/ScrollArea';
+import { cn } from '../../../lib/utils';
+import type { ActivityItem } from '../../../types/roi';
 
 interface ActivityIconProps {
   type: ActivityItem['type'];
