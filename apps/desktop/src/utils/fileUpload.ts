@@ -1,5 +1,5 @@
-import { readFileAsDataURL, generateId } from './fileUtils';
 import type { FileAttachment } from '../types/chat';
+import { generateId, readFileAsDataURL } from './fileUtils';
 
 /**
  * Upload configuration
@@ -88,15 +88,14 @@ export async function uploadFiles(
 /**
  * Delete an uploaded file
  */
-export async function deleteFile(fileId: string): Promise<void> {
+export const deleteFile = async (_fileId: string): Promise<void> => {
   try {
     // In production, call your backend API to delete the file
     // await invoke('delete_file', { fileId });
-    console.log(`Deleting file: ${fileId}`);
   } catch (error) {
     throw new Error(`Failed to delete file: ${error}`);
   }
-}
+};
 
 /**
  * Download a file from URL

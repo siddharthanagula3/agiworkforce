@@ -1,15 +1,15 @@
-import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type {
-  PricingPlan,
-  UsageSummary,
   BillableEvent,
-  Invoice,
-  CurrentBill,
-  ROIGuarantee,
-  PlanChangeEstimate,
   CostEstimate,
+  CurrentBill,
+  Invoice,
+  PlanChangeEstimate,
+  PricingPlan,
+  ROIGuarantee,
+  UsageSummary,
 } from '../types/pricing';
 
 interface PricingState {
@@ -242,8 +242,8 @@ export const usePricingStore = create<PricingState>()(
 
     downloadInvoice: async (invoiceId: string) => {
       try {
-        const pdfPath = await invoke<string>('download_invoice_pdf', { invoiceId });
-        console.log('Invoice downloaded:', pdfPath);
+        await invoke<string>('download_invoice_pdf', { invoiceId });
+
         return;
       } catch (error) {
         console.error('Failed to download invoice:', error);
