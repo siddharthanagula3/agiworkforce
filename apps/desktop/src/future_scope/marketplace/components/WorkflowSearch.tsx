@@ -1,9 +1,15 @@
-import { X, SlidersHorizontal } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { WORKFLOW_CATEGORIES } from '../../types/marketplace';
+import { SlidersHorizontal, X } from 'lucide-react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/Select';
+import { WORKFLOW_CATEGORIES } from '../../../types/marketplace';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 export function WorkflowSearch() {
   const { filters, setFilter, resetFilters, applyFilters } = useMarketplaceStore();

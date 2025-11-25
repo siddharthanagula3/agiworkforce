@@ -1,8 +1,5 @@
+import { Copy, Edit, Eye, Share2, Star, Trash2, TrendingUp, Upload } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { Upload, Eye, Copy, Star, Share2, Edit, Trash2, TrendingUp } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import { Badge } from '../ui/Badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,9 +9,18 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../ui/AlertDialog';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { useAuthStore } from '../../stores/authStore';
+} from '../../../components/ui/AlertDialog';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import { useAuthStore } from '../../../stores/authStore';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 export function MyWorkflowsTab() {
   const { myPublishedWorkflows, isLoading, fetchMyWorkflows, openShareModal, unpublishWorkflow } =

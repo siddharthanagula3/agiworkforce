@@ -3,9 +3,9 @@
  * Large, animated stat cards for displaying key metrics
  */
 
-import { type LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-import { cn } from '../../lib/utils';
+import { type LucideIcon, TrendingDown, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card';
+import { cn } from '../../../lib/utils';
 
 interface BigStatCardProps {
   title: string;
@@ -45,8 +45,10 @@ export function BigStatCard({
               <div
                 className={cn(
                   'flex items-center text-sm font-medium',
-                  change > 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500',
-                  change === 0 && 'text-muted-foreground'
+                  change > 0
+                    ? 'text-green-600 dark:text-green-500'
+                    : 'text-red-600 dark:text-red-500',
+                  change === 0 && 'text-muted-foreground',
                 )}
               >
                 {change > 0 ? (

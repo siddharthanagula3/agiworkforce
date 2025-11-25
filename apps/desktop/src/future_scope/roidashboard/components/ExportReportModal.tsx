@@ -3,24 +3,30 @@
  * Generate PDF/CSV/JSON reports
  */
 
+import { Download, FileJson, FileSpreadsheet, FileText } from 'lucide-react';
 import { useState } from 'react';
-import { Download, FileText, FileSpreadsheet, FileJson } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '../../../components/ui/Button';
+import { Checkbox } from '../../../components/ui/Checkbox';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-} from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { Label } from '../ui/Label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { Checkbox } from '../ui/Checkbox';
-import { Input } from '../ui/Input';
-import { toast } from 'sonner';
-import { useROIStore } from '../../stores/roiStore';
-import type { ExportOptions } from '../../types/roi';
+} from '../../../components/ui/Dialog';
+import { Input } from '../../../components/ui/Input';
+import { Label } from '../../../components/ui/Label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/Select';
+import type { ExportOptions } from '../../../types/roi';
+import { useROIStore } from '../roiStore';
 
 interface ExportReportModalProps {
   open: boolean;
@@ -76,9 +82,7 @@ export function ExportReportModal({ open, onClose }: ExportReportModalProps) {
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Export ROI Report</DialogTitle>
-          <DialogDescription>
-            Generate a comprehensive report of your ROI metrics
-          </DialogDescription>
+          <DialogDescription>Generate a comprehensive report of your ROI metrics</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

@@ -3,16 +3,11 @@
  * Celebration modal showing demo results and encouraging user to hire
  */
 
+import { CheckCircle, CheckCircle2, Clock, DollarSign, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogFooter,
-} from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { CheckCircle, Clock, DollarSign, TrendingUp, CheckCircle2 } from 'lucide-react';
-import { useEmployeeStore } from '../../stores/employeeStore';
+import { Button } from '../../../components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../../../components/ui/Dialog';
+import { useEmployeeStore } from '../employeeStore';
 
 function MetricCard({
   icon: Icon,
@@ -43,7 +38,7 @@ export function DemoResultsModal() {
 
   if (!demoResults) return null;
 
-  const employee = employees.find(e => e.id === demoResults.employee_id);
+  const employee = employees.find((e) => e.id === demoResults.employee_id);
   const isAlreadyHired = employee?.is_hired;
 
   const handleClose = () => {
@@ -142,16 +137,14 @@ export function DemoResultsModal() {
           <h4 className="font-semibold mb-4 text-lg">Monthly Projection</h4>
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <div className="text-3xl font-bold text-primary mb-1">
-                {monthlyTimeSaved} hours
-              </div>
+              <div className="text-3xl font-bold text-primary mb-1">{monthlyTimeSaved} hours</div>
               <div className="text-sm text-muted-foreground">Time saved per month</div>
-              <div className="text-xs text-muted-foreground mt-1">Based on {monthlyRuns} runs/month</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Based on {monthlyRuns} runs/month
+              </div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-primary mb-1">
-                ${monthlyCostSaved}
-              </div>
+              <div className="text-3xl font-bold text-primary mb-1">${monthlyCostSaved}</div>
               <div className="text-sm text-muted-foreground">Value generated</div>
               <div className="text-xs text-muted-foreground mt-1">
                 {Math.round(monthlyCostSaved / (employee?.monthly_price || 39))}x ROI
@@ -161,12 +154,7 @@ export function DemoResultsModal() {
         </div>
 
         <DialogFooter className="gap-3 sm:gap-3">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            className="flex-1"
-            disabled={isHiring}
-          >
+          <Button variant="outline" onClick={handleClose} className="flex-1" disabled={isHiring}>
             Maybe Later
           </Button>
           {isAlreadyHired ? (

@@ -1,10 +1,10 @@
-import { invoke } from '@/lib/tauri-mock';
 import { Heart, Trash2 } from 'lucide-react';
 import React, { useEffect } from 'react';
-import { useAuthStore } from '../../stores/authStore';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import type { PublishedWorkflow } from '../../types/marketplace';
-import { Button } from '../ui/Button';
+import { Button } from '../../../components/ui/Button';
+import { invoke } from '../../../lib/tauri-mock';
+import { useAuthStore } from '../../../stores/authStore';
+import type { PublishedWorkflow } from '../../../types/marketplace';
+import { useMarketplaceStore } from '../marketplaceStore';
 import { WorkflowCard } from './WorkflowCard';
 
 export function MyFavoritesTab() {

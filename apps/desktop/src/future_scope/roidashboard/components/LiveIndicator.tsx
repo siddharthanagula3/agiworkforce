@@ -4,7 +4,7 @@
  */
 
 import { formatDistanceToNow } from 'date-fns';
-import { cn } from '../../lib/utils';
+import { cn } from '../../../lib/utils';
 
 interface LiveIndicatorProps {
   connected: boolean;
@@ -24,7 +24,7 @@ export function LiveIndicator({ connected, lastUpdate, updateCount }: LiveIndica
         <div
           className={cn(
             'h-2 w-2 rounded-full transition-colors',
-            connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+            connected ? 'bg-green-500 animate-pulse' : 'bg-red-500',
           )}
         />
         <span className="text-sm font-medium text-muted-foreground">

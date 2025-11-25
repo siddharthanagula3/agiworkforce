@@ -3,29 +3,29 @@
  * Beautiful card displaying an AI employee with actions
  */
 
+import type { LucideIcon } from 'lucide-react';
 import {
+  Briefcase,
+  CheckCircle2,
   Clock,
+  Code,
   DollarSign,
   Play,
   Plus,
-  CheckCircle2,
-  Users,
-  Briefcase,
-  Code,
   Settings as SettingsIcon,
-  User,
+  Shield,
   Star,
   TrendingUp,
-  Shield,
+  User,
+  Users,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
-import { cn } from '../../lib/utils';
-import type { AIEmployee } from '../../types/employees';
-import { useEmployeeStore } from '../../stores/employeeStore';
 import { useState } from 'react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../../../components/ui/Card';
+import { cn } from '../../../lib/utils';
+import type { AIEmployee } from '../../../types/employees';
+import { useEmployeeStore } from '../employeeStore';
 
 interface EmployeeCardProps {
   employee: AIEmployee;
@@ -33,10 +33,7 @@ interface EmployeeCardProps {
   onViewDetails?: (employee: AIEmployee) => void;
 }
 
-const ROLE_CONFIG: Record<
-  string,
-  { icon: LucideIcon; color: string; label: string }
-> = {
+const ROLE_CONFIG: Record<string, { icon: LucideIcon; color: string; label: string }> = {
   SupportAgent: { icon: Users, color: 'text-blue-500', label: 'Support' },
   SalesAgent: { icon: Briefcase, color: 'text-green-500', label: 'Sales' },
   Developer: { icon: Code, color: 'text-purple-500', label: 'Developer' },
@@ -44,7 +41,15 @@ const ROLE_CONFIG: Record<
   Personal: { icon: User, color: 'text-pink-500', label: 'Personal' },
 };
 
-function StatItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+function StatItem({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="flex items-center gap-2">
       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -56,7 +61,11 @@ function StatItem({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
   );
 }
 
-export function EmployeeCard({ employee, userId = 'default-user', onViewDetails }: EmployeeCardProps) {
+export function EmployeeCard({
+  employee,
+  userId = 'default-user',
+  onViewDetails,
+}: EmployeeCardProps) {
   const { hireEmployee, runDemo, setSelectedEmployee, isDemoRunning } = useEmployeeStore();
   const [isHiring, setIsHiring] = useState(false);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
@@ -109,7 +118,7 @@ export function EmployeeCard({ employee, userId = 'default-user', onViewDetails 
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div
               className={cn(
-                'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/10'
+                'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/10',
               )}
             >
               <RoleIcon className={cn('h-6 w-6', roleConfig!.color)} />
@@ -197,12 +206,7 @@ export function EmployeeCard({ employee, userId = 'default-user', onViewDetails 
               <Play className="h-4 w-4" />
               {isRunningDemo ? 'Running...' : 'Try Demo'}
             </Button>
-            <Button
-              size="sm"
-              className="flex-1 gap-2"
-              onClick={handleHire}
-              disabled={isHiring}
-            >
+            <Button size="sm" className="flex-1 gap-2" onClick={handleHire} disabled={isHiring}>
               <Plus className="h-4 w-4" />
               {isHiring ? 'Hiring...' : `$${employee.monthly_price}/mo`}
             </Button>

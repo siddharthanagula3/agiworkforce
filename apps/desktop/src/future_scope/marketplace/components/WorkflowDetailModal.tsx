@@ -1,20 +1,15 @@
-import React, { useState} from 'react';
-import { X, Copy, Share2, Star, Eye, Clock, DollarSign, Calendar, ThumbsUp } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/Dialog';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Separator } from '../ui/Separator';
-import { Textarea } from '../ui/Textarea';
-import { useMarketplaceStore } from '../../stores/marketplaceStore';
-import { useAuthStore } from '../../stores/authStore';
-import type { WorkflowDefinition } from '../../types/workflow';
+import { Calendar, Clock, Copy, DollarSign, Eye, Share2, Star, ThumbsUp, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../components/ui/Dialog';
+import { ScrollArea } from '../../../components/ui/ScrollArea';
+import { Separator } from '../../../components/ui/Separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
+import { Textarea } from '../../../components/ui/Textarea';
+import { useAuthStore } from '../../../stores/authStore';
+import type { WorkflowDefinition } from '../../../types/workflow';
+import { useMarketplaceStore } from '../marketplaceStore';
 
 export function WorkflowDetailModal() {
   const {
@@ -320,9 +315,7 @@ export function WorkflowDetailModal() {
                         </div>
                       </div>
                       <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Review (Optional)
-                        </label>
+                        <label className="text-sm font-medium mb-2 block">Review (Optional)</label>
                         <Textarea
                           value={reviewText}
                           onChange={(e) => setReviewText(e.target.value)}
