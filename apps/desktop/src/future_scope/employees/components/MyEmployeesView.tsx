@@ -3,25 +3,19 @@
  * Dashboard for managing hired employees
  */
 
-import { useState } from 'react';
 import {
-  Users,
+  Calendar,
   Clock,
   DollarSign,
-  TrendingUp,
+  LayoutGrid,
+  LayoutList,
   Play,
   Settings as SettingsIcon,
   Trash2,
-  LayoutGrid,
-  LayoutList,
-  Calendar,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/Card';
-import { ScrollArea } from '../ui/ScrollArea';
-import { useEmployeeStore } from '../../stores/employeeStore';
-import type { AIEmployee } from '../../types/employees';
+import { useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +25,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../ui/AlertDialog';
+} from '../../../components/ui/AlertDialog';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../../../components/ui/Card';
+import { ScrollArea } from '../../../components/ui/ScrollArea';
+import type { AIEmployee } from '../../../types/employees';
+import { useEmployeeStore } from '../employeeStore';
 
 type ViewMode = 'grid' | 'list';
 
@@ -71,9 +71,7 @@ function EmployeeGridItem({ employee, onFire }: Omit<EmployeeItemProps, 'viewMod
       </CardHeader>
 
       <CardContent className="space-y-4 pb-3">
-        <p className="text-sm text-muted-foreground line-clamp-2">
-          {employee.description}
-        </p>
+        <p className="text-sm text-muted-foreground line-clamp-2">{employee.description}</p>
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 pt-3 border-t">
@@ -88,9 +86,7 @@ function EmployeeGridItem({ employee, onFire }: Omit<EmployeeItemProps, 'viewMod
             <div className="text-xs text-muted-foreground mb-1">Saved</div>
             <div className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="font-semibold">
-                {stats?.total_time_saved_minutes || 0}min
-              </span>
+              <span className="font-semibold">{stats?.total_time_saved_minutes || 0}min</span>
             </div>
           </div>
           <div>
@@ -104,21 +100,14 @@ function EmployeeGridItem({ employee, onFire }: Omit<EmployeeItemProps, 'viewMod
             <div className="text-xs text-muted-foreground mb-1">Last Used</div>
             <div className="flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-medium">
-                {formatLastUsed(stats?.last_run_at)}
-              </span>
+              <span className="text-xs font-medium">{formatLastUsed(stats?.last_run_at)}</span>
             </div>
           </div>
         </div>
       </CardContent>
 
       <CardFooter className="gap-2 pt-3 border-t">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1"
-          onClick={() => runDemo(employee.id)}
-        >
+        <Button variant="outline" size="sm" className="flex-1" onClick={() => runDemo(employee.id)}>
           <Play className="mr-2 h-4 w-4" />
           Run
         </Button>
@@ -150,9 +139,7 @@ function EmployeeListItem({ employee, onFire }: Omit<EmployeeItemProps, 'viewMod
           <h3 className="font-semibold text-lg">{employee.name}</h3>
           <Badge variant="secondary">{employee.role}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-1">
-          {employee.description}
-        </p>
+        <p className="text-sm text-muted-foreground line-clamp-1">{employee.description}</p>
       </div>
 
       <div className="flex items-center gap-6 shrink-0">
@@ -175,11 +162,7 @@ function EmployeeListItem({ employee, onFire }: Omit<EmployeeItemProps, 'viewMod
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => runDemo(employee.id)}
-        >
+        <Button variant="outline" size="sm" onClick={() => runDemo(employee.id)}>
           <Play className="mr-2 h-4 w-4" />
           Run
         </Button>
@@ -296,10 +279,13 @@ export function MyEmployeesView() {
                 </div>
                 <div>
                   <div className="text-2xl font-bold">
-                    {Math.round(myEmployees.reduce((sum, e) => {
-                      const stats = useEmployeeStore.getState().employeeStats.get(e.id);
-                      return sum + (stats?.total_time_saved_minutes || 0);
-                    }, 0) / 60)}h
+                    {Math.round(
+                      myEmployees.reduce((sum, e) => {
+                        const stats = useEmployeeStore.getState().employeeStats.get(e.id);
+                        return sum + (stats?.total_time_saved_minutes || 0);
+                      }, 0) / 60,
+                    )}
+                    h
                   </div>
                   <div className="text-xs text-muted-foreground">Time Saved</div>
                 </div>
@@ -315,7 +301,8 @@ export function MyEmployeesView() {
                 </div>
                 <div>
                   <div className="text-2xl font-bold">
-                    ${myEmployees.reduce((sum, e) => {
+                    $
+                    {myEmployees.reduce((sum, e) => {
                       const stats = useEmployeeStore.getState().employeeStats.get(e.id);
                       return sum + (stats?.total_cost_saved_usd || 0);
                     }, 0)}
@@ -347,21 +334,13 @@ export function MyEmployeesView() {
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {myEmployees.map((employee) => (
-              <EmployeeGridItem
-                key={employee.id}
-                employee={employee}
-                onFire={setEmployeeToFire}
-              />
+              <EmployeeGridItem key={employee.id} employee={employee} onFire={setEmployeeToFire} />
             ))}
           </div>
         ) : (
           <div className="space-y-4">
             {myEmployees.map((employee) => (
-              <EmployeeListItem
-                key={employee.id}
-                employee={employee}
-                onFire={setEmployeeToFire}
-              />
+              <EmployeeListItem key={employee.id} employee={employee} onFire={setEmployeeToFire} />
             ))}
           </div>
         )}
@@ -373,13 +352,16 @@ export function MyEmployeesView() {
           <AlertDialogHeader>
             <AlertDialogTitle>Fire {employeeToFire?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove {employeeToFire?.name} from your team. You can always hire them again later
-              from the employee library.
+              This will remove {employeeToFire?.name} from your team. You can always hire them again
+              later from the employee library.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmFire} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleConfirmFire}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Fire Employee
             </AlertDialogAction>
           </AlertDialogFooter>

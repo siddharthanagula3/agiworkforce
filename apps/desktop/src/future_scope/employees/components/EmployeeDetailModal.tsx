@@ -3,43 +3,40 @@
  * Full detail view of an AI employee with tabs for different information
  */
 
+import type { LucideIcon } from 'lucide-react';
+import {
+  ArrowRight,
+  Briefcase,
+  CheckCircle,
+  CheckCircle2,
+  Clock,
+  Code,
+  DollarSign,
+  Play,
+  Plus,
+  Settings as SettingsIcon,
+  Shield,
+  Star,
+  TrendingUp,
+  User,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-} from '../ui/Dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { ScrollArea } from '../ui/ScrollArea';
-import {
-  Shield,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  Star,
-  Plus,
-  CheckCircle2,
-  Play,
-  Users,
-  Briefcase,
-  Code,
-  Settings as SettingsIcon,
-  User,
-  CheckCircle,
-  ArrowRight,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { useEmployeeStore } from '../../stores/employeeStore';
+} from '../../../components/ui/Dialog';
+import { ScrollArea } from '../../../components/ui/ScrollArea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
+import { cn } from '../../../lib/utils';
+import { useEmployeeStore } from '../employeeStore';
 
-const ROLE_CONFIG: Record<
-  string,
-  { icon: LucideIcon; color: string; label: string }
-> = {
+const ROLE_CONFIG: Record<string, { icon: LucideIcon; color: string; label: string }> = {
   SupportAgent: { icon: Users, color: 'text-blue-500', label: 'Support' },
   SalesAgent: { icon: Briefcase, color: 'text-green-500', label: 'Sales' },
   Developer: { icon: Code, color: 'text-purple-500', label: 'Developer' },
@@ -47,7 +44,12 @@ const ROLE_CONFIG: Record<
   Personal: { icon: User, color: 'text-pink-500', label: 'Personal' },
 };
 
-function StatCard({ icon: Icon, label, value, subtext }: {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  subtext,
+}: {
   icon: LucideIcon;
   label: string;
   value: string;
@@ -66,7 +68,8 @@ function StatCard({ icon: Icon, label, value, subtext }: {
 }
 
 export function EmployeeDetailModal() {
-  const { selectedEmployee, setSelectedEmployee, hireEmployee, runDemo, isDemoRunning } = useEmployeeStore();
+  const { selectedEmployee, setSelectedEmployee, hireEmployee, runDemo, isDemoRunning } =
+    useEmployeeStore();
   const [isHiring, setIsHiring] = useState(false);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
 
@@ -116,7 +119,7 @@ export function EmployeeDetailModal() {
               <div className="flex items-start gap-4">
                 <div
                   className={cn(
-                    'flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/10'
+                    'flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-2 ring-primary/10',
                   )}
                 >
                   <RoleIcon className={cn('h-8 w-8', roleConfig!.color)} />
@@ -202,14 +205,18 @@ export function EmployeeDetailModal() {
                         {employee.estimated_time_saved_per_run * 20} hours
                       </div>
                       <div className="text-sm text-muted-foreground">Time saved per month</div>
-                      <div className="mt-1 text-xs text-muted-foreground">Based on 20 runs/month</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Based on 20 runs/month
+                      </div>
                     </div>
                     <div>
                       <div className="text-3xl font-bold text-primary">
                         ${employee.estimated_cost_saved_per_run * 20}
                       </div>
                       <div className="text-sm text-muted-foreground">Value generated per month</div>
-                      <div className="mt-1 text-xs text-muted-foreground">At $50/hour labor cost</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        At $50/hour labor cost
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -282,7 +289,7 @@ export function EmployeeDetailModal() {
                               'h-4 w-4',
                               i < Math.round(employee.avg_rating)
                                 ? 'fill-yellow-500 text-yellow-500'
-                                : 'text-muted-foreground'
+                                : 'text-muted-foreground',
                             )}
                           />
                         ))}
@@ -315,7 +322,8 @@ export function EmployeeDetailModal() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Recent Reviews</h3>
                   <p className="text-sm text-muted-foreground">
-                    Reviews feature coming soon. Check back later to see what other teams are saying!
+                    Reviews feature coming soon. Check back later to see what other teams are
+                    saying!
                   </p>
                 </div>
               </TabsContent>

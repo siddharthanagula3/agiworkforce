@@ -4,17 +4,23 @@
  */
 
 import {
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
   type TooltipProps,
 } from 'recharts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
-import type { EmployeeChartData } from '../../types/roi';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../../../components/ui/Card';
+import type { EmployeeChartData } from '../../../types/roi';
 
 interface CostSavedChartProps {
   data: EmployeeChartData[];
@@ -37,12 +43,8 @@ function CustomTooltip({ active, payload, label }: TooltipProps<number, string>)
         </p>
         {data && (
           <>
-            <p className="text-muted-foreground">
-              {data.timeSavedHours.toFixed(1)}h saved
-            </p>
-            <p className="text-muted-foreground">
-              {data.automationsRun} automations
-            </p>
+            <p className="text-muted-foreground">{data.timeSavedHours.toFixed(1)}h saved</p>
+            <p className="text-muted-foreground">{data.automationsRun} automations</p>
             <p className="text-muted-foreground">
               {(data.successRate * 100).toFixed(0)}% success rate
             </p>
@@ -57,9 +59,8 @@ export function CostSavedChart({ data, loading = false }: CostSavedChartProps) {
   // Truncate employee names if too long
   const formattedData = data.map((emp) => ({
     ...emp,
-    displayName: emp.employeeName.length > 15
-      ? `${emp.employeeName.substring(0, 15)}...`
-      : emp.employeeName,
+    displayName:
+      emp.employeeName.length > 15 ? `${emp.employeeName.substring(0, 15)}...` : emp.employeeName,
   }));
 
   return (
