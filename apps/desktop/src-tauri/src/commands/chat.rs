@@ -1081,7 +1081,7 @@ pub async fn chat_send_message(
         {
             let billing = billing_state.0.lock().map_err(|e| e.to_string())?;
             if !billing.check_cloud_access() {
-                 return Err("Cloud model access requires a Pro or Max subscription. Please upgrade your plan or use a local model (Ollama).".to_string());
+                return Err("Cloud model access requires a Pro or Max subscription. Please upgrade your plan or use a local model (Ollama).".to_string());
             }
         }
     }
