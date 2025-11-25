@@ -268,7 +268,6 @@ export class AuthService {
 
     if (this.token) {
       this.inactivityTimer = setTimeout(() => {
-        console.log('Session timed out due to inactivity');
         this.logout();
       }, this.INACTIVITY_TIMEOUT);
     }

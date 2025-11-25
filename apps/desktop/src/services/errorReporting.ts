@@ -135,7 +135,6 @@ class ErrorReportingService {
 
     // Check privacy settings
     if (this.options.respectPrivacy && this.shouldFilterError(error)) {
-      console.log('Error filtered due to privacy settings:', error.type);
       return;
     }
 
@@ -221,8 +220,6 @@ class ErrorReportingService {
 
       // Send to backend
       await invoke('error_report_batch', { reports });
-
-      console.log(`Successfully reported ${reports.length} errors`);
     } catch (error) {
       console.error('Failed to send error batch:', error);
 
