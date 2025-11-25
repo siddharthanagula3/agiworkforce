@@ -1,8 +1,8 @@
+pub mod models;
 #[cfg(feature = "billing")]
 pub mod stripe_client;
 #[cfg(feature = "billing")]
 pub mod webhooks;
-pub mod models;
 
 #[cfg(not(feature = "billing"))]
 use serde::{Deserialize, Serialize};

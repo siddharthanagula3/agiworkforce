@@ -10,7 +10,7 @@ pub enum PlanTier {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserSubscription {
     pub tier: PlanTier,
-    pub credits_total: f64,     // Base + Rollover
+    pub credits_total: f64, // Base + Rollover
     pub credits_used: f64,
     pub renewal_date: String,
 }

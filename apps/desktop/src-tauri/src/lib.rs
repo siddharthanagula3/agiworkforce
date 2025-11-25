@@ -47,7 +47,6 @@ pub mod overlay;
 
 // LLM Providers
 
-
 // Security and guardrails
 pub mod security;
 
@@ -179,10 +178,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         // Initialize DB with singleton connection
-        .manage(commands::chat::AppDatabase { 
+        .manage(commands::chat::AppDatabase {
             conn: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::db::init_db("agi.db").expect("Failed to init DB")
-            )) 
+                crate::db::init_db("agi.db").expect("Failed to init DB"),
+            )),
         })
         .manage(crate::billing::BillingStateWrapper::default())
         .manage(commands::llm::LLMState::default())
