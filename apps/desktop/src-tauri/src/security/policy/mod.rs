@@ -9,7 +9,6 @@
 /// 4. Provide transparency through clear decision reasoning
 ///
 /// Philosophy: "Powerful by default, dangerous only with explicit consent"
-
 pub mod actions;
 pub mod decisions;
 pub mod engine;
