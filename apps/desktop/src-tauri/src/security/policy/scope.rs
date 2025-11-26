@@ -70,7 +70,9 @@ impl ScopeManager {
         // Check if workspace is in blacklist
         let canonical = workspace.root_path.canonicalize()?;
         if self.is_path_blacklisted(&canonical)? {
-            return Err(anyhow::anyhow!("Cannot create workspace in system-critical directory"));
+            return Err(anyhow::anyhow!(
+                "Cannot create workspace in system-critical directory"
+            ));
         }
 
         self.workspaces.push(workspace);
@@ -107,15 +109,14 @@ impl ScopeManager {
 
     /// Check if a path is blacklisted (system-critical)
     pub fn is_path_blacklisted(&self, path: &Path) -> Result<bool> {
-        let canonical = path.canonicalize()
-            .or_else(|_| {
-                // If canonicalize fails (path doesn't exist), check parent
-                if let Some(parent) = path.parent() {
-                    parent.canonicalize()
-                } else {
-                    Err(anyhow::anyhow!("Cannot resolve path"))
-                }
-            })?;
+        let canonical = path.canonicalize().or_else(|_| {
+            // If canonicalize fails (path doesn't exist), check parent
+            if let Some(parent) = path.parent() {
+                parent.canonicalize()
+            } else {
+                Err(anyhow::anyhow!("Cannot resolve path"))
+            }
+        })?;
 
         // Check against absolute blacklist paths
         for blacklisted in &self.system_blacklist {
@@ -169,7 +170,8 @@ impl ScopeManager {
         }
 
         // Canonicalize to resolve symlinks and get absolute path
-        let canonical = path.canonicalize()
+        let canonical = path
+            .canonicalize()
             .or_else(|_| {
                 // If path doesn't exist, try parent
                 if let Some(parent) = path.parent() {

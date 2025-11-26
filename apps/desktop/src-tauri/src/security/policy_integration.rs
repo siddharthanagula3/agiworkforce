@@ -4,7 +4,6 @@
 /// 1. Check policy decisions before operations
 /// 2. Convert policy decisions into Tauri command results
 /// 3. Manage policy context from Tauri app state
-
 use super::policy::*;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -26,14 +25,9 @@ pub enum PolicyError {
         approval_token: Option<String>,
     },
     /// Operation was denied
-    Denied {
-        reason: String,
-        can_elevate: bool,
-    },
+    Denied { reason: String, can_elevate: bool },
     /// Other policy error
-    PolicyFailure {
-        message: String,
-    },
+    PolicyFailure { message: String },
 }
 
 impl std::fmt::Display for PolicyError {
@@ -73,11 +67,12 @@ impl PolicyState {
         let engine = self.engine.read().await;
         let context = self.context.read().await;
 
-        let decision = engine
-            .evaluate(&action, &context)
-            .map_err(|e| PolicyError::PolicyFailure {
-                message: e.to_string(),
-            })?;
+        let decision =
+            engine
+                .evaluate(&action, &context)
+                .map_err(|e| PolicyError::PolicyFailure {
+                    message: e.to_string(),
+                })?;
 
         match decision {
             PolicyDecision::Allow { .. } => Ok(()),
@@ -92,9 +87,13 @@ impl PolicyState {
                 allow_remember,
                 approval_token: None, // Could be generated for retry
             }),
-            PolicyDecision::Deny { reason, can_elevate } => {
-                Err(PolicyError::Denied { reason, can_elevate })
-            }
+            PolicyDecision::Deny {
+                reason,
+                can_elevate,
+            } => Err(PolicyError::Denied {
+                reason,
+                can_elevate,
+            }),
         }
     }
 
