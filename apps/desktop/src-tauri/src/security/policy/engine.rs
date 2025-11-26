@@ -52,57 +52,49 @@ impl PolicyEngine {
         context: &PolicyContext,
     ) -> Result<PolicyDecision> {
         match action {
-            SecurityAction::FileRead { path, .. } => {
-                self.evaluate_file_read(path, context)
-            }
-            SecurityAction::FileWrite { path, size_bytes, .. } => {
-                self.evaluate_file_write(path, *size_bytes, context)
-            }
-            SecurityAction::FileDelete { path, .. } => {
-                self.evaluate_file_delete(path, context)
-            }
+            SecurityAction::FileRead { path, .. } => self.evaluate_file_read(path, context),
+            SecurityAction::FileWrite {
+                path, size_bytes, ..
+            } => self.evaluate_file_write(path, *size_bytes, context),
+            SecurityAction::FileDelete { path, .. } => self.evaluate_file_delete(path, context),
             SecurityAction::DirectoryCreate { path, .. } => {
                 self.evaluate_directory_create(path, context)
             }
-            SecurityAction::DirectoryDelete { path, recursive, .. } => {
-                self.evaluate_directory_delete(path, *recursive, context)
-            }
+            SecurityAction::DirectoryDelete {
+                path, recursive, ..
+            } => self.evaluate_directory_delete(path, *recursive, context),
             SecurityAction::DirectoryList { path, .. } => {
                 self.evaluate_directory_list(path, context)
             }
             SecurityAction::ShellCommand { command, cwd, .. } => {
                 self.evaluate_shell_command(command, cwd, context)
             }
-            SecurityAction::TerminalSpawn { cwd, .. } => {
-                self.evaluate_terminal_spawn(cwd, context)
-            }
-            SecurityAction::GitOperation { operation, repository_path, .. } => {
-                self.evaluate_git_operation(operation, repository_path, context)
-            }
+            SecurityAction::TerminalSpawn { cwd, .. } => self.evaluate_terminal_spawn(cwd, context),
+            SecurityAction::GitOperation {
+                operation,
+                repository_path,
+                ..
+            } => self.evaluate_git_operation(operation, repository_path, context),
             SecurityAction::ScreenCapture { save_to_disk, .. } => {
                 self.evaluate_screen_capture(*save_to_disk, context)
             }
             SecurityAction::InputSimulation { action_type, .. } => {
                 self.evaluate_input_simulation(action_type, context)
             }
-            SecurityAction::ClipboardRead => {
-                self.evaluate_clipboard_read(context)
-            }
-            SecurityAction::ClipboardWrite { .. } => {
-                self.evaluate_clipboard_write(context)
-            }
+            SecurityAction::ClipboardRead => self.evaluate_clipboard_read(context),
+            SecurityAction::ClipboardWrite { .. } => self.evaluate_clipboard_write(context),
             SecurityAction::DatabaseConnect { is_local, host, .. } => {
                 self.evaluate_database_connect(*is_local, host, context)
             }
             SecurityAction::DatabaseQuery { query_type, .. } => {
                 self.evaluate_database_query(query_type, context)
             }
-            SecurityAction::NetworkRequest { domain, is_sensitive_data, .. } => {
-                self.evaluate_network_request(domain, *is_sensitive_data, context)
-            }
-            SecurityAction::BrowserLaunch { .. } => {
-                self.evaluate_browser_launch(context)
-            }
+            SecurityAction::NetworkRequest {
+                domain,
+                is_sensitive_data,
+                ..
+            } => self.evaluate_network_request(domain, *is_sensitive_data, context),
+            SecurityAction::BrowserLaunch { .. } => self.evaluate_browser_launch(context),
             SecurityAction::BrowserNavigate { url, .. } => {
                 self.evaluate_browser_navigate(url, context)
             }
@@ -119,11 +111,9 @@ impl PolicyEngine {
 
     fn evaluate_file_read(&self, path: &Path, context: &PolicyContext) -> Result<PolicyDecision> {
         match self.scope_manager.check_path_scope(path, false)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::Allow {
-                    reason: Some("Reading file in workspace".to_string()),
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::Allow {
+                reason: Some("Reading file in workspace".to_string()),
+            }),
             PathScopeResult::InUserHome { .. } => {
                 if context.trust_level.is_elevated() {
                     Ok(PolicyDecision::Allow {
@@ -154,12 +144,18 @@ impl PolicyEngine {
         }
     }
 
-    fn evaluate_file_write(&self, path: &Path, size_bytes: Option<u64>, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_file_write(
+        &self,
+        path: &Path,
+        size_bytes: Option<u64>,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         match self.scope_manager.check_path_scope(path, true)? {
             PathScopeResult::InWorkspace { .. } => {
                 // Check file size for potential DOS
                 if let Some(size) = size_bytes {
-                    if size > 100_000_000 { // 100 MB
+                    if size > 100_000_000 {
+                        // 100 MB
                         return Ok(PolicyDecision::RequireApproval {
                             risk_level: RiskLevel::Medium,
                             reason: format!("Writing large file ({} MB)", size / 1_000_000),
@@ -181,17 +177,18 @@ impl PolicyEngine {
                     })
                 } else {
                     Ok(PolicyDecision::Deny {
-                        reason: format!("Cannot write to {} - outside workspace. Elevate trust level to allow.", path.display()),
+                        reason: format!(
+                            "Cannot write to {} - outside workspace. Elevate trust level to allow.",
+                            path.display()
+                        ),
                         can_elevate: true,
                     })
                 }
             }
-            PathScopeResult::OutsideScope { .. } => {
-                Ok(PolicyDecision::Deny {
-                    reason: format!("Cannot write to system location: {}", path.display()),
-                    can_elevate: false,
-                })
-            }
+            PathScopeResult::OutsideScope { .. } => Ok(PolicyDecision::Deny {
+                reason: format!("Cannot write to system location: {}", path.display()),
+                can_elevate: false,
+            }),
         }
     }
 
@@ -219,22 +216,22 @@ impl PolicyEngine {
                     })
                 }
             }
-            PathScopeResult::OutsideScope { .. } => {
-                Ok(PolicyDecision::Deny {
-                    reason: "Cannot delete system files".to_string(),
-                    can_elevate: false,
-                })
-            }
+            PathScopeResult::OutsideScope { .. } => Ok(PolicyDecision::Deny {
+                reason: "Cannot delete system files".to_string(),
+                can_elevate: false,
+            }),
         }
     }
 
-    fn evaluate_directory_create(&self, path: &Path, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_directory_create(
+        &self,
+        path: &Path,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         match self.scope_manager.check_path_scope(path, true)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::Allow {
-                    reason: Some("Creating directory in workspace".to_string()),
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::Allow {
+                reason: Some("Creating directory in workspace".to_string()),
+            }),
             PathScopeResult::InUserHome { .. } => {
                 if context.trust_level.is_elevated() {
                     Ok(PolicyDecision::Allow {
@@ -248,30 +245,35 @@ impl PolicyEngine {
                     })
                 }
             }
-            PathScopeResult::OutsideScope { .. } => {
-                Ok(PolicyDecision::Deny {
-                    reason: "Cannot create directories in system locations".to_string(),
-                    can_elevate: false,
-                })
-            }
+            PathScopeResult::OutsideScope { .. } => Ok(PolicyDecision::Deny {
+                reason: "Cannot create directories in system locations".to_string(),
+                can_elevate: false,
+            }),
         }
     }
 
-    fn evaluate_directory_delete(&self, path: &Path, recursive: bool, context: &PolicyContext) -> Result<PolicyDecision> {
-        let risk = if recursive { RiskLevel::High } else { RiskLevel::Medium };
+    fn evaluate_directory_delete(
+        &self,
+        path: &Path,
+        recursive: bool,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
+        let risk = if recursive {
+            RiskLevel::High
+        } else {
+            RiskLevel::Medium
+        };
 
         match self.scope_manager.check_path_scope(path, true)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::RequireApproval {
-                    risk_level: risk,
-                    reason: if recursive {
-                        format!("Recursively delete directory: {}", path.display())
-                    } else {
-                        format!("Delete directory: {}", path.display())
-                    },
-                    allow_remember: false,
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::RequireApproval {
+                risk_level: risk,
+                reason: if recursive {
+                    format!("Recursively delete directory: {}", path.display())
+                } else {
+                    format!("Delete directory: {}", path.display())
+                },
+                allow_remember: false,
+            }),
             PathScopeResult::InUserHome { .. } | PathScopeResult::OutsideScope { .. } => {
                 if context.trust_level.is_full_system() {
                     Ok(PolicyDecision::RequireApproval {
@@ -289,13 +291,15 @@ impl PolicyEngine {
         }
     }
 
-    fn evaluate_directory_list(&self, path: &Path, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_directory_list(
+        &self,
+        path: &Path,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         match self.scope_manager.check_path_scope(path, false)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::Allow {
-                    reason: Some("Listing directory in workspace".to_string()),
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::Allow {
+                reason: Some("Listing directory in workspace".to_string()),
+            }),
             PathScopeResult::InUserHome { .. } => {
                 if context.trust_level.is_elevated() {
                     Ok(PolicyDecision::Allow {
@@ -316,7 +320,8 @@ impl PolicyEngine {
                     })
                 } else {
                     Ok(PolicyDecision::Deny {
-                        reason: "Cannot list system directories in Normal/Elevated mode".to_string(),
+                        reason: "Cannot list system directories in Normal/Elevated mode"
+                            .to_string(),
                         can_elevate: true,
                     })
                 }
@@ -326,16 +331,14 @@ impl PolicyEngine {
 
     // Shell and command evaluations
 
-    fn evaluate_shell_command(&self, command: &str, cwd: &Path, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_shell_command(
+        &self,
+        command: &str,
+        cwd: &Path,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         // Check if command looks dangerous
-        let dangerous_patterns = [
-            "rm -rf /",
-            "format ",
-            "del /s",
-            "deltree",
-            "mkfs",
-            "dd if=",
-        ];
+        let dangerous_patterns = ["rm -rf /", "format ", "del /s", "deltree", "mkfs", "dd if="];
 
         let command_lower = command.to_lowercase();
         for pattern in &dangerous_patterns {
@@ -350,11 +353,9 @@ impl PolicyEngine {
 
         // Check working directory scope
         match self.scope_manager.check_path_scope(cwd, false)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::Allow {
-                    reason: Some("Running command in workspace".to_string()),
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::Allow {
+                reason: Some("Running command in workspace".to_string()),
+            }),
             PathScopeResult::InUserHome { .. } => {
                 if context.trust_level.is_elevated() {
                     Ok(PolicyDecision::Allow {
@@ -385,13 +386,15 @@ impl PolicyEngine {
         }
     }
 
-    fn evaluate_terminal_spawn(&self, cwd: &Path, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_terminal_spawn(
+        &self,
+        cwd: &Path,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         match self.scope_manager.check_path_scope(cwd, false)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::Allow {
-                    reason: Some("Spawning terminal in workspace".to_string()),
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::Allow {
+                reason: Some("Spawning terminal in workspace".to_string()),
+            }),
             PathScopeResult::InUserHome { .. } => {
                 if context.trust_level.is_elevated() {
                     Ok(PolicyDecision::Allow {
@@ -405,16 +408,19 @@ impl PolicyEngine {
                     })
                 }
             }
-            PathScopeResult::OutsideScope { .. } => {
-                Ok(PolicyDecision::Deny {
-                    reason: "Cannot spawn terminal in system directories".to_string(),
-                    can_elevate: true,
-                })
-            }
+            PathScopeResult::OutsideScope { .. } => Ok(PolicyDecision::Deny {
+                reason: "Cannot spawn terminal in system directories".to_string(),
+                can_elevate: true,
+            }),
         }
     }
 
-    fn evaluate_git_operation(&self, operation: &GitOperationType, repo_path: &Path, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_git_operation(
+        &self,
+        operation: &GitOperationType,
+        repo_path: &Path,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         // Git operations that modify remote state are more sensitive
         let is_remote_write = matches!(operation, GitOperationType::Push);
 
@@ -428,11 +434,9 @@ impl PolicyEngine {
 
         // Check repository path scope
         match self.scope_manager.check_path_scope(repo_path, false)? {
-            PathScopeResult::InWorkspace { .. } => {
-                Ok(PolicyDecision::Allow {
-                    reason: Some(format!("Git {:?} in workspace", operation)),
-                })
-            }
+            PathScopeResult::InWorkspace { .. } => Ok(PolicyDecision::Allow {
+                reason: Some(format!("Git {:?} in workspace", operation)),
+            }),
             _ => {
                 if context.trust_level.is_elevated() {
                     Ok(PolicyDecision::Allow {
@@ -451,21 +455,33 @@ impl PolicyEngine {
 
     // Automation evaluations
 
-    fn evaluate_screen_capture(&self, save_to_disk: bool, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_screen_capture(
+        &self,
+        save_to_disk: bool,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         if context.trust_level.is_full_system() {
             Ok(PolicyDecision::Allow {
                 reason: Some("Screen capture in full system mode".to_string()),
             })
         } else {
             Ok(PolicyDecision::RequireApproval {
-                risk_level: if save_to_disk { RiskLevel::Medium } else { RiskLevel::Low },
+                risk_level: if save_to_disk {
+                    RiskLevel::Medium
+                } else {
+                    RiskLevel::Low
+                },
                 reason: "Capture screenshot".to_string(),
                 allow_remember: true,
             })
         }
     }
 
-    fn evaluate_input_simulation(&self, _action_type: &InputActionType, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_input_simulation(
+        &self,
+        _action_type: &InputActionType,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         if context.trust_level.is_full_system() {
             Ok(PolicyDecision::Allow {
                 reason: Some("Input simulation in full system mode".to_string()),
@@ -501,7 +517,12 @@ impl PolicyEngine {
 
     // Database evaluations
 
-    fn evaluate_database_connect(&self, is_local: bool, host: &str, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_database_connect(
+        &self,
+        is_local: bool,
+        host: &str,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         if is_local || host == "localhost" || host == "127.0.0.1" {
             Ok(PolicyDecision::Allow {
                 reason: Some("Connecting to local database".to_string()),
@@ -520,7 +541,11 @@ impl PolicyEngine {
         }
     }
 
-    fn evaluate_database_query(&self, query_type: &QueryType, _context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_database_query(
+        &self,
+        query_type: &QueryType,
+        _context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         match query_type {
             QueryType::Select => Ok(PolicyDecision::Allow {
                 reason: Some("Read-only database query".to_string()),
@@ -543,7 +568,12 @@ impl PolicyEngine {
 
     // Network evaluations
 
-    fn evaluate_network_request(&self, domain: &str, is_sensitive_data: bool, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_network_request(
+        &self,
+        domain: &str,
+        is_sensitive_data: bool,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         // Known safe domains
         let safe_domains = [
             "api.openai.com",
@@ -567,7 +597,8 @@ impl PolicyEngine {
                 })
             } else {
                 Ok(PolicyDecision::Deny {
-                    reason: "Cannot send sensitive data to external domains in Normal mode".to_string(),
+                    reason: "Cannot send sensitive data to external domains in Normal mode"
+                        .to_string(),
                     can_elevate: true,
                 })
             }
@@ -586,7 +617,11 @@ impl PolicyEngine {
         })
     }
 
-    fn evaluate_browser_navigate(&self, url: &str, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_browser_navigate(
+        &self,
+        url: &str,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         // Check for suspicious URLs
         let suspicious_tlds = [".onion", ".tk", ".ml"];
         if suspicious_tlds.iter().any(|tld| url.contains(tld)) {
@@ -610,7 +645,11 @@ impl PolicyEngine {
 
     // Credential evaluations
 
-    fn evaluate_credential_read(&self, _service: &str, context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_credential_read(
+        &self,
+        _service: &str,
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         if context.trust_level.is_elevated() {
             Ok(PolicyDecision::Allow {
                 reason: Some("Reading credentials (elevated mode)".to_string()),
@@ -624,7 +663,11 @@ impl PolicyEngine {
         }
     }
 
-    fn evaluate_credential_write(&self, _service: &str, _context: &PolicyContext) -> Result<PolicyDecision> {
+    fn evaluate_credential_write(
+        &self,
+        _service: &str,
+        _context: &PolicyContext,
+    ) -> Result<PolicyDecision> {
         Ok(PolicyDecision::Allow {
             reason: Some("Storing credentials securely".to_string()),
         })
