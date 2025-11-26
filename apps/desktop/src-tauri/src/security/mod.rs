@@ -5,10 +5,11 @@ pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
 pub mod encryption;
-pub mod guardrails;
 pub mod injection_detector;
 pub mod oauth;
 pub mod permissions;
+pub mod policy;
+pub mod policy_integration;
 pub mod prompt_injection;
 pub mod rate_limit;
 pub mod rbac;
@@ -36,11 +37,21 @@ pub use oauth::{
     OAuthAuthorizationUrl, OAuthManager, OAuthProvider, OAuthTokenResult, OAuthUserInfo,
 };
 pub use permissions::PermissionManager;
+pub use policy::{
+    ActionCategory, PolicyContext, PolicyDecision, PolicyEngine, RiskLevel, SecurityAction,
+    TrustLevel, Workspace,
+};
+pub use policy_integration::{
+    check_clipboard_read, check_clipboard_write, check_database_connect, check_directory_delete,
+    check_file_delete, check_file_read, check_file_write, check_input_simulation,
+    check_network_request, check_screen_capture, check_shell_command, check_terminal_spawn,
+    PolicyError, PolicyState,
+};
 pub use prompt_injection::{PromptInjectionDetector, SecurityAnalysis, SecurityRecommendation};
 pub use rate_limit::{RateLimitConfig, RateLimiter};
 pub use rbac::{Permission, RBACManager};
 pub use secret_manager::{SecretError, SecretManager};
 pub use storage::{decrypt_file, encrypt_file, EncryptedData, SecureStorage};
-pub use tool_guard::{RiskLevel, SecurityError, ToolExecutionGuard, ToolPolicy};
+pub use tool_guard::{SecurityError, ToolExecutionGuard, ToolPolicy};
 pub use updater::{UpdateMetadata, UpdateSecurityManager, VerificationResult};
 pub use validator::{CommandValidator, SafetyLevel};
