@@ -309,7 +309,7 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <div className="w-16 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800">
+      <div className="w-16 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out">
         <div className="p-3 flex flex-col items-center gap-4">
           <Button
             onClick={onToggleCollapse}
@@ -406,7 +406,7 @@ export function Sidebar({
 
       <div
         className={cn(
-          'w-64 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800',
+          'w-64 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out',
           className,
         )}
       >
