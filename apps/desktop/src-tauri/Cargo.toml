@@ -29,7 +29,9 @@ tauri-plugin-dialog = "2.0.0"
 tauri-plugin-notification = "2.0.0"
 tauri-plugin-clipboard-manager = "2.0.0"
 tauri-plugin-window-state = "2.0.0"
-tauri-plugin-updater = "2.0.0"
+# NOTE: Updater disabled for public beta due to unimplemented signature verification
+# If re-enabling, MUST implement proper Ed25519/RSA signature verification first
+# tauri-plugin-updater = "2.0.0"
 
 # Async Runtime
 tokio = { version = "1.37", features = ["full"] }
