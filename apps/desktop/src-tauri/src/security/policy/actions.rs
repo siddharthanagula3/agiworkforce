@@ -177,7 +177,9 @@ impl SecurityAction {
             SecurityAction::DirectoryCreate { path, .. } => {
                 format!("Create directory: {}", path.display())
             }
-            SecurityAction::DirectoryDelete { path, recursive, .. } => {
+            SecurityAction::DirectoryDelete {
+                path, recursive, ..
+            } => {
                 if *recursive {
                     format!("Delete directory recursively: {}", path.display())
                 } else {
@@ -190,10 +192,16 @@ impl SecurityAction {
             SecurityAction::ShellCommand { command, cwd, .. } => {
                 format!("Run command '{}' in {}", command, cwd.display())
             }
-            SecurityAction::TerminalSpawn { shell_type, cwd, .. } => {
+            SecurityAction::TerminalSpawn {
+                shell_type, cwd, ..
+            } => {
                 format!("Spawn {} terminal in {}", shell_type, cwd.display())
             }
-            SecurityAction::GitOperation { operation, repository_path, .. } => {
+            SecurityAction::GitOperation {
+                operation,
+                repository_path,
+                ..
+            } => {
                 format!("Git {:?} in {}", operation, repository_path.display())
             }
             SecurityAction::ScreenCapture { region, .. } => {
@@ -211,7 +219,12 @@ impl SecurityAction {
             },
             SecurityAction::ClipboardRead => "Read clipboard".to_string(),
             SecurityAction::ClipboardWrite { .. } => "Write to clipboard".to_string(),
-            SecurityAction::DatabaseConnect { db_type, host, database, .. } => {
+            SecurityAction::DatabaseConnect {
+                db_type,
+                host,
+                database,
+                ..
+            } => {
                 format!("Connect to {} database: {} on {}", db_type, database, host)
             }
             SecurityAction::DatabaseQuery { query_type, .. } => {
@@ -258,16 +271,19 @@ impl SecurityAction {
             | SecurityAction::ClipboardRead
             | SecurityAction::ClipboardWrite { .. } => ActionCategory::Automation,
 
-            SecurityAction::DatabaseConnect { .. }
-            | SecurityAction::DatabaseQuery { .. } => ActionCategory::Database,
+            SecurityAction::DatabaseConnect { .. } | SecurityAction::DatabaseQuery { .. } => {
+                ActionCategory::Database
+            }
 
             SecurityAction::NetworkRequest { .. } => ActionCategory::Network,
 
-            SecurityAction::BrowserLaunch { .. }
-            | SecurityAction::BrowserNavigate { .. } => ActionCategory::Browser,
+            SecurityAction::BrowserLaunch { .. } | SecurityAction::BrowserNavigate { .. } => {
+                ActionCategory::Browser
+            }
 
-            SecurityAction::CredentialRead { .. }
-            | SecurityAction::CredentialWrite { .. } => ActionCategory::Credentials,
+            SecurityAction::CredentialRead { .. } | SecurityAction::CredentialWrite { .. } => {
+                ActionCategory::Credentials
+            }
         }
     }
 }
