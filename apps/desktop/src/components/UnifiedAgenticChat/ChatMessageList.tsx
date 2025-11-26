@@ -206,6 +206,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       <div className="flex-1 overflow-hidden">
         <AutoSizer>
           {({ height, width }) => (
+            // @ts-expect-error - VariableSizeList type incompatibility with React 18
             <List
               ref={listRef}
               height={height}
