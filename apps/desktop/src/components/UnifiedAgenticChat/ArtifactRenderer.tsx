@@ -5,19 +5,19 @@ import { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    Legend,
-    Line,
-    LineChart,
-    Pie,
-    PieChart,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { toast } from 'sonner';
 import { useTheme } from '../../hooks/useTheme';
@@ -224,6 +224,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 function CodeArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
   return (
     <div className="overflow-x-auto">
+      {/* @ts-expect-error - SyntaxHighlighter type incompatibility with React 18 */}
       <SyntaxHighlighter
         language={artifact.language || 'text'}
         style={isDark ? oneDark : oneLight}
