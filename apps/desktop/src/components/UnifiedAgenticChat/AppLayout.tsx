@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { CommandPalette } from './CommandPalette';
-import { EmptyState } from './EmptyState';
 import { Sidebar } from './Sidebar';
 // TODO: Re-implement SidecarPanel or remove if deprecated
 // import { SidecarPanel } from './SidecarPanel';
@@ -70,12 +69,10 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNewChat]);
 
-  const isEmptyState = messages.length === 0;
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cream-50 dark:bg-charcoal-900 font-sans text-gray-900 dark:text-gray-100 antialiased">
       {/* Background gradient for empty state */}
-      {isEmptyState && (
+      {messages.length === 0 && (
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-terra-cotta-500/5" />
         </div>
@@ -91,7 +88,9 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
 
       {/* Main Content Area */}
       <main
-        className={cn('flex flex-1 min-h-0 flex-col overflow-hidden transition-all duration-300')}
+        className={cn(
+          'flex flex-1 min-h-0 flex-col overflow-hidden transition-all duration-300 ease-in-out',
+        )}
         style={{ marginRight: sidecarState.isOpen ? sidecarWidth : 0 }}
       >
         {/* Content Container */}
@@ -104,9 +103,6 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
               <div ref={messagesEndRef} className="h-px" />
             </div>
           </div>
-
-          {/* Empty State - Content behind input */}
-          {isEmptyState && <EmptyState />}
         </div>
       </main>
 

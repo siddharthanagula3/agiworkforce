@@ -21,6 +21,7 @@ import remarkMath from 'remark-math';
 import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { EnhancedMessage, SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { shouldShowClaudePlanningCard, getPreviousUserMessage } from '../../utils/messageHelpers';
 import { parseCitations } from './CitationBadge';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { StatusTrail } from './StatusTrail';
@@ -54,6 +55,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const retryFailedMessage = useUnifiedChatStore((state) => state.retryFailedMessage);
+  const messages = useUnifiedChatStore((state) => state.messages);
 
   // Auto-trigger sidecar for relevant content
   React.useEffect(() => {
@@ -107,11 +109,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     // If we found a match, but it's empty and we're not explicit, ignore it
     // This prevents showing empty blocks if <thinking> is just starting
     if (match && (match[1]?.trim() || message.metadata?.streaming)) {
-      return match[1]?.trim() || '';
+      const thinkingContent = match[1]?.trim() || '';
+
+      // Get the previous user message to determine if we should show the planning card
+      const prevUserMessage = getPreviousUserMessage(messages, message.id);
+
+      // Check if we should show the planning card based on the user's request
+      const shouldShow = shouldShowClaudePlanningCard(prevUserMessage, message.metadata);
+
+      return shouldShow ? thinkingContent : null;
     }
 
     return explicit ? message.content : null;
-  }, [message]);
+  }, [message, messages]);
 
   const isToolCall = useMemo(() => {
     const meta = message.metadata;
@@ -278,11 +288,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         onMouseLeave={() => setShowActions(false)}
       >
         {showAvatar && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-700 text-white text-sm font-medium">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-purple-700 text-white text-sm font-medium">
             AI
           </div>
         )}
-        <div className="flex-1 relative">
+        <div className="min-w-0 relative max-w-full">
           {/* Status Trail */}
           <StatusTrail messageId={message.id} />
 
