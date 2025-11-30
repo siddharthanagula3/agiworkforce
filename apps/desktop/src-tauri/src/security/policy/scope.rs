@@ -114,7 +114,10 @@ impl ScopeManager {
             if let Some(parent) = path.parent() {
                 parent.canonicalize()
             } else {
-                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "Cannot resolve path"))
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Cannot resolve path",
+                ))
             }
         })?;
 
