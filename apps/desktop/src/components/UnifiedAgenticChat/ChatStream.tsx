@@ -99,73 +99,132 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
         ) : null}
       </AnimatePresence>
 
-      {items.map((message) => {
-        const meta = message.metadata || {};
-        const kind: SidecarMode | undefined =
-          (meta.sidecarType as SidecarMode | undefined) ||
-          (meta.tool === 'terminal'
-            ? 'terminal'
-            : meta.tool === 'browser'
-              ? 'browser'
-              : meta.tool === 'code'
-                ? 'code'
-                : meta.tool === 'media' || meta.tool === 'video'
-                  ? 'preview'
-                  : meta.tool === 'files'
-                    ? 'code'
-                    : undefined);
-
-        if (meta.phase === 'thinking' || meta.thinking) {
-          return renderThought(
-            message.id,
-            meta.thinking?.title || 'Planning task...',
-            meta.thinking?.details || message.content || 'The agent is reasoning about this task.',
-          );
-        }
-
-        if (meta.event === 'action' && kind) {
-          return renderActionCard(
-            message.id,
-            meta.label || 'Action executed',
-            meta.summary || message.content || 'Agent performed an action.',
-            kind,
-            { messageId: message.id, ...meta },
-          );
-        }
-
-        if (kind === 'terminal' && meta.command) {
-          return renderActionCard(
-            message.id,
-            `Executed ${meta.command}`,
-            meta.preview || 'Command finished. View output for details.',
-            'terminal',
-            { command: meta.command, messageId: message.id },
-          );
-        }
-
-        return (
-          <div key={message.id} className="space-y-3">
-            <MessageBubble
-              message={message}
-              showAvatar
-              showTimestamp
-              enableActions
-              onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
-              onRegenerate={() => handleRetry(message.id, message.content)}
-              onEdit={(content) => handleRetry(message.id, content)}
-            />
-            {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
-                  (artifact: any) => (
-                    <ArtifactRenderer key={artifact.id || artifact.title} artifact={artifact} />
-                  ),
-                )}
-              </div>
-            ) : null}
+      {items.length === 0 ? (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-2xl font-semibold text-white">How can I help you today?</p>
+              <p className="mt-2 text-sm text-zinc-300">
+                Start typing, drop in files, or add context for the agent to plan and execute.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => onOpenSidecar?.('browser')}>
+                <MousePointerClick className="mr-2 h-4 w-4" />
+                Open browser tools
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => onOpenSidecar?.('terminal')}>
+                <Terminal className="mr-2 h-4 w-4" />
+                Terminal session
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => onOpenSidecar?.('code')}>
+                <Braces className="mr-2 h-4 w-4" />
+                Code workspace
+              </Button>
+            </div>
           </div>
-        );
-      })}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                icon: Wand2,
+                title: 'Automate a workflow',
+                copy: 'Describe a task and let the agent plan, execute, and report back.',
+              },
+              {
+                icon: FileText,
+                title: 'Summarize & cite',
+                copy: 'Drop PDFs, docs, or web links for grounded summaries with sources.',
+              },
+              {
+                icon: Activity,
+                title: 'Observe & act',
+                copy: 'Attach screen/clipboard context and delegate quick UI actions.',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-white/5 bg-white/5 p-3 backdrop-blur"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <item.icon className="h-4 w-4 text-teal-200" />
+                  {item.title}
+                </div>
+                <p className="mt-2 text-sm text-zinc-300">{item.copy}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        items.map((message) => {
+          const meta = message.metadata || {};
+          const kind: SidecarMode | undefined =
+            (meta.sidecarType as SidecarMode | undefined) ||
+            (meta.tool === 'terminal'
+              ? 'terminal'
+              : meta.tool === 'browser'
+                ? 'browser'
+                : meta.tool === 'code'
+                  ? 'code'
+                  : meta.tool === 'media' || meta.tool === 'video'
+                    ? 'preview'
+                    : meta.tool === 'files'
+                      ? 'code'
+                      : undefined);
+
+          if (meta.phase === 'thinking' || meta.thinking) {
+            return renderThought(
+              message.id,
+              meta.thinking?.title || 'Planning task...',
+              meta.thinking?.details ||
+                message.content ||
+                'The agent is reasoning about this task.',
+            );
+          }
+
+          if (meta.event === 'action' && kind) {
+            return renderActionCard(
+              message.id,
+              meta.label || 'Action executed',
+              meta.summary || message.content || 'Agent performed an action.',
+              kind,
+              { messageId: message.id, ...meta },
+            );
+          }
+
+          if (kind === 'terminal' && meta.command) {
+            return renderActionCard(
+              message.id,
+              `Executed ${meta.command}`,
+              meta.preview || 'Command finished. View output for details.',
+              'terminal',
+              { command: meta.command, messageId: message.id },
+            );
+          }
+
+          return (
+            <div key={message.id} className="space-y-3">
+              <MessageBubble
+                message={message}
+                showAvatar
+                showTimestamp
+                enableActions
+                onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
+                onRegenerate={() => handleRetry(message.id, message.content)}
+                onEdit={(content) => handleRetry(message.id, content)}
+              />
+              {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
+                    (artifact: any) => (
+                      <ArtifactRenderer key={artifact.id || artifact.title} artifact={artifact} />
+                    ),
+                  )}
+                </div>
+              ) : null}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 };
