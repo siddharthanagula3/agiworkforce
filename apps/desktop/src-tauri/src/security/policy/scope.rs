@@ -34,7 +34,7 @@ impl ScopeManager {
         // Windows system directories
         if cfg!(windows) {
             if let Ok(windir) = std::env::var("WINDIR") {
-                blacklist.push(PathBuf::from(windir).join("System32"));
+                blacklist.push(PathBuf::from(&windir).join("System32"));
                 blacklist.push(PathBuf::from(&windir).join("SysWOW64"));
             }
             blacklist.push(PathBuf::from("C:\\Windows\\System32"));
@@ -114,7 +114,7 @@ impl ScopeManager {
             if let Some(parent) = path.parent() {
                 parent.canonicalize()
             } else {
-                Err(anyhow::anyhow!("Cannot resolve path"))
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "Cannot resolve path"))
             }
         })?;
 

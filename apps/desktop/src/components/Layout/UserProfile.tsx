@@ -2,24 +2,25 @@ import React from 'react';
 import { Settings, CreditCard } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { cn } from '../../lib/utils';
+import { useAccountStore } from '../../stores/accountStore';
 
 interface UserProfileProps {
-  name?: string;
-  email?: string;
-  avatar?: string;
   onSettingsClick?: () => void;
   onBillingClick?: () => void;
   collapsed?: boolean;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
-  name = 'Siddhartha Nagula',
-  email = 'siddhartha@agiworkforce.com',
-  avatar,
   onSettingsClick,
   onBillingClick,
   collapsed = false,
 }) => {
+  // Read from account store instead of hardcoded values
+  const { displayName, email, avatar } = useAccountStore((state) => state.account);
+
+  const name = displayName || 'User';
+  const userEmail = email || '';
+
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -50,7 +51,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm font-medium text-zinc-100">{name}</div>
-              <div className="truncate text-xs text-zinc-400">{email}</div>
+              <div className="truncate text-xs text-zinc-400">{userEmail}</div>
             </div>
           )}
         </button>
@@ -79,7 +80,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="truncate text-sm font-semibold text-zinc-100">{name}</div>
-                <div className="truncate text-xs text-zinc-400">{email}</div>
+                <div className="truncate text-xs text-zinc-400">{userEmail}</div>
               </div>
             </div>
           </div>
