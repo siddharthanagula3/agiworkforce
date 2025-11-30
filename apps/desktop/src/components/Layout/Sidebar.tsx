@@ -224,8 +224,6 @@ export function Sidebar({
 
       <div className="border-t border-white/10 px-3 py-3">
         <UserProfile
-          name="Siddhartha Nagula"
-          email="siddhartha@agiworkforce.com"
           onSettingsClick={onOpenSettings}
           onBillingClick={onOpenSettings}
           collapsed={collapsed}
