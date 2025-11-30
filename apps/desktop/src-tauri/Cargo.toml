@@ -21,14 +21,14 @@ unused_qualifications = "allow"  # Allow unused qualifications (improve code cla
 unused_results = "allow"  # Allow unused results (many are intentional)
 
 [dependencies]
-# Tauri and Plugins (upgraded to stable 2.0.0)
-tauri = { version = "2.0.0", features = ["tray-icon", "devtools"] }
-tauri-plugin-shell = "2.0.0"
-tauri-plugin-fs = "2.0.0"
-tauri-plugin-dialog = "2.0.0"
-tauri-plugin-notification = "2.0.0"
-tauri-plugin-clipboard-manager = "2.0.0"
-tauri-plugin-window-state = "2.0.0"
+# Tauri and Plugins (upgraded to stable 2.9.x)
+tauri = { version = "2.9.3", features = ["tray-icon", "devtools"] }
+tauri-plugin-shell = "2.3.3"
+tauri-plugin-fs = "2.4.4"
+tauri-plugin-dialog = "2.4.2"
+tauri-plugin-notification = "2.3.3"
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-window-state = "2.4.1"
 # NOTE: Updater disabled for public beta due to unimplemented signature verification
 # If re-enabling, MUST implement proper Ed25519/RSA signature verification first
 # tauri-plugin-updater = "2.0.0"
@@ -211,7 +211,7 @@ billing = []  # Billing feature enabled (stripe dependency removed, using custom
 # Windows builds typically enable webrtc-support, Linux builds may skip it to avoid GTK dependencies
 
 [build-dependencies]
-tauri-build = { version = "2.0.0", features = [] }
+tauri-build = { version = "2.5.2", features = [] }
 
 [dev-dependencies]
 tempfile = "3.10"
