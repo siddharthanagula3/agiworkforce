@@ -29,14 +29,14 @@ pub mod automation;
 // Browser integration
 pub mod browser;
 
-// P2P Communication
-pub mod p2p;
-
 // Database layer
 pub mod db;
 
 // Billing and subscriptions (Stripe integration)
 pub mod billing;
+
+// Account management and web backend integration (placeholders)
+pub mod account;
 
 // Settings storage
 pub mod settings;

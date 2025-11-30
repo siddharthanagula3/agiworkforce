@@ -1,22 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
+  Calendar,
   ChevronLeft,
   ChevronRight,
-  Plus,
-  Search,
-  Trash2,
-  Calendar,
   Clock,
   Pin,
   PinOff,
+  Plus,
+  Search,
+  Trash2,
 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import { UserProfile } from '../Layout/UserProfile';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
-import { motion, AnimatePresence } from 'framer-motion';
-import { UserProfile } from '../Layout/UserProfile';
 
 interface SidebarProps {
   className?: string;
@@ -504,8 +504,6 @@ export function Sidebar({
         {/* Profile Section */}
         <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
           <UserProfile
-            name="Siddhartha Nagula"
-            email="siddhartha@agiworkforce.com"
             onSettingsClick={onOpenSettings}
             onBillingClick={onOpenBilling}
             collapsed={collapsed}
