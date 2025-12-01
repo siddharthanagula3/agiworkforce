@@ -51,10 +51,13 @@ export function PromptDialog({
     if (open) {
       setValue(defaultValue);
       // Focus input when dialog opens
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
       }, 0);
+
+      // Cleanup timeout on unmount
+      return () => clearTimeout(timeoutId);
     }
   }, [open, defaultValue]);
 
