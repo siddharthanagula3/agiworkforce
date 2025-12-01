@@ -434,7 +434,9 @@ class FeatureFlagsService {
   private startPeriodicUpdates() {
     // Update every 5 minutes
     this.updateInterval = window.setInterval(() => {
-      this.fetchRemoteFlags();
+      void this.fetchRemoteFlags().catch((error) => {
+        console.error('Failed to fetch remote feature flags:', error);
+      });
     }, 5 * 60 * 1000);
   }
 
