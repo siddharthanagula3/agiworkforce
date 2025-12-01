@@ -21,12 +21,14 @@ use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use futures_util::StreamExt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration as TokioDuration};
 use tracing::{info, warn};
 
 /// Shared database connection wrapper exposed to Tauri commands.
+/// Uses tokio::sync::Mutex for async compatibility.
 pub struct AppDatabase {
     pub conn: Arc<Mutex<Connection>>,
 }
@@ -35,7 +37,7 @@ pub struct AppDatabase {
 /// Auto-compact conversation history if needed (like Cursor/Claude Code)
 async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Result<(), String> {
     let messages = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -73,7 +75,7 @@ async fn auto_compact_conversation(db: &AppDatabase, conversation_id: i64) -> Re
                 let old_count = messages.len() - keep_count;
 
                 if old_count > 0 {
-                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                    let conn = db.conn.lock().await;
 
                     // Delete old messages (except recent ones)
                     let old_messages: Vec<i64> =
@@ -225,9 +227,10 @@ pub struct ConversationStats {
 }
 
 // Updated Nov 16, 2025: Added input validation for title length
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_create_conversation(
-    db: State<AppDatabase>,
+pub async fn chat_create_conversation(
+    db: State<'_, AppDatabase>,
     request: CreateConversationRequest,
 ) -> Result<Conversation, String> {
     // Validate title is not empty and not too long
@@ -239,10 +242,7 @@ pub fn chat_create_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     let id = repository::create_conversation(&conn, trimmed_title.to_string())
         .map_err(|e| format!("Failed to create conversation: {}", e))?;
     repository::get_conversation(&conn, id)
@@ -250,15 +250,21 @@ pub fn chat_create_conversation(
 }
 
 #[tauri::command]
-pub fn chat_get_conversations(db: State<AppDatabase>) -> Result<Vec<Conversation>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+pub async fn chat_get_conversations(
+    db: State<'_, AppDatabase>,
+) -> Result<Vec<Conversation>, String> {
+    let conn = db.conn.lock().await;
     repository::list_conversations(&conn, 1000, 0)
         .map_err(|e| format!("Failed to list conversations: {}", e))
 }
 
 // Updated Nov 16, 2025: Added input validation for conversation ID
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_get_conversation(db: State<AppDatabase>, id: i64) -> Result<Conversation, String> {
+pub async fn chat_get_conversation(
+    db: State<'_, AppDatabase>,
+    id: i64,
+) -> Result<Conversation, String> {
     // Validate ID is positive
     if id <= 0 {
         return Err(format!(
@@ -267,18 +273,16 @@ pub fn chat_get_conversation(db: State<AppDatabase>, id: i64) -> Result<Conversa
         ));
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     repository::get_conversation(&conn, id)
         .map_err(|e| format!("Failed to get conversation {}: {}", id, e))
 }
 
 // Updated Nov 16, 2025: Added input validation for ID and title
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_update_conversation(
-    db: State<AppDatabase>,
+pub async fn chat_update_conversation(
+    db: State<'_, AppDatabase>,
     id: i64,
     request: UpdateConversationRequest,
 ) -> Result<(), String> {
@@ -299,17 +303,15 @@ pub fn chat_update_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     repository::update_conversation_title(&conn, id, trimmed_title.to_string())
         .map_err(|e| format!("Failed to update conversation {}: {}", id, e))
 }
 
 // Updated Nov 16, 2025: Added input validation for ID
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_delete_conversation(db: State<AppDatabase>, id: i64) -> Result<(), String> {
+pub async fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
     // Validate ID is positive
     if id <= 0 {
         return Err(format!(
@@ -318,18 +320,16 @@ pub fn chat_delete_conversation(db: State<AppDatabase>, id: i64) -> Result<(), S
         ));
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     repository::delete_conversation(&conn, id)
         .map_err(|e| format!("Failed to delete conversation {}: {}", id, e))
 }
 
 // Updated Nov 16, 2025: Added comprehensive input validation
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_create_message(
-    db: State<AppDatabase>,
+pub async fn chat_create_message(
+    db: State<'_, AppDatabase>,
     request: CreateMessageRequest,
 ) -> Result<Message, String> {
     // Validate conversation_id is positive
@@ -369,10 +369,7 @@ pub fn chat_create_message(
         }
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
 
     let role = match request.role.as_str() {
         "user" => MessageRole::User,
@@ -409,9 +406,10 @@ pub fn chat_create_message(
 }
 
 // Updated Nov 16, 2025: Added input validation for conversation ID
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_get_messages(
-    db: State<AppDatabase>,
+pub async fn chat_get_messages(
+    db: State<'_, AppDatabase>,
     conversation_id: i64,
 ) -> Result<Vec<Message>, String> {
     // Validate conversation_id is positive
@@ -422,10 +420,7 @@ pub fn chat_get_messages(
         ));
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
             "Failed to list messages for conversation {}: {}",
@@ -435,9 +430,10 @@ pub fn chat_get_messages(
 }
 
 // Updated Nov 16, 2025: Added input validation for ID and content
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_update_message(
-    db: State<AppDatabase>,
+pub async fn chat_update_message(
+    db: State<'_, AppDatabase>,
     id: i64,
     content: String,
 ) -> Result<Message, String> {
@@ -455,34 +451,30 @@ pub fn chat_update_message(
         return Err("Message content cannot exceed 1,000,000 characters".to_string());
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     repository::update_message_content(&conn, id, trimmed_content.to_string())
         .map_err(|e| format!("Failed to update message {}: {}", id, e))
 }
 
 // Updated Nov 16, 2025: Added input validation for ID
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_delete_message(db: State<AppDatabase>, id: i64) -> Result<(), String> {
+pub async fn chat_delete_message(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
     // Validate ID is positive
     if id <= 0 {
         return Err(format!("Invalid message ID: {}. ID must be positive", id));
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     repository::delete_message(&conn, id)
         .map_err(|e| format!("Failed to delete message {}: {}", id, e))
 }
 
 // Updated Nov 16, 2025: Added input validation for conversation ID
+// Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub fn chat_get_conversation_stats(
-    db: State<AppDatabase>,
+pub async fn chat_get_conversation_stats(
+    db: State<'_, AppDatabase>,
     conversation_id: i64,
 ) -> Result<ConversationStats, String> {
     // Validate conversation_id is positive
@@ -493,10 +485,7 @@ pub fn chat_get_conversation_stats(
         ));
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     let messages = repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
             "Failed to list messages for conversation {}: {}",
@@ -564,7 +553,7 @@ async fn chat_send_message_streaming(
 
     // Create conversation and user message
     let (conversation_id, _user_message_id, assistant_message_id) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
 
         let conversation_id = match request.conversation_id {
             Some(id) => {
@@ -595,7 +584,7 @@ async fn chat_send_message_streaming(
 
     // Get conversation history (after compaction)
     let history = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -832,7 +821,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
 
     // Update assistant message with final content
     let mut assistant_msg = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         repository::update_message_content(&conn, assistant_message_id, accumulated_content.clone())
             .map_err(|e| format!("Failed to update assistant message: {}", e))?
     };
@@ -957,7 +946,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
 
                         // Add tool results to conversation
                         for (tool_call_id, result_content) in tool_results {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             let tool_result_msg = Message::new(
                                 conversation_id,
                                 MessageRole::System,
@@ -969,7 +958,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
 
                         // Continue conversation with tool results (make another request)
                         let updated_history = {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             repository::list_messages(&conn, conversation_id)
                                 .map_err(|e| format!("Failed to list messages: {}", e))?
                         };
@@ -1001,7 +990,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                             router.invoke_candidate(candidate, &final_request).await
                         } {
                             // Update assistant message with final response
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             assistant_msg = repository::update_message_content(
                                 &conn,
                                 assistant_message_id,
@@ -1017,7 +1006,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
 
     // Fetch final conversation state
     let (conversation, user_msg, messages) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         let conversation = repository::get_conversation(&conn, conversation_id)
             .map_err(|e| format!("Failed to get conversation: {}", e))?;
         let user_msg = repository::get_message(&conn, _user_message_id)
@@ -1137,7 +1126,7 @@ pub async fn chat_send_message(
     }
 
     let (conversation_id, user_message) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
 
         let conversation_id = match request.conversation_id {
             Some(id) => {
@@ -1177,7 +1166,7 @@ pub async fn chat_send_message(
 
     // Get conversation history (after compaction)
     let history = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -1334,7 +1323,7 @@ pub async fn chat_send_message(
         );
 
         if let Some(entry) = {
-            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            let conn = db.conn.lock().await;
             llm_state
                 .cache_manager
                 .fetch(&conn, &cache_key)
@@ -1373,7 +1362,7 @@ pub async fn chat_send_message(
             Ok(mut route_outcome) => {
                 route_outcome.response.cached = false;
                 {
-                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                    let conn = db.conn.lock().await;
                     let expires_at = llm_state.cache_manager.default_expiry();
                     llm_state
                         .cache_manager
@@ -1400,7 +1389,7 @@ pub async fn chat_send_message(
                     if let Some(ref executor) = _tool_executor {
                         // Save assistant message with tool calls
                         let _assistant_msg_with_tools = {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             let mut assistant = Message::new(
                                 conversation_id,
                                 MessageRole::Assistant,
@@ -1452,7 +1441,7 @@ pub async fn chat_send_message(
 
                         // Add tool results to conversation
                         for (tool_call_id, result_content) in tool_results {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             let tool_result_msg = Message::new(
                                 conversation_id,
                                 MessageRole::System, // Tool results as system messages
@@ -1469,7 +1458,7 @@ pub async fn chat_send_message(
                         );
 
                         let updated_history = {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             repository::list_messages(&conn, conversation_id)
                                 .map_err(|e| format!("Failed to list messages: {}", e))?
                         };
@@ -1526,7 +1515,7 @@ pub async fn chat_send_message(
     })?;
 
     let (conversation, assistant_message, stats, last_message) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
 
         let mut assistant = Message::new(
             conversation_id,

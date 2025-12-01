@@ -144,14 +144,28 @@ const DesktopShell = () => {
     const checkOnboarding = async () => {
       try {
         // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Onboarding status check timed out')), 3000),
-        );
+        let timeoutId: number;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(
+            () => reject(new Error('Onboarding status check timed out')),
+            3000,
+          );
+        });
 
         const statusPromise = invoke<{ completed: boolean }>('get_onboarding_status');
 
         const status = await Promise.race([statusPromise, timeoutPromise]);
-        setOnboardingComplete(status.completed);
+        clearTimeout(timeoutId!);
+
+        // Type guard to ensure status has the expected shape
+        if (status && typeof status === 'object' && 'completed' in status) {
+          if (import.meta.env.DEV) {
+            console.log('Onboarding status:', status);
+          }
+          setOnboardingComplete(status.completed);
+        } else {
+          throw new Error('Invalid onboarding status response');
+        }
       } catch (error) {
         console.error('Failed to check onboarding status:', error);
         addError({
