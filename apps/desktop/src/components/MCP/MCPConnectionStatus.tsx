@@ -261,7 +261,11 @@ export function MCPConnectionStatus() {
                         onClick={() => {
                           invoke('mcp_check_server_health', {
                             serverName: health.server_name
-                          }).then(fetchHealth);
+                          })
+                            .then(fetchHealth)
+                            .catch((error) => {
+                              console.error('Health check failed:', error);
+                            });
                         }}
                       >
                         Test Connection
@@ -272,7 +276,11 @@ export function MCPConnectionStatus() {
                         onClick={() => {
                           invoke('mcp_connect_server', {
                             name: health.server_name
-                          }).then(fetchHealth);
+                          })
+                            .then(fetchHealth)
+                            .catch((error) => {
+                              console.error('Reconnect failed:', error);
+                            });
                         }}
                       >
                         Reconnect
