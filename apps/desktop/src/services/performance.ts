@@ -295,9 +295,10 @@ class PerformanceMonitoringService {
 
   /**
    * Monitor memory usage
+   * Returns interval ID that can be used to stop monitoring with clearInterval()
    */
-  public async monitorMemory(interval: number = 5000) {
-    setInterval(async () => {
+  public monitorMemory(interval: number = 5000): ReturnType<typeof setInterval> {
+    return setInterval(async () => {
       try {
         const metrics = await this.getSystemMetrics();
         const memoryUsagePercent = (metrics.memory_used_mb / metrics.memory_total_mb) * 100;
