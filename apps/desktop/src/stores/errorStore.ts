@@ -29,6 +29,7 @@ interface ErrorStore {
   maxHistorySize: number;
   toasts: AppError[];
   maxToasts: number;
+  dismissTimers: Map<string, ReturnType<typeof setTimeout>>;
 
   // Actions
   addError: (error: Omit<AppError, 'id' | 'timestamp' | 'dismissed' | 'count'>) => void;
@@ -47,6 +48,7 @@ const useErrorStore = create<ErrorStore>()(
       maxHistorySize: 100,
       toasts: [],
       maxToasts: 5,
+      dismissTimers: new Map(),
 
       addError: (errorData) => {
         const { errors, toasts, maxHistorySize, maxToasts } = get();
@@ -93,9 +95,12 @@ const useErrorStore = create<ErrorStore>()(
         // Auto-dismiss info and warning toasts after delay
         if (errorData.severity === 'info' || errorData.severity === 'warning') {
           const duration = errorData.severity === 'info' ? 3000 : 5000;
-          setTimeout(() => {
-            get().dismissError(newError.id);
+          const timerId = setTimeout(() => {
+            const store = get();
+            store.dismissTimers.delete(newError.id);
+            store.dismissError(newError.id);
           }, duration);
+          get().dismissTimers.set(newError.id, timerId);
         }
 
         // Report critical errors automatically
@@ -122,6 +127,13 @@ const useErrorStore = create<ErrorStore>()(
       },
 
       dismissError: (id) => {
+        // Clear any pending dismiss timer
+        const timerId = get().dismissTimers.get(id);
+        if (timerId !== undefined) {
+          clearTimeout(timerId);
+          get().dismissTimers.delete(id);
+        }
+
         set((state) => ({
           errors: state.errors.map((e) => (e.id === id ? { ...e, dismissed: true } : e)),
           toasts: state.toasts.filter((e) => e.id !== id),
@@ -129,6 +141,11 @@ const useErrorStore = create<ErrorStore>()(
       },
 
       dismissAll: () => {
+        // Clear all pending dismiss timers
+        const timers = get().dismissTimers;
+        timers.forEach((timerId) => clearTimeout(timerId));
+        timers.clear();
+
         set((state) => ({
           errors: state.errors.map((e) => ({ ...e, dismissed: true })),
           toasts: [],
@@ -136,6 +153,11 @@ const useErrorStore = create<ErrorStore>()(
       },
 
       clearHistory: () => {
+        // Clear all pending dismiss timers
+        const timers = get().dismissTimers;
+        timers.forEach((timerId) => clearTimeout(timerId));
+        timers.clear();
+
         set({ errors: [], toasts: [] });
       },
 

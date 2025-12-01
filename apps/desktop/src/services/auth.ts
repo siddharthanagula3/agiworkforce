@@ -29,6 +29,7 @@ export class AuthService {
   private refreshTimer: NodeJS.Timeout | null = null;
   private inactivityTimer: NodeJS.Timeout | null = null;
   private readonly INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+  private inactivityListeners: Array<{ event: string; handler: () => void }> = [];
 
   private constructor() {
     // Load token from localStorage on initialization
@@ -64,6 +65,29 @@ export class AuthService {
   }
 
   /**
+   * Decode JWT token to extract user information
+   */
+  private decodeJWT(token: string): { id?: string; email?: string; role?: string; exp?: number } {
+    try {
+      const base64Url = token.split('.')[1];
+      if (!base64Url) {
+        throw new Error('Invalid token format');
+      }
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join(''),
+      );
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('Failed to decode JWT:', error);
+      return {};
+    }
+  }
+
+  /**
    * Login with email and password
    */
   async login(email: string, password: string): Promise<AuthToken> {
@@ -76,12 +100,14 @@ export class AuthService {
       this.token = token;
       this.saveToken(token);
 
-      // CRITICAL FIX: Dispatch update to UI store immediately
-      // In production, decode the JWT to get actual user details/role
+      // Decode JWT to get actual user details/role
+      const decoded = this.decodeJWT(token.access_token);
+      const userRole = decoded.role as UserRole | undefined;
+
       useAuthStore.getState().setUser({
-        id: email,
-        email: email,
-        role: UserRole.Viewer, // Default to viewer, should be from token
+        id: decoded.id || email,
+        email: decoded.email || email,
+        role: userRole || UserRole.Viewer, // Fallback to Viewer only if not in token
       });
 
       this.startRefreshTimer();
@@ -109,6 +135,7 @@ export class AuthService {
       this.clearToken();
       this.stopRefreshTimer();
       this.stopInactivityTimer();
+      this.cleanupInactivityListeners();
     }
   }
 
@@ -225,7 +252,8 @@ export class AuthService {
 
     if (this.token) {
       // Refresh 5 minutes before expiration
-      const refreshTime = (this.token.expires_in - 5 * 60) * 1000;
+      // Ensure refresh time is positive and at least 1 second
+      const refreshTime = Math.max((this.token.expires_in - 5 * 60) * 1000, 1000);
       this.refreshTimer = setTimeout(() => {
         this.refreshToken().catch((error) => {
           console.error('Auto-refresh failed:', error);
@@ -252,10 +280,23 @@ export class AuthService {
 
     // Listen for user activity
     if (typeof window !== 'undefined') {
-      window.addEventListener('mousemove', resetTimer);
-      window.addEventListener('keydown', resetTimer);
-      window.addEventListener('click', resetTimer);
-      window.addEventListener('scroll', resetTimer);
+      const events = ['mousemove', 'keydown', 'click', 'scroll'];
+      events.forEach((event) => {
+        window.addEventListener(event, resetTimer);
+        this.inactivityListeners.push({ event, handler: resetTimer });
+      });
+    }
+  }
+
+  /**
+   * Cleanup inactivity detection listeners
+   */
+  private cleanupInactivityListeners(): void {
+    if (typeof window !== 'undefined') {
+      this.inactivityListeners.forEach(({ event, handler }) => {
+        window.removeEventListener(event, handler);
+      });
+      this.inactivityListeners = [];
     }
   }
 
