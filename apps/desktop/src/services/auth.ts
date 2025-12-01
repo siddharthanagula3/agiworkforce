@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useAuthStore } from '../stores/authStore';
+import { safeGetJSON, safeSetJSON, safeRemoveItem } from '../utils/localStorage';
 
 export interface AuthToken {
   access_token: string;
@@ -191,22 +192,20 @@ export class AuthService {
    * Save token to localStorage
    */
   private saveToken(token: AuthToken): void {
-    localStorage.setItem('auth_token', JSON.stringify(token));
+    const success = safeSetJSON('auth_token', token);
+    if (!success) {
+      console.warn('[Auth] Failed to persist auth token - session may not survive reload');
+    }
   }
 
   /**
    * Load token from localStorage
    */
   private loadToken(): void {
-    const stored = localStorage.getItem('auth_token');
-    if (stored) {
-      try {
-        this.token = JSON.parse(stored);
-        this.startRefreshTimer();
-      } catch (error) {
-        console.error('Failed to parse stored token:', error);
-        this.clearToken();
-      }
+    const token = safeGetJSON<AuthToken | null>('auth_token', null);
+    if (token) {
+      this.token = token;
+      this.startRefreshTimer();
     }
   }
 
@@ -215,7 +214,7 @@ export class AuthService {
    */
   private clearToken(): void {
     this.token = null;
-    localStorage.removeItem('auth_token');
+    safeRemoveItem('auth_token');
   }
 
   /**
