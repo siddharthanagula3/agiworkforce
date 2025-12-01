@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Artifact } from '../types/chat';
 import { invoke, isTauri } from '../lib/tauri-mock';
+import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
 
 // ============================================================================
 // Types
@@ -338,22 +339,14 @@ let idMappings: IdMapping = { dbIdToUuid: {}, uuidToDbId: {} };
 
 // Load mappings from localStorage on initialization
 if (typeof window !== 'undefined') {
-  try {
-    const stored = localStorage.getItem('id-mappings');
-    if (stored) {
-      idMappings = JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error('[UnifiedChatStore] Failed to load ID mappings:', error);
-  }
+  idMappings = safeGetJSON<IdMapping>('id-mappings', { dbIdToUuid: {}, uuidToDbId: {} });
 }
 
 function persistIdMappings() {
   if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('id-mappings', JSON.stringify(idMappings));
-    } catch (error) {
-      console.error('[UnifiedChatStore] Failed to persist ID mappings:', error);
+    const success = safeSetJSON('id-mappings', idMappings);
+    if (!success) {
+      console.warn('[UnifiedChatStore] Failed to persist ID mappings - using in-memory only');
     }
   }
 }
