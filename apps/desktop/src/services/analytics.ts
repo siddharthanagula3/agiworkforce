@@ -29,7 +29,7 @@ class AnalyticsService {
   private userId?: string;
   private sessionStartTime: number;
   private userProperties: UserProperties = {};
-  private flushTimer?: number;
+  private flushTimer?: ReturnType<typeof setInterval>;
   private isOnline: boolean = true;
   private privacyConsent?: PrivacyConsent;
 
