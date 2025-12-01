@@ -14,6 +14,13 @@ import {
   PrivacyConsent,
 } from '../types/analytics';
 import { v4 as uuidv4 } from 'uuid'; // You'll need to add this: pnpm add uuid
+import {
+  safeGetJSON,
+  safeSetJSON,
+  safeRemoveItem,
+  safeGetItem,
+  safeSetItem,
+} from '../utils/localStorage';
 
 class AnalyticsService {
   private config: AnalyticsConfig;
@@ -92,43 +99,28 @@ class AnalyticsService {
   }
 
   private async loadConfig() {
-    try {
-      const savedConfig = localStorage.getItem('analytics_config');
-      if (savedConfig) {
-        this.config = { ...this.config, ...JSON.parse(savedConfig) };
-      }
-    } catch (error) {
-      console.error('Failed to load analytics config:', error);
-    }
+    const savedConfig = safeGetJSON<Partial<AnalyticsConfig>>('analytics_config', {});
+    this.config = { ...this.config, ...savedConfig };
   }
 
   private async loadPrivacyConsent() {
-    try {
-      const savedConsent = localStorage.getItem('privacy_consent');
-      if (savedConsent) {
-        this.privacyConsent = JSON.parse(savedConsent);
-        this.config.enabled = this.privacyConsent?.analytics_enabled ?? false;
-        this.config.allowErrorReporting =
-          this.privacyConsent?.error_reporting_enabled ?? false;
-        this.config.allowPerformanceMonitoring =
-          this.privacyConsent?.performance_monitoring_enabled ?? false;
-      }
-    } catch (error) {
-      console.error('Failed to load privacy consent:', error);
+    const savedConsent = safeGetJSON<PrivacyConsent | null>('privacy_consent', null);
+    if (savedConsent) {
+      this.privacyConsent = savedConsent;
+      this.config.enabled = this.privacyConsent?.analytics_enabled ?? false;
+      this.config.allowErrorReporting = this.privacyConsent?.error_reporting_enabled ?? false;
+      this.config.allowPerformanceMonitoring =
+        this.privacyConsent?.performance_monitoring_enabled ?? false;
     }
   }
 
   private async loadUserId() {
-    try {
-      let userId = localStorage.getItem('analytics_user_id');
-      if (!userId) {
-        userId = uuidv4();
-        localStorage.setItem('analytics_user_id', userId);
-      }
-      this.userId = userId;
-    } catch (error) {
-      console.error('Failed to load user ID:', error);
+    let userId = safeGetItem('analytics_user_id');
+    if (!userId) {
+      userId = uuidv4();
+      safeSetItem('analytics_user_id', userId);
     }
+    this.userId = userId;
   }
 
   /**
@@ -182,7 +174,7 @@ class AnalyticsService {
       // Send to backend
       Object.entries(properties).forEach(([key, value]) => {
         invoke('analytics_set_user_property', { key, value }).catch((error) =>
-          console.error('Failed to set user property:', error)
+          console.error('Failed to set user property:', error),
         );
       });
     }
@@ -197,8 +189,7 @@ class AnalyticsService {
       userId: this.userId,
       startTime: this.sessionStartTime,
       duration_ms: Date.now() - this.sessionStartTime,
-      page_views: this.eventQueue.filter((e) => e.name === 'session_started')
-        .length,
+      page_views: this.eventQueue.filter((e) => e.name === 'session_started').length,
       events_count: this.eventQueue.length,
       app_version: this.userProperties.app_version,
       os: this.userProperties.os_version,
@@ -210,7 +201,10 @@ class AnalyticsService {
    */
   public updateConfig(config: Partial<AnalyticsConfig>) {
     this.config = { ...this.config, ...config };
-    localStorage.setItem('analytics_config', JSON.stringify(this.config));
+    const success = safeSetJSON('analytics_config', this.config);
+    if (!success) {
+      console.warn('[Analytics] Failed to persist config - changes may not survive reload');
+    }
 
     // Restart flush timer if interval changed
     if (config.batchInterval) {
@@ -224,14 +218,13 @@ class AnalyticsService {
    */
   public updatePrivacyConsent(consent: PrivacyConsent) {
     this.privacyConsent = consent;
-    localStorage.setItem('privacy_consent', JSON.stringify(consent));
+    safeSetJSON('privacy_consent', consent);
 
     this.config.enabled = consent.analytics_enabled;
     this.config.allowErrorReporting = consent.error_reporting_enabled;
-    this.config.allowPerformanceMonitoring =
-      consent.performance_monitoring_enabled;
+    this.config.allowPerformanceMonitoring = consent.performance_monitoring_enabled;
 
-    localStorage.setItem('analytics_config', JSON.stringify(this.config));
+    safeSetJSON('analytics_config', this.config);
   }
 
   /**
@@ -265,9 +258,9 @@ class AnalyticsService {
    */
   public async deleteAllData() {
     // Clear local storage
-    localStorage.removeItem('analytics_user_id');
-    localStorage.removeItem('analytics_config');
-    localStorage.removeItem('privacy_consent');
+    safeRemoveItem('analytics_user_id');
+    safeRemoveItem('analytics_config');
+    safeRemoveItem('privacy_consent');
 
     // Clear queue
     this.eventQueue = [];
@@ -306,7 +299,7 @@ class AnalyticsService {
       this.eventQueue = [];
 
       // Remove offline events
-      localStorage.removeItem('analytics_offline_events');
+      safeRemoveItem('analytics_offline_events');
     } catch (error) {
       console.error('Failed to flush analytics events:', error);
 
@@ -335,20 +328,15 @@ class AnalyticsService {
    * Save events to local storage for offline support
    */
   private saveOfflineEvents() {
-    try {
-      const existingEvents = localStorage.getItem('analytics_offline_events');
-      const events = existingEvents ? JSON.parse(existingEvents) : [];
-      const allEvents = [...events, ...this.eventQueue];
+    const existingEvents = safeGetJSON<AnalyticsEvent[]>('analytics_offline_events', []);
+    const allEvents = [...existingEvents, ...this.eventQueue];
 
-      // Limit to 1000 events to prevent storage issues
-      const limitedEvents = allEvents.slice(-1000);
+    // Limit to 1000 events to prevent storage issues
+    const limitedEvents = allEvents.slice(-1000);
 
-      localStorage.setItem(
-        'analytics_offline_events',
-        JSON.stringify(limitedEvents)
-      );
-    } catch (error) {
-      console.error('Failed to save offline events:', error);
+    const success = safeSetJSON('analytics_offline_events', limitedEvents);
+    if (!success) {
+      console.warn('[Analytics] Failed to save offline events - will retry when online');
     }
   }
 
