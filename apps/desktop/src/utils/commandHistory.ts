@@ -5,6 +5,8 @@
  * Similar to VS Code/Cursor command palette behavior.
  */
 
+import { safeGetJSON, safeSetJSON, safeRemoveItem } from './localStorage';
+
 export interface CommandHistoryEntry {
   commandId: string;
   timestamp: number;
@@ -18,48 +20,38 @@ const MAX_RECENT_COMMANDS = 10;
  * Get all command history entries
  */
 export function getCommandHistory(): CommandHistoryEntry[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return [];
-    }
-    return JSON.parse(stored) as CommandHistoryEntry[];
-  } catch (error) {
-    console.error('Failed to load command history:', error);
-    return [];
-  }
+  return safeGetJSON<CommandHistoryEntry[]>(STORAGE_KEY, []);
 }
 
 /**
  * Record a command execution
  */
 export function recordCommandExecution(commandId: string): void {
-  try {
-    const history = getCommandHistory();
-    const existing = history.find((entry) => entry.commandId === commandId);
+  const history = getCommandHistory();
+  const existing = history.find((entry) => entry.commandId === commandId);
 
-    if (existing) {
-      // Update existing entry
-      existing.timestamp = Date.now();
-      existing.executionCount += 1;
-    } else {
-      // Add new entry
-      history.push({
-        commandId,
-        timestamp: Date.now(),
-        executionCount: 1,
-      });
-    }
+  if (existing) {
+    // Update existing entry
+    existing.timestamp = Date.now();
+    existing.executionCount += 1;
+  } else {
+    // Add new entry
+    history.push({
+      commandId,
+      timestamp: Date.now(),
+      executionCount: 1,
+    });
+  }
 
-    // Sort by most recent first
-    history.sort((a, b) => b.timestamp - a.timestamp);
+  // Sort by most recent first
+  history.sort((a, b) => b.timestamp - a.timestamp);
 
-    // Keep only MAX_RECENT_COMMANDS
-    const trimmed = history.slice(0, MAX_RECENT_COMMANDS);
+  // Keep only MAX_RECENT_COMMANDS
+  const trimmed = history.slice(0, MAX_RECENT_COMMANDS);
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-  } catch (error) {
-    console.error('Failed to record command execution:', error);
+  const success = safeSetJSON(STORAGE_KEY, trimmed);
+  if (!success) {
+    console.warn('[CommandHistory] Failed to save command history - using in-memory only');
   }
 }
 
@@ -86,10 +78,9 @@ export function getFrequentCommandIds(): string[] {
  * Clear all command history
  */
 export function clearCommandHistory(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (error) {
-    console.error('Failed to clear command history:', error);
+  const success = safeRemoveItem(STORAGE_KEY);
+  if (!success) {
+    console.warn('[CommandHistory] Failed to clear command history');
   }
 }
 
