@@ -109,7 +109,7 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
       }
     };
 
-    setupListeners();
+    void setupListeners();
 
     return () => {
       isMounted = false;
