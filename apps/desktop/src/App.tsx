@@ -142,11 +142,11 @@ const DesktopShell = () => {
   // Check onboarding status on mount
   useEffect(() => {
     const checkOnboarding = async () => {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       try {
         // Add timeout to prevent infinite loading
-        let timeoutId: number;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = window.setTimeout(
+          timeoutId = setTimeout(
             () => reject(new Error('Onboarding status check timed out')),
             3000,
           );
@@ -155,7 +155,11 @@ const DesktopShell = () => {
         const statusPromise = invoke<{ completed: boolean }>('get_onboarding_status');
 
         const status = await Promise.race([statusPromise, timeoutPromise]);
-        clearTimeout(timeoutId!);
+
+        // Clear timeout if status resolved first
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
 
         // Type guard to ensure status has the expected shape
         if (status && typeof status === 'object' && 'completed' in status) {
@@ -167,6 +171,11 @@ const DesktopShell = () => {
           throw new Error('Invalid onboarding status response');
         }
       } catch (error) {
+        // Clear timeout on error
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+
         console.error('Failed to check onboarding status:', error);
         addError({
           type: 'ONBOARDING_ERROR',
