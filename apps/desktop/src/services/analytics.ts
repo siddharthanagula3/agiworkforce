@@ -402,7 +402,9 @@ class AnalyticsService {
     }
 
     this.flushTimer = window.setInterval(() => {
-      this.flushQueue();
+      void this.flushQueue().catch((error) => {
+        console.error('Failed to flush analytics queue:', error);
+      });
     }, this.config.batchInterval);
   }
 
