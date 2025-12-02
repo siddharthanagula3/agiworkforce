@@ -17,7 +17,7 @@
     "dotenv": "^16.3.1",
     "ws": "^8.16.0",
     "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -25,7 +25,7 @@
     "@types/cors": "^2.8.17",
     "@types/ws": "^8.5.10",
     "@types/jsonwebtoken": "^9.0.5",
-    "@types/bcryptjs": "^2.4.6",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20.11.5",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
