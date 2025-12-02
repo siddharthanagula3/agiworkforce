@@ -420,6 +420,7 @@ export interface UnifiedChatState {
   focusMode: FocusMode;
   sidecar: SidecarState;
   actionTrail: ActionTrailEntry[];
+  fadeTimers: Map<string, ReturnType<typeof setTimeout>>;
   tokenUsage: TokenUsage;
   citations: Citation[];
 
@@ -597,6 +598,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         autoTrigger: false,
       },
       actionTrail: [],
+      fadeTimers: new Map(),
       tokenUsage: {
         current: 0,
         max: 128000, // Default to 128k context
@@ -1280,20 +1282,31 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
           // Auto-remove after fadeAfter duration if specified
           if (entry.fadeAfter) {
-            setTimeout(() => {
+            const timerId = setTimeout(() => {
               const current = get();
+              current.fadeTimers.delete(newEntry.id);
               current.removeActionTrailEntry(newEntry.id);
             }, entry.fadeAfter);
+            state.fadeTimers.set(newEntry.id, timerId);
           }
         }),
 
       removeActionTrailEntry: (id) =>
         set((state) => {
+          // Clear any pending fade timer
+          const timerId = state.fadeTimers.get(id);
+          if (timerId !== undefined) {
+            clearTimeout(timerId);
+            state.fadeTimers.delete(id);
+          }
           state.actionTrail = state.actionTrail.filter((entry) => entry.id !== id);
         }),
 
       clearActionTrail: () =>
         set((state) => {
+          // Clear all pending fade timers
+          state.fadeTimers.forEach((timerId) => clearTimeout(timerId));
+          state.fadeTimers.clear();
           state.actionTrail = [];
         }),
 
