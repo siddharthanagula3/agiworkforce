@@ -18,11 +18,30 @@ class PerformanceMonitoringService {
   private marks: Map<string, PerformanceMark> = new Map();
   private measures: PerformanceMeasure[] = [];
   private appStartTime: number;
+  private observers: PerformanceObserver[] = [];
+  private eventListeners: Array<{ event: string; handler: () => void }> = [];
 
   constructor() {
     this.appStartTime = Date.now();
     this.initializeWebVitals();
     this.trackAppStartup();
+  }
+
+  /**
+   * Cleanup all observers and event listeners
+   */
+  public cleanup(): void {
+    // Disconnect all performance observers
+    this.observers.forEach((observer) => observer.disconnect());
+    this.observers = [];
+
+    // Remove all event listeners
+    if (typeof window !== 'undefined') {
+      this.eventListeners.forEach(({ event, handler }) => {
+        window.removeEventListener(event, handler);
+      });
+      this.eventListeners = [];
+    }
   }
 
   /**
@@ -42,6 +61,7 @@ class PerformanceMonitoringService {
         }
       });
       lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
+      this.observers.push(lcpObserver);
 
       // Track FID (First Input Delay)
       const fidObserver = new PerformanceObserver((list) => {
@@ -55,6 +75,7 @@ class PerformanceMonitoringService {
         });
       });
       fidObserver.observe({ entryTypes: ['first-input'] });
+      this.observers.push(fidObserver);
 
       // Track CLS (Cumulative Layout Shift)
       let clsValue = 0;
@@ -67,19 +88,22 @@ class PerformanceMonitoringService {
         });
       });
       clsObserver.observe({ entryTypes: ['layout-shift'] });
+      this.observers.push(clsObserver);
 
       // Report CLS on page unload
-      window.addEventListener('beforeunload', () => {
+      const beforeUnloadHandler = () => {
         if (clsValue > 0) {
           analytics.track('app_opened', {
             cls: clsValue,
             metric: 'cumulative_layout_shift',
           });
         }
-      });
+      };
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+      this.eventListeners.push({ event: 'beforeunload', handler: beforeUnloadHandler });
 
       // Track Navigation Timing
-      window.addEventListener('load', () => {
+      const loadHandler = () => {
         const perfData = performance.getEntriesByType(
           'navigation',
         )[0] as PerformanceNavigationTiming;
@@ -96,7 +120,9 @@ class PerformanceMonitoringService {
             metric: 'navigation_timing',
           });
         }
-      });
+      };
+      window.addEventListener('load', loadHandler);
+      this.eventListeners.push({ event: 'load', handler: loadHandler });
     } catch (error) {
       console.error('Failed to initialize Web Vitals:', error);
     }
@@ -106,12 +132,14 @@ class PerformanceMonitoringService {
    * Track app startup time
    */
   private trackAppStartup() {
-    window.addEventListener('load', () => {
+    const startupHandler = () => {
       const startupTime = Date.now() - this.appStartTime;
       analytics.track('app_opened', {
         app_startup_time_ms: startupTime,
       });
-    });
+    };
+    window.addEventListener('load', startupHandler);
+    this.eventListeners.push({ event: 'load', handler: startupHandler });
   }
 
   /**
