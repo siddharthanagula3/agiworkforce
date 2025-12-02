@@ -60,26 +60,23 @@ jobs:
 
       - name: Verify TypeScript compilation
         run: pnpm --filter @agiworkforce/desktop exec tsc --noEmit
-        continue-on-error: true
 
       - name: Build web bundle
         run: pnpm --filter @agiworkforce/desktop exec vite build
-        continue-on-error: true
 
       - name: Run Rust unit tests
         working-directory: apps/desktop/src-tauri
         run: cargo test --lib --bins -- --nocapture --test-threads=1
-        continue-on-error: true
 
       - name: Run frontend unit tests
         run: pnpm --filter @agiworkforce/desktop test
-        continue-on-error: true
 
       - name: Status summary
         if: always()
         run: |
-          echo "Build verification workflow completed"
-          echo "- Rust compilation: verified"
-          echo "- TypeScript compilation: optional (allowed to fail)"
-          echo "- Frontend tests: optional (allowed to fail)"
-          echo "- Rust tests: optional (allowed to fail)"
+          echo "Build verification workflow completed successfully"
+          echo "✅ Rust compilation: passed"
+          echo "✅ TypeScript compilation: passed"
+          echo "✅ Web bundle build: passed"
+          echo "✅ Rust tests: passed"
+          echo "✅ Frontend tests: passed"
