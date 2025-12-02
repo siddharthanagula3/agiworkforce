@@ -7,6 +7,7 @@
 
 import { ErrorEventProperties } from '../types/analytics';
 import { analytics } from './analytics';
+import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
 
 // Import Sentry
 import * as Sentry from '@sentry/react';
@@ -97,9 +98,12 @@ class ErrorTrackingService {
    */
   private loadConfig() {
     try {
-      const savedConfig = localStorage.getItem('error_tracking_config');
+      const savedConfig = safeGetJSON<Partial<ErrorTrackingConfig>>(
+        'error_tracking_config',
+        null,
+      );
       if (savedConfig) {
-        this.config = { ...this.config, ...JSON.parse(savedConfig) };
+        this.config = { ...this.config, ...savedConfig };
       }
 
       // Load DSN from environment variable
@@ -129,7 +133,10 @@ class ErrorTrackingService {
    */
   public updateConfig(config: Partial<ErrorTrackingConfig>) {
     this.config = { ...this.config, ...config };
-    localStorage.setItem('error_tracking_config', JSON.stringify(this.config));
+    const success = safeSetJSON('error_tracking_config', this.config);
+    if (!success) {
+      console.warn('[ErrorTracking] Failed to persist config - changes may not survive reload');
+    }
 
     // Reinitialize if enabled state changed
     if (config.enabled !== undefined) {
