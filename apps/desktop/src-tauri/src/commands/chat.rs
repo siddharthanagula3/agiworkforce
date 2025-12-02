@@ -998,6 +998,37 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                             )
                             .map_err(|e| format!("Failed to update assistant message: {}", e))?;
                         }
+                    } else {
+                        // CRITICAL BUG FIX: Tool executor is None but LLM requested tool calls (streaming path)
+                        tracing::error!(
+                            "[Chat Streaming] CRITICAL: LLM requested {} tool calls but tool executor is not available! Tool registry initialization may have failed.",
+                            tool_calls.len()
+                        );
+
+                        // Save error message to conversation
+                        let conn = db.conn.lock().await;
+                        let error_msg = Message::new(
+                            conversation_id,
+                            MessageRole::System,
+                            format!(
+                                "⚠️ ERROR: The AI requested to use tools ({} tools), but the tool execution system is not available. This may be due to a system initialization error. Please try restarting the application or contact support.",
+                                tool_calls.iter().map(|tc| &tc.name).collect::<Vec<_>>().join(", ")
+                            ),
+                        );
+                        repository::create_message(&conn, &error_msg)
+                            .map_err(|e| format!("Failed to save tool error message: {}", e))?;
+
+                        // Update assistant message with error
+                        assistant_msg = repository::update_message_content(
+                            &conn,
+                            assistant_message_id,
+                            format!(
+                                "{}\n\n⚠️ ERROR: Tool execution system not available. Attempted to use: {}",
+                                accumulated_content,
+                                tool_calls.iter().map(|tc| &tc.name).collect::<Vec<_>>().join(", ")
+                            ),
+                        )
+                        .map_err(|e| format!("Failed to update assistant message: {}", e))?;
                     }
                 }
             }
@@ -1416,7 +1447,14 @@ pub async fn chat_send_message(
                             })?
                         };
 
-                        // Execute all tool calls
+                        // Execute all tool calls sequentially
+                        // TODO: Optimize with parallel execution for independent tools
+                        // (requires dependency analysis to ensure tools don't conflict)
+                        tracing::info!(
+                            "[Chat] Executing {} tool calls sequentially...",
+                            tool_calls.len()
+                        );
+
                         let mut tool_results = Vec::new();
                         for tool_call in tool_calls {
                             tracing::info!(
@@ -1496,6 +1534,33 @@ pub async fn chat_send_message(
                         // Update outcome with follow-up response
                         outcome = Some(follow_up_outcome);
                         break;
+                    } else {
+                        // CRITICAL BUG FIX: Tool executor is None but LLM requested tool calls
+                        // This can happen if ToolRegistry::new() failed during initialization
+                        tracing::error!(
+                            "[Chat] CRITICAL: LLM requested {} tool calls but tool executor is not available! Tool registry initialization may have failed.",
+                            tool_calls.len()
+                        );
+
+                        // Save error message to conversation so user knows what happened
+                        let conn = db.conn.lock().await;
+                        let error_msg = Message::new(
+                            conversation_id,
+                            MessageRole::System,
+                            format!(
+                                "⚠️ ERROR: The AI requested to use tools ({} tools), but the tool execution system is not available. This may be due to a system initialization error. Please try restarting the application or contact support.",
+                                tool_calls.iter().map(|tc| &tc.name).collect::<Vec<_>>().join(", ")
+                            ),
+                        );
+                        repository::create_message(&conn, &error_msg)
+                            .map_err(|e| format!("Failed to save tool error message: {}", e))?;
+
+                        // Return error to user
+                        return Err(format!(
+                            "Tool execution system not available. The AI attempted to use {} tools ({}), but the tool executor failed to initialize. Please restart the application.",
+                            tool_calls.len(),
+                            tool_calls.iter().map(|tc| &tc.name).collect::<Vec<_>>().join(", ")
+                        ));
                     }
                 }
 

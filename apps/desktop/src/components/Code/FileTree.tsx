@@ -257,9 +257,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         unlistenRef();
       }
       void invoke('file_watch_stop', { path: rootPath }).catch(() => {});
-      if (!disposed) {
-        setTree(null);
-      }
+      setTree(null);
     };
   }, [rootPath, normalizedRoot, loadDirectory]);
 
