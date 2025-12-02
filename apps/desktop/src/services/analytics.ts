@@ -29,7 +29,7 @@ class AnalyticsService {
   private userId?: string;
   private sessionStartTime: number;
   private userProperties: UserProperties = {};
-  private flushTimer?: number;
+  private flushTimer?: ReturnType<typeof setInterval>;
   private isOnline: boolean = true;
   private privacyConsent?: PrivacyConsent;
 
@@ -402,7 +402,9 @@ class AnalyticsService {
     }
 
     this.flushTimer = window.setInterval(() => {
-      this.flushQueue();
+      void this.flushQueue().catch((error) => {
+        console.error('Failed to flush analytics queue:', error);
+      });
     }, this.config.batchInterval);
   }
 

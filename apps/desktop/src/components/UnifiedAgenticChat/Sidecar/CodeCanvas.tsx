@@ -122,9 +122,12 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
       setHasUnsavedChanges(false);
 
       // Auto-hide success message after 3 seconds
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         setSaveState({ status: 'idle' });
       }, 3000);
+
+      // Return cleanup function to clear timeout if component unmounts
+      return () => clearTimeout(timeoutId);
     } catch (error) {
       setSaveState({
         status: 'error',
