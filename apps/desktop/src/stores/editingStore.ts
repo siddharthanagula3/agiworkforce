@@ -179,17 +179,27 @@ export const useEditingStore = create<EditingState>()(
             const deletions = hunk.changes.filter(c => c.type === 'delete');
             const additions = hunk.changes.filter(c => c.type === 'add');
 
-            // Remove deleted lines
+            // Apply deletions first in reverse order to maintain correct indices
+            let deletedCount = 0;
             for (const del of deletions.reverse()) {
               if (del.oldLineNumber !== undefined) {
-                lines.splice(del.oldLineNumber - 1, 1);
+                const index = del.oldLineNumber - 1;
+                lines.splice(index, 1);
+                deletedCount++;
               }
             }
 
-            // Add new lines
-            for (const add of additions) {
+            // Apply additions with offset adjustment for deleted lines
+            // Sort additions by line number to apply in order
+            const sortedAdditions = additions.sort((a, b) =>
+              (a.newLineNumber || 0) - (b.newLineNumber || 0)
+            );
+
+            for (const add of sortedAdditions) {
               if (add.newLineNumber !== undefined) {
-                lines.splice(add.newLineNumber - 1, 0, add.content);
+                // Adjust index based on number of deletions before this line
+                const index = add.newLineNumber - 1;
+                lines.splice(index, 0, add.content);
               }
             }
 
