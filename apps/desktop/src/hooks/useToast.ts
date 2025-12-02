@@ -2,7 +2,7 @@ import * as React from 'react';
 import type { ToastActionElement, ToastProps } from '../components/ui/Toast';
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 1000; // 1 second (was incorrectly set to 1000000ms = 278 hours)
 
 type ToasterToast = ToastProps & {
   id: string;
