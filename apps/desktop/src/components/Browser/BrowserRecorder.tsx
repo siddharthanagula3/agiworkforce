@@ -107,19 +107,24 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
 
 `;
 
+    // Helper function to escape string values for code generation
+    const escapeForCode = (str: string): string => {
+      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    };
+
     recordedSteps.forEach((step) => {
       switch (step.type) {
         case 'navigate':
-          code += `  await page.goto('${step.value}');\n`;
+          code += `  await page.goto('${escapeForCode(step.value)}');\n`;
           break;
         case 'click':
-          code += `  await page.click('${step.selector}');\n`;
+          code += `  await page.click('${escapeForCode(step.selector)}');\n`;
           break;
         case 'type':
-          code += `  await page.type('${step.selector}', '${step.value}');\n`;
+          code += `  await page.type('${escapeForCode(step.selector)}', '${escapeForCode(step.value)}');\n`;
           break;
         case 'wait':
-          code += `  await page.waitForSelector('${step.selector}');\n`;
+          code += `  await page.waitForSelector('${escapeForCode(step.selector)}');\n`;
           break;
         case 'screenshot':
           code += `  await page.screenshot({ path: 'screenshot.png' });\n`;
@@ -145,19 +150,20 @@ driver = webdriver.Chrome()
 try:
 `;
 
+    // Reuse the same escape function for Python strings
     recordedSteps.forEach((step) => {
       switch (step.type) {
         case 'navigate':
-          code += `    driver.get('${step.value}')\n`;
+          code += `    driver.get('${escapeForCode(step.value)}')\n`;
           break;
         case 'click':
-          code += `    driver.find_element(By.CSS_SELECTOR, '${step.selector}').click()\n`;
+          code += `    driver.find_element(By.CSS_SELECTOR, '${escapeForCode(step.selector)}').click()\n`;
           break;
         case 'type':
-          code += `    driver.find_element(By.CSS_SELECTOR, '${step.selector}').send_keys('${step.value}')\n`;
+          code += `    driver.find_element(By.CSS_SELECTOR, '${escapeForCode(step.selector)}').send_keys('${escapeForCode(step.value)}')\n`;
           break;
         case 'wait':
-          code += `    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, '${step.selector}')))\n`;
+          code += `    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, '${escapeForCode(step.selector)}')))\n`;
           break;
         case 'screenshot':
           code += `    driver.save_screenshot('screenshot.png')\n`;
