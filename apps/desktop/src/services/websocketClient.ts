@@ -148,7 +148,8 @@ export class WebSocketClient {
   private attemptReconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts && this.userId) {
       this.reconnectAttempts++;
-      const delay = 2000 * this.reconnectAttempts;
+      // Cap reconnection delay at 30 seconds to prevent unbounded growth
+      const delay = Math.min(2000 * this.reconnectAttempts, 30000);
 
       this.reconnectTimeout = setTimeout(() => {
         if (this.userId) {
