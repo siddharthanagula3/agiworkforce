@@ -22,7 +22,7 @@ Complete installation instructions for AGI Workforce Desktop App.
 The MSI installer provides a standard Windows installation experience.
 
 1. **Download the installer**
-   - Go to [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+   - Go to [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
    - Download `AGI-Workforce_x.x.x_x64.msi`
 
 2. **Run the installer**
@@ -40,7 +40,7 @@ The MSI installer provides a standard Windows installation experience.
 No installation required - run directly.
 
 1. **Download**
-   - Get `AGI-Workforce.exe` from [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+   - Get `AGI-Workforce.exe` from [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
 
 2. **Run**
    - Double-click the `.exe` file
@@ -63,7 +63,7 @@ No installation required - run directly.
 ### Method 1: DMG Installer (Recommended)
 
 1. **Download**
-   - Go to [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+   - Go to [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
    - Download `AGI-Workforce_x.x.x_universal.dmg` (works on Intel & Apple Silicon)
 
 2. **Install**
@@ -116,7 +116,7 @@ AppImage works on most Linux distributions without installation.
 
 1. **Download**
    ```bash
-   wget https://github.com/yourusername/agiworkforce-desktop-app/releases/latest/download/agi-workforce_x.x.x_amd64.AppImage
+   wget https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases/latest/download/agi-workforce_x.x.x_amd64.AppImage
    ```
 
 2. **Make Executable**
@@ -146,7 +146,7 @@ For Debian-based distributions (Ubuntu, Linux Mint, Pop!_OS, etc.)
 
 1. **Download**
    ```bash
-   wget https://github.com/yourusername/agiworkforce-desktop-app/releases/latest/download/agi-workforce_x.x.x_amd64.deb
+   wget https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases/latest/download/agi-workforce_x.x.x_amd64.deb
    ```
 
 2. **Install**
@@ -263,7 +263,7 @@ For developers who want to build from source.
 
 1. **Clone Repository**
    ```bash
-   git clone https://github.com/yourusername/agiworkforce-desktop-app.git
+   git clone https://github.com/siddharthanagula3/agiworkforce-desktop-app.git
    cd agiworkforce-desktop-app
    ```
 
@@ -398,7 +398,7 @@ GDK_BACKEND=x11 ./agi-workforce_*.AppImage
 - Disable browser auto-record if not needed
 
 **Need more help?**
-- Check [GitHub Issues](https://github.com/yourusername/agiworkforce-desktop-app/issues)
+- Check [GitHub Issues](https://github.com/siddharthanagula3/agiworkforce-desktop-app/issues)
 - Join [Discord community](https://discord.gg/agiworkforce)
 - Email support@agiworkforce.com
 
