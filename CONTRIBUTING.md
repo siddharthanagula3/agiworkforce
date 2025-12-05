@@ -42,7 +42,7 @@ Before creating bug reports, please:
    - Expected vs actual behavior
    - Screenshots/logs if applicable
 
-**Submit via**: [GitHub Issues](https://github.com/yourusername/agiworkforce-desktop-app/issues/new?template=bug_report.md)
+**Submit via**: [GitHub Issues](https://github.com/siddharthanagula3/agiworkforce-desktop-app/issues/new?template=bug_report.md)
 
 ### Suggesting Enhancements
 
@@ -53,7 +53,7 @@ Enhancement suggestions are welcome! Please:
 3. **Explain the problem** this solves
 4. **Describe the proposed solution**
 
-**Submit via**: [GitHub Issues](https://github.com/yourusername/agiworkforce-desktop-app/issues/new?template=feature_request.md)
+**Submit via**: [GitHub Issues](https://github.com/siddharthanagula3/agiworkforce-desktop-app/issues/new?template=feature_request.md)
 
 ### Contributing Code
 
@@ -453,7 +453,7 @@ Releases are automated via GitHub Actions:
 
 ## Getting Help
 
-- **Questions**: [GitHub Discussions](https://github.com/yourusername/agiworkforce-desktop-app/discussions)
+- **Questions**: [GitHub Discussions](https://github.com/siddharthanagula3/agiworkforce-desktop-app/discussions)
 - **Chat**: [Discord Server](https://discord.gg/agiworkforce)
 - **Email**: developers@agiworkforce.com
 
