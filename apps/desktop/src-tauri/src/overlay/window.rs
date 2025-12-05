@@ -16,7 +16,6 @@ pub fn ensure_overlay_ready(app: &AppHandle) {
         WebviewUrl::App("index.html?mode=overlay".into()),
     )
     .decorations(false)
-    .transparent(true)
     .resizable(false)
     .fullscreen(false)
     .shadow(false)

@@ -204,7 +204,7 @@ mod keyboard_tests {
 
         // Test Ctrl+A
         let modifiers = vec![VK_CONTROL.0 as u16];
-        let result = keyboard.hotkey(&modifiers, 0x41); // 'A'
+        let result = keyboard.send_hotkey(&modifiers, 0x41); // 'A'
         assert!(result.is_ok(), "hotkey should succeed");
     }
 }

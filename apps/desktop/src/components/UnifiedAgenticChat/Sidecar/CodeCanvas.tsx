@@ -104,7 +104,7 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
         status: 'error',
         message: 'No file path specified',
       });
-      return;
+      return undefined;
     }
 
     setSaveState({ status: 'saving' });
@@ -133,6 +133,7 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
         status: 'error',
         message: `Failed to save: ${error}`,
       });
+      return undefined;
     }
   }, [filePath, code]);
 

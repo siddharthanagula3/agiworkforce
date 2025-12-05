@@ -3,7 +3,7 @@ use crate::agi::api_tools_impl;
 use crate::agi::outcome_tracker::OutcomeTracker;
 use crate::agi::planner::PlanStep;
 use crate::agi::process_reasoning::ProcessReasoning;
-use crate::automation::AutomationService;
+use crate::automation::{input::KeyboardSimulator, AutomationService};
 use crate::cache::ToolResultCache;
 use crate::calendar::EventDateTime;
 use crate::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
@@ -409,7 +409,7 @@ impl AGIExecutor {
                     let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                     let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                     use crate::automation::input::MouseButton;
-                    self.automation.mouse.click(x, y, MouseButton::Left)?;
+                    self.automation.mouse.lock().unwrap().click(x, y, MouseButton::Left)?;
                     Ok(json!({ "success": true, "action": "clicked", "x": x, "y": y }))
                 } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                     // Element ID provided - use UIA invoke
@@ -417,7 +417,7 @@ impl AGIExecutor {
                     Ok(json!({ "success": true, "action": "invoked", "element_id": element_id }))
                 } else if let Some(text) = target.get("text").and_then(|v| v.as_str()) {
                     // Text provided - find element by name and click
-                    use crate::automation::uia::ElementQuery;
+                    use crate::automation::types::ElementQuery;
                     let query = ElementQuery {
                         window: None,
                         window_class: None,
@@ -455,7 +455,7 @@ impl AGIExecutor {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
                     // Find element by text and focus
-                    use crate::automation::uia::ElementQuery;
+                    use crate::automation::types::ElementQuery;
                     let query = ElementQuery {
                         window: None,
                         window_class: None,
@@ -473,7 +473,8 @@ impl AGIExecutor {
                 }
 
                 // Type the text
-                self.automation.keyboard.send_text(text).await?;
+                let mut keyboard = KeyboardSimulator::new()?;
+                keyboard.send_text(text).await?;
                 Ok(json!({ "success": true, "action": "typed", "text": text }))
             }
             "browser_navigate" => {

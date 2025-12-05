@@ -4,7 +4,8 @@ use super::AppDatabase;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
-    inspector::{DetailedElementInfo, ElementSelector, InspectorService},
+    types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
+    InspectorService,
     recorder::{global_recorder, Recording, RecordingSession},
 };
 use crate::db::repository;
@@ -103,7 +104,7 @@ pub fn automation_inspect_element_by_id(element_id: String) -> Result<DetailedEl
 #[tauri::command]
 pub fn automation_find_element_by_selector(
     selector: ElementSelector,
-) -> Result<Option<String>, String> {
+) -> Result<Option<BasicElementInfo>, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
     inspector
         .find_element_by_selector(&selector)
@@ -111,7 +112,7 @@ pub fn automation_find_element_by_selector(
 }
 
 #[tauri::command]
-pub fn automation_generate_selector(element_id: String) -> Result<Vec<ElementSelector>, String> {
+pub fn automation_generate_selector(element_id: String) -> Result<ElementSelector, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
     inspector
         .generate_selector(&element_id)
@@ -119,19 +120,9 @@ pub fn automation_generate_selector(element_id: String) -> Result<Vec<ElementSel
 }
 
 #[tauri::command]
-pub fn automation_get_element_tree(
-    element_id: String,
-) -> Result<
-    (
-        Option<crate::automation::inspector::BasicElementInfo>,
-        Vec<crate::automation::inspector::BasicElementInfo>,
-    ),
-    String,
-> {
+pub fn automation_get_element_tree() -> Result<DetailedElementInfo, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector
-        .get_element_tree(&element_id)
-        .map_err(|e| e.to_string())
+    inspector.get_element_tree().map_err(|e| e.to_string())
 }
 
 // ============================================================================

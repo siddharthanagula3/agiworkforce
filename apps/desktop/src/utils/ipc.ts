@@ -50,7 +50,9 @@ function byteLength(obj: unknown): number {
     return new TextEncoder().encode(JSON.stringify(obj)).length;
   } catch (error) {
     // Don't silently return 0 - throw error to prevent bypassing payload limit
-    throw new Error(`Failed to serialize payload: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to serialize payload: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
   }
 }
 
@@ -117,17 +119,11 @@ export const TypeGuards = {
     return Array.isArray(value);
   },
 
-  hasProperty: <T extends string>(
-    value: unknown,
-    prop: T,
-  ): value is Record<T, unknown> => {
+  hasProperty: <T extends string>(value: unknown, prop: T): value is Record<T, unknown> => {
     return TypeGuards.isObject(value) && prop in value;
   },
 
-  hasProperties: <T extends string>(
-    value: unknown,
-    props: T[],
-  ): value is Record<T, unknown> => {
+  hasProperties: <T extends string>(value: unknown, props: T[]): value is Record<T, unknown> => {
     return TypeGuards.isObject(value) && props.every((prop) => prop in value);
   },
 };
@@ -173,11 +169,7 @@ async function withRetry<T>(
       // 1. This was the last attempt
       // 2. The command is not retryable
       // 3. The error is not retryable
-      if (
-        attempt === maxRetries ||
-        !RETRYABLE_COMMANDS.has(command) ||
-        !isRetryableError(error)
-      ) {
+      if (attempt === maxRetries || !RETRYABLE_COMMANDS.has(command) || !isRetryableError(error)) {
         throw error;
       }
 
@@ -258,6 +250,9 @@ export async function invoke<T = unknown>(command: string, args?: Json): Promise
     const timeout = COMMAND_TIMEOUTS[command] ?? DEFAULT_TIMEOUT_MS;
 
     // Wrap with timeout to prevent hanging operations
-    return withTimeout(tauriInvoke<T>(command, args), timeout, command);
+    // Filter out null/primitives as tauri invoke only accepts Record<string, unknown> | undefined
+    const invokeArgs =
+      args === null || typeof args !== 'object' || Array.isArray(args) ? undefined : args;
+    return withTimeout(tauriInvoke<T>(command, invokeArgs), timeout, command);
   }, command);
 }

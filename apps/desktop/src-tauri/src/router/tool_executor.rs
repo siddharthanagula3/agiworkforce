@@ -501,7 +501,7 @@ impl ToolExecutor {
                 // ✅ UI automation with AutomationService
                 if let Some(ref app) = self.app_handle {
                     use crate::automation::{
-                        input::MouseButton, uia::ElementQuery, AutomationService,
+                        input::MouseButton, types::ElementQuery, AutomationService,
                     };
                     use tauri::Manager;
 
@@ -514,7 +514,7 @@ impl ToolExecutor {
                     if let Some(coords) = target.get("coordinates") {
                         let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                         let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        match automation.mouse.click(x, y, MouseButton::Left) {
+                        match automation.mouse.lock().unwrap().click(x, y, MouseButton::Left) {
                             Ok(_) => Ok(ToolResult {
                                 success: true,
                                 data: json!({ "success": true, "action": "clicked", "x": x, "y": y }),
@@ -611,7 +611,7 @@ impl ToolExecutor {
             "ui_type" => {
                 // ✅ UI automation with AutomationService
                 if let Some(ref app) = self.app_handle {
-                    use crate::automation::{uia::ElementQuery, AutomationService};
+                    use crate::automation::{input::KeyboardSimulator, types::ElementQuery, AutomationService};
                     use tauri::Manager;
 
                     let automation = app.state::<std::sync::Arc<AutomationService>>();
@@ -670,7 +670,10 @@ impl ToolExecutor {
                     }
 
                     // Type the text
-                    match automation.keyboard.send_text(text).await {
+                    let mut keyboard = KeyboardSimulator::new()
+                        .map_err(|e| anyhow!("Failed to create keyboard simulator: {}", e))?;
+                    let send_result = keyboard.send_text(text).await;
+                    match send_result {
                         Ok(_) => Ok(ToolResult {
                             success: true,
                             data: json!({ "success": true, "action": "typed", "text": text }),

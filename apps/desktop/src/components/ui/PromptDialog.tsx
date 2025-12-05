@@ -59,6 +59,7 @@ export function PromptDialog({
       // Cleanup timeout on unmount
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [open, defaultValue]);
 
   const handleSubmit = (e: React.FormEvent) => {
