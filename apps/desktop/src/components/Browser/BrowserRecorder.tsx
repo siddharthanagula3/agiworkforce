@@ -6,18 +6,7 @@ import { Button } from '../ui/Button';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Badge } from '../ui/Badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-import {
-  Circle,
-  Square,
-  Play,
-  Trash2,
-  Copy,
-  Download,
-  Edit,
-  X,
-  Check,
-  Code,
-} from 'lucide-react';
+import { Circle, Square, Play, Trash2, Copy, Download, Edit, X, Check, Code } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '../ui/ConfirmDialog';
 
@@ -35,7 +24,9 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
     generatePlaywrightCode,
   } = useBrowserStore();
 
-  const [codeFormat, setCodeFormat] = useState<'playwright' | 'puppeteer' | 'selenium'>('playwright');
+  const [codeFormat, setCodeFormat] = useState<'playwright' | 'puppeteer' | 'selenium'>(
+    'playwright',
+  );
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
 
   // Updated Nov 16, 2025: Use accessible dialogs
@@ -56,7 +47,8 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
     if (recordedSteps.length > 0) {
       const confirmed = await confirm({
         title: 'Clear recording?',
-        description: 'Are you sure you want to clear all recorded steps? This action cannot be undone.',
+        description:
+          'Are you sure you want to clear all recorded steps? This action cannot be undone.',
         confirmText: 'Clear',
         variant: 'destructive',
       });
@@ -88,6 +80,16 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
     toast.success('Code downloaded');
   };
 
+  // Helper function to escape string values for code generation
+  const escapeForCode = (str: string | undefined): string => {
+    if (!str) return '';
+    return str
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r');
+  };
+
   const generateCode = () => {
     if (codeFormat === 'playwright') {
       return generatePlaywrightCode();
@@ -106,11 +108,6 @@ export function BrowserRecorder({ className }: BrowserRecorderProps) {
   const page = await browser.newPage();
 
 `;
-
-    // Helper function to escape string values for code generation
-    const escapeForCode = (str: string): string => {
-      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-    };
 
     recordedSteps.forEach((step) => {
       switch (step.type) {
@@ -182,17 +179,22 @@ try:
   };
 
   return (
-    <div className={cn('flex flex-col h-full bg-background border border-border rounded-lg', className)}>
+    <div
+      className={cn(
+        'flex flex-col h-full bg-background border border-border rounded-lg',
+        className,
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <div className={cn(
-            'h-3 w-3 rounded-full',
-            isRecording ? 'bg-red-600 animate-pulse' : 'bg-muted-foreground'
-          )} />
-          <span className="text-sm font-medium">
-            {isRecording ? 'Recording...' : 'Recorder'}
-          </span>
+          <div
+            className={cn(
+              'h-3 w-3 rounded-full',
+              isRecording ? 'bg-red-600 animate-pulse' : 'bg-muted-foreground',
+            )}
+          />
+          <span className="text-sm font-medium">{isRecording ? 'Recording...' : 'Recorder'}</span>
           {recordedSteps.length > 0 && (
             <Badge variant="secondary">{recordedSteps.length} steps</Badge>
           )}
@@ -241,10 +243,7 @@ try:
             {recordedSteps.length > 0 ? (
               <div className="divide-y divide-border">
                 {recordedSteps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className="px-4 py-3 hover:bg-muted/50"
-                  >
+                  <div key={step.id} className="px-4 py-3 hover:bg-muted/50">
                     <div className="flex items-start gap-3">
                       <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-medium">
                         {index + 1}
@@ -286,14 +285,10 @@ try:
                         ) : (
                           <div className="text-sm">
                             {step.type === 'navigate' && (
-                              <span className="font-mono text-xs">
-                                Navigate to: {step.value}
-                              </span>
+                              <span className="font-mono text-xs">Navigate to: {step.value}</span>
                             )}
                             {step.type === 'click' && (
-                              <span className="font-mono text-xs">
-                                Click: {step.selector}
-                              </span>
+                              <span className="font-mono text-xs">Click: {step.selector}</span>
                             )}
                             {step.type === 'type' && (
                               <span className="font-mono text-xs">
@@ -301,30 +296,20 @@ try:
                               </span>
                             )}
                             {step.type === 'wait' && (
-                              <span className="font-mono text-xs">
-                                Wait for: {step.selector}
-                              </span>
+                              <span className="font-mono text-xs">Wait for: {step.selector}</span>
                             )}
                             {step.type === 'screenshot' && (
-                              <span className="font-mono text-xs">
-                                Take screenshot
-                              </span>
+                              <span className="font-mono text-xs">Take screenshot</span>
                             )}
                             {step.type === 'execute' && (
-                              <span className="font-mono text-xs">
-                                Execute: {step.value}
-                              </span>
+                              <span className="font-mono text-xs">Execute: {step.value}</span>
                             )}
                           </div>
                         )}
                       </div>
 
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingStepId(step.id)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => setEditingStepId(step.id)}>
                           <Edit className="h-3 w-3" />
                         </Button>
                       </div>

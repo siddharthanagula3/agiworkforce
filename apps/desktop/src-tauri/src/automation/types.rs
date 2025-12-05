@@ -138,3 +138,79 @@ impl fmt::Display for ComputerUseError {
 }
 
 impl std::error::Error for ComputerUseError {}
+
+// UI Automation types (originally from uia/inspector modules, now cross-platform)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BoundingRectangle {
+    pub left: f64,
+    pub top: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct UIElementInfo {
+    pub id: String,
+    pub name: String,
+    pub class_name: String,
+    pub control_type: String,
+    pub bounding_rect: Option<BoundingRectangle>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct ElementQuery {
+    #[serde(default)]
+    pub window: Option<String>,
+    #[serde(default)]
+    pub window_class: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub class_name: Option<String>,
+    #[serde(default)]
+    pub automation_id: Option<String>,
+    #[serde(default)]
+    pub control_type: Option<String>,
+    #[serde(default)]
+    pub max_results: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedElementInfo {
+    pub id: String,
+    pub name: String,
+    pub class_name: String,
+    pub control_type: String,
+    pub bounding_rect: Option<BoundingRectangle>,
+    pub properties: std::collections::HashMap<String, serde_json::Value>,
+    pub automation_id: Option<String>,
+    pub parent: Option<BasicElementInfo>,
+    pub children: Vec<BasicElementInfo>,
+    pub is_enabled: bool,
+    pub is_offscreen: bool,
+    pub has_keyboard_focus: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BasicElementInfo {
+    pub id: String,
+    pub name: String,
+    pub class_name: String,
+    pub control_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElementSelector {
+    pub selector_type: SelectorType,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SelectorType {
+    AutomationId,
+    Name,
+    ClassName,
+    XPath,
+    Coordinates,
+}

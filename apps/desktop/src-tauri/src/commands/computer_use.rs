@@ -125,6 +125,7 @@ pub async fn computer_use_capture_screen(
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = state;
         Err("Screen capture not supported on this platform".to_string())
     }
 }
@@ -160,6 +161,7 @@ pub async fn computer_use_click(
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = state;
         Err("Mouse control not supported on this platform".to_string())
     }
 }
@@ -195,6 +197,7 @@ pub async fn computer_use_move_mouse(
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = state;
         Err("Mouse control not supported on this platform".to_string())
     }
 }
@@ -229,6 +232,7 @@ pub async fn computer_use_type_text(
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = state;
         Err("Keyboard control not supported on this platform".to_string())
     }
 }
@@ -296,6 +300,7 @@ pub async fn computer_use_execute_tool(
 
 // Helper functions
 
+#[allow(dead_code)]
 async fn record_action(state: &ComputerUseState, action: ComputerAction) {
     if let Some(session_id) = state.current_session.lock().await.as_ref() {
         let mut sessions = state.sessions.lock().await;

@@ -405,7 +405,7 @@ class AnalyticsService {
       void this.flushQueue().catch((error) => {
         console.error('Failed to flush analytics queue:', error);
       });
-    }, this.config.batchInterval);
+    }, this.config.batchInterval) as unknown as ReturnType<typeof setInterval>;
   }
 
   /**
