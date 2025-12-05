@@ -1,112 +1,54 @@
-#[cfg(windows)]
+// Cross-platform clipboard implementation using arboard
 use anyhow::{anyhow, Result};
-#[cfg(windows)]
-use std::ffi::c_void;
-#[cfg(windows)]
-use windows::core::PCWSTR;
-#[cfg(windows)]
-use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
-#[cfg(windows)]
-use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
-};
-#[cfg(windows)]
-use windows::Win32::System::Memory::{
-    GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
-};
-#[cfg(windows)]
-use windows::Win32::System::Ole::CF_UNICODETEXT;
+use arboard::Clipboard;
 
-#[cfg(windows)]
-pub struct ClipboardManager;
+pub struct ClipboardManager {
+    clipboard: Clipboard,
+}
 
-#[cfg(windows)]
 impl ClipboardManager {
     pub fn new() -> Result<Self> {
-        Ok(Self)
+        let clipboard = Clipboard::new().map_err(|e| anyhow!("Failed to initialize clipboard: {}", e))?;
+        Ok(Self { clipboard })
     }
 
-    pub fn get_text(&self) -> Result<String> {
-        unsafe {
-            OpenClipboard(HWND(0)).map_err(|err| anyhow!("OpenClipboard failed: {err:?}"))?;
-
-            let result = (|| {
-                let handle = GetClipboardData(CF_UNICODETEXT.0 as u32)
-                    .map_err(|err| anyhow!("GetClipboardData failed: {err:?}"))?;
-                if handle.is_invalid() {
-                    return Err(anyhow!("Clipboard does not contain text data"));
-                }
-
-                let hglobal = HGLOBAL(handle.0 as *mut c_void);
-                let ptr = GlobalLock(hglobal);
-                if ptr.is_null() {
-                    return Err(anyhow!("GlobalLock failed"));
-                }
-
-                let pwstr = PCWSTR(ptr as *const u16);
-                let text = pwstr.to_string().unwrap_or_default();
-
-                GlobalUnlock(hglobal).map_err(|err| anyhow!("GlobalUnlock failed: {err:?}"))?;
-
-                Ok(text)
-            })();
-
-            CloseClipboard().map_err(|err| anyhow!("CloseClipboard failed: {err:?}"))?;
-
-            result
-        }
+    pub fn get_text(&mut self) -> Result<String> {
+        self.clipboard
+            .get_text()
+            .map_err(|e| anyhow!("Failed to get clipboard text: {}", e))
     }
 
-    pub fn set_text(&self, text: &str) -> Result<()> {
-        unsafe {
-            OpenClipboard(HWND(0)).map_err(|err| anyhow!("OpenClipboard failed: {err:?}"))?;
+    pub fn set_text(&mut self, text: &str) -> Result<()> {
+        self.clipboard
+            .set_text(text.to_string())
+            .map_err(|e| anyhow!("Failed to set clipboard text: {}", e))
+    }
 
-            let result = (|| {
-                EmptyClipboard().map_err(|err| anyhow!("EmptyClipboard failed: {err:?}"))?;
+    pub fn clear(&mut self) -> Result<()> {
+        self.clipboard
+            .clear()
+            .map_err(|e| anyhow!("Failed to clear clipboard: {}", e))
+    }
+}
 
-                let encoded: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-                let bytes = encoded.len() * std::mem::size_of::<u16>();
+impl Default for ClipboardManager {
+    fn default() -> Self {
+        Self::new().expect("Failed to create ClipboardManager")
+    }
+}
 
-                let handle = GlobalAlloc(GMEM_MOVEABLE, bytes)
-                    .map_err(|err| anyhow!("GlobalAlloc failed: {err:?}"))?;
-                if handle.is_invalid() {
-                    return Err(anyhow!("GlobalAlloc returned invalid handle"));
-                }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-                let buffer = GlobalLock(handle) as *mut u16;
-                if buffer.is_null() {
-                    let _ = GlobalFree(handle);
-                    return Err(anyhow!("GlobalLock failed"));
-                }
+    #[test]
+    fn test_clipboard_set_get() {
+        let mut clipboard = ClipboardManager::new().unwrap();
+        let test_text = "Hello, cross-platform clipboard!";
 
-                // Verify the allocation size before copying
-                let allocated_size = GlobalSize(handle);
-                if allocated_size < bytes {
-                    GlobalUnlock(handle).ok();
-                    let _ = GlobalFree(handle);
-                    return Err(anyhow!(
-                        "GlobalAlloc allocated insufficient memory: {} bytes requested, {} bytes allocated",
-                        bytes,
-                        allocated_size
-                    ));
-                }
+        clipboard.set_text(test_text).unwrap();
+        let retrieved = clipboard.get_text().unwrap();
 
-                std::ptr::copy_nonoverlapping(encoded.as_ptr(), buffer, encoded.len());
-                GlobalUnlock(handle).map_err(|err| anyhow!("GlobalUnlock failed: {err:?}"))?;
-
-                SetClipboardData(CF_UNICODETEXT.0 as u32, HANDLE(handle.0 as isize)).map_err(
-                    |err| {
-                        let _ = GlobalFree(handle);
-                        anyhow!("SetClipboardData failed: {err:?}")
-                    },
-                )?;
-
-                Ok(())
-            })();
-
-            CloseClipboard().map_err(|err| anyhow!("CloseClipboard failed: {err:?}"))?;
-
-            result
-        }
+        assert_eq!(retrieved, test_text);
     }
 }

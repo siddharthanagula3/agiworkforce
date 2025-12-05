@@ -16,7 +16,7 @@ pub struct AIEmployeeState {
 pub async fn ai_employees_get_all(
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<Vec<AIEmployee>, String> {
-    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let registry = state.registry.lock().unwrap();
     registry.get_all().map_err(|e| e.to_string())
 }
 
@@ -26,7 +26,7 @@ pub async fn ai_employees_get_by_id(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<AIEmployee, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .get_employee_by_id(&employee_id)
         .map_err(|e| e.to_string())
@@ -39,7 +39,7 @@ pub async fn ai_employees_search(
     filters: EmployeeFilters,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<Vec<AIEmployee>, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .search_employees(&query, filters)
         .map_err(|e| e.to_string())
@@ -50,7 +50,7 @@ pub async fn ai_employees_search(
 pub async fn ai_employees_get_featured(
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<Vec<AIEmployee>, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .get_featured_employees()
         .map_err(|e| e.to_string())
@@ -62,7 +62,7 @@ pub async fn ai_employees_get_by_category(
     category: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<Vec<AIEmployee>, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .get_employees_by_category(&category)
         .map_err(|e| e.to_string())
@@ -101,7 +101,7 @@ pub async fn ai_employees_get_user_employees(
     user_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<Vec<UserEmployee>, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .get_user_employees(&user_id)
         .map_err(|e| e.to_string())
@@ -180,7 +180,7 @@ pub async fn ai_employees_get_stats(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<EmployeeStats, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .get_employee_stats(&employee_id)
         .map_err(|e| e.to_string())
@@ -193,7 +193,7 @@ pub async fn ai_employees_publish(
     creator_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<String, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .publish_employee(employee, &creator_id)
         .map_err(|e| e.to_string())
@@ -206,7 +206,7 @@ pub async fn update_custom_employee(
     config: AIEmployee,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<(), String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .update_employee(&employee_id, config)
         .map_err(|e| e.to_string())
@@ -218,7 +218,7 @@ pub async fn delete_custom_employee(
     employee_id: String,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<(), String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .delete_employee(&employee_id)
         .map_err(|e| e.to_string())
@@ -232,7 +232,7 @@ pub async fn publish_employee_to_marketplace(
     is_public: bool,
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<String, String> {
-    let marketplace = state.marketplace.lock().map_err(|e| e.to_string())?;
+    let marketplace = state.marketplace.lock().unwrap();
     marketplace
         .publish_to_marketplace(&employee_id, &creator_id, is_public)
         .map_err(|e| e.to_string())
@@ -243,7 +243,7 @@ pub async fn publish_employee_to_marketplace(
 pub async fn ai_employees_initialize(
     state: State<'_, AIEmployeeState>,
 ) -> StdResult<usize, String> {
-    let registry = state.registry.lock().map_err(|e| e.to_string())?;
+    let registry = state.registry.lock().unwrap();
     registry.initialize().map_err(|e| e.to_string())?;
     registry.count().map_err(|e| e.to_string())
 }

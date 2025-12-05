@@ -1,7 +1,8 @@
+// Cross-platform screen capture using xcap
 use anyhow::{anyhow, Context, Result};
 use image::{DynamicImage, RgbaImage};
-use screenshots::Screen;
 use serde::{Deserialize, Serialize};
+use xcap::Monitor;
 
 use super::dxgi::{list_displays, ScreenInfo};
 
@@ -44,16 +45,26 @@ pub struct CapturedRegion {
 }
 
 pub fn capture_primary_screen() -> Result<CapturedImage> {
-    let screens = Screen::all().context("Failed to enumerate displays")?;
-    let screen = screens
-        .first()
+    let monitors = Monitor::all().context("Failed to enumerate displays")?;
+    let monitor = monitors
+        .iter()
+        .find(|m| m.is_primary())
+        .or_else(|| monitors.first())
         .ok_or_else(|| anyhow!("No displays detected for capture"))?;
-    let pixels = screen
-        .capture()
+
+    let image = monitor
+        .capture_image()
         .context("Failed to capture primary screen")?;
+
+    // Convert xcap's image type into this crate's RgbaImage to avoid version mismatches
+    let pixels = RgbaImage::from_raw(image.width(), image.height(), image.into_raw())
+        .ok_or_else(|| anyhow!("Failed to convert captured image"))?;
+
     let displays = list_displays()?;
     let display = displays
-        .first()
+        .iter()
+        .find(|d| d.is_primary)
+        .or_else(|| displays.first())
         .cloned()
         .ok_or_else(|| anyhow!("Display metadata unavailable"))?;
 
@@ -65,27 +76,62 @@ pub fn capture_primary_screen() -> Result<CapturedImage> {
 }
 
 pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<CapturedRegion> {
-    let target_screen = Screen::from_point(x, y).context("Unable to resolve screen for region")?;
-    let pixels = target_screen
-        .capture_area(
-            x - target_screen.display_info.x,
-            y - target_screen.display_info.y,
-            width,
-            height,
-        )
-        .context("Failed to capture region")?;
+    // Find the monitor containing the point (x, y)
+    let monitors = Monitor::all().context("Failed to enumerate displays")?;
+
+    let target_monitor = monitors
+        .iter()
+        .find(|m| {
+            let mx = m.x();
+            let my = m.y();
+            let mw = m.width() as i32;
+            let mh = m.height() as i32;
+            x >= mx && x < mx + mw && y >= my && y < my + mh
+        })
+        .or_else(|| monitors.first())
+        .ok_or_else(|| anyhow!("Unable to resolve screen for region"))?;
+
+    // Capture the full monitor
+    let full_image = target_monitor
+        .capture_image()
+        .context("Failed to capture screen")?;
+    let full_image = RgbaImage::from_raw(
+        full_image.width(),
+        full_image.height(),
+        full_image.into_raw(),
+    )
+    .ok_or_else(|| anyhow!("Failed to convert captured region"))?;
+
+    // Calculate relative coordinates within the monitor
+    let rel_x = (x - target_monitor.x()).max(0) as u32;
+    let rel_y = (y - target_monitor.y()).max(0) as u32;
+    let crop_width = width.min(target_monitor.width() - rel_x);
+    let crop_height = height.min(target_monitor.height() - rel_y);
+
+    // Manually crop by creating a new image and copying pixels
+    // This is necessary because xcap::image and image crate are separate
+    let mut pixels = RgbaImage::new(crop_width, crop_height);
+    for y_offset in 0..crop_height {
+        for x_offset in 0..crop_width {
+            let pixel = full_image.get_pixel(rel_x + x_offset, rel_y + y_offset);
+            pixels.put_pixel(x_offset, y_offset, image::Rgba([pixel[0], pixel[1], pixel[2], pixel[3]]));
+        }
+    }
 
     let displays = list_displays()?;
-    let display = displays
+    let screen_index = monitors
         .iter()
-        .find(|info| info.id == target_screen.display_info.id)
-        .cloned()
-        .unwrap_or_else(|| ScreenInfo::from(target_screen.display_info));
-
-    let screen_index = displays
-        .iter()
-        .position(|info| info.id == display.id)
+        .position(|m| {
+            m.x() == target_monitor.x()
+                && m.y() == target_monitor.y()
+                && m.width() == target_monitor.width()
+                && m.height() == target_monitor.height()
+        })
         .unwrap_or(0);
+
+    let display = displays.get(screen_index).cloned().unwrap_or_else(|| {
+        ScreenInfo::from_monitor(target_monitor, screen_index)
+    });
 
     Ok(CapturedRegion {
         pixels,

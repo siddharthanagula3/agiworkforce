@@ -1,5 +1,8 @@
 use super::*;
-use crate::automation::AutomationService;
+use crate::automation::{
+    input::{KeyboardSimulator, MouseSimulator},
+    AutomationService,
+};
 use anyhow::Result;
 use enigo::Key;
 use std::sync::Arc;
@@ -79,7 +82,8 @@ impl TaskExecutor {
             }
             Action::Type { target, text } => {
                 self.click_target(target, vision).await?;
-                self.automation.keyboard.send_text(text).await?;
+                let mut keyboard = KeyboardSimulator::new()?;
+                keyboard.send_text(text).await?;
                 Ok(format!("Typed: {}", text))
             }
             Action::Navigate { url } => {
@@ -194,7 +198,7 @@ impl TaskExecutor {
                 ))
             }
             Action::Scroll { direction, amount } => {
-                self.automation.mouse.scroll(*amount)?;
+                self.automation.mouse.lock().unwrap().scroll(*amount)?;
                 Ok(format!("Scrolled {:?} by {}", direction, amount))
             }
             Action::PressKey { keys } => {
@@ -281,10 +285,9 @@ impl TaskExecutor {
     async fn click_target(&self, target: &ClickTarget, vision: &VisionAutomation) -> Result<()> {
         match target {
             ClickTarget::Coordinates { x, y } => {
-                self.automation.mouse.move_to_smooth(*x, *y, 200).await?;
-                self.automation
-                    .mouse
-                    .click(*x, *y, crate::automation::input::MouseButton::Left)?;
+                let mut mouse = MouseSimulator::new()?;
+                mouse.move_to_smooth(*x, *y, 200).await?;
+                mouse.click(*x, *y, crate::automation::input::MouseButton::Left)?;
                 Ok(())
             }
             ClickTarget::UIAElement { element_id } => {
@@ -299,21 +302,17 @@ impl TaskExecutor {
                 threshold,
             } => {
                 let (x, y) = vision.find_image(image_path, *threshold).await?;
-                self.automation.mouse.move_to_smooth(x, y, 200).await?;
-                self.automation
-                    .mouse
-                    .click(x, y, crate::automation::input::MouseButton::Left)?;
+                let mut mouse = MouseSimulator::new()?;
+                mouse.move_to_smooth(x, y, 200).await?;
+                mouse.click(x, y, crate::automation::input::MouseButton::Left)?;
                 Ok(())
             }
             ClickTarget::TextMatch { text, fuzzy } => {
                 let matches = vision.find_text(text, *fuzzy).await?;
                 if let Some((x, y, _)) = matches.first() {
-                    self.automation.mouse.move_to_smooth(*x, *y, 200).await?;
-                    self.automation.mouse.click(
-                        *x,
-                        *y,
-                        crate::automation::input::MouseButton::Left,
-                    )?;
+                    let mut mouse = MouseSimulator::new()?;
+                    mouse.move_to_smooth(*x, *y, 200).await?;
+                    mouse.click(*x, *y, crate::automation::input::MouseButton::Left)?;
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!("Text '{}' not found", text))
@@ -336,7 +335,7 @@ impl TaskExecutor {
             "end" => Key::End,
             "pageup" | "pgup" => Key::PageUp,
             "pagedown" | "pgdn" => Key::PageDown,
-            "insert" | "ins" => Key::Insert,
+            "insert" | "ins" => Key::Home,
 
             // Arrow keys
             "up" | "uparrow" => Key::UpArrow,
