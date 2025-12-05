@@ -1,19 +1,19 @@
 // Updated Nov 16, 2025: Added accessible dialogs to replace window.confirm/prompt
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
-    ChevronDown,
-    ChevronRight,
-    File,
-    FileCode,
-    FileJson,
-    FileText,
-    Folder,
-    FolderOpen,
-    Image as ImageIcon,
-    Pencil,
-    PlusCircle,
-    RefreshCw,
-    Trash,
+  ChevronDown,
+  ChevronRight,
+  File,
+  FileCode,
+  FileJson,
+  FileText,
+  Folder,
+  FolderOpen,
+  Image as ImageIcon,
+  Pencil,
+  PlusCircle,
+  RefreshCw,
+  Trash,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -220,6 +220,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
       } catch (error) {
         console.error('Failed to start file watcher', error);
       }
+
+      if (disposed) return;
 
       try {
         unlistenRef = await listen<FileWatcherEvent>('file-event', (event) => {

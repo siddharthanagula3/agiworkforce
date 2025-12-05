@@ -29,7 +29,7 @@ pub fn initialize_template_manager(db: Arc<Mutex<Connection>>) -> TemplateManage
 pub async fn get_all_templates(
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     mgr.get_all_templates().map_err(|e| e.to_string())
 }
 
@@ -39,7 +39,7 @@ pub async fn get_template_by_id(
     id: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Option<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     mgr.get_template_by_id(&id).map_err(|e| e.to_string())
 }
 
@@ -49,7 +49,7 @@ pub async fn get_templates_by_category(
     category: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     let cat = TemplateCategory::from_str(&category)
         .ok_or_else(|| format!("Invalid category: {}", category))?;
     mgr.get_templates_by_category(cat)
@@ -62,7 +62,7 @@ pub async fn install_template(
     template_id: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<(), String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     // For now, we use a default user_id. In production, this would come from auth
     let user_id = "default_user";
     mgr.install_template(user_id, &template_id)
@@ -74,7 +74,7 @@ pub async fn install_template(
 pub async fn get_installed_templates(
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     // For now, we use a default user_id. In production, this would come from auth
     let user_id = "default_user";
     mgr.get_installed_templates(user_id)
@@ -87,7 +87,7 @@ pub async fn search_templates(
     query: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<Vec<AgentTemplate>, String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     mgr.search_templates(&query).map_err(|e| e.to_string())
 }
 
@@ -99,7 +99,7 @@ pub async fn execute_template(
     manager: State<'_, TemplateManagerState>,
 ) -> Result<String, String> {
     // Get template
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     let template = mgr
         .get_template_by_id(&template_id)
         .map_err(|e| e.to_string())?
@@ -127,7 +127,7 @@ pub async fn uninstall_template(
     template_id: String,
     manager: State<'_, TemplateManagerState>,
 ) -> Result<(), String> {
-    let mgr = manager.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager.manager.lock().unwrap();
     let user_id = "default_user";
 
     mgr.uninstall_template(user_id, &template_id)

@@ -4,7 +4,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
-use super::inspector::{ElementSelector, InspectorService};
+use super::types::ElementSelector;
+use super::InspectorService;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 
 /// Script action to execute
@@ -284,7 +285,7 @@ impl ExecutorService {
     async fn execute_click(&self, action: &ScriptAction) -> Result<()> {
         let (x, y) = self.resolve_coordinates(action)?;
 
-        let mouse = MouseSimulator::new()?;
+        let mut mouse = MouseSimulator::new()?;
         mouse.click(x, y, MouseButton::Left)?;
         Ok(())
     }
@@ -299,12 +300,12 @@ impl ExecutorService {
         // Optionally click first if coordinates provided
         if action.coordinates.is_some() || action.selector.is_some() {
             let (x, y) = self.resolve_coordinates(action)?;
-            let mouse = MouseSimulator::new()?;
+            let mut mouse = MouseSimulator::new()?;
             mouse.click(x, y, MouseButton::Left)?;
             sleep(Duration::from_millis(100)).await;
         }
 
-        let keyboard = KeyboardSimulator::new()?;
+        let mut keyboard = KeyboardSimulator::new()?;
         keyboard.send_text(text).await?;
         Ok(())
     }
@@ -367,8 +368,8 @@ impl ExecutorService {
         }
 
         if let Some(ref selector) = action.selector {
-            if let Some(element_id) = self.inspector.find_element_by_selector(selector)? {
-                let info = self.inspector.inspect_element_by_id(&element_id)?;
+            if let Some(element) = self.inspector.find_element_by_selector(selector)? {
+                let info = self.inspector.inspect_element_by_id(&element.id)?;
                 if let Some(rect) = info.bounding_rect {
                     let x = (rect.left + rect.width / 2.0).round() as i32;
                     let y = (rect.top + rect.height / 2.0).round() as i32;

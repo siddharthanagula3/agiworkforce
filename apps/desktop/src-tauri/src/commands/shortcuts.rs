@@ -98,7 +98,7 @@ impl Default for ShortcutsState {
 #[tauri::command]
 pub async fn shortcuts_register(
     shortcut: Shortcut,
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, Arc<Mutex<ShortcutsState>>>,
 ) -> Result<(), String> {
     tracing::info!(

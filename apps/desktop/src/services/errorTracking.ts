@@ -98,7 +98,7 @@ class ErrorTrackingService {
    */
   private loadConfig() {
     try {
-      const savedConfig = safeGetJSON<Partial<ErrorTrackingConfig>>(
+      const savedConfig = safeGetJSON<Partial<ErrorTrackingConfig> | null>(
         'error_tracking_config',
         null,
       );
