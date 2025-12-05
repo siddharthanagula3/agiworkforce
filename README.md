@@ -5,7 +5,7 @@
 AGI Workforce is an intelligent desktop application that combines AI chat, tool execution, browser automation, terminal control, and workflow orchestration to boost your productivity.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+[![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#supported-platforms)
 
 ---
@@ -28,23 +28,23 @@ AGI Workforce is an intelligent desktop application that combines AI chat, tool 
 ### Windows
 
 **Option 1: Installer (.msi)**
-1. Download the latest `.msi` installer from [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+1. Download the latest `.msi` installer from [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
 2. Double-click the installer and follow the wizard
 3. Launch "AGI Workforce" from Start Menu
 
 **Option 2: Portable (.exe)**
-1. Download the `.exe` from [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+1. Download the `.exe` from [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
 2. Run the executable directly - no installation needed
 
 ### macOS
 
 **Option 1: DMG**
-1. Download the `.dmg` file from [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+1. Download the `.dmg` file from [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
 2. Open the DMG and drag "AGI Workforce" to Applications
 3. Launch from Applications folder
 
 **Option 2: App Bundle**
-1. Download the `.app.tar.gz` from [Releases](https://github.com/yourusername/agiworkforce-desktop-app/releases)
+1. Download the `.app.tar.gz` from [Releases](https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases)
 2. Extract and move to Applications folder
 
 ### Linux
@@ -52,7 +52,7 @@ AGI Workforce is an intelligent desktop application that combines AI chat, tool 
 **Option 1: AppImage** (Recommended)
 ```bash
 # Download AppImage
-wget https://github.com/yourusername/agiworkforce-desktop-app/releases/latest/download/agi-workforce.AppImage
+wget https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases/latest/download/agi-workforce.AppImage
 
 # Make executable
 chmod +x agi-workforce.AppImage
@@ -64,7 +64,7 @@ chmod +x agi-workforce.AppImage
 **Option 2: Debian/Ubuntu (.deb)**
 ```bash
 # Download and install
-wget https://github.com/yourusername/agiworkforce-desktop-app/releases/latest/download/agi-workforce.deb
+wget https://github.com/siddharthanagula3/agiworkforce-desktop-app/releases/latest/download/agi-workforce.deb
 sudo dpkg -i agi-workforce.deb
 ```
 
@@ -95,7 +95,7 @@ sudo dpkg -i agi-workforce.deb
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/agiworkforce-desktop-app.git
+git clone https://github.com/siddharthanagula3/agiworkforce-desktop-app.git
 cd agiworkforce-desktop-app
 
 # Install dependencies
@@ -223,8 +223,8 @@ Built with:
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/agiworkforce-desktop-app/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/agiworkforce-desktop-app/discussions)
+- **Issues**: [GitHub Issues](https://github.com/siddharthanagula3/agiworkforce-desktop-app/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/siddharthanagula3/agiworkforce-desktop-app/discussions)
 - **Discord**: [Join our community](https://discord.gg/agiworkforce)
 - **Email**: support@agiworkforce.com
 
