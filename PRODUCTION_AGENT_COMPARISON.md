@@ -8,7 +8,13 @@
 
 ## Executive Summary
 
-AGI Workforce has been analyzed against leading production desktop AI agents (Claude Desktop, Cursor IDE) to ensure feature parity and quality. This document provides a comprehensive technical comparison.
+AGI Workforce has been analyzed against leading production desktop AI agents to ensure feature parity and quality. This document provides a comprehensive technical comparison against:
+- **Claude Desktop** (Anthropic) - MCP-based desktop agent
+- **Cursor IDE** - VSCode-based AI coding assistant
+- **Aider** - CLI-based coding assistant
+- **Google Antigravity** (NEW Nov 2025) - Agentic development platform
+- **Google Project IDX/Firebase Studio** - Cloud-based IDE
+- **Gemini CLI** - Terminal-based AI agent
 
 **Verdict**: ✅ **AGI Workforce meets or exceeds production agent standards**
 
@@ -39,31 +45,121 @@ AGI Workforce has been analyzed against leading production desktop AI agents (Cl
 - **Architecture**: CLI-based AI coding assistant
 - **Key Features**: Git integration, file editing, terminal commands
 
+### 4. Google Antigravity (NEW - November 2025)
+- **Official**: Yes (Google)
+- **Released**: November 20, 2025 (Public Preview)
+- **Architecture**: Agentic development platform with AI-powered IDE
+- **Key Features**: Agent-first architecture, terminal/editor/browser integration, autonomous task execution
+- **Models**: Gemini 3, Claude Sonnet 4.5, GPT OSS
+- **Platform**: MacOS, Windows, Linux (Free for individuals)
+- **Sources**:
+  - [Google Antigravity Announcement](https://developers.googleblog.com/en/build-with-google-antigravity-our-new-agentic-development-platform/)
+  - [Hands-On With Antigravity](https://thenewstack.io/hands-on-with-antigravity-googles-newest-ai-coding-experiment/)
+  - [VentureBeat Coverage](https://venturebeat.com/ai/google-antigravity-introduces-agent-first-architecture-for-asynchronous)
+
+**Terminal Integration**:
+- Gemini 3 includes client-side bash tool for shell command execution
+- Agents autonomously operate across editor, terminal, and browser
+- Supports navigating filesystem, driving development processes, automating system operations
+
+### 5. Google Project IDX / Firebase Studio
+- **Official**: Yes (Google)
+- **Architecture**: Cloud-based IDE (browser-based, formerly Project IDX, now Firebase Studio)
+- **Key Features**: Gemini AI integration, code completion, inline suggestions, Linux terminal
+- **Sources**:
+  - [Project IDX](https://idx.dev/)
+  - [Firebase Studio Docs](https://firebase.google.com/docs/studio/idx-is-firebase-studio)
+  - [Google IDX Guide](https://www.dhiwise.com/post/google-project-idx-guide)
+
+### 6. Gemini CLI / Code Assist
+- **Official**: Yes (Google)
+- **Architecture**: Open-source AI agent for terminal
+- **Key Features**: Terminal-based AI, MCP server support, command execution, file manipulation
+- **Sources**:
+  - [Gemini CLI Documentation](https://developers.google.com/gemini-code-assist/docs/gemini-cli)
+  - [GitHub: google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli)
+  - [Gemini CLI Announcement](https://blog.google/technology/developers/introducing-gemini-cli-open-source-ai-agent/)
+
 ---
 
 ## Feature Comparison Matrix
 
-| Feature | Claude Desktop | Cursor IDE | AGI Workforce | Status |
-|---------|---------------|------------|---------------|--------|
-| **Terminal Execution** | ✅ Via MCP | ✅ Composer + CLI | ✅ Native | ✅ **MATCH** |
-| **File Operations** | ✅ Via MCP | ✅ Native | ✅ Native | ✅ **MATCH** |
-| **MCP Protocol Support** | ✅ Core feature | ✅ Via plugins | ✅ Native | ✅ **MATCH** |
-| **Approval Workflow** | ✅ Explicit approval | ⚠️ Limited | ✅ Comprehensive | ✅ **EXCEED** |
-| **UI Automation** | ❌ No | ❌ No | ✅ Windows UIA | ✅ **EXCEED** |
-| **Browser Automation** | ❌ No | ❌ No | ✅ Tab manager | ✅ **EXCEED** |
-| **Screen Capture** | ❌ No | ❌ No | ✅ Native | ✅ **EXCEED** |
-| **Database Access** | ⚠️ Via MCP | ⚠️ Via plugins | ✅ Native | ✅ **EXCEED** |
-| **API Integration** | ⚠️ Via MCP | ⚠️ Limited | ✅ Full HTTP client | ✅ **EXCEED** |
-| **Multi-Shell Support** | ⚠️ System shell | ⚠️ System shell | ✅ PS, CMD, WSL, Bash | ✅ **EXCEED** |
-| **AI-Assisted Terminal** | ❌ No | ❌ No | ✅ Suggestions, error analysis | ✅ **EXCEED** |
-| **LLM Sub-Reasoning** | ❌ No | ❌ No | ✅ Recursive tool | ✅ **EXCEED** |
-| **Code Analysis** | ⚠️ Limited | ✅ Native | ✅ Native | ✅ **MATCH** |
-| **OCR Capability** | ❌ No | ❌ No | ✅ Optional | ✅ **EXCEED** |
+| Feature | Claude Desktop | Cursor IDE | Google Antigravity | AGI Workforce | Status |
+|---------|---------------|------------|-------------------|---------------|--------|
+| **Terminal Execution** | ✅ Via MCP | ✅ Composer + CLI | ✅ Bash tool (Gemini 3) | ✅ Native multi-shell | ✅ **EXCEED** |
+| **File Operations** | ✅ Via MCP | ✅ Native | ✅ Agent-driven | ✅ Native | ✅ **MATCH** |
+| **MCP Protocol Support** | ✅ Core feature | ✅ Via plugins | ✅ Yes (Gemini CLI) | ✅ Native | ✅ **MATCH** |
+| **Approval Workflow** | ✅ Explicit approval | ⚠️ Limited | ⚠️ Unknown (preview) | ✅ Comprehensive | ✅ **MATCH** |
+| **UI Automation** | ❌ No | ❌ No | ❌ No | ✅ Windows UIA | ✅ **EXCEED** |
+| **Browser Automation** | ❌ No | ❌ No | ✅ Yes (autonomous) | ✅ Tab manager | ✅ **MATCH** |
+| **Screen Capture** | ❌ No | ❌ No | ✅ Artifacts/screenshots | ✅ Native | ✅ **MATCH** |
+| **Database Access** | ⚠️ Via MCP | ⚠️ Via plugins | ❓ Unknown | ✅ Native | ✅ **EXCEED** |
+| **API Integration** | ⚠️ Via MCP | ⚠️ Limited | ❓ Unknown | ✅ Full HTTP client | ✅ **EXCEED** |
+| **Multi-Shell Support** | ⚠️ System shell | ⚠️ System shell | ✅ Bash (cross-platform) | ✅ PS, CMD, WSL, Bash | ✅ **MATCH** |
+| **AI-Assisted Terminal** | ❌ No | ❌ No | ✅ Agentic (autonomous) | ✅ Suggestions, error analysis | ✅ **MATCH** |
+| **LLM Sub-Reasoning** | ❌ No | ❌ No | ✅ Multi-model (Gemini/Claude/GPT) | ✅ Recursive tool | ✅ **MATCH** |
+| **Code Analysis** | ⚠️ Limited | ✅ Native | ✅ AI-powered | ✅ Native | ✅ **MATCH** |
+| **OCR Capability** | ❌ No | ❌ No | ❓ Unknown | ✅ Optional | ✅ **EXCEED** |
 
 **Legend**:
 - ✅ = Full support
 - ⚠️ = Partial/limited support
 - ❌ = Not available
+- ❓ = Unknown (insufficient public information)
+
+**Note on Google Antigravity**: Released November 20, 2025 in public preview. Full feature details still emerging. Comparison based on available documentation as of December 2025.
+
+---
+
+## Google Antigravity Comparison (NEW)
+
+### Overview
+Google Antigravity represents the latest evolution in agentic AI development platforms, released just weeks ago (November 20, 2025). It introduces an "agent-first architecture" where developers act as architects collaborating with autonomous AI agents.
+
+### Key Similarities with AGI Workforce
+1. **Terminal Integration**: Both provide AI-powered terminal execution
+   - Antigravity: Gemini 3 bash tool for shell commands
+   - AGI Workforce: Multi-shell support (PowerShell, CMD, WSL, Bash) + AI assistance
+
+2. **Agent Autonomy**: Both support autonomous agent workflows
+   - Antigravity: Agents plan, execute, verify tasks autonomously
+   - AGI Workforce: Tool execution with approval workflows
+
+3. **Browser Integration**: Both include browser automation
+   - Antigravity: Agents operate across editor, terminal, browser
+   - AGI Workforce: Tab manager with navigation, extraction, interaction
+
+4. **Multi-Model Support**: Both support multiple LLMs
+   - Antigravity: Gemini 3, Claude Sonnet 4.5, GPT OSS
+   - AGI Workforce: Router supports multiple providers (OpenAI, Anthropic, Google, etc.)
+
+5. **Artifacts/Verification**: Both generate verification outputs
+   - Antigravity: Generates artifacts (task lists, plans, screenshots, recordings)
+   - AGI Workforce: Tool results, execution logs, screen captures
+
+### Key Differences
+
+**AGI Workforce Advantages**:
+- ✅ **Desktop Application**: Native Windows/macOS/Linux app (vs Antigravity's IDE)
+- ✅ **Windows UI Automation**: Can control any Windows application via UIA
+- ✅ **Database Tools**: Native database query, execute, transactions
+- ✅ **Established Stability**: Built on proven Tauri framework, not preview
+- ✅ **More Built-in Tools**: 44 registered tools vs needing configuration
+- ✅ **Granular Control**: Safe mode vs full_control conversation modes
+
+**Google Antigravity Advantages**:
+- ✅ **Fully Autonomous**: Agents work independently across multiple domains
+- ✅ **Multi-Model Native**: Seamless switching between Gemini 3, Claude, GPT
+- ✅ **Free Preview**: No cost for individuals during preview
+- ✅ **Google Ecosystem**: Integrated with Google infrastructure
+- ✅ **Agent-First UX**: Purpose-built for agentic workflows
+
+### Verdict: AGI Workforce vs Google Antigravity
+**Comparison**: While Google Antigravity is bleeding-edge (Nov 2025) with fully autonomous agents, AGI Workforce offers more comprehensive built-in tooling, Windows-specific automation, and production stability.
+
+**Use Case Fit**:
+- Choose **Google Antigravity** for: Fully autonomous multi-step workflows, Google ecosystem integration, experimental cutting-edge features
+- Choose **AGI Workforce** for: Windows automation, database operations, UI testing, production stability, granular control
 
 ---
 
