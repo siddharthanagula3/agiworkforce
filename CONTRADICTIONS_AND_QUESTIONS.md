@@ -1,8 +1,35 @@
 # Contradictions Found & Questions for Clarification
 
-**Analysis Date**: December 2, 2025
+**Analysis Date**: December 2, 2025 (Updated)
 **Analyst**: Claude (AI Assistant)
 **Purpose**: Identify all contradictions in codebase and documentation before public release
+**Status**: 5 of 10 contradictions RESOLVED
+
+---
+
+## ✅ RESOLVED CONTRADICTIONS
+
+1. **✅ Antigravity IDE Research** - RESOLVED
+   - Found: Google Antigravity is REAL, announced November 20, 2025
+   - Added to PRODUCTION_AGENT_COMPARISON.md with full analysis
+   - Also researched Google Project IDX and Gemini CLI
+
+2. **✅ SECURITY.md Status** - RESOLVED
+   - Fixed: Updated RELEASE_CHECKLIST.md to show SECURITY.md as complete
+   - Removed "(needs creation)" text
+
+3. **✅ Commit Count** - RESOLVED
+   - Fixed: Updated from "7 commits" to "9 commits (5 bug fixes + 4 documentation)"
+   - Accurate count verified via git log
+
+4. **✅ git_push Tool** - ANALYSIS ERROR RESOLVED
+   - My Error: git_push DOES exist (tools.rs:1352)
+   - Not a contradiction - my grep search was incorrect
+   - Verified: All DANGEROUS_TOOLS are properly registered
+
+5. **✅ Tool Count** - NOT A CONTRADICTION
+   - "40+ tools" is accurate (actual: 44 tools)
+   - Imprecise but not incorrect
 
 ---
 
