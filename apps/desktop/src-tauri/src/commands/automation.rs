@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result as AnyResult};
+use enigo::Key;
 use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
@@ -11,7 +12,7 @@ use crate::{
     automation::{
         global_service,
         input::{KeyboardSimulator, MouseButton},
-        uia::{ElementQuery, UIElementInfo},
+        types::{ElementQuery, UIElementInfo},
         AutomationService,
     },
     db::{
@@ -241,14 +242,23 @@ pub async fn automation_send_keys(
 
 #[tauri::command]
 pub fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
-    let modifiers: Vec<u16> = request
+    let modifiers: Vec<Key> = request
         .modifiers
         .iter()
         .filter_map(|name| KeyboardSimulator::modifier_key(name))
         .collect();
 
-    with_service(|service| service.keyboard.hotkey(&modifiers, request.key))
-        .map_err(|err| err.to_string())
+    let key = KeyboardSimulator::vk_to_key(request.key)
+        .ok_or_else(|| format!("Unsupported key code: {}", request.key))?;
+
+    with_service(|service| {
+        service
+            .keyboard
+            .lock()
+            .unwrap()
+            .send_hotkey(&modifiers, key)
+    })
+    .map_err(|err| err.to_string())
 }
 
 // Updated Nov 16, 2025: Added input validation for coordinates
@@ -298,7 +308,7 @@ pub fn automation_click(
             _ => MouseButton::Left,
         };
 
-        service.mouse.click(x, y, button)?;
+        service.mouse.lock().unwrap().click(x, y, button)?;
         Ok((x, y, button_name))
     })
     .map_err(|err| err.to_string());
@@ -410,7 +420,7 @@ pub async fn automation_drag_drop(
     }
 
     // Create mouse simulator outside the service to avoid async closure issues
-    let mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
+    let mut mouse = crate::automation::input::MouseSimulator::new().map_err(|e| e.to_string())?;
     if let Err(err) = mouse
         .drag_and_drop(
             request.from_x,
@@ -583,7 +593,7 @@ async fn execute_text_input(
     let should_focus = force_focus || request.focus.unwrap_or(false);
 
     // Create a keyboard simulator outside the closure
-    let keyboard = KeyboardSimulator::new().map_err(|e| e.to_string())?;
+    let mut keyboard = KeyboardSimulator::new().map_err(|e| e.to_string())?;
 
     let location = match with_service(|service| {
         if let Some(element_id) = &element_id {
