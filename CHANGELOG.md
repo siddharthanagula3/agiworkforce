@@ -5,7 +5,7 @@ All notable changes to AGI Workforce Desktop App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.0.0] - 2024-12-02
+## [5.0.0] - 2025-12-02
 
 ### 🔒 Security Fixes
 
@@ -194,4 +194,4 @@ See git history for changes prior to comprehensive bug fix session.
 ---
 
 For more details on any change, see the commit history at:
-https://github.com/yourusername/agiworkforce-desktop-app/commits/main
+https://github.com/siddharthanagula3/agiworkforce-desktop-app/commits/main
