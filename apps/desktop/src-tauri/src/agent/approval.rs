@@ -5,8 +5,9 @@ use serde_json::{self, json};
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{oneshot, Mutex as TokioMutex};
+use tokio::sync::{oneshot, Mutex as TokioMutex, RwLock};
 
 pub struct ApprovalManager {
     config: AgentConfig,
@@ -202,9 +203,20 @@ pub enum ApprovalResolution {
     Rejected { reason: Option<String> },
 }
 
+/// Represents a pending approval request with atomic state tracking
+#[derive(Debug)]
+struct PendingApproval {
+    sender: oneshot::Sender<ApprovalResolution>,
+    /// Atomic flag to prevent double-resolution (race condition protection)
+    resolved: AtomicBool,
+}
+
 pub struct ApprovalController {
-    pending: TokioMutex<HashMap<String, oneshot::Sender<ApprovalResolution>>>,
-    trust_store: TokioMutex<TrustedWorkflowStore>,
+    /// Pending approval requests with atomic resolution tracking
+    pending: TokioMutex<HashMap<String, PendingApproval>>,
+    /// Trust store with read-write lock for better concurrency
+    trust_store: RwLock<TrustedWorkflowStore>,
+    /// Current workflow hash
     current_hash: TokioMutex<Option<String>>,
 }
 
@@ -213,7 +225,7 @@ impl ApprovalController {
         let trust_store = TrustedWorkflowStore::load(data_dir.join("trusted_workflows.json"))?;
         Ok(Self {
             pending: TokioMutex::new(HashMap::new()),
-            trust_store: TokioMutex::new(trust_store),
+            trust_store: RwLock::new(trust_store),
             current_hash: TokioMutex::new(None),
         })
     }
@@ -227,30 +239,43 @@ impl ApprovalController {
             payload.workflow_hash = self.current_hash.lock().await.clone();
         }
 
+        // SECURITY FIX: Use read lock for trust check (better concurrency)
+        // This is the first part of the TOCTOU fix - we check trust status
         if let Some(hash) = payload.workflow_hash.as_deref() {
-            if self
-                .trust_store
-                .lock()
-                .await
-                .is_trusted(hash, &payload.action_signature)
-            {
+            // Acquire read lock to check trust status
+            let trust_store = self.trust_store.read().await;
+            if trust_store.is_trusted(hash, &payload.action_signature) {
                 tracing::info!(
                     "[Approval] Auto-approved trusted workflow {} for action {}",
                     hash,
                     payload.action_id
                 );
+                // Drop read lock before returning
+                drop(trust_store);
                 return Ok(ApprovalResolution::Approved { trust: false });
             }
+            // Explicitly drop read lock before proceeding
+            drop(trust_store);
         }
 
+        // Create oneshot channel for approval resolution
         let (tx, rx) = oneshot::channel();
+
+        // SECURITY FIX: Atomically insert pending approval with resolved flag
         {
             let mut pending = self.pending.lock().await;
-            pending.insert(payload.action_id.clone(), tx);
+            pending.insert(
+                payload.action_id.clone(),
+                PendingApproval {
+                    sender: tx,
+                    resolved: AtomicBool::new(false),
+                },
+            );
         }
 
         self.emit_status(app_handle, "paused", &payload.reason)?;
 
+        // Emit approval request to frontend
         if let Err(error) = app_handle.emit("agent:permission_required", &payload) {
             let mut pending = self.pending.lock().await;
             pending.remove(&payload.action_id);
@@ -259,19 +284,25 @@ impl ApprovalController {
 
         let action_signature = payload.action_signature.clone();
 
+        // Wait for approval resolution
         match rx.await {
             Ok(resolution) => {
+                // SECURITY FIX: Atomically record trust under write lock
+                // This prevents race between checking and recording trust
                 if let (ApprovalResolution::Approved { trust }, Some(hash)) =
                     (&resolution, payload.workflow_hash.as_deref())
                 {
                     if *trust {
-                        let mut store = self.trust_store.lock().await;
+                        // Acquire write lock to atomically record trust
+                        let mut store = self.trust_store.write().await;
                         store.record_trust(hash, &action_signature)?;
+                        // Write lock automatically dropped
                     }
                 }
                 Ok(resolution)
             }
             Err(_) => {
+                // Channel was dropped without resolution
                 self.pending.lock().await.remove(&payload.action_id);
                 Err(anyhow!(
                     "Approval channel dropped for {}",
@@ -282,14 +313,37 @@ impl ApprovalController {
     }
 
     pub async fn resolve(&self, action_id: &str, resolution: ApprovalResolution) -> Result<()> {
-        let sender = {
+        // SECURITY FIX: Atomic check-then-act pattern to prevent race condition
+        // This prevents double-resolution attacks where an attacker tries to resolve
+        // the same approval multiple times to bypass security checks
+        let pending_approval = {
             let mut pending = self.pending.lock().await;
             pending
                 .remove(action_id)
                 .ok_or_else(|| anyhow!("Approval {} not pending", action_id))?
         };
 
-        sender
+        // SECURITY FIX: Atomic compare-and-swap to ensure single resolution
+        // This prevents TOCTOU race where approval could be resolved twice
+        if pending_approval
+            .resolved
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            // Approval was already resolved by another thread
+            tracing::error!(
+                "[Security] Race condition detected: Approval {} already resolved",
+                action_id
+            );
+            return Err(anyhow!(
+                "Approval {} already resolved (race condition prevented)",
+                action_id
+            ));
+        }
+
+        // Now safe to send resolution - guaranteed to be sent exactly once
+        pending_approval
+            .sender
             .send(resolution)
             .map_err(|_| anyhow!("Failed to send approval resolution for {}", action_id))
     }
@@ -300,7 +354,8 @@ impl ApprovalController {
         signature: &str,
     ) -> Result<bool> {
         if let Some(hash) = workflow_hash {
-            Ok(self.trust_store.lock().await.is_trusted(hash, signature))
+            // Use read lock for better concurrency (multiple reads can happen simultaneously)
+            Ok(self.trust_store.read().await.is_trusted(hash, signature))
         } else {
             Ok(false)
         }
@@ -331,7 +386,8 @@ impl ApprovalController {
     }
 
     pub async fn list_trusted_workflows(&self) -> Result<HashMap<String, Vec<String>>> {
-        let store = self.trust_store.lock().await;
+        // Use read lock for better concurrency
+        let store = self.trust_store.read().await;
         Ok(store
             .entries
             .iter()

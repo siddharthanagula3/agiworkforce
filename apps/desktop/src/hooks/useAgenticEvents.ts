@@ -136,6 +136,7 @@ export interface AgentMetricsEvent {
 export function useAgenticEvents() {
   const unlistenFns = useRef<UnlistenFn[]>([]);
   const isMountedRef = useRef(false);
+  const setupInProgressRef = useRef(false);
 
   const handlersRef = useRef({
     addFileOperation: useUnifiedChatStore.getState().addFileOperation,
@@ -266,7 +267,22 @@ export function useAgenticEvents() {
   useEffect(() => {
     isMountedRef.current = true;
 
+    // Clean up any existing listeners if setup is in progress
+    if (setupInProgressRef.current) {
+      console.warn('[useAgenticEvents] Setup already in progress, cleaning up old listeners');
+      unlistenFns.current.forEach((fn) => fn());
+      unlistenFns.current = [];
+    }
+
+    setupInProgressRef.current = true;
+
     const setupListeners = async () => {
+      // Check if still mounted during async setup
+      if (!isMountedRef.current) {
+        setupInProgressRef.current = false;
+        return;
+      }
+
       const push = (fn: UnlistenFn) => unlistenFns.current.push(fn);
 
       const unlistenFileOp = await listen<FileOperationEvent>('agi:file_operation', (event) => {
@@ -307,63 +323,77 @@ export function useAgenticEvents() {
       const unlistenPlanUpdate = await listen<AgentPlanUpdateEvent>(
         'agent:plan_update',
         async (event) => {
-          if (!isMountedRef.current) return;
-          if (!event.payload?.plan) return;
+          try {
+            if (!isMountedRef.current) return;
+            if (!event.payload?.plan) return;
 
-          const { plan } = event.payload;
-          const normalizedSteps =
-            plan.steps?.map<PlanStep>((step) => ({
-              id: step.id,
-              title: step.title,
-              description: step.description,
-              status: normalizeActionStatus(step.status),
-              parentId: step.parentId,
-              result: step.result,
-            })) ?? [];
+            const { plan } = event.payload;
+            const normalizedSteps =
+              plan.steps?.map<PlanStep>((step) => ({
+                id: step.id,
+                title: step.title,
+                description: step.description,
+                status: normalizeActionStatus(step.status),
+                parentId: step.parentId,
+                result: step.result,
+              })) ?? [];
 
-          handlersRef.current.setPlan({
-            id: plan.id,
-            description: plan.description,
-            steps: normalizedSteps,
-            createdAt: plan.createdAt ? new Date(plan.createdAt) : new Date(),
-            updatedAt: new Date(),
-          });
-
-          const currentContext = useUnifiedChatStore.getState().workflowContext;
-          const entryPoint =
-            currentContext?.entryPoint ?? currentContext?.description ?? plan.description;
-          let workflowHash = plan.workflowHash;
-
-          if (!workflowHash && entryPoint) {
-            const composite = `${entryPoint}::${plan.description}`;
-            workflowHash = await sha256(composite);
-          }
-
-          if (workflowHash) {
-            handlersRef.current.setWorkflowContext({
-              hash: workflowHash,
+            handlersRef.current.setPlan({
+              id: plan.id,
               description: plan.description,
-              entryPoint,
+              steps: normalizedSteps,
+              createdAt: plan.createdAt ? new Date(plan.createdAt) : new Date(),
+              updatedAt: new Date(),
             });
-            if (isTauri) {
+
+            const currentContext = useUnifiedChatStore.getState().workflowContext;
+            const entryPoint =
+              currentContext?.entryPoint ?? currentContext?.description ?? plan.description;
+            let workflowHash = plan.workflowHash;
+
+            if (!workflowHash && entryPoint) {
               try {
-                await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
-              } catch (error) {
-                console.error('[useAgenticEvents] Failed to push workflow hash', error);
+                const composite = `${entryPoint}::${plan.description}`;
+                workflowHash = await sha256(composite);
+              } catch (hashError) {
+                console.error('[useAgenticEvents] Failed to compute workflow hash', hashError);
               }
             }
-          }
 
-          upsertActionLogEntry({
-            id: plan.id,
-            type: 'plan',
-            title: 'Plan generated',
-            description: plan.description,
-            status: 'success',
-            workflowHash,
-          });
+            // Only set workflow context if we have both hash and entryPoint
+            if (workflowHash && entryPoint) {
+              handlersRef.current.setWorkflowContext({
+                hash: workflowHash,
+                description: plan.description,
+                entryPoint,
+              });
+              if (isTauri) {
+                try {
+                  await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
+                } catch (error) {
+                  console.error('[useAgenticEvents] Failed to push workflow hash', error);
+                }
+              }
+            } else if (workflowHash && !entryPoint) {
+              console.warn('[useAgenticEvents] Missing entryPoint for workflow context, skipping setWorkflowContext');
+            }
+
+            upsertActionLogEntry({
+              id: plan.id,
+              type: 'plan',
+              title: 'Plan generated',
+              description: plan.description,
+              status: 'success',
+              workflowHash,
+            });
+          } catch (error) {
+            console.error('[useAgenticEvents] Error in agent:plan_update handler', error);
+          }
         },
-      );
+      ).catch((error) => {
+        console.error('[useAgenticEvents] Failed to setup agent:plan_update listener', error);
+        return () => {}; // Return a no-op unlisten function
+      });
       push(unlistenPlanUpdate);
 
       const unlistenActionUpdate = await listen<AgentActionUpdateEvent>(
@@ -446,7 +476,7 @@ export function useAgenticEvents() {
 
       const unlistenAgentStatus = await listen<AgentStatusEvent>('agent:status_update', (event) => {
         if (!isMountedRef.current) return;
-        const existingAgents = useUnifiedChatStore.getState().agents;
+        const existingAgents = useUnifiedChatStore.getState().agents ?? [];
         const agentExists = existingAgents.some((a) => a.id === event.payload.agent.id);
 
         if (agentExists) {
@@ -573,14 +603,19 @@ export function useAgenticEvents() {
         },
       );
       push(unlistenGoalCompleted);
+
+      // Mark setup as complete
+      setupInProgressRef.current = false;
     };
 
     setupListeners().catch((error) => {
       console.error('[useAgenticEvents] Failed to setup listeners:', error);
+      setupInProgressRef.current = false;
     });
 
     return () => {
       isMountedRef.current = false;
+      setupInProgressRef.current = false;
       unlistenFns.current.forEach((fn) => fn());
       unlistenFns.current = [];
     };
