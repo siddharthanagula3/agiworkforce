@@ -86,7 +86,8 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
         }
     })?;
 
-    window.set_decorations(false)?;
+    // Note: decorations setting is handled by tauri.conf.json
+    // On macOS, decorations: false can cause WebView rendering issues
     window.set_focus()?;
     window.set_title("AGI Workforce")?;
 
