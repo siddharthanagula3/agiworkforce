@@ -369,7 +369,14 @@ export function useAgenticEvents() {
               });
               if (isTauri) {
                 try {
-                  await invoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
+                  // BUG #19 FIX: Add timeout to prevent indefinite hang
+                  const INVOKE_TIMEOUT_MS = 10000; // 10 second timeout
+                  await Promise.race([
+                    invoke('agent_set_workflow_hash', { workflow_hash: workflowHash }),
+                    new Promise<never>((_, reject) =>
+                      setTimeout(() => reject(new Error('Timeout: agent_set_workflow_hash did not respond within 10 seconds')), INVOKE_TIMEOUT_MS)
+                    )
+                  ]);
                 } catch (error) {
                   console.error('[useAgenticEvents] Failed to push workflow hash', error);
                 }
