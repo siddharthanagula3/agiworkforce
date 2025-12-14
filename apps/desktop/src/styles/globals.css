@@ -82,16 +82,32 @@
 }
 
 @layer base {
-  * {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
     @apply border-border;
+  }
+
+  html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
   }
 
   body {
     @apply bg-background text-foreground;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
-    line-height: 1.6;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
 
@@ -101,6 +117,18 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    font: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
   }
 }
 
@@ -392,44 +420,6 @@
   .btn-premium:active {
     transform: translateY(0);
   }
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  overflow: hidden;
-}
-
-body {
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button {
-  font: inherit;
-  background: none;
-  border: none;
-  cursor: pointer;
 }
 
 @keyframes overlay-flash {

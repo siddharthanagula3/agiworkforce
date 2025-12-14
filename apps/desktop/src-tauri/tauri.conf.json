@@ -19,7 +19,7 @@
         "minWidth": 1000,
         "minHeight": 700,
         "resizable": true,
-        "decorations": false,
+        "decorations": true,
         "transparent": false,
         "alwaysOnTop": false,
         "shadow": true,
