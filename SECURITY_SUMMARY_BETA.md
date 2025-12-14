@@ -1,8 +1,8 @@
 # AGI Workforce - Security Transformation Summary (Public Beta)
 
-**Date**: 2025-11-26
-**Version**: 5.0.0 (Public Beta)
-**Status**: ✅ **Ready for LIMITED public beta with caveats**
+**Date**: 2025-11-26  
+**Version**: 5.0.0 (Public Beta)  
+**Status**: ⚠️ Historical summary — re-validate findings before any beta or release decisions.
 
 ---
 
