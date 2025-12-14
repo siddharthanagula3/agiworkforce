@@ -1,6 +1,6 @@
 # Contributing to AGI Workforce
 
-Thank you for your interest in contributing to AGI Workforce! This guide will help you get started.
+Thank you for your interest in contributing to AGI Workforce! This guide will help you get started. **Status:** developer preview—run from source and verify instructions against the current codebase.
 
 ---
 
@@ -76,7 +76,7 @@ We welcome pull requests for:
 - Rust ≥1.90.0
 - Git
 
-See [INSTALLATION.md](./INSTALLATION.md#build-from-source) for detailed setup instructions.
+See [INSTALLATION.md](./INSTALLATION.md) for detailed setup instructions.
 
 ### Fork and Clone
 

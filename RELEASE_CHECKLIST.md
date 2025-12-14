@@ -1,12 +1,14 @@
-# Release Checklist - v5.0.0
+# Release Checklist - v5.0.0 (Draft)
 
 **Last Updated**: December 2, 2025
-**Branch**: `claude/find-fix-bugs-01NZWT345fqy9yNQryzTGciG`
-**Status**: ✅ READY FOR PUBLIC RELEASE (with minor updates needed)
+**Branch**: `main`
+**Status**: ⚠️ Developer preview — no published installers or releases. Run/validate every step before any public distribution.
 
 ---
 
 ## ✅ COMPLETED - Production Ready
+
+> Note: Items below reflect prior internal checklist and have not been re-validated for the current developer-preview state. Re-run tests/builds and confirm artifact availability before claiming completion.
 
 ### Code Quality & Bug Fixes
 - ✅ **30+ critical bugs fixed** across 5 bug fix commits (9 total commits including documentation)
@@ -41,9 +43,9 @@
 - ✅ **Prompt injection detection** - Automatic blocking of malicious prompts
 
 ### Platform Support
-- ✅ **Windows 10/11** - MSI installer + portable EXE
-- ✅ **macOS 11+** - DMG + App bundle (Universal: Intel + Apple Silicon)
-- ✅ **Linux** - AppImage + .deb packages
+- ⚠️ **Windows 10/11** - Local unsigned builds only (MSI/EXE generation requires manual steps)
+- ⚠️ **macOS 11+** - Unsigned DMG/app bundles generated locally
+- ⚠️ **Linux** - AppImage/.deb produced locally; not published
 
 ### Production Agent Comparison
 - ✅ **PRODUCTION_AGENT_COMPARISON.md** - Comprehensive technical comparison created

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how to build Windows installers (NSIS `.exe` and MSI `.msi`) for the AGI Workforce desktop application using Tauri 2.
+Developer-preview note: installers are **not published or signed**. Use this guide only if you need to generate local unsigned Windows packages (NSIS `.exe` / MSI `.msi`) from the current source. Expect SmartScreen warnings on unsigned builds.
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ This guide explains how to build Windows installers (NSIS `.exe` and MSI `.msi`)
 ```
 
 - **Product Name**: AGI Workforce
-- **Version**: 5.0.0 (update in `package.json` and `tauri.conf.json`)
+- **Version**: 5.0.0 (update in `apps/desktop/package.json` and `tauri.conf.json`)
 - **App Identifier**: com.agiworkforce.desktop
 - **Bundle Targets**: `all` (builds NSIS and MSI)
 

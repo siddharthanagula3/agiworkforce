@@ -5,6 +5,8 @@ All notable changes to AGI Workforce Desktop App will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> Status: draft/legacy log for 5.0.0; contents have not been re-verified against the current developer-preview codebase. Validate entries before relying on them for release notes.
+
 ## [5.0.0] - 2025-12-02
 
 ### 🔒 Security Fixes

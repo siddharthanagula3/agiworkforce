@@ -1,30 +1,43 @@
 # AGI Workforce Desktop App
 
-This is the desktop application for AGI Workforce, built with React, Vite, and Tauri.
+Tauri + Vite + React desktop workspace for the AGI Workforce project.
 
-## Project Structure
+## Structure
 
-- `src/`: Main source code
-  - `components/`: UI components
-  - `stores/`: State management (Zustand)
-  - `future_scope/`: **Archived Features**. This directory contains features that are currently disabled and excluded from the build (Employees, Marketplace, ROI Dashboard).
-    - **Note**: Files in `future_scope` may contain broken relative imports. This is expected as they are archived.
-- `src-tauri/`: Rust backend for Tauri
+- `src/`: Frontend code (components, pages, stores, api, utils, types)
+- `src-tauri/`: Rust backend (Tauri commands, event emitters)
+- `future_scope/`: Archived/disabled features (employees, marketplace, ROI dashboard); excluded from builds and lint/typecheck.
 
-## Development
+## Environment
 
-### Prerequisites
+Copy `.env.example` → `.env` in this directory and set provider keys (`VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`, `VITE_GOOGLE_API_KEY`, optional Sentry/telemetry flags). MCP servers can be configured via `mcp-servers-config.example.json`.
 
-- Node.js
-- Rust (for Tauri)
+## Commands
 
-### Commands
+From repository root (preferred):
 
-- `npm run dev`: Start development server
-- `npm run build`: Build for production
-- `npm run lint`: Run ESLint (excludes `future_scope`)
-- `npm run typecheck`: Run TypeScript check (excludes `future_scope`)
+```bash
+pnpm dev:desktop                   # Tauri + Vite dev loop
+pnpm build:desktop                 # Build frontend + Tauri bundles
+pnpm --filter @agiworkforce/desktop test         # Vitest
+pnpm --filter @agiworkforce/desktop test:e2e     # Playwright
+pnpm --filter @agiworkforce/desktop typecheck     # TS check
+pnpm lint                          # ESLint (future_scope ignored)
+```
 
-## Linting
+From `apps/desktop`:
 
-The `future_scope` directory is explicitly ignored in `.eslintignore` and `tsconfig.json` to prevent build errors from the archived features.
+```bash
+pnpm dev        # Vite + Tauri dev
+pnpm build      # Vite build + tauri build
+pnpm test       # Vitest
+pnpm test:e2e   # Playwright
+pnpm typecheck  # TS check
+pnpm lint:fix   # ESLint fix
+```
+
+## Notes
+
+- Rust toolchain pinned to 1.90.0 (see `rust-toolchain.toml`).
+- Builds are unsigned; no auto-updater configured.
+- Approval workflow prompts for dangerous tools when safe mode is enabled.

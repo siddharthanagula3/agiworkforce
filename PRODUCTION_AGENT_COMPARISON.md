@@ -1,8 +1,9 @@
 # Production Agent Comparison
 
-**Last Updated**: December 2, 2025
-**Version**: 5.0.0
-**Purpose**: Technical comparison of AGI Workforce implementation against production desktop AI agents
+**Last Updated**: December 2, 2025  
+**Version**: 5.0.0  
+**Purpose**: Technical comparison of AGI Workforce implementation against production desktop AI agents  
+**Status**: ⚠️ Legacy/internal notes — claims and sources below are not re-validated; use only after verifying against current products.
 
 ---
 
@@ -16,7 +17,7 @@ AGI Workforce has been analyzed against leading production desktop AI agents to 
 - **Google Project IDX/Firebase Studio** - Cloud-based IDE
 - **Gemini CLI** - Terminal-based AI agent
 
-**Verdict**: ✅ **AGI Workforce meets or exceeds production agent standards**
+**Verdict**: ⚠️ Needs re-validation — treat as historical analysis, not a current benchmark.
 
 ---
 
