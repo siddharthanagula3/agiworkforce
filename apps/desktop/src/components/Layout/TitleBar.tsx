@@ -38,7 +38,7 @@ const TitleBar = ({
       data-tauri-drag-region
     >
       {/* Logo and Title */}
-      <div className="flex.items-center gap-3 min-w-0 shrink" data-tauri-drag-region>
+      <div className="flex items-center gap-3 min-w-0 shrink" data-tauri-drag-region>
         <button
           type="button"
           onClick={onToggleSidebar}
