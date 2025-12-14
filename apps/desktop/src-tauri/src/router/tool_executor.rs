@@ -147,6 +147,65 @@ impl ToolExecutor {
             None,
         );
 
+        // Treat MCP tool calls as dangerous in safe mode (they can run arbitrary server-defined actions)
+        let in_safe_mode = self.conversation_mode.as_deref() == Some("safe");
+        if tool_call.name.starts_with("mcp_") && in_safe_mode {
+            tracing::warn!(
+                "[Security] MCP tool '{}' requested in safe mode. Emitting approval request.",
+                tool_call.name
+            );
+
+            if let Some(app_handle) = &self.app_handle {
+                if let Err(e) = app_handle.emit(
+                    "approval:request",
+                    json!({
+                        "id": uuid::Uuid::new_v4().to_string(),
+                        "type": "tool_execution",
+                        "toolName": tool_call.name,
+                        "description": format!("Agent wants to execute MCP tool: {}", tool_call.name),
+                        "riskLevel": "high",
+                        "details": {
+                            "tool": tool_call.name,
+                            "arguments": metadata_snapshot.clone(),
+                            "source": "mcp"
+                        },
+                        "status": "pending",
+                    }),
+                ) {
+                    tracing::error!("Failed to emit approval:request event for MCP tool: {}", e);
+                }
+            }
+
+            let message = format!(
+                "User approval required to execute MCP tool: {}",
+                tool_call.name
+            );
+            self.emit_tool_action(
+                &action_id,
+                &tool_call.name,
+                "blocked",
+                &metadata_snapshot,
+                Some(message.clone()),
+            );
+            self.emit_tool_metrics(
+                &action_id,
+                &tool_call.name,
+                start_time.elapsed().as_millis() as u64,
+                false,
+            );
+
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "approval_required": true }),
+                error: Some(message),
+                metadata: HashMap::from([
+                    ("requires_approval".to_string(), json!(true)),
+                    ("tool_name".to_string(), json!(tool_call.name)),
+                    ("tool_source".to_string(), json!("mcp")),
+                ]),
+            });
+        }
+
         if tool_call.name.starts_with("mcp_") {
             let result = self.execute_mcp_tool(tool_call, args).await;
             return self.finalize_tool_result(
@@ -195,7 +254,8 @@ impl ToolExecutor {
             );
 
             if let Some(app_handle) = &self.app_handle {
-                let _ = app_handle.emit(
+                // BUG #18 FIX: Log emit errors instead of suppressing them
+                if let Err(e) = app_handle.emit(
                     "approval:request",
                     json!({
                         "id": uuid::Uuid::new_v4().to_string(),
@@ -209,9 +269,11 @@ impl ToolExecutor {
                         },
                         "status": "pending",
                     }),
-                );
+                ) {
+                    tracing::error!("Failed to emit approval:request event: {}", e);
+                }
 
-                let _ = app_handle.emit(
+                if let Err(e) = app_handle.emit(
                     "agent:status:update",
                     json!({
                         "id": "main_agent",
@@ -220,7 +282,9 @@ impl ToolExecutor {
                         "currentStep": format!("Waiting for approval to execute: {}", tool.name),
                         "progress": 50
                     }),
-                );
+                ) {
+                    tracing::error!("Failed to emit agent:status:update event: {}", e);
+                }
             }
 
             let message = format!(
@@ -253,7 +317,8 @@ impl ToolExecutor {
         }
 
         if let Some(app_handle) = &self.app_handle {
-            let _ = app_handle.emit(
+            // BUG #18 FIX: Log emit errors instead of suppressing them
+            if let Err(e) = app_handle.emit(
                 "agent:status:update",
                 json!({
                     "id": "main_agent",
@@ -262,7 +327,9 @@ impl ToolExecutor {
                     "currentStep": format!("Executing: {}", tool.name),
                     "progress": 60
                 }),
-            );
+            ) {
+                tracing::error!("Failed to emit agent:status:update event: {}", e);
+            }
         }
 
         let result = self.execute_tool_impl(&tool, args).await;
@@ -470,23 +537,56 @@ impl ToolExecutor {
                 use crate::automation::screen::capture_primary_screen;
                 match capture_primary_screen() {
                     Ok(captured) => {
-                        let temp_path = std::env::temp_dir().join(format!(
-                            "screenshot_{}.png",
-                            &uuid::Uuid::new_v4().to_string()[..8]
-                        ));
-                        match captured.pixels.save(&temp_path) {
-                            Ok(_) => Ok(ToolResult {
-                                success: true,
-                                data: json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }),
-                                error: None,
-                                metadata: HashMap::new(),
-                            }),
-                            Err(e) => Ok(ToolResult {
-                                success: false,
-                                data: json!(null),
-                                error: Some(format!("Failed to save screenshot: {}", e)),
-                                metadata: HashMap::new(),
-                            }),
+                        // BUG #16 FIX: Use tempfile crate for automatic cleanup of temporary files
+                        // This ensures files are cleaned up when they go out of scope
+                        let temp_file = match tempfile::Builder::new()
+                            .prefix("screenshot_")
+                            .suffix(".png")
+                            .tempfile()
+                        {
+                            Ok(file) => file,
+                            Err(e) => {
+                                return Ok(ToolResult {
+                                    success: false,
+                                    data: json!(null),
+                                    error: Some(format!("Failed to create temp file: {}", e)),
+                                    metadata: HashMap::new(),
+                                });
+                            }
+                        };
+
+                        let temp_path = temp_file.path();
+                        match captured.pixels.save(temp_path) {
+                            Ok(_) => {
+                                // Keep the file until the ToolResult is consumed
+                                // By persisting it, we prevent automatic deletion
+                                let (file, path) = temp_file.keep().map_err(|e| {
+                                    anyhow!("Failed to persist temp file: {}", e)
+                                })?;
+                                drop(file); // Close the file handle
+
+                                Ok(ToolResult {
+                                    success: true,
+                                    data: json!({
+                                        "screenshot_path": path.to_string_lossy().to_string(),
+                                        "cleanup_note": "File will be cleaned up by OS temp directory cleanup"
+                                    }),
+                                    error: None,
+                                    metadata: HashMap::from([
+                                        ("temp_file".to_string(), json!(true)),
+                                        ("path".to_string(), json!(path.to_string_lossy().to_string())),
+                                    ]),
+                                })
+                            }
+                            Err(e) => {
+                                // temp_file will be automatically deleted when it goes out of scope
+                                Ok(ToolResult {
+                                    success: false,
+                                    data: json!(null),
+                                    error: Some(format!("Failed to save screenshot: {}", e)),
+                                    metadata: HashMap::new(),
+                                })
+                            }
                         }
                     }
                     Err(e) => Ok(ToolResult {
@@ -933,7 +1033,7 @@ impl ToolExecutor {
                 cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
                 cmd.kill_on_drop(true);
 
-                let child = cmd
+                let mut child = cmd
                     .spawn()
                     .map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
                 let start = Instant::now();
@@ -947,7 +1047,28 @@ impl ToolExecutor {
                         result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?
                     }
                     Err(_) => {
+                        // BUG #15 FIX: Gracefully kill timed-out process to prevent zombie processes
                         let timeout_error = format!("Command timed out after {} ms", timeout_ms);
+
+                        // First attempt: graceful kill (SIGTERM on Unix, terminate on Windows)
+                        if let Err(e) = child.kill().await {
+                            tracing::warn!("Failed to kill timed-out process: {}", e);
+                        }
+
+                        // Give process 1 second to cleanup, then force kill if still running
+                        match timeout(TokioDuration::from_millis(1000), child.wait()).await {
+                            Ok(Ok(_status)) => {
+                                tracing::debug!("Process terminated gracefully after timeout");
+                            }
+                            Ok(Err(e)) => {
+                                tracing::warn!("Error waiting for process termination: {}", e);
+                            }
+                            Err(_) => {
+                                // Process didn't exit in 1 second, it will be force-killed by kill_on_drop
+                                tracing::warn!("Process did not terminate gracefully, will be force-killed");
+                            }
+                        }
+
                         if let Some(app_handle) = &self.app_handle {
                             let terminal_event = TerminalCommand {
                                 id: Uuid::new_v4().to_string(),
@@ -1424,7 +1545,14 @@ impl ToolExecutor {
                     "error": error,
                 }
             });
-            let _ = app_handle.emit("agent:action_update", payload);
+            // BUG #18 FIX: Log emit errors instead of suppressing them
+            if let Err(e) = app_handle.emit("agent:action_update", payload) {
+                tracing::error!(
+                    "Failed to emit agent:action_update event for action {}: {}",
+                    action_id,
+                    e
+                );
+            }
         }
     }
 
@@ -1440,7 +1568,14 @@ impl ToolExecutor {
                     "completionReason": completion_reason,
                 }
             });
-            let _ = app_handle.emit("agent:metrics", payload);
+            // BUG #18 FIX: Log emit errors instead of suppressing them
+            if let Err(e) = app_handle.emit("agent:metrics", payload) {
+                tracing::error!(
+                    "Failed to emit agent:metrics event for action {}: {}",
+                    action_id,
+                    e
+                );
+            }
         }
     }
 

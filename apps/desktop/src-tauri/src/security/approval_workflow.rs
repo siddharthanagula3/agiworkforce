@@ -155,6 +155,7 @@ impl ApprovalWorkflow {
     }
 
     /// Approve a request
+    /// SECURITY FIX: Uses atomic UPDATE with WHERE status='pending' to prevent race conditions
     pub fn approve_request(
         &self,
         request_id: &str,
@@ -168,7 +169,9 @@ impl ApprovalWorkflow {
 
         let now = Utc::now().timestamp();
 
-        match decision {
+        // SECURITY FIX: Use atomic UPDATE with affected row count check
+        // This prevents TOCTOU race where multiple approvals could be processed
+        let rows_affected = match decision {
             ApprovalDecision::Approved { reason } => {
                 conn.execute(
                     "UPDATE approval_requests
@@ -181,7 +184,7 @@ impl ApprovalWorkflow {
                         reason,
                         request_id,
                     ],
-                )?;
+                )?
             }
             ApprovalDecision::Rejected { reason } => {
                 conn.execute(
@@ -195,8 +198,25 @@ impl ApprovalWorkflow {
                         reason,
                         request_id,
                     ],
-                )?;
+                )?
             }
+        };
+
+        // SECURITY FIX: Verify exactly one row was updated
+        // If 0 rows affected, the approval was already processed (race condition)
+        if rows_affected == 0 {
+            return Err(Error::Other(format!(
+                "Approval request {} not found or already processed (race condition prevented)",
+                request_id
+            )));
+        }
+
+        if rows_affected > 1 {
+            // This should never happen due to PRIMARY KEY constraint
+            return Err(Error::Other(format!(
+                "Critical error: Multiple approval requests updated for id {}",
+                request_id
+            )));
         }
 
         Ok(())
