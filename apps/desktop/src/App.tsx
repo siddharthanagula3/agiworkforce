@@ -11,6 +11,7 @@ import { CircleUserRound, Maximize2, Minimize2, Moon, Plus, RefreshCcw, Sun } fr
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorToastContainer from './components/errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
+import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import useErrorStore from './stores/errorStore';
 // Lazy load heavy components for better bundle splitting
@@ -360,9 +361,11 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-      <Suspense fallback={<LoadingFallback />}>
-        {isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}
-      </Suspense>
+      <TooltipProvider delayDuration={300}>
+        <Suspense fallback={<LoadingFallback />}>
+          {isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}
+        </Suspense>
+      </TooltipProvider>
     </ErrorBoundary>
   );
 };
