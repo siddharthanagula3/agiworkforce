@@ -21,8 +21,9 @@ use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use futures_util::StreamExt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration as TokioDuration};
 use tracing::{info, warn};
 
@@ -215,6 +216,8 @@ struct StreamChunkPayload {
 struct StreamEndPayload {
     conversation_id: i64,
     message_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -240,7 +243,7 @@ pub async fn chat_create_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     let id = repository::create_conversation(&conn, trimmed_title.to_string())
         .map_err(|e| format!("Failed to create conversation: {}", e))?;
     repository::get_conversation(&conn, id)
@@ -251,7 +254,7 @@ pub async fn chat_create_conversation(
 pub async fn chat_get_conversations(
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<Conversation>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::list_conversations(&conn, 1000, 0)
         .map_err(|e| format!("Failed to list conversations: {}", e))
 }
@@ -271,7 +274,7 @@ pub async fn chat_get_conversation(
         ));
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::get_conversation(&conn, id)
         .map_err(|e| format!("Failed to get conversation {}: {}", id, e))
 }
@@ -301,7 +304,7 @@ pub async fn chat_update_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::update_conversation_title(&conn, id, trimmed_title.to_string())
         .map_err(|e| format!("Failed to update conversation {}: {}", id, e))
 }
@@ -318,7 +321,7 @@ pub async fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Re
         ));
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::delete_conversation(&conn, id)
         .map_err(|e| format!("Failed to delete conversation {}: {}", id, e))
 }
@@ -367,7 +370,7 @@ pub async fn chat_create_message(
         }
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
 
     let role = match request.role.as_str() {
         "user" => MessageRole::User,
@@ -418,7 +421,7 @@ pub async fn chat_get_messages(
         ));
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
             "Failed to list messages for conversation {}: {}",
@@ -449,7 +452,7 @@ pub async fn chat_update_message(
         return Err("Message content cannot exceed 1,000,000 characters".to_string());
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::update_message_content(&conn, id, trimmed_content.to_string())
         .map_err(|e| format!("Failed to update message {}: {}", id, e))
 }
@@ -463,7 +466,7 @@ pub async fn chat_delete_message(db: State<'_, AppDatabase>, id: i64) -> Result<
         return Err(format!("Invalid message ID: {}. ID must be positive", id));
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     repository::delete_message(&conn, id)
         .map_err(|e| format!("Failed to delete message {}: {}", id, e))
 }
@@ -483,7 +486,7 @@ pub async fn chat_get_conversation_stats(
         ));
     }
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().await;
     let messages = repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
             "Failed to list messages for conversation {}: {}",
@@ -549,28 +552,42 @@ async fn chat_send_message_streaming(
         }
     }
 
-    // Create conversation and user message
+    // Create conversation and user message (BUG #11 FIX: Use transaction for atomicity)
     let (conversation_id, _user_message_id, assistant_message_id) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
+
+        // Start a transaction to ensure atomicity
+        let tx = conn.unchecked_transaction()
+            .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
         let conversation_id = match request.conversation_id {
             Some(id) => {
-                repository::get_conversation(&conn, id)
+                repository::get_conversation(&tx, id)
                     .map_err(|e| format!("Conversation not found: {}", e))?;
                 id
             }
-            None => repository::create_conversation(&conn, "New Conversation".to_string())
+            None => repository::create_conversation(&tx, "New Conversation".to_string())
                 .map_err(|e| format!("Failed to create conversation: {}", e))?,
         };
 
         let user_msg = Message::new(conversation_id, MessageRole::User, trimmed_content.clone());
-        let user_msg_id = repository::create_message(&conn, &user_msg)
-            .map_err(|e| format!("Failed to create user message: {}", e))?;
+        let user_msg_id = repository::create_message(&tx, &user_msg)
+            .map_err(|e| {
+                // Rollback will happen automatically when tx is dropped
+                format!("Failed to create user message: {}", e)
+            })?;
 
         // Create placeholder assistant message
         let assistant_msg = Message::new(conversation_id, MessageRole::Assistant, String::new());
-        let assistant_msg_id = repository::create_message(&conn, &assistant_msg)
-            .map_err(|e| format!("Failed to create assistant message: {}", e))?;
+        let assistant_msg_id = repository::create_message(&tx, &assistant_msg)
+            .map_err(|e| {
+                // Rollback will happen automatically when tx is dropped
+                format!("Failed to create assistant message: {}", e)
+            })?;
+
+        // Commit the transaction
+        tx.commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         (conversation_id, user_msg_id, assistant_msg_id)
     };
@@ -582,7 +599,7 @@ async fn chat_send_message_streaming(
 
     // Get conversation history (after compaction)
     let history = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -683,6 +700,11 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
     };
 
     // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees (same as non-streaming)
+    let conversation_mode = request
+        .conversation_mode
+        .clone()
+        .unwrap_or_else(|| "safe".to_string());
+
     let (tool_definitions, tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
         use crate::commands::McpState;
@@ -696,7 +718,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                     ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
 
                 // 🔒 Set conversation mode for security checks
-                tool_executor.set_conversation_mode(request.conversation_mode.clone());
+                tool_executor.set_conversation_mode(Some(conversation_mode.clone()));
 
                 let mut tool_defs = tool_executor.get_tool_definitions(None);
 
@@ -718,7 +740,19 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                 (Some(tool_defs), Some(tool_executor))
             }
             Err(e) => {
+                // BUG #13 FIX: Emit warning to frontend when tools unavailable
                 tracing::warn!("[Chat Streaming] Failed to initialize tool registry: {}", e);
+
+                // Emit warning event to frontend
+                let _ = app_handle.emit(
+                    "tool:initialization:warning",
+                    serde_json::json!({
+                        "message": "Tool execution system is unavailable",
+                        "details": format!("Failed to initialize tool registry: {}", e),
+                        "timestamp": chrono::Utc::now().to_rfc3339(),
+                    }),
+                );
+
                 (None, None)
             }
         }
@@ -770,9 +804,10 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
             .map_err(|e| format!("Streaming failed: {}", e))?
     };
 
-    // Process stream chunks
+    // Process stream chunks (BUG #12 & #20 FIX: Track errors and report in stream-end)
     let mut accumulated_content = String::new();
     let _total_tokens: Option<i32> = None;
+    let mut stream_error: Option<String> = None;
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
@@ -800,27 +835,38 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                 }
             }
             Err(e) => {
-                warn!("Stream chunk error: {}", e);
+                let error_msg = format!("Stream chunk error: {}", e);
+                warn!("{}", error_msg);
+                stream_error = Some(error_msg);
                 break;
             }
         }
     }
 
-    // Emit stream end
+    // Emit stream end with error status if applicable
     if let Err(error) = app_handle.emit(
         "chat:stream-end",
         StreamEndPayload {
             conversation_id,
             message_id: assistant_message_id,
+            error: stream_error.clone(),
         },
     ) {
         warn!("Failed to emit stream end event: {}", error);
     }
 
-    // Update assistant message with final content
+    // Update assistant message with final content (only if no streaming error)
     let mut assistant_msg = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        repository::update_message_content(&conn, assistant_message_id, accumulated_content.clone())
+        let conn = db.conn.lock().await;
+
+        // If there was a streaming error, append error message to content
+        let final_content = if let Some(ref error) = stream_error {
+            format!("{}\n\n⚠️ Streaming Error: {}", accumulated_content, error)
+        } else {
+            accumulated_content.clone()
+        };
+
+        repository::update_message_content(&conn, assistant_message_id, final_content)
             .map_err(|e| format!("Failed to update assistant message: {}", e))?
     };
 
@@ -942,21 +988,29 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                             }
                         }
 
-                        // Add tool results to conversation
-                        for (tool_call_id, result_content) in tool_results {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                            let tool_result_msg = Message::new(
-                                conversation_id,
-                                MessageRole::System,
-                                format!("Tool result [{}]: {}", tool_call_id, result_content),
-                            );
-                            repository::create_message(&conn, &tool_result_msg)
-                                .map_err(|e| format!("Failed to save tool result: {}", e))?;
-                        }
-
-                        // Continue conversation with tool results (make another request)
+                        // Add tool results to conversation (BUG #10 FIX: Batch database operations)
                         let updated_history = {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
+
+                            // Batch all tool results in a single transaction
+                            let tx = conn.unchecked_transaction()
+                                .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+                            for (tool_call_id, result_content) in tool_results {
+                                let tool_result_msg = Message::new(
+                                    conversation_id,
+                                    MessageRole::System,
+                                    format!("Tool result [{}]: {}", tool_call_id, result_content),
+                                );
+                                repository::create_message(&tx, &tool_result_msg)
+                                    .map_err(|e| format!("Failed to save tool result: {}", e))?;
+                            }
+
+                            // Commit transaction
+                            tx.commit()
+                                .map_err(|e| format!("Failed to commit tool results transaction: {}", e))?;
+
+                            // Get updated history after committing
                             repository::list_messages(&conn, conversation_id)
                                 .map_err(|e| format!("Failed to list messages: {}", e))?
                         };
@@ -988,7 +1042,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                             router.invoke_candidate(candidate, &final_request).await
                         } {
                             // Update assistant message with final response
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             assistant_msg = repository::update_message_content(
                                 &conn,
                                 assistant_message_id,
@@ -1004,7 +1058,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                         );
 
                         // Save error message to conversation
-                        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                        let conn = db.conn.lock().await;
                         let error_msg = Message::new(
                             conversation_id,
                             MessageRole::System,
@@ -1035,7 +1089,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
 
     // Fetch final conversation state
     let (conversation, user_msg, messages) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         let conversation = repository::get_conversation(&conn, conversation_id)
             .map_err(|e| format!("Failed to get conversation: {}", e))?;
         let user_msg = repository::get_message(&conn, _user_message_id)
@@ -1154,24 +1208,31 @@ pub async fn chat_send_message(
         }
     }
 
+    // BUG #11 FIX: Use transaction for atomicity in non-streaming path
     let (conversation_id, user_message) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
+
+        let tx = conn.unchecked_transaction()
+            .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
         let conversation_id = match request.conversation_id {
             Some(id) => {
-                repository::get_conversation(&conn, id)
+                repository::get_conversation(&tx, id)
                     .map_err(|e| format!("Conversation not found: {}", e))?;
                 id
             }
-            None => repository::create_conversation(&conn, "New Conversation".to_string())
+            None => repository::create_conversation(&tx, "New Conversation".to_string())
                 .map_err(|e| format!("Failed to create conversation: {}", e))?,
         };
 
         let message = Message::new(conversation_id, MessageRole::User, trimmed_content.clone());
-        let message_id = repository::create_message(&conn, &message)
+        let message_id = repository::create_message(&tx, &message)
             .map_err(|e| format!("Failed to create message: {}", e))?;
-        let message = repository::get_message(&conn, message_id)
+        let message = repository::get_message(&tx, message_id)
             .map_err(|e| format!("Failed to retrieve message: {}", e))?;
+
+        tx.commit()
+            .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
         (conversation_id, message)
     };
@@ -1195,7 +1256,7 @@ pub async fn chat_send_message(
 
     // Get conversation history (after compaction)
     let history = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
         repository::list_messages(&conn, conversation_id)
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
@@ -1212,6 +1273,11 @@ pub async fn chat_send_message(
         .collect();
 
     // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees
+    let conversation_mode = request
+        .conversation_mode
+        .clone()
+        .unwrap_or_else(|| "safe".to_string());
+
     let (tool_definitions, _tool_executor) = if request.enable_tools.unwrap_or(true) {
         use crate::agi::tools::ToolRegistry;
         use crate::commands::McpState;
@@ -1225,7 +1291,7 @@ pub async fn chat_send_message(
                     ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
 
                 // 🔒 Set conversation mode for security checks
-                tool_executor.set_conversation_mode(request.conversation_mode.clone());
+                tool_executor.set_conversation_mode(Some(conversation_mode.clone()));
 
                 let mut tool_defs = tool_executor.get_tool_definitions(None);
 
@@ -1247,7 +1313,19 @@ pub async fn chat_send_message(
                 (Some(tool_defs), Some(tool_executor))
             }
             Err(e) => {
+                // BUG #13 FIX: Emit warning to frontend when tools unavailable
                 tracing::warn!("[Chat] Failed to initialize tool registry: {}", e);
+
+                // Emit warning event to frontend
+                let _ = app_handle.emit(
+                    "tool:initialization:warning",
+                    serde_json::json!({
+                        "message": "Tool execution system is unavailable",
+                        "details": format!("Failed to initialize tool registry: {}", e),
+                        "timestamp": chrono::Utc::now().to_rfc3339(),
+                    }),
+                );
+
                 (None, None)
             }
         }
@@ -1352,7 +1430,7 @@ pub async fn chat_send_message(
         );
 
         if let Some(entry) = {
-            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            let conn = db.conn.lock().await;
             llm_state
                 .cache_manager
                 .fetch(&conn, &cache_key)
@@ -1391,7 +1469,7 @@ pub async fn chat_send_message(
             Ok(mut route_outcome) => {
                 route_outcome.response.cached = false;
                 {
-                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                    let conn = db.conn.lock().await;
                     let expires_at = llm_state.cache_manager.default_expiry();
                     llm_state
                         .cache_manager
@@ -1418,7 +1496,7 @@ pub async fn chat_send_message(
                     if let Some(ref executor) = _tool_executor {
                         // Save assistant message with tool calls
                         let _assistant_msg_with_tools = {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
                             let mut assistant = Message::new(
                                 conversation_id,
                                 MessageRole::Assistant,
@@ -1475,18 +1553,7 @@ pub async fn chat_send_message(
                             }
                         }
 
-                        // Add tool results to conversation
-                        for (tool_call_id, result_content) in tool_results {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                            let tool_result_msg = Message::new(
-                                conversation_id,
-                                MessageRole::System, // Tool results as system messages
-                                format!("Tool result [{}]: {}", tool_call_id, result_content),
-                            );
-                            repository::create_message(&conn, &tool_result_msg)
-                                .map_err(|e| format!("Failed to save tool result: {}", e))?;
-                        }
-
+                        // Add tool results to conversation (BUG #10 FIX: Batch database operations)
                         // Continue conversation with tool results (non-streaming for now)
                         tracing::info!(
                             "[Chat] Continuing conversation with {} tool results",
@@ -1494,7 +1561,27 @@ pub async fn chat_send_message(
                         );
 
                         let updated_history = {
-                            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                            let conn = db.conn.lock().await;
+
+                            // Batch all tool results in a single transaction
+                            let tx = conn.unchecked_transaction()
+                                .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+                            for (tool_call_id, result_content) in tool_results {
+                                let tool_result_msg = Message::new(
+                                    conversation_id,
+                                    MessageRole::System, // Tool results as system messages
+                                    format!("Tool result [{}]: {}", tool_call_id, result_content),
+                                );
+                                repository::create_message(&tx, &tool_result_msg)
+                                    .map_err(|e| format!("Failed to save tool result: {}", e))?;
+                            }
+
+                            // Commit transaction
+                            tx.commit()
+                                .map_err(|e| format!("Failed to commit tool results transaction: {}", e))?;
+
+                            // Get updated history after committing
                             repository::list_messages(&conn, conversation_id)
                                 .map_err(|e| format!("Failed to list messages: {}", e))?
                         };
@@ -1541,7 +1628,7 @@ pub async fn chat_send_message(
                         );
 
                         // Save error message to conversation so user knows what happened
-                        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                        let conn = db.conn.lock().await;
                         let error_msg = Message::new(
                             conversation_id,
                             MessageRole::System,
@@ -1578,7 +1665,7 @@ pub async fn chat_send_message(
     })?;
 
     let (conversation, assistant_message, stats, last_message) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.conn.lock().await;
 
         let mut assistant = Message::new(
             conversation_id,
@@ -1667,6 +1754,7 @@ pub async fn chat_send_message(
                 StreamEndPayload {
                     conversation_id: conversation.id,
                     message_id: assistant_message.id,
+                    error: None, // No error in simulated streaming
                 },
             ) {
                 warn!("Failed to emit stream end event: {}", error);
@@ -1772,8 +1860,8 @@ pub struct CostOverviewResponse {
 }
 
 #[tauri::command]
-pub fn chat_get_cost_overview(db: State<AppDatabase>) -> Result<CostOverviewResponse, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+pub async fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverviewResponse, String> {
+    let conn = db.conn.lock().await;
 
     let now = Utc::now();
     let today_start = Utc
@@ -1812,8 +1900,8 @@ pub struct CostAnalyticsResponse {
 
 // Updated Nov 16, 2025: Added input validation for days parameter
 #[tauri::command]
-pub fn chat_get_cost_analytics(
-    db: State<AppDatabase>,
+pub async fn chat_get_cost_analytics(
+    db: State<'_, AppDatabase>,
     days: Option<i64>,
     provider: Option<String>,
     model: Option<String>,
@@ -1831,10 +1919,7 @@ pub fn chat_get_cost_analytics(
         }
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
     let window = days.unwrap_or(30).max(1);
 
     let provider_clean = provider
@@ -1881,7 +1966,7 @@ pub fn chat_get_cost_analytics(
 
 // Updated Nov 16, 2025: Added input validation for budget amount
 #[tauri::command]
-pub fn chat_set_monthly_budget(db: State<AppDatabase>, amount: Option<f64>) -> Result<(), String> {
+pub async fn chat_set_monthly_budget(db: State<'_, AppDatabase>, amount: Option<f64>) -> Result<(), String> {
     // Validate amount if provided
     if let Some(value) = amount {
         if value < 0.0 {
@@ -1898,10 +1983,7 @@ pub fn chat_set_monthly_budget(db: State<AppDatabase>, amount: Option<f64>) -> R
         }
     }
 
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to acquire database lock: {}", e))?;
+    let conn = db.conn.lock().await;
 
     match amount {
         Some(value) => repository::set_setting(

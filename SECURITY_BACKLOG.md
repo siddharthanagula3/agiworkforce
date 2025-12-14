@@ -1,8 +1,8 @@
 # AGI Workforce - Security Backlog
 
-**Status**: ✅ **MAJOR PROGRESS - Ready for Closed Beta**
-**Updated**: 2025-11-26
-**Goal**: Transform from "not safe for public beta" to "powerful but controlled"
+**Status**: ⚠️ Historical backlog — re-assess before any beta claims  
+**Updated**: 2025-11-26  
+**Goal**: Transform from "not safe for public beta" to "powerful but controlled"  
 **Philosophy**: Powerful by default, dangerous only with explicit consent
 
 ---
