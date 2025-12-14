@@ -3,8 +3,8 @@
 ## Project Structure & Module Organization
 
 - Monorepo managed by pnpm; primary app lives in `apps/desktop` (Tauri + Vite + React + Tailwind). Browser extension work is under `apps/extension`; `apps/_future_mobile` is parked.
-- Shared code sits in `packages/` (`types`, `utils`); backend pieces live in `services/` (`api-gateway`, `signaling-server`; update-server TBD). Global configs and scripts are in `configs/` and `scripts/`; infra/migrations folders were removed until real assets exist.
-- Tests live both in `tests/` (cross-cutting suites) and inside features (e.g., `apps/desktop/src/__tests__`, `apps/desktop/e2e`).
+- Shared code sits in `packages/` (`types`, `utils`); backend pieces live in `services/` (`api-gateway`, `signaling-server`; update-server TBD). Repo-level configs live at the root (`package.json`, `tsconfig.base.json`, lint configs) and helper scripts sit in `dev-scripts/`; infra/migrations folders were removed until real assets exist.
+- Tests live inside features (`apps/desktop/src/**/__tests__`) with E2E/Playwright suites under `apps/desktop/e2e` and `apps/desktop/playwright`; there's no root `tests/` directory.
 
 ## Build, Test, and Development Commands
 

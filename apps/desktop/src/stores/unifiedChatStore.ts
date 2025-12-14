@@ -775,6 +775,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       confirmOptimisticMessage: (tempId, confirmedId) =>
         set((state) => {
+          // BUG FIX #7: Capture convoId once at the start to ensure atomicity
+          const convoId = state.activeConversationId;
           const applyConfirmation = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === tempId);
             if (idx !== -1 && list[idx]) {
@@ -786,8 +788,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             }
           };
           applyConfirmation(state.messages);
-          const convoId = state.activeConversationId;
-          if (convoId && state.messagesByConversation[convoId]) {
+          // Verify convoId hasn't changed before second apply
+          if (convoId && convoId === state.activeConversationId && state.messagesByConversation[convoId]) {
             applyConfirmation(state.messagesByConversation[convoId]);
           }
         }),
@@ -865,10 +867,10 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const { currentStreamingMessageId } = state;
           if (currentStreamingMessageId) {
-            const index = state.messages.findIndex((m) => m.id === currentStreamingMessageId);
-            if (index !== -1 && state.messages[index]) {
-              state.messages[index].content += content;
-            }
+            // BUG FIX #2: Use immutable update with map() to avoid race condition
+            state.messages = state.messages.map((m) =>
+              m.id === currentStreamingMessageId ? { ...m, content: m.content + content } : m,
+            );
           }
         }),
 
@@ -1283,9 +1285,17 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           // Auto-remove after fadeAfter duration if specified
           if (entry.fadeAfter) {
             const timerId = setTimeout(() => {
-              const current = get();
-              current.fadeTimers.delete(newEntry.id);
-              current.removeActionTrailEntry(newEntry.id);
+              // BUG FIX #5: Add try-catch and verify entry still exists before removing
+              try {
+                const current = get();
+                // Check if entry still exists before attempting removal
+                if (current.actionTrail.some((e) => e.id === newEntry.id)) {
+                  current.fadeTimers.delete(newEntry.id);
+                  current.removeActionTrailEntry(newEntry.id);
+                }
+              } catch (error) {
+                console.warn('[ActionTrail] Error during auto-remove:', error);
+              }
             }, entry.fadeAfter);
             state.fadeTimers.set(newEntry.id, timerId);
           }
@@ -1384,7 +1394,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           content.includes('http://') ||
           content.includes('https://') ||
           message.operations?.some(
-            (op) => op.type === 'tool' && op.data?.toolName?.includes('browser'),
+            (op) =>
+              op.type === 'tool' &&
+              typeof op.data === 'object' &&
+              op.data !== null &&
+              typeof op.data.toolName === 'string' &&
+              op.data.toolName.includes('browser'),
           )
         ) {
           return 'browser';
