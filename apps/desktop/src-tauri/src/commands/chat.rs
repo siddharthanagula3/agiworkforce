@@ -121,7 +121,7 @@ pub struct CreateConversationRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMessageRequest {
     pub conversation_id: i64,
-    pub role: String,
+    pub role: MessageRole,
     pub content: String,
     pub tokens: Option<i32>,
     pub cost: Option<f64>,
@@ -372,22 +372,10 @@ pub async fn chat_create_message(
 
     let conn = db.conn.lock().await;
 
-    let role = match request.role.as_str() {
-        "user" => MessageRole::User,
-        "assistant" => MessageRole::Assistant,
-        "system" => MessageRole::System,
-        other => {
-            return Err(format!(
-                "Invalid role: '{}'. Must be 'user', 'assistant', or 'system'",
-                other
-            ))
-        }
-    };
-
     let message = Message {
         id: 0,
         conversation_id: request.conversation_id,
-        role,
+        role: request.role,
         content: trimmed_content.to_string(),
         tokens: request.tokens,
         cost: request.cost,
