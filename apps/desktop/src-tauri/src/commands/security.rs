@@ -357,15 +357,15 @@ mod tests {
         let manager = state.read();
 
         // Test registration
-        let user_id = manager
-            .register_user(
-                "test@example.com",
+        let user = manager
+            .register(
+                "test@example.com".to_string(),
                 "password123",
-                &crate::security::UserRole::Editor,
+                crate::security::UserRole::Editor,
             )
             .unwrap();
 
-        assert!(!user_id.is_empty());
+        assert!(!user.id.is_empty());
 
         // Test login
         let token = manager.login("test@example.com", "password123").unwrap();

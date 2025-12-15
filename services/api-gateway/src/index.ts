@@ -1,17 +1,16 @@
+import 'dotenv/config';
+
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
-import dotenv from 'dotenv';
 
 import { authRouter } from './routes/auth';
 import { desktopRouter } from './routes/desktop';
 import { syncRouter } from './routes/sync';
 import { setupWebSocket } from './websocket';
 import { mobileRouter } from './routes/mobile';
-
-dotenv.config();
 
 // Critical security check: Ensure JWT_SECRET is set before starting server
 if (!process.env['JWT_SECRET']) {

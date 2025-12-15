@@ -21,7 +21,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    baseURL: 'http://localhost:1420',
+    baseURL: 'http://localhost:5173',
     viewport: { width: 1920, height: 1080 },
     ignoreHTTPSErrors: true,
     actionTimeout: 10000,
@@ -79,7 +79,7 @@ export default defineConfig({
   // Configure Tauri app launch
   webServer: {
     command: 'pnpm tauri dev',
-    url: 'http://localhost:1420',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env['CI'],
     timeout: 120000,
   },

@@ -22,7 +22,7 @@ unused_results = "allow"  # Allow unused results (many are intentional)
 
 [dependencies]
 # Tauri and Plugins (upgraded to stable 2.9.x)
-tauri = { version = "2.9.3", features = ["tray-icon", "devtools"] }
+tauri = { version = "2.9.3", features = ["tray-icon", "devtools", "test"] }
 tauri-plugin-shell = "2.3.3"
 tauri-plugin-fs = "2.4.4"
 tauri-plugin-dialog = "2.4.2"
@@ -156,6 +156,9 @@ docx-rs = "0.4"              # DOCX creation
 rust_xlsxwriter = "0.77"      # XLSX creation
 printpdf = "0.7"             # PDF creation
 
+# Temporary files
+tempfile = "3.10"
+
 # OCR (conditional)
 tesseract = { version = "0.15", optional = true }
 
@@ -170,6 +173,9 @@ mailparse = "0.15"
 
 # Model Context Protocol (MCP)
 rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
+
+# Git integration (Safe replacement for shell commands)
+git2 = { version = "0.18", features = ["vendored-openssl"] }
 
 # Windows-specific (UI Automation only)
 [target.'cfg(windows)'.dependencies]

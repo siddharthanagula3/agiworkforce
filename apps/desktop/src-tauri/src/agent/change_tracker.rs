@@ -281,78 +281,50 @@ impl ChangeTracker {
 
     /// Get git branch name
     async fn get_git_branch(&self, working_dir: &PathBuf) -> Option<String> {
-        use tokio::process::Command;
-
-        let output = Command::new("git")
-            .arg("rev-parse")
-            .arg("--abbrev-ref")
-            .arg("HEAD")
-            .current_dir(working_dir)
-            .output()
-            .await
-            .ok()?;
-
-        if output.status.success() {
-            String::from_utf8(output.stdout)
-                .ok()
-                .map(|s| s.trim().to_string())
-        } else {
-            None
-        }
+        let working_dir = working_dir.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let repo = git2::Repository::open(&working_dir).ok()?;
+            let head = repo.head().ok()?;
+            head.shorthand().map(|s| s.to_string())
+        })
+        .await
+        .ok()
+        .flatten()
     }
 
     /// Get git HEAD commit hash
     async fn get_git_head(&self, working_dir: &PathBuf) -> Result<String, String> {
-        use tokio::process::Command;
-
-        let output = Command::new("git")
-            .arg("rev-parse")
-            .arg("HEAD")
-            .current_dir(working_dir)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to execute git: {}", e))?;
-
-        if output.status.success() {
-            String::from_utf8(output.stdout)
-                .map_err(|e| format!("Invalid UTF-8: {}", e))?
-                .trim()
-                .to_string()
-                .pipe(Ok)
-        } else {
-            Err("Not a git repository or no commits".to_string())
-        }
+        let working_dir = working_dir.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let repo = git2::Repository::open(&working_dir).map_err(|e| e.message().to_string())?;
+            let head = repo.head().map_err(|e| e.message().to_string())?;
+            let commit = head.peel_to_commit().map_err(|e| e.message().to_string())?;
+            Ok(commit.id().to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 
     /// Get list of changed files in git
     async fn get_git_changed_files(&self, working_dir: &PathBuf) -> Result<Vec<PathBuf>, String> {
-        use tokio::process::Command;
-
-        let output = Command::new("git")
-            .arg("diff")
-            .arg("--name-only")
-            .arg("HEAD")
-            .current_dir(working_dir)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to execute git: {}", e))?;
-
-        if output.status.success() {
-            let files: Vec<PathBuf> = String::from_utf8(output.stdout)
-                .map_err(|e| format!("Invalid UTF-8: {}", e))?
-                .lines()
-                .filter_map(|line| {
-                    if line.is_empty() {
-                        None
-                    } else {
-                        Some(working_dir.join(line))
-                    }
-                })
-                .collect();
+        let working_dir = working_dir.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let repo = git2::Repository::open(&working_dir).map_err(|e| e.message().to_string())?;
+            let mut opts = git2::StatusOptions::new();
+            opts.include_untracked(true);
+            
+            let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.message().to_string())?;
+            
+            let mut files = Vec::new();
+            for entry in statuses.iter() {
+                if let Some(path) = entry.path() {
+                    files.push(working_dir.join(path));
+                }
+            }
             Ok(files)
-        } else {
-            Ok(Vec::new()) // No changes or not a git repo
-        }
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
 
     /// Get snapshot for a task
@@ -368,14 +340,5 @@ impl Default for ChangeTracker {
     }
 }
 
-// Helper trait for pipe operator
-trait Pipe: Sized {
-    fn pipe<F, R>(self, f: F) -> R
-    where
-        F: FnOnce(Self) -> R,
-    {
-        f(self)
-    }
-}
+// Helper trait removed (unused)
 
-impl<T> Pipe for T {}

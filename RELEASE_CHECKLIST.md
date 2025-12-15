@@ -77,7 +77,7 @@
 
 ### 1. Update Placeholder URLs (REQUIRED)
 
-All documentation currently has `yourusername` placeholders that need to be replaced with actual GitHub username/org:
+All documentation currently has `siddharthanagula3` placeholders that need to be replaced with actual GitHub username/org:
 
 **Files to update:**
 - `README.md` (20 occurrences)
@@ -88,10 +88,10 @@ All documentation currently has `yourusername` placeholders that need to be repl
 **Find and replace:**
 ```bash
 # Replace all instances
-find . -type f \( -name "*.md" \) -exec sed -i 's|yourusername|ACTUAL_GITHUB_USERNAME|g' {} +
+find . -type f \( -name "*.md" \) -exec sed -i 's|siddharthanagula3|ACTUAL_GITHUB_USERNAME|g' {} +
 
 # Or manually update:
-# - https://github.com/yourusername/agiworkforce-desktop-app
+# - https://github.com/siddharthanagula3/agiworkforce-desktop-app
 # Replace with:
 # - https://github.com/YOUR_ACTUAL_ORG/agiworkforce-desktop-app
 ```
@@ -302,7 +302,7 @@ After releasing v5.0.0:
 ✅ Multi-platform (Windows/macOS/Linux)
 
 ### What Needs Update:
-⚠️ Replace `yourusername` with actual GitHub org (5 minutes)
+⚠️ Replace `siddharthanagula3` with actual GitHub org (5 minutes)
 ⚠️ Merge to main branch (2 minutes)
 ⚠️ Create release tag v5.0.0 (1 minute)
 

@@ -1,14 +1,10 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import type { AuthenticatedUser } from './middleware/auth';
+import { authenticatedUserSchema } from './authenticated-user';
+import { requireEnv } from './env';
 
-const JWT_SECRET = process.env['JWT_SECRET'];
-if (!JWT_SECRET) {
-  throw new Error(
-    'FATAL: JWT_SECRET environment variable is required but not set. Set JWT_SECRET in .env file.',
-  );
-}
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
@@ -139,7 +135,8 @@ function parseMessage(message: RawData): GatewayMessage | null {
 function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
   try {
     const payload = jwt.verify(message.token, JWT_SECRET);
-    if (!isAuthenticatedPayload(payload)) {
+    const parseResult = authenticatedUserSchema.safeParse(payload);
+    if (!parseResult.success) {
       ws.send(
         JSON.stringify({
           type: 'auth_error',
@@ -150,7 +147,7 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
       return;
     }
 
-    const { userId } = payload as { userId: string };
+    const { userId } = parseResult.data;
     ws.userId = userId;
     if (typeof message.deviceId === 'string') {
       ws.deviceId = message.deviceId;
@@ -208,15 +205,6 @@ function handleMessage(ws: AuthenticatedWebSocket, data: NonAuthMessage) {
     default:
       assertUnreachable(data);
   }
-}
-
-function isAuthenticatedPayload(payload: unknown): payload is AuthenticatedUser {
-  if (!payload || typeof payload !== 'object') {
-    return false;
-  }
-
-  const candidate = payload as Partial<AuthenticatedUser>;
-  return typeof candidate.userId === 'string';
 }
 
 interface BroadcastMessage {
