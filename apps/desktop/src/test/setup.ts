@@ -19,6 +19,12 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
+// Mock window.scrollTo (jsdom throws "Not implemented")
+Object.defineProperty(window, 'scrollTo', {
+  writable: true,
+  value: vi.fn(),
+});
+
 // Mock IntersectionObserver (commonly used in components)
 globalThis.IntersectionObserver = class IntersectionObserver {
   constructor() {}

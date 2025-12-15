@@ -515,8 +515,6 @@ pub struct TrendingMetric {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_outcome_tracker_creation() {
         // This would need a proper test database

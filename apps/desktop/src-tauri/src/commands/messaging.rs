@@ -64,9 +64,7 @@ pub async fn connect_slack(
     .to_string();
 
     // Store connection in database
-    db.conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?
+    db.connection()?
         .execute(
             "INSERT INTO messaging_connections
             (id, user_id, platform, workspace_id, workspace_name, credentials, is_active, created_at)
@@ -119,9 +117,7 @@ pub async fn connect_whatsapp(
     })
     .to_string();
 
-    db.conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?
+    db.connection()?
         .execute(
             "INSERT INTO messaging_connections
             (id, user_id, platform, credentials, is_active, created_at)
@@ -181,9 +177,7 @@ pub async fn connect_teams(
     })
     .to_string();
 
-    db.conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?
+    db.connection()?
         .execute(
             "INSERT INTO messaging_connections
             (id, user_id, platform, workspace_id, workspace_name, credentials, is_active, created_at)
@@ -222,20 +216,15 @@ pub async fn send_message(
     db: State<'_, AppDatabase>,
 ) -> Result<SendMessageResponse, String> {
     // Get connection details
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?;
-
-    let (platform, credentials, user_id): (String, String, String) = conn
-        .query_row(
+    let (platform, credentials, user_id): (String, String, String) = {
+        let conn = db.connection()?;
+        conn.query_row(
             "SELECT platform, credentials, user_id FROM messaging_connections WHERE id = ?1 AND is_active = 1",
             params![connection_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
-        .map_err(|e| format!("Connection not found: {}", e))?;
-
-    drop(conn);
+        .map_err(|e| format!("Connection not found: {}", e))?
+    };
 
     let platform = MessagingPlatform::from_str(&platform)
         .ok_or_else(|| format!("Invalid platform: {}", platform))?;
@@ -331,9 +320,7 @@ pub async fn send_message(
     let message_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
-    db.conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?
+    db.connection()?
         .execute(
             "INSERT INTO messaging_history
             (id, connection_id, channel_id, message_id, direction, sender_id, content, timestamp)
@@ -352,9 +339,7 @@ pub async fn send_message(
         .map_err(|e| format!("Failed to store message history: {}", e))?;
 
     // Update last_used_at
-    db.conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?
+    db.connection()?
         .execute(
             "UPDATE messaging_connections SET last_used_at = ?1 WHERE id = ?2",
             params![now, connection_id],
@@ -372,10 +357,7 @@ pub async fn get_messaging_history(
     limit: usize,
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<UnifiedMessage>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?;
+    let conn = db.connection()?;
 
     let mut stmt = conn
         .prepare(
@@ -418,9 +400,7 @@ pub async fn disconnect_platform(
     connection_id: String,
     db: State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    db.conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?
+    db.connection()?
         .execute(
             "UPDATE messaging_connections SET is_active = 0 WHERE id = ?1",
             params![connection_id],
@@ -436,10 +416,7 @@ pub async fn list_messaging_connections(
     user_id: String,
     db: State<'_, AppDatabase>,
 ) -> Result<Vec<MessagingConnection>, String> {
-    let conn = db
-        .conn
-        .lock()
-        .map_err(|e| format!("Database lock error: {}", e))?;
+    let conn = db.connection()?;
 
     let mut stmt = conn
         .prepare(

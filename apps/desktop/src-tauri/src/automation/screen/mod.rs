@@ -2,6 +2,7 @@ mod capture;
 mod dxgi;
 #[cfg(feature = "ocr")]
 mod ocr;
+mod xcap_lock;
 
 #[cfg(test)]
 mod tests;

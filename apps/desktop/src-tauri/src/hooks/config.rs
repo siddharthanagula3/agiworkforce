@@ -180,7 +180,7 @@ mod tests {
     fn test_load_save_config() {
         let config = HookConfig::create_example();
 
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         let path = temp_file.path().to_path_buf();
 
         config.save_to_file(&path).unwrap();

@@ -31,7 +31,7 @@ pub async fn get_team_presence(
     state: State<'_, RealtimeState>,
     team_id: String,
 ) -> Result<Vec<UserPresence>, String> {
-    let presence = state.presence.get_team_presence(&team_id);
+    let presence = state.presence.get_team_presence(&team_id).await;
     Ok(presence)
 }
 
@@ -41,7 +41,7 @@ pub async fn update_user_activity(
     user_id: String,
     activity: UserActivity,
 ) -> Result<(), String> {
-    state.presence.set_activity(&user_id, activity);
+    state.presence.set_activity(&user_id, activity).await;
     Ok(())
 }
 
@@ -50,7 +50,7 @@ pub async fn set_user_online(
     state: State<'_, RealtimeState>,
     user_id: String,
 ) -> Result<(), String> {
-    state.presence.set_online(&user_id);
+    state.presence.set_online(&user_id).await;
     Ok(())
 }
 
@@ -59,7 +59,7 @@ pub async fn set_user_offline(
     state: State<'_, RealtimeState>,
     user_id: String,
 ) -> Result<(), String> {
-    state.presence.set_offline(&user_id);
+    state.presence.set_offline(&user_id).await;
     Ok(())
 }
 
@@ -68,5 +68,5 @@ pub async fn get_user_presence(
     state: State<'_, RealtimeState>,
     user_id: String,
 ) -> Result<Option<UserPresence>, String> {
-    Ok(state.presence.get_user_presence(&user_id))
+    Ok(state.presence.get_user_presence(&user_id).await)
 }

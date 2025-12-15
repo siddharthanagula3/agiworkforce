@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod capture_tests {
     use super::super::capture::{capture_primary_screen, capture_region, create_thumbnail};
+    use serial_test::serial;
 
     #[tokio::test]
+    #[serial]
     async fn test_capture_primary_screen() {
         let result = capture_primary_screen();
 
@@ -15,6 +17,7 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_capture_screen_dimensions() {
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
@@ -42,6 +45,7 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_capture_region() {
         // Capture small region from top-left
         let result = capture_region(0, 0, 100, 100);
@@ -60,6 +64,7 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_capture_region_center_screen() {
         // Capture region from center of screen
         let result = capture_region(500, 300, 200, 150);
@@ -78,6 +83,7 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_capture_region_various_sizes() {
         let test_cases = vec![(0, 0, 50, 50), (100, 100, 100, 100), (200, 150, 300, 200)];
 
@@ -99,6 +105,7 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_thumbnail() {
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
@@ -131,6 +138,7 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_create_small_thumbnail() {
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
@@ -148,15 +156,16 @@ mod capture_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_pixel_data_format() {
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
         // Verify we have RGBA data
         let pixels = capture.pixels;
         assert_eq!(
-            pixels.len() as u32,
-            pixels.width() * pixels.height(),
-            "Pixel array should match dimensions"
+            pixels.len(),
+            pixels.width() as usize * pixels.height() as usize * 4,
+            "Pixel buffer should match dimensions (RGBA)"
         );
 
         // Spot check: get a pixel and verify it's valid RGBA

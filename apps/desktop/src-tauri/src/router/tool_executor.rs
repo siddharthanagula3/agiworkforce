@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::{Emitter, Manager};
 use tokio::fs;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration as TokioDuration};
 use uuid::Uuid;
@@ -560,9 +561,9 @@ impl ToolExecutor {
                             Ok(_) => {
                                 // Keep the file until the ToolResult is consumed
                                 // By persisting it, we prevent automatic deletion
-                                let (file, path) = temp_file.keep().map_err(|e| {
-                                    anyhow!("Failed to persist temp file: {}", e)
-                                })?;
+                                let (file, path) = temp_file
+                                    .keep()
+                                    .map_err(|e| anyhow!("Failed to persist temp file: {}", e))?;
                                 drop(file); // Close the file handle
 
                                 Ok(ToolResult {
@@ -574,7 +575,10 @@ impl ToolExecutor {
                                     error: None,
                                     metadata: HashMap::from([
                                         ("temp_file".to_string(), json!(true)),
-                                        ("path".to_string(), json!(path.to_string_lossy().to_string())),
+                                        (
+                                            "path".to_string(),
+                                            json!(path.to_string_lossy().to_string()),
+                                        ),
                                     ]),
                                 })
                             }
@@ -614,7 +618,12 @@ impl ToolExecutor {
                     if let Some(coords) = target.get("coordinates") {
                         let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                         let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        match automation.mouse.lock().unwrap().click(x, y, MouseButton::Left) {
+                        match automation
+                            .mouse
+                            .lock()
+                            .unwrap()
+                            .click(x, y, MouseButton::Left)
+                        {
                             Ok(_) => Ok(ToolResult {
                                 success: true,
                                 data: json!({ "success": true, "action": "clicked", "x": x, "y": y }),
@@ -711,7 +720,9 @@ impl ToolExecutor {
             "ui_type" => {
                 // ✅ UI automation with AutomationService
                 if let Some(ref app) = self.app_handle {
-                    use crate::automation::{input::KeyboardSimulator, types::ElementQuery, AutomationService};
+                    use crate::automation::{
+                        input::KeyboardSimulator, types::ElementQuery, AutomationService,
+                    };
                     use tauri::Manager;
 
                     let automation = app.state::<std::sync::Arc<AutomationService>>();
@@ -1036,12 +1047,28 @@ impl ToolExecutor {
                 let mut child = cmd
                     .spawn()
                     .map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
+                let stdout_handle = child.stdout.take();
+                let stderr_handle = child.stderr.take();
+
+                let stdout_task = tokio::spawn(async move {
+                    let mut buffer = Vec::new();
+                    if let Some(mut stdout) = stdout_handle {
+                        stdout.read_to_end(&mut buffer).await?;
+                    }
+                    Ok::<Vec<u8>, std::io::Error>(buffer)
+                });
+
+                let stderr_task = tokio::spawn(async move {
+                    let mut buffer = Vec::new();
+                    if let Some(mut stderr) = stderr_handle {
+                        stderr.read_to_end(&mut buffer).await?;
+                    }
+                    Ok::<Vec<u8>, std::io::Error>(buffer)
+                });
+
                 let start = Instant::now();
-                let output = match timeout(
-                    TokioDuration::from_millis(timeout_ms),
-                    child.wait_with_output(),
-                )
-                .await
+                let status = match timeout(TokioDuration::from_millis(timeout_ms), child.wait())
+                    .await
                 {
                     Ok(result) => {
                         result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?
@@ -1065,9 +1092,14 @@ impl ToolExecutor {
                             }
                             Err(_) => {
                                 // Process didn't exit in 1 second, it will be force-killed by kill_on_drop
-                                tracing::warn!("Process did not terminate gracefully, will be force-killed");
+                                tracing::warn!(
+                                    "Process did not terminate gracefully, will be force-killed"
+                                );
                             }
                         }
+
+                        stdout_task.abort();
+                        stderr_task.abort();
 
                         if let Some(app_handle) = &self.app_handle {
                             let terminal_event = TerminalCommand {
@@ -1090,6 +1122,20 @@ impl ToolExecutor {
                             metadata: HashMap::new(),
                         });
                     }
+                };
+
+                let stdout = stdout_task
+                    .await
+                    .map_err(|e| anyhow!("Failed to join stdout reader: {}", e))?
+                    .map_err(|e| anyhow!("Failed to read stdout: {}", e))?;
+                let stderr = stderr_task
+                    .await
+                    .map_err(|e| anyhow!("Failed to join stderr reader: {}", e))?
+                    .map_err(|e| anyhow!("Failed to read stderr: {}", e))?;
+                let output = std::process::Output {
+                    status,
+                    stdout,
+                    stderr,
                 };
 
                 let duration_ms = start.elapsed().as_millis() as u64;
@@ -1723,44 +1769,7 @@ mod tests {
             .to_string(),
         };
 
-        // We can't easily test the full execution without AppHandle,
-        // but we can verify the arguments are parsed correctly in a real execution flow
-        // if we had a ToolExecutor instance.
-        // Since ToolExecutor::new() doesn't require AppHandle, we can try it.
-
         let registry = std::sync::Arc::new(ToolRegistry::new().unwrap());
-        // Register tools manually for the test since we don't have the full app setup
-        registry
-            .register_tool(Tool {
-                id: "file_write".to_string(),
-                name: "Write File".to_string(),
-                description: "Write content to a file".to_string(),
-                capabilities: vec![ToolCapability::FileWrite],
-                parameters: vec![
-                    ToolParameter {
-                        name: "path".to_string(),
-                        parameter_type: ParameterType::FilePath,
-                        required: true,
-                        description: "Path".to_string(),
-                        default: None,
-                    },
-                    ToolParameter {
-                        name: "content".to_string(),
-                        parameter_type: ParameterType::String,
-                        required: true,
-                        description: "Content".to_string(),
-                        default: None,
-                    },
-                ],
-                estimated_resources: ResourceUsage {
-                    cpu_percent: 1.0,
-                    memory_mb: 10,
-                    network_mb: 0.0,
-                },
-                dependencies: vec![],
-            })
-            .unwrap();
-
         let executor = ToolExecutor::new(registry);
         let result = executor.execute_tool_call(&tool_call).await.unwrap();
 

@@ -30,7 +30,7 @@ pub struct OnboardingStatus {
 /// Get onboarding status
 #[tauri::command]
 pub async fn get_onboarding_status(db: State<'_, AppDatabase>) -> Result<OnboardingStatus, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let mut stmt = conn
         .prepare(
@@ -83,7 +83,7 @@ pub async fn complete_onboarding_step(
     step_id: String,
     data: Option<String>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -104,7 +104,7 @@ pub async fn skip_onboarding_step(
     db: State<'_, AppDatabase>,
     step_id: String,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -122,7 +122,7 @@ pub async fn skip_onboarding_step(
 /// Reset onboarding progress
 #[tauri::command]
 pub async fn reset_onboarding(db: State<'_, AppDatabase>) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -141,7 +141,7 @@ pub async fn reset_onboarding(db: State<'_, AppDatabase>) -> Result<(), String> 
 pub async fn export_user_data(db: State<'_, AppDatabase>) -> Result<String, String> {
     use serde_json::json;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     // Export conversations
     let mut stmt = conn
@@ -224,7 +224,7 @@ pub async fn check_connectivity() -> Result<bool, String> {
 pub async fn get_session_info(db: State<'_, AppDatabase>) -> Result<serde_json::Value, String> {
     use serde_json::json;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     // Get most recent session
     let result = conn.query_row(
@@ -278,7 +278,7 @@ pub async fn update_session_activity(
     db: State<'_, AppDatabase>,
     session_id: String,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -301,7 +301,7 @@ pub async fn get_user_preference(
 ) -> Result<Option<serde_json::Value>, String> {
     use serde_json::json;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let result = conn.query_row(
         "SELECT value, data_type FROM user_preferences WHERE key = ?1",
@@ -334,7 +334,7 @@ pub async fn set_user_preference(
     data_type: String,
     description: Option<String>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.connection()?;
 
     let now = chrono::Utc::now().timestamp();
 
@@ -363,9 +363,11 @@ pub async fn set_user_preference(
 
 // ===== First-Run Experience Commands =====
 
-use crate::onboarding::instant_demo::InstantDemo;
+// Temporarily commented out during async migration - these modules use std::sync::Mutex
+// use crate::onboarding::instant_demo::InstantDemo;
 use crate::onboarding::{
     AIEmployeeRecommendation, DemoResult, FirstRunExperience, FirstRunSession, FirstRunStatistics,
+    InstantDemo,
 };
 
 /// Start first-run experience
@@ -378,7 +380,7 @@ pub async fn start_first_run_experience(
     let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
         .start(&user_id, user_role.as_deref())
-        .map_err(|e| format!("Failed to start first-run experience: {}", e))
+        .map_err(|e| format!("Failed to start first-run: {}", e))
 }
 
 /// Check if user has completed first run
@@ -443,7 +445,7 @@ pub async fn run_instant_demo(
     let demo = InstantDemo::new(db.conn.clone());
     demo.run_demo(&employee_id, user_id.as_deref())
         .await
-        .map_err(|e| format!("Failed to run demo: {}", e))
+        .map_err(|e| format!("Failed to run instant demo: {}", e))
 }
 
 /// Update first-run session step
@@ -453,15 +455,21 @@ pub async fn update_first_run_step(
     session_id: String,
     step: String,
 ) -> Result<(), String> {
-    use crate::onboarding::OnboardingStep;
+    let step_enum = match step.as_str() {
+        "welcome" => crate::onboarding::OnboardingStep::Welcome,
+        "choose_employee" => crate::onboarding::OnboardingStep::ChooseEmployee,
+        "running_demo" => crate::onboarding::OnboardingStep::RunningDemo,
+        "viewing_results" => crate::onboarding::OnboardingStep::ViewingResults,
+        "quick_setup" => crate::onboarding::OnboardingStep::QuickSetup,
+        "assign_first_task" => crate::onboarding::OnboardingStep::AssignFirstTask,
+        "completed" => crate::onboarding::OnboardingStep::Completed,
+        _ => return Err(format!("Invalid first-run step: {}", step)),
+    };
 
     let first_run = FirstRunExperience::new(db.conn.clone());
-    let onboarding_step: OnboardingStep =
-        serde_json::from_str(&step).map_err(|e| format!("Invalid step format: {}", e))?;
-
     first_run
-        .update_step(&session_id, onboarding_step)
-        .map_err(|e| format!("Failed to update step: {}", e))
+        .update_step(&session_id, step_enum)
+        .map_err(|e| format!("Failed to update first-run step: {}", e))
 }
 
 /// Select employee for demo

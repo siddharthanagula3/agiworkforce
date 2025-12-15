@@ -4,6 +4,8 @@ use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use std::time::Duration;
 use tokio::time::sleep;
 
+use super::enigo_lock::lock_enigo;
+
 pub struct KeyboardSimulator {
     enigo: Enigo,
     typing_delay_ms: u64,
@@ -25,9 +27,14 @@ pub enum MacroAction {
 
 impl KeyboardSimulator {
     pub fn new() -> Result<Self> {
+        let _enigo_lock = lock_enigo()?;
         let settings = Settings::default();
-        let enigo = Enigo::new(&settings).map_err(|e| anyhow!("Failed to create enigo: {:?}", e))?;
-        Ok(Self { enigo, typing_delay_ms: 10 })
+        let enigo =
+            Enigo::new(&settings).map_err(|e| anyhow!("Failed to create enigo: {:?}", e))?;
+        Ok(Self {
+            enigo,
+            typing_delay_ms: 10,
+        })
     }
 
     /// Set typing speed (delay in milliseconds between keystrokes)
@@ -42,8 +49,12 @@ impl KeyboardSimulator {
     /// Send text with custom delay between keystrokes
     pub async fn send_text_with_delay(&mut self, text: &str, delay_ms: u64) -> Result<()> {
         for ch in text.chars() {
-            self.enigo.text(&ch.to_string())
-                .map_err(|e| anyhow!("Failed to send text: {:?}", e))?;
+            {
+                let _enigo_lock = lock_enigo()?;
+                self.enigo
+                    .text(&ch.to_string())
+                    .map_err(|e| anyhow!("Failed to send text: {:?}", e))?;
+            }
             if delay_ms > 0 {
                 sleep(Duration::from_millis(delay_ms)).await;
             }
@@ -52,35 +63,45 @@ impl KeyboardSimulator {
     }
 
     pub fn press_key(&mut self, key: Key) -> Result<()> {
-        self.enigo.key(key, Direction::Press)
+        let _enigo_lock = lock_enigo()?;
+        self.enigo
+            .key(key, Direction::Press)
             .map_err(|e| anyhow!("Failed to press key: {:?}", e))
     }
 
     pub fn release_key(&mut self, key: Key) -> Result<()> {
-        self.enigo.key(key, Direction::Release)
+        let _enigo_lock = lock_enigo()?;
+        self.enigo
+            .key(key, Direction::Release)
             .map_err(|e| anyhow!("Failed to release key: {:?}", e))
     }
 
     pub fn tap_key(&mut self, key: Key) -> Result<()> {
-        self.enigo.key(key, Direction::Click)
+        let _enigo_lock = lock_enigo()?;
+        self.enigo
+            .key(key, Direction::Click)
             .map_err(|e| anyhow!("Failed to tap key: {:?}", e))
     }
 
     /// Send a hotkey combination (e.g., Ctrl+C)
     pub fn send_hotkey(&mut self, modifiers: &[Key], key: Key) -> Result<()> {
+        let _enigo_lock = lock_enigo()?;
         // Press all modifiers
         for modifier in modifiers {
-            self.enigo.key(*modifier, Direction::Press)
+            self.enigo
+                .key(*modifier, Direction::Press)
                 .map_err(|e| anyhow!("Failed to press modifier: {:?}", e))?;
         }
 
         // Press and release the main key
-        self.enigo.key(key, Direction::Click)
+        self.enigo
+            .key(key, Direction::Click)
             .map_err(|e| anyhow!("Failed to click key: {:?}", e))?;
 
         // Release all modifiers in reverse order
         for modifier in modifiers.iter().rev() {
-            self.enigo.key(*modifier, Direction::Release)
+            self.enigo
+                .key(*modifier, Direction::Release)
                 .map_err(|e| anyhow!("Failed to release modifier: {:?}", e))?;
         }
 
@@ -154,11 +175,10 @@ impl KeyboardSimulator {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_keyboard_text() {
-        let mut keyboard = KeyboardSimulator::new().unwrap();
-        // Just ensure it doesn't panic - actual simulation requires GUI
-        let result = keyboard.send_text("test").await;
+    #[test]
+    fn test_keyboard_simulator_creation() {
+        // Avoid sending real keystrokes in unit tests; that should be covered by ignored/manual tests.
+        let result = KeyboardSimulator::new();
         assert!(result.is_ok());
     }
 }

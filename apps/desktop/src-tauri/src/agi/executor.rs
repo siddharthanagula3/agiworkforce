@@ -409,7 +409,11 @@ impl AGIExecutor {
                     let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                     let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                     use crate::automation::input::MouseButton;
-                    self.automation.mouse.lock().unwrap().click(x, y, MouseButton::Left)?;
+                    self.automation
+                        .mouse
+                        .lock()
+                        .unwrap()
+                        .click(x, y, MouseButton::Left)?;
                     Ok(json!({ "success": true, "action": "clicked", "x": x, "y": y }))
                 } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                     // Element ID provided - use UIA invoke
