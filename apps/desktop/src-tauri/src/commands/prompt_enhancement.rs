@@ -223,35 +223,22 @@ pub async fn get_available_providers() -> Result<Vec<String>, String> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_detect_use_case_command() {
+    #[test]
+    fn test_detect_use_case_logic() {
         let state = PromptEnhancementState::new();
-        let result = detect_use_case(
-            "Write a TypeScript function to sort an array".to_string(),
-            // State wrapper not available in unit tests - should be integration test
-            // For now, test the inner functionality directly
-            // tauri::State::from(&state),
-        )
-        .await;
-
-        assert!(result.is_ok());
-        let detection = result.unwrap();
+        let detection = state
+            .detector
+            .detect("Write a TypeScript function to sort an array");
         assert_eq!(detection.use_case, UseCase::Coding);
     }
 
-    #[tokio::test]
-    async fn test_enhance_prompt_command() {
+    #[test]
+    fn test_enhance_prompt_logic() {
         let state = PromptEnhancementState::new();
-        let result = enhance_prompt(
-            "Write a function to sort an array".to_string(),
-            // State wrapper not available in unit tests - should be integration test
-            // For now, test the inner functionality directly
-            // tauri::State::from(&state),
-        )
-        .await;
-
-        assert!(result.is_ok());
-        let enhanced = result.unwrap();
+        let detection = state.detector.detect("Write a function to sort an array");
+        let enhanced = state
+            .enhancer
+            .enhance("Write a function to sort an array", &detection);
         assert!(enhanced.enhanced.len() > enhanced.original.len());
     }
 

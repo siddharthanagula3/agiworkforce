@@ -108,22 +108,10 @@ async function handleClearCookies(message, sendResponse) {
 
 // Handle execute script in tab
 async function handleExecuteScript(message, sender, sendResponse) {
-  try {
-    const tabId = sender.tab?.id;
-    if (!tabId) {
-      throw new Error('No tab ID available');
-    }
-
-    const results = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: new Function(message.script),
-    });
-
-    sendResponse({ success: true, data: results[0]?.result });
-  } catch (error) {
-    console.error('Failed to execute script:', error);
-    sendResponse({ success: false, error: error.message });
-  }
+  sendResponse({
+    success: false,
+    error: 'EXECUTE_SCRIPT is disabled for security reasons',
+  });
 }
 
 // Handle capture screenshot

@@ -541,47 +541,35 @@ mod tests {
             user_id: None,
         };
 
-        // In tests, we need to wrap the state properly for Tauri
-        // State cannot be created directly, so we test the inner functionality
-        let state_ref = &state;
-        // For now, skip State wrapper in unit tests - these should be integration tests
-        // let result = analytics_track_event(event, State::from(&state)).await;
-        // assert!(result.is_ok());
+        let collector = state.collector.read().await;
+        let result = collector.track(event).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_analytics_get_session_id() {
         let state = create_test_state();
-        // State wrapper not available in unit tests - should be integration test
-        // let result = analytics_get_session_id(State::from(&state)).await;
-        // assert!(result.is_ok());
-        // assert!(!result.unwrap().is_empty());
-        assert!(result.is_ok());
-        assert!(!result.unwrap().is_empty());
+        let session_id = state.collector.read().await.get_session_id();
+        assert!(!session_id.is_empty());
     }
 
     #[tokio::test]
     async fn test_metrics_get_system() {
         let state = create_test_state();
-        // State wrapper not available in unit tests - should be integration test
-        // let result = metrics_get_system(State::from(&state)).await;
-        // assert!(result.is_ok());
-        // let metrics = result.unwrap();
-        // assert!(metrics.memory_total_mb > 0);
-        assert!(result.is_ok());
-
-        let metrics = result.unwrap();
+        let metrics = state
+            .metrics_collector
+            .write()
+            .await
+            .collect_system_metrics();
         assert!(metrics.memory_total_mb > 0);
     }
 
     #[tokio::test]
     async fn test_metrics_get_app() {
         let state = create_test_state();
-        // State wrapper not available in unit tests - should be integration test
-        // let result = metrics_get_app(State::from(&state)).await;
-        // assert!(result.is_ok());
-        assert!(result.is_ok());
+        let metrics = state.metrics_collector.read().await.collect_app_metrics();
+        assert_eq!(metrics.automations_count, 0);
+        assert_eq!(metrics.goals_count, 0);
     }
 
     #[tokio::test]

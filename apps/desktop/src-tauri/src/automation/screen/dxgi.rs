@@ -2,6 +2,8 @@
 use anyhow::{Context, Result};
 use xcap::Monitor;
 
+use super::xcap_lock::lock_xcap;
+
 #[derive(Debug, Clone)]
 pub struct ScreenInfo {
     pub id: u32,
@@ -28,6 +30,7 @@ impl ScreenInfo {
 }
 
 pub fn list_displays() -> Result<Vec<ScreenInfo>> {
+    let _xcap_lock = lock_xcap()?;
     let monitors = Monitor::all().context("Failed to enumerate displays")?;
     Ok(monitors
         .iter()

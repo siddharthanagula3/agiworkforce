@@ -66,7 +66,7 @@ mod tests {
         assert!(capabilities.can_access_databases);
         assert!(capabilities.can_make_api_calls);
         assert!(capabilities.can_process_images);
-        assert!(!capabilities.can_process_audio); // Not implemented yet
+        assert!(capabilities.can_process_audio);
         assert!(capabilities.can_understand_code);
         assert!(capabilities.can_learn_from_experience);
         assert!(capabilities.can_plan_complex_tasks);

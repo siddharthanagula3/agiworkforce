@@ -347,8 +347,6 @@ async fn run_and_capture(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_terminal_ai_creation() {
         // This test requires actual router and session manager instances

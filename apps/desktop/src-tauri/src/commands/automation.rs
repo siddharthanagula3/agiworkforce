@@ -448,7 +448,8 @@ pub async fn automation_drag_drop(
     }
 
     // Emit overlay animation for drag-drop
-    if let Ok(conn) = db.conn.lock() {
+    {
+        let conn = db.connection()?;
         if let Err(err) = dispatch_overlay_animation(
             &app,
             &conn,
@@ -646,7 +647,8 @@ async fn execute_text_input(
         return Err(error_string);
     }
 
-    if let Ok(conn) = db.conn.lock() {
+    {
+        let conn = db.connection()?;
         if let Err(err) = dispatch_overlay_animation(
             app,
             &conn,
@@ -777,14 +779,14 @@ pub fn overlay_emit_region(
 }
 
 #[tauri::command]
-pub fn overlay_replay_recent(
+pub async fn overlay_replay_recent(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     limit: Option<usize>,
 ) -> Result<(), String> {
     ensure_overlay_ready(&app);
     let events = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.connection()?;
         repository::list_overlay_events(&conn, None, None).map_err(|e| e.to_string())?
     };
 

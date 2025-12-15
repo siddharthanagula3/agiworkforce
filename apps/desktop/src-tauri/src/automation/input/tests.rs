@@ -16,7 +16,7 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_set_get_text() {
-        let clipboard = ClipboardManager::new().unwrap();
+        let mut clipboard = ClipboardManager::new().unwrap();
 
         // Save original clipboard content
         let original = clipboard.get_text().unwrap_or_default();
@@ -39,7 +39,7 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_empty_string() {
-        let clipboard = ClipboardManager::new().unwrap();
+        let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
 
@@ -55,7 +55,7 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_unicode_text() {
-        let clipboard = ClipboardManager::new().unwrap();
+        let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
 
@@ -74,7 +74,7 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_multiline_text() {
-        let clipboard = ClipboardManager::new().unwrap();
+        let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
 
@@ -93,7 +93,7 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_large_text() {
-        let clipboard = ClipboardManager::new().unwrap();
+        let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
 
@@ -118,6 +118,7 @@ mod clipboard_tests {
 #[cfg(test)]
 mod keyboard_tests {
     use super::super::keyboard::KeyboardSimulator;
+    use enigo::Key;
 
     #[test]
     fn test_keyboard_simulator_creation() {
@@ -130,39 +131,18 @@ mod keyboard_tests {
 
     #[test]
     fn test_modifier_key_conversion() {
-        use super::super::keyboard::KeyboardSimulator;
-        use windows::Win32::UI::Input::KeyboardAndMouse::{VK_CONTROL, VK_MENU, VK_SHIFT};
-
-        assert_eq!(
-            KeyboardSimulator::modifier_key("ctrl"),
-            Some(VK_CONTROL.0 as u16)
-        );
+        assert_eq!(KeyboardSimulator::modifier_key("ctrl"), Some(Key::Control));
         assert_eq!(
             KeyboardSimulator::modifier_key("control"),
-            Some(VK_CONTROL.0 as u16)
+            Some(Key::Control)
         );
-        assert_eq!(
-            KeyboardSimulator::modifier_key("CTRL"),
-            Some(VK_CONTROL.0 as u16)
-        );
+        assert_eq!(KeyboardSimulator::modifier_key("CTRL"), Some(Key::Control));
 
-        assert_eq!(
-            KeyboardSimulator::modifier_key("alt"),
-            Some(VK_MENU.0 as u16)
-        );
-        assert_eq!(
-            KeyboardSimulator::modifier_key("ALT"),
-            Some(VK_MENU.0 as u16)
-        );
+        assert_eq!(KeyboardSimulator::modifier_key("alt"), Some(Key::Alt));
+        assert_eq!(KeyboardSimulator::modifier_key("ALT"), Some(Key::Alt));
 
-        assert_eq!(
-            KeyboardSimulator::modifier_key("shift"),
-            Some(VK_SHIFT.0 as u16)
-        );
-        assert_eq!(
-            KeyboardSimulator::modifier_key("SHIFT"),
-            Some(VK_SHIFT.0 as u16)
-        );
+        assert_eq!(KeyboardSimulator::modifier_key("shift"), Some(Key::Shift));
+        assert_eq!(KeyboardSimulator::modifier_key("SHIFT"), Some(Key::Shift));
 
         assert_eq!(KeyboardSimulator::modifier_key("invalid"), None);
         assert_eq!(KeyboardSimulator::modifier_key(""), None);
@@ -177,7 +157,7 @@ mod keyboard_tests {
     async fn test_send_text_integration() {
         // This test requires manual verification
         // It will type text into the currently focused window
-        let keyboard = KeyboardSimulator::new().unwrap();
+        let mut keyboard = KeyboardSimulator::new().unwrap();
 
         // WARNING: This will type into whatever window has focus!
         // Only run in isolated test environment
@@ -188,23 +168,21 @@ mod keyboard_tests {
     #[test]
     #[ignore]
     fn test_press_key_integration() {
-        let keyboard = KeyboardSimulator::new().unwrap();
+        let mut keyboard = KeyboardSimulator::new().unwrap();
 
-        // Test Enter key (VK_RETURN = 0x0D)
-        let result = keyboard.press_key(0x0D);
+        // Test Enter key
+        let result = keyboard.press_key(Key::Return);
         assert!(result.is_ok(), "press_key should succeed");
     }
 
     #[test]
     #[ignore]
     fn test_hotkey_integration() {
-        use windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
-
-        let keyboard = KeyboardSimulator::new().unwrap();
+        let mut keyboard = KeyboardSimulator::new().unwrap();
 
         // Test Ctrl+A
-        let modifiers = vec![VK_CONTROL.0 as u16];
-        let result = keyboard.send_hotkey(&modifiers, 0x41); // 'A'
+        let modifiers = vec![Key::Control];
+        let result = keyboard.send_hotkey(&modifiers, Key::Unicode('a'));
         assert!(result.is_ok(), "hotkey should succeed");
     }
 }
@@ -212,7 +190,7 @@ mod keyboard_tests {
 #[cfg(test)]
 mod mouse_tests {
     use super::super::mouse::{MouseButton, MouseSimulator};
-    use crate::automation::uia::BoundingRectangle;
+    use crate::automation::types::BoundingRectangle;
 
     #[test]
     fn test_mouse_simulator_creation() {
@@ -235,7 +213,7 @@ mod mouse_tests {
     #[test]
     #[ignore]
     fn test_move_to_integration() {
-        let mouse = MouseSimulator::new().unwrap();
+        let mut mouse = MouseSimulator::new().unwrap();
 
         // Move to center of primary screen (assuming 1920x1080)
         let result = mouse.move_to(960, 540);
@@ -249,7 +227,7 @@ mod mouse_tests {
     #[test]
     #[ignore]
     fn test_click_integration() {
-        let mouse = MouseSimulator::new().unwrap();
+        let mut mouse = MouseSimulator::new().unwrap();
 
         // Click at safe position (center of screen)
         let result = mouse.click(960, 540, MouseButton::Left);
@@ -257,9 +235,10 @@ mod mouse_tests {
     }
 
     #[test]
+    #[cfg(windows)]
     #[ignore]
     fn test_click_rect_center_integration() {
-        let mouse = MouseSimulator::new().unwrap();
+        let mut mouse = MouseSimulator::new().unwrap();
 
         let rect = BoundingRectangle {
             left: 100.0,
@@ -275,7 +254,7 @@ mod mouse_tests {
     #[test]
     #[ignore]
     fn test_drag_integration() {
-        let mouse = MouseSimulator::new().unwrap();
+        let mut mouse = MouseSimulator::new().unwrap();
 
         let result = mouse.drag((100, 100), (200, 200));
         assert!(result.is_ok(), "drag should succeed");
@@ -284,7 +263,7 @@ mod mouse_tests {
     #[test]
     #[ignore]
     fn test_scroll_integration() {
-        let mouse = MouseSimulator::new().unwrap();
+        let mut mouse = MouseSimulator::new().unwrap();
 
         // Scroll up 3 clicks
         let result = mouse.scroll(3);
@@ -297,8 +276,6 @@ mod mouse_tests {
 
     #[test]
     fn test_click_rect_center_calculation() {
-        let _mouse = MouseSimulator::new().unwrap();
-
         // Test that calculation doesn't panic
         let rect = BoundingRectangle {
             left: 0.0,

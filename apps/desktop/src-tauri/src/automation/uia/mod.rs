@@ -40,17 +40,22 @@ pub struct UIAutomationService {
     cache_ttl: Duration,
 }
 
+// SAFETY: UIAutomationService is Send because we wrap the COM pointer and protect shared state with Mutex.
+// The underlying IUIAutomation interface is generally thread-safe when used correctly.
 unsafe impl Send for UIAutomationService {}
+// SAFETY: UIAutomationService is Sync because we protect shared state with Mutex.
 unsafe impl Sync for UIAutomationService {}
 
 impl UIAutomationService {
     pub fn new() -> Result<Self> {
         // Thread-safe COM initialization using OnceLock
         COM_INITIALIZED.get_or_init(|| unsafe {
+            // SAFETY: CoInitializeEx is called once per process. We ignore errors if already initialized.
             if let Err(err) = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() {
                 tracing::error!("CoInitializeEx failed: {:?}", err);
                 return;
             }
+            // SAFETY: CoInitializeSecurity is called to set default security levels.
             let _ = CoInitializeSecurity(
                 None,
                 -1,
@@ -66,6 +71,7 @@ impl UIAutomationService {
         });
 
         let automation: IUIAutomation = unsafe {
+            // SAFETY: CoCreateInstance is safe to call after CoInitializeEx.
             CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
                 .map_err(|err| anyhow!("Failed to create CUIAutomation: {err:?}"))?
         };
@@ -82,12 +88,14 @@ impl UIAutomationService {
     }
 
     pub(super) fn root_element(&self) -> Result<IUIAutomationElement> {
+        // SAFETY: self.automation is a valid COM interface pointer.
         unsafe { self.automation.GetRootElement() }
             .map_err(|err| anyhow!("GetRootElement: {err:?}"))
     }
 
     pub(super) fn register_element(&self, element: &IUIAutomationElement) -> Result<String> {
         let runtime_id =
+            // SAFETY: element is a valid COM interface pointer.
             unsafe { element.GetRuntimeId() }.map_err(|err| anyhow!("GetRuntimeId: {err:?}"))?;
         let id = safe_array_to_runtime_id(runtime_id)?;
 
@@ -153,6 +161,8 @@ where
 }
 
 pub(super) fn safe_array_to_runtime_id(array: *mut SAFEARRAY) -> Result<String> {
+    // SAFETY: We check for null pointer. We use SafeArray access functions correctly
+    // and ensure SafeArrayUnaccessData is called. We also destroy the array at the end.
     unsafe {
         if array.is_null() {
             return Err(anyhow!("runtime id array is null"));

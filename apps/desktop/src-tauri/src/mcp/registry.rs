@@ -26,7 +26,7 @@ impl McpToolRegistry {
     }
 
     /// Convert a single MCP tool to AGI tool schema
-    fn mcp_tool_to_schema(&self, server_name: &str, mcp_tool: &McpTool) -> Tool {
+    pub fn mcp_tool_to_schema(&self, server_name: &str, mcp_tool: &McpTool) -> Tool {
         // Prefix tool name with server name to avoid conflicts
         let tool_id = format!("mcp_{}_{}", server_name, mcp_tool.name);
 
