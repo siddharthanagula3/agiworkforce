@@ -67,50 +67,91 @@ pub async fn github_clone_repo(
     // Create local path
     let repo_id = format!("{}/{}", owner, name);
     let local_path = github_state.workspace_dir.join(&owner).join(&name);
+    let local_path_clone = local_path.clone();
+    let repo_url_clone = repo_url.clone();
+    let branch_clone = branch.clone();
 
-    // Clone repository using git command
-    if local_path.exists() {
-        tracing::info!(
-            "Repository already exists at {:?}, pulling latest",
-            local_path
-        );
+    // Perform git operations in blocking thread
+    tauri::async_runtime::spawn_blocking(move || {
+        use git2::{Cred, FetchOptions, RemoteCallbacks, Repository, build::RepoBuilder};
 
-        // Pull latest changes
-        let output = Command::new("git")
-            .current_dir(&local_path)
-            .args(["pull", "origin", branch.as_deref().unwrap_or("main")])
-            .output()
-            .map_err(|e| format!("Failed to pull repository: {}", e))?;
+        if local_path_clone.exists() {
+            tracing::info!(
+                "Repository already exists at {:?}, pulling latest",
+                local_path_clone
+            );
 
-        if !output.status.success() {
-            return Err(format!(
-                "Git pull failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
+            let repo = Repository::open(&local_path_clone).map_err(|e| e.message().to_string())?;
+            let remote_name = "origin";
+            let mut remote = repo.find_remote(remote_name).map_err(|e| e.message().to_string())?;
+
+            let branch_name = branch_clone.as_deref().unwrap_or("main");
+
+            let mut callbacks = RemoteCallbacks::new();
+            callbacks.credentials(|_url, username_from_url, _allowed_types| {
+                Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+            });
+
+            let mut fetch_opts = FetchOptions::new();
+            fetch_opts.remote_callbacks(callbacks);
+
+            remote.fetch(&[branch_name], Some(&mut fetch_opts), None)
+                .map_err(|e| e.message().to_string())?;
+
+            // Merge analysis
+            let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| e.message().to_string())?;
+            let fetch_commit = repo.reference_to_annotated_commit(&fetch_head).map_err(|e| e.message().to_string())?;
+            let analysis = repo.merge_analysis(&[&fetch_commit]).map_err(|e| e.message().to_string())?;
+
+            if analysis.0.is_fast_forward() {
+                let refname = format!("refs/heads/{}", branch_name);
+                let mut reference = repo.find_reference(&refname).map_err(|e| e.message().to_string())?;
+                reference.set_target(fetch_commit.id(), "Fast-Forward").map_err(|e| e.message().to_string())?;
+                repo.set_head(&refname).map_err(|e| e.message().to_string())?;
+                repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force())).map_err(|e| e.message().to_string())?;
+            } else if analysis.0.is_normal() {
+                let head_commit = repo.reference_to_annotated_commit(&repo.head().unwrap()).unwrap();
+                repo.merge(&[&fetch_commit], None, None).map_err(|e| e.message().to_string())?;
+                
+                // Auto commit merge
+                let sig = repo.signature().unwrap();
+                let tree_id = repo.index().unwrap().write_tree().unwrap();
+                let tree = repo.find_tree(tree_id).unwrap();
+                
+                let head_commit_obj = repo.find_commit(head_commit.id()).unwrap();
+                let fetch_commit_obj = repo.find_commit(fetch_commit.id()).unwrap();
+                
+                repo.commit(Some("HEAD"), &sig, &sig, "Merge", &tree, &[&head_commit_obj, &fetch_commit_obj]).unwrap();
+                
+                repo.checkout_head(None).unwrap();
+            }
+        } else {
+            // Clone repository
+            std::fs::create_dir_all(local_path_clone.parent().unwrap())
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+            let mut callbacks = RemoteCallbacks::new();
+            callbacks.credentials(|_url, username_from_url, _allowed_types| {
+                Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+            });
+
+            let mut fetch_opts = FetchOptions::new();
+            fetch_opts.remote_callbacks(callbacks);
+
+            let mut builder = RepoBuilder::new();
+            builder.fetch_options(fetch_opts);
+            
+            if let Some(br) = branch_clone {
+                builder.branch(&br);
+            }
+
+            builder.clone(&repo_url_clone, &local_path_clone)
+                .map_err(|e| e.message().to_string())?;
         }
-    } else {
-        // Clone repository
-        std::fs::create_dir_all(local_path.parent().unwrap())
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
-
-        let mut args = vec!["clone"];
-        if let Some(ref br) = branch {
-            args.extend(&["--branch", br.as_str()]);
-        }
-        args.extend(&[&repo_url, local_path.to_str().unwrap()]);
-
-        let output = Command::new("git")
-            .args(&args)
-            .output()
-            .map_err(|e| format!("Failed to clone repository: {}", e))?;
-
-        if !output.status.success() {
-            return Err(format!(
-                "Git clone failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-    }
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
 
     // Build repository context
     let repo = GitHubRepo {

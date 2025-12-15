@@ -19,11 +19,13 @@ impl UIAutomationService {
     pub fn invoke(&self, element_id: &str) -> Result<()> {
         let element = self.get_element(element_id)?;
         if let Some(pattern) = get_invoke_pattern(&element) {
+            // SAFETY: pattern is a valid COM interface pointer obtained from get_invoke_pattern
             unsafe { pattern.Invoke() }.map_err(|err| anyhow!("Invoke failed: {err:?}"))?;
             return Ok(());
         }
 
         if let Some(pattern) = get_selection_item_pattern(&element) {
+            // SAFETY: pattern is a valid COM interface pointer obtained from get_selection_item_pattern
             unsafe { pattern.Select() }.map_err(|err| anyhow!("Select failed: {err:?}"))?;
             return Ok(());
         }
@@ -36,6 +38,7 @@ impl UIAutomationService {
     pub fn set_value(&self, element_id: &str, value: &str) -> Result<()> {
         let element = self.get_element(element_id)?;
         if let Some(pattern) = get_value_pattern(&element) {
+            // SAFETY: pattern is a valid COM interface pointer obtained from get_value_pattern
             unsafe { pattern.SetValue(&BSTR::from(value)) }
                 .map_err(|err| anyhow!("SetValue failed: {err:?}"))?;
             return Ok(());
@@ -48,6 +51,7 @@ impl UIAutomationService {
         let element = self.get_element(element_id)?;
 
         if let Some(pattern) = get_value_pattern(&element) {
+            // SAFETY: pattern is a valid COM interface pointer obtained from get_value_pattern
             let value = unsafe { pattern.CurrentValue() }
                 .map_err(|err| anyhow!("CurrentValue failed: {err:?}"))?;
             return Ok(value.to_string());
@@ -69,6 +73,7 @@ impl UIAutomationService {
     pub fn toggle(&self, element_id: &str) -> Result<()> {
         let element = self.get_element(element_id)?;
         if let Some(pattern) = get_toggle_pattern(&element) {
+            // SAFETY: pattern is a valid COM interface pointer obtained from get_toggle_pattern
             unsafe { pattern.Toggle() }.map_err(|err| anyhow!("Toggle failed: {err:?}"))?;
             return Ok(());
         }
@@ -82,6 +87,7 @@ impl UIAutomationService {
 
     pub fn set_focus(&self, element_id: &str) -> Result<()> {
         let element = self.get_element(element_id)?;
+        // SAFETY: element is a valid COM interface pointer obtained from get_element
         unsafe { element.SetFocus() }.map_err(|err| anyhow!("SetFocus failed: {err:?}"))
     }
 

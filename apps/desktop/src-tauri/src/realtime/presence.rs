@@ -3,7 +3,8 @@ use chrono::Utc;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPresence {
@@ -36,6 +37,7 @@ pub enum ActivityType {
     RunningAutomation,
 }
 
+#[derive(Clone)]
 pub struct PresenceManager {
     db: Arc<Mutex<Connection>>,
     online_users: Arc<Mutex<HashMap<String, UserPresence>>>,
@@ -49,7 +51,7 @@ impl PresenceManager {
         }
     }
 
-    pub fn set_online(&self, user_id: &str) {
+    pub async fn set_online(&self, user_id: &str) {
         let presence = UserPresence {
             user_id: user_id.to_string(),
             status: PresenceStatus::Online,
@@ -57,55 +59,48 @@ impl PresenceManager {
             current_activity: None,
         };
 
-        if let Ok(mut users) = self.online_users.lock() {
-            users.insert(user_id.to_string(), presence.clone());
-        }
-        let _ = self.persist_presence(&presence);
+        self.online_users
+            .lock()
+            .await
+            .insert(user_id.to_string(), presence.clone());
+        let _ = self.persist_presence(&presence).await;
     }
 
-    pub fn set_offline(&self, user_id: &str) {
-        if let Ok(mut users) = self.online_users.lock() {
-            if let Some(presence) = users.get_mut(user_id) {
-                presence.status = PresenceStatus::Offline;
-                presence.last_seen = Utc::now().timestamp();
-                let _ = self.persist_presence(presence);
-            }
+    pub async fn set_offline(&self, user_id: &str) {
+        let mut users = self.online_users.lock().await;
+        if let Some(presence) = users.get_mut(user_id) {
+            presence.status = PresenceStatus::Offline;
+            presence.last_seen = Utc::now().timestamp();
+            let presence_clone = presence.clone();
+            drop(users); // Release lock before await
+            let _ = self.persist_presence(&presence_clone).await;
+        } else {
             users.remove(user_id);
         }
     }
 
-    pub fn set_activity(&self, user_id: &str, activity: UserActivity) {
-        if let Ok(mut users) = self.online_users.lock() {
-            if let Some(presence) = users.get_mut(user_id) {
-                presence.current_activity = Some(activity);
-                let _ = self.persist_presence(presence);
-            }
+    pub async fn set_activity(&self, user_id: &str, activity: UserActivity) {
+        let mut users = self.online_users.lock().await;
+        if let Some(presence) = users.get_mut(user_id) {
+            presence.current_activity = Some(activity);
+            let presence_clone = presence.clone();
+            drop(users); // Release lock before await
+            let _ = self.persist_presence(&presence_clone).await;
         }
     }
 
-    pub fn get_team_presence(&self, _team_id: &str) -> Vec<UserPresence> {
+    pub async fn get_team_presence(&self, _team_id: &str) -> Vec<UserPresence> {
         // For now, return all online users
         // In a real implementation, filter by team_id from database
-        self.online_users
-            .lock()
-            .map(|guard| guard.values().cloned().collect())
-            .unwrap_or_default()
+        self.online_users.lock().await.values().cloned().collect()
     }
 
-    pub fn get_user_presence(&self, user_id: &str) -> Option<UserPresence> {
-        self.online_users
-            .lock()
-            .ok()
-            .and_then(|guard| guard.get(user_id).cloned())
+    pub async fn get_user_presence(&self, user_id: &str) -> Option<UserPresence> {
+        self.online_users.lock().await.get(user_id).cloned()
     }
 
-    fn persist_presence(&self, presence: &UserPresence) -> Result<(), rusqlite::Error> {
-        let db = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Failed to acquire database lock: {}",
-                e
-            ))))
-        })?;
+    async fn persist_presence(&self, presence: &UserPresence) -> Result<(), rusqlite::Error> {
+        let db = self.db.lock().await;
         let activity_json = presence
             .current_activity
             .as_ref()

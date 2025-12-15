@@ -138,7 +138,6 @@ mod tests {
 
     #[test]
     fn test_word_editor_creation() {
-        let editor = WordEditor::new();
-        assert!(std::mem::size_of_val(&editor) >= 0);
+        let _editor = WordEditor::new();
     }
 }

@@ -147,8 +147,6 @@ mod tests {
     fn test_directory_change_invalidation() -> Result<()> {
         let cache = setup_test_cache()?;
         let dir_path = PathBuf::from("/test/project");
-        let file1 = dir_path.join("file1.rs");
-        let file2 = dir_path.join("file2.rs");
 
         // Add cache entries
         cache.set(

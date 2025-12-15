@@ -131,6 +131,10 @@ impl RealtimeMetricsCollector {
         Arc::clone(&self.db)
     }
 
+    fn connection(&self) -> SqliteResult<std::sync::MutexGuard<'_, Connection>> {
+        self.db.lock().map_err(|_e| rusqlite::Error::InvalidQuery)
+    }
+
     /// Record automation run and broadcast metrics update
     pub async fn record_automation_run(
         &self,
@@ -178,12 +182,7 @@ impl RealtimeMetricsCollector {
 
     /// Store metrics in database
     fn store_metrics(&self, metrics: &MetricsSnapshot) -> SqliteResult<()> {
-        let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Database lock poisoned: {}",
-                e
-            ))))
-        })?;
+        let conn = self.connection()?;
         conn.execute(
             "INSERT INTO realtime_metrics (
                 id, user_id, automation_id, employee_id,
@@ -228,7 +227,7 @@ impl RealtimeMetricsCollector {
 
     /// Check for milestones and celebrate
     async fn check_milestones(&self, user_id: &str) {
-        if let Ok(stats) = self.get_realtime_stats(user_id).await {
+        if let Ok(stats) = self.get_realtime_stats(user_id) {
             let all_time = &stats.all_time;
 
             // Define milestone thresholds
@@ -241,14 +240,18 @@ impl RealtimeMetricsCollector {
             for (threshold, title) in milestones {
                 if all_time.total_time_saved_hours >= threshold {
                     // Check if milestone already recorded
-                    if !self.is_milestone_recorded(user_id, title).unwrap_or(true) {
-                        self.record_milestone(
+                    let already_recorded =
+                        self.is_milestone_recorded(user_id, title).unwrap_or(true);
+                    if !already_recorded {
+                        if let Err(e) = self.record_milestone(
                             user_id,
                             title,
                             threshold,
                             all_time.total_cost_saved_usd,
-                        )
-                        .ok();
+                        ) {
+                            tracing::warn!("Failed to record milestone {}: {}", title, e);
+                            continue;
+                        }
 
                         // Broadcast milestone event
                         use crate::realtime::RealtimeEvent;
@@ -268,12 +271,7 @@ impl RealtimeMetricsCollector {
 
     /// Check if milestone has been recorded
     fn is_milestone_recorded(&self, user_id: &str, milestone_type: &str) -> SqliteResult<bool> {
-        let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Database lock poisoned: {}",
-                e
-            ))))
-        })?;
+        let conn = self.connection()?;
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM user_milestones WHERE user_id = ?1 AND milestone_type = ?2",
             rusqlite::params![user_id, milestone_type],
@@ -290,12 +288,7 @@ impl RealtimeMetricsCollector {
         threshold_value: f64,
         _cost_saved: f64,
     ) -> SqliteResult<()> {
-        let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Database lock poisoned: {}",
-                e
-            ))))
-        })?;
+        let conn = self.connection()?;
         conn.execute(
             "INSERT INTO user_milestones (id, user_id, milestone_type, threshold_value, achieved_at, shared)
              VALUES (?1, ?2, ?3, ?4, ?5, 0)",
@@ -311,22 +304,18 @@ impl RealtimeMetricsCollector {
     }
 
     /// Get real-time statistics for a user
-    pub async fn get_realtime_stats(&self, user_id: &str) -> Result<RealtimeStats, String> {
+    pub fn get_realtime_stats(&self, user_id: &str) -> Result<RealtimeStats, String> {
         let today = self
             .aggregate_period(user_id, 1)
-            .await
             .map_err(|e| format!("Failed to get today stats: {}", e))?;
         let this_week = self
             .aggregate_period(user_id, 7)
-            .await
             .map_err(|e| format!("Failed to get week stats: {}", e))?;
         let this_month = self
             .aggregate_period(user_id, 30)
-            .await
             .map_err(|e| format!("Failed to get month stats: {}", e))?;
         let all_time = self
             .aggregate_all_time(user_id)
-            .await
             .map_err(|e| format!("Failed to get all-time stats: {}", e))?;
 
         Ok(RealtimeStats {
@@ -338,13 +327,8 @@ impl RealtimeMetricsCollector {
     }
 
     /// Aggregate metrics for a specific time period (in days)
-    async fn aggregate_period(&self, user_id: &str, days: i64) -> SqliteResult<PeriodStats> {
-        let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Database lock poisoned: {}",
-                e
-            ))))
-        })?;
+    fn aggregate_period(&self, user_id: &str, days: i64) -> SqliteResult<PeriodStats> {
+        let conn = self.connection()?;
         let cutoff = Utc::now().timestamp() - (days * 24 * 60 * 60);
 
         let (total_time_minutes, total_cost, count): (Option<i64>, Option<f64>, i64) = conn
@@ -382,13 +366,8 @@ impl RealtimeMetricsCollector {
     }
 
     /// Aggregate all-time metrics
-    async fn aggregate_all_time(&self, user_id: &str) -> SqliteResult<PeriodStats> {
-        let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Database lock poisoned: {}",
-                e
-            ))))
-        })?;
+    fn aggregate_all_time(&self, user_id: &str) -> SqliteResult<PeriodStats> {
+        let conn = self.connection()?;
 
         let (total_time_minutes, total_cost, count): (Option<i64>, Option<f64>, i64) = conn
             .query_row(
@@ -430,12 +409,7 @@ impl RealtimeMetricsCollector {
         user_id: &str,
         cutoff_timestamp: Option<i64>,
     ) -> SqliteResult<Vec<EmployeePerformance>> {
-        let conn = self.db.lock().map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(format!(
-                "Database lock poisoned: {}",
-                e
-            ))))
-        })?;
+        let conn = self.connection()?;
 
         let query = if let Some(_cutoff) = cutoff_timestamp {
             "SELECT

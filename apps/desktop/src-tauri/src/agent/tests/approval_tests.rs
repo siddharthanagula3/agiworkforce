@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::super::approval::*;
+    use crate::agent::approval::*;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::task;
@@ -115,7 +115,9 @@ mod tests {
         let app_handle_clone = app_handle.clone();
         let payload_clone = payload.clone();
         let approval_task = task::spawn(async move {
-            controller_clone.request_approval(&app_handle_clone, payload_clone).await
+            controller_clone
+                .request_approval(&app_handle_clone, payload_clone)
+                .await
         });
 
         // Give the request time to register
@@ -129,11 +131,15 @@ mod tests {
         let resolution2 = ApprovalResolution::Approved { trust: true };
 
         let resolve_task1 = task::spawn(async move {
-            controller_clone1.resolve("test_action_1", resolution1).await
+            controller_clone1
+                .resolve("test_action_1", resolution1)
+                .await
         });
 
         let resolve_task2 = task::spawn(async move {
-            controller_clone2.resolve("test_action_1", resolution2).await
+            controller_clone2
+                .resolve("test_action_1", resolution2)
+                .await
         });
 
         let result1 = resolve_task1.await.unwrap();
@@ -161,7 +167,10 @@ mod tests {
 
         // Wait for approval task to complete
         let approval_result = approval_task.await.unwrap();
-        assert!(approval_result.is_ok(), "Approval should have been resolved");
+        assert!(
+            approval_result.is_ok(),
+            "Approval should have been resolved"
+        );
     }
 
     /// Test that trust store operations are thread-safe
@@ -196,7 +205,9 @@ mod tests {
         let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
 
         // Set a workflow hash
-        controller.set_current_hash(Some("test_workflow".to_string())).await;
+        controller
+            .set_current_hash(Some("test_workflow".to_string()))
+            .await;
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -227,25 +238,35 @@ mod tests {
         let app_handle_clone = app_handle.clone();
         let payload_clone = payload.clone();
         let approval_task = task::spawn(async move {
-            controller_clone.request_approval(&app_handle_clone, payload_clone).await
+            controller_clone
+                .request_approval(&app_handle_clone, payload_clone)
+                .await
         });
 
         // Give request time to register
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
         // Resolve with trust=true
-        let result = controller.resolve("test_toctou", ApprovalResolution::Approved { trust: true }).await;
+        let result = controller
+            .resolve("test_toctou", ApprovalResolution::Approved { trust: true })
+            .await;
         assert!(result.is_ok(), "First resolution should succeed");
 
         // Wait for approval to complete
         let approval_result = approval_task.await.unwrap();
-        assert!(approval_result.is_ok(), "Approval should complete successfully");
+        assert!(
+            approval_result.is_ok(),
+            "Approval should complete successfully"
+        );
 
         // Verify trust was recorded atomically
         let is_trusted = controller
             .is_action_trusted(Some("test_workflow"), "delete_sig")
             .await
             .unwrap();
-        assert!(is_trusted, "Action should be trusted after approval with trust=true");
+        assert!(
+            is_trusted,
+            "Action should be trusted after approval with trust=true"
+        );
     }
 }

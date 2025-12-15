@@ -3,15 +3,12 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { authenticatedUserSchema } from '../authenticated-user';
+import { requireEnv } from '../env';
 
 const router: Router = Router();
 
-const JWT_SECRET = process.env['JWT_SECRET'];
-if (!JWT_SECRET) {
-  throw new Error(
-    'FATAL: JWT_SECRET environment variable is required but not set. Set JWT_SECRET in .env file.',
-  );
-}
+const JWT_SECRET = requireEnv('JWT_SECRET');
 const JWT_EXPIRES_IN = '7d';
 
 // In-memory user store (replace with database in production)
@@ -117,8 +114,9 @@ router.get('/verify', (req: Request, res: Response) => {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
-    return res.json({ valid: true, userId: payload.userId, email: payload.email });
+    const payload = jwt.verify(token, JWT_SECRET);
+    const user = authenticatedUserSchema.parse(payload);
+    return res.json({ valid: true, userId: user.userId, email: user.email });
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }

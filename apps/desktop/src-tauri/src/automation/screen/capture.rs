@@ -4,7 +4,8 @@ use image::{DynamicImage, RgbaImage};
 use serde::{Deserialize, Serialize};
 use xcap::Monitor;
 
-use super::dxgi::{list_displays, ScreenInfo};
+use super::dxgi::ScreenInfo;
+use super::xcap_lock::lock_xcap;
 
 #[cfg(windows)]
 use std::sync::Mutex;
@@ -45,11 +46,13 @@ pub struct CapturedRegion {
 }
 
 pub fn capture_primary_screen() -> Result<CapturedImage> {
+    let _xcap_lock = lock_xcap()?;
     let monitors = Monitor::all().context("Failed to enumerate displays")?;
-    let monitor = monitors
+    let (screen_index, monitor) = monitors
         .iter()
-        .find(|m| m.is_primary())
-        .or_else(|| monitors.first())
+        .enumerate()
+        .find(|(_, m)| m.is_primary())
+        .or_else(|| monitors.iter().enumerate().next())
         .ok_or_else(|| anyhow!("No displays detected for capture"))?;
 
     let image = monitor
@@ -60,35 +63,32 @@ pub fn capture_primary_screen() -> Result<CapturedImage> {
     let pixels = RgbaImage::from_raw(image.width(), image.height(), image.into_raw())
         .ok_or_else(|| anyhow!("Failed to convert captured image"))?;
 
-    let displays = list_displays()?;
-    let display = displays
-        .iter()
-        .find(|d| d.is_primary)
-        .or_else(|| displays.first())
-        .cloned()
-        .ok_or_else(|| anyhow!("Display metadata unavailable"))?;
+    let display = ScreenInfo::from_monitor(monitor, screen_index);
 
     Ok(CapturedImage {
         pixels,
-        screen_index: 0,
+        screen_index,
         display,
     })
 }
 
 pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<CapturedRegion> {
     // Find the monitor containing the point (x, y)
+    let _xcap_lock = lock_xcap()?;
     let monitors = Monitor::all().context("Failed to enumerate displays")?;
 
-    let target_monitor = monitors
+    let (screen_index, target_monitor) = monitors
         .iter()
+        .enumerate()
         .find(|m| {
+            let m = m.1;
             let mx = m.x();
             let my = m.y();
             let mw = m.width() as i32;
             let mh = m.height() as i32;
             x >= mx && x < mx + mw && y >= my && y < my + mh
         })
-        .or_else(|| monitors.first())
+        .or_else(|| monitors.iter().enumerate().next())
         .ok_or_else(|| anyhow!("Unable to resolve screen for region"))?;
 
     // Capture the full monitor
@@ -105,33 +105,20 @@ pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Capture
     // Calculate relative coordinates within the monitor
     let rel_x = (x - target_monitor.x()).max(0) as u32;
     let rel_y = (y - target_monitor.y()).max(0) as u32;
-    let crop_width = width.min(target_monitor.width() - rel_x);
-    let crop_height = height.min(target_monitor.height() - rel_y);
+    let available_width = target_monitor.width().saturating_sub(rel_x);
+    let available_height = target_monitor.height().saturating_sub(rel_y);
 
-    // Manually crop by creating a new image and copying pixels
-    // This is necessary because xcap::image and image crate are separate
-    let mut pixels = RgbaImage::new(crop_width, crop_height);
-    for y_offset in 0..crop_height {
-        for x_offset in 0..crop_width {
-            let pixel = full_image.get_pixel(rel_x + x_offset, rel_y + y_offset);
-            pixels.put_pixel(x_offset, y_offset, image::Rgba([pixel[0], pixel[1], pixel[2], pixel[3]]));
-        }
+    let crop_width = width.min(available_width);
+    let crop_height = height.min(available_height);
+
+    if crop_width == 0 || crop_height == 0 {
+        return Err(anyhow!("Capture region is outside of screen bounds"));
     }
 
-    let displays = list_displays()?;
-    let screen_index = monitors
-        .iter()
-        .position(|m| {
-            m.x() == target_monitor.x()
-                && m.y() == target_monitor.y()
-                && m.width() == target_monitor.width()
-                && m.height() == target_monitor.height()
-        })
-        .unwrap_or(0);
+    let pixels =
+        image::imageops::crop_imm(&full_image, rel_x, rel_y, crop_width, crop_height).to_image();
 
-    let display = displays.get(screen_index).cloned().unwrap_or_else(|| {
-        ScreenInfo::from_monitor(target_monitor, screen_index)
-    });
+    let display = ScreenInfo::from_monitor(target_monitor, screen_index);
 
     Ok(CapturedRegion {
         pixels,
@@ -172,6 +159,8 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
     let windows = Arc::new(Mutex::new(Vec::new()));
     let windows_clone = Arc::clone(&windows);
 
+    // SAFETY: We are passing a valid callback function and a pointer to a valid Arc<Mutex<Vec<WindowInfo>>>.
+    // The callback function (enum_window_proc) correctly casts the lparam back to the Mutex.
     unsafe {
         // Callback function for EnumWindows
         unsafe extern "system" fn enum_window_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -288,6 +277,10 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>> {
 /// Capture a specific window by HWND
 #[cfg(windows)]
 pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
+    // SAFETY: This block uses Windows GDI APIs. We ensure that:
+    // 1. Handles (DC, Bitmap) are checked for validity before use.
+    // 2. Resources are properly released (DeleteDC, ReleaseDC, DeleteObject) even on error paths.
+    // 3. Pointers passed to GetDIBits are valid and point to sufficiently sized buffers.
     unsafe {
         let hwnd = HWND(hwnd as _);
 
@@ -423,6 +416,10 @@ pub fn capture_window(_hwnd: isize) -> Result<CapturedImage> {
 pub fn paste_from_clipboard() -> Result<CapturedImage> {
     const CF_BITMAP: u32 = 2;
 
+    // SAFETY: This block uses Windows Clipboard and GDI APIs. We ensure that:
+    // 1. Clipboard is opened and closed properly.
+    // 2. Clipboard data is checked for validity.
+    // 3. GDI resources are managed and released.
     unsafe {
         // Open clipboard
         if OpenClipboard(HWND(0)).is_err() {
