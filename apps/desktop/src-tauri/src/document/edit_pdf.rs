@@ -92,7 +92,6 @@ mod tests {
 
     #[test]
     fn test_pdf_editor_creation() {
-        let editor = PdfEditor::new();
-        assert!(std::mem::size_of_val(&editor) >= 0);
+        let _editor = PdfEditor::new();
     }
 }

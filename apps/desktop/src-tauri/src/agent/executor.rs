@@ -1,6 +1,6 @@
 use super::*;
 use crate::automation::{
-    input::{KeyboardSimulator, MouseSimulator},
+    input::{lock_enigo, KeyboardSimulator, MouseSimulator},
     AutomationService,
 };
 use anyhow::Result;
@@ -246,6 +246,7 @@ impl TaskExecutor {
                 if modifiers.is_empty() {
                     // Single key press - use enigo::Key for compatibility
                     use enigo::{Enigo, Keyboard, Settings};
+                    let _enigo_lock = lock_enigo()?;
                     let mut enigo =
                         Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
                     enigo
@@ -254,6 +255,7 @@ impl TaskExecutor {
                 } else {
                     // Key combination with modifiers - use enigo for key combinations
                     use enigo::{Enigo, Keyboard, Settings};
+                    let _enigo_lock = lock_enigo()?;
                     let mut enigo =
                         Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
 

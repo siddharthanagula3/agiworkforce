@@ -194,7 +194,6 @@ mod tests {
 
     #[test]
     fn test_excel_editor_creation() {
-        let editor = ExcelEditor::new();
-        assert!(std::mem::size_of_val(&editor) >= 0);
+        let _editor = ExcelEditor::new();
     }
 }

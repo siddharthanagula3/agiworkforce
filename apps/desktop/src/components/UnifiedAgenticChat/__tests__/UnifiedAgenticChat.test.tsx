@@ -8,6 +8,10 @@ vi.mock('../../Terminal/TerminalWorkspace', () => ({
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
 }));
+vi.mock('../../ui/ScrollArea', () => ({
+  ScrollArea: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ScrollBar: () => null,
+}));
 
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
@@ -27,46 +31,56 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-describe('UnifiedAgenticChat', () => {
-  const renderChat = (props: React.ComponentProps<typeof UnifiedAgenticChat> = {}) => {
+	describe('UnifiedAgenticChat', () => {
+  const renderChat = async (props: React.ComponentProps<typeof UnifiedAgenticChat> = {}) => {
     let utils: ReturnType<typeof render>;
-    act(() => {
+    await act(async () => {
       utils = render(<UnifiedAgenticChat {...props} />);
+      await Promise.resolve();
+      await Promise.resolve();
     });
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return utils!;
   };
 
-  it('should render without crashing', () => {
-    renderChat();
+  it('should render without crashing', async () => {
+    await renderChat();
     expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
   });
 
-  it('should display welcome message when no messages exist', () => {
-    renderChat();
+  it('should display welcome message when no messages exist', async () => {
+    await renderChat();
     expect(screen.getByText(/Start typing, drop in files/i)).toBeInTheDocument();
   });
 
-  it('should render input area with placeholder', () => {
-    renderChat();
+  it('should render input area with placeholder', async () => {
+    await renderChat();
     expect(screen.getByPlaceholderText('Ask me anything...')).toBeInTheDocument();
   });
 
   it('should call onSendMessage when message is sent', async () => {
     const mockOnSend = vi.fn();
-    renderChat({ onSendMessage: mockOnSend });
+    await renderChat({ onSendMessage: mockOnSend });
 
     expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
   });
 
-  it('should support different layout modes', () => {
-    const { rerender } = renderChat({ layout: 'default' });
+  it('should support different layout modes', async () => {
+    const { rerender } = await renderChat({ layout: 'default' });
     expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
 
-    rerender(<UnifiedAgenticChat layout="compact" />);
+    await act(async () => {
+      rerender(<UnifiedAgenticChat layout="compact" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
 
-    rerender(<UnifiedAgenticChat layout="immersive" />);
+    await act(async () => {
+      rerender(<UnifiedAgenticChat layout="immersive" />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(screen.getByText(/How can I help you today\?/i)).toBeInTheDocument();
   });
 });

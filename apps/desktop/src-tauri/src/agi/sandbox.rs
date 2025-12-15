@@ -56,51 +56,47 @@ impl SandboxManager {
 
     async fn setup_git_worktree(&self, workspace_path: &PathBuf, sandbox_id: &str) -> Result<()> {
         let current_dir = std::env::current_dir()?;
+        let workspace_path = workspace_path.clone();
+        let sandbox_id_clone = sandbox_id.to_string();
 
         if !self.is_git_repo(&current_dir).await? {
             tracing::warn!("[SandboxManager] Not in git repo, skipping worktree");
             return Ok(());
         }
 
-        let branch_name = format!("sandbox/{}", sandbox_id);
+        tauri::async_runtime::spawn_blocking(move || {
+            let repo = git2::Repository::open(&current_dir).map_err(|e| anyhow!("Failed to open repo: {}", e))?;
+            let branch_name = format!("sandbox/{}", sandbox_id_clone);
 
-        let output = tokio::process::Command::new("git")
-            .args([
-                "worktree",
-                "add",
-                workspace_path.to_str().unwrap(),
-                "-b",
-                &branch_name,
-            ])
-            .current_dir(&current_dir)
-            .output()
-            .await?;
+            // Create worktree
+            let opts = git2::WorktreeAddOptions::new();
+            repo.worktree(&branch_name, &workspace_path, Some(&opts))
+                .map_err(|e| anyhow!("Failed to create worktree: {}", e))?;
 
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("Git worktree creation failed: {}", error));
-        }
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(|e| anyhow!("Task join error: {}", e))??;
 
-        tracing::info!("[SandboxManager] Git worktree created: {}", branch_name);
+        tracing::info!("[SandboxManager] Git worktree created: sandbox/{}", sandbox_id);
 
         Ok(())
     }
 
     async fn is_git_repo(&self, path: &PathBuf) -> Result<bool> {
-        let output = tokio::process::Command::new("git")
-            .args(["rev-parse", "--git-dir"])
-            .current_dir(path)
-            .output()
-            .await?;
-
-        Ok(output.status.success())
+        let path = path.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            git2::Repository::discover(&path).is_ok()
+        })
+        .await
+        .map_err(|e| anyhow!("Task join error: {}", e))
     }
 
     pub async fn cleanup_sandbox(&self, sandbox: &Sandbox) -> Result<()> {
         tracing::info!("[SandboxManager] Cleaning up sandbox: {}", sandbox.id);
 
         if sandbox.git_worktree {
-            self.remove_git_worktree(&sandbox.workspace_path).await?;
+            self.remove_git_worktree(&sandbox.workspace_path, &sandbox.id).await?;
         }
 
         if sandbox.workspace_path.exists() {
@@ -113,24 +109,27 @@ impl SandboxManager {
         Ok(())
     }
 
-    async fn remove_git_worktree(&self, workspace_path: &PathBuf) -> Result<()> {
+    async fn remove_git_worktree(&self, _workspace_path: &PathBuf, sandbox_id: &str) -> Result<()> {
         let current_dir = std::env::current_dir()?;
+        let sandbox_id = sandbox_id.to_string();
+        
+        tauri::async_runtime::spawn_blocking(move || {
+            let repo = git2::Repository::open(&current_dir).map_err(|e| anyhow!("Failed to open repo: {}", e))?;
+            let worktree_name = format!("sandbox/{}", sandbox_id);
+            
+            if let Ok(wt) = repo.find_worktree(&worktree_name) {
+                wt.prune(None).map_err(|e| anyhow!("Failed to prune worktree: {}", e))?;
+            }
+            
+            // Also delete the branch
+            if let Ok(mut branch) = repo.find_branch(&worktree_name, git2::BranchType::Local) {
+                branch.delete().map_err(|e| anyhow!("Failed to delete branch: {}", e))?;
+            }
 
-        let output = tokio::process::Command::new("git")
-            .args([
-                "worktree",
-                "remove",
-                workspace_path.to_str().unwrap(),
-                "--force",
-            ])
-            .current_dir(&current_dir)
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            tracing::warn!("[SandboxManager] Git worktree removal warning: {}", error);
-        }
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(|e| anyhow!("Task join error: {}", e))??;
 
         Ok(())
     }

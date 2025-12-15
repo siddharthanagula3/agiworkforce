@@ -1,17 +1,9 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { authenticatedUserSchema, type AuthenticatedUser } from '../authenticated-user';
+import { requireEnv } from '../env';
 
-const JWT_SECRET = process.env['JWT_SECRET'];
-if (!JWT_SECRET) {
-  throw new Error(
-    'FATAL: JWT_SECRET environment variable is required but not set. Set JWT_SECRET in .env file.',
-  );
-}
-
-export interface AuthenticatedUser {
-  userId: string;
-  email: string;
-}
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 declare global {
   namespace Express {
@@ -34,8 +26,8 @@ export function authenticateToken(
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthenticatedUser;
-    req.user = payload;
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = authenticatedUserSchema.parse(payload);
     next();
     return;
   } catch (error) {

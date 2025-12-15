@@ -47,8 +47,10 @@ pub struct ElementQuery {
 impl UIAutomationService {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
         let desktop = self.root_element()?;
+        // SAFETY: self.automation() returns a valid COM pointer. CreateTrueCondition is safe.
         let true_condition =
             unsafe { self.automation().CreateTrueCondition() }.map_err(|err| anyhow!("{err:?}"))?;
+        // SAFETY: desktop is a valid COM pointer. FindAll is safe.
         let array = unsafe { desktop.FindAll(TreeScope_Children, &true_condition) }
             .map_err(|err| anyhow!("FindAll: {err:?}"))?;
 
@@ -57,6 +59,7 @@ impl UIAutomationService {
 
         let mut results = Vec::new();
         for index in 0..count {
+            // SAFETY: array is a valid COM pointer. GetElement is safe with valid index.
             let element =
                 unsafe { array.GetElement(index) }.map_err(|err| anyhow!("GetElement: {err:?}"))?;
             results.push(self.describe_element(&element)?);
@@ -80,6 +83,7 @@ impl UIAutomationService {
         };
 
         let condition = self.build_condition(query)?;
+        // SAFETY: parent is a valid COM pointer. FindAll is safe.
         let collection = unsafe { parent.FindAll(TreeScope_Subtree, &condition) }
             .map_err(|err| anyhow!("FindAll: {err:?}"))?;
 
@@ -93,6 +97,8 @@ impl UIAutomationService {
             if results.len() >= max_results {
                 break;
             }
+            }
+            // SAFETY: collection is a valid COM pointer. GetElement is safe with valid index.
             let element = unsafe { collection.GetElement(index) }
                 .map_err(|err| anyhow!("GetElement: {err:?}"))?;
             results.push(self.describe_element(&element)?);
@@ -105,6 +111,7 @@ impl UIAutomationService {
         &self,
         element: &IUIAutomationElement,
     ) -> Result<Option<BoundingRectangle>> {
+        // SAFETY: element is a valid COM pointer. CurrentBoundingRectangle is safe.
         let rect =
             unsafe { element.CurrentBoundingRectangle() }.map_err(|err| anyhow!("{err:?}"))?;
         if rect.left == 0 && rect.right == 0 && rect.top == 0 && rect.bottom == 0 {
@@ -124,6 +131,7 @@ impl UIAutomationService {
 
     fn describe_element(&self, element: &IUIAutomationElement) -> Result<UIElementInfo> {
         let id = self.register_element(element)?;
+        // SAFETY: element is a valid COM pointer. Property getters are safe.
         let name = read_bstr(|| unsafe { element.CurrentName().ok() }).unwrap_or_default();
         let class_name = read_bstr(|| unsafe { element.CurrentClassName().ok() })
             .unwrap_or_else(|| "Unknown".into());
@@ -158,6 +166,7 @@ impl UIAutomationService {
         }
 
         let condition = self.combine_conditions(&conditions, true)?;
+        // SAFETY: root is a valid COM pointer. FindFirst is safe.
         let element = unsafe { root.FindFirst(TreeScope_Children, &condition) }
             .map_err(|err| anyhow!("{err:?}"))?;
         Ok(if element.as_raw().is_null() {
@@ -186,6 +195,7 @@ impl UIAutomationService {
         if let Some(control_type) = &query.control_type {
             if let Some(control_type_id) = self.control_type_by_name(control_type) {
                 let variant = VARIANT::from(control_type_id.0);
+                // SAFETY: self.automation is a valid COM pointer. CreatePropertyCondition is safe.
                 let condition = unsafe {
                     self.automation
                         .CreatePropertyCondition(UIA_ControlTypePropertyId, &variant)
@@ -208,6 +218,7 @@ impl UIAutomationService {
         value: &str,
     ) -> Result<IUIAutomationCondition> {
         let variant = VARIANT::from(BSTR::from(value));
+        // SAFETY: self.automation is a valid COM pointer. CreatePropertyCondition is safe.
         unsafe {
             self.automation
                 .CreatePropertyCondition(property_id, &variant)
@@ -227,8 +238,10 @@ impl UIAutomationService {
         let mut combined = conditions[0].clone();
         for condition in &conditions[1..] {
             combined = if and {
+                // SAFETY: self.automation is a valid COM pointer. CreateAndCondition is safe.
                 unsafe { self.automation.CreateAndCondition(&combined, condition) }
             } else {
+                // SAFETY: self.automation is a valid COM pointer. CreateOrCondition is safe.
                 unsafe { self.automation.CreateOrCondition(&combined, condition) }
             }
             .map_err(|err| anyhow!("Combine conditions: {err:?}"))?;

@@ -10,6 +10,7 @@ pub mod types;
 #[cfg(windows)]
 pub mod uia;
 pub mod vision_planner;
+pub(crate) mod os_lock;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -30,15 +31,24 @@ impl UIAutomationService {
     }
 
     pub fn invoke(&self, _element_id: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
-    pub fn bounding_rect(&self, _element_id: &str) -> anyhow::Result<Option<types::BoundingRectangle>> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+    pub fn bounding_rect(
+        &self,
+        _element_id: &str,
+    ) -> anyhow::Result<Option<types::BoundingRectangle>> {
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn set_focus(&self, _element_id: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn find_elements(
@@ -46,27 +56,39 @@ impl UIAutomationService {
         _parent_id: Option<String>,
         _query: &types::ElementQuery,
     ) -> anyhow::Result<Vec<types::UIElementInfo>> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn toggle(&self, _element_id: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn set_value(&self, _element_id: &str, _value: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn list_windows(&self) -> anyhow::Result<Vec<types::UIElementInfo>> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn get_value(&self, _element_id: &str) -> anyhow::Result<String> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 
     pub fn focus_window(&self, _window_name: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("UI Automation not available on this platform"))
+        Err(anyhow::anyhow!(
+            "UI Automation not available on this platform"
+        ))
     }
 }
 
@@ -79,19 +101,32 @@ impl InspectorService {
         Ok(Self)
     }
 
-    pub fn inspect_element_at_point(&self, _x: i32, _y: i32) -> anyhow::Result<types::DetailedElementInfo> {
+    pub fn inspect_element_at_point(
+        &self,
+        _x: i32,
+        _y: i32,
+    ) -> anyhow::Result<types::DetailedElementInfo> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 
-    pub fn inspect_element_by_selector(&self, _selector: &types::ElementSelector) -> anyhow::Result<types::DetailedElementInfo> {
+    pub fn inspect_element_by_selector(
+        &self,
+        _selector: &types::ElementSelector,
+    ) -> anyhow::Result<types::DetailedElementInfo> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 
-    pub fn inspect_element_by_id(&self, _element_id: &str) -> anyhow::Result<types::DetailedElementInfo> {
+    pub fn inspect_element_by_id(
+        &self,
+        _element_id: &str,
+    ) -> anyhow::Result<types::DetailedElementInfo> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 
-    pub fn find_element_by_selector(&self, _selector: &types::ElementSelector) -> anyhow::Result<Option<types::BasicElementInfo>> {
+    pub fn find_element_by_selector(
+        &self,
+        _selector: &types::ElementSelector,
+    ) -> anyhow::Result<Option<types::BasicElementInfo>> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 
