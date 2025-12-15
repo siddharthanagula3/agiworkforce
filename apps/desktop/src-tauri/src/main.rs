@@ -320,7 +320,7 @@ fn main() {
             tracing::info!("Template manager state initialized");
 
             // Initialize Real-time Metrics and ROI Dashboard
-            let presence_db = Arc::new(Mutex::new(
+            let presence_db = Arc::new(tokio::sync::Mutex::new(
                 Connection::open(&db_path).context("Failed to open database for presence")?,
             ));
             let presence_manager =

@@ -4,6 +4,8 @@ use enigo::{Button, Coordinate, Enigo, Mouse, Settings};
 use std::time::Duration;
 use tokio::time::sleep;
 
+use super::enigo_lock::lock_enigo;
+
 #[cfg(windows)]
 use crate::automation::types::BoundingRectangle;
 
@@ -30,12 +32,14 @@ pub struct MouseSimulator {
 
 impl MouseSimulator {
     pub fn new() -> Result<Self> {
+        let _enigo_lock = lock_enigo()?;
         let enigo = Enigo::new(&Settings::default())
             .map_err(|e| anyhow!("Failed to create mouse simulator: {:?}", e))?;
         Ok(Self { enigo })
     }
 
     pub fn move_to(&mut self, x: i32, y: i32) -> Result<()> {
+        let _enigo_lock = lock_enigo()?;
         self.enigo
             .move_mouse(x, y, Coordinate::Abs)
             .map_err(|e| anyhow!("Failed to move mouse: {:?}", e))
@@ -89,6 +93,7 @@ impl MouseSimulator {
 
     pub fn click(&mut self, x: i32, y: i32, button: MouseButton) -> Result<()> {
         self.move_to(x, y)?;
+        let _enigo_lock = lock_enigo()?;
         self.enigo
             .button(button.into(), enigo::Direction::Click)
             .map_err(|e| anyhow!("Failed to click mouse button: {:?}", e))
@@ -96,7 +101,11 @@ impl MouseSimulator {
 
     /// Click the center of a bounding rectangle (Windows UI Automation only)
     #[cfg(windows)]
-    pub fn click_rect_center(&mut self, rect: &BoundingRectangle, button: MouseButton) -> Result<()> {
+    pub fn click_rect_center(
+        &mut self,
+        rect: &BoundingRectangle,
+        button: MouseButton,
+    ) -> Result<()> {
         let x = (rect.left + rect.width / 2.0).round() as i32;
         let y = (rect.top + rect.height / 2.0).round() as i32;
         self.click(x, y, button)
@@ -104,12 +113,16 @@ impl MouseSimulator {
 
     pub fn drag(&mut self, start: (i32, i32), end: (i32, i32)) -> Result<()> {
         self.move_to(start.0, start.1)?;
-        self.enigo
-            .button(Button::Left, enigo::Direction::Press)
-            .map_err(|e| anyhow!("Failed to press mouse button: {:?}", e))?;
+        {
+            let _enigo_lock = lock_enigo()?;
+            self.enigo
+                .button(Button::Left, enigo::Direction::Press)
+                .map_err(|e| anyhow!("Failed to press mouse button: {:?}", e))?;
+        }
 
         self.move_to(end.0, end.1)?;
 
+        let _enigo_lock = lock_enigo()?;
         self.enigo
             .button(Button::Left, enigo::Direction::Release)
             .map_err(|e| anyhow!("Failed to release mouse button: {:?}", e))
@@ -148,9 +161,12 @@ impl MouseSimulator {
         sleep(Duration::from_millis(10)).await;
 
         // Press left mouse button
-        self.enigo
-            .button(Button::Left, enigo::Direction::Press)
-            .map_err(|e| anyhow!("Failed to press mouse button: {:?}", e))?;
+        {
+            let _enigo_lock = lock_enigo()?;
+            self.enigo
+                .button(Button::Left, enigo::Direction::Press)
+                .map_err(|e| anyhow!("Failed to press mouse button: {:?}", e))?;
+        }
 
         // Small delay after pressing button
         sleep(Duration::from_millis(10)).await;
@@ -187,9 +203,12 @@ impl MouseSimulator {
         sleep(Duration::from_millis(10)).await;
 
         // Release left mouse button
-        self.enigo
-            .button(Button::Left, enigo::Direction::Release)
-            .map_err(|e| anyhow!("Failed to release mouse button: {:?}", e))?;
+        {
+            let _enigo_lock = lock_enigo()?;
+            self.enigo
+                .button(Button::Left, enigo::Direction::Release)
+                .map_err(|e| anyhow!("Failed to release mouse button: {:?}", e))?;
+        }
 
         Ok(())
     }
@@ -197,6 +216,7 @@ impl MouseSimulator {
     pub fn scroll(&mut self, delta: i32) -> Result<()> {
         // Enigo scroll units may differ from Windows (120 per notch)
         // Adjust the delta to work similarly across platforms
+        let _enigo_lock = lock_enigo()?;
         self.enigo
             .scroll(delta, enigo::Axis::Vertical)
             .map_err(|e| anyhow!("Failed to scroll: {:?}", e))

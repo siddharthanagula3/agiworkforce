@@ -107,6 +107,7 @@ impl UIAutomationService {
 
         loop {
             let element = self.get_element(element_id)?;
+            // SAFETY: element is a valid COM pointer. CurrentIsEnabled is safe.
             let is_enabled = unsafe { element.CurrentIsEnabled() }
                 .map_err(|err| anyhow!("CurrentIsEnabled failed: {err:?}"))?;
 

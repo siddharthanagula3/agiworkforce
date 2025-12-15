@@ -189,13 +189,13 @@ impl TemplateManager {
         Ok(Self { db })
     }
 
+    fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
+        self.db.lock().map_err(|_e| rusqlite::Error::InvalidQuery)
+    }
+
     /// Get all available templates
     pub fn get_all_templates(&self) -> Result<Vec<AgentTemplate>> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
@@ -243,11 +243,7 @@ impl TemplateManager {
 
     /// Get template by ID
     pub fn get_template_by_id(&self, id: &str) -> Result<Option<AgentTemplate>> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
@@ -294,11 +290,7 @@ impl TemplateManager {
     }
 
     pub fn uninstall_template(&self, user_id: &str, template_id: &str) -> Result<()> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         conn.execute(
             "DELETE FROM template_installs WHERE user_id = ?1 AND template_id = ?2",
@@ -313,11 +305,7 @@ impl TemplateManager {
         &self,
         category: TemplateCategory,
     ) -> Result<Vec<AgentTemplate>> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
@@ -366,11 +354,7 @@ impl TemplateManager {
 
     /// Install a template for a user
     pub fn install_template(&self, user_id: &str, template_id: &str) -> Result<()> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         // Insert install record
         conn.execute(
@@ -394,11 +378,7 @@ impl TemplateManager {
 
     /// Get installed templates for a user
     pub fn get_installed_templates(&self, user_id: &str) -> Result<Vec<AgentTemplate>> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT t.id, t.name, t.category, t.description, t.icon, t.tools, t.workflow,
@@ -448,11 +428,7 @@ impl TemplateManager {
 
     /// Search templates by query (searches name and description)
     pub fn search_templates(&self, query: &str) -> Result<Vec<AgentTemplate>> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         let search_pattern = format!("%{}%", query.to_lowercase());
 
@@ -503,11 +479,7 @@ impl TemplateManager {
 
     /// Save a template to the database
     pub fn save_template(&self, template: &AgentTemplate) -> Result<()> {
-        let conn = self.db.lock().map_err(|_| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                "Failed to lock database",
-            )))
-        })?;
+        let conn = self.connection()?;
 
         let tools_json = serde_json::to_string(&template.tools).unwrap_or_default();
         let workflow_json = serde_json::to_string(&template.workflow).unwrap_or_default();
@@ -556,7 +528,6 @@ impl TemplateManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
 
     #[test]
     fn test_template_category_conversion() {
