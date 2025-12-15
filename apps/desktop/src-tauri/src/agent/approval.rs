@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::{oneshot, Mutex as TokioMutex, RwLock};
 
 pub struct ApprovalManager {
@@ -230,9 +230,9 @@ impl ApprovalController {
         })
     }
 
-    pub async fn request_approval(
+    pub async fn request_approval<R: Runtime>(
         &self,
-        app_handle: &AppHandle,
+        app_handle: &AppHandle<R>,
         mut payload: ApprovalRequestPayload,
     ) -> Result<ApprovalResolution> {
         if payload.workflow_hash.is_none() {
@@ -361,7 +361,12 @@ impl ApprovalController {
         }
     }
 
-    fn emit_status(&self, app_handle: &AppHandle, status: &str, current_step: &str) -> Result<()> {
+    fn emit_status<R: Runtime>(
+        &self,
+        app_handle: &AppHandle<R>,
+        status: &str,
+        current_step: &str,
+    ) -> Result<()> {
         app_handle
             .emit(
                 "agent:status:update",

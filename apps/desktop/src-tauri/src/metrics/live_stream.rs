@@ -58,7 +58,7 @@ impl LiveMetricsStream {
         user_id: &str,
         delta: MetricsSnapshot,
     ) -> Result<(), String> {
-        let new_totals = self.collector.get_realtime_stats(user_id).await?.today;
+        let new_totals = self.collector.get_realtime_stats(user_id)?.today;
 
         let update = MetricsUpdate {
             update_type: UpdateType::AutomationCompleted,

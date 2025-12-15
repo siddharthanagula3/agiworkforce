@@ -371,7 +371,7 @@ mod tests {
         // Test that image data is properly prepared for base64 encoding
         let image_data = vec![255, 216, 255, 224]; // JPEG header
         let content = ContentPart::Image {
-            image: ImageData {
+            image: ImageInput {
                 data: image_data.clone(),
                 format: ImageFormat::Jpeg,
                 detail: crate::router::ImageDetail::High,

@@ -172,34 +172,30 @@ impl ApprovalWorkflow {
         // SECURITY FIX: Use atomic UPDATE with affected row count check
         // This prevents TOCTOU race where multiple approvals could be processed
         let rows_affected = match decision {
-            ApprovalDecision::Approved { reason } => {
-                conn.execute(
-                    "UPDATE approval_requests
+            ApprovalDecision::Approved { reason } => conn.execute(
+                "UPDATE approval_requests
                      SET status = ?1, reviewed_by = ?2, reviewed_at = ?3, decision_reason = ?4
                      WHERE id = ?5 AND status = 'pending'",
-                    rusqlite::params![
-                        ApprovalStatus::Approved.as_str(),
-                        reviewer_id,
-                        now,
-                        reason,
-                        request_id,
-                    ],
-                )?
-            }
-            ApprovalDecision::Rejected { reason } => {
-                conn.execute(
-                    "UPDATE approval_requests
+                rusqlite::params![
+                    ApprovalStatus::Approved.as_str(),
+                    reviewer_id,
+                    now,
+                    reason,
+                    request_id,
+                ],
+            )?,
+            ApprovalDecision::Rejected { reason } => conn.execute(
+                "UPDATE approval_requests
                      SET status = ?1, reviewed_by = ?2, reviewed_at = ?3, decision_reason = ?4
                      WHERE id = ?5 AND status = 'pending'",
-                    rusqlite::params![
-                        ApprovalStatus::Rejected.as_str(),
-                        reviewer_id,
-                        now,
-                        reason,
-                        request_id,
-                    ],
-                )?
-            }
+                rusqlite::params![
+                    ApprovalStatus::Rejected.as_str(),
+                    reviewer_id,
+                    now,
+                    reason,
+                    request_id,
+                ],
+            )?,
         };
 
         // SECURITY FIX: Verify exactly one row was updated

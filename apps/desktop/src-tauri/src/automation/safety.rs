@@ -197,9 +197,10 @@ mod tests {
         let safety = ComputerUseSafety::new();
 
         assert!(safety.is_click_location_safe(100, 100));
-        assert!(safety.is_click_location_safe(1920, 1080));
+        assert!(safety.is_click_location_safe(960, 540));
         assert!(!safety.is_click_location_safe(-10, 50));
         assert!(!safety.is_click_location_safe(5, 5));
+        assert!(!safety.is_click_location_safe(1900, 1070));
     }
 
     #[test]

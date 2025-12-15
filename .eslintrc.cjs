@@ -36,6 +36,7 @@ module.exports = {
     '**/src-tauri/**',
     'target',
     'examples/**',
+    'apps/_future_mobile/**',
   ],
   rules: {
     'react/react-in-jsx-scope': 'off',

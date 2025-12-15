@@ -86,7 +86,7 @@ function handleMessage(message, sender, sendResponse) {
       return true;
 
     case 'EVALUATE':
-      handleEvaluate(message, sendResponse);
+      sendResponse({ success: false, error: 'EVALUATE is disabled for security reasons' });
       return true;
 
     case 'QUERY_ALL':
@@ -383,17 +383,6 @@ function handleClearLocalStorage(sendResponse) {
     sendResponse({ success: true });
   } catch (error) {
     console.error('Clear local storage failed:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-// Evaluate JavaScript
-function handleEvaluate(message, sendResponse) {
-  try {
-    const result = eval(message.script);
-    sendResponse({ success: true, data: result });
-  } catch (error) {
-    console.error('Evaluate failed:', error);
     sendResponse({ success: false, error: error.message });
   }
 }

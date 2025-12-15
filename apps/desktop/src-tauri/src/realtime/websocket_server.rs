@@ -117,7 +117,7 @@ impl RealtimeServer {
             let mut clients_lock = clients.lock().await;
             if let Some(client) = clients_lock.get(&client_id) {
                 if let Some(user_id) = &client.user_id {
-                    presence.set_offline(user_id);
+                    presence.set_offline(user_id).await;
                 }
             }
             clients_lock.remove(&client_id);
@@ -164,7 +164,7 @@ impl RealtimeServer {
                         client.team_id = team_id.clone();
                     }
                 }
-                presence.set_online(user_id);
+                presence.set_online(user_id).await;
                 tracing::info!("Client authenticated: {} as user {}", client_id, user_id);
             }
 

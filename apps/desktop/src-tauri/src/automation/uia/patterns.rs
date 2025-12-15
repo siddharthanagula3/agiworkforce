@@ -41,6 +41,7 @@ impl PatternCapabilities {
 pub(super) fn get_invoke_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationInvokePattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)
@@ -51,6 +52,7 @@ pub(super) fn get_invoke_pattern(
 pub(super) fn get_value_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationValuePattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
@@ -61,6 +63,7 @@ pub(super) fn get_value_pattern(
 pub(super) fn get_toggle_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationTogglePattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
@@ -71,6 +74,7 @@ pub(super) fn get_toggle_pattern(
 pub(super) fn get_selection_item_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationSelectionItemPattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationSelectionItemPattern>(UIA_SelectionItemPatternId)
@@ -79,6 +83,7 @@ pub(super) fn get_selection_item_pattern(
 }
 
 pub(super) fn get_text_pattern(element: &IUIAutomationElement) -> Option<IUIAutomationTextPattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPattern is safe to call.
     unsafe {
         element
             .GetCurrentPattern(UIA_TextPatternId)
@@ -96,6 +101,7 @@ pub(super) fn get_text_pattern(element: &IUIAutomationElement) -> Option<IUIAuto
 /// - Data grids
 /// - Calendars
 pub(super) fn get_grid_pattern(element: &IUIAutomationElement) -> Option<IUIAutomationGridPattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationGridPattern>(UIA_GridPatternId)
@@ -113,6 +119,7 @@ pub(super) fn get_grid_pattern(element: &IUIAutomationElement) -> Option<IUIAuto
 pub(super) fn get_table_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationTablePattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationTablePattern>(UIA_TablePatternId)
@@ -132,6 +139,7 @@ pub(super) fn get_table_pattern(
 pub(super) fn get_scroll_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationScrollPattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationScrollPattern>(UIA_ScrollPatternId)
@@ -150,6 +158,7 @@ pub(super) fn get_scroll_pattern(
 pub(super) fn get_expand_collapse_pattern(
     element: &IUIAutomationElement,
 ) -> Option<IUIAutomationExpandCollapsePattern> {
+    // SAFETY: element is a valid COM interface pointer. GetCurrentPatternAs is safe to call.
     unsafe {
         element
             .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(UIA_ExpandCollapsePatternId)

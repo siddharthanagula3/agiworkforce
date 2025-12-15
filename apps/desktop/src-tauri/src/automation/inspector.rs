@@ -66,6 +66,7 @@ impl InspectorService {
         let point = POINT { x, y };
 
         let element = unsafe {
+            // SAFETY: self.uia.automation() returns a valid COM pointer. ElementFromPoint is safe.
             self.uia
                 .automation()
                 .ElementFromPoint(point)
@@ -133,6 +134,8 @@ impl InspectorService {
         let mut selectors = Vec::new();
 
         // Try automation ID (best selector) using direct property where available
+        // Try automation ID (best selector) using direct property where available
+        // SAFETY: element is a valid COM pointer. CurrentAutomationId is safe.
         if let Some(automation_id) = read_bstr(|| unsafe { element.CurrentAutomationId().ok() }) {
             if !automation_id.is_empty() {
                 selectors.push(ElementSelector {
@@ -143,6 +146,8 @@ impl InspectorService {
         }
 
         // Try name (second best)
+        // Try name (second best)
+        // SAFETY: element is a valid COM pointer. CurrentName is safe.
         if let Some(name) = read_bstr(|| unsafe { element.CurrentName().ok() }) {
             if !name.is_empty() {
                 selectors.push(ElementSelector {
@@ -153,6 +158,8 @@ impl InspectorService {
         }
 
         // Try class name (less reliable)
+        // Try class name (less reliable)
+        // SAFETY: element is a valid COM pointer. CurrentClassName is safe.
         if let Some(class_name) = read_bstr(|| unsafe { element.CurrentClassName().ok() }) {
             if !class_name.is_empty() {
                 selectors.push(ElementSelector {
@@ -201,6 +208,7 @@ impl InspectorService {
             read_bstr(|| unsafe { element.CurrentClassName().ok() }).unwrap_or_default();
 
         let control_type = unsafe {
+            // SAFETY: element is a valid COM pointer. Property getters are safe.
             element
                 .CurrentControlType()
                 .map(|id| format!("ControlType_{:?}", id))
@@ -212,6 +220,7 @@ impl InspectorService {
         let bounding_rect = self.uia.bounding_rect(&id).ok().flatten();
 
         let is_enabled = unsafe {
+            // SAFETY: element is a valid COM pointer. CurrentIsEnabled is safe.
             element
                 .CurrentIsEnabled()
                 .map(|b| b.as_bool())
@@ -219,6 +228,7 @@ impl InspectorService {
         };
 
         let is_offscreen = unsafe {
+            // SAFETY: element is a valid COM pointer. CurrentIsOffscreen is safe.
             element
                 .CurrentIsOffscreen()
                 .map(|b| b.as_bool())
@@ -226,6 +236,7 @@ impl InspectorService {
         };
 
         let has_keyboard_focus = unsafe {
+            // SAFETY: element is a valid COM pointer. CurrentHasKeyboardFocus is safe.
             element
                 .CurrentHasKeyboardFocus()
                 .map(|b| b.as_bool())
@@ -269,6 +280,7 @@ impl InspectorService {
     /// Get parent element
     fn get_parent(&self, element: &IUIAutomationElement) -> Result<BasicElementInfo> {
         let _condition = unsafe {
+            // SAFETY: self.uia.automation() returns a valid COM pointer. CreateTrueCondition is safe.
             self.uia
                 .automation()
                 .CreateTrueCondition()
@@ -276,6 +288,7 @@ impl InspectorService {
         };
 
         let parent = unsafe {
+            // SAFETY: self.uia.automation() returns a valid COM pointer. ControlViewWalker is safe.
             self.uia
                 .automation()
                 .ControlViewWalker()
@@ -290,6 +303,7 @@ impl InspectorService {
     /// Get children elements
     fn get_children(&self, element: &IUIAutomationElement) -> Result<Vec<BasicElementInfo>> {
         let _condition = unsafe {
+            // SAFETY: self.uia.automation() returns a valid COM pointer. CreateTrueCondition is safe.
             self.uia
                 .automation()
                 .CreateTrueCondition()
@@ -297,6 +311,7 @@ impl InspectorService {
         };
 
         let children_array = unsafe {
+            // SAFETY: element is a valid COM pointer. FindAll is safe.
             element
                 .FindAll(
                     windows::Win32::UI::Accessibility::TreeScope_Children,
@@ -309,6 +324,7 @@ impl InspectorService {
         let mut children = Vec::new();
 
         for i in 0..length {
+            // SAFETY: children_array is a valid COM pointer. GetElement is safe with valid index.
             if let Ok(child) = unsafe { children_array.GetElement(i) } {
                 if let Ok(info) = self.get_basic_info(&child) {
                     children.push(info);
@@ -323,6 +339,7 @@ impl InspectorService {
     fn get_basic_info(&self, element: &IUIAutomationElement) -> Result<BasicElementInfo> {
         let id = self.uia.register_element(element)?;
 
+        // SAFETY: element is a valid COM pointer. Property getters are safe.
         let name = read_bstr(|| unsafe { element.CurrentName().ok() }).unwrap_or_default();
 
         let class_name =

@@ -12,7 +12,7 @@ fn compile_regex(pattern: &str) -> Regex {
             // This should never happen for hardcoded patterns, but handle gracefully
             warn!("Failed to compile regex pattern '{}': {}. Using fallback pattern that matches nothing.", pattern, e);
             // Return a regex that matches nothing as a safe fallback
-            Regex::new(r"(?!)").unwrap_or_else(|_| {
+            Regex::new(r"\b\B").unwrap_or_else(|_| {
                 // This truly should never fail, but if it does, create a simple safe regex
                 Regex::new("^$").expect("Basic regex pattern failed")
             })
