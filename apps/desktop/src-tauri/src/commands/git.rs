@@ -4,8 +4,8 @@
  * Safe replacement for shell-based commands to prevent injection
  */
 use git2::{
-    BranchType, Cred, FetchOptions, PushOptions, RemoteCallbacks,
-    Repository, Signature, StatusOptions,
+    BranchType, Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository, Signature,
+    StatusOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -104,7 +104,9 @@ pub async fn git_status(path: String) -> Result<GitStatus, String> {
         let mut opts = StatusOptions::new();
         opts.include_untracked(true).recurse_untracked_dirs(true);
 
-        let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.message().to_string())?;
+        let statuses = repo
+            .statuses(Some(&mut opts))
+            .map_err(|e| e.message().to_string())?;
 
         let mut staged = Vec::new();
         let mut unstaged = Vec::new();
@@ -189,19 +191,25 @@ pub async fn git_commit(path: String, message: String) -> Result<String, String>
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        
+
         let mut index = repo.index().map_err(|e| e.message().to_string())?;
         let tree_id = index.write_tree().map_err(|e| e.message().to_string())?;
-        let tree = repo.find_tree(tree_id).map_err(|e| e.message().to_string())?;
+        let tree = repo
+            .find_tree(tree_id)
+            .map_err(|e| e.message().to_string())?;
 
-        let sig = repo.signature().or_else(|_| {
-            Signature::now("AGI Agent", "agent@agiworkforce.com")
-        }).map_err(|e| e.message().to_string())?;
+        let sig = repo
+            .signature()
+            .or_else(|_| Signature::now("AGI Agent", "agent@agiworkforce.com"))
+            .map_err(|e| e.message().to_string())?;
 
         let parent_commit = match repo.head() {
             Ok(head) => {
                 let target = head.target().ok_or("HEAD has no target")?;
-                Some(repo.find_commit(target).map_err(|e| e.message().to_string())?)
+                Some(
+                    repo.find_commit(target)
+                        .map_err(|e| e.message().to_string())?,
+                )
             }
             Err(_) => None, // Initial commit
         };
@@ -212,14 +220,9 @@ pub async fn git_commit(path: String, message: String) -> Result<String, String>
             vec![]
         };
 
-        let commit_id = repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            &message,
-            &tree,
-            &parents,
-        ).map_err(|e| e.message().to_string())?;
+        let commit_id = repo
+            .commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
+            .map_err(|e| e.message().to_string())?;
 
         Ok(commit_id.to_string())
     })
@@ -240,7 +243,9 @@ pub async fn git_push(
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let mut remote = repo.find_remote(&remote_name).map_err(|e| e.message().to_string())?;
+        let mut remote = repo
+            .find_remote(&remote_name)
+            .map_err(|e| e.message().to_string())?;
 
         let branch_name = if let Some(b) = branch {
             b
@@ -264,7 +269,8 @@ pub async fn git_push(
         let mut push_opts = PushOptions::new();
         push_opts.remote_callbacks(callbacks);
 
-        remote.push(&[&refspec], Some(&mut push_opts))
+        remote
+            .push(&[&refspec], Some(&mut push_opts))
             .map_err(|e| e.message().to_string())?;
 
         Ok("Push successful".to_string())
@@ -285,7 +291,9 @@ pub async fn git_pull(
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let mut remote = repo.find_remote(&remote_name).map_err(|e| e.message().to_string())?;
+        let mut remote = repo
+            .find_remote(&remote_name)
+            .map_err(|e| e.message().to_string())?;
 
         let branch_name = if let Some(b) = branch {
             b
@@ -302,34 +310,58 @@ pub async fn git_pull(
         let mut fetch_opts = FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
 
-        remote.fetch(&[&branch_name], Some(&mut fetch_opts), None)
+        remote
+            .fetch(&[&branch_name], Some(&mut fetch_opts), None)
             .map_err(|e| e.message().to_string())?;
 
         // Merge analysis
-        let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| e.message().to_string())?;
-        let fetch_commit = repo.reference_to_annotated_commit(&fetch_head).map_err(|e| e.message().to_string())?;
-        let analysis = repo.merge_analysis(&[&fetch_commit]).map_err(|e| e.message().to_string())?;
+        let fetch_head = repo
+            .find_reference("FETCH_HEAD")
+            .map_err(|e| e.message().to_string())?;
+        let fetch_commit = repo
+            .reference_to_annotated_commit(&fetch_head)
+            .map_err(|e| e.message().to_string())?;
+        let analysis = repo
+            .merge_analysis(&[&fetch_commit])
+            .map_err(|e| e.message().to_string())?;
 
         if analysis.0.is_fast_forward() {
             let refname = format!("refs/heads/{}", branch_name);
-            let mut reference = repo.find_reference(&refname).map_err(|e| e.message().to_string())?;
-            reference.set_target(fetch_commit.id(), "Fast-Forward").map_err(|e| e.message().to_string())?;
-            repo.set_head(&refname).map_err(|e| e.message().to_string())?;
-            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force())).map_err(|e| e.message().to_string())?;
+            let mut reference = repo
+                .find_reference(&refname)
+                .map_err(|e| e.message().to_string())?;
+            reference
+                .set_target(fetch_commit.id(), "Fast-Forward")
+                .map_err(|e| e.message().to_string())?;
+            repo.set_head(&refname)
+                .map_err(|e| e.message().to_string())?;
+            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+                .map_err(|e| e.message().to_string())?;
         } else if analysis.0.is_normal() {
-            let head_commit = repo.reference_to_annotated_commit(&repo.head().unwrap()).unwrap();
-            repo.merge(&[&fetch_commit], None, None).map_err(|e| e.message().to_string())?;
-            
+            let head_commit = repo
+                .reference_to_annotated_commit(&repo.head().unwrap())
+                .unwrap();
+            repo.merge(&[&fetch_commit], None, None)
+                .map_err(|e| e.message().to_string())?;
+
             // Auto commit merge
             let sig = repo.signature().unwrap();
             let tree_id = repo.index().unwrap().write_tree().unwrap();
             let tree = repo.find_tree(tree_id).unwrap();
-            
+
             let head_commit_obj = repo.find_commit(head_commit.id()).unwrap();
             let fetch_commit_obj = repo.find_commit(fetch_commit.id()).unwrap();
-            
-            repo.commit(Some("HEAD"), &sig, &sig, "Merge", &tree, &[&head_commit_obj, &fetch_commit_obj]).unwrap();
-            
+
+            repo.commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                "Merge",
+                &tree,
+                &[&head_commit_obj, &fetch_commit_obj],
+            )
+            .unwrap();
+
             repo.checkout_head(None).unwrap();
         }
 
@@ -366,9 +398,11 @@ pub async fn git_checkout(path: String, branch_name: String) -> Result<String, S
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let refname = format!("refs/heads/{}", branch_name);
-        
-        repo.set_head(&refname).map_err(|e| e.message().to_string())?;
-        repo.checkout_head(None).map_err(|e| e.message().to_string())?;
+
+        repo.set_head(&refname)
+            .map_err(|e| e.message().to_string())?;
+        repo.checkout_head(None)
+            .map_err(|e| e.message().to_string())?;
 
         Ok(format!("Switched to branch '{}'", branch_name))
     })
@@ -390,8 +424,10 @@ pub async fn git_checkout_new_branch(path: String, branch_name: String) -> Resul
             .map_err(|e| e.message().to_string())?;
 
         let refname = format!("refs/heads/{}", branch_name);
-        repo.set_head(&refname).map_err(|e| e.message().to_string())?;
-        repo.checkout_head(None).map_err(|e| e.message().to_string())?;
+        repo.set_head(&refname)
+            .map_err(|e| e.message().to_string())?;
+        repo.checkout_head(None)
+            .map_err(|e| e.message().to_string())?;
 
         Ok(format!("Switched to new branch '{}'", branch_name))
     })
@@ -406,16 +442,21 @@ pub async fn git_list_branches(path: String) -> Result<Vec<GitBranch>, String> {
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let branches = repo.branches(Some(BranchType::Local)).map_err(|e| e.message().to_string())?;
-        
+        let branches = repo
+            .branches(Some(BranchType::Local))
+            .map_err(|e| e.message().to_string())?;
+
         let mut result = Vec::new();
-        let head_name = repo.head().ok().and_then(|h| h.shorthand().map(|s| s.to_string()));
+        let head_name = repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
         for b in branches {
             let (branch, _) = b.map_err(|e| e.message().to_string())?;
             let name = branch.name().unwrap_or(Some("")).unwrap_or("").to_string();
             let is_current = Some(&name) == head_name.as_ref();
-            
+
             let last_commit = if let Ok(commit) = branch.get().peel_to_commit() {
                 commit.id().to_string()
             } else {
@@ -446,9 +487,10 @@ pub async fn git_delete_branch(
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let mut branch = repo.find_branch(&branch_name, BranchType::Local)
+        let mut branch = repo
+            .find_branch(&branch_name, BranchType::Local)
             .map_err(|e| e.message().to_string())?;
-        
+
         branch.delete().map_err(|e| e.message().to_string())?;
 
         Ok(format!("Branch '{}' deleted", branch_name))
@@ -464,13 +506,16 @@ pub async fn git_merge(path: String, branch_name: String) -> Result<String, Stri
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let branch = repo.find_branch(&branch_name, BranchType::Local)
+        let branch = repo
+            .find_branch(&branch_name, BranchType::Local)
             .map_err(|e| e.message().to_string())?;
-        
-        let annotated_commit = repo.reference_to_annotated_commit(branch.get())
+
+        let annotated_commit = repo
+            .reference_to_annotated_commit(branch.get())
             .map_err(|e| e.message().to_string())?;
-        
-        let (analysis, _) = repo.merge_analysis(&[&annotated_commit])
+
+        let (analysis, _) = repo
+            .merge_analysis(&[&annotated_commit])
             .map_err(|e| e.message().to_string())?;
 
         if analysis.is_fast_forward() {
@@ -479,21 +524,33 @@ pub async fn git_merge(path: String, branch_name: String) -> Result<String, Stri
             let target_id = annotated_commit.id();
             reference.set_target(target_id, "Fast-Forward").unwrap();
             repo.set_head(&refname).unwrap();
-            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force())).unwrap();
+            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+                .unwrap();
         } else if analysis.is_normal() {
-            let head_commit = repo.reference_to_annotated_commit(&repo.head().unwrap()).unwrap();
-            repo.merge(&[&annotated_commit], None, None).map_err(|e| e.message().to_string())?;
-            
+            let head_commit = repo
+                .reference_to_annotated_commit(&repo.head().unwrap())
+                .unwrap();
+            repo.merge(&[&annotated_commit], None, None)
+                .map_err(|e| e.message().to_string())?;
+
             // Auto commit
             let sig = repo.signature().unwrap();
             let tree_id = repo.index().unwrap().write_tree().unwrap();
             let tree = repo.find_tree(tree_id).unwrap();
-            
+
             let head_commit_obj = repo.find_commit(head_commit.id()).unwrap();
             let other_commit_obj = repo.find_commit(annotated_commit.id()).unwrap();
-            
-            repo.commit(Some("HEAD"), &sig, &sig, "Merge", &tree, &[&head_commit_obj, &other_commit_obj]).unwrap();
-            
+
+            repo.commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                "Merge",
+                &tree,
+                &[&head_commit_obj, &other_commit_obj],
+            )
+            .unwrap();
+
             repo.checkout_head(None).unwrap();
         }
 
@@ -513,12 +570,12 @@ pub async fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitCommit
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let mut revwalk = repo.revwalk().map_err(|e| e.message().to_string())?;
         revwalk.push_head().map_err(|e| e.message().to_string())?;
-        
+
         let mut commits = Vec::new();
         for oid in revwalk.take(max_count) {
             let oid = oid.map_err(|e| e.message().to_string())?;
             let commit = repo.find_commit(oid).map_err(|e| e.message().to_string())?;
-            
+
             let sig = commit.author();
             commits.push(GitCommit {
                 hash: oid.to_string(),
@@ -547,7 +604,7 @@ pub async fn git_diff(
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let mut opts = git2::DiffOptions::new();
-        
+
         if let Some(fp) = file_path {
             opts.pathspec(fp);
         }
@@ -557,13 +614,19 @@ pub async fn git_diff(
             repo.diff_tree_to_index(head.as_ref(), Some(&repo.index().unwrap()), Some(&mut opts))
         } else {
             repo.diff_index_to_workdir(None, Some(&mut opts))
-        }.map_err(|e| e.message().to_string())?;
+        }
+        .map_err(|e| e.message().to_string())?;
 
         let mut diffs = Vec::new();
-        
+
         diff.foreach(
             &mut |delta, _progress| {
-                let path = delta.new_file().path().unwrap().to_string_lossy().to_string();
+                let path = delta
+                    .new_file()
+                    .path()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
                 diffs.push(GitDiff {
                     file_path: path,
                     additions: 0, // Calculating exact lines requires more complex diff parsing
@@ -575,7 +638,8 @@ pub async fn git_diff(
             None,
             None,
             None,
-        ).map_err(|e| e.message().to_string())?;
+        )
+        .map_err(|e| e.message().to_string())?;
 
         Ok(diffs)
     })
@@ -600,7 +664,8 @@ pub async fn git_clone(url: String, destination: String) -> Result<String, Strin
         let mut builder = git2::build::RepoBuilder::new();
         builder.fetch_options(fetch_opts);
 
-        builder.clone(&url, Path::new(&destination))
+        builder
+            .clone(&url, Path::new(&destination))
             .map(|_| "Clone successful".to_string())
             .map_err(|e| e.message().to_string())
     })
@@ -616,7 +681,9 @@ pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, S
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let mut remote = repo.find_remote(&remote_name).map_err(|e| e.message().to_string())?;
+        let mut remote = repo
+            .find_remote(&remote_name)
+            .map_err(|e| e.message().to_string())?;
 
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_url, username_from_url, _allowed_types| {
@@ -626,7 +693,8 @@ pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, S
         let mut fetch_opts = FetchOptions::new();
         fetch_opts.remote_callbacks(callbacks);
 
-        remote.fetch(&[] as &[&str], Some(&mut fetch_opts), None)
+        remote
+            .fetch(&[] as &[&str], Some(&mut fetch_opts), None)
             .map(|_| "Fetch successful".to_string())
             .map_err(|e| e.message().to_string())
     })
@@ -642,10 +710,14 @@ pub async fn git_stash(path: String, message: Option<String>) -> Result<String, 
     spawn_blocking(move || {
         let mut repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let sig = repo.signature().map_err(|e| e.message().to_string())?;
-        
-        repo.stash_save(&sig, message.as_deref().unwrap_or("Stash"), Some(git2::StashFlags::DEFAULT))
-            .map(|_| "Stash successful".to_string())
-            .map_err(|e| e.message().to_string())
+
+        repo.stash_save(
+            &sig,
+            message.as_deref().unwrap_or("Stash"),
+            Some(git2::StashFlags::DEFAULT),
+        )
+        .map(|_| "Stash successful".to_string())
+        .map_err(|e| e.message().to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -678,8 +750,10 @@ pub async fn git_reset(
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let oid = git2::Oid::from_str(&commit).map_err(|e| e.message().to_string())?;
-        let object = repo.find_object(oid, None).map_err(|e| e.message().to_string())?;
-        
+        let object = repo
+            .find_object(oid, None)
+            .map_err(|e| e.message().to_string())?;
+
         let reset_type = match mode.as_str() {
             "soft" => git2::ResetType::Soft,
             "mixed" => git2::ResetType::Mixed,
@@ -703,7 +777,7 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<(String, String)>, Str
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let remotes = repo.remotes().map_err(|e| e.message().to_string())?;
-        
+
         let mut result = Vec::new();
         for name in remotes.iter() {
             if let Some(name) = name {
@@ -727,7 +801,8 @@ pub async fn git_add_remote(path: String, name: String, url: String) -> Result<S
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        repo.remote(&name, &url).map_err(|e| e.message().to_string())?;
+        repo.remote(&name, &url)
+            .map_err(|e| e.message().to_string())?;
         Ok(format!("Remote '{}' added", name))
     })
     .await
