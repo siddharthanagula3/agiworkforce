@@ -65,7 +65,8 @@ impl SandboxManager {
         }
 
         tauri::async_runtime::spawn_blocking(move || {
-            let repo = git2::Repository::open(&current_dir).map_err(|e| anyhow!("Failed to open repo: {}", e))?;
+            let repo = git2::Repository::open(&current_dir)
+                .map_err(|e| anyhow!("Failed to open repo: {}", e))?;
             let branch_name = format!("sandbox/{}", sandbox_id_clone);
 
             // Create worktree
@@ -78,25 +79,27 @@ impl SandboxManager {
         .await
         .map_err(|e| anyhow!("Task join error: {}", e))??;
 
-        tracing::info!("[SandboxManager] Git worktree created: sandbox/{}", sandbox_id);
+        tracing::info!(
+            "[SandboxManager] Git worktree created: sandbox/{}",
+            sandbox_id
+        );
 
         Ok(())
     }
 
     async fn is_git_repo(&self, path: &PathBuf) -> Result<bool> {
         let path = path.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            git2::Repository::discover(&path).is_ok()
-        })
-        .await
-        .map_err(|e| anyhow!("Task join error: {}", e))
+        tauri::async_runtime::spawn_blocking(move || git2::Repository::discover(&path).is_ok())
+            .await
+            .map_err(|e| anyhow!("Task join error: {}", e))
     }
 
     pub async fn cleanup_sandbox(&self, sandbox: &Sandbox) -> Result<()> {
         tracing::info!("[SandboxManager] Cleaning up sandbox: {}", sandbox.id);
 
         if sandbox.git_worktree {
-            self.remove_git_worktree(&sandbox.workspace_path, &sandbox.id).await?;
+            self.remove_git_worktree(&sandbox.workspace_path, &sandbox.id)
+                .await?;
         }
 
         if sandbox.workspace_path.exists() {
@@ -112,18 +115,22 @@ impl SandboxManager {
     async fn remove_git_worktree(&self, _workspace_path: &PathBuf, sandbox_id: &str) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let sandbox_id = sandbox_id.to_string();
-        
+
         tauri::async_runtime::spawn_blocking(move || {
-            let repo = git2::Repository::open(&current_dir).map_err(|e| anyhow!("Failed to open repo: {}", e))?;
+            let repo = git2::Repository::open(&current_dir)
+                .map_err(|e| anyhow!("Failed to open repo: {}", e))?;
             let worktree_name = format!("sandbox/{}", sandbox_id);
-            
+
             if let Ok(wt) = repo.find_worktree(&worktree_name) {
-                wt.prune(None).map_err(|e| anyhow!("Failed to prune worktree: {}", e))?;
+                wt.prune(None)
+                    .map_err(|e| anyhow!("Failed to prune worktree: {}", e))?;
             }
-            
+
             // Also delete the branch
             if let Ok(mut branch) = repo.find_branch(&worktree_name, git2::BranchType::Local) {
-                branch.delete().map_err(|e| anyhow!("Failed to delete branch: {}", e))?;
+                branch
+                    .delete()
+                    .map_err(|e| anyhow!("Failed to delete branch: {}", e))?;
             }
 
             Ok::<(), anyhow::Error>(())
