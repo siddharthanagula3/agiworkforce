@@ -21,7 +21,7 @@ import remarkMath from 'remark-math';
 import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { EnhancedMessage, SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { shouldShowClaudePlanningCard, getPreviousUserMessage } from '../../utils/messageHelpers';
+import { getPreviousUserMessage, shouldShowClaudePlanningCard } from '../../utils/messageHelpers';
 import { parseCitations } from './CitationBadge';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { StatusTrail } from './StatusTrail';
@@ -275,11 +275,18 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   };
 
+  // Handle thinking + content rendering
   if (thinkingMatch) {
     const summary =
       (message.metadata as any)?.thinkingSummary || (message.metadata as any)?.summary;
     const duration = (message.metadata as any)?.duration;
     const steps = (message.metadata as any)?.steps;
+
+    // Remove the thinking block from the content to show the rest
+    const thinkingBlock = thinkingMatch;
+    const remainingContent = message.content
+      .replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/i, '')
+      .trim();
 
     return (
       <div
@@ -292,16 +299,81 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             AI
           </div>
         )}
-        <div className="min-w-0 relative max-w-full">
+        <div className="min-w-0 relative max-w-full flex-1">
           {/* Status Trail */}
           <StatusTrail messageId={message.id} />
 
           {/* Reasoning Accordion */}
           <ReasoningAccordion
-            content={thinkingMatch}
+            content={thinkingBlock}
             summary={summary}
             metadata={{ duration, steps }}
           />
+
+          {/* Render remaining content if present */}
+          {remainingContent && (
+            <div className="prose prose-sm dark:prose-invert max-w-none mt-4">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={{
+                  code(props) {
+                    const { inline, className, children, ...rest } =
+                      props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
+                    const match = /language-(\w+)/.exec(className || '');
+                    const language = match ? match[1] : 'text';
+                    const code = String(children).replace(/\n$/, '');
+
+                    return !inline ? (
+                      <CodeBlock
+                        code={code}
+                        language={language || 'text'}
+                        showLineNumbers={true}
+                        enableCopy={true}
+                      />
+                    ) : (
+                      <code
+                        className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
+                        {...rest}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                  // Reuse other components if needed or keep simple
+                }}
+              >
+                {remainingContent}
+              </ReactMarkdown>
+            </div>
+          )}
+
+          {/* Attachments with Previews (Duplicated from below, could be refactored but keeping inline for safety) */}
+          {Array.isArray(message.attachments) && message.attachments.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {message.attachments.map((attachment) => (
+                <div key={attachment.id} className="attachment-preview max-w-xs">
+                  {/* ... simplified preview for brevity or reuse ... */}
+                  <span className="text-xs text-zinc-500">{attachment.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Actions */}
+          {enableActions && (
+            <div
+              className={cn(
+                'flex items-center gap-1 mt-2 transition-opacity',
+                showActions ? 'opacity-100' : 'opacity-0',
+              )}
+            >
+              {/* Simplified action buttons for this block */}
+              <button onClick={handleCopy} className="p-1 text-zinc-500 hover:text-zinc-300">
+                <Copy size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

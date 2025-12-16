@@ -15,10 +15,12 @@ import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
 import { Button } from '../ui/Button';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
+import { ArtifactsView } from './ArtifactsView';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { MediaLab } from './MediaLab';
+import { ProjectsView } from './ProjectsView';
 
 export const UnifiedAgenticChat: React.FC<{
   className?: string;
@@ -43,6 +45,7 @@ export const UnifiedAgenticChat: React.FC<{
   const setStreamingMessage = useUnifiedChatStore((state) => state.setStreamingMessage);
   const conversationMode = useUnifiedChatStore((state) => state.conversationMode);
   const messages = useUnifiedChatStore((state) => state.messages);
+  const activeView = useUnifiedChatStore((state) => state.activeView);
   // const streamingMessageId = useUnifiedChatStore((state) => state.currentStreamingMessageId); // Unused for now
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
@@ -432,7 +435,7 @@ export const UnifiedAgenticChat: React.FC<{
   };
 
   const openSidecar = (panel: SidecarMode, payload?: Record<string, unknown>) => {
-    openSidecarStore(panel, payload?.['contextId'] as string | undefined);
+    openSidecarStore(panel, payload?.['contextId'] as string | undefined, payload);
   };
 
   return (
@@ -440,12 +443,17 @@ export const UnifiedAgenticChat: React.FC<{
       className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
     >
       <AppLayout onOpenSettings={onOpenSettings} onOpenBilling={onOpenBilling}>
-        <BudgetAlertsPanel />
-        <ChatStream onOpenSidecar={openSidecar} />
-
-        {/* FIX: Removed the fixed bottom wrapper. 
-            ChatInputArea handles its own 'fixed' positioning to float in the center when empty. */}
-        <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
+        {activeView === 'chat' ? (
+          <>
+            <BudgetAlertsPanel />
+            <ChatStream onOpenSidecar={openSidecar} />
+            <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
+          </>
+        ) : activeView === 'projects' ? (
+          <ProjectsView />
+        ) : activeView === 'artifacts' ? (
+          <ArtifactsView />
+        ) : null}
       </AppLayout>
 
       {workspaceOpen && (
