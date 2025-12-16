@@ -97,7 +97,6 @@ impl UIAutomationService {
             if results.len() >= max_results {
                 break;
             }
-            }
             // SAFETY: collection is a valid COM pointer. GetElement is safe with valid index.
             let element = unsafe { collection.GetElement(index) }
                 .map_err(|err| anyhow!("GetElement: {err:?}"))?;
