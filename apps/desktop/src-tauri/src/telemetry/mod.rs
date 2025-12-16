@@ -2,6 +2,7 @@ pub mod analytics_metrics;
 pub mod collector;
 pub mod logging;
 pub mod metrics;
+pub mod redaction;
 pub mod tracing;
 
 // Re-export commonly used types
