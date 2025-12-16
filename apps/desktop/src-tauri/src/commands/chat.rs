@@ -709,7 +709,10 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
             Ok(registry) => {
                 // ✅ Register core tools
                 // We must retrieve services from app state to register them
-                let automation = app_handle.state::<std::sync::Arc<crate::automation::AutomationService>>().inner().clone();
+                let automation = app_handle
+                    .state::<std::sync::Arc<crate::automation::AutomationService>>()
+                    .inner()
+                    .clone();
                 let llm_state = app_handle.state::<crate::commands::llm::LLMState>();
                 let router = llm_state.router.clone();
 
