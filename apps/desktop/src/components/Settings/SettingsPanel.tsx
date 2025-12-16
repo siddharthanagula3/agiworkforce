@@ -34,6 +34,7 @@ import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
+import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -222,7 +223,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           ) : (
             /* Updated Nov 16, 2025: Fixed duplicate agent-library tab trigger */
             <Tabs defaultValue="api-keys" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="api-keys" className="flex items-center gap-2">
                   <Key className="h-4 w-4" />
                   API Keys
@@ -230,6 +231,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <TabsTrigger value="llm-config" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
                   Models
+                </TabsTrigger>
+                <TabsTrigger value="filesystem" className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Filesystem
                 </TabsTrigger>
                 {/* <TabsTrigger value="agent-library" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -497,6 +502,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 <EmployeesPage />
               </div>
             </TabsContent> */}
+
+              <TabsContent value="filesystem" className="space-y-6 pt-6">
+                <AllowedDirectoriesSettings />
+              </TabsContent>
 
               <TabsContent value="window" className="space-y-6 pt-6">
                 <div>

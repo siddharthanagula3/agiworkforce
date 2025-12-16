@@ -11,7 +11,6 @@ import {
 import React, { useMemo } from 'react';
 
 import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { ArtifactRenderer } from './ArtifactRenderer';
 import { Button } from '../ui/Button';
 import { MessageBubble } from './MessageBubble';
 
@@ -77,7 +76,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
         {isLoading && !isStreaming ? (
           <motion.div
             key="thinking"
-            className="inline-flex items-center gap-2 self-start rounded-full border border-teal-400/50 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-100"
+            className="inline-flex items-center gap-2 self-start rounded-full border border-agent-thinking/50 bg-agent-thinking/10 px-3 py-1 text-xs font-medium text-agent-thinking"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
@@ -100,60 +99,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
       </AnimatePresence>
 
       {items.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-2xl font-semibold text-white">How can I help you today?</p>
-              <p className="mt-2 text-sm text-zinc-300">
-                Start typing, drop in files, or add context for the agent to plan and execute.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={() => onOpenSidecar?.('browser')}>
-                <MousePointerClick className="mr-2 h-4 w-4" />
-                Open browser tools
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => onOpenSidecar?.('terminal')}>
-                <Terminal className="mr-2 h-4 w-4" />
-                Terminal session
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => onOpenSidecar?.('code')}>
-                <Braces className="mr-2 h-4 w-4" />
-                Code workspace
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                icon: Wand2,
-                title: 'Automate a workflow',
-                copy: 'Describe a task and let the agent plan, execute, and report back.',
-              },
-              {
-                icon: FileText,
-                title: 'Summarize & cite',
-                copy: 'Drop PDFs, docs, or web links for grounded summaries with sources.',
-              },
-              {
-                icon: Activity,
-                title: 'Observe & act',
-                copy: 'Attach screen/clipboard context and delegate quick UI actions.',
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-2xl border border-white/5 bg-white/5 p-3 backdrop-blur"
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                  <item.icon className="h-4 w-4 text-teal-200" />
-                  {item.title}
-                </div>
-                <p className="mt-2 text-sm text-zinc-300">{item.copy}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <div className="flex-1" />
       ) : (
         items.map((message) => {
           const meta = message.metadata || {};
@@ -213,10 +159,39 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
                 onEdit={(content) => handleRetry(message.id, content)}
               />
               {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2">
                   {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
-                    (artifact: any) => (
-                      <ArtifactRenderer key={artifact.id || artifact.title} artifact={artifact} />
+                    (artifact: any, idx: number) => (
+                      <div
+                        key={idx}
+                        onClick={() => onOpenSidecar?.('preview', { artifact })}
+                        className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
+                            {artifact.type === 'image' ? (
+                              <FileText className="w-4 h-4" />
+                            ) : (
+                              <Braces className="w-4 h-4" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-zinc-200">
+                              {artifact.title || 'Generated Artifact'}
+                            </div>
+                            <div className="text-xs text-zinc-400">
+                              {artifact.type === 'code' ? artifact.language : artifact.type}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 group-hover:text-white"
+                        >
+                          View <PanelTopOpen className="ml-2 w-3 h-3" />
+                        </Button>
+                      </div>
                     ),
                   )}
                 </div>

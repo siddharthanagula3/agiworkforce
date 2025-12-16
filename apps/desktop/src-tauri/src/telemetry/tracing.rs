@@ -2,6 +2,7 @@ use anyhow::Result;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use super::logging::{create_file_appender, LogConfig};
+use super::redaction::RedactingWriter;
 
 /// Initialize tracing with file and stdout logging
 pub fn init_tracing(config: LogConfig) -> Result<()> {
@@ -21,9 +22,10 @@ pub fn init_tracing(config: LogConfig) -> Result<()> {
     });
 
     // Create file layer (JSON format for structured logs)
+    let redacting_writer = RedactingWriter::new(file_writer);
     let file_layer = fmt::layer()
         .json()
-        .with_writer(file_writer)
+        .with_writer(std::sync::Mutex::new(redacting_writer))
         .with_target(true)
         .with_thread_ids(true)
         .with_thread_names(true)

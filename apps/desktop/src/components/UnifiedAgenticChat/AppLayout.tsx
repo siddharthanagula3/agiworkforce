@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { ResizeHandle } from '../ui/ResizeHandle';
 import { CommandPalette } from './CommandPalette';
+import { DynamicSidecar } from './DynamicSidecar';
 import { Sidebar } from './Sidebar';
-// TODO: Re-implement SidecarPanel or remove if deprecated
 // import { SidecarPanel } from './SidecarPanel';
 
 interface AppLayoutProps {
@@ -13,11 +14,19 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Moved to store
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
+  const setSidecarWidth = useUnifiedChatStore((state) => state.setSidecarWidth);
+  const sidebarWidth = useUnifiedChatStore((state) => state.sidebarWidth);
+  const setSidebarWidth = useUnifiedChatStore((state) => state.setSidebarWidth);
+  const sidebarCollapsed = useUnifiedChatStore((state) => state.sidebarCollapsed);
+  const setSidebarCollapsed = useUnifiedChatStore((state) => state.setSidebarCollapsed);
+
+  const [isResizing, setIsResizing] = useState(false);
+
   const messages = useUnifiedChatStore((state) => state.messages);
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
@@ -55,7 +64,7 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
       // Cmd+Shift+S: Toggle Sidebar
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
+        setSidebarCollapsed(!sidebarCollapsed);
       }
 
       // Cmd+Shift+O: New Chat
@@ -70,11 +79,11 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
   }, [handleNewChat]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-cream-50 dark:bg-charcoal-900 font-sans text-gray-900 dark:text-gray-100 antialiased">
+    <div className="relative flex h-full w-full overflow-hidden bg-cream-50 dark:bg-charcoal-900 font-sans text-gray-900 dark:text-gray-100 antialiased">
       {/* Background gradient for empty state */}
       {messages.length === 0 && (
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-terra-cotta-500/5" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-terra-cotta-500/5" />
         </div>
       )}
 
@@ -84,12 +93,15 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
         onOpenBilling={onOpenBilling}
+        width={sidebarCollapsed ? 64 : sidebarWidth}
+        onResize={setSidebarWidth}
       />
 
       {/* Main Content Area */}
       <main
         className={cn(
-          'flex flex-1 min-h-0 flex-col overflow-hidden transition-all duration-300 ease-in-out',
+          'flex flex-1 min-h-0 flex-col overflow-hidden ease-in-out',
+          !isResizing && 'transition-all duration-300',
         )}
         style={{ marginRight: sidecarState.isOpen ? sidecarWidth : 0 }}
       >
@@ -97,7 +109,7 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
         <div className="relative flex h-full flex-col">
           {/* Message Area */}
           <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-32 scroll-smooth">
-            <div className="mx-auto w-full max-w-3xl px-4 py-6">
+            <div className="mx-auto w-full max-w-5xl px-4 py-6">
               {children}
               {/* Scroll anchor for auto-scroll */}
               <div ref={messagesEndRef} className="h-px" />
@@ -106,9 +118,31 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
         </div>
       </main>
 
-      {/* Sidecar Panel - Fixed position */}
-      {/* TODO: Re-implement SidecarPanel */}
-      {/* {sidecarState.isOpen && <SidecarPanel />} */}
+      {/* Sidecar Panel - Absolute position to sit within the layout container (below titlebar) */}
+      {sidecarState.isOpen && (
+        <div
+          className={cn(
+            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
+            !isResizing && 'transition-[width] duration-300',
+          )}
+          style={{ width: sidecarWidth, position: 'absolute', top: 0, right: 0, bottom: 0 }}
+        >
+          <ResizeHandle
+            width={sidecarWidth}
+            onResize={setSidecarWidth}
+            isResizing={setIsResizing}
+            direction="left"
+            minWidth={300}
+            maxWidth={1000}
+            className="z-50"
+          />
+          <DynamicSidecar
+            panelType={sidecarState.activeMode}
+            payload={sidecarState.context}
+            onClose={() => useUnifiedChatStore.getState().closeSidecar()}
+          />
+        </div>
+      )}
 
       {/* Command Palette (Cmd+K) */}
       <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />

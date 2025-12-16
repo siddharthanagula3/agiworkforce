@@ -707,6 +707,16 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
 
         match ToolRegistry::new() {
             Ok(registry) => {
+                // ✅ Register core tools
+                // We must retrieve services from app state to register them
+                let automation = app_handle.state::<std::sync::Arc<crate::automation::AutomationService>>().inner().clone();
+                let llm_state = app_handle.state::<crate::commands::llm::LLMState>();
+                let router = llm_state.router.clone();
+
+                if let Err(e) = registry.register_all_tools(automation, router) {
+                    tracing::error!("Failed to register tools: {}", e);
+                }
+
                 let tool_registry = Arc::new(registry);
                 let mut tool_executor =
                     ToolExecutor::with_app_handle(tool_registry.clone(), app_handle.clone());
