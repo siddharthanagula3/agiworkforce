@@ -17,6 +17,7 @@ import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { cn } from '../../lib/utils';
+import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
   Attachment,
@@ -97,8 +98,16 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const editingMessageId = useUnifiedChatStore((state) => state.editingMessageId);
   const setDraftContent = useUnifiedChatStore((state) => state.setDraftContent);
   const cancelEditing = useUnifiedChatStore((state) => state.cancelEditing);
+
+  // Sidecar awareness for layout
+  const sidecarOpen = useUnifiedChatStore((state) => state.sidecar.isOpen);
+  const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
+  const sidebarWidth = useUnifiedChatStore((state) => state.sidebarWidth);
+  const sidebarCollapsed = useUnifiedChatStore((state) => state.sidebarCollapsed);
+
   const selectedModel = useModelStore((state) => state.selectedModel);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
+  const { displayName } = useAccountStore((state) => state.account);
   const prefersReducedMotion = useReducedMotion();
 
   const {
@@ -352,8 +361,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 exit={{ scale: 0.8, opacity: 0 }}
                 className="flex flex-col items-center gap-4"
               >
-                <div className="rounded-full bg-teal-500/20 p-8">
-                  <Paperclip className="h-16 w-16 text-teal-500" />
+                <div className="rounded-full bg-primary/10 p-8">
+                  <Paperclip className="h-16 w-16 text-primary" />
                 </div>
                 <p className="text-2xl font-medium text-white">Drop to Attach</p>
               </motion.div>
@@ -378,16 +387,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           'fixed z-40 w-full px-4',
           isEmptyState
             ? 'bottom-1/2 translate-y-1/2 max-w-2xl left-1/2 -translate-x-1/2'
-            : 'bottom-6 max-w-3xl left-1/2 -translate-x-1/2',
+            : 'bottom-6 max-w-5xl left-1/2 -translate-x-1/2',
           className,
         )}
         initial={false}
         animate={{
           bottom: isEmptyState ? '50%' : '24px',
-          left: '50%',
+          left: sidecarOpen
+            ? `calc(50% + ${(sidebarCollapsed ? 64 : sidebarWidth) / 2}px - ${sidecarWidth / 2}px)`
+            : `calc(50% + ${(sidebarCollapsed ? 64 : sidebarWidth) / 2}px)`,
           x: '-50%',
           y: isEmptyState ? '50%' : '0%',
-          maxWidth: isEmptyState ? '42rem' : '48rem',
+          maxWidth: isEmptyState ? '42rem' : '64rem',
         }}
         transition={
           prefersReducedMotion
@@ -410,7 +421,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               className={cn(
                 'px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200',
                 focusMode === mode.value
-                  ? 'bg-teal-500 text-white shadow-md shadow-teal-500/25'
+                  ? 'bg-primary text-white shadow-md shadow-primary/25'
                   : 'bg-white/80 dark:bg-charcoal-800/80 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-charcoal-700 border border-gray-200 dark:border-gray-700',
               )}
               aria-pressed={focusMode === mode.value}
@@ -420,6 +431,34 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           ))}
         </motion.div>
 
+        {/* Greeting - Only in Empty State */}
+        <AnimatePresence>
+          {isEmptyState && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="absolute bottom-full left-0 w-full mb-8 text-center pointer-events-none"
+            >
+              <div className="inline-flex items-center justify-center p-1.5 mb-6 rounded-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 backdrop-blur-sm">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 px-2">
+                  Free plan ·{' '}
+                  <span className="underline decoration-zinc-400 cursor-pointer pointer-events-auto">
+                    Upgrade
+                  </span>
+                </span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-serif text-zinc-900 dark:text-[#f8f5f1] mb-2 tracking-tight">
+                <span className="text-terra-cotta-600 dark:text-terra-cotta-400 inline-block mr-2">
+                  ✴
+                </span>
+                Back at it, {displayName || 'Friend'}
+              </h1>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div
           className={cn(
             'relative overflow-visible rounded-2xl',
@@ -427,7 +466,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             'border border-gray-200/80 dark:border-gray-700/80',
             'shadow-xl shadow-gray-200/50 dark:shadow-black/30',
             'transition-all duration-200 ease-out',
-            'focus-within:border-teal-500/50 focus-within:ring-4 focus-within:ring-teal-500/10',
+            'focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10',
             isEmptyState && 'shadow-2xl',
           )}
         >
@@ -454,14 +493,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 {activeContext.map((item) => (
                   <div
                     key={item.id}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 dark:bg-teal-900/20 px-2.5 py-1 text-xs text-teal-700 dark:text-teal-300"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 dark:bg-primary/20 px-2.5 py-1 text-xs text-primary dark:text-primary-foreground"
                   >
                     <span>{item.icon ?? 'CTX'}</span>
                     <span className="max-w-[180px] truncate">{item.name}</span>
                     <button
                       type="button"
                       onClick={() => removeContextItem(item.id)}
-                      className="ml-0.5 text-teal-500 hover:text-teal-700 transition"
+                      className="ml-0.5 text-primary/70 hover:text-primary transition"
                     >
                       <X size={12} />
                     </button>
@@ -513,67 +552,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
           {/* Main Input Row */}
           <div className="flex items-end gap-2 p-3">
-            {/* Model Selector - Inside Input */}
-            <div className="relative" ref={modelSelectorRef}>
-              <button
-                type="button"
-                onClick={() => setShowModelSelector(!showModelSelector)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium',
-                  'bg-gray-100 dark:bg-charcoal-700 hover:bg-gray-200 dark:hover:bg-charcoal-600',
-                  'text-gray-700 dark:text-gray-300',
-                  'transition-colors duration-150',
-                  'border border-transparent hover:border-gray-300 dark:hover:border-gray-600',
-                )}
-              >
-                <span className="truncate max-w-[120px]">{modelDisplayName}</span>
-                <ChevronDown
-                  size={14}
-                  className={cn('transition-transform', showModelSelector && 'rotate-180')}
-                />
-              </button>
-
-              {/* Model Selector Dropdown */}
-              <AnimatePresence>
-                {showModelSelector && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute bottom-full left-0 z-50 mb-3 w-80"
-                  >
-                    <QuickModelSelector onClose={() => setShowModelSelector(false)} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Textarea */}
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                placeholder={placeholder}
-                disabled={isDisabled}
-                rows={1}
-                className={cn(
-                  'w-full resize-none bg-transparent py-2 px-1',
-                  'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
-                  'focus:outline-none',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'text-[15px] leading-6',
-                )}
-                style={{ maxHeight: `${24 * MAX_ROWS}px` }}
-              />
-            </div>
-
-            {/* Action Buttons */}
+            {/* Left Controls: Attach & Mic */}
             <div className="flex items-center gap-1">
-              {/* Attachment Button */}
               {enableAttachments && (
                 <button
                   type="button"
@@ -590,8 +570,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   <Paperclip size={18} />
                 </button>
               )}
-
-              {/* Mic Button - Voice Input */}
               <button
                 type="button"
                 onClick={toggleListening}
@@ -603,16 +581,67 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                 )}
-                title={
-                  isListening
-                    ? 'Stop recording'
-                    : isVoiceSupported
-                      ? 'Voice input'
-                      : 'Voice input not supported'
-                }
+                title={isListening ? 'Stop recording' : 'Voice input'}
               >
                 {isListening ? <MicOff size={18} /> : <Mic size={18} />}
               </button>
+            </div>
+
+            {/* Textarea */}
+            <div className="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder={placeholder}
+                disabled={isDisabled}
+                rows={1}
+                className={cn(
+                  'w-full resize-none bg-transparent py-2 px-2',
+                  'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
+                  'focus:outline-none',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'text-[15px] leading-6',
+                )}
+                style={{ maxHeight: `${24 * MAX_ROWS}px` }}
+              />
+            </div>
+
+            {/* Right Controls: Model Selector & Send */}
+            <div className="flex items-center gap-2">
+              {/* Model Selector */}
+              <div className="relative" ref={modelSelectorRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelector(!showModelSelector)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium',
+                    'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                    'transition-colors duration-150',
+                  )}
+                >
+                  <span className="truncate max-w-[100px]">{modelDisplayName}</span>
+                  <ChevronDown
+                    size={12}
+                    className={cn('transition-transform', showModelSelector && 'rotate-180')}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showModelSelector && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute bottom-full right-0 z-50 mb-3 w-80"
+                    >
+                      <QuickModelSelector onClose={() => setShowModelSelector(false)} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {/* Send / Stop Button */}
               {showStopButton ? (
@@ -620,7 +649,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   type="button"
                   onClick={onStopGeneration}
                   className={cn(
-                    'p-2.5 rounded-xl transition-all duration-200',
+                    'p-2 rounded-lg transition-all duration-200',
                     'bg-red-500 hover:bg-red-600 text-white',
                     'shadow-lg shadow-red-500/25 animate-pulse',
                   )}
@@ -634,10 +663,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   onClick={() => handleSubmit()}
                   disabled={isDisabled || !content.trim()}
                   className={cn(
-                    'p-2.5 rounded-xl transition-all duration-200',
+                    'p-2 rounded-lg transition-all duration-200',
                     content.trim() && !isDisabled
-                      ? 'bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white shadow-lg shadow-teal-500/25'
-                      : 'bg-gray-200 dark:bg-charcoal-700 text-gray-400 cursor-not-allowed',
+                      ? 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
+                      : 'bg-gray-100 dark:bg-charcoal-700 text-gray-400 cursor-not-allowed',
                   )}
                   title="Send message"
                 >
@@ -706,7 +735,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                         ? 'bg-red-500'
                         : tokenPercentage > 70
                           ? 'bg-amber-500'
-                          : 'bg-teal-500',
+                          : 'bg-primary',
                     )}
                     style={{ width: `${tokenPercentage}%` }}
                   />

@@ -1,23 +1,28 @@
-import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Braces,
+  Code2,
+  Database,
   FileText,
   Image as ImageIcon,
   MousePointerClick,
+  PanelTopOpen,
   Shield,
   ShieldAlert,
   ShieldCheck,
   Terminal,
   Video,
-  Database,
+  X,
 } from 'lucide-react';
+import React from 'react';
 
+import { cn } from '../../lib/utils';
+import type { Artifact } from '../../types/chat';
 import { BrowserVisualization } from '../Browser/BrowserVisualization';
 import { MonacoEditor } from '../Editor/MonacoEditor';
 import { TerminalPanel } from '../execution/TerminalPanel';
-import { cn } from '../../lib/utils';
 import { MediaGallery } from '../Media/MediaGallery';
+import { ArtifactRenderer } from './ArtifactRenderer';
 
 // FIX: Added 'data' to supported types to match SidecarPanel
 export type DynamicPanelType =
@@ -28,6 +33,10 @@ export type DynamicPanelType =
   | 'media'
   | 'files'
   | 'data'
+  | 'preview'
+  | 'diff'
+  | 'canvas'
+  | 'artifact'
   | null;
 
 interface DynamicSidecarProps {
@@ -45,7 +54,11 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   video: <Video className="h-4 w-4 text-orange-300" />,
   media: <ImageIcon className="h-4 w-4 text-indigo-300" />,
   files: <FileText className="h-4 w-4 text-slate-200" />,
-  data: <Database className="h-4 w-4 text-blue-300" />, // FIX: Added Data icon
+  data: <Database className="h-4 w-4 text-blue-300" />,
+  preview: <PanelTopOpen className="h-4 w-4 text-orange-300" />,
+  diff: <FileText className="h-4 w-4 text-zinc-300" />,
+  canvas: <Braces className="h-4 w-4 text-pink-300" />,
+  artifact: <Code2 className="h-4 w-4 text-orange-300" />,
 };
 
 export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
@@ -131,6 +144,23 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           </div>
         );
 
+      case 'artifact':
+        if (!payload?.['artifact']) {
+          return (
+            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+              No artifact data provided
+            </div>
+          );
+        }
+        return (
+          <div className="h-full overflow-y-auto p-4">
+            <ArtifactRenderer
+              artifact={payload['artifact'] as Artifact}
+              className="h-full border-none shadow-none"
+            />
+          </div>
+        );
+
       // FIX: Data Mode Implementation (Matches SidecarPanel)
       case 'data':
         return (
@@ -192,11 +222,13 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             type="button"
             onClick={onClose}
             className={cn(
-              'rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-200 transition hover:border-white/30 hover:text-white',
+              'flex items-center justify-center h-7 w-7 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border border-zinc-200 dark:border-zinc-700',
               !onClose && 'opacity-60 pointer-events-none',
             )}
+            aria-label="Close sidecar"
+            title="Close sidecar"
           >
-            Close
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
