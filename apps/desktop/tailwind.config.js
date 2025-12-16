@@ -41,8 +41,8 @@ export default {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
+          DEFAULT: '#da7756', // Terra Cotta
+          foreground: '#FFFFFF',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -70,14 +70,14 @@ export default {
         },
         // Focus Mode Colors (Claude + Perplexity patterns)
         'terra-cotta': {
-          DEFAULT: '#C15F3C',
+          DEFAULT: '#da7756',
           50: '#F9E8E1',
           100: '#F5D4C8',
           200: '#ECAD96',
           300: '#E38664',
           400: '#DA7332',
-          500: '#C15F3C',
-          600: '#9A4C30',
+          500: '#da7756',
+          600: '#bd5d3a', // Button color
           700: '#743924',
           800: '#4D2618',
           900: '#27130C',
@@ -119,9 +119,12 @@ export default {
         'surface-floating-hover': 'rgba(255, 255, 255, 0.12)',
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        lg: '12px', // Standard for Claude Desktop (buttons, cards)
+        md: '8px',
+        sm: '6px',
+        xl: '16px',
+        '2xl': '24px',
+        '3xl': '32px',
       },
       // Enhanced box shadows for halo effects and floating elements
       boxShadow: {

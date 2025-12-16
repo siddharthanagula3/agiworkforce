@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import type { Artifact } from '../types/chat';
 import { invoke, isTauri } from '../lib/tauri-mock';
+import type { Artifact } from '../types/chat';
 import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
 
 // ============================================================================
@@ -287,6 +287,9 @@ export type ConversationMode = 'safe' | 'full_control';
 // Focus Modes (Perplexity-style)
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
 
+// View Modes
+export type ActiveView = 'chat' | 'projects' | 'artifacts';
+
 // FIX: Added 'data' to SidecarMode to support the new Data Grid
 export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas' | 'data';
 
@@ -295,6 +298,7 @@ export interface SidecarState {
   isOpen: boolean;
   activeMode: SidecarMode;
   contextId: string | null; // File path, URL, or Tool Call ID
+  context?: any; // Generic context object (e.g. Artifact)
   autoTrigger: boolean;
 }
 
@@ -411,10 +415,15 @@ export interface UnifiedChatState {
   sidecarOpen: boolean;
   sidecarSection: SidecarSection;
   sidecarWidth: number;
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
   sidecarUserSelected: boolean;
   isAutonomousMode: boolean;
   missionControlOpen: boolean;
   selectedMessage: string | null;
+
+  // View State
+  activeView: ActiveView;
 
   // Focus Modes & Workspace
   focusMode: FocusMode;
@@ -510,9 +519,14 @@ export interface UnifiedChatState {
   setSidecarSection: (section: SidecarSection) => void;
   setSidecarSectionFromEvent: (event: string) => void;
   setSidecarWidth: (width: number) => void;
+  setSidebarWidth: (width: number) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   setMissionControlOpen: (open: boolean) => void;
   setSelectedMessage: (id: string | null) => void;
   setAutonomousMode: (value: boolean) => void;
+
+  // Actions - Navigation
+  setActiveView: (view: ActiveView) => void;
 
   // Actions - Filters
   setFileOperationFilter: (types: FileOperationType[]) => void;
@@ -527,7 +541,7 @@ export interface UnifiedChatState {
   // Actions - Focus Modes & Workspace
   setFocusMode: (mode: FocusMode) => void;
   setSidecar: (state: Partial<SidecarState>) => void;
-  openSidecar: (mode: SidecarMode, contextId?: string) => void;
+  openSidecar: (mode: SidecarMode, contextId?: string, context?: any) => void;
   closeSidecar: () => void;
   addActionTrailEntry: (entry: Omit<ActionTrailEntry, 'id' | 'timestamp'>) => void;
   removeActionTrailEntry: (id: string) => void;
@@ -584,10 +598,14 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       sidecarOpen: false,
       sidecarSection: 'operations',
       sidecarWidth: 400,
+      sidebarWidth: 260,
+      sidebarCollapsed: false,
       sidecarUserSelected: false,
       isAutonomousMode: false,
       missionControlOpen: false,
       selectedMessage: null,
+
+      activeView: 'chat',
 
       // Focus Modes & Workspace (new)
       focusMode: null,
@@ -789,7 +807,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           };
           applyConfirmation(state.messages);
           // Verify convoId hasn't changed before second apply
-          if (convoId && convoId === state.activeConversationId && state.messagesByConversation[convoId]) {
+          if (
+            convoId &&
+            convoId === state.activeConversationId &&
+            state.messagesByConversation[convoId]
+          ) {
             applyConfirmation(state.messagesByConversation[convoId]);
           }
         }),
@@ -1197,6 +1219,16 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.sidecarWidth = width;
         }),
 
+      setSidebarWidth: (width) =>
+        set((state) => {
+          state.sidebarWidth = width;
+        }),
+
+      setSidebarCollapsed: (collapsed) =>
+        set((state) => {
+          state.sidebarCollapsed = collapsed;
+        }),
+
       setMissionControlOpen: (open) =>
         set((state) => {
           state.missionControlOpen = open;
@@ -1210,6 +1242,15 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       setAutonomousMode: (value) =>
         set((state) => {
           state.isAutonomousMode = value;
+          // When auto mode is enabled, ensure sidecar is open
+          if (value) {
+            state.sidecarOpen = true;
+          }
+        }),
+
+      setActiveView: (view) =>
+        set((state) => {
+          state.activeView = view;
         }),
 
       // Filter Actions
@@ -1255,14 +1296,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.sidecar = { ...state.sidecar, ...updates };
         }),
 
-      openSidecar: (mode, contextId) =>
+      openSidecar: (mode, contextId, context) =>
         set((state) => {
-          state.sidecar = {
-            isOpen: true,
-            activeMode: mode,
-            contextId: contextId ?? null,
-            autoTrigger: state.sidecar.autoTrigger,
-          };
+          state.sidecar.isOpen = true;
+          state.sidecar.activeMode = mode;
+          state.sidecar.contextId = contextId ?? null;
+          state.sidecar.context = context;
           // Also update legacy sidecarOpen for backward compatibility
           state.sidecarOpen = true;
         }),
@@ -1474,6 +1513,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         sidecarOpen: state.sidecarOpen,
         sidecarSection: state.sidecarSection,
         sidecarWidth: state.sidecarWidth,
+        sidebarWidth: state.sidebarWidth,
+        sidebarCollapsed: state.sidebarCollapsed,
         filters: state.filters,
         // Workspace state
         focusMode: state.focusMode,

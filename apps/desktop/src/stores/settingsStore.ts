@@ -67,6 +67,7 @@ interface SettingsState {
   apiKeys: APIKeys;
   llmConfig: LLMConfig;
   windowPreferences: WindowPreferences;
+  allowedDirectories: string[];
   loading: boolean;
   error: string | null;
 
@@ -90,12 +91,20 @@ interface SettingsState {
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
+  // Allowed Directories
+  addAllowedDirectory: (path: string) => void;
+  removeAllowedDirectory: (path: string) => void;
+  setAllowedDirectories: (paths: string[]) => void;
+
   // Persistence
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 }
 
-const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPreferences'> = {
+const defaultSettings: Pick<
+  SettingsState,
+  'apiKeys' | 'llmConfig' | 'windowPreferences' | 'allowedDirectories'
+> = {
   apiKeys: {
     openai: '',
     anthropic: '',
@@ -156,6 +165,7 @@ const defaultSettings: Pick<SettingsState, 'apiKeys' | 'llmConfig' | 'windowPref
     startupPosition: 'center',
     dockOnStartup: null,
   },
+  allowedDirectories: [],
 };
 
 export const createDefaultLLMConfig = (): LLMConfig => ({
@@ -385,6 +395,23 @@ export const useSettingsStore = create<SettingsState>()(
         }));
       },
 
+      addAllowedDirectory: (path: string) => {
+        set((state) => {
+          if (state.allowedDirectories.includes(path)) return {};
+          return { allowedDirectories: [...state.allowedDirectories, path] };
+        });
+      },
+
+      removeAllowedDirectory: (path: string) => {
+        set((state) => ({
+          allowedDirectories: state.allowedDirectories.filter((p) => p !== path),
+        }));
+      },
+
+      setAllowedDirectories: (paths: string[]) => {
+        set({ allowedDirectories: paths });
+      },
+
       // Updated Nov 16, 2025: Fixed async coordination race conditions
       loadSettings: async () => {
         set({ loading: true, error: null });
@@ -394,6 +421,7 @@ export const useSettingsStore = create<SettingsState>()(
           const settings = await invoke<{
             llmConfig: LLMConfig;
             windowPreferences: WindowPreferences;
+            allowedDirectories: string[];
           }>('settings_load');
 
           // Race condition guard: check if still the latest load
@@ -502,6 +530,7 @@ export const useSettingsStore = create<SettingsState>()(
             apiKeys,
             llmConfig: mergedLLMConfig,
             windowPreferences: mergedWindowPreferences,
+            allowedDirectories: settings.allowedDirectories ?? [],
             loading: false,
           });
 
@@ -528,11 +557,12 @@ export const useSettingsStore = create<SettingsState>()(
       saveSettings: async () => {
         set({ loading: true, error: null });
         try {
-          const { llmConfig, windowPreferences } = get();
+          const { llmConfig, windowPreferences, allowedDirectories } = get();
           await invoke('settings_save', {
             settings: {
               llmConfig,
               windowPreferences,
+              allowedDirectories,
             },
           });
           set({ loading: false });
@@ -549,6 +579,7 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         llmConfig: state.llmConfig,
         windowPreferences: state.windowPreferences,
+        allowedDirectories: state.allowedDirectories,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<SettingsState> | undefined;
@@ -573,6 +604,7 @@ export const useSettingsStore = create<SettingsState>()(
           ...persisted,
           llmConfig: mergedLLMConfig,
           windowPreferences: mergedWindowPreferences,
+          allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
         };
       },
     },

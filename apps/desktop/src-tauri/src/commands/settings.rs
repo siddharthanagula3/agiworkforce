@@ -42,6 +42,8 @@ pub struct WindowPreferences {
 pub struct Settings {
     pub llm_config: LLMConfig,
     pub window_preferences: WindowPreferences,
+    #[serde(default)]
+    pub allowed_directories: Vec<String>,
 }
 
 pub struct SettingsState {
@@ -79,6 +81,7 @@ impl SettingsState {
                     startup_position: "center".to_string(),
                     dock_on_startup: None,
                 },
+                allowed_directories: Vec::new(),
             })),
         }
     }

@@ -1,16 +1,8 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-import { BrowserViewer } from './BrowserViewer';
 import { BrowserActionLog } from './BrowserActionLog';
-import { BrowserDebugPanel } from './BrowserDebugPanel';
-import { BrowserRecorder } from './BrowserRecorder';
-import {
-  Eye,
-  List,
-  Bug,
-  Circle,
-} from 'lucide-react';
+import { BrowserViewer } from './BrowserViewer';
 
 interface BrowserVisualizationProps {
   className?: string;
@@ -26,40 +18,32 @@ export function BrowserVisualization({ className, tabId }: BrowserVisualizationP
 
   return (
     <div className={cn('flex flex-col h-full bg-background', className)}>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="px-4 py-2 border-b border-border">
-          <TabsTrigger value="live">
-            <Eye className="h-4 w-4 mr-2" />
-            Live View
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-1 flex flex-col overflow-hidden"
+      >
+        <TabsList className="px-4 py-2 border-b border-border bg-transparent w-full justify-start">
+          <TabsTrigger
+            value="live"
+            className="data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800"
+          >
+            Preview
           </TabsTrigger>
-          <TabsTrigger value="actions">
-            <List className="h-4 w-4 mr-2" />
-            Actions
-          </TabsTrigger>
-          <TabsTrigger value="debug">
-            <Bug className="h-4 w-4 mr-2" />
-            Debug
-          </TabsTrigger>
-          <TabsTrigger value="record">
-            <Circle className="h-4 w-4 mr-2" />
-            Record
+          <TabsTrigger
+            value="actions"
+            className="data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800"
+          >
+            Console
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="live" className="flex-1 overflow-hidden m-0 p-4">
+        <TabsContent value="live" className="flex-1 overflow-hidden m-0 p-0">
           <BrowserViewer tabId={tabId} className="h-full" />
         </TabsContent>
 
-        <TabsContent value="actions" className="flex-1 overflow-hidden m-0 p-4">
+        <TabsContent value="actions" className="flex-1 overflow-hidden m-0 p-0">
           <BrowserActionLog className="h-full" />
-        </TabsContent>
-
-        <TabsContent value="debug" className="flex-1 overflow-hidden m-0 p-4">
-          <BrowserDebugPanel tabId={tabId} className="h-full" />
-        </TabsContent>
-
-        <TabsContent value="record" className="flex-1 overflow-hidden m-0 p-4">
-          <BrowserRecorder className="h-full" />
         </TabsContent>
       </Tabs>
     </div>
