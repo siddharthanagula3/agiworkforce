@@ -3,6 +3,7 @@ pub mod executor;
 pub mod input;
 #[cfg(windows)]
 pub mod inspector;
+pub(crate) mod os_lock;
 pub mod recorder;
 pub mod safety;
 pub mod screen;
@@ -10,7 +11,6 @@ pub mod types;
 #[cfg(windows)]
 pub mod uia;
 pub mod vision_planner;
-pub(crate) mod os_lock;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;

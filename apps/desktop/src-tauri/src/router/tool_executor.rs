@@ -137,7 +137,7 @@ impl ToolExecutor {
         if let Some(app_handle) = &self.app_handle {
             let settings_state = app_handle.state::<SettingsState>();
             let settings = settings_state.settings.lock().await;
-            
+
             let allowed = &settings.allowed_directories;
             if allowed.is_empty() {
                 return Ok(()); // Allow all if no restrictions set
@@ -147,15 +147,18 @@ impl ToolExecutor {
             // We use simple string prefix matching for now to avoid FS IO blocking
             // In a production environment, this should canonicalize paths to resolve symlinks
             let path_normalized = path_str.replace('\\', "/");
-            
+
             for allowed_dir in allowed {
                 let allowed_normalized = allowed_dir.replace('\\', "/");
                 if path_normalized.starts_with(&allowed_normalized) {
                     return Ok(());
                 }
             }
-            
-            return Err(anyhow!("Access denied: Path '{}' is not in allowed directories.", path_str));
+
+            return Err(anyhow!(
+                "Access denied: Path '{}' is not in allowed directories.",
+                path_str
+            ));
         }
         Ok(())
     }
@@ -1274,9 +1277,15 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing path parameter"))?
                     .to_string();
-                let remote = args.get("remote").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let branch = args.get("branch").and_then(|v| v.as_str()).map(|s| s.to_string());
-                
+                let remote = args
+                    .get("remote")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let branch = args
+                    .get("branch")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
                 if let Err(e) = self.validate_path(&path).await {
                     return Ok(ToolResult {
                         success: false,
@@ -1288,7 +1297,7 @@ impl ToolExecutor {
 
                 // Use the safe git2 implementation
                 use crate::commands::git::git_push;
-                
+
                 match git_push(path.clone(), remote.clone(), branch.clone(), false).await {
                     Ok(msg) => Ok(ToolResult {
                         success: true,

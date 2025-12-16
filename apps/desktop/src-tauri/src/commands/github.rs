@@ -73,7 +73,7 @@ pub async fn github_clone_repo(
 
     // Perform git operations in blocking thread
     tauri::async_runtime::spawn_blocking(move || {
-        use git2::{Cred, FetchOptions, RemoteCallbacks, Repository, build::RepoBuilder};
+        use git2::{build::RepoBuilder, Cred, FetchOptions, RemoteCallbacks, Repository};
 
         if local_path_clone.exists() {
             tracing::info!(
@@ -83,7 +83,9 @@ pub async fn github_clone_repo(
 
             let repo = Repository::open(&local_path_clone).map_err(|e| e.message().to_string())?;
             let remote_name = "origin";
-            let mut remote = repo.find_remote(remote_name).map_err(|e| e.message().to_string())?;
+            let mut remote = repo
+                .find_remote(remote_name)
+                .map_err(|e| e.message().to_string())?;
 
             let branch_name = branch_clone.as_deref().unwrap_or("main");
 
@@ -95,34 +97,58 @@ pub async fn github_clone_repo(
             let mut fetch_opts = FetchOptions::new();
             fetch_opts.remote_callbacks(callbacks);
 
-            remote.fetch(&[branch_name], Some(&mut fetch_opts), None)
+            remote
+                .fetch(&[branch_name], Some(&mut fetch_opts), None)
                 .map_err(|e| e.message().to_string())?;
 
             // Merge analysis
-            let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| e.message().to_string())?;
-            let fetch_commit = repo.reference_to_annotated_commit(&fetch_head).map_err(|e| e.message().to_string())?;
-            let analysis = repo.merge_analysis(&[&fetch_commit]).map_err(|e| e.message().to_string())?;
+            let fetch_head = repo
+                .find_reference("FETCH_HEAD")
+                .map_err(|e| e.message().to_string())?;
+            let fetch_commit = repo
+                .reference_to_annotated_commit(&fetch_head)
+                .map_err(|e| e.message().to_string())?;
+            let analysis = repo
+                .merge_analysis(&[&fetch_commit])
+                .map_err(|e| e.message().to_string())?;
 
             if analysis.0.is_fast_forward() {
                 let refname = format!("refs/heads/{}", branch_name);
-                let mut reference = repo.find_reference(&refname).map_err(|e| e.message().to_string())?;
-                reference.set_target(fetch_commit.id(), "Fast-Forward").map_err(|e| e.message().to_string())?;
-                repo.set_head(&refname).map_err(|e| e.message().to_string())?;
-                repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force())).map_err(|e| e.message().to_string())?;
+                let mut reference = repo
+                    .find_reference(&refname)
+                    .map_err(|e| e.message().to_string())?;
+                reference
+                    .set_target(fetch_commit.id(), "Fast-Forward")
+                    .map_err(|e| e.message().to_string())?;
+                repo.set_head(&refname)
+                    .map_err(|e| e.message().to_string())?;
+                repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+                    .map_err(|e| e.message().to_string())?;
             } else if analysis.0.is_normal() {
-                let head_commit = repo.reference_to_annotated_commit(&repo.head().unwrap()).unwrap();
-                repo.merge(&[&fetch_commit], None, None).map_err(|e| e.message().to_string())?;
-                
+                let head_commit = repo
+                    .reference_to_annotated_commit(&repo.head().unwrap())
+                    .unwrap();
+                repo.merge(&[&fetch_commit], None, None)
+                    .map_err(|e| e.message().to_string())?;
+
                 // Auto commit merge
                 let sig = repo.signature().unwrap();
                 let tree_id = repo.index().unwrap().write_tree().unwrap();
                 let tree = repo.find_tree(tree_id).unwrap();
-                
+
                 let head_commit_obj = repo.find_commit(head_commit.id()).unwrap();
                 let fetch_commit_obj = repo.find_commit(fetch_commit.id()).unwrap();
-                
-                repo.commit(Some("HEAD"), &sig, &sig, "Merge", &tree, &[&head_commit_obj, &fetch_commit_obj]).unwrap();
-                
+
+                repo.commit(
+                    Some("HEAD"),
+                    &sig,
+                    &sig,
+                    "Merge",
+                    &tree,
+                    &[&head_commit_obj, &fetch_commit_obj],
+                )
+                .unwrap();
+
                 repo.checkout_head(None).unwrap();
             }
         } else {
@@ -140,12 +166,13 @@ pub async fn github_clone_repo(
 
             let mut builder = RepoBuilder::new();
             builder.fetch_options(fetch_opts);
-            
+
             if let Some(br) = branch_clone {
                 builder.branch(&br);
             }
 
-            builder.clone(&repo_url_clone, &local_path_clone)
+            builder
+                .clone(&repo_url_clone, &local_path_clone)
                 .map_err(|e| e.message().to_string())?;
         }
         Ok::<(), String>(())

@@ -312,9 +312,11 @@ impl ChangeTracker {
             let repo = git2::Repository::open(&working_dir).map_err(|e| e.message().to_string())?;
             let mut opts = git2::StatusOptions::new();
             opts.include_untracked(true);
-            
-            let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.message().to_string())?;
-            
+
+            let statuses = repo
+                .statuses(Some(&mut opts))
+                .map_err(|e| e.message().to_string())?;
+
             let mut files = Vec::new();
             for entry in statuses.iter() {
                 if let Some(path) = entry.path() {
@@ -341,4 +343,3 @@ impl Default for ChangeTracker {
 }
 
 // Helper trait removed (unused)
-
