@@ -1,12 +1,15 @@
-use std::io::{self, Write};
-use regex::Regex;
 use once_cell::sync::Lazy;
+use regex::Regex;
+use std::io::{self, Write};
 
 // Regex patterns for sensitive data
 static API_KEY_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(sk-[a-zA-Z0-9]{20,})").unwrap());
-static BEARER_TOKEN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"Bearer\s+([a-zA-Z0-9\-\._~\+\/]+=*)").unwrap());
-static GOOGLE_API_KEY_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"AIza[0-9A-Za-z-_]{35}").unwrap());
-static GITHUB_TOKEN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(ghp_[a-zA-Z0-9]{36})").unwrap());
+static BEARER_TOKEN_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"Bearer\s+([a-zA-Z0-9\-\._~\+\/]+=*)").unwrap());
+static GOOGLE_API_KEY_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"AIza[0-9A-Za-z-_]{35}").unwrap());
+static GITHUB_TOKEN_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(ghp_[a-zA-Z0-9]{36})").unwrap());
 
 /// A writer that redacts sensitive information from the output
 pub struct RedactingWriter<W: Write> {
@@ -20,10 +23,18 @@ impl<W: Write> RedactingWriter<W> {
 
     fn redact(&self, input: &str) -> String {
         let mut result = input.to_string();
-        result = API_KEY_REGEX.replace_all(&result, "[REDACTED_API_KEY]").to_string();
-        result = BEARER_TOKEN_REGEX.replace_all(&result, "Bearer [REDACTED_TOKEN]").to_string();
-        result = GOOGLE_API_KEY_REGEX.replace_all(&result, "[REDACTED_GOOGLE_KEY]").to_string();
-        result = GITHUB_TOKEN_REGEX.replace_all(&result, "[REDACTED_GITHUB_TOKEN]").to_string();
+        result = API_KEY_REGEX
+            .replace_all(&result, "[REDACTED_API_KEY]")
+            .to_string();
+        result = BEARER_TOKEN_REGEX
+            .replace_all(&result, "Bearer [REDACTED_TOKEN]")
+            .to_string();
+        result = GOOGLE_API_KEY_REGEX
+            .replace_all(&result, "[REDACTED_GOOGLE_KEY]")
+            .to_string();
+        result = GITHUB_TOKEN_REGEX
+            .replace_all(&result, "[REDACTED_GITHUB_TOKEN]")
+            .to_string();
         result
     }
 }
