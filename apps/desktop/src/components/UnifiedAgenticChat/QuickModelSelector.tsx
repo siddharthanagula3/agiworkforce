@@ -152,9 +152,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       </div>
 
       {suggestion && suggestedMetadata && (
-        <div className="mb-3 rounded-lg border border-dashed border-teal-500/40 bg-teal-50/70 p-3 text-sm text-teal-800 dark:border-teal-500/40 dark:bg-teal-900/15 dark:text-teal-100">
+        <div className="mb-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 text-sm text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary-foreground">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-200">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
               <Sparkles size={14} />
               Recommended
             </div>
@@ -197,13 +197,13 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors',
                         isActive
-                          ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm dark:border-teal-500/60 dark:bg-teal-500/10 dark:text-teal-50'
-                          : 'border-gray-200 bg-white text-gray-900 hover:border-teal-500/70 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-teal-500/50 dark:hover:bg-charcoal-700',
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
+                          : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
                       )}
                     >
                       <span className="truncate">{model.name}</span>
                       {isActive ? (
-                        <Check size={16} className="text-teal-500 dark:text-teal-300" />
+                        <Check size={16} className="text-primary" />
                       ) : (
                         <span className="text-xs text-gray-400 dark:text-gray-500">
                           {PROVIDER_LABELS[model.provider]}

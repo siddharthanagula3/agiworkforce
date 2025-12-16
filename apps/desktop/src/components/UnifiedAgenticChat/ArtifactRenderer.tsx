@@ -1,7 +1,6 @@
-// Updated Nov 16, 2025: Added accessible dialogs to replace window.prompt
 import { invoke } from '@/lib/tauri-mock';
 import { BarChart3, Check, Code2, Copy, Download, FileUp, Network } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
@@ -397,17 +396,82 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
 }
 
 // Mermaid diagram artifact (placeholder - would need mermaid library)
+// mermaid diagram artifact implementation
 function MermaidArtifact({ artifact }: { artifact: Artifact }) {
-  return (
-    <div className="p-8 bg-muted/30">
-      <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-        <p className="text-sm text-yellow-800 dark:text-yellow-200">
-          Mermaid diagram rendering requires additional setup. The diagram source is shown below.
-        </p>
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = React.useState<string>('');
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const renderDiagram = async () => {
+      if (!artifact.content) return;
+
+      try {
+        // Dynamic import to avoid SSR issues if any (though this is a desktop app)
+        const mermaid = (await import('mermaid')).default;
+
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark', // Using dark theme to match app aesthetic
+          securityLevel: 'loose',
+          fontFamily: 'Styrene, Inter, sans-serif',
+        });
+
+        const id = `mermaid-${crypto.randomUUID().replace(/-/g, '')}`;
+        // Verify Content is valid
+        if (!artifact.content.trim()) {
+          throw new Error('Empty diagram content');
+        }
+
+        const { svg } = await mermaid.render(id, artifact.content);
+
+        if (mounted) {
+          setSvg(svg);
+          setError(null);
+        }
+      } catch (err) {
+        if (mounted) {
+          console.error('Mermaid render error:', err);
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    };
+
+    renderDiagram();
+
+    return () => {
+      mounted = false;
+    };
+  }, [artifact.content]);
+
+  if (error) {
+    return (
+      <div className="p-4 border border-rose-500/20 bg-rose-500/10 rounded-lg">
+        <p className="text-sm font-medium text-rose-400 mb-2">Failed to render diagram</p>
+        <pre className="text-xs text-rose-300 whitespace-pre-wrap">{error}</pre>
+        <div className="mt-4 pt-4 border-t border-rose-500/20">
+          <p className="text-xs text-zinc-400 mb-1">Source:</p>
+          <pre className="text-xs text-zinc-300 font-mono bg-black/20 p-2 rounded">
+            {artifact.content}
+          </pre>
+        </div>
       </div>
-      <pre className="p-4 bg-background rounded-lg border overflow-x-auto">
-        <code className="text-sm">{artifact.content}</code>
-      </pre>
+    );
+  }
+
+  return (
+    <div className="p-4 bg-white/5 rounded-lg overflow-x-auto flex justify-center min-h-[200px] items-center">
+      {svg ? (
+        <div
+          ref={containerRef}
+          dangerouslySetInnerHTML={{ __html: svg }}
+          className="w-full h-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
+        />
+      ) : (
+        <div className="text-zinc-500 text-sm animate-pulse">Rendering diagram...</div>
+      )}
     </div>
   );
 }

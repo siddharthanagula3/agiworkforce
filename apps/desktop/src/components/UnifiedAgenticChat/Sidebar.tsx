@@ -4,6 +4,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Code2,
+  Layers,
   Pin,
   PinOff,
   Plus,
@@ -14,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { UserProfile } from '../Layout/UserProfile';
+import { ResizeHandle } from '../ui/ResizeHandle';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -24,6 +27,10 @@ interface SidebarProps {
   onOpenBilling?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  isMobile?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
+  width?: number;
+  onResize?: (width: number) => void;
 }
 
 type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
@@ -73,16 +80,20 @@ export function Sidebar({
   onOpenBilling,
   collapsed = false,
   onToggleCollapse,
+  isMobile = false,
+  onCollapsedChange = () => {},
+  width = 260,
+  onResize,
 }: SidebarProps) {
-  const {
-    conversations,
-    activeConversationId,
-    createConversation,
-    selectConversation,
-    renameConversation,
-    deleteConversation,
-    togglePinnedConversation,
-  } = useUnifiedChatStore();
+  const conversations = useUnifiedChatStore((state) => state.conversations);
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
+  const activeView = useUnifiedChatStore((state) => state.activeView);
+  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+  const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
+  const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
+  const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
+  const createConversation = useUnifiedChatStore((state) => state.createConversation);
+  const setActiveView = useUnifiedChatStore((state) => state.setActiveView);
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,9 +163,24 @@ export function Sidebar({
     return visible;
   }, [groupedConversations, expandedGroups, pinnedConversations]);
 
-  const handleCreateConversation = useCallback(() => {
+  const handleNewChat = useCallback(() => {
     createConversation('New chat');
-  }, [createConversation]);
+    setActiveView('chat');
+    if (isMobile && onCollapsedChange) {
+      onCollapsedChange(true);
+    }
+  }, [createConversation, setActiveView, isMobile, onCollapsedChange]);
+
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      selectConversation(id);
+      setActiveView('chat');
+      if (isMobile && onCollapsedChange) {
+        onCollapsedChange(true);
+      }
+    },
+    [selectConversation, setActiveView, isMobile, onCollapsedChange],
+  );
 
   const handleRename = useCallback(
     (id: string) => {
@@ -224,7 +250,7 @@ export function Sidebar({
         e.preventDefault();
         const conversation = visibleConversations[focusedIndex];
         if (conversation) {
-          selectConversation(conversation.id);
+          handleSelectConversation(conversation.id);
           setFocusedIndex(-1);
         }
       }
@@ -320,7 +346,7 @@ export function Sidebar({
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button
-            onClick={handleCreateConversation}
+            onClick={handleNewChat}
             variant="ghost"
             size="icon"
             className="text-gray-600 dark:text-gray-400"
@@ -384,7 +410,7 @@ export function Sidebar({
                         className={cn(
                           'w-full text-left px-3 py-2 rounded-lg transition-colors',
                           conv.id === activeConversationId
-                            ? 'bg-teal-100 dark:bg-teal-900/30'
+                            ? 'bg-primary/10 dark:bg-primary/20'
                             : 'hover:bg-gray-100 dark:hover:bg-gray-800',
                         )}
                       >
@@ -406,10 +432,20 @@ export function Sidebar({
 
       <div
         className={cn(
-          'w-64 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out',
+          'flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out relative',
           className,
         )}
+        style={{ width: width }}
       >
+        {onResize && !collapsed && (
+          <ResizeHandle
+            width={width}
+            onResize={onResize}
+            direction="right"
+            minWidth={200}
+            maxWidth={400}
+          />
+        )}
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between mb-3">
@@ -422,9 +458,8 @@ export function Sidebar({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button
-              onClick={handleCreateConversation}
-              variant="default"
-              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white"
+              onClick={handleNewChat}
+              className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 transition-colors"
             >
               <Plus className="h-4 w-4" />
               New Chat
@@ -442,6 +477,43 @@ export function Sidebar({
             </div>
           </button>
         </div>
+
+        {/* Projects & Artifacts (Spec matching) */}
+        {!collapsed && (
+          <div className="px-3 py-2 space-y-1">
+            <button
+              onClick={() => setActiveView('projects')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'projects'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                <Layers className="w-3.5 h-3.5" />
+              </span>
+              Projects
+              <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
+                Pro
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveView('artifacts')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'artifacts'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                <Code2 className="w-3.5 h-3.5" />
+              </span>
+              Artifacts
+            </button>
+          </div>
+        )}
 
         {/* Conversations List */}
         <ScrollArea className="flex-1">

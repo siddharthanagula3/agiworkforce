@@ -1,4 +1,5 @@
 use crate::agi::tools::{Tool, ToolRegistry, ToolResult};
+use crate::commands::settings::SettingsState;
 use crate::events::{
     create_file_delete_event, create_file_read_event, create_file_write_event, emit_file_operation,
     emit_terminal_command, TerminalCommand,
@@ -129,6 +130,34 @@ impl ToolExecutor {
             crate::agi::tools::ParameterType::FilePath => "string",
             crate::agi::tools::ParameterType::URL => "string",
         }
+    }
+
+    /// Validate if a path is allowed
+    async fn validate_path(&self, path_str: &str) -> Result<()> {
+        if let Some(app_handle) = &self.app_handle {
+            let settings_state = app_handle.state::<SettingsState>();
+            let settings = settings_state.settings.lock().await;
+            
+            let allowed = &settings.allowed_directories;
+            if allowed.is_empty() {
+                return Ok(()); // Allow all if no restrictions set
+            }
+
+            // Normalize path for comparison
+            // We use simple string prefix matching for now to avoid FS IO blocking
+            // In a production environment, this should canonicalize paths to resolve symlinks
+            let path_normalized = path_str.replace('\\', "/");
+            
+            for allowed_dir in allowed {
+                let allowed_normalized = allowed_dir.replace('\\', "/");
+                if path_normalized.starts_with(&allowed_normalized) {
+                    return Ok(());
+                }
+            }
+            
+            return Err(anyhow!("Access denied: Path '{}' is not in allowed directories.", path_str));
+        }
+        Ok(())
     }
 
     /// Execute a tool call from the LLM
@@ -396,6 +425,15 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    });
+                }
+
                 match fs::read_to_string(&path).await {
                     Ok(content) => {
                         if let Some(app_handle) = &self.app_handle {
@@ -453,6 +491,15 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    });
+                }
+
                 let old_content = fs::read_to_string(&path).await.ok();
                 if let Some(parent) = Path::new(&path).parent() {
                     let _ = fs::create_dir_all(parent).await;
@@ -500,6 +547,15 @@ impl ToolExecutor {
                     .get("session_id")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
+
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                    });
+                }
 
                 let size_bytes = fs::metadata(&path)
                     .await
@@ -1013,6 +1069,17 @@ impl ToolExecutor {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(60_000);
 
+                if let Some(dir) = &cwd {
+                    if let Err(e) = self.validate_path(dir).await {
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(e.to_string()),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                }
+
                 let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
                     "cmd" => (
                         "cmd.exe".to_string(),
@@ -1199,6 +1266,47 @@ impl ToolExecutor {
                     error: error_message,
                     metadata,
                 })
+            }
+            "git_push" => {
+                // ✅ Git push implementation
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+                let remote = args.get("remote").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let branch = args.get("branch").and_then(|v| v.as_str()).map(|s| s.to_string());
+                
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    });
+                }
+
+                // Use the safe git2 implementation
+                use crate::commands::git::git_push;
+                
+                match git_push(path.clone(), remote.clone(), branch.clone(), false).await {
+                    Ok(msg) => Ok(ToolResult {
+                        success: true,
+                        data: json!({ "success": true, "message": msg }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("path".to_string(), json!(path)),
+                            ("remote".to_string(), json!(remote)),
+                            ("branch".to_string(), json!(branch)),
+                        ]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Git push failed: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                }
             }
             "db_query" => {
                 // ✅ Database query implementation
