@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { invoke } from '../lib/tauri-mock';
 
 export interface TerminalSession {
   id: string;

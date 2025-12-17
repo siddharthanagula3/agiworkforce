@@ -17,9 +17,6 @@ pub struct UserSubscription {
 
 impl UserSubscription {
     pub fn has_cloud_access(&self) -> bool {
-        match self.tier {
-            PlanTier::Hobby => false,
-            _ => true,
-        }
+        !matches!(self.tier, PlanTier::Hobby)
     }
 }

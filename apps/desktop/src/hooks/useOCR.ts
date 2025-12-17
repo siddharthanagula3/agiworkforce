@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useCallback, useState } from 'react';
+import { invoke } from '../lib/tauri-mock';
 
 export interface BoundingBox {
   x: number;

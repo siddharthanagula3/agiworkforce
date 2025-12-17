@@ -7,9 +7,9 @@
  * Updated Nov 16, 2025: Fixed cleanup issues with timers and abort controller
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import type { ContextItemType, ContextSuggestion, AutocompleteState } from '@agiworkforce/types';
+import type { AutocompleteState, ContextItemType, ContextSuggestion } from '@agiworkforce/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { invoke } from '../lib/tauri-mock';
 
 /**
  * Command trigger patterns

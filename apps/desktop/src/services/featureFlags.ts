@@ -5,9 +5,9 @@
  * Can integrate with LaunchDarkly or similar services
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { analytics } from './analytics';
+import { invoke } from '../lib/tauri-mock';
 import { FeatureFlag, FeatureFlagConfig, UserProperties } from '../types/analytics';
+import { analytics } from './analytics';
 
 /**
  * Feature flag names
@@ -243,9 +243,7 @@ class FeatureFlagsService {
     }
 
     // Use consistent hashing to determine if user is in rollout
-    const hash = this.hashString(
-      `${flagName}-${this.userProperties.userId}`
-    );
+    const hash = this.hashString(`${flagName}-${this.userProperties.userId}`);
     const bucket = hash % 100;
     return bucket < percentage;
   }
@@ -267,9 +265,7 @@ class FeatureFlagsService {
    * Get all enabled features
    */
   public getEnabledFeatures(): string[] {
-    return Object.keys(this.config.flags).filter((flag) =>
-      this.isEnabled(flag)
-    );
+    return Object.keys(this.config.flags).filter((flag) => this.isEnabled(flag));
   }
 
   /**
@@ -291,10 +287,7 @@ class FeatureFlagsService {
    */
   public setUserProperties(properties: Partial<UserProperties>) {
     this.userProperties = { ...this.userProperties, ...properties };
-    localStorage.setItem(
-      'feature_flags_user_properties',
-      JSON.stringify(this.userProperties)
-    );
+    localStorage.setItem('feature_flags_user_properties', JSON.stringify(this.userProperties));
   }
 
   /**
@@ -304,7 +297,7 @@ class FeatureFlagsService {
     this.localOverrides.set(flagName, enabled);
     localStorage.setItem(
       'feature_flags_overrides',
-      JSON.stringify(Array.from(this.localOverrides.entries()))
+      JSON.stringify(Array.from(this.localOverrides.entries())),
     );
 
     analytics.track('feature_discovered', {
@@ -321,7 +314,7 @@ class FeatureFlagsService {
     this.localOverrides.delete(flagName);
     localStorage.setItem(
       'feature_flags_overrides',
-      JSON.stringify(Array.from(this.localOverrides.entries()))
+      JSON.stringify(Array.from(this.localOverrides.entries())),
     );
   }
 
@@ -398,9 +391,7 @@ class FeatureFlagsService {
    */
   private async fetchRemoteFlags() {
     try {
-      const remoteFlags = await invoke<Record<string, boolean>>(
-        'feature_flag_get_all'
-      );
+      const remoteFlags = await invoke<Record<string, boolean>>('feature_flag_get_all');
 
       // Merge remote flags with local config
       Object.entries(remoteFlags).forEach(([name, enabled]) => {
@@ -419,10 +410,7 @@ class FeatureFlagsService {
       this.config.lastUpdated = Date.now();
 
       // Save to storage
-      localStorage.setItem(
-        'feature_flags_config',
-        JSON.stringify(this.config)
-      );
+      localStorage.setItem('feature_flags_config', JSON.stringify(this.config));
     } catch (error) {
       console.error('Failed to fetch remote feature flags:', error);
     }
@@ -433,11 +421,14 @@ class FeatureFlagsService {
    */
   private startPeriodicUpdates() {
     // Update every 5 minutes
-    this.updateInterval = window.setInterval(() => {
-      void this.fetchRemoteFlags().catch((error) => {
-        console.error('Failed to fetch remote feature flags:', error);
-      });
-    }, 5 * 60 * 1000);
+    this.updateInterval = window.setInterval(
+      () => {
+        void this.fetchRemoteFlags().catch((error) => {
+          console.error('Failed to fetch remote feature flags:', error);
+        });
+      },
+      5 * 60 * 1000,
+    );
   }
 
   /**

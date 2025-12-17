@@ -141,7 +141,7 @@ impl ImageGenerationClient {
             size: request.size.map(|s| match s {
                 ImageSize::Small => "256x256".to_string(),
                 ImageSize::Medium => "512x512".to_string(),
-                ImageSize::Large | _ => "1024x1024".to_string(),
+                _ => "1024x1024".to_string(),
             }),
             quality: request.quality.map(|q| match q {
                 ImageQuality::Standard => "standard".to_string(),
