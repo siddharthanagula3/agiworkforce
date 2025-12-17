@@ -147,7 +147,7 @@ impl Default for PolicyState {
 }
 
 /// Helper functions for common policy checks
-
+///
 /// Check file read operation
 pub async fn check_file_read(
     policy: &PolicyState,

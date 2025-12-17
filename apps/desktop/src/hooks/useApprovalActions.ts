@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { useUnifiedChatStore } from '../stores/unifiedChatStore';
+import { invoke } from '../lib/tauri-mock';
 import type { ApprovalRequest } from '../stores/unifiedChatStore';
+import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 
 interface ResolveOptions {
   trust?: boolean;

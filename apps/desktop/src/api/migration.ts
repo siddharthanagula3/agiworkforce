@@ -1,11 +1,11 @@
 // Updated Nov 16, 2025: Added comprehensive error handling, validation, timeout handling, and retry logic
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type {
   LovableConnectionRequest,
   LovableConnectionResponse,
-  LovableWorkflowListResponse,
   LovableMigrationLaunchRequest,
   LovableMigrationLaunchResponse,
+  LovableWorkflowListResponse,
 } from '../types/migration';
 
 // Updated Nov 16, 2025: Configurable timeouts for migration operations

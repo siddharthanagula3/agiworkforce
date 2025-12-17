@@ -31,9 +31,11 @@ pub enum PolicyDecision {
 /// User's trust level - determines how permissive the policy is
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TrustLevel {
     /// Normal mode - restrictive, workspace-scoped, many approvals required
     /// Suitable for general use and untrusted automation
+    #[default]
     Normal,
 
     /// Elevated mode - fewer approvals, broader scope
@@ -44,12 +46,6 @@ pub enum TrustLevel {
     /// User wants the agent to act like a full human operator
     /// This mode should be clearly marked in UI with warnings
     FullSystem,
-}
-
-impl Default for TrustLevel {
-    fn default() -> Self {
-        TrustLevel::Normal
-    }
 }
 
 impl TrustLevel {

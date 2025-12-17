@@ -4,7 +4,7 @@
  */
 
 import * as monaco from 'monaco-editor';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../../lib/tauri-mock';
 import { extractCodeContext } from './contextExtractor';
 import { rankCompletions } from './rankingEngine';
 
@@ -115,8 +115,7 @@ Support multi-line completions if appropriate.`;
         label: this.getCompletionLabel(completion),
         kind: this.inferCompletionKind(completion),
         insertText: completion,
-        insertTextRules:
-          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range: {
           startLineNumber: position.lineNumber,
           startColumn: position.column,
@@ -183,7 +182,5 @@ export function registerCompletionProvider(
   languages: string[] = ['typescript', 'javascript', 'rust', 'python', 'go'],
 ): monaco.IDisposable[] {
   const provider = new AICompletionProvider();
-  return languages.map((lang) =>
-    monaco.languages.registerCompletionItemProvider(lang, provider),
-  );
+  return languages.map((lang) => monaco.languages.registerCompletionItemProvider(lang, provider));
 }

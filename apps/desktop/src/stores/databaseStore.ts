@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 export interface ConnectionConfig {
   database_type: 'Postgres' | 'MySql' | 'Sqlite' | 'MongoDB' | 'Redis';

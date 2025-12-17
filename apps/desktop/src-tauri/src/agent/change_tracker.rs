@@ -280,8 +280,8 @@ impl ChangeTracker {
     }
 
     /// Get git branch name
-    async fn get_git_branch(&self, working_dir: &PathBuf) -> Option<String> {
-        let working_dir = working_dir.clone();
+    async fn get_git_branch(&self, working_dir: &std::path::Path) -> Option<String> {
+        let working_dir = working_dir.to_path_buf();
         tauri::async_runtime::spawn_blocking(move || {
             let repo = git2::Repository::open(&working_dir).ok()?;
             let head = repo.head().ok()?;
@@ -293,8 +293,8 @@ impl ChangeTracker {
     }
 
     /// Get git HEAD commit hash
-    async fn get_git_head(&self, working_dir: &PathBuf) -> Result<String, String> {
-        let working_dir = working_dir.clone();
+    async fn get_git_head(&self, working_dir: &std::path::Path) -> Result<String, String> {
+        let working_dir = working_dir.to_path_buf();
         tauri::async_runtime::spawn_blocking(move || {
             let repo = git2::Repository::open(&working_dir).map_err(|e| e.message().to_string())?;
             let head = repo.head().map_err(|e| e.message().to_string())?;
@@ -306,8 +306,11 @@ impl ChangeTracker {
     }
 
     /// Get list of changed files in git
-    async fn get_git_changed_files(&self, working_dir: &PathBuf) -> Result<Vec<PathBuf>, String> {
-        let working_dir = working_dir.clone();
+    async fn get_git_changed_files(
+        &self,
+        working_dir: &std::path::Path,
+    ) -> Result<Vec<PathBuf>, String> {
+        let working_dir = working_dir.to_path_buf();
         tauri::async_runtime::spawn_blocking(move || {
             let repo = git2::Repository::open(&working_dir).map_err(|e| e.message().to_string())?;
             let mut opts = git2::StatusOptions::new();

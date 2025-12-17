@@ -1,13 +1,13 @@
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type {
+  NodeLibraryItem,
+  ScheduledWorkflow,
   WorkflowDefinition,
+  WorkflowEdge,
   WorkflowExecution,
   WorkflowExecutionLog,
   WorkflowNode,
-  WorkflowEdge,
-  NodeLibraryItem,
-  ScheduledWorkflow,
 } from '../types/workflow';
 
 interface OrchestrationState {
@@ -325,7 +325,9 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => ({
 
   updateNode: (id: string, updates: Partial<WorkflowNode>) => {
     set((state) => ({
-      nodes: state.nodes.map((node) => (node.id === id ? ({ ...node, ...updates } as WorkflowNode) : node)),
+      nodes: state.nodes.map((node) =>
+        node.id === id ? ({ ...node, ...updates } as WorkflowNode) : node,
+      ),
     }));
   },
 

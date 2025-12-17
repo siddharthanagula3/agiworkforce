@@ -362,7 +362,7 @@ fn generate_file_tree(path: &PathBuf) -> Result<String, String> {
     }
 }
 
-fn read_readme(path: &PathBuf) -> Option<String> {
+fn read_readme(path: &std::path::Path) -> Option<String> {
     for name in &["README.md", "README.MD", "readme.md", "README", "Readme.md"] {
         let readme_path = path.join(name);
         if let Ok(content) = std::fs::read_to_string(&readme_path) {

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -54,9 +54,9 @@ impl SandboxManager {
         Ok(sandbox)
     }
 
-    async fn setup_git_worktree(&self, workspace_path: &PathBuf, sandbox_id: &str) -> Result<()> {
+    async fn setup_git_worktree(&self, workspace_path: &Path, sandbox_id: &str) -> Result<()> {
         let current_dir = std::env::current_dir()?;
-        let workspace_path = workspace_path.clone();
+        let workspace_path = workspace_path.to_path_buf();
         let sandbox_id_clone = sandbox_id.to_string();
 
         if !self.is_git_repo(&current_dir).await? {
@@ -87,8 +87,8 @@ impl SandboxManager {
         Ok(())
     }
 
-    async fn is_git_repo(&self, path: &PathBuf) -> Result<bool> {
-        let path = path.clone();
+    async fn is_git_repo(&self, path: &Path) -> Result<bool> {
+        let path = path.to_path_buf();
         tauri::async_runtime::spawn_blocking(move || git2::Repository::discover(&path).is_ok())
             .await
             .map_err(|e| anyhow!("Task join error: {}", e))

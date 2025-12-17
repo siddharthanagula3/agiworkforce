@@ -46,7 +46,7 @@ impl CacheManager {
     /// - temperature > 0.0: 1 hour (creative/non-deterministic)
     pub fn temperature_aware_expiry(&self, temperature: Option<f32>) -> DateTime<Utc> {
         let duration = match temperature {
-            Some(temp) if temp == 0.0 => ChronoDuration::days(7),
+            Some(0.0) => ChronoDuration::days(7),
             Some(_) => ChronoDuration::hours(1),
             None => ChronoDuration::hours(1), // Default to 1 hour if not specified
         };
@@ -267,7 +267,6 @@ impl CacheManager {
                 avg_hits_per_entry: row.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
             })
         })?;
-
         Ok(stats)
     }
 

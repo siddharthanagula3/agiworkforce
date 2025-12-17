@@ -4,22 +4,22 @@
  * Privacy-first analytics with event batching, offline queue, and opt-in tracking
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { v4 as uuidv4 } from 'uuid'; // You'll need to add this: pnpm add uuid
+import { invoke } from '../lib/tauri-mock';
 import {
+  AnalyticsConfig,
   AnalyticsEvent,
   EventName,
-  AnalyticsConfig,
-  UserProperties,
-  SessionInfo,
   PrivacyConsent,
+  SessionInfo,
+  UserProperties,
 } from '../types/analytics';
-import { v4 as uuidv4 } from 'uuid'; // You'll need to add this: pnpm add uuid
 import {
-  safeGetJSON,
-  safeSetJSON,
-  safeRemoveItem,
   safeGetItem,
+  safeGetJSON,
+  safeRemoveItem,
   safeSetItem,
+  safeSetJSON,
 } from '../utils/localStorage';
 
 class AnalyticsService {

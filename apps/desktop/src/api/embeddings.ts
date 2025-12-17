@@ -4,7 +4,7 @@
  * Updated Nov 16, 2025: Added comprehensive error handling, validation, timeout handling, and cancellation support
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 // Updated Nov 16, 2025: Configurable timeouts for embeddings operations
 const EMBEDDINGS_TIMEOUT_MS = 30000; // 30 seconds for search/stats
