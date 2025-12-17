@@ -7,11 +7,11 @@
 export const STRIPE_PRICE_IDS = {
   free: null, // Free tier has no Stripe price
   pro_monthly: 'price_1234567890pro_monthly', // Replace with actual Stripe Price ID
-  pro_yearly: 'price_1234567890pro_yearly',   // Replace with actual Stripe Price ID
+  pro_yearly: 'price_1234567890pro_yearly', // Replace with actual Stripe Price ID
   proplus_monthly: 'price_1234567890proplus_monthly', // Replace with actual Stripe Price ID
-  proplus_yearly: 'price_1234567890proplus_yearly',   // Replace with actual Stripe Price ID
+  proplus_yearly: 'price_1234567890proplus_yearly', // Replace with actual Stripe Price ID
   team_monthly: 'price_1234567890team_monthly', // Replace with actual Stripe Price ID
-  team_yearly: 'price_1234567890team_yearly',   // Replace with actual Stripe Price ID
+  team_yearly: 'price_1234567890team_yearly', // Replace with actual Stripe Price ID
 } as const;
 
 export interface PricingPlan {
@@ -167,7 +167,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
 ];
 
-export const TRIAL_PERIOD_DAYS = 14;
+// No free trial - users pay from day 1
+export const TRIAL_PERIOD_DAYS = 0;
 
 export const GRACE_PERIOD_DAYS = 7; // Days after subscription expires before features are disabled
 
@@ -175,10 +176,7 @@ export function getPlanById(planId: string): PricingPlan | undefined {
   return PRICING_PLANS.find((plan) => plan.id === planId);
 }
 
-export function getStripePriceId(
-  planId: string,
-  interval: 'monthly' | 'yearly'
-): string | null {
+export function getStripePriceId(planId: string, interval: 'monthly' | 'yearly'): string | null {
   const plan = getPlanById(planId);
   return plan?.stripePriceId[interval] ?? null;
 }

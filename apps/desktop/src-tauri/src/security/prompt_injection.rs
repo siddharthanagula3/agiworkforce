@@ -45,7 +45,7 @@ impl PromptInjectionDetector {
                 0.85,
             ),
             (
-                Regex::new(r"(?i)(what|show|tell|reveal|display)\s+(me\s+)?(your|the)\s+(system\s+)?(prompt|instructions?|rules?)").unwrap(),
+                Regex::new(r"(?i)(what|show|tell|reveal|display)(\s+is)?\s+(me\s+)?(your|the)\s+(system\s+)?(prompt|instructions?|rules?)").unwrap(),
                 "System prompt extraction attempt",
                 0.8,
             ),
@@ -62,7 +62,7 @@ impl PromptInjectionDetector {
             ),
             // Role manipulation
             (
-                Regex::new(r"(?i)(you\s+are|act\s+as|pretend\s+to\s+be|roleplay\s+as)\s+(a\s+)?(developer|administrator|root|sudo|system)").unwrap(),
+                Regex::new(r"(?i)(you\s+are|act\s+as|pretend\s+to\s+be|roleplay\s+as)(\s+now)?\s+(a\s+)?(developer|administrator|root|sudo|system)").unwrap(),
                 "Role manipulation attempt",
                 0.75,
             ),
@@ -80,7 +80,7 @@ impl PromptInjectionDetector {
             (
                 Regex::new(r"[A-Za-z0-9+/]{40,}={0,2}").unwrap(), // Base64-like strings
                 "Potential base64 encoded instruction",
-                0.6,
+                0.8,
             ),
             // Jailbreak patterns
             (
@@ -146,7 +146,8 @@ impl PromptInjectionDetector {
         let structure_score = self.check_structure(input);
 
         // Calculate overall risk
-        let risk_score = (pattern_score * 0.7 + structure_score * 0.3).min(1.0);
+        // Use the maximum of pattern and structure score to ensure specific detections aren't diluted
+        let risk_score = pattern_score.max(structure_score * 0.5).min(1.0);
 
         // Determine confidence based on number of detections
         let confidence = if detected.is_empty() {

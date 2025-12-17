@@ -21,6 +21,9 @@ logs/
 *.log
 report.*.json
 
+# --- Internal/local artifacts ---
+artifacts/
+
 # --- Runtime data ---
 pids/
 *.pid

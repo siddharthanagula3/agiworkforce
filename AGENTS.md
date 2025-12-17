@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-- Monorepo managed by pnpm; primary app lives in `apps/desktop` (Tauri + Vite + React + Tailwind). Browser extension work is under `apps/extension`; `apps/_future_mobile` is parked.
+- Monorepo managed by pnpm; primary app lives in `apps/desktop` (Tauri + Vite + React + Tailwind). Browser extension work is under `apps/extension`.
 - Shared code sits in `packages/` (`types`, `utils`); backend pieces live in `services/` (`api-gateway`, `signaling-server`; update-server TBD). Repo-level configs live at the root (`package.json`, `tsconfig.base.json`, lint configs) and helper scripts sit in `dev-scripts/`; infra/migrations folders were removed until real assets exist.
 - Tests live inside features (`apps/desktop/src/**/__tests__`) with E2E/Playwright suites under `apps/desktop/e2e` and `apps/desktop/playwright`; there's no root `tests/` directory.
 
@@ -40,7 +40,6 @@
 
 - Desktop: `apps/desktop/src` for UI (components/pages/services/stores), `src-tauri` for Rust commands; `p2p` placeholder removed, sidecars removed.
 - Extension: `apps/extension` minimal Vite bundle; no native-messaging/popup subfolders remain.
-- Mobile (parked): `apps/_future_mobile` kept for reference; empty stubs removed.
 - Packages: `packages/types`, `packages/utils`; `ui-components` removed (alias dropped from `tsconfig.base.json`).
 - Services: `services/api-gateway` (Node), `services/signaling-server`; `update-server` folder removed pending real implementation.
 - Infra/migrations: removed empty scaffolding; add back only when populated with real IaC or schema assets.
