@@ -1,15 +1,15 @@
-import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useCallback, useState } from 'react';
+import { invoke } from '../lib/tauri-mock';
 import type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
-
-// Re-export types for external use
-export type { CaptureResult, CaptureRecord, Region, WindowInfo } from '../types/capture';
 import {
   normalizeCaptureRecord,
   normalizeCaptureResult,
   type RawCaptureRecord,
   type RawCaptureResult,
 } from '../utils/captureTransforms';
+
+// Re-export types for external use
+export type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
 
 export interface UseScreenCaptureReturn {
   isCapturing: boolean;

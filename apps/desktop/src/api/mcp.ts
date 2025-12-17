@@ -1,13 +1,13 @@
 // Updated Nov 16, 2025: Added comprehensive error handling, input validation, timeout handling, and retry logic
-import { invoke } from '@tauri-apps/api/core';
-import type { McpServerInfo, McpToolInfo, McpServersConfig, McpServerConfig } from '../types/mcp';
+import { invoke } from '../lib/tauri-mock';
+import type { McpServerConfig, McpServerInfo, McpServersConfig, McpToolInfo } from '../types/mcp';
 
 /**
  * MCP API Client - TypeScript bindings for MCP Tauri commands
  */
 
 // Re-export types for convenience
-export type { McpServerInfo, McpToolInfo, McpServersConfig, McpServerConfig };
+export type { McpServerConfig, McpServerInfo, McpServersConfig, McpToolInfo };
 
 // Updated Nov 16, 2025: Configurable timeouts for different MCP operations
 const MCP_TIMEOUT_MS = 30000; // 30 seconds for most operations

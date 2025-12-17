@@ -6,19 +6,19 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import {
-  SystemMetrics,
-  AppMetrics,
-  UsageStats,
-  FeatureUsageStats,
-  AnalyticsConfig,
-  PrivacyConsent,
-} from '../types/analytics';
+import { invoke } from '../lib/tauri-mock';
 import { analytics } from '../services/analytics';
-import { performanceMonitor } from '../services/performance';
-import { errorTracking, ErrorSeverity } from '../services/errorTracking';
+import { ErrorSeverity, errorTracking } from '../services/errorTracking';
 import { featureFlags } from '../services/featureFlags';
-import { invoke } from '@tauri-apps/api/core';
+import { performanceMonitor } from '../services/performance';
+import {
+  AnalyticsConfig,
+  AppMetrics,
+  FeatureUsageStats,
+  PrivacyConsent,
+  SystemMetrics,
+  UsageStats,
+} from '../types/analytics';
 
 interface AnalyticsState {
   // Metrics
@@ -92,13 +92,10 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         set({ systemMetrics: metrics });
       } catch (error) {
         console.error('Failed to load system metrics:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
+        });
       } finally {
         set({ isLoadingMetrics: false });
       }
@@ -112,13 +109,10 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         set({ appMetrics: metrics });
       } catch (error) {
         console.error('Failed to load app metrics:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
+        });
       } finally {
         set({ isLoadingMetrics: false });
       }
@@ -145,13 +139,10 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         set({ usageStats: stats });
       } catch (error) {
         console.error('Failed to load usage stats:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
+        });
       } finally {
         set({ isLoadingStats: false });
       }
@@ -185,20 +176,16 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         set({ featureUsage: usage });
       } catch (error) {
         console.error('Failed to load feature usage:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
+        });
       }
     },
 
     // Refresh all metrics
     refreshAllMetrics: async () => {
-      const { loadSystemMetrics, loadAppMetrics, loadUsageStats, loadFeatureUsage } =
-        get();
+      const { loadSystemMetrics, loadAppMetrics, loadUsageStats, loadFeatureUsage } = get();
       await Promise.all([
         loadSystemMetrics(),
         loadAppMetrics(),
@@ -242,13 +229,10 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         });
       } catch (error) {
         console.error('Failed to export analytics data:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: 'high' as any,
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: 'high' as any,
+        });
       }
     },
 
@@ -268,13 +252,10 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         });
       } catch (error) {
         console.error('Failed to delete analytics data:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: 'high' as any,
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: 'high' as any,
+        });
       }
     },
 
@@ -311,13 +292,10 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         return roi;
       } catch (error) {
         console.error('Failed to calculate ROI:', error);
-        errorTracking.captureError(
-          error instanceof Error ? error : new Error(String(error)),
-          {
-            component: 'analyticsStore',
-            severity: 'high' as any,
-          }
-        );
+        errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
+          component: 'analyticsStore',
+          severity: 'high' as any,
+        });
         throw error;
       } finally {
         set({ isLoadingROI: false });
@@ -398,7 +376,12 @@ export const useAnalyticsStore = create<AnalyticsState>()(
 
         // Download the report
         const blob = new Blob([report as string], {
-          type: format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/markdown',
+          type:
+            format === 'json'
+              ? 'application/json'
+              : format === 'csv'
+                ? 'text/csv'
+                : 'text/markdown',
         });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -430,7 +413,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         set({ isLoadingROI: false });
       }
     },
-  }))
+  })),
 );
 
 // Updated Nov 16, 2025: Fixed memory leak - store interval ID for cleanup

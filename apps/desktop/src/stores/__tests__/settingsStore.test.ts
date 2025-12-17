@@ -279,6 +279,7 @@ describe('settingsStore', () => {
       settings: {
         llmConfig: expect.any(Object),
         windowPreferences: expect.any(Object),
+        allowedDirectories: expect.any(Object),
       },
     });
     expect(useSettingsStore.getState().loading).toBe(false);

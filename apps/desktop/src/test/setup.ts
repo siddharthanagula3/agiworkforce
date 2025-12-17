@@ -89,7 +89,28 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
 }));
 
-// Mock Monaco Editor
+// Mock Monaco Editor core package
+vi.mock('monaco-editor', () => ({
+  editor: {
+    create: vi.fn(),
+    createModel: vi.fn(),
+    defineTheme: vi.fn(),
+    setTheme: vi.fn(),
+    IStandaloneCodeEditor: vi.fn(),
+  },
+  languages: {
+    register: vi.fn(),
+    registerCompletionItemProvider: vi.fn(),
+    setMonarchTokensProvider: vi.fn(),
+    setLanguageConfiguration: vi.fn(),
+  },
+  Range: vi.fn(),
+  Selection: vi.fn(),
+  KeyMod: { CtrlCmd: 2048, Shift: 1024, Alt: 512 },
+  KeyCode: { Enter: 3, Escape: 9 },
+}));
+
+// Mock Monaco Editor React wrapper
 vi.mock('@monaco-editor/react', () => ({
   default: vi.fn(() => null),
   Editor: vi.fn(() => null),

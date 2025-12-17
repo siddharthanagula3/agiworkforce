@@ -1,7 +1,7 @@
-import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
-import path from 'node:path';
 import net from 'node:net';
+import path from 'node:path';
+import { defineConfig, type UserConfig } from 'vite';
 // import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 const DEFAULT_DEV_PORT = Number(process.env['VITE_DEV_PORT'] ?? 5173);
@@ -42,6 +42,9 @@ export default defineConfig(async () => {
       environment: 'jsdom',
       setupFiles: './src/test/setup.ts',
       css: true,
+      alias: {
+        'monaco-editor': path.resolve(__dirname, './src/test/__mocks__/monaco-editor.ts'),
+      },
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
@@ -60,6 +63,11 @@ export default defineConfig(async () => {
           '**/*.spec.{ts,tsx}',
           '**/dist/**',
         ],
+      },
+      server: {
+        deps: {
+          inline: ['@supabase/supabase-js', 'monaco-editor'],
+        },
       },
     },
     plugins: [

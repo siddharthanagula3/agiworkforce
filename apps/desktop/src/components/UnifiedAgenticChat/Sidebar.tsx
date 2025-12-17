@@ -264,7 +264,7 @@ export function Sidebar({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingId, showSearch, focusedIndex, visibleConversations, selectConversation]);
+  }, [editingId, showSearch, focusedIndex, visibleConversations, handleSelectConversation]);
 
   const renderConversationItem = (conv: ConversationSummary, isKeyboardFocused: boolean) => (
     <div

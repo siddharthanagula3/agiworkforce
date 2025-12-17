@@ -147,6 +147,8 @@ pub struct ResourceState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionResult {
     pub tool_id: String,
+    #[serde(default)]
+    pub step_id: String,
     pub success: bool,
     pub result: serde_json::Value,
     pub error: Option<String>,
