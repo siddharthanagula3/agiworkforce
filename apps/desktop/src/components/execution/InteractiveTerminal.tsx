@@ -5,7 +5,6 @@
  * command history (up/down arrows), and AI command suggestions.
  */
 
-import { invoke } from '@tauri-apps/api/core';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -23,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 
@@ -58,6 +58,152 @@ export function InteractiveTerminal({
   const [searchQuery, setSearchQuery] = useState('');
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [isGettingSuggestion, setIsGettingSuggestion] = useState(false);
+
+  const writePrompt = useCallback(
+    (terminal: Terminal) => {
+      const cwd = workingDirectory?.split('/').pop() || '~';
+      terminal.write(`\x1b[1;32m${cwd}\x1b[0m \x1b[1;34m❯\x1b[0m `);
+    },
+    [workingDirectory],
+  );
+
+  const navigateHistory = useCallback(
+    (direction: number) => {
+      const terminal = xtermRef.current;
+      if (!terminal || commandHistory.length === 0) return;
+
+      const newIndex = Math.max(-1, Math.min(commandHistory.length - 1, historyIndex + direction));
+
+      if (newIndex !== historyIndex) {
+        // Clear current line
+        terminal.write('\r\x1b[K');
+        writePrompt(terminal);
+
+        if (newIndex >= 0 && newIndex < commandHistory.length) {
+          const historyCommand = commandHistory[commandHistory.length - 1 - newIndex] || '';
+          setCurrentCommand(historyCommand);
+          terminal.write(historyCommand);
+        } else {
+          setCurrentCommand('');
+        }
+
+        setHistoryIndex(newIndex);
+      }
+    },
+    [commandHistory, historyIndex, writePrompt],
+  );
+
+  const handleExecute = useCallback(async () => {
+    const terminal = xtermRef.current;
+    if (!terminal || !currentCommand.trim()) {
+      terminal?.writeln('');
+      writePrompt(terminal!);
+      return;
+    }
+
+    const command = currentCommand.trim();
+    terminal.writeln('');
+
+    // Add to history
+    setCommandHistory((prev) => [...prev, command]);
+    setHistoryIndex(-1);
+    setCurrentCommand('');
+    setIsExecuting(true);
+    setAiSuggestion(null);
+
+    try {
+      const result = await invoke<ExecuteResult>('execute_terminal_command', {
+        command,
+        cwd: workingDirectory,
+        shell: null, // Use default shell
+      });
+
+      // Write output
+      if (result.stdout) {
+        result.stdout.split('\n').forEach((line) => {
+          terminal.writeln(line);
+        });
+      }
+      if (result.stderr) {
+        result.stderr.split('\n').forEach((line) => {
+          terminal.writeln(`\x1b[31m${line}\x1b[0m`);
+        });
+      }
+
+      // Write exit code if non-zero
+      if (result.exitCode !== 0 && result.exitCode !== null) {
+        terminal.writeln(`\x1b[90m[exit: ${result.exitCode}]\x1b[0m`);
+      }
+
+      onCommandExecuted?.(command, result.stdout || result.stderr, result.exitCode ?? -1);
+    } catch (error) {
+      terminal.writeln(`\x1b[31mError: ${error}\x1b[0m`);
+    } finally {
+      setIsExecuting(false);
+      terminal.writeln('');
+      writePrompt(terminal);
+
+      if (!scrollLock) {
+        terminal.scrollToBottom();
+      }
+    }
+  }, [currentCommand, workingDirectory, scrollLock, onCommandExecuted, writePrompt]);
+
+  const handleAiSuggest = useCallback(async () => {
+    if (!currentCommand.trim()) {
+      toast.info('Type what you want to do first');
+      return;
+    }
+
+    setIsGettingSuggestion(true);
+    try {
+      const suggestion = await invoke<string>('terminal_ai_suggest_command', {
+        intent: currentCommand,
+        shellType: 'bash',
+        cwd: workingDirectory,
+      });
+
+      setAiSuggestion(suggestion);
+
+      // Apply suggestion to terminal
+      const terminal = xtermRef.current;
+      if (terminal) {
+        // Clear current line
+        terminal.write('\r\x1b[K');
+        writePrompt(terminal);
+        terminal.write(suggestion);
+        setCurrentCommand(suggestion);
+      }
+    } catch (error) {
+      toast.error(`Failed to get suggestion: ${error}`);
+      setIsGettingSuggestion(false);
+    }
+  }, [currentCommand, workingDirectory, writePrompt]);
+
+  const handleSearch = () => {
+    if (searchAddonRef.current && searchQuery) {
+      searchAddonRef.current.findNext(searchQuery, { incremental: true });
+    }
+  };
+
+  const handleCopy = async () => {
+    const terminal = xtermRef.current;
+    if (!terminal) return;
+
+    const selection = terminal.getSelection();
+    if (selection) {
+      await navigator.clipboard.writeText(selection);
+      toast.success('Copied to clipboard');
+    }
+  };
+
+  const handleClear = () => {
+    const terminal = xtermRef.current;
+    if (terminal) {
+      terminal.clear();
+      writePrompt(terminal);
+    }
+  };
 
   // Initialize xterm.js with interactive input
   useEffect(() => {
@@ -140,7 +286,7 @@ export function InteractiveTerminal({
       fitAddonRef.current = null;
       searchAddonRef.current = null;
     };
-  }, []);
+  }, [writePrompt]);
 
   // Handle keyboard input
   useEffect(() => {
@@ -185,151 +331,15 @@ export function InteractiveTerminal({
     });
 
     return () => disposable.dispose();
-  }, [currentCommand, isExecuting, commandHistory, historyIndex]);
-
-  const writePrompt = (terminal: Terminal) => {
-    const cwd = workingDirectory?.split('/').pop() || '~';
-    terminal.write(`\x1b[1;32m${cwd}\x1b[0m \x1b[1;34m❯\x1b[0m `);
-  };
-
-  const navigateHistory = useCallback(
-    (direction: number) => {
-      const terminal = xtermRef.current;
-      if (!terminal || commandHistory.length === 0) return;
-
-      const newIndex = Math.max(-1, Math.min(commandHistory.length - 1, historyIndex + direction));
-
-      if (newIndex !== historyIndex) {
-        // Clear current line
-        terminal.write('\r\x1b[K');
-        writePrompt(terminal);
-
-        if (newIndex >= 0 && newIndex < commandHistory.length) {
-          const historyCommand = commandHistory[commandHistory.length - 1 - newIndex] || '';
-          setCurrentCommand(historyCommand);
-          terminal.write(historyCommand);
-        } else {
-          setCurrentCommand('');
-        }
-
-        setHistoryIndex(newIndex);
-      }
-    },
-    [commandHistory, historyIndex, workingDirectory],
-  );
-
-  const handleExecute = useCallback(async () => {
-    const terminal = xtermRef.current;
-    if (!terminal || !currentCommand.trim()) {
-      terminal?.writeln('');
-      writePrompt(terminal!);
-      return;
-    }
-
-    const command = currentCommand.trim();
-    terminal.writeln('');
-
-    // Add to history
-    setCommandHistory((prev) => [...prev, command]);
-    setHistoryIndex(-1);
-    setCurrentCommand('');
-    setIsExecuting(true);
-    setAiSuggestion(null);
-
-    try {
-      const result = await invoke<ExecuteResult>('execute_terminal_command', {
-        command,
-        cwd: workingDirectory,
-        shell: null, // Use default shell
-      });
-
-      // Write output
-      if (result.stdout) {
-        result.stdout.split('\n').forEach((line) => {
-          terminal.writeln(line);
-        });
-      }
-      if (result.stderr) {
-        result.stderr.split('\n').forEach((line) => {
-          terminal.writeln(`\x1b[31m${line}\x1b[0m`);
-        });
-      }
-
-      // Write exit code if non-zero
-      if (result.exitCode !== 0 && result.exitCode !== null) {
-        terminal.writeln(`\x1b[90m[exit: ${result.exitCode}]\x1b[0m`);
-      }
-
-      onCommandExecuted?.(command, result.stdout || result.stderr, result.exitCode ?? -1);
-    } catch (error) {
-      terminal.writeln(`\x1b[31mError: ${error}\x1b[0m`);
-    } finally {
-      setIsExecuting(false);
-      terminal.writeln('');
-      writePrompt(terminal);
-
-      if (!scrollLock) {
-        terminal.scrollToBottom();
-      }
-    }
-  }, [currentCommand, workingDirectory, scrollLock, onCommandExecuted]);
-
-  const handleAiSuggest = useCallback(async () => {
-    if (!currentCommand.trim()) {
-      toast.info('Type what you want to do first');
-      return;
-    }
-
-    setIsGettingSuggestion(true);
-    try {
-      const suggestion = await invoke<string>('terminal_ai_suggest_command', {
-        intent: currentCommand,
-        shellType: 'bash',
-        cwd: workingDirectory,
-      });
-
-      setAiSuggestion(suggestion);
-
-      // Apply suggestion to terminal
-      const terminal = xtermRef.current;
-      if (terminal) {
-        // Clear current line
-        terminal.write('\r\x1b[K');
-        writePrompt(terminal);
-        terminal.write(suggestion);
-        setCurrentCommand(suggestion);
-      }
-    } catch (error) {
-      toast.error(`Failed to get suggestion: ${error}`);
-    } finally {
-      setIsGettingSuggestion(false);
-    }
-  }, [currentCommand, workingDirectory]);
-
-  const handleSearch = () => {
-    if (searchAddonRef.current && searchQuery) {
-      searchAddonRef.current.findNext(searchQuery, { incremental: true });
-    }
-  };
-
-  const handleCopy = async () => {
-    const terminal = xtermRef.current;
-    if (!terminal) return;
-
-    const selection = terminal.getSelection();
-    if (selection) {
-      await navigator.clipboard.writeText(selection);
-      toast.success('Copied to clipboard');
-    }
-  };
-
-  const handleClear = () => {
-    const terminal = xtermRef.current;
-    if (terminal) {
-      terminal.clear();
-      writePrompt(terminal);
-    }
-  };
+  }, [
+    currentCommand,
+    isExecuting,
+    commandHistory,
+    historyIndex,
+    handleExecute,
+    navigateHistory,
+    writePrompt,
+  ]);
 
   return (
     <div

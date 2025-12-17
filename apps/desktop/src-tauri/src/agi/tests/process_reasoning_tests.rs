@@ -123,6 +123,7 @@ mod tests {
         let tool_results = vec![
             ToolExecutionResult {
                 tool_id: "tool_1".to_string(),
+                step_id: "test_step_1".to_string(),
                 success: true,
                 result: serde_json::json!({}),
                 error: None,
@@ -135,6 +136,7 @@ mod tests {
             },
             ToolExecutionResult {
                 tool_id: "tool_2".to_string(),
+                step_id: "test_step_2".to_string(),
                 success: false,
                 result: serde_json::json!({}),
                 error: Some("failed".to_string()),

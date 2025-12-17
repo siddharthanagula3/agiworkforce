@@ -1,14 +1,14 @@
-import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import { create } from 'zustand';
+import { invoke } from '../lib/tauri-mock';
 
 import type {
+  Contact,
   EmailAccount,
   EmailAddress,
   EmailFilter,
   EmailMessage,
   EmailProviderConfig,
-  Contact,
 } from '../types/email';
 
 const DEFAULT_FILTER: EmailFilter = {

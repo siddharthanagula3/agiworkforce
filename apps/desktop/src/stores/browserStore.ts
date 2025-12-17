@@ -1,7 +1,7 @@
 // Updated Nov 16, 2025: Added UnlistenFn import for cleanup
-import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { create } from 'zustand';
+import { invoke } from '../lib/tauri-mock';
 
 export interface BrowserTab {
   id: string;

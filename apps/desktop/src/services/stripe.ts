@@ -12,7 +12,7 @@
  * 2. Enable Stripe MCP in MCP configuration at %APPDATA%/agiworkforce/mcp-servers-config.json
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
 export interface CustomerInfo {
   id: string;

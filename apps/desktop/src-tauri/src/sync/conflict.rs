@@ -94,6 +94,7 @@ impl ConflictResolver {
         Ok(serde_json::to_string(&merged)?)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn merge_json_objects(
         &self,
         local: &serde_json::Value,

@@ -4,13 +4,8 @@
  * Frontend service for interacting with cache management Tauri commands.
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import type {
-  CacheStats,
-  CacheSettings,
-  CacheAnalytics,
-  CacheType,
-} from '../types/cache';
+import { invoke } from '../lib/tauri-mock';
+import type { CacheAnalytics, CacheSettings, CacheStats, CacheType } from '../types/cache';
 
 /**
  * Get comprehensive cache statistics

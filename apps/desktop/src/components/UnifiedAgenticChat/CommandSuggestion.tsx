@@ -5,11 +5,11 @@
  * Displays suggested commands with Run/Copy/Edit actions.
  */
 
-import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Copy, Edit3, Play, Terminal, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 

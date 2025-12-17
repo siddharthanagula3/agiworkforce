@@ -1,8 +1,8 @@
 // Updated Nov 16, 2025: Added cleanup for event listeners to fix memory leak
-import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-shell';
+import { create } from 'zustand';
+import { invoke } from '../lib/tauri-mock';
 import type {
   CloudFile,
   CloudProvider,
