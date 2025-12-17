@@ -114,12 +114,24 @@ impl LLMRouter {
         let mut reason =
             String::from("General developer chat - routing to OpenAI for balanced cost/quality.");
 
+        // Priority 1: Vision tasks (images, videos, screenshots)
         if context.requires_vision {
             provider = Provider::Google;
             task_category = TaskCategory::Creative;
             reason =
-                "Vision or screenshot detected - routing to Google Gemini for multimodal reasoning."
+                "Vision or multimodal content detected - routing to Google Gemini for multimodal reasoning."
                     .to_string();
+        // Priority 2: Creative/generation tasks (image/video generation)
+        } else if normalized_intents
+            .iter()
+            .any(|intent| matches!(intent.as_str(), "creative" | "generate" | "design" | "art"))
+        {
+            provider = Provider::Google;
+            task_category = TaskCategory::Creative;
+            reason =
+                "Creative or generation task detected - routing to Google Gemini for creative capabilities."
+                    .to_string();
+        // Priority 3: Code/automation tasks
         } else if normalized_intents.iter().any(|intent| {
             matches!(
                 intent.as_str(),
@@ -131,6 +143,17 @@ impl LLMRouter {
             reason =
                 "Developer or automation workflow detected - routing to Anthropic Claude for deep reasoning."
                     .to_string();
+        // Priority 4: Writing/research tasks
+        } else if normalized_intents
+            .iter()
+            .any(|intent| matches!(intent.as_str(), "writing" | "research"))
+        {
+            provider = Provider::OpenAI;
+            task_category = TaskCategory::Complex;
+            reason =
+                "Writing or research task detected - routing to OpenAI GPT-4o for quality output."
+                    .to_string();
+        // Priority 5: Cost optimization
         } else if context.cost_priority == CostPriority::Low {
             provider = Provider::Ollama;
             task_category = TaskCategory::Simple;
@@ -138,6 +161,7 @@ impl LLMRouter {
                 .to_string();
         }
 
+        // Upgrade for large context
         if context.token_estimate > 12_000 && provider == Provider::OpenAI {
             task_category = TaskCategory::Complex;
             reason = format!(
@@ -735,6 +759,7 @@ impl LLMRouter {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let candidates = self.candidates(&request, &prefs);

@@ -8,7 +8,6 @@ import {
   Globe2,
   Image,
   Loader2,
-  MoreVertical,
   RotateCw,
   Terminal as TerminalIcon,
   Trash2,
@@ -21,10 +20,12 @@ import remarkMath from 'remark-math';
 import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { EnhancedMessage, SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
-import { getPreviousUserMessage, shouldShowClaudePlanningCard } from '../../utils/messageHelpers';
 import { parseCitations } from './CitationBadge';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { StatusTrail } from './StatusTrail';
+
+import { useExecutionStore } from '../../stores/executionStore';
+import { DeepResearchPanel } from './DeepResearchPanel';
 import { CodeBlock } from './Visualizations/CodeBlock';
 
 export interface MessageBubbleProps {
@@ -55,7 +56,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const retryFailedMessage = useUnifiedChatStore((state) => state.retryFailedMessage);
+
   const messages = useUnifiedChatStore((state) => state.messages);
+  const researchTasks = useExecutionStore((state) => state.researchTasks);
 
   // Auto-trigger sidecar for relevant content
   React.useEffect(() => {
@@ -109,15 +112,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     // If we found a match, but it's empty and we're not explicit, ignore it
     // This prevents showing empty blocks if <thinking> is just starting
     if (match && (match[1]?.trim() || message.metadata?.streaming)) {
-      const thinkingContent = match[1]?.trim() || '';
-
-      // Get the previous user message to determine if we should show the planning card
-      const prevUserMessage = getPreviousUserMessage(messages, message.id);
-
-      // Check if we should show the planning card based on the user's request
-      const shouldShow = shouldShowClaudePlanningCard(prevUserMessage, message.metadata);
-
-      return shouldShow ? thinkingContent : null;
+      return match[1]?.trim() || '';
     }
 
     return explicit ? message.content : null;
@@ -274,6 +269,28 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       </div>
     );
   };
+
+  // Handle Deep Research Task
+  const researchTaskId = (message.metadata as any)?.taskId;
+  const isResearchTask =
+    (message.metadata as any)?.type === 'deep-research' ||
+    (message.metadata as any)?.type === 'deep-research-task';
+  const researchTask = researchTaskId ? researchTasks[researchTaskId] : null;
+
+  if (isResearchTask && researchTask) {
+    return (
+      <div className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors">
+        {showAvatar && (
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-sm font-medium">
+            AI
+          </div>
+        )}
+        <div className="min-w-0 relative max-w-full flex-1">
+          <DeepResearchPanel task={researchTask} />
+        </div>
+      </div>
+    );
+  }
 
   // Handle thinking + content rendering
   if (thinkingMatch) {
@@ -523,14 +540,34 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           <div className="mt-3 flex flex-wrap gap-3">
             {message.attachments.map((attachment) => {
               const isImage = attachment.mimeType?.startsWith('image/');
+              const isVideo = attachment.mimeType?.startsWith('video/');
+              const isAudio = attachment.mimeType?.startsWith('audio/');
+              const mediaSource = attachment.content || attachment.path;
+
               return (
-                <div key={attachment.id} className="attachment-preview max-w-xs">
-                  {isImage && (attachment.content || attachment.path) ? (
+                <div key={attachment.id} className="attachment-preview max-w-md">
+                  {isImage && mediaSource ? (
                     <img
-                      src={attachment.content || attachment.path}
+                      src={mediaSource}
                       alt={attachment.name}
-                      className="rounded-lg"
+                      className="rounded-lg max-h-64 object-contain"
                     />
+                  ) : isVideo && mediaSource ? (
+                    <video
+                      src={mediaSource}
+                      controls
+                      className="rounded-lg max-h-64 w-full"
+                      preload="metadata"
+                    >
+                      <track kind="captions" />
+                      Your browser does not support video playback.
+                    </video>
+                  ) : isAudio && mediaSource ? (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+                      <audio src={mediaSource} controls className="w-full max-w-xs">
+                        Your browser does not support audio playback.
+                      </audio>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
                       <FileText className="h-5 w-5 text-zinc-500" />
@@ -603,12 +640,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 <Trash2 size={14} className="text-zinc-600 dark:text-zinc-400" />
               </button>
             )}
-            <button
-              className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-              title="More actions"
-            >
-              <MoreVertical size={14} className="text-zinc-600 dark:text-zinc-400" />
-            </button>
           </div>
         )}
       </div>

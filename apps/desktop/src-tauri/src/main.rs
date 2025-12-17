@@ -11,7 +11,8 @@ use agiworkforce_desktop::security::{AuthManager, SecretManager};
 use agiworkforce_desktop::{
     build_system_tray,
     commands::{
-        // Note: CodeGeneratorState and ContextManagerState moved to ai_native module (stubbed)
+        // Note: AI coding features are currently disabled/stubbed.
+        // If these are needed, they should be implemented using the agi/ module.
         ai_native::{CodeGeneratorState, ContextManagerState},
         load_persisted_calendar_accounts,
         security::AuthManagerState,
@@ -210,12 +211,18 @@ fn main() {
 
             tracing::info!("Document state initialized");
 
-            // Initialize automation service
-            let automation_service = agiworkforce_desktop::automation::AutomationService::new()
-                .context("Failed to initialize automation service")?;
-            app.manage(std::sync::Arc::new(automation_service));
-
-            tracing::info!("Automation service initialized");
+            // Initialize automation service (graceful fallback if platform doesn't support it)
+            match agiworkforce_desktop::automation::AutomationService::new() {
+                Ok(automation_service) => {
+                    app.manage(std::sync::Arc::new(Some(automation_service)));
+                    tracing::info!("Automation service initialized");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize automation service: {}. Some automation features may be unavailable. On macOS, you may need to grant accessibility permissions in System Settings > Privacy & Security > Accessibility.", e);
+                    // Allow the app to start without automation capabilities
+                    app.manage(std::sync::Arc::new(None::<agiworkforce_desktop::automation::AutomationService>));
+                }
+            }
 
             // Initialize MCP state
             let mcp_state = McpState::new();
@@ -223,13 +230,12 @@ fn main() {
 
             tracing::info!("MCP state initialized");
 
-            // TODO: AgentRuntime, ContextManager, and CodeGenerator are temporarily disabled
-            // These were part of the deleted agent/ module and should be reimplemented using agi/ if needed
-            // For now, we initialize stub states to satisfy the type system
+            // AI-native coding features (STUBBED)
+            // These commands are stubbed to prevent errors but are not functional.
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
             app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
 
-            tracing::info!("AI-native states initialized (stubbed)");
+            tracing::info!("AI-native states initialized (stubs)");
 
             // Initialize GitHub integration state
             let workspace_dir = app
@@ -538,13 +544,8 @@ fn main() {
             agiworkforce_desktop::commands::query_knowledge,
             agiworkforce_desktop::commands::get_recent_knowledge,
             agiworkforce_desktop::commands::get_knowledge_by_category,
-            // TODO: Agent and Runtime commands disabled - were part of deleted agent/ module
-            // agent_init, agent_submit_task, agent_get_task_status, agent_list_tasks, agent_stop
-            // runtime_queue_task, runtime_get_next_task, runtime_execute_task, runtime_cancel_task,
-            // runtime_get_task_status, runtime_get_all_tasks, runtime_set_auto_approve,
-            // runtime_is_auto_approve_enabled, runtime_revert_task, runtime_get_task_changes,
             // runtime_get_all_changes
-            // AI-native software engineering commands (stubbed)
+            // AI-native software engineering commands (STUBBED - Not functional)
             agiworkforce_desktop::commands::ai_analyze_project,
             agiworkforce_desktop::commands::ai_add_constraint,
             agiworkforce_desktop::commands::ai_generate_code,
@@ -879,6 +880,9 @@ fn main() {
             agiworkforce_desktop::commands::file_move,
             agiworkforce_desktop::commands::file_exists,
             agiworkforce_desktop::commands::file_metadata,
+            // File undo/rollback commands
+            agiworkforce_desktop::commands::undo_file_operation,
+            agiworkforce_desktop::commands::execute_terminal_command,
             // Directory operations commands
             agiworkforce_desktop::commands::dir_create,
             agiworkforce_desktop::commands::dir_list,
