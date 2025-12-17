@@ -3,25 +3,25 @@
  * Zustand store for managing ROI dashboard state and real-time updates
  */
 
-import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { invoke } from '../../lib/tauri-mock';
 import type {
-    ActivityItem,
-    AllTimeStats,
-    BenchmarkComparisonData,
-    ChartDataPoint,
-    ComparisonData,
-    ComparisonMode,
-    DayStats,
-    EmployeeChartData,
-    ExportOptions,
-    MetricsUpdate,
-    Milestone,
-    MonthStats,
-    PeriodComparisonData,
-    WeekStats,
+  ActivityItem,
+  AllTimeStats,
+  BenchmarkComparisonData,
+  ChartDataPoint,
+  ComparisonData,
+  ComparisonMode,
+  DayStats,
+  EmployeeChartData,
+  ExportOptions,
+  MetricsUpdate,
+  Milestone,
+  MonthStats,
+  PeriodComparisonData,
+  WeekStats,
 } from '../../types/roi';
 
 interface ROIState {
@@ -253,7 +253,7 @@ export const useROIStore = create<ROIState>()(
 
           // Remove from unacknowledged list
           state.unacknowledgedMilestones = state.unacknowledgedMilestones.filter(
-            (m) => m.id !== milestoneId
+            (m) => m.id !== milestoneId,
           );
         });
       } catch (error) {
@@ -329,5 +329,5 @@ export const useROIStore = create<ROIState>()(
       unsubscribeFromLiveUpdates();
       set(initialState);
     },
-  }))
+  })),
 );

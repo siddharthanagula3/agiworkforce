@@ -779,12 +779,10 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<(String, String)>, Str
         let remotes = repo.remotes().map_err(|e| e.message().to_string())?;
 
         let mut result = Vec::new();
-        for name in remotes.iter() {
-            if let Some(name) = name {
-                if let Ok(remote) = repo.find_remote(name) {
-                    let url = remote.url().unwrap_or("").to_string();
-                    result.push((name.to_string(), url));
-                }
+        for name in remotes.iter().flatten() {
+            if let Ok(remote) = repo.find_remote(name) {
+                let url = remote.url().unwrap_or("").to_string();
+                result.push((name.to_string(), url));
             }
         }
 

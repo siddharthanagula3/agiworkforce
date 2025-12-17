@@ -1,5 +1,172 @@
 use crate::terminal::{detect_available_shells, SessionManager, ShellInfo, ShellType, TerminalAI};
+use std::time::Instant;
 use tauri::State;
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecuteResult {
+    stdout: String,
+    stderr: String,
+    exit_code: Option<i32>,
+    duration_ms: u64,
+}
+
+#[tauri::command]
+pub async fn execute_terminal_command(
+    command: String,
+    cwd: Option<String>,
+    shell: Option<String>,
+) -> Result<ExecuteResult, String> {
+    use std::path::Path;
+    use std::process::Stdio;
+    use tokio::io::AsyncReadExt;
+    use tokio::process::Command;
+
+    tracing::info!("Executing independent terminal command: {}", command);
+
+    // SECURITY: Validate command for dangerous patterns
+    let dangerous_patterns = [
+        "rm -rf /",
+        "rm -rf /*",
+        "dd if=",
+        ":(){ :|:& };:", // fork bomb
+        "mkfs",
+        "format c:",
+        "> /dev/sda",
+        "chmod -R 777 /",
+        "shutdown",
+        "reboot",
+        "halt",
+        "init 0",
+        "init 6",
+    ];
+
+    let command_lower = command.to_lowercase();
+    for pattern in &dangerous_patterns {
+        if command_lower.contains(&pattern.to_lowercase()) {
+            tracing::warn!("Blocked dangerous command pattern: {}", pattern);
+            return Err(format!(
+                "Command blocked for security: contains dangerous pattern '{}'",
+                pattern
+            ));
+        }
+    }
+
+    // Validate cwd if provided
+    if let Some(ref dir) = cwd {
+        if !Path::new(dir).exists() {
+            return Err(format!("Working directory does not exist: {}", dir));
+        }
+    }
+
+    let shell = shell.unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            "powershell".to_string()
+        } else {
+            "bash".to_string()
+        }
+    });
+
+    let (program, args): (String, Vec<String>) = match shell.to_lowercase().as_str() {
+        "cmd" => (
+            "cmd.exe".to_string(),
+            vec!["/C".to_string(), command.clone()],
+        ),
+        "bash" | "sh" | "zsh" => {
+            let shell_path = if cfg!(target_os = "macos") {
+                "/bin/zsh".to_string()
+            } else {
+                "/bin/bash".to_string()
+            };
+            (shell_path, vec!["-lc".to_string(), command.clone()])
+        }
+        "powershell" | "pwsh" => (
+            if cfg!(target_os = "windows") {
+                "powershell.exe".to_string()
+            } else {
+                "pwsh".to_string()
+            },
+            vec![
+                "-NoLogo".to_string(),
+                "-NoProfile".to_string(),
+                "-Command".to_string(),
+                command.clone(),
+            ],
+        ),
+        _ => {
+            if cfg!(target_os = "windows") {
+                (
+                    "powershell.exe".to_string(),
+                    vec!["-Command".to_string(), command.clone()],
+                )
+            } else {
+                (
+                    "/bin/sh".to_string(),
+                    vec!["-c".to_string(), command.clone()],
+                )
+            }
+        }
+    };
+
+    let mut cmd = Command::new(&program);
+    for arg in &args {
+        cmd.arg(arg);
+    }
+
+    if let Some(ref path) = cwd {
+        cmd.current_dir(path);
+    }
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let start_time = Instant::now();
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to spawn command: {}", e))?;
+
+    let stdout_handle = child.stdout.take();
+    let stderr_handle = child.stderr.take();
+
+    // Read stdout
+    let stdout_task = tokio::spawn(async move {
+        let mut buffer = Vec::new();
+        if let Some(mut stdout) = stdout_handle {
+            let _ = stdout.read_to_end(&mut buffer).await;
+        }
+        buffer
+    });
+
+    // Read stderr
+    let stderr_task = tokio::spawn(async move {
+        let mut buffer = Vec::new();
+        if let Some(mut stderr) = stderr_handle {
+            let _ = stderr.read_to_end(&mut buffer).await;
+        }
+        buffer
+    });
+
+    // Wait for command with timeout (60 seconds)
+    let timeout_duration = tokio::time::Duration::from_secs(60);
+    let status = match tokio::time::timeout(timeout_duration, child.wait()).await {
+        Ok(result) => result.map_err(|e| format!("Command failed: {}", e))?,
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err("Command timed out after 60 seconds".to_string());
+        }
+    };
+
+    let stdout_bytes = stdout_task.await.unwrap_or_default();
+    let stderr_bytes = stderr_task.await.unwrap_or_default();
+    let duration = start_time.elapsed();
+
+    Ok(ExecuteResult {
+        stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
+        stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
+        exit_code: status.code(),
+        duration_ms: duration.as_millis() as u64,
+    })
+}
 
 #[tauri::command]
 pub async fn terminal_detect_shells() -> Result<Vec<ShellInfo>, String> {

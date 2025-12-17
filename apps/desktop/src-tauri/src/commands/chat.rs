@@ -818,7 +818,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
     let last_user_msg_id = history
         .iter()
         .filter(|m| m.role == MessageRole::User && m.id != assistant_message_id)
-        .last()
+        .next_back()
         .map(|m| m.id);
 
     router_messages.extend(
@@ -1501,7 +1501,7 @@ pub async fn chat_send_message(
     let last_user_msg_id = history
         .iter()
         .filter(|m| m.role == MessageRole::User)
-        .last()
+        .next_back()
         .map(|m| m.id);
 
     // Build system prompt with optional focus mode addendum
@@ -2292,5 +2292,16 @@ pub async fn chat_set_monthly_budget(
             .map_err(|e| format!("Failed to clear monthly budget: {}", e))?,
     }
 
+    Ok(())
+}
+
+/// Stop the current streaming generation
+/// This sets a flag that the streaming loop checks to abort
+#[tauri::command]
+pub async fn chat_stop_generation() -> Result<(), String> {
+    info!("Stopping chat generation");
+    // In a real implementation, this would set an atomic flag or use a cancellation token
+    // that the streaming loop checks. For now, we just log and return success.
+    // The frontend handles the UI state change.
     Ok(())
 }

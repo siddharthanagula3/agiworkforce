@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import { useAuthStore } from '../stores/authStore';
-import { safeGetJSON, safeSetJSON, safeRemoveItem } from '../utils/localStorage';
+import { safeGetJSON, safeRemoveItem, safeSetJSON } from '../utils/localStorage';
 
 export interface AuthToken {
   access_token: string;

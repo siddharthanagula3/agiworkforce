@@ -86,7 +86,7 @@ impl RAGSystem {
     /// Parse code file into semantic chunks
     async fn parse_code_file(
         &self,
-        file_path: &PathBuf,
+        file_path: &std::path::Path,
         content: &str,
     ) -> Result<Vec<CodeChunk>, String> {
         let mut chunks = Vec::new();
@@ -126,7 +126,7 @@ impl RAGSystem {
             if (line == "}" || line == "};") && current_function.is_some() {
                 let chunk = CodeChunk {
                     id: uuid::Uuid::new_v4().to_string(),
-                    file_path: file_path.clone(),
+                    file_path: file_path.to_path_buf(),
                     content: lines[current_chunk_start..=i].join("\n"),
                     start_line: current_chunk_start,
                     end_line: i,
@@ -149,7 +149,7 @@ impl RAGSystem {
         if chunks.is_empty() {
             chunks.push(CodeChunk {
                 id: uuid::Uuid::new_v4().to_string(),
-                file_path: file_path.clone(),
+                file_path: file_path.to_path_buf(),
                 content: content.to_string(),
                 start_line: 0,
                 end_line: lines.len(),
@@ -167,7 +167,7 @@ impl RAGSystem {
     }
 
     /// Detect programming language from file extension
-    fn detect_language(&self, path: &PathBuf) -> String {
+    fn detect_language(&self, path: &std::path::Path) -> String {
         if let Some(ext) = path.extension() {
             match ext.to_string_lossy().as_ref() {
                 "rs" => "rust".to_string(),

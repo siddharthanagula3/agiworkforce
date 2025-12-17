@@ -90,35 +90,33 @@ impl EmployeeMarketplace {
             .map_err(|e| EmployeeError::DatabaseError(e.to_string()))?;
 
         let mut result = Vec::new();
-        for emp in employees {
-            if let Ok(e) = emp {
-                // Apply filters that can't be done in SQL easily
-                let mut include = true;
+        for e in employees.flatten() {
+            // Apply filters that can't be done in SQL easily
+            let mut include = true;
 
-                if !filters.roles.is_empty() && !filters.roles.contains(&e.role) {
+            if !filters.roles.is_empty() && !filters.roles.contains(&e.role) {
+                include = false;
+            }
+
+            if !filters.tags.is_empty() {
+                let has_tag = filters.tags.iter().any(|tag| e.tags.contains(tag));
+                if !has_tag {
                     include = false;
                 }
+            }
 
-                if !filters.tags.is_empty() {
-                    let has_tag = filters.tags.iter().any(|tag| e.tags.contains(tag));
-                    if !has_tag {
-                        include = false;
-                    }
+            if !filters.required_integrations.is_empty() {
+                let has_integration = filters
+                    .required_integrations
+                    .iter()
+                    .any(|int| e.required_integrations.contains(int));
+                if !has_integration {
+                    include = false;
                 }
+            }
 
-                if !filters.required_integrations.is_empty() {
-                    let has_integration = filters
-                        .required_integrations
-                        .iter()
-                        .any(|int| e.required_integrations.contains(int));
-                    if !has_integration {
-                        include = false;
-                    }
-                }
-
-                if include {
-                    result.push(e);
-                }
+            if include {
+                result.push(e);
             }
         }
 

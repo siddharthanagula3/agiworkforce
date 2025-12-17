@@ -3,15 +3,15 @@
  * Manages AI employee configurator state including workflow editing, capabilities, and training
  */
 
+import type { Edge, Node } from 'reactflow';
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
-import type { Node, Edge } from 'reactflow';
+import { invoke } from '../lib/tauri-mock';
 import type {
+  Capability,
   CustomEmployee,
   EmployeeTemplate,
-  Capability,
-  TrainingExample,
   TestResult,
+  TrainingExample,
   WorkflowDefinition,
 } from '../types/configurator';
 
@@ -347,9 +347,7 @@ export const useConfiguratorStore = create<ConfiguratorState>((set, get) => ({
   deleteNode: (id: string) => {
     set((state) => ({
       workflowNodes: state.workflowNodes.filter((node) => node.id !== id),
-      workflowEdges: state.workflowEdges.filter(
-        (edge) => edge.source !== id && edge.target !== id,
-      ),
+      workflowEdges: state.workflowEdges.filter((edge) => edge.source !== id && edge.target !== id),
       selectedNode: state.selectedNode?.id === id ? null : state.selectedNode,
       isDirty: true,
     }));
