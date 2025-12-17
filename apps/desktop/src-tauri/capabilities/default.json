@@ -80,13 +80,13 @@
     "notification:allow-list-channels",
     "notification:allow-delete-channel",
     "notification:allow-create-channel",
-    "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-read-image",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-write-image",
     "clipboard-manager:allow-write-html",
     "clipboard-manager:allow-clear",
     "window-state:allow-save-window-state",
-    "window-state:allow-restore-state"
+    "window-state:allow-restore-state",
+    "dialog:default",
+    "fs:default"
   ]
 }

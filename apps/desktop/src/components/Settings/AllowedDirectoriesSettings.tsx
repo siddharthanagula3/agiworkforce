@@ -1,6 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { exists } from '@tauri-apps/plugin-fs';
-import { FolderPlus, FolderX, AlertCircle } from 'lucide-react';
+import { AlertCircle, FolderPlus, FolderX } from 'lucide-react';
 import { useState } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
@@ -60,9 +60,9 @@ export function AllowedDirectoriesSettings() {
         }
         addAllowedDirectory(selected);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to open directory picker:', e);
-      setError('Failed to open directory picker');
+      setError(`Failed to open directory picker: ${e.message || e}`);
     }
   };
 

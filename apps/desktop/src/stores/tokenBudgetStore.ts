@@ -16,7 +16,10 @@ export interface TokenBudget {
   period: BudgetPeriod;
   limit: number; // Token limit
   warningThreshold: number; // Percentage (e.g., 80 means warn at 80%)
-  currentUsage: number; // Tokens used in current period
+  currentUsage: number; // Total tokens used in current period
+  inputTokens: number; // Input tokens used in current period
+  outputTokens: number; // Output tokens used in current period
+  estimatedCost: number; // Estimated cost in USD
   periodStart: number; // Timestamp when period started
   periodEnd: number; // Timestamp when period ends
 }
@@ -29,6 +32,13 @@ export interface BudgetAlert {
   dismissed: boolean;
 }
 
+export interface TokenUsageDetails {
+  inputTokens: number;
+  outputTokens: number;
+  modelId?: string;
+  costUsd?: number;
+}
+
 interface TokenBudgetState {
   budget: TokenBudget;
   alerts: BudgetAlert[];
@@ -39,9 +49,16 @@ interface TokenBudgetState {
   setBudgetLimit: (limit: number) => void;
   setWarningThreshold: (threshold: number) => void;
   addTokenUsage: (tokens: number) => void;
+  addDetailedTokenUsage: (details: TokenUsageDetails) => void;
   resetPeriod: () => void;
   dismissAlert: (alertId: string) => void;
   clearAlerts: () => void;
+
+  // Selectors
+  getInputTokens: () => number;
+  getOutputTokens: () => number;
+  getTotalTokens: () => number;
+  getEstimatedCost: () => number;
 }
 
 const storageFallback: Storage = {
@@ -96,13 +113,16 @@ function shouldResetPeriod(budget: TokenBudget): boolean {
 
 export const useTokenBudgetStore = create<TokenBudgetState>()(
   persist(
-    immer((set) => ({
+    immer((set, get) => ({
       budget: {
         enabled: false,
         period: 'daily',
         limit: 100000, // 100K tokens
         warningThreshold: 80, // Warn at 80%
         currentUsage: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCost: 0,
         periodStart: Date.now(),
         periodEnd: calculatePeriodEnd(Date.now(), 'daily'),
       },
@@ -128,6 +148,9 @@ export const useTokenBudgetStore = create<TokenBudgetState>()(
           state.budget.periodStart = now;
           state.budget.periodEnd = calculatePeriodEnd(now, period);
           state.budget.currentUsage = 0;
+          state.budget.inputTokens = 0;
+          state.budget.outputTokens = 0;
+          state.budget.estimatedCost = 0;
           state.alerts = [];
         });
       },
@@ -156,6 +179,9 @@ export const useTokenBudgetStore = create<TokenBudgetState>()(
             state.budget.periodStart = now;
             state.budget.periodEnd = calculatePeriodEnd(now, state.budget.period);
             state.budget.currentUsage = 0;
+            state.budget.inputTokens = 0;
+            state.budget.outputTokens = 0;
+            state.budget.estimatedCost = 0;
             state.alerts = [];
           }
 
@@ -208,12 +234,84 @@ export const useTokenBudgetStore = create<TokenBudgetState>()(
         });
       },
 
+      addDetailedTokenUsage: (details: TokenUsageDetails) => {
+        set((state) => {
+          if (!state.budget.enabled) {
+            return;
+          }
+
+          // Check if period should be reset
+          if (shouldResetPeriod(state.budget)) {
+            const now = Date.now();
+            state.budget.periodStart = now;
+            state.budget.periodEnd = calculatePeriodEnd(now, state.budget.period);
+            state.budget.currentUsage = 0;
+            state.budget.inputTokens = 0;
+            state.budget.outputTokens = 0;
+            state.budget.estimatedCost = 0;
+            state.alerts = [];
+          }
+
+          const totalTokens = details.inputTokens + details.outputTokens;
+
+          // Add usage
+          state.budget.currentUsage += totalTokens;
+          state.budget.inputTokens += details.inputTokens;
+          state.budget.outputTokens += details.outputTokens;
+          state.budget.estimatedCost += details.costUsd || 0;
+
+          // Calculate percentage
+          const percentage = (state.budget.currentUsage / state.budget.limit) * 100;
+
+          // Create alerts based on usage
+          if (percentage >= 100) {
+            const existingExceeded = state.alerts.find(
+              (a) => a.type === 'exceeded' && !a.dismissed,
+            );
+            if (!existingExceeded) {
+              state.alerts.push({
+                id: `exceeded-${Date.now()}`,
+                type: 'exceeded',
+                message: `Token budget exceeded! Used ${state.budget.currentUsage.toLocaleString()} of ${state.budget.limit.toLocaleString()} tokens (Input: ${state.budget.inputTokens.toLocaleString()}, Output: ${state.budget.outputTokens.toLocaleString()}). Est. cost: $${state.budget.estimatedCost.toFixed(4)}`,
+                timestamp: Date.now(),
+                dismissed: false,
+              });
+            }
+          } else if (percentage >= 90) {
+            const existingDanger = state.alerts.find((a) => a.type === 'danger' && !a.dismissed);
+            if (!existingDanger) {
+              state.alerts.push({
+                id: `danger-${Date.now()}`,
+                type: 'danger',
+                message: `Token budget at ${percentage.toFixed(0)}%! Only ${(state.budget.limit - state.budget.currentUsage).toLocaleString()} tokens remaining. Est. cost: $${state.budget.estimatedCost.toFixed(4)}`,
+                timestamp: Date.now(),
+                dismissed: false,
+              });
+            }
+          } else if (percentage >= state.budget.warningThreshold) {
+            const existingWarning = state.alerts.find((a) => a.type === 'warning' && !a.dismissed);
+            if (!existingWarning) {
+              state.alerts.push({
+                id: `warning-${Date.now()}`,
+                type: 'warning',
+                message: `Token budget at ${percentage.toFixed(0)}%. Input: ${state.budget.inputTokens.toLocaleString()}, Output: ${state.budget.outputTokens.toLocaleString()}. Est. cost: $${state.budget.estimatedCost.toFixed(4)}`,
+                timestamp: Date.now(),
+                dismissed: false,
+              });
+            }
+          }
+        });
+      },
+
       resetPeriod: () => {
         set((state) => {
           const now = Date.now();
           state.budget.periodStart = now;
           state.budget.periodEnd = calculatePeriodEnd(now, state.budget.period);
           state.budget.currentUsage = 0;
+          state.budget.inputTokens = 0;
+          state.budget.outputTokens = 0;
+          state.budget.estimatedCost = 0;
           state.alerts = [];
         });
       },
@@ -232,6 +330,12 @@ export const useTokenBudgetStore = create<TokenBudgetState>()(
           state.alerts = [];
         });
       },
+
+      // Selectors
+      getInputTokens: () => get().budget.inputTokens,
+      getOutputTokens: () => get().budget.outputTokens,
+      getTotalTokens: () => get().budget.currentUsage,
+      getEstimatedCost: () => get().budget.estimatedCost,
     })),
     {
       name: 'agiworkforce-token-budget',
@@ -246,3 +350,13 @@ export const selectActiveAlerts = (state: TokenBudgetState) =>
   state.alerts.filter((a) => !a.dismissed);
 export const selectBudgetPercentage = (state: TokenBudgetState) =>
   (state.budget.currentUsage / state.budget.limit) * 100;
+export const selectInputTokens = (state: TokenBudgetState) => state.budget.inputTokens;
+export const selectOutputTokens = (state: TokenBudgetState) => state.budget.outputTokens;
+export const selectEstimatedCost = (state: TokenBudgetState) => state.budget.estimatedCost;
+export const selectTokenBreakdown = (state: TokenBudgetState) => ({
+  total: state.budget.currentUsage,
+  input: state.budget.inputTokens,
+  output: state.budget.outputTokens,
+  cost: state.budget.estimatedCost,
+  percentage: (state.budget.currentUsage / state.budget.limit) * 100,
+});

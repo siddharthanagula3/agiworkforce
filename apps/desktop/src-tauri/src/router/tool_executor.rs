@@ -668,7 +668,31 @@ impl ToolExecutor {
                     };
                     use tauri::Manager;
 
-                    let automation = app.state::<std::sync::Arc<AutomationService>>();
+                    let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
+                    let automation = match automation_opt.as_ref() {
+                        Some(_) => {
+                            // Create a fresh automation service for this operation
+                            match AutomationService::new() {
+                                Ok(service) => std::sync::Arc::new(service),
+                                Err(e) => {
+                                    return Ok(ToolResult {
+                                        success: false,
+                                        data: json!(null),
+                                        error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+                                        metadata: HashMap::new(),
+                                    });
+                                }
+                            }
+                        }
+                        None => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
                     let target = args
                         .get("target")
                         .ok_or_else(|| anyhow!("Missing target parameter"))?;
@@ -784,7 +808,28 @@ impl ToolExecutor {
                     };
                     use tauri::Manager;
 
-                    let automation = app.state::<std::sync::Arc<AutomationService>>();
+                    let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
+                    let automation = match automation_opt.as_ref() {
+                        Some(_) => match AutomationService::new() {
+                            Ok(service) => std::sync::Arc::new(service),
+                            Err(e) => {
+                                return Ok(ToolResult {
+                                        success: false,
+                                        data: json!(null),
+                                        error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+                                        metadata: HashMap::new(),
+                                    });
+                            }
+                        },
+                        None => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some("Automation service not available. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility.".to_string()),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    };
                     let target = args
                         .get("target")
                         .ok_or_else(|| anyhow!("Missing target parameter"))?;
@@ -1887,6 +1932,39 @@ mod tests {
         };
 
         let registry = std::sync::Arc::new(ToolRegistry::new().unwrap());
+
+        // Register file_write tool manually since register_all_tools requires heavy dependencies
+        registry
+            .register_tool(crate::agi::tools::Tool {
+                id: "file_write".to_string(),
+                name: "Write File".to_string(),
+                description: "Write content to a file".to_string(),
+                capabilities: vec![crate::agi::tools::ToolCapability::FileWrite],
+                parameters: vec![
+                    crate::agi::tools::ToolParameter {
+                        name: "path".to_string(),
+                        parameter_type: crate::agi::tools::ParameterType::FilePath,
+                        required: true,
+                        description: "Path".to_string(),
+                        default: None,
+                    },
+                    crate::agi::tools::ToolParameter {
+                        name: "content".to_string(),
+                        parameter_type: crate::agi::tools::ParameterType::String,
+                        required: true,
+                        description: "Content".to_string(),
+                        default: None,
+                    },
+                ],
+                estimated_resources: crate::agi::ResourceUsage {
+                    cpu_percent: 0.0,
+                    memory_mb: 0,
+                    network_mb: 0.0,
+                },
+                dependencies: vec![],
+            })
+            .unwrap();
+
         let executor = ToolExecutor::new(registry);
         let result = executor.execute_tool_call(&tool_call).await.unwrap();
 

@@ -51,10 +51,17 @@ static AGI_CORE: Mutex<Option<Arc<TokioMutex<AGICore>>>> = Mutex::new(None);
 #[tauri::command]
 pub async fn agi_init(
     config: AGIConfig,
-    automation: State<'_, Arc<AutomationService>>,
+    automation: State<'_, Arc<Option<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
+    // Check if automation service is available
+    if automation.is_none() {
+        return Err(
+            "Automation service not available. Please grant accessibility permissions.".to_string(),
+        );
+    }
+
     // Get router from LLM state
     let router = llm_state.router.lock().await;
     // Create a new router instance for AGI (since we can't clone)
@@ -62,13 +69,15 @@ pub async fn agi_init(
     let router_for_agi = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
     drop(router);
 
-    let agi = AGICore::new(
-        config,
-        router_for_agi,
-        automation.inner().clone(),
-        Some(app.clone()),
-    )
-    .map_err(|e| format!("Failed to create AGI: {}", e))?;
+    // Clone the automation service for AGI use
+    // Note: We need to create a new Arc for the AGICore
+    let automation_arc = Arc::new(
+        AutomationService::new()
+            .map_err(|e| format!("Failed to create automation service for AGI: {}", e))?,
+    );
+
+    let agi = AGICore::new(config, router_for_agi, automation_arc, Some(app.clone()))
+        .map_err(|e| format!("Failed to create AGI: {}", e))?;
 
     let agi_arc = Arc::new(TokioMutex::new(agi));
 
@@ -269,21 +278,34 @@ pub struct SpawnParallelAgentsResponse {
 #[tauri::command]
 pub async fn orchestrator_init(
     request: OrchestratorInitRequest,
-    automation: State<'_, Arc<AutomationService>>,
+    automation: State<'_, Arc<Option<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
+    // Check if automation service is available
+    if automation.is_none() {
+        return Err(
+            "Automation service not available. Please grant accessibility permissions.".to_string(),
+        );
+    }
+
     // Get router from LLM state
     let router = llm_state.router.lock().await;
     // Create a new router instance for orchestrator
     let router_for_orchestrator = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
     drop(router);
 
+    // Create a fresh automation service for the orchestrator
+    let automation_arc = Arc::new(
+        AutomationService::new()
+            .map_err(|e| format!("Failed to create automation service: {}", e))?,
+    );
+
     let orchestrator = AgentOrchestrator::new(
         request.max_agents,
         request.config,
         router_for_orchestrator,
-        automation.inner().clone(),
+        automation_arc,
         Some(app.clone()),
     )
     .map_err(|e| format!("Failed to create orchestrator: {}", e))?;
@@ -302,7 +324,7 @@ pub async fn orchestrator_init(
 /// Initialize orchestrator using default config (helper for UI)
 #[tauri::command]
 pub async fn orchestrator_init_default(
-    automation: State<'_, Arc<AutomationService>>,
+    automation: State<'_, Arc<Option<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
