@@ -248,18 +248,187 @@
     @apply bg-rose-500;
   }
 
-  /* Thinking Blocks */
-  .thinking-block {
-    @apply bg-gray-50/50 dark:bg-gray-900/50 border-l-2 border-teal-500 pl-4 py-3 my-2;
+  /* ============================================
+     Claude-Style Message Bubbles
+     ============================================ */
+  .message-container {
+    @apply relative py-6 px-4;
   }
 
-  /* Status Trail */
+  .message-container + .message-container {
+    @apply border-t border-gray-100 dark:border-gray-800/50;
+  }
+
+  .message-assistant {
+    @apply bg-gray-50/80 dark:bg-gray-900/30;
+  }
+
+  .message-user {
+    @apply bg-white dark:bg-transparent;
+  }
+
+  .message-content {
+    @apply max-w-3xl mx-auto;
+  }
+
+  .message-avatar {
+    @apply flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium;
+  }
+
+  .message-avatar-assistant {
+    @apply bg-gradient-to-br from-teal-400 to-cyan-500 text-white;
+  }
+
+  .message-avatar-user {
+    @apply bg-gradient-to-br from-blue-500 to-indigo-600 text-white;
+  }
+
+  .message-body {
+    @apply flex-1 min-w-0;
+  }
+
+  .message-text {
+    @apply text-[15px] leading-relaxed text-gray-800 dark:text-gray-200;
+  }
+
+  .message-text p {
+    @apply my-3 first:mt-0 last:mb-0;
+  }
+
+  .message-text ul,
+  .message-text ol {
+    @apply my-3 pl-6;
+  }
+
+  .message-text li {
+    @apply my-1.5;
+  }
+
+  /* ============================================
+     Claude-Style Code Blocks
+     ============================================ */
+  .code-block-wrapper {
+    @apply my-4 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50 bg-gray-900 dark:bg-gray-950;
+  }
+
+  .code-block-header {
+    @apply flex items-center justify-between px-4 py-2.5 bg-gray-800 dark:bg-gray-900 border-b border-gray-700/50;
+  }
+
+  .code-block-header-left {
+    @apply flex items-center gap-2;
+  }
+
+  .code-block-language {
+    @apply text-xs font-medium text-gray-400 uppercase tracking-wide;
+  }
+
+  .code-block-filename {
+    @apply text-xs text-gray-300 font-mono;
+  }
+
+  .code-block-actions {
+    @apply flex items-center gap-1;
+  }
+
+  .code-block-action-btn {
+    @apply p-1.5 rounded-md text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 transition-colors;
+  }
+
+  .code-block-content {
+    @apply overflow-x-auto;
+  }
+
+  .code-block-content pre {
+    @apply m-0 p-4 text-sm leading-relaxed;
+  }
+
+  .code-block-content code {
+    @apply font-mono text-[13px];
+  }
+
+  /* Collapsible code block */
+  .code-block-collapsed {
+    @apply max-h-[200px] overflow-hidden relative;
+  }
+
+  .code-block-collapsed::after {
+    content: '';
+    @apply absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-900 to-transparent pointer-events-none;
+  }
+
+  .code-block-expand-btn {
+    @apply absolute bottom-2 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-600 transition-all z-10;
+  }
+
+  /* Inline code */
+  .message-text code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[13px] font-mono;
+  }
+
+  /* ============================================
+     Thinking/Reasoning Blocks (Claude-style)
+     ============================================ */
+  .thinking-block {
+    @apply bg-amber-50/50 dark:bg-amber-900/10 border-l-2 border-amber-500 pl-4 py-3 my-4 rounded-r-lg;
+  }
+
+  .thinking-block-header {
+    @apply flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400 mb-2;
+  }
+
+  .thinking-block-content {
+    @apply text-sm text-gray-600 dark:text-gray-400 italic;
+  }
+
+  /* ============================================
+     Artifact Cards (Claude-style)
+     ============================================ */
+  .artifact-card {
+    @apply my-4 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50 bg-white dark:bg-gray-900 shadow-sm;
+  }
+
+  .artifact-card-header {
+    @apply flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700/50;
+  }
+
+  .artifact-card-title {
+    @apply flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100;
+  }
+
+  .artifact-card-badge {
+    @apply px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400;
+  }
+
+  .artifact-card-actions {
+    @apply flex items-center gap-1;
+  }
+
+  .artifact-card-content {
+    @apply p-4;
+  }
+
+  /* ============================================
+     Status Trail (Claude-style tool calls)
+     ============================================ */
   .status-trail {
     @apply flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400;
   }
 
   .status-trail-item {
-    @apply flex items-center gap-1 animate-fade-in;
+    @apply flex items-center gap-1.5 animate-fade-in;
+  }
+
+  .status-trail-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse;
+  }
+
+  .status-trail-complete {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+
+  .status-trail-complete .status-trail-dot {
+    @apply bg-emerald-500 animate-none;
   }
 
   /* Sidecar Styles */

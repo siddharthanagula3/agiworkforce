@@ -1,7 +1,7 @@
 // Types matching Rust backend models
 
-import type { ToolCallUI, ToolResultUI, ToolExecutionWorkflow } from './toolCalling';
 import type { TaskMetadata } from '../lib/taskMetadata';
+import type { ToolCallUI, ToolExecutionWorkflow, ToolResultUI } from './toolCalling';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -11,7 +11,13 @@ export interface Message {
   role: MessageRole;
   content: string;
   tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   cost?: number;
+  input_cost?: number;
+  output_cost?: number;
+  model?: string;
+  provider?: string;
   created_at: string; // ISO date string from Rust
   artifacts?: Artifact[];
   attachments?: FileAttachment[];
@@ -30,11 +36,20 @@ export interface Conversation {
 export interface ConversationStats {
   message_count: number;
   total_tokens: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
   total_cost: number;
 }
 
 // Artifact types
-export type ArtifactType = 'code' | 'chart' | 'diagram' | 'table' | 'mermaid';
+export type ArtifactType =
+  | 'code'
+  | 'chart'
+  | 'diagram'
+  | 'table'
+  | 'mermaid'
+  | 'spreadsheet'
+  | 'presentation';
 
 export interface Artifact {
   id: string;
@@ -84,7 +99,13 @@ export interface CreateMessageRequest {
   role: string;
   content: string;
   tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   cost?: number;
+  input_cost?: number;
+  output_cost?: number;
+  model?: string;
+  provider?: string;
   artifacts?: Artifact[];
   attachments?: FileAttachment[];
 }
@@ -181,4 +202,25 @@ export interface ChatStreamChunkPayload {
 export interface ChatStreamEndPayload {
   conversationId: number;
   messageId: number;
+}
+
+// Deep Research Types
+export interface ResearchStep {
+  id: string;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  timestamp?: number;
+  details?: string;
+}
+
+export interface ResearchTask {
+  id: string;
+  query: string;
+  progress: number;
+  status: 'running' | 'completed' | 'failed'; // 'running' corresponds to 'processing' in some backends
+  steps: ResearchStep[];
+  findings: string[];
+  sources: { title: string; url: string; domain?: string }[];
+  timeElapsed?: string;
+  timeRemaining?: string;
 }

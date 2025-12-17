@@ -43,6 +43,13 @@ struct AnthropicTool {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct AnthropicThinking {
+    #[serde(rename = "type")]
+    thinking_type: String, // "enabled"
+    budget_tokens: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct AnthropicRequest {
     model: String,
     messages: Vec<AnthropicMessage>,
@@ -56,6 +63,8 @@ struct AnthropicRequest {
     stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<AnthropicTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<AnthropicThinking>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -222,14 +231,29 @@ impl LLMProvider for AnthropicProvider {
             })
             .collect();
 
+        // Configure thinking mode
+        let (thinking, temperature, max_tokens) = if request.thinking_mode.unwrap_or(false) {
+            (
+                Some(AnthropicThinking {
+                    thinking_type: "enabled".to_string(),
+                    budget_tokens: 16000,
+                }),
+                None, // Temperature must be None when thinking is enabled
+                request.max_tokens.or(Some(64000)), // Need higher max tokens for thinking
+            )
+        } else {
+            (None, request.temperature, request.max_tokens.or(Some(4096)))
+        };
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages,
             system: system_param,
-            max_tokens: request.max_tokens.or(Some(4096)),
-            temperature: request.temperature,
+            max_tokens,
+            temperature,
             stream: if request.stream { Some(false) } else { None },
             tools: anthropic_tools,
+            thinking,
         };
 
         let response = self
@@ -380,14 +404,29 @@ impl LLMProvider for AnthropicProvider {
             })
             .collect();
 
+        // Configure thinking mode
+        let (thinking, temperature, max_tokens) = if request.thinking_mode.unwrap_or(false) {
+            (
+                Some(AnthropicThinking {
+                    thinking_type: "enabled".to_string(),
+                    budget_tokens: 16000,
+                }),
+                None, // Temperature must be None when thinking is enabled
+                request.max_tokens.or(Some(64000)), // Need higher max tokens for thinking
+            )
+        } else {
+            (None, request.temperature, request.max_tokens.or(Some(4096)))
+        };
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages,
             system: system_param,
-            max_tokens: request.max_tokens.or(Some(4096)),
-            temperature: request.temperature,
+            max_tokens,
+            temperature,
             stream: Some(true), // Enable streaming
             tools: anthropic_tools,
+            thinking,
         };
 
         tracing::debug!(

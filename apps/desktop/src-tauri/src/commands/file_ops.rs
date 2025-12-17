@@ -1233,3 +1233,237 @@ pub async fn file_get_metadata(file_path: String) -> Result<FileMetadata, String
         readonly: metadata.permissions().readonly(),
     })
 }
+
+// ============================================================================
+// FILE UNDO/ROLLBACK OPERATIONS
+// ============================================================================
+
+/// Undo a file operation (restore, delete, or create)
+/// Supports three operations:
+/// - "restore": Write content back to the file
+/// - "delete": Remove the file
+/// - "create": Create a new file with content
+#[tauri::command]
+pub async fn undo_file_operation(
+    operation: String,
+    path: String,
+    content: Option<String>,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<(), String> {
+    info!("Undo file operation: {} on {}", operation, path);
+
+    // Validate path security
+    validate_path_security(&path)?;
+
+    match operation.as_str() {
+        "restore" => {
+            // Restore previous content
+            let content = content.ok_or("Content required for restore operation")?;
+
+            if !check_file_permission(&path, FileOperation::Write, &state).await? {
+                return Err("Permission denied".to_string());
+            }
+
+            // Create parent directory if needed
+            if let Some(parent) = Path::new(&path).parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                }
+            }
+
+            fs::write(&path, content).map_err(|e| format!("Failed to restore file: {}", e))?;
+            log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
+            info!("Successfully restored file: {}", path);
+            Ok(())
+        }
+        "delete" => {
+            // Delete the file (undo a create operation)
+            if !check_file_permission(&path, FileOperation::Delete, &state).await? {
+                return Err("Permission denied".to_string());
+            }
+
+            if Path::new(&path).exists() {
+                fs::remove_file(&path).map_err(|e| format!("Failed to delete file: {}", e))?;
+                log_file_operation(&path, FileOperation::Delete, true, None, &state).await?;
+                info!("Successfully deleted file: {}", path);
+            }
+            Ok(())
+        }
+        "create" => {
+            // Create a file (undo a delete operation)
+            let content = content.ok_or("Content required for create operation")?;
+
+            if !check_file_permission(&path, FileOperation::Write, &state).await? {
+                return Err("Permission denied".to_string());
+            }
+
+            // Create parent directory if needed
+            if let Some(parent) = Path::new(&path).parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                }
+            }
+
+            fs::write(&path, content).map_err(|e| format!("Failed to create file: {}", e))?;
+            log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
+            info!("Successfully created file: {}", path);
+            Ok(())
+        }
+        _ => Err(format!("Unknown undo operation: {}", operation)),
+    }
+}
+
+// ============================================================================
+// TERMINAL EXECUTION (One-shot command execution)
+// ============================================================================
+
+/// Result of terminal command execution
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalExecuteResult {
+    pub stdout: String,
+    pub stderr: String,
+    #[serde(rename = "exitCode")]
+    pub exit_code: Option<i32>,
+    #[serde(rename = "durationMs")]
+    pub duration_ms: u64,
+}
+
+/// Execute a terminal command and return the result
+/// This is a one-shot execution, not an interactive session
+#[tauri::command]
+pub async fn execute_terminal_command(
+    command: String,
+    cwd: Option<String>,
+    shell: Option<String>,
+) -> Result<TerminalExecuteResult, String> {
+    use std::process::Stdio;
+    use std::time::Instant;
+    use tokio::io::AsyncReadExt;
+    use tokio::process::Command;
+
+    info!("Executing terminal command: {}", command);
+
+    // Validate cwd if provided
+    if let Some(ref dir) = cwd {
+        validate_path_security(dir)?;
+        if !Path::new(dir).exists() {
+            return Err(format!("Working directory does not exist: {}", dir));
+        }
+    }
+
+    let shell = shell.unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            "powershell".to_string()
+        } else {
+            "bash".to_string()
+        }
+    });
+
+    let (program, args): (String, Vec<String>) = match shell.to_lowercase().as_str() {
+        "cmd" => (
+            "cmd.exe".to_string(),
+            vec!["/C".to_string(), command.clone()],
+        ),
+        "bash" | "sh" | "zsh" => {
+            let shell_path = if cfg!(target_os = "macos") {
+                "/bin/zsh".to_string()
+            } else {
+                "/bin/bash".to_string()
+            };
+            (shell_path, vec!["-lc".to_string(), command.clone()])
+        }
+        "powershell" | "pwsh" => (
+            if cfg!(target_os = "windows") {
+                "powershell.exe".to_string()
+            } else {
+                "pwsh".to_string()
+            },
+            vec![
+                "-NoLogo".to_string(),
+                "-NoProfile".to_string(),
+                "-Command".to_string(),
+                command.clone(),
+            ],
+        ),
+        _ => {
+            // Default to platform-appropriate shell
+            if cfg!(target_os = "windows") {
+                (
+                    "powershell.exe".to_string(),
+                    vec!["-Command".to_string(), command.clone()],
+                )
+            } else {
+                (
+                    "/bin/sh".to_string(),
+                    vec!["-c".to_string(), command.clone()],
+                )
+            }
+        }
+    };
+
+    let mut cmd = Command::new(&program);
+    for arg in &args {
+        cmd.arg(arg);
+    }
+    if let Some(ref dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let start = Instant::now();
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to spawn command: {}", e))?;
+
+    let stdout_handle = child.stdout.take();
+    let stderr_handle = child.stderr.take();
+
+    // Read stdout
+    let stdout_task = tokio::spawn(async move {
+        let mut buffer = Vec::new();
+        if let Some(mut stdout) = stdout_handle {
+            let _ = stdout.read_to_end(&mut buffer).await;
+        }
+        buffer
+    });
+
+    // Read stderr
+    let stderr_task = tokio::spawn(async move {
+        let mut buffer = Vec::new();
+        if let Some(mut stderr) = stderr_handle {
+            let _ = stderr.read_to_end(&mut buffer).await;
+        }
+        buffer
+    });
+
+    // Wait for command with timeout (60 seconds)
+    let timeout_duration = tokio::time::Duration::from_secs(60);
+    let status = match tokio::time::timeout(timeout_duration, child.wait()).await {
+        Ok(result) => result.map_err(|e| format!("Command failed: {}", e))?,
+        Err(_) => {
+            // Kill the process on timeout
+            let _ = child.kill().await;
+            return Err("Command timed out after 60 seconds".to_string());
+        }
+    };
+
+    let stdout_bytes = stdout_task.await.unwrap_or_default();
+    let stderr_bytes = stderr_task.await.unwrap_or_default();
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).to_string();
+    let exit_code = status.code();
+
+    info!("Command completed with exit code: {:?}", exit_code);
+
+    Ok(TerminalExecuteResult {
+        stdout,
+        stderr,
+        exit_code,
+        duration_ms,
+    })
+}

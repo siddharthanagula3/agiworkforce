@@ -4,9 +4,15 @@
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { StripeService, type UsageStats } from '../services/stripe';
+import {
+  StripeService,
+  type UsageStats,
+  type TokenUsageEvent,
+  type ModelUsageStats,
+} from '../services/stripe';
 import { checkUsageLimit, shouldShowUsageWarning } from '../utils/featureGates';
 import { useBillingStore } from './billingStore';
+import { getModelMetadata } from '../constants/llm';
 
 interface UsageState {
   // Current usage stats
@@ -21,9 +27,17 @@ interface UsageState {
   showAutomationWarning: boolean;
   showApiCallWarning: boolean;
   showStorageWarning: boolean;
+  showTokenWarning: boolean;
 
   // Error state
   error: string | null;
+}
+
+interface LLMTokenUsageParams {
+  modelId: string;
+  provider: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 interface UsageActions {
@@ -36,6 +50,7 @@ interface UsageActions {
   trackApiCall: (count?: number) => Promise<void>;
   trackStorage: (sizeInMb: number) => Promise<void>;
   trackLLMTokens: (tokens: number) => Promise<void>;
+  trackLLMUsageDetailed: (params: LLMTokenUsageParams) => Promise<void>;
   trackBrowserSession: () => Promise<void>;
   trackMCPToolCall: () => Promise<void>;
 
@@ -43,6 +58,13 @@ interface UsageActions {
   checkAutomationLimit: () => boolean;
   checkApiCallLimit: () => boolean;
   checkStorageLimit: (additionalMb: number) => boolean;
+
+  // Token usage helpers
+  getInputTokens: () => number;
+  getOutputTokens: () => number;
+  getTotalTokens: () => number;
+  getModelUsage: () => ModelUsageStats[];
+  getTokenCost: () => number;
 
   // Reset usage (called at billing period end)
   resetUsage: () => void;
@@ -68,6 +90,7 @@ export const useUsageStore = create<UsageStore>()(
       showAutomationWarning: false,
       showApiCallWarning: false,
       showStorageWarning: false,
+      showTokenWarning: false,
       error: null,
 
       // Fetch usage stats
@@ -83,9 +106,21 @@ export const useUsageStore = create<UsageStore>()(
             periodStart,
             periodEnd,
             statsLoading: false,
-            showAutomationWarning: shouldShowUsageWarning('automations', stats.automations_executed, subscription),
-            showApiCallWarning: shouldShowUsageWarning('apiCalls', stats.api_calls_made, subscription),
-            showStorageWarning: shouldShowUsageWarning('storage', stats.storage_used_mb, subscription),
+            showAutomationWarning: shouldShowUsageWarning(
+              'automations',
+              stats.automations_executed,
+              subscription,
+            ),
+            showApiCallWarning: shouldShowUsageWarning(
+              'apiCalls',
+              stats.api_calls_made,
+              subscription,
+            ),
+            showStorageWarning: shouldShowUsageWarning(
+              'storage',
+              stats.storage_used_mb,
+              subscription,
+            ),
           });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to fetch usage';
@@ -115,7 +150,13 @@ export const useUsageStore = create<UsageStore>()(
         }
 
         try {
-          await StripeService.trackUsage(customer.id, 'automation_execution', 1, periodStart, periodEnd);
+          await StripeService.trackUsage(
+            customer.id,
+            'automation_execution',
+            1,
+            periodStart,
+            periodEnd,
+          );
 
           // Update local stats
           if (stats) {
@@ -127,7 +168,8 @@ export const useUsageStore = create<UsageStore>()(
             });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to track automation';
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to track automation';
           set({ error: errorMessage });
           throw error;
         }
@@ -169,7 +211,13 @@ export const useUsageStore = create<UsageStore>()(
         }
 
         try {
-          await StripeService.trackUsage(customer.id, 'storage_mb', sizeInMb, periodStart, periodEnd);
+          await StripeService.trackUsage(
+            customer.id,
+            'storage_mb',
+            sizeInMb,
+            periodStart,
+            periodEnd,
+          );
 
           // Update local stats
           if (stats) {
@@ -208,7 +256,78 @@ export const useUsageStore = create<UsageStore>()(
             });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to track LLM tokens';
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to track LLM tokens';
+          set({ error: errorMessage });
+          throw error;
+        }
+      },
+
+      trackLLMUsageDetailed: async ({ modelId, provider, inputTokens, outputTokens }) => {
+        const { customer } = useBillingStore.getState();
+        const { periodStart, periodEnd, stats } = get();
+
+        if (!customer) {
+          throw new Error('No customer found');
+        }
+
+        try {
+          // Calculate cost using model metadata
+          const modelMeta = getModelMetadata(modelId);
+          const inputCost = modelMeta ? (inputTokens / 1_000_000) * modelMeta.inputCost : 0;
+          const outputCost = modelMeta ? (outputTokens / 1_000_000) * modelMeta.outputCost : 0;
+          const totalCost = inputCost + outputCost;
+
+          const event: TokenUsageEvent = {
+            model_id: modelId,
+            provider,
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            cost_usd: totalCost,
+            timestamp: Date.now(),
+          };
+
+          await StripeService.trackLLMUsage(customer.id, event, periodStart, periodEnd);
+
+          // Update local stats
+          if (stats) {
+            const totalTokens = inputTokens + outputTokens;
+            const modelUsage = [...(stats.model_usage || [])];
+
+            // Find or create model usage entry
+            const existingModel = modelUsage.find((m) => m.model_id === modelId);
+            if (existingModel) {
+              // Update existing entry
+              existingModel.input_tokens += inputTokens;
+              existingModel.output_tokens += outputTokens;
+              existingModel.total_tokens += totalTokens;
+              existingModel.cost_usd += totalCost;
+              existingModel.request_count += 1;
+            } else {
+              modelUsage.push({
+                model_id: modelId,
+                model_name: modelMeta?.name || modelId,
+                provider,
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                total_tokens: totalTokens,
+                cost_usd: totalCost,
+                request_count: 1,
+              });
+            }
+
+            set({
+              stats: {
+                ...stats,
+                llm_tokens_used: stats.llm_tokens_used + totalTokens,
+                llm_input_tokens: stats.llm_input_tokens + inputTokens,
+                llm_output_tokens: stats.llm_output_tokens + outputTokens,
+                model_usage: modelUsage,
+              },
+            });
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to track LLM usage';
           set({ error: errorMessage });
           throw error;
         }
@@ -235,7 +354,8 @@ export const useUsageStore = create<UsageStore>()(
             });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to track browser session';
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to track browser session';
           set({ error: errorMessage });
           throw error;
         }
@@ -262,7 +382,8 @@ export const useUsageStore = create<UsageStore>()(
             });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to track MCP tool call';
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to track MCP tool call';
           set({ error: errorMessage });
           throw error;
         }
@@ -300,6 +421,33 @@ export const useUsageStore = create<UsageStore>()(
         return limitCheck.withinLimit;
       },
 
+      // Token usage helpers
+      getInputTokens: () => {
+        const { stats } = get();
+        return stats?.llm_input_tokens || 0;
+      },
+
+      getOutputTokens: () => {
+        const { stats } = get();
+        return stats?.llm_output_tokens || 0;
+      },
+
+      getTotalTokens: () => {
+        const { stats } = get();
+        return stats?.llm_tokens_used || 0;
+      },
+
+      getModelUsage: () => {
+        const { stats } = get();
+        return stats?.model_usage || [];
+      },
+
+      getTokenCost: () => {
+        const { stats } = get();
+        if (!stats?.model_usage) return 0;
+        return stats.model_usage.reduce((total, model) => total + model.cost_usd, 0);
+      },
+
       // Reset usage
       resetUsage: () => {
         set({
@@ -308,12 +456,16 @@ export const useUsageStore = create<UsageStore>()(
             api_calls_made: 0,
             storage_used_mb: 0,
             llm_tokens_used: 0,
+            llm_input_tokens: 0,
+            llm_output_tokens: 0,
             browser_sessions: 0,
             mcp_tool_calls: 0,
+            model_usage: [],
           },
           showAutomationWarning: false,
           showApiCallWarning: false,
           showStorageWarning: false,
+          showTokenWarning: false,
         });
       },
 
@@ -326,6 +478,6 @@ export const useUsageStore = create<UsageStore>()(
       setError: (error) => set({ error }),
       clearError: () => set({ error: null }),
     }),
-    { name: 'UsageStore' }
-  )
+    { name: 'UsageStore' },
+  ),
 );

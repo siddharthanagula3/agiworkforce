@@ -61,6 +61,13 @@ jobs:
       - name: Verify TypeScript compilation
         run: pnpm --filter @agiworkforce/desktop exec tsc --noEmit
 
+      - name: Verify Frontend lints
+        run: pnpm lint
+
+      - name: Verify Rust lints
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy -- -D warnings
+
       - name: Build web bundle
         run: pnpm --filter @agiworkforce/desktop exec vite build
 

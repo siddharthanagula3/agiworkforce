@@ -275,19 +275,27 @@ export const UnifiedAgenticChat: React.FC<{
 
     const routingOverrides = applyRouting();
 
+    // If 'auto' is selected, don't pass model/provider overrides - let the router decide
+    const isAutoMode =
+      options.modelOverride === 'auto' ||
+      routingOverrides.modelId === 'auto' ||
+      modelForMessage === 'auto';
+
     const enrichedOptions: SendOptions = {
       ...options,
-      providerOverride:
-        options.providerOverride ??
-        routingOverrides.providerId ??
-        providerForMessage ??
-        llmConfig.defaultProvider,
-      modelOverride:
-        options.modelOverride ??
-        routingOverrides.modelId ??
-        modelForMessage ??
-        llmConfig.defaultModels[llmConfig.defaultProvider] ??
-        'gpt-5.1',
+      providerOverride: isAutoMode
+        ? undefined // Let router decide
+        : (options.providerOverride ??
+          routingOverrides.providerId ??
+          providerForMessage ??
+          llmConfig.defaultProvider),
+      modelOverride: isAutoMode
+        ? undefined // Let router decide based on task
+        : (options.modelOverride ??
+          routingOverrides.modelId ??
+          modelForMessage ??
+          llmConfig.defaultModels[llmConfig.defaultProvider] ??
+          'gpt-5.1'),
     };
 
     const entryPoint = content.trim();
@@ -349,14 +357,21 @@ export const UnifiedAgenticChat: React.FC<{
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
+            attachments: enrichedOptions.attachments?.map((att) => ({
+              id: att.id,
+              type: att.type,
+              name: att.name,
+              mimeType: att.mimeType,
+              content: att.content, // base64 data for images
+            })),
             providerOverride: enrichedOptions.providerOverride,
             modelOverride: enrichedOptions.modelOverride,
             focusMode: enrichedOptions.focusMode,
             stream: true, // Enable streaming
             enableTools: true,
             conversationMode,
-            workflowHash,
             taskMetadata,
+            thinkingMode: useModelStore.getState().thinkingModeEnabled,
           },
         });
 
@@ -442,7 +457,12 @@ export const UnifiedAgenticChat: React.FC<{
     <div
       className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
     >
-      <AppLayout onOpenSettings={onOpenSettings} onOpenBilling={onOpenBilling}>
+      <AppLayout
+        onOpenSettings={onOpenSettings}
+        onOpenBilling={onOpenBilling}
+        onOpenWorkspace={() => setWorkspaceOpen(true)}
+        onOpenMediaLab={() => setMediaLabOpen(true)}
+      >
         {activeView === 'chat' ? (
           <>
             <BudgetAlertsPanel />

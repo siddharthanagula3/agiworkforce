@@ -272,6 +272,7 @@ Provide your analysis in a clear, structured format."#
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let preferences = crate::router::RouterPreferences {

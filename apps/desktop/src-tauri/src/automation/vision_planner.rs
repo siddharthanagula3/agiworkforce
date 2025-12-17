@@ -152,6 +152,7 @@ impl ActionPlanner {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         // Get candidates (prefer vision-capable models)
