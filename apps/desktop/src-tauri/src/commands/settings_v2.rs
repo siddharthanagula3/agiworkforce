@@ -345,8 +345,8 @@ mod tests {
         let setting_val = json_to_setting_value(&json_int);
         assert_eq!(setting_val.as_integer(), Some(42));
 
-        let json_float = serde_json::json!(3.14);
+        let json_float = serde_json::json!(3.15);
         let setting_val = json_to_setting_value(&json_float);
-        assert_eq!(setting_val.as_float(), Some(3.14));
+        assert_eq!(setting_val.as_float(), Some(3.15));
     }
 }

@@ -273,14 +273,14 @@ fn benchmark_error_handling(c: &mut Criterion) {
     group.bench_function("success_path", |b| {
         b.iter(|| {
             let result = operation_with_result(false);
-            black_box(result);
+            let _ = black_box(result);
         });
     });
 
     group.bench_function("error_path", |b| {
         b.iter(|| {
             let result = operation_with_result(true);
-            black_box(result);
+            let _ = black_box(result);
         });
     });
 
@@ -308,7 +308,7 @@ fn benchmark_memory_allocation(c: &mut Criterion) {
             size,
             |b, &size| {
                 b.iter(|| {
-                    let s = "x".repeat(size);
+                    let s = "x".repeat(size as usize);
                     black_box(s);
                 });
             },
