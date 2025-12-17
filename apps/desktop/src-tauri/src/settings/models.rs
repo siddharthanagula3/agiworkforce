@@ -362,8 +362,8 @@ mod tests {
         let int_val = SettingValue::from(42i64);
         assert_eq!(int_val.as_integer(), Some(42));
 
-        let float_val = SettingValue::from(3.14);
-        assert_eq!(float_val.as_float(), Some(3.14));
+        let float_val = SettingValue::from(3.15);
+        assert_eq!(float_val.as_float(), Some(3.15));
 
         let bool_val = SettingValue::from(true);
         assert_eq!(bool_val.as_boolean(), Some(true));
