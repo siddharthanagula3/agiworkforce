@@ -1,6 +1,5 @@
 // Updated Nov 16, 2025: Added comprehensive error handling, input validation, and timeout handling
-import { invoke } from '@tauri-apps/api/core';
-import type { CaptureResult } from '../types/capture';
+import { invoke } from '../lib/tauri-mock';
 import type {
   AutomationClickRequest,
   AutomationElementInfo,
@@ -11,6 +10,7 @@ import type {
   OverlayRegionPayload,
   OverlayTypePayload,
 } from '../types/automation';
+import type { CaptureResult } from '../types/capture';
 import { normalizeCaptureResult, type RawCaptureResult } from '../utils/captureTransforms';
 
 // Updated Nov 16, 2025: Configurable timeout for automation operations

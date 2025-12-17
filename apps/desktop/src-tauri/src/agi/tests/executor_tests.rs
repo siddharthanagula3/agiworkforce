@@ -38,6 +38,7 @@ mod tests {
     fn test_tool_execution_result_success() {
         let result = ToolExecutionResult {
             tool_id: "file_read".to_string(),
+            step_id: "test_step".to_string(),
             success: true,
             result: json!({"content": "test content"}),
             error: None,
@@ -59,6 +60,7 @@ mod tests {
     fn test_tool_execution_result_failure() {
         let result = ToolExecutionResult {
             tool_id: "invalid_tool".to_string(),
+            step_id: "test_step".to_string(),
             success: false,
             result: json!({}),
             error: Some("Tool not found".to_string()),
@@ -159,6 +161,7 @@ mod tests {
         // Add multiple tool results
         context.tool_results.push(ToolExecutionResult {
             tool_id: "step_1".to_string(),
+            step_id: "test_step_1".to_string(),
             success: true,
             result: json!({"value": 42}),
             error: None,
@@ -172,6 +175,7 @@ mod tests {
 
         context.tool_results.push(ToolExecutionResult {
             tool_id: "step_2".to_string(),
+            step_id: "test_step_2".to_string(),
             success: true,
             result: json!({"value": 84}),
             error: None,
@@ -191,6 +195,7 @@ mod tests {
     fn test_execution_result_serialization() {
         let result = ToolExecutionResult {
             tool_id: "test_tool".to_string(),
+            step_id: "test_step".to_string(),
             success: true,
             result: json!({"output": "success"}),
             error: None,
@@ -242,6 +247,7 @@ mod tests {
         let results = vec![
             ToolExecutionResult {
                 tool_id: "tool_1".to_string(),
+                step_id: "test_step_1".to_string(),
                 success: true,
                 result: json!({}),
                 error: None,
@@ -254,6 +260,7 @@ mod tests {
             },
             ToolExecutionResult {
                 tool_id: "tool_2".to_string(),
+                step_id: "test_step_2".to_string(),
                 success: false,
                 result: json!({}),
                 error: Some("Failed".to_string()),
@@ -266,6 +273,7 @@ mod tests {
             },
             ToolExecutionResult {
                 tool_id: "tool_3".to_string(),
+                step_id: "test_step_3".to_string(),
                 success: true,
                 result: json!({}),
                 error: None,

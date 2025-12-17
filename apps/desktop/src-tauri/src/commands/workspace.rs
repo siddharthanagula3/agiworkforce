@@ -459,7 +459,7 @@ fn index_file(path: &PathBuf, _root: &PathBuf) -> Option<IndexedFile> {
     })
 }
 
-fn extract_symbols(content: &str, path: &PathBuf, language: &str) -> Vec<Symbol> {
+fn extract_symbols(content: &str, path: &std::path::Path, language: &str) -> Vec<Symbol> {
     let mut symbols = Vec::new();
 
     for (line_num, line) in content.lines().enumerate() {
@@ -473,7 +473,7 @@ fn extract_symbols(content: &str, path: &PathBuf, language: &str) -> Vec<Symbol>
                     symbols.push(Symbol {
                         name: name.0,
                         kind: name.1,
-                        file_path: path.clone(),
+                        file_path: path.to_path_buf(),
                         line: line_num,
                         column: 0,
                         scope: None,
@@ -487,7 +487,7 @@ fn extract_symbols(content: &str, path: &PathBuf, language: &str) -> Vec<Symbol>
                     symbols.push(Symbol {
                         name: name.0,
                         kind: name.1,
-                        file_path: path.clone(),
+                        file_path: path.to_path_buf(),
                         line: line_num,
                         column: 0,
                         scope: None,

@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { invoke } from '../lib/tauri-mock';
 import type {
   BillableEvent,
   CostEstimate,

@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
+import { invoke } from '../lib/tauri-mock';
 
 export interface ApiRequest {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';

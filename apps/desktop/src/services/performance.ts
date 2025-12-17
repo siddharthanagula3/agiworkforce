@@ -4,15 +4,15 @@
  * Track app performance, page load times, API response times, and Web Vitals
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { analytics } from './analytics';
+import { invoke } from '../lib/tauri-mock';
 import {
-  PerformanceMetrics,
+  AppMetrics,
   PerformanceMark,
   PerformanceMeasure,
+  PerformanceMetrics,
   SystemMetrics,
-  AppMetrics,
 } from '../types/analytics';
+import { analytics } from './analytics';
 
 class PerformanceMonitoringService {
   private marks: Map<string, PerformanceMark> = new Map();

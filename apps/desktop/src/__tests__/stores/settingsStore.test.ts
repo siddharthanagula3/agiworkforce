@@ -4,8 +4,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import { invoke } from '../../lib/tauri-mock';
+import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
@@ -478,6 +478,7 @@ describe('settingsStore', () => {
         settings: {
           llmConfig: expect.any(Object),
           windowPreferences: expect.any(Object),
+          allowedDirectories: expect.any(Array),
         },
       });
 

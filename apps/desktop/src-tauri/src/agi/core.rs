@@ -586,6 +586,7 @@ impl AGICore {
             // Record result
             let tool_result = ToolExecutionResult {
                 tool_id: step.tool_id.clone(),
+                step_id: step.id.clone(),
                 success,
                 result: step_value.clone(),
                 error: error_text.clone(),

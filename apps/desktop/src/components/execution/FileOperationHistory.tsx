@@ -5,7 +5,6 @@
  * Similar to Claude Code's file change tracking.
  */
 
-import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
@@ -22,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { invoke } from '../../lib/tauri-mock';
 
 import { cn } from '../../lib/utils';
 import { selectFileChanges, useExecutionStore } from '../../stores/executionStore';

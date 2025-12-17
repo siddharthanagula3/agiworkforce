@@ -165,10 +165,7 @@ impl TeamPermissions {
     fn admin_permissions(permission: Permission) -> bool {
         use Permission::*;
 
-        match permission {
-            DeleteTeam | ManageBilling => false,
-            _ => true,
-        }
+        !matches!(permission, DeleteTeam | ManageBilling)
     }
 
     /// Editor permissions

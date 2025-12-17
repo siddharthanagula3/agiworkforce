@@ -1,5 +1,5 @@
 // Updated Nov 16, 2025: Added comprehensive error handling, validation, timeout handling, and stack overflow protection
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 import type {
   AutomationScript,
   CodeLanguage,
