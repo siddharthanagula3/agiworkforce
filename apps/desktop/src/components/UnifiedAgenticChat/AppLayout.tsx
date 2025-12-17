@@ -11,9 +11,17 @@ interface AppLayoutProps {
   children: React.ReactNode;
   onOpenSettings?: () => void;
   onOpenBilling?: () => void;
+  onOpenWorkspace?: () => void;
+  onOpenMediaLab?: () => void;
 }
 
-export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayoutProps) {
+export function AppLayout({
+  children,
+  onOpenSettings,
+  onOpenBilling,
+  onOpenWorkspace,
+  onOpenMediaLab,
+}: AppLayoutProps) {
   // const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Moved to store
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -40,15 +48,55 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
     createConversation('New chat');
   }, [createConversation]);
 
+  // Track whether user has scrolled up (to pause auto-scroll)
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const lastContentLengthRef = useRef(0);
+
+  // Get the last message content for streaming detection
+  const lastMessage = messages[messages.length - 1];
+  const lastMessageContent = lastMessage?.content || '';
+
+  // Detect user scroll to pause auto-scroll when they scroll up
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setUserScrolledUp(!isNearBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Reset user scroll when sending a new message
+  useEffect(() => {
+    if (messages.length > 0) {
+      setUserScrolledUp(false);
+    }
+  }, [messages.length]);
+
   // Auto-scroll to bottom when new messages arrive or during streaming
   useEffect(() => {
-    if (messages.length > 0 || isStreaming) {
+    // Skip auto-scroll if user has scrolled up manually
+    if (userScrolledUp) return;
+
+    const shouldScroll =
+      messages.length > 0 ||
+      isStreaming ||
+      lastMessageContent.length > lastContentLengthRef.current;
+
+    if (shouldScroll) {
       // Use requestAnimationFrame for smooth scrolling
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       });
     }
-  }, [messages.length, isStreaming]);
+
+    lastContentLengthRef.current = lastMessageContent.length;
+  }, [messages.length, isStreaming, lastMessageContent, userScrolledUp]);
 
   // Global Shortcuts (Cmd+K, Cmd+Shift+O, Cmd+Shift+S)
   useEffect(() => {
@@ -93,6 +141,8 @@ export function AppLayout({ children, onOpenSettings, onOpenBilling }: AppLayout
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
         onOpenBilling={onOpenBilling}
+        onOpenWorkspace={onOpenWorkspace}
+        onOpenMediaLab={onOpenMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
       />

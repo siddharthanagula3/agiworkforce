@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import type { ModelMetadata } from '../constants/llm';
+import { getAllModels, getModelMetadata } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
 import type { Provider } from './settingsStore';
-import type { ModelMetadata } from '../constants/llm';
-import { getModelMetadata, getAllModels } from '../constants/llm';
 
 export interface ProviderStatus {
   provider: Provider;
@@ -61,6 +61,9 @@ interface ModelState {
   // Usage statistics
   usageStats: UsageStats | null;
 
+  // Preferences
+  thinkingModeEnabled: boolean;
+
   // UI state
   loading: boolean;
   error: string | null;
@@ -68,6 +71,7 @@ interface ModelState {
   // Actions
   selectModel: (modelId: string, provider: Provider) => Promise<void>;
   toggleFavorite: (modelId: string) => void;
+  toggleThinkingMode: () => void;
   addToRecent: (modelId: string) => void;
   checkProviderStatus: (provider: Provider) => Promise<ProviderStatus>;
   checkAllProviders: () => Promise<void>;
@@ -111,12 +115,14 @@ const modelStorage = createJSONStorage<{
   selectedProvider: Provider | null;
   favorites: string[];
   recentModels: string[];
+  thinkingModeEnabled: boolean;
 }>(() => (typeof window === 'undefined' ? storageFallback : window.localStorage));
 
 export const useModelStore = create<ModelState>()(
   persist(
     (set, get) => ({
-      selectedModel: null,
+      // Default to 'auto' for smart routing
+      selectedModel: 'auto',
       selectedProvider: null,
       favorites: [],
       recentModels: [],
@@ -132,6 +138,7 @@ export const useModelStore = create<ModelState>()(
         moonshot: null,
       },
       usageStats: null,
+      thinkingModeEnabled: false,
       loading: false,
       error: null,
 
@@ -161,6 +168,10 @@ export const useModelStore = create<ModelState>()(
             : [...state.favorites, modelId];
           return { favorites };
         });
+      },
+
+      toggleThinkingMode: () => {
+        set((state) => ({ thinkingModeEnabled: !state.thinkingModeEnabled }));
       },
 
       addToRecent: (modelId: string) => {
@@ -297,6 +308,7 @@ export const useModelStore = create<ModelState>()(
         selectedProvider: state.selectedProvider,
         favorites: state.favorites,
         recentModels: state.recentModels,
+        thinkingModeEnabled: state.thinkingModeEnabled,
       }),
     },
   ),

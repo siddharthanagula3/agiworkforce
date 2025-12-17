@@ -1,8 +1,18 @@
 import { invoke } from '@/lib/tauri-mock';
-import { BarChart3, Check, Code2, Copy, Download, FileUp, Network } from 'lucide-react';
+import {
+  BarChart3,
+  Check,
+  Code2,
+  Copy,
+  Download,
+  FileSpreadsheet,
+  FileUp,
+  Network,
+  Presentation,
+} from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   Bar,
   BarChart,
@@ -28,6 +38,8 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { usePrompt } from '../ui/PromptDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
+import { PresentationArtifact } from './artifact-components/PresentationArtifact';
+import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
 
 interface ArtifactRendererProps {
   artifact: Artifact;
@@ -107,6 +119,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     if (artifact.type === 'code' && artifact.language) {
       return artifact.language;
     }
+    if (artifact.type === 'spreadsheet') return 'csv';
+    if (artifact.type === 'presentation') return 'md';
     return artifact.type === 'chart' || artifact.type === 'diagram' ? 'json' : 'txt';
   };
 
@@ -119,6 +133,10 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       case 'diagram':
       case 'mermaid':
         return <Network className="h-4 w-4" />;
+      case 'spreadsheet':
+        return <FileSpreadsheet className="h-4 w-4" />;
+      case 'presentation':
+        return <Presentation className="h-4 w-4" />;
       default:
         return <Code2 className="h-4 w-4" />;
     }
@@ -209,6 +227,10 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
             <TableArtifact artifact={artifact} />
           ) : artifact.type === 'mermaid' ? (
             <MermaidArtifact artifact={artifact} />
+          ) : artifact.type === 'spreadsheet' ? (
+            <SpreadsheetArtifact artifact={artifact} />
+          ) : artifact.type === 'presentation' ? (
+            <PresentationArtifact artifact={artifact} />
           ) : (
             <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
           )}
@@ -219,20 +241,31 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   );
 }
 
-// Code artifact with syntax highlighting
-function CodeArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
+// Code artifact with Claude-style syntax highlighting
+function CodeArtifact({ artifact, isDark: _isDark }: { artifact: Artifact; isDark: boolean }) {
+  const lineCount = artifact.content.split('\n').length;
+
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto bg-gray-950">
       {/* @ts-expect-error - SyntaxHighlighter type incompatibility with React 18 */}
       <SyntaxHighlighter
         language={artifact.language || 'text'}
-        style={isDark ? oneDark : oneLight}
+        style={oneDark}
         customStyle={{
           margin: 0,
-          borderRadius: 0,
-          fontSize: '0.875rem',
+          padding: '1rem',
+          background: 'transparent',
+          fontSize: '13px',
+          lineHeight: '1.6',
         }}
-        showLineNumbers
+        showLineNumbers={lineCount > 3}
+        lineNumberStyle={{
+          minWidth: '2.5em',
+          paddingRight: '1em',
+          color: '#4b5563',
+          userSelect: 'none',
+        }}
+        wrapLongLines={false}
       >
         {artifact.content}
       </SyntaxHighlighter>

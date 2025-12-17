@@ -132,6 +132,7 @@ Provide solutions in JSON format:
         stream: false,
         tools: None,
         tool_choice: None,
+        thinking_mode: None,
     };
 
     let router = router_state.lock().await;
@@ -204,6 +205,7 @@ Provide analysis in JSON format:
         stream: false,
         tools: None,
         tool_choice: None,
+        thinking_mode: None,
     };
 
     let router = router_state.lock().await;

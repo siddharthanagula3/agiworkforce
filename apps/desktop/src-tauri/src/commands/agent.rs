@@ -41,9 +41,16 @@ static AGENT: Mutex<Option<Arc<TokioMutex<AutonomousAgent>>>> = Mutex::new(None)
 #[tauri::command]
 pub async fn agent_init(
     config: AgentConfig,
-    automation: State<'_, Arc<AutomationService>>,
+    automation: State<'_, Arc<Option<AutomationService>>>,
     llm_state: State<'_, LLMState>,
 ) -> Result<(), String> {
+    // Check if automation service is available
+    if automation.is_none() {
+        return Err(
+            "Automation service not available. Please grant accessibility permissions.".to_string(),
+        );
+    }
+
     // Get router from LLM state
     let router = llm_state.router.lock().await;
     // Create a new router instance for agent (since we can't clone)
@@ -51,7 +58,13 @@ pub async fn agent_init(
     let router_for_agent = Arc::new(LLMRouter::new());
     drop(router);
 
-    let agent = AutonomousAgent::new(config, automation.inner().clone(), router_for_agent)
+    // Create a fresh automation service for the agent
+    let automation_arc = Arc::new(
+        AutomationService::new()
+            .map_err(|e| format!("Failed to create automation service: {}", e))?,
+    );
+
+    let agent = AutonomousAgent::new(config, automation_arc, router_for_agent)
         .map_err(|e| format!("Failed to create agent: {}", e))?;
 
     let agent_arc = Arc::new(TokioMutex::new(agent));

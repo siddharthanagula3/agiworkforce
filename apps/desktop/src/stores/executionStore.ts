@@ -12,6 +12,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { ResearchTask } from '../types/chat';
 
 // ========================================
 // Types
@@ -97,6 +98,9 @@ export interface ExecutionState {
   // File changes
   fileChanges: FileChange[];
 
+  // Research Tasks
+  researchTasks: Record<string, ResearchTask>;
+
   // LLM streaming
   currentLLMStream: string;
   isStreaming: boolean;
@@ -115,6 +119,10 @@ export interface ExecutionState {
   addTerminalLog: (log: TerminalLog) => void;
   clearTerminalLogs: () => void;
   setTerminalScrollLock: (locked: boolean) => void;
+
+  // Research Actions
+  addResearchTask: (task: ResearchTask) => void;
+  updateResearchTask: (id: string, updates: Partial<ResearchTask>) => void;
 
   addBrowserAction: (action: BrowserAction) => void;
   updateCurrentBrowserState: (url: string | null, screenshot: string | null) => void;
@@ -142,11 +150,12 @@ const initialState = {
   activeGoal: null,
   steps: [],
   terminalLogs: [],
-  terminalScrollLock: false,
+  terminalScrollLock: true,
   browserActions: [],
   currentBrowserUrl: null,
   currentScreenshot: null,
   fileChanges: [],
+  researchTasks: {},
   currentLLMStream: '',
   isStreaming: false,
   panelVisible: false,
@@ -214,6 +223,18 @@ export const useExecutionStore = create<ExecutionState>()(
         state.terminalScrollLock = locked;
       });
     },
+
+    addResearchTask: (task) =>
+      set((state) => {
+        state.researchTasks[task.id] = task;
+      }),
+
+    updateResearchTask: (id, updates) =>
+      set((state) => {
+        if (state.researchTasks[id]) {
+          Object.assign(state.researchTasks[id], updates);
+        }
+      }),
 
     addBrowserAction: (action) => {
       set((state) => {

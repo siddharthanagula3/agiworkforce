@@ -142,12 +142,24 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const isEmptyState = messages.length === 0;
   const showStopButton = isStreaming && onStopGeneration;
 
-  // Keep local content aligned with shared draft (for edit/resend flows)
   useEffect(() => {
     if (draftContent !== content) {
       setContent(draftContent);
     }
   }, [draftContent, content]);
+
+  // Shortcut: Alt+P (or Option+P) to toggle model selector
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Check for Alt+P (Option+P on Mac)
+      if (e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setShowModelSelector((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   useEffect(() => {
     setShowModelSelector(false);

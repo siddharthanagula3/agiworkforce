@@ -901,6 +901,7 @@ impl AGIExecutor {
                     stream: false,
                     tools: None,
                     tool_choice: None,
+                    thinking_mode: None,
                 };
 
                 let router = self.router.lock().await;

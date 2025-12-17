@@ -11,9 +11,13 @@ import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
 
 export interface MessageMetadata {
   tokenCount?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   model?: string;
   provider?: string;
   cost?: number;
+  inputCost?: number;
+  outputCost?: number;
   duration?: number;
   streaming?: boolean;
   artifacts?: Artifact[];
@@ -315,8 +319,11 @@ export interface ActionTrailEntry {
 // Token Usage Tracking
 export interface TokenUsage {
   current: number;
+  inputTokens: number;
+  outputTokens: number;
   max: number;
   percentage: number;
+  estimatedCost: number;
 }
 
 // Citation for inline references
@@ -619,8 +626,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       fadeTimers: new Map(),
       tokenUsage: {
         current: 0,
+        inputTokens: 0,
+        outputTokens: 0,
         max: 128000, // Default to 128k context
         percentage: 0,
+        estimatedCost: 0,
       },
       citations: [],
 

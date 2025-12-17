@@ -3,22 +3,33 @@
  * Unified account state management for AGI Workforce desktop app
  *
  * This store manages user identity, subscription plan, and feature access.
- * It is designed to work offline with local defaults, and can sync with
- * the web backend when authentication is implemented.
+ * It integrates with Supabase Auth and syncs subscription data from the database.
  *
  * See: docs/ACCOUNT_INTEGRATION.md for integration details
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
+import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
+import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
+
+// Re-export PlanTier for backwards compatibility
+export type { PlanTier } from '../lib/supabase';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type PlanTier = 'free' | 'pro' | 'enterprise';
-
-export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
+export type SubscriptionStatus =
+  | 'active'
+  | 'trialing'
+  | 'past_due'
+  | 'canceled'
+  | 'none'
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'unpaid';
 
 export interface DesktopAccount {
   // Identity
@@ -32,11 +43,12 @@ export interface DesktopAccount {
   planDisplayName: string;
   subscriptionStatus: SubscriptionStatus;
   currentPeriodEnd: number | null; // Unix timestamp
+  stripeCustomerId?: string | null;
 
   // Feature Access
   featureFlags: Record<string, boolean>;
 
-  // Authentication (placeholders for future backend integration)
+  // Authentication (managed by Supabase)
   accessToken?: string | null;
   refreshToken?: string | null;
   deviceLinkId?: string | null;
@@ -90,6 +102,7 @@ const getDefaultAccount = (): DesktopAccount => {
   const planDisplayNames: Record<PlanTier, string> = {
     free: 'Free',
     pro: 'Pro',
+    max: 'Max',
     enterprise: 'Enterprise',
   };
 
@@ -141,6 +154,7 @@ export const useAccountStore = create<AccountState>()(
         const planDisplayNames: Record<PlanTier, string> = {
           free: 'Free',
           pro: 'Pro',
+          max: 'Max',
           enterprise: 'Enterprise',
         };
 
@@ -195,8 +209,10 @@ export const useAccountStore = create<AccountState>()(
         }));
       },
 
-      // Auth Actions (stubs)
-      login: (tokens: { accessToken: string; refreshToken: string }) => {
+      // Auth Actions - Now using Supabase Auth
+      login: async (tokens: { accessToken: string; refreshToken: string }) => {
+        // This is now handled by Supabase Auth - tokens are managed automatically
+        // The auth state listener will update the store
         set((state) => ({
           account: {
             ...state.account,
@@ -205,55 +221,58 @@ export const useAccountStore = create<AccountState>()(
           },
           isAuthenticated: true,
         }));
-
-        // TODO: Fetch user profile from backend
-        // await get().syncWithBackend();
       },
 
-      logout: () => {
+      logout: async () => {
+        // Sign out via Supabase Auth
+        await supabaseAuth.signOut();
+
         set({
           account: getDefaultAccount(),
           isAuthenticated: false,
           isPro: false,
           isEnterprise: false,
         });
-
-        // TODO: Revoke tokens on backend
       },
 
       syncWithBackend: async () => {
-        const { account } = get();
-        if (!account.accessToken) {
-          console.warn('No access token - skipping backend sync');
+        // Sync is now handled by Supabase Auth service
+        // This refreshes user data from the database
+        await supabaseAuth.refreshUserData();
+
+        const authState = supabaseAuth.getState();
+
+        if (!authState.user) {
+          console.warn('No authenticated user - skipping sync');
           return;
         }
 
         try {
-          // TODO: Implement actual backend sync
-          // const profile = await invoke<UserProfile>('fetch_user_profile', {
-          //   accessToken: account.accessToken
-          // });
-          //
-          // set({
-          //   account: {
-          //     ...account,
-          //     id: profile.id,
-          //     email: profile.email,
-          //     displayName: profile.name,
-          //     avatar: profile.avatar_url,
-          //     plan: profile.plan.tier,
-          //     planDisplayName: profile.plan.display_name,
-          //     subscriptionStatus: profile.plan.status,
-          //     currentPeriodEnd: profile.plan.current_period_end,
-          //     featureFlags: profile.feature_flags,
-          //     lastSyncedAt: Date.now(),
-          //   },
-          // });
+          const planTier = asPlanTier(authState.subscription?.plan_tier);
 
-          console.log('Backend sync - not yet implemented');
+          set((state) => ({
+            account: {
+              ...state.account,
+              id: authState.user?.id || null,
+              email: authState.user?.email || null,
+              displayName: authState.profile?.display_name || null,
+              avatar: authState.profile?.avatar_url || null,
+              plan: planTier,
+              planDisplayName: PLAN_DISPLAY_NAMES[planTier],
+              subscriptionStatus: (authState.subscription?.status as SubscriptionStatus) || 'none',
+              currentPeriodEnd: authState.subscription?.current_period_end
+                ? new Date(authState.subscription.current_period_end).getTime()
+                : null,
+              stripeCustomerId: authState.subscription?.stripe_customer_id || null,
+              featureFlags: authState.featureFlags,
+              lastSyncedAt: Date.now(),
+            },
+            isAuthenticated: true,
+            isPro: planTier === 'pro' || planTier === 'enterprise',
+            isEnterprise: planTier === 'enterprise',
+          }));
         } catch (error) {
           console.error('Failed to sync with backend:', error);
-          // Handle auth errors, network errors, etc.
         }
       },
 
@@ -308,16 +327,37 @@ export const selectFeatureFlags = (state: AccountState) => state.account.feature
 
 /**
  * Check if a feature is enabled for the current account
+ * Uses the subscription service for feature access checks
  */
 export function hasFeature(featureKey: string): boolean {
   const { account, isPro, isEnterprise } = useAccountStore.getState();
 
-  // Check feature flags first
+  // Check feature flags first (can override plan-based access)
   if (account.featureFlags[featureKey] !== undefined) {
     return account.featureFlags[featureKey];
   }
 
-  // Default feature access based on plan
+  // Use subscription service for plan-based feature checks
+  const featureMap: Record<string, keyof PlanFeatures> = {
+    unlimited_automations: 'automationsPerDay',
+    browser_automation: 'browserAutomation',
+    advanced_ui_automation: 'advancedUiAutomation',
+    email_support: 'emailSupport',
+    llm_cost_tracking: 'llmCostTracking',
+    team_features: 'teamFeatures',
+    sso: 'sso',
+    priority_support: 'prioritySupport',
+    custom_workflows: 'customWorkflows',
+    webhook_integration: 'webhookIntegration',
+    analytics: 'analytics',
+  };
+
+  const mappedFeature = featureMap[featureKey];
+  if (mappedFeature) {
+    return subscriptionService.hasFeatureAccess(mappedFeature);
+  }
+
+  // Legacy fallback for unmapped features
   const proFeatures = [
     'unlimited_automations',
     'browser_automation',
@@ -354,8 +394,58 @@ export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; Priority support',
+    max: 'Maximum performance; $300/mo credits; Dedicated support',
     enterprise: 'Custom solutions; Dedicated support; SSO',
   };
 
   return descriptions[plan];
+}
+
+// ============================================================================
+// Supabase Auth Integration
+// ============================================================================
+
+/**
+ * Initialize account store with Supabase Auth listener
+ * This sets up automatic syncing when auth state changes
+ */
+export function initializeAccountStore(): () => void {
+  // Subscribe to auth state changes
+  const unsubscribe = supabaseAuth.onAuthStateChange((authState: AuthState) => {
+    const store = useAccountStore.getState();
+
+    if (authState.user && authState.session) {
+      // User is signed in - sync their data
+      const planTier = asPlanTier(authState.subscription?.plan_tier);
+
+      store.setAccount({
+        id: authState.user.id,
+        email: authState.user.email || null,
+        displayName:
+          authState.profile?.display_name ||
+          (authState.user.user_metadata?.['full_name'] as string) ||
+          null,
+        avatar:
+          authState.profile?.avatar_url ||
+          (authState.user.user_metadata?.['avatar_url'] as string) ||
+          null,
+        plan: planTier,
+        planDisplayName: PLAN_DISPLAY_NAMES[planTier],
+        subscriptionStatus: (authState.subscription?.status as SubscriptionStatus) || 'none',
+        currentPeriodEnd: authState.subscription?.current_period_end
+          ? new Date(authState.subscription.current_period_end).getTime()
+          : null,
+        stripeCustomerId: authState.subscription?.stripe_customer_id || null,
+        featureFlags: authState.featureFlags,
+        accessToken: authState.session.access_token,
+        refreshToken: authState.session.refresh_token,
+        lastSyncedAt: Date.now(),
+      });
+    } else if (!authState.user && !authState.isLoading) {
+      // User signed out
+      store.reset();
+    }
+  });
+
+  return unsubscribe;
 }

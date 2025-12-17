@@ -49,6 +49,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -85,6 +86,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -128,6 +130,7 @@ mod tests {
             stream: false,
             tools: Some(tools.clone()),
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert!(request.tools.is_some());
@@ -154,6 +157,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         // The provider will add max_tokens: 4096 if None
@@ -176,6 +180,7 @@ mod tests {
             stream: true,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert!(request.stream);
@@ -227,6 +232,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert_eq!(request.messages.len(), 3);
@@ -245,6 +251,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let high_temp = LLMRequest {
@@ -255,6 +262,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert_eq!(low_temp.temperature, Some(0.0));
@@ -279,6 +287,7 @@ mod tests {
                 stream: false,
                 tools: None,
                 tool_choice: None,
+                thinking_mode: None,
             };
 
             assert_eq!(request.model, model);
@@ -301,6 +310,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert_eq!(request.messages[0].content, "");
@@ -337,6 +347,7 @@ mod tests {
             stream: false,
             tools: Some(tools),
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert!(request.tools.is_some());
@@ -359,6 +370,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let serialized = serde_json::to_string(&request).unwrap();
@@ -421,6 +433,7 @@ mod tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert!(request.messages[0].multimodal_content.is_some());
