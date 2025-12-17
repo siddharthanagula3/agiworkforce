@@ -318,12 +318,12 @@ mod integration_tests {
         service
             .set(
                 "float_key".to_string(),
-                SettingValue::Float(3.14),
+                SettingValue::Float(3.15),
                 SettingCategory::System,
                 false,
             )
             .unwrap();
-        assert_eq!(service.get("float_key").unwrap().as_float(), Some(3.14));
+        assert_eq!(service.get("float_key").unwrap().as_float(), Some(3.15));
 
         // Boolean
         service
