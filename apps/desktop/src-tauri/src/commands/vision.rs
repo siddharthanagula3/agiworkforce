@@ -146,6 +146,7 @@ pub async fn vision_send_message(
         stream: false,
         tools: None,
         tool_choice: None,
+        thinking_mode: None,
     };
 
     // Route to appropriate provider

@@ -5,26 +5,30 @@ import {
   ChevronRight,
   Clock,
   Code2,
+  Image,
   Layers,
   Pin,
   PinOff,
   Plus,
   Search,
+  TerminalSquare,
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { UserProfile } from '../Layout/UserProfile';
-import { ResizeHandle } from '../ui/ResizeHandle';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { ResizeHandle } from '../ui/ResizeHandle';
 import { ScrollArea } from '../ui/ScrollArea';
 
 interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
   onOpenBilling?: () => void;
+  onOpenWorkspace?: () => void;
+  onOpenMediaLab?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   isMobile?: boolean;
@@ -78,6 +82,8 @@ export function Sidebar({
   className,
   onOpenSettings,
   onOpenBilling,
+  onOpenWorkspace,
+  onOpenMediaLab,
   collapsed = false,
   onToggleCollapse,
   isMobile = false,
@@ -512,6 +518,28 @@ export function Sidebar({
               </span>
               Artifacts
             </button>
+            {onOpenWorkspace && (
+              <button
+                onClick={onOpenWorkspace}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <span className="w-5 h-5 flex items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                  <TerminalSquare className="w-3.5 h-3.5" />
+                </span>
+                Workspace
+              </button>
+            )}
+            {onOpenMediaLab && (
+              <button
+                onClick={onOpenMediaLab}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                  <Image className="w-3.5 h-3.5" />
+                </span>
+                Media Lab
+              </button>
+            )}
           </div>
         )}
 

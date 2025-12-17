@@ -113,13 +113,13 @@ impl FullTextSearch {
         let conn = Connection::open(&self.db_path)?;
 
         conn.execute(
+            "DELETE FROM messages_fts WHERE message_id = ?1",
+            params![message_id],
+        )?;
+
+        conn.execute(
             "INSERT INTO messages_fts (message_id, conversation_id, content, sender, message_type, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(message_id) DO UPDATE SET
-                content = excluded.content,
-                sender = excluded.sender,
-                message_type = excluded.message_type,
-                timestamp = excluded.timestamp",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![message_id, conversation_id, content, sender, message_type, timestamp],
         )?;
 
@@ -137,13 +137,13 @@ impl FullTextSearch {
         let conn = Connection::open(&self.db_path)?;
 
         conn.execute(
+            "DELETE FROM conversations_fts WHERE conversation_id = ?1",
+            params![conversation_id],
+        )?;
+
+        conn.execute(
             "INSERT INTO conversations_fts (conversation_id, title, description, project_id, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(conversation_id) DO UPDATE SET
-                title = excluded.title,
-                description = excluded.description,
-                project_id = excluded.project_id,
-                timestamp = excluded.timestamp",
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![conversation_id, title, description, project_id, timestamp],
         )?;
 
@@ -162,13 +162,13 @@ impl FullTextSearch {
         let conn = Connection::open(&self.db_path)?;
 
         conn.execute(
+            "DELETE FROM knowledge_fts WHERE chunk_id = ?1",
+            params![chunk_id],
+        )?;
+
+        conn.execute(
             "INSERT INTO knowledge_fts (chunk_id, project_id, content, source_file, chunk_index, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(chunk_id) DO UPDATE SET
-                content = excluded.content,
-                source_file = excluded.source_file,
-                chunk_index = excluded.chunk_index,
-                timestamp = excluded.timestamp",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![chunk_id, project_id, content, source_file, chunk_index, timestamp],
         )?;
 
@@ -472,6 +472,8 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, message_id);
-        assert!(results[0].snippet.contains("test message"));
+        // Snippet includes <mark> tags, so check for keywords individually
+        assert!(results[0].snippet.contains("test"));
+        assert!(results[0].snippet.contains("message"));
     }
 }

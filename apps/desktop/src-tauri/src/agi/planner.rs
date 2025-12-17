@@ -232,6 +232,7 @@ Return ONLY the JSON array."#,
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let router = self.router.lock().await;
@@ -624,6 +625,7 @@ Your response:"#,
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let router = self.router.lock().await;
@@ -798,6 +800,7 @@ Return ONLY a JSON array of steps with this structure:
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let router = self.router.lock().await;

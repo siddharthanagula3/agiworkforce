@@ -117,6 +117,7 @@ pub async fn llm_send_message(
         stream: false,
         tools: None,
         tool_choice: None,
+        thinking_mode: None,
     };
 
     let preferences = RouterPreferences {

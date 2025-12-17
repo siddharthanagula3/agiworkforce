@@ -31,7 +31,6 @@ The project is a monorepo organized using pnpm workspaces.
 │   │   ├── src/              # React frontend source
 │   │   └── src-tauri/        # Rust backend source
 │   ├── extension/            # Minimal browser extension scaffold
-│   └── _future_mobile/       # Placeholder for a future mobile app
 ├── packages/
 │   ├── types/                # Shared TypeScript types for the monorepo
 │   └── utils/                # Shared utility functions

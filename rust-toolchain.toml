@@ -1,4 +1,5 @@
 [toolchain]
 channel = "1.90.0"
 components = ["rustfmt", "clippy"]
-targets = ["x86_64-pc-windows-msvc"]
+# Targets managed by CI; omit for cross-platform local dev
+# targets = ["x86_64-pc-windows-msvc"]

@@ -13,9 +13,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 
 export interface TokenCounterProps {
   /**
-   * Current token count
+   * Current total token count
    */
   currentTokens: number;
+
+  /**
+   * Input tokens used
+   */
+  inputTokens?: number;
+
+  /**
+   * Output tokens used
+   */
+  outputTokens?: number;
 
   /**
    * Maximum context window size for the selected model
@@ -23,9 +33,14 @@ export interface TokenCounterProps {
   maxTokens: number;
 
   /**
-   * Optional cost per token (for cost estimation)
+   * Optional cost per token (for cost estimation) - deprecated, use estimatedCost
    */
   costPerToken?: number;
+
+  /**
+   * Estimated cost in USD
+   */
+  estimatedCost?: number;
 
   /**
    * Optional budget limit in tokens
@@ -84,8 +99,11 @@ function getUsageStatus(current: number, max: number, budget?: number) {
 
 export const TokenCounter = ({
   currentTokens,
+  inputTokens = 0,
+  outputTokens = 0,
   maxTokens,
   costPerToken,
+  estimatedCost: estimatedCostProp,
   budgetLimit,
   showDetails = true,
   compact = false,
@@ -97,9 +115,12 @@ export const TokenCounter = ({
   );
 
   const estimatedCost = useMemo(() => {
+    if (estimatedCostProp !== undefined) {
+      return estimatedCostProp.toFixed(4);
+    }
     if (!costPerToken) return null;
     return (currentTokens * costPerToken).toFixed(4);
-  }, [currentTokens, costPerToken]);
+  }, [currentTokens, costPerToken, estimatedCostProp]);
 
   const tokensRemaining = maxTokens - currentTokens;
   const budgetRemaining = budgetLimit ? budgetLimit - currentTokens : null;
@@ -128,6 +149,22 @@ export const TokenCounter = ({
                 <span className="text-xs text-muted-foreground">Usage</span>
                 <span className="text-xs font-medium">{percentage.toFixed(1)}%</span>
               </div>
+              {(inputTokens > 0 || outputTokens > 0) && (
+                <>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">↓ Input</span>
+                    <span className="text-xs font-medium text-blue-400">
+                      {formatTokens(inputTokens)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">↑ Output</span>
+                    <span className="text-xs font-medium text-green-400">
+                      {formatTokens(outputTokens)}
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between gap-4">
                 <span className="text-xs text-muted-foreground">Remaining</span>
                 <span className="text-xs font-medium">{formatTokens(tokensRemaining)}</span>
@@ -165,10 +202,27 @@ export const TokenCounter = ({
       {/* Progress Bar */}
       <div className="space-y-1">
         <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn('h-full transition-all duration-300', barColor)}
-            style={{ width: `${percentage}%` }}
-          />
+          {/* Input tokens (blue) + Output tokens (green) stacked bar */}
+          {inputTokens > 0 || outputTokens > 0 ? (
+            <>
+              <div
+                className="absolute h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${(inputTokens / maxTokens) * 100}%` }}
+              />
+              <div
+                className="absolute h-full bg-green-500 transition-all duration-300"
+                style={{
+                  left: `${(inputTokens / maxTokens) * 100}%`,
+                  width: `${(outputTokens / maxTokens) * 100}%`,
+                }}
+              />
+            </>
+          ) : (
+            <div
+              className={cn('h-full transition-all duration-300', barColor)}
+              style={{ width: `${percentage}%` }}
+            />
+          )}
           {budgetLimit && budgetRemaining !== null && budgetRemaining > 0 && (
             <div
               className="absolute top-0 h-full border-r-2 border-warning"
@@ -178,6 +232,16 @@ export const TokenCounter = ({
         </div>
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>{percentage.toFixed(1)}% used</span>
+          {(inputTokens > 0 || outputTokens > 0) && (
+            <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />↓ {formatTokens(inputTokens)}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500" />↑ {formatTokens(outputTokens)}
+              </span>
+            </span>
+          )}
           {budgetLimit && (
             <span className="flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
@@ -190,6 +254,28 @@ export const TokenCounter = ({
       {/* Details Grid */}
       {showDetails && (
         <div className="grid grid-cols-2 gap-3 border-t border-border pt-2">
+          {/* Input/Output breakdown */}
+          {(inputTokens > 0 || outputTokens > 0) && (
+            <>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span>Input tokens</span>
+                </div>
+                <div className="text-sm font-medium text-blue-400">{formatTokens(inputTokens)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  <span>Output tokens</span>
+                </div>
+                <div className="text-sm font-medium text-green-400">
+                  {formatTokens(outputTokens)}
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="space-y-1">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <TrendingUp className="h-3 w-3" />

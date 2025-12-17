@@ -4,7 +4,7 @@ Tauri + React desktop agent workspace with tool execution, approvals, and automa
 
 ## Status & Scope
 
-- Desktop app lives in `apps/desktop` (Tauri + Vite + React + Tailwind); browser extension is minimal (`apps/extension`); mobile is parked (`apps/_future_mobile`).
+- Desktop app lives in `apps/desktop` (Tauri + Vite + React + Tailwind); browser extension is minimal (`apps/extension`).
 - Shared code in `packages/{types,utils}`; backend experiments in `services/{api-gateway,signaling-server}`.
 - Rust toolchain pinned to 1.90.0 (`rust-toolchain.toml`); Node 20.x and pnpm 9.x required (see `package.json`).
 - `apps/desktop/src/future_scope` holds archived/disabled features (employees, marketplace, ROI dashboard) and is excluded from builds.
@@ -60,7 +60,6 @@ cargo fmt && cargo clippy && cargo test          # From apps/desktop/src-tauri
 
 - `apps/desktop`: Main desktop app (React UI + Tauri backend)
 - `apps/extension`: Minimal browser extension scaffold
-- `apps/_future_mobile`: Parked mobile stubs
 - `packages/types`, `packages/utils`: Shared code
 - `services/api-gateway`, `services/signaling-server`: Backend experiments
 - `dev-scripts`: Helper scripts (e.g., reset-app.ps1)
