@@ -53,6 +53,7 @@ pub async fn get_code_completion(
         stream: false, // No streaming for completions (need full response fast)
         tools: None,
         tool_choice: None,
+        thinking_mode: None,
     };
 
     let router = router_state.lock().await;
@@ -139,6 +140,7 @@ pub async fn get_inline_completion(
         stream: false,
         tools: None,
         tool_choice: None,
+        thinking_mode: None,
     };
 
     let router = router_state.lock().await;

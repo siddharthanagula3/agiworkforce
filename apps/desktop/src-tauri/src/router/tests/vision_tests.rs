@@ -82,6 +82,7 @@ mod vision_tests {
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         assert_eq!(request.messages.len(), 1);
@@ -226,6 +227,7 @@ mod vision_tests {
                 }),
             }]),
             tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
         };
 
         assert!(request.tools.is_some());
@@ -375,6 +377,7 @@ mod function_calling_tests {
                 }),
             }]),
             tool_choice: Some(ToolChoice::Auto),
+            thinking_mode: None,
         };
 
         assert!(request.tools.is_some());

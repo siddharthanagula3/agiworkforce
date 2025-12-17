@@ -112,6 +112,7 @@ Return ONLY the JSON array, no other text."#,
             stream: false,
             tools: None,
             tool_choice: None,
+            thinking_mode: None,
         };
 
         let preferences = RouterPreferences {

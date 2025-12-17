@@ -101,7 +101,7 @@ impl ToolRegistry {
                 description: "Path to the file to read".to_string(),
                 default: None,
             }],
-            estimated_resources: ResourceUsage {
+            estimated_resources: crate::agi::ResourceUsage {
                 cpu_percent: 1.0,
                 memory_mb: 10,
                 network_mb: 0.0,
@@ -1458,6 +1458,79 @@ impl ToolRegistry {
             dependencies: vec!["browser_navigate".to_string(), "ui_click".to_string()],
         })?;
 
+        // Media Generation Tools
+        self.register_tool(Tool {
+            id: "media_generate_image".to_string(),
+            name: "Generate Image".to_string(),
+            description: "Generate images using AI (DALL-E 3, Imagen 3, SDXL)".to_string(),
+            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
+            parameters: vec![
+                ToolParameter {
+                    name: "prompt".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Image generation prompt".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "size".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Size: 'square', 'wide', 'portrait'".to_string(),
+                    default: Some(serde_json::json!("wide")),
+                },
+                ToolParameter {
+                    name: "style".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Style: 'photorealistic', 'artistic', 'anime'".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 5.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "media_generate_video".to_string(),
+            name: "Generate Video".to_string(),
+            description: "Generate video using AI (Veo 3.1) - Requires Pro/Max plan".to_string(),
+            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
+            parameters: vec![
+                ToolParameter {
+                    name: "prompt".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Video generation prompt".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "duration_secs".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Duration in seconds (default 4-8)".to_string(),
+                    default: Some(serde_json::json!(4)),
+                },
+                ToolParameter {
+                    name: "resolution".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Resolution: '1080p', '4k'".to_string(),
+                    default: Some(serde_json::json!("1080p")),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 20.0,
+            },
+            dependencies: vec![],
+        })?;
+
         Ok(())
     }
 
@@ -1477,7 +1550,7 @@ impl ToolRegistry {
         Ok(count)
     }
 
-    fn register_tool(&self, tool: Tool) -> Result<()> {
+    pub fn register_tool(&self, tool: Tool) -> Result<()> {
         // Index by capabilities
         let mut capabilities_index = self
             .capabilities_index

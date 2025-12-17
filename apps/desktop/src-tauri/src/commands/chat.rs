@@ -164,6 +164,29 @@ pub struct ChatSendMessageRequest {
     pub workflow_hash: Option<String>,
     #[serde(default, alias = "taskMetadata")]
     pub task_metadata: Option<TaskMetadata>,
+    /// Focus mode for specialized searches (web, code, academic, reasoning, deep-research)
+    #[serde(default, alias = "focusMode")]
+    pub focus_mode: Option<String>,
+    /// Image/file attachments for multimodal messages
+    #[serde(default)]
+    pub attachments: Option<Vec<ChatAttachment>>,
+    #[serde(default, alias = "thinkingMode")]
+    pub thinking_mode: Option<bool>,
+}
+
+/// Attachment data from frontend (images, screenshots, files)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAttachment {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub attachment_type: String, // "image" | "file" | "screenshot"
+    pub name: String,
+    #[serde(default)]
+    pub mime_type: Option<String>,
+    /// Base64-encoded content (for images: data URL or raw base64)
+    #[serde(default)]
+    pub content: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -201,6 +224,143 @@ fn parse_cost_priority(source: Option<&str>) -> CostPriority {
     match source {
         Some(value) if value.eq_ignore_ascii_case("low") => CostPriority::Low,
         _ => CostPriority::Balanced,
+    }
+}
+
+/// Convert frontend attachments to multimodal ContentPart for vision models
+fn attachments_to_content_parts(
+    text_content: &str,
+    attachments: &Option<Vec<ChatAttachment>>,
+) -> Option<Vec<crate::router::ContentPart>> {
+    use crate::router::{ContentPart, ImageFormat, ImageInput};
+    use base64::Engine;
+
+    let attachments = attachments.as_ref()?;
+    let image_attachments: Vec<_> = attachments
+        .iter()
+        .filter(|a| a.attachment_type == "image" || a.attachment_type == "screenshot")
+        .filter_map(|a| a.content.as_ref())
+        .collect();
+
+    if image_attachments.is_empty() {
+        return None;
+    }
+
+    let mut parts = Vec::new();
+
+    // Add text content first
+    if !text_content.is_empty() {
+        parts.push(ContentPart::Text {
+            text: text_content.to_string(),
+        });
+    }
+
+    // Add image parts
+    for content in image_attachments {
+        // Handle base64 data URLs (e.g., "data:image/png;base64,...")
+        let (format, base64_data) = if content.starts_with("data:") {
+            // Parse data URL
+            let parts: Vec<&str> = content.splitn(2, ',').collect();
+            if parts.len() != 2 {
+                continue;
+            }
+            let header = parts[0];
+            let data = parts[1];
+
+            let format = if header.contains("image/png") {
+                ImageFormat::Png
+            } else if header.contains("image/jpeg") || header.contains("image/jpg") {
+                ImageFormat::Jpeg
+            } else if header.contains("image/webp") {
+                ImageFormat::Webp
+            } else {
+                // Default to PNG for unknown formats
+                ImageFormat::Png
+            };
+
+            (format, data)
+        } else {
+            // Assume raw base64 PNG
+            (ImageFormat::Png, content.as_str())
+        };
+
+        // Decode base64
+        match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+            Ok(data) => {
+                parts.push(ContentPart::Image {
+                    image: ImageInput {
+                        data,
+                        format,
+                        detail: crate::router::ImageDetail::Auto,
+                    },
+                });
+            }
+            Err(e) => {
+                warn!("Failed to decode base64 image: {}", e);
+            }
+        }
+    }
+
+    if parts.len() <= 1 && text_content.is_empty() {
+        return None;
+    }
+
+    Some(parts)
+}
+
+/// Generate additional system prompt instructions based on focus mode
+fn get_focus_mode_system_addendum(focus_mode: Option<&str>) -> Option<String> {
+    match focus_mode {
+        Some("web") => Some(
+            "\n\nFOCUS MODE: WEB SEARCH
+You are focused on finding information from the web. Prioritize:
+- Using web_search tool to find current, accurate information
+- Citing sources with URLs when possible
+- Providing comprehensive answers from multiple sources
+- Distinguishing between facts and opinions"
+                .to_string(),
+        ),
+        Some("code") => Some(
+            "\n\nFOCUS MODE: CODE
+You are focused on programming and technical tasks. Prioritize:
+- Reading and understanding code files when relevant
+- Providing working, tested code examples
+- Following best practices for the language/framework
+- Explaining technical concepts clearly
+- Using terminal_execute to run and test code when helpful"
+                .to_string(),
+        ),
+        Some("academic") => Some(
+            "\n\nFOCUS MODE: ACADEMIC RESEARCH
+You are focused on scholarly and academic content. Prioritize:
+- Finding peer-reviewed sources and academic papers
+- Providing citations in academic format
+- Distinguishing between established facts and ongoing research
+- Explaining methodology and limitations of studies
+- Being precise about claims and evidence"
+                .to_string(),
+        ),
+        Some("reasoning") | Some("writing") => Some(
+            "\n\nFOCUS MODE: WRITING & REASONING
+You are focused on helping with writing and content creation. Prioritize:
+- Clear, well-structured prose
+- Appropriate tone for the intended audience
+- Logical flow and coherent arguments
+- Grammar and style consistency
+- Iterating on drafts based on feedback"
+                .to_string(),
+        ),
+        Some("deep-research") => Some(
+            "\n\nFOCUS MODE: DEEP RESEARCH
+You are conducting comprehensive, in-depth research. Prioritize:
+- Thorough exploration of the topic from multiple angles
+- Using multiple search queries to gather diverse sources
+- Synthesizing information into a coherent analysis
+- Identifying gaps, contradictions, and areas of uncertainty
+- Providing a well-structured research summary with sources"
+                .to_string(),
+        ),
+        _ => None, // No focus mode or unknown mode
     }
 }
 
@@ -601,10 +761,8 @@ async fn chat_send_message_streaming(
     // Construct messages for the router
     let mut router_messages: Vec<RouterChatMessage> = Vec::new();
 
-    // Add System Prompt with Tool Usage + Thinking Process instructions
-    router_messages.push(RouterChatMessage {
-        role: "system".to_string(),
-        content: "You are AGI Workforce, an intelligent AI assistant with access to powerful automation tools.
+    // Build system prompt with optional focus mode addendum
+    let base_system_prompt = "You are AGI Workforce, an intelligent AI assistant with access to powerful automation tools.
 
 TOOL USAGE - CRITICAL:
 You have access to tools for file operations, web searches, terminal commands, screenshots, and more. 
@@ -619,8 +777,7 @@ Common patterns:
 - \"list files in [directory]\" → Use file_list tool
 
 IMPORTANT: You should proactively use tools when they would help answer the user's question. 
-Don"
-.to_string() + "'t wait for explicit \"use tool\" commands. Be intelligent and helpful.
+Don't wait for explicit \"use tool\" commands. Be intelligent and helpful.
 
 THINKING PROCESS:
 For complex problems, show your reasoning using <thinking> tags before the final answer:
@@ -636,24 +793,68 @@ RESPONSE STYLE:
 - Synthesize tool results into helpful answers
 - If a tool fails, explain the error and suggest alternatives
 
-Remember: You are an autonomous agent. Use tools proactively to provide the best assistance.",
+Remember: You are an autonomous agent. Use tools proactively to provide the best assistance.";
+
+    // Add focus mode specific instructions if present
+    let system_prompt = match get_focus_mode_system_addendum(request.focus_mode.as_deref()) {
+        Some(addendum) => format!("{}{}", base_system_prompt, addendum),
+        None => base_system_prompt.to_string(),
+    };
+
+    // Add System Prompt with Tool Usage + Thinking Process instructions
+    router_messages.push(RouterChatMessage {
+        role: "system".to_string(),
+        content: system_prompt,
         tool_calls: None,
         tool_call_id: None,
         multimodal_content: None,
     });
 
+    // Convert attachments to multimodal content parts for vision
+    let multimodal_parts = attachments_to_content_parts(&trimmed_content, &request.attachments);
+    let has_attachments = multimodal_parts.is_some();
+
+    // Find the last user message ID to attach multimodal content
+    let last_user_msg_id = history
+        .iter()
+        .filter(|m| m.role == MessageRole::User && m.id != assistant_message_id)
+        .last()
+        .map(|m| m.id);
+
     router_messages.extend(
         history
             .iter()
             .filter(|m| m.id != assistant_message_id) // Exclude placeholder
-            .map(|message| RouterChatMessage {
-                role: message.role.as_str().to_string(),
-                content: message.content.clone(),
-                tool_calls: None,
-                tool_call_id: None,
-                multimodal_content: None,
+            .map(|message| {
+                // Check if this is the last user message and we have attachments
+                let is_last_user_with_attachments =
+                    has_attachments && Some(message.id) == last_user_msg_id;
+
+                RouterChatMessage {
+                    role: message.role.as_str().to_string(),
+                    content: if is_last_user_with_attachments {
+                        // For multimodal, some providers want empty content when using content parts
+                        String::new()
+                    } else {
+                        message.content.clone()
+                    },
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: if is_last_user_with_attachments {
+                        multimodal_parts.clone()
+                    } else {
+                        None
+                    },
+                }
             }),
     );
+
+    if has_attachments {
+        info!(
+            "[Chat Streaming] Sending message with {} image attachments for vision processing",
+            request.attachments.as_ref().map(|a| a.len()).unwrap_or(0)
+        );
+    }
 
     let provider_override = request
         .provider_override
@@ -709,15 +910,33 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
             Ok(registry) => {
                 // ✅ Register core tools
                 // We must retrieve services from app state to register them
-                let automation = app_handle
-                    .state::<std::sync::Arc<crate::automation::AutomationService>>()
+                let automation_opt = app_handle
+                    .state::<std::sync::Arc<Option<crate::automation::AutomationService>>>()
                     .inner()
                     .clone();
                 let llm_state = app_handle.state::<crate::commands::llm::LLMState>();
                 let router = llm_state.router.clone();
 
-                if let Err(e) = registry.register_all_tools(automation, router) {
-                    tracing::error!("Failed to register tools: {}", e);
+                // Only register tools if automation service is available
+                if let Some(ref _automation) = *automation_opt {
+                    // Create a fresh automation service for tool registration
+                    match crate::automation::AutomationService::new() {
+                        Ok(automation) => {
+                            let automation_arc = std::sync::Arc::new(automation);
+                            if let Err(e) =
+                                registry.register_all_tools(automation_arc, router.clone())
+                            {
+                                tracing::error!("Failed to register tools: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Could not create automation service for tools: {}", e);
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        "Automation service not available - some tools will be disabled"
+                    );
                 }
 
                 let tool_registry = Arc::new(registry);
@@ -783,6 +1002,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
         } else {
             None
         },
+        thinking_mode: request.thinking_mode,
     };
 
     let preferences = RouterPreferences {
@@ -900,6 +1120,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
             stream: false, // Non-streaming to get tool calls
             tools: tool_defs_for_follow_up.clone(),
             tool_choice: Some(crate::router::ToolChoice::Auto),
+            thinking_mode: request.thinking_mode,
         };
 
         let candidates = {
@@ -1043,6 +1264,7 @@ Remember: You are an autonomous agent. Use tools proactively to provide the best
                             stream: false,
                             tools: tool_defs_for_follow_up.clone(),
                             tool_choice: Some(crate::router::ToolChoice::Auto),
+                            thinking_mode: request.thinking_mode,
                         };
 
                         // Get final response with tool results
@@ -1271,16 +1493,70 @@ pub async fn chat_send_message(
             .map_err(|e| format!("Failed to list messages: {}", e))?
     };
 
-    let router_messages: Vec<RouterChatMessage> = history
+    // Convert attachments to multimodal content parts for vision
+    let multimodal_parts = attachments_to_content_parts(&trimmed_content, &request.attachments);
+    let has_multimodal = multimodal_parts.is_some();
+
+    // Find the last user message to attach multimodal content
+    let last_user_msg_id = history
         .iter()
-        .map(|message| RouterChatMessage {
+        .filter(|m| m.role == MessageRole::User)
+        .last()
+        .map(|m| m.id);
+
+    // Build system prompt with optional focus mode addendum
+    let base_system_prompt = "You are AGI Workforce, an intelligent AI assistant with access to powerful automation tools.
+
+TOOL USAGE - CRITICAL:
+You have access to tools for file operations, web searches, terminal commands, screenshots, and more. 
+When a user requests an action, automatically identify and call the appropriate tools.
+
+IMPORTANT: You should proactively use tools when they would help answer the user's question. 
+Don't wait for explicit \"use tool\" commands. Be intelligent and helpful.
+
+Remember: You are an autonomous agent. Use tools proactively to provide the best assistance.";
+
+    let system_prompt = match get_focus_mode_system_addendum(request.focus_mode.as_deref()) {
+        Some(addendum) => format!("{}{}", base_system_prompt, addendum),
+        None => base_system_prompt.to_string(),
+    };
+
+    // Build router messages starting with system prompt
+    let mut router_messages: Vec<RouterChatMessage> = vec![RouterChatMessage {
+        role: "system".to_string(),
+        content: system_prompt,
+        tool_calls: None,
+        tool_call_id: None,
+        multimodal_content: None,
+    }];
+
+    router_messages.extend(history.iter().map(|message| {
+        // Check if this is the last user message and we have attachments
+        let is_last_user_with_attachments = has_multimodal && Some(message.id) == last_user_msg_id;
+
+        RouterChatMessage {
             role: message.role.as_str().to_string(),
-            content: message.content.clone(),
+            content: if is_last_user_with_attachments {
+                String::new()
+            } else {
+                message.content.clone()
+            },
             tool_calls: None,
             tool_call_id: None,
-            multimodal_content: None,
-        })
-        .collect();
+            multimodal_content: if is_last_user_with_attachments {
+                multimodal_parts.clone()
+            } else {
+                None
+            },
+        }
+    }));
+
+    if has_multimodal {
+        info!(
+            "[Chat] Sending message with {} image attachments for vision processing",
+            request.attachments.as_ref().map(|a| a.len()).unwrap_or(0)
+        );
+    }
 
     // ✅ Add tool definitions from AGI registry + MCP tools + AI Employees
     let conversation_mode = request
@@ -1408,6 +1684,7 @@ pub async fn chat_send_message(
         } else {
             None
         },
+        thinking_mode: request.thinking_mode,
     };
 
     let preferences = RouterPreferences {
@@ -1617,6 +1894,7 @@ pub async fn chat_send_message(
                             stream: false,
                             tools: tool_defs_for_follow_up.clone(),
                             tool_choice: Some(crate::router::ToolChoice::Auto),
+                            thinking_mode: request.thinking_mode,
                         };
 
                         // Make follow-up request

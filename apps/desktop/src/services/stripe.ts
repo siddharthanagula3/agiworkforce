@@ -1,10 +1,10 @@
 /**
  * Stripe service - Frontend wrapper for Tauri billing commands
- * 
+ *
  * Note: Stripe MCP tools are also available for the AGI agent to use directly.
  * When Stripe MCP server is enabled and connected, the agent can use Stripe MCP tools
  * (e.g., mcp_stripe_create_customer, mcp_stripe_list_customers, etc.) for billing operations.
- * 
+ *
  * To enable Stripe MCP:
  * 1. Store your Stripe secret key in Windows Credential Manager:
  *    - Service: agiworkforce-mcp-stripe
@@ -69,11 +69,35 @@ export interface UsageStats {
   api_calls_made: number;
   storage_used_mb: number;
   llm_tokens_used: number;
+  llm_input_tokens: number;
+  llm_output_tokens: number;
   browser_sessions: number;
   mcp_tool_calls: number;
   limit_automations?: number;
   limit_api_calls?: number;
   limit_storage_mb?: number;
+  // Per-model usage breakdown
+  model_usage?: ModelUsageStats[];
+}
+
+export interface ModelUsageStats {
+  model_id: string;
+  model_name: string;
+  provider: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  request_count: number;
+}
+
+export interface TokenUsageEvent {
+  model_id: string;
+  provider: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd?: number;
+  timestamp?: number;
 }
 
 export class StripeService {
@@ -81,7 +105,7 @@ export class StripeService {
 
   /**
    * Initialize the Stripe service with API keys
-   * 
+   *
    * Note: This initializes the Rust-based Stripe client. Stripe MCP tools are available
    * separately when the Stripe MCP server is enabled and connected. The AGI agent can
    * use either the Tauri commands (via this service) or Stripe MCP tools directly.
@@ -128,7 +152,7 @@ export class StripeService {
     priceId: string,
     planName: string,
     billingInterval: 'monthly' | 'yearly',
-    trialDays?: number
+    trialDays?: number,
   ): Promise<SubscriptionInfo> {
     return await invoke<SubscriptionInfo>('stripe_create_subscription', {
       customerStripeId,
@@ -154,7 +178,7 @@ export class StripeService {
   static async updateSubscription(
     stripeSubscriptionId: string,
     newPriceId: string,
-    newPlanName: string
+    newPlanName: string,
   ): Promise<SubscriptionInfo> {
     return await invoke<SubscriptionInfo>('stripe_update_subscription', {
       stripeSubscriptionId,
@@ -187,7 +211,7 @@ export class StripeService {
   static async getUsage(
     customerId: string,
     periodStart: number,
-    periodEnd: number
+    periodEnd: number,
   ): Promise<UsageStats> {
     return await invoke<UsageStats>('stripe_get_usage', {
       customerId,
@@ -201,11 +225,19 @@ export class StripeService {
    */
   static async trackUsage(
     customerId: string,
-    usageType: 'automation_execution' | 'api_call' | 'storage_mb' | 'llm_tokens' | 'browser_session' | 'mcp_tool_call',
+    usageType:
+      | 'automation_execution'
+      | 'api_call'
+      | 'storage_mb'
+      | 'llm_tokens'
+      | 'llm_input_tokens'
+      | 'llm_output_tokens'
+      | 'browser_session'
+      | 'mcp_tool_call',
     count: number,
     periodStart: number,
     periodEnd: number,
-    metadata?: string
+    metadata?: string,
   ): Promise<void> {
     await invoke('stripe_track_usage', {
       customerId,
@@ -218,12 +250,58 @@ export class StripeService {
   }
 
   /**
+   * Track detailed LLM token usage with input/output breakdown
+   */
+  static async trackLLMUsage(
+    customerId: string,
+    event: TokenUsageEvent,
+    periodStart: number,
+    periodEnd: number,
+  ): Promise<void> {
+    const metadata = JSON.stringify({
+      model_id: event.model_id,
+      provider: event.provider,
+      input_tokens: event.input_tokens,
+      output_tokens: event.output_tokens,
+      cost_usd: event.cost_usd,
+      timestamp: event.timestamp || Date.now(),
+    });
+
+    // Track total tokens
+    await this.trackUsage(
+      customerId,
+      'llm_tokens',
+      event.input_tokens + event.output_tokens,
+      periodStart,
+      periodEnd,
+      metadata,
+    );
+
+    // Track input tokens separately
+    await this.trackUsage(
+      customerId,
+      'llm_input_tokens',
+      event.input_tokens,
+      periodStart,
+      periodEnd,
+      metadata,
+    );
+
+    // Track output tokens separately
+    await this.trackUsage(
+      customerId,
+      'llm_output_tokens',
+      event.output_tokens,
+      periodStart,
+      periodEnd,
+      metadata,
+    );
+  }
+
+  /**
    * Create Stripe billing portal session URL
    */
-  static async createPortalSession(
-    customerStripeId: string,
-    returnUrl: string
-  ): Promise<string> {
+  static async createPortalSession(customerStripeId: string, returnUrl: string): Promise<string> {
     return await invoke<string>('stripe_create_portal_session', {
       customerStripeId,
       returnUrl,
