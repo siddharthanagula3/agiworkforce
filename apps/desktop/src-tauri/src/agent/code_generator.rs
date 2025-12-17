@@ -429,10 +429,10 @@ impl CodeGenerator {
                 file.file_type
             ));
             if file.tests.is_some() {
-                summary.push_str(&"  - Includes tests\n".to_string());
+                summary.push_str("  - Includes tests\n");
             }
             if file.documentation.is_some() {
-                summary.push_str(&"  - Includes documentation\n".to_string());
+                summary.push_str("  - Includes documentation\n");
             }
         }
 
@@ -531,8 +531,8 @@ impl CodeGenerator {
     }
 
     /// Get test file path for a source file
-    fn get_test_path(&self, source_path: &PathBuf) -> PathBuf {
-        let mut test_path = source_path.clone();
+    fn get_test_path(&self, source_path: &std::path::Path) -> PathBuf {
+        let mut test_path = source_path.to_path_buf();
 
         // Change extension to .test.ts or .test.rs etc.
         if let Some(ext) = source_path.extension() {

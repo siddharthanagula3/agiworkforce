@@ -226,13 +226,13 @@ Return ONLY the JSON array."#,
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-5".to_string(),
-            temperature: Some(0.7),
-            max_tokens: Some(4000),
+            model: "claude-3-5-sonnet-20241022".to_string(),
+            temperature: None,
+            max_tokens: Some(64000), // Higher limit for thinking process
             stream: false,
             tools: None,
             tool_choice: None,
-            thinking_mode: None,
+            thinking_mode: Some(true),
         };
 
         let router = self.router.lock().await;

@@ -1,5 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
-import { isTauri } from '../lib/tauri-mock';
+import { invoke, isTauri } from '../lib/tauri-mock';
 
 export type AgentPriority = 'low' | 'medium' | 'high' | 'critical';
 

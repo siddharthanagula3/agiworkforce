@@ -1,7 +1,7 @@
-import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
 import { create } from 'zustand';
+import { invoke } from '../lib/tauri-mock';
 
 import type {
   CalendarAccount,

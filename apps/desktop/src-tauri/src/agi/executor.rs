@@ -177,7 +177,7 @@ impl AGIExecutor {
         // Check dependencies
         for dep_id in &step.dependencies {
             // Verify dependency was executed successfully
-            let dep_result = context.tool_results.iter().find(|r| r.tool_id == *dep_id);
+            let dep_result = context.tool_results.iter().find(|r| r.step_id == *dep_id);
 
             if let Some(result) = dep_result {
                 if !result.success {
@@ -753,8 +753,8 @@ impl AGIExecutor {
                             Some(1)
                         },
                         stdout: None, // Would need to capture from session output
-                        stderr: if execution_result.is_err() {
-                            Some(execution_result.as_ref().unwrap_err().to_string())
+                        stderr: if let Err(ref e) = execution_result {
+                            Some(e.to_string())
                         } else {
                             None
                         },

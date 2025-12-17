@@ -4,15 +4,15 @@
  */
 
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { invoke } from '../lib/tauri-mock';
 import type {
-  UserRole,
-  OnboardingDemo,
   DemoProgress,
   DemoResult,
+  OnboardingDemo,
   OnboardingSettings,
   OnboardingState,
+  UserRole,
 } from '../types/onboarding';
 
 interface OnboardingStore extends OnboardingState {

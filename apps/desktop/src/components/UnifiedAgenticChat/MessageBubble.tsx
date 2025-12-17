@@ -1,4 +1,3 @@
-import { emit } from '@tauri-apps/api/event';
 import 'katex/dist/katex.min.css';
 import {
   CheckCircle2,
@@ -17,7 +16,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { isTauri } from '../../lib/tauri-mock';
+import { emit, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { EnhancedMessage, SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { parseCitations } from './CitationBadge';
@@ -57,7 +56,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const retryFailedMessage = useUnifiedChatStore((state) => state.retryFailedMessage);
 
-  const messages = useUnifiedChatStore((state) => state.messages);
   const researchTasks = useExecutionStore((state) => state.researchTasks);
 
   // Auto-trigger sidecar for relevant content
@@ -116,7 +114,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     }
 
     return explicit ? message.content : null;
-  }, [message, messages]);
+  }, [message]);
 
   const isToolCall = useMemo(() => {
     const meta = message.metadata;
