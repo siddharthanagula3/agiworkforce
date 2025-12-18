@@ -104,15 +104,29 @@ impl AuditLogger {
         Self { db, hmac_key }
     }
 
-    /// Generate a new HMAC key
+    /// Generate or retrieve HMAC key
     fn generate_hmac_key() -> Result<Vec<u8>> {
-        // In production, this should be:
-        // 1. Generated once during installation
-        // 2. Stored in Windows Credential Manager
-        // 3. Never changed (changing invalidates all signatures)
+        // TODO: Integrate with SecretManager for secure storage and rotation
 
-        // For now, use a static key (REPLACE IN PRODUCTION)
-        Ok(b"agiworkforce-audit-hmac-key-v1".to_vec())
+        // 1. Try to get from environment variable (runtime)
+        if let Ok(key) = std::env::var("AUDIT_HMAC_KEY") {
+            if !key.is_empty() {
+                return Ok(key.into_bytes());
+            }
+        }
+
+        // 2. Fallback logic
+        #[cfg(debug_assertions)]
+        {
+            tracing::warn!("SECURITY WARNING: Using hardcoded HMAC key for audit logging. This is unsafe for production.");
+            Ok(b"agiworkforce-audit-hmac-key-v1".to_vec())
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            // In production, we MUST have a secure key
+            panic!("CRITICAL SECURITY ERROR: AUDIT_HMAC_KEY environment variable not set. Application cannot start securely.");
+        }
     }
 
     /// Log an audit event
