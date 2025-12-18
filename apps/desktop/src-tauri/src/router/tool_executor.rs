@@ -375,6 +375,225 @@ impl ToolExecutor {
         )
     }
 
+    /// Execute a terminal command (extracted logic)
+    async fn execute_terminal_tool(
+        &self,
+        args: HashMap<String, serde_json::Value>,
+    ) -> Result<ToolResult> {
+        let command = args
+            .get("command")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing command parameter"))?
+            .to_string();
+        let cwd = args
+            .get("cwd")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let shell = args
+            .get("shell")
+            .and_then(|v| v.as_str())
+            .unwrap_or("powershell")
+            .to_lowercase();
+        let timeout_ms = args
+            .get("timeout_ms")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(60_000);
+
+        if let Some(dir) = &cwd {
+            if let Err(e) = self.validate_path(dir).await {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!(null),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::new(),
+                });
+            }
+        }
+
+        let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
+            "cmd" => (
+                "cmd.exe".to_string(),
+                vec!["/C".to_string(), command.clone()],
+            ),
+            "bash" => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
+            "wsl" => (
+                "wsl.exe".to_string(),
+                vec!["bash".to_string(), "-lc".to_string(), command.clone()],
+            ),
+            _ => (
+                "powershell.exe".to_string(),
+                vec![
+                    "-NoLogo".to_string(),
+                    "-NoProfile".to_string(),
+                    "-Command".to_string(),
+                    command.clone(),
+                ],
+            ),
+        };
+
+        let mut cmd = Command::new(&program);
+        for arg in shell_args.drain(..) {
+            cmd.arg(arg);
+        }
+        if let Some(dir) = &cwd {
+            cmd.current_dir(dir);
+        }
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.kill_on_drop(true);
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
+        let stdout_handle = child.stdout.take();
+        let stderr_handle = child.stderr.take();
+
+        let stdout_task = tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            if let Some(mut stdout) = stdout_handle {
+                stdout.read_to_end(&mut buffer).await?;
+            }
+            Ok::<Vec<u8>, std::io::Error>(buffer)
+        });
+
+        let stderr_task = tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            if let Some(mut stderr) = stderr_handle {
+                stderr.read_to_end(&mut buffer).await?;
+            }
+            Ok::<Vec<u8>, std::io::Error>(buffer)
+        });
+
+        let start = Instant::now();
+        let status = match timeout(TokioDuration::from_millis(timeout_ms), child.wait()).await {
+            Ok(result) => result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?,
+            Err(_) => {
+                // BUG #15 FIX: Gracefully kill timed-out process to prevent zombie processes
+                let timeout_error = format!("Command timed out after {} ms", timeout_ms);
+
+                // First attempt: graceful kill (SIGTERM on Unix, terminate on Windows)
+                if let Err(e) = child.kill().await {
+                    tracing::warn!("Failed to kill timed-out process: {}", e);
+                }
+
+                // Give process 1 second to cleanup, then force kill if still running
+                match timeout(TokioDuration::from_millis(1000), child.wait()).await {
+                    Ok(Ok(_status)) => {
+                        tracing::debug!("Process terminated gracefully after timeout");
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("Error waiting for process termination: {}", e);
+                    }
+                    Err(_) => {
+                        // Process didn't exit in 1 second, it will be force-killed by kill_on_drop
+                        tracing::warn!(
+                            "Process did not terminate gracefully, will be force-killed"
+                        );
+                    }
+                }
+
+                stdout_task.abort();
+                stderr_task.abort();
+
+                if let Some(app_handle) = &self.app_handle {
+                    let terminal_event = TerminalCommand {
+                        id: Uuid::new_v4().to_string(),
+                        command: command.clone(),
+                        cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
+                        exit_code: None,
+                        stdout: None,
+                        stderr: Some(timeout_error.clone()),
+                        duration: Some(timeout_ms),
+                        session_id: None,
+                        agent_id: None,
+                    };
+                    emit_terminal_command(app_handle, terminal_event);
+                }
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!(null),
+                    error: Some(timeout_error),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        let stdout = stdout_task
+            .await
+            .map_err(|e| anyhow!("Failed to join stdout reader: {}", e))?
+            .map_err(|e| anyhow!("Failed to read stdout: {}", e))?;
+        let stderr = stderr_task
+            .await
+            .map_err(|e| anyhow!("Failed to join stderr reader: {}", e))?
+            .map_err(|e| anyhow!("Failed to read stderr: {}", e))?;
+        let output = std::process::Output {
+            status,
+            stdout,
+            stderr,
+        };
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let exit_code = output.status.code();
+        let success = output.status.success();
+
+        if let Some(app_handle) = &self.app_handle {
+            let terminal_event = TerminalCommand {
+                id: Uuid::new_v4().to_string(),
+                command: command.clone(),
+                cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
+                exit_code,
+                stdout: if stdout.is_empty() {
+                    None
+                } else {
+                    Some(stdout.clone())
+                },
+                stderr: if stderr.is_empty() {
+                    None
+                } else {
+                    Some(stderr.clone())
+                },
+                duration: Some(duration_ms),
+                session_id: None,
+                agent_id: None,
+            };
+            emit_terminal_command(app_handle, terminal_event);
+        }
+
+        let mut metadata = HashMap::new();
+        metadata.insert("shell".to_string(), json!(shell));
+        metadata.insert("program".to_string(), json!(program));
+        if let Some(dir) = &cwd {
+            metadata.insert("cwd".to_string(), json!(dir));
+        }
+
+        let error_message = if success {
+            None
+        } else {
+            let trimmed = stderr.trim();
+            if trimmed.is_empty() {
+                Some(match exit_code {
+                    Some(code) => format!("Command exited with code {}", code),
+                    None => "Command exited with error".to_string(),
+                })
+            } else {
+                Some(trimmed.to_string())
+            }
+        };
+
+        Ok(ToolResult {
+            success,
+            data: json!({
+                "stdout": stdout,
+                "stderr": stderr,
+                "exitCode": exit_code,
+                "durationMs": duration_ms,
+            }),
+            error: error_message,
+            metadata,
+        })
+    }
+
     /// Execute an MCP tool
     async fn execute_mcp_tool(
         &self,
@@ -1097,224 +1316,7 @@ impl ToolExecutor {
                     })
                 }
             }
-            "terminal_execute" => {
-                let command = args
-                    .get("command")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing command parameter"))?
-                    .to_string();
-                let cwd = args
-                    .get("cwd")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let shell = args
-                    .get("shell")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("powershell")
-                    .to_lowercase();
-                let timeout_ms = args
-                    .get("timeout_ms")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(60_000);
-
-                if let Some(dir) = &cwd {
-                    if let Err(e) = self.validate_path(dir).await {
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(e.to_string()),
-                            metadata: HashMap::new(),
-                        });
-                    }
-                }
-
-                let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
-                    "cmd" => (
-                        "cmd.exe".to_string(),
-                        vec!["/C".to_string(), command.clone()],
-                    ),
-                    "bash" => ("bash".to_string(), vec!["-lc".to_string(), command.clone()]),
-                    "wsl" => (
-                        "wsl.exe".to_string(),
-                        vec!["bash".to_string(), "-lc".to_string(), command.clone()],
-                    ),
-                    _ => (
-                        "powershell.exe".to_string(),
-                        vec![
-                            "-NoLogo".to_string(),
-                            "-NoProfile".to_string(),
-                            "-Command".to_string(),
-                            command.clone(),
-                        ],
-                    ),
-                };
-
-                let mut cmd = Command::new(&program);
-                for arg in shell_args.drain(..) {
-                    cmd.arg(arg);
-                }
-                if let Some(dir) = &cwd {
-                    cmd.current_dir(dir);
-                }
-                cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-                cmd.kill_on_drop(true);
-
-                let mut child = cmd
-                    .spawn()
-                    .map_err(|e| anyhow!("Failed to spawn shell: {}", e))?;
-                let stdout_handle = child.stdout.take();
-                let stderr_handle = child.stderr.take();
-
-                let stdout_task = tokio::spawn(async move {
-                    let mut buffer = Vec::new();
-                    if let Some(mut stdout) = stdout_handle {
-                        stdout.read_to_end(&mut buffer).await?;
-                    }
-                    Ok::<Vec<u8>, std::io::Error>(buffer)
-                });
-
-                let stderr_task = tokio::spawn(async move {
-                    let mut buffer = Vec::new();
-                    if let Some(mut stderr) = stderr_handle {
-                        stderr.read_to_end(&mut buffer).await?;
-                    }
-                    Ok::<Vec<u8>, std::io::Error>(buffer)
-                });
-
-                let start = Instant::now();
-                let status = match timeout(TokioDuration::from_millis(timeout_ms), child.wait())
-                    .await
-                {
-                    Ok(result) => {
-                        result.map_err(|e| anyhow!("Failed to wait for command: {}", e))?
-                    }
-                    Err(_) => {
-                        // BUG #15 FIX: Gracefully kill timed-out process to prevent zombie processes
-                        let timeout_error = format!("Command timed out after {} ms", timeout_ms);
-
-                        // First attempt: graceful kill (SIGTERM on Unix, terminate on Windows)
-                        if let Err(e) = child.kill().await {
-                            tracing::warn!("Failed to kill timed-out process: {}", e);
-                        }
-
-                        // Give process 1 second to cleanup, then force kill if still running
-                        match timeout(TokioDuration::from_millis(1000), child.wait()).await {
-                            Ok(Ok(_status)) => {
-                                tracing::debug!("Process terminated gracefully after timeout");
-                            }
-                            Ok(Err(e)) => {
-                                tracing::warn!("Error waiting for process termination: {}", e);
-                            }
-                            Err(_) => {
-                                // Process didn't exit in 1 second, it will be force-killed by kill_on_drop
-                                tracing::warn!(
-                                    "Process did not terminate gracefully, will be force-killed"
-                                );
-                            }
-                        }
-
-                        stdout_task.abort();
-                        stderr_task.abort();
-
-                        if let Some(app_handle) = &self.app_handle {
-                            let terminal_event = TerminalCommand {
-                                id: Uuid::new_v4().to_string(),
-                                command: command.clone(),
-                                cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
-                                exit_code: None,
-                                stdout: None,
-                                stderr: Some(timeout_error.clone()),
-                                duration: Some(timeout_ms),
-                                session_id: None,
-                                agent_id: None,
-                            };
-                            emit_terminal_command(app_handle, terminal_event);
-                        }
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!(null),
-                            error: Some(timeout_error),
-                            metadata: HashMap::new(),
-                        });
-                    }
-                };
-
-                let stdout = stdout_task
-                    .await
-                    .map_err(|e| anyhow!("Failed to join stdout reader: {}", e))?
-                    .map_err(|e| anyhow!("Failed to read stdout: {}", e))?;
-                let stderr = stderr_task
-                    .await
-                    .map_err(|e| anyhow!("Failed to join stderr reader: {}", e))?
-                    .map_err(|e| anyhow!("Failed to read stderr: {}", e))?;
-                let output = std::process::Output {
-                    status,
-                    stdout,
-                    stderr,
-                };
-
-                let duration_ms = start.elapsed().as_millis() as u64;
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let exit_code = output.status.code();
-                let success = output.status.success();
-
-                if let Some(app_handle) = &self.app_handle {
-                    let terminal_event = TerminalCommand {
-                        id: Uuid::new_v4().to_string(),
-                        command: command.clone(),
-                        cwd: cwd.clone().unwrap_or_else(|| ".".to_string()),
-                        exit_code,
-                        stdout: if stdout.is_empty() {
-                            None
-                        } else {
-                            Some(stdout.clone())
-                        },
-                        stderr: if stderr.is_empty() {
-                            None
-                        } else {
-                            Some(stderr.clone())
-                        },
-                        duration: Some(duration_ms),
-                        session_id: None,
-                        agent_id: None,
-                    };
-                    emit_terminal_command(app_handle, terminal_event);
-                }
-
-                let mut metadata = HashMap::new();
-                metadata.insert("shell".to_string(), json!(shell));
-                metadata.insert("program".to_string(), json!(program));
-                if let Some(dir) = &cwd {
-                    metadata.insert("cwd".to_string(), json!(dir));
-                }
-
-                let error_message = if success {
-                    None
-                } else {
-                    let trimmed = stderr.trim();
-                    if trimmed.is_empty() {
-                        Some(match exit_code {
-                            Some(code) => format!("Command exited with code {}", code),
-                            None => "Command exited with error".to_string(),
-                        })
-                    } else {
-                        Some(trimmed.to_string())
-                    }
-                };
-
-                Ok(ToolResult {
-                    success,
-                    data: json!({
-                        "stdout": stdout,
-                        "stderr": stderr,
-                        "exitCode": exit_code,
-                        "durationMs": duration_ms,
-                    }),
-                    error: error_message,
-                    metadata,
-                })
-            }
+            "terminal_execute" => self.execute_terminal_tool(args).await,
             "git_push" => {
                 // ✅ Git push implementation
                 let path = args

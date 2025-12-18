@@ -68,6 +68,8 @@ mod file_ops_tests;
 #[cfg(test)]
 mod github_test;
 #[cfg(test)]
+mod path_validation_tests;
+#[cfg(test)]
 mod window_tests;
 
 pub use agent::*;
