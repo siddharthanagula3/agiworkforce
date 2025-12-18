@@ -23,6 +23,10 @@ enum GooglePart {
         #[serde(rename = "inline_data")]
         inline_data: GoogleInlineData,
     },
+    FileData {
+        #[serde(rename = "file_data")]
+        file_data: GoogleFileData,
+    },
     FunctionCall {
         #[serde(rename = "functionCall")]
         function_call: GoogleFunctionCall,
@@ -37,6 +41,13 @@ enum GooglePart {
 struct GoogleInlineData {
     mime_type: String,
     data: String, // base64 encoded
+}
+
+/// For cloud-stored files (videos, large files)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GoogleFileData {
+    mime_type: String,
+    file_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,6 +160,8 @@ impl GoogleProvider {
 
     /// Convert multimodal content to Google format
     fn convert_content(text: &str, multimodal: Option<&Vec<ContentPart>>) -> Vec<GooglePart> {
+        use crate::router::{VideoData, VideoFormat};
+
         let mut parts = Vec::new();
 
         // Add text first if not empty
@@ -181,6 +194,39 @@ impl GoogleProvider {
                                 data: base64_data,
                             },
                         });
+                    }
+                    ContentPart::Video { video } => {
+                        let mime_type = match video.format {
+                            VideoFormat::Mp4 => "video/mp4",
+                            VideoFormat::Webm => "video/webm",
+                            VideoFormat::Mov => "video/quicktime",
+                            VideoFormat::Avi => "video/x-msvideo",
+                            VideoFormat::Mkv => "video/x-matroska",
+                        };
+                        match &video.data {
+                            VideoData::Bytes(bytes) => {
+                                // For small videos, use inline_data with base64
+                                let base64_data = base64::Engine::encode(
+                                    &base64::engine::general_purpose::STANDARD,
+                                    bytes,
+                                );
+                                parts.push(GooglePart::InlineData {
+                                    inline_data: GoogleInlineData {
+                                        mime_type: mime_type.to_string(),
+                                        data: base64_data,
+                                    },
+                                });
+                            }
+                            VideoData::Uri(uri) => {
+                                // For cloud-stored videos, use file_data with URI
+                                parts.push(GooglePart::FileData {
+                                    file_data: GoogleFileData {
+                                        mime_type: mime_type.to_string(),
+                                        file_uri: uri.clone(),
+                                    },
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -282,6 +328,9 @@ impl LLMProvider for GoogleProvider {
                     }
                     GooglePart::FunctionResponse { .. } => {
                         // Skip function responses (used in follow-up messages)
+                    }
+                    GooglePart::FileData { .. } => {
+                        // Skip file data in responses
                     }
                 }
             }

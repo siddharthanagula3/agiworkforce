@@ -5,6 +5,7 @@ pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
 pub mod encryption;
+pub mod guardrails;
 pub mod injection_detector;
 pub mod oauth;
 pub mod permissions;

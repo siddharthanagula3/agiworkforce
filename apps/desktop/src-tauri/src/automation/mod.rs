@@ -3,6 +3,8 @@ pub mod executor;
 pub mod input;
 #[cfg(windows)]
 pub mod inspector;
+#[cfg(test)]
+mod integration_tests;
 pub(crate) mod os_lock;
 pub mod recorder;
 pub mod safety;

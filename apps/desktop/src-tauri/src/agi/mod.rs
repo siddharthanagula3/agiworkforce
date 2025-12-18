@@ -8,6 +8,8 @@ pub mod knowledge;
 pub mod learning;
 pub mod memory;
 pub mod orchestrator;
+#[allow(dead_code)]
+pub mod orchestrator_examples;
 pub mod outcome_tracker;
 pub mod planner;
 pub mod process_ontology;

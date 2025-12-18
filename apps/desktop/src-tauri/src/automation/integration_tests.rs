@@ -19,11 +19,11 @@
 //! - Tests include cleanup to close windows and reset state
 
 use super::*;
-use crate::automation::input::{KeyboardSimulator, MouseSimulator, MouseButton};
+use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 use crate::automation::screen::{capture_primary_screen, capture_region};
-use crate::automation::uia::{UIAutomationService, ElementQuery, BoundingRectangle};
+use crate::automation::uia::{BoundingRectangle, ElementQuery, UIAutomationService};
 use serial_test::serial;
-use std::process::{Command, Child};
+use std::process::{Child, Command};
 use std::thread;
 use std::time::Duration;
 
@@ -41,7 +41,8 @@ impl TestApp {
             cmd.args(args);
         }
 
-        let process = cmd.spawn()
+        let process = cmd
+            .spawn()
             .map_err(|e| anyhow!("Failed to launch {}: {}", app_name, e))?;
 
         // Wait for application to initialize
@@ -55,7 +56,8 @@ impl TestApp {
 
     /// Close the application gracefully
     pub fn close(mut self) -> anyhow::Result<()> {
-        self.process.kill()
+        self.process
+            .kill()
             .map_err(|e| anyhow!("Failed to close {}: {}", self.name, e))?;
 
         // Wait for cleanup
@@ -65,7 +67,8 @@ impl TestApp {
 
     /// Close without consuming self
     pub fn close_ref(&mut self) -> anyhow::Result<()> {
-        self.process.kill()
+        self.process
+            .kill()
             .map_err(|e| anyhow!("Failed to close {}: {}", self.name, e))?;
 
         thread::sleep(Duration::from_millis(500));
@@ -89,9 +92,11 @@ pub fn find_window_with_retry(
     for attempt in 1..=max_attempts {
         let windows = service.list_windows()?;
 
-        if let Some(window) = windows.iter().find(|w|
-            w.name.to_lowercase().contains(&name_contains.to_lowercase())
-        ) {
+        if let Some(window) = windows.iter().find(|w| {
+            w.name
+                .to_lowercase()
+                .contains(&name_contains.to_lowercase())
+        }) {
             return Ok(window.clone());
         }
 
@@ -100,7 +105,10 @@ pub fn find_window_with_retry(
         }
     }
 
-    Err(anyhow!("Failed to find window containing '{}'", name_contains))
+    Err(anyhow!(
+        "Failed to find window containing '{}'",
+        name_contains
+    ))
 }
 
 /// Helper to find element with retry logic
@@ -122,7 +130,10 @@ pub fn find_element_with_retry(
         }
     }
 
-    Err(anyhow!("Failed to find element matching query after {} attempts", max_attempts))
+    Err(anyhow!(
+        "Failed to find element matching query after {} attempts",
+        max_attempts
+    ))
 }
 
 /// Helper to wait for application state
@@ -140,7 +151,10 @@ where
         thread::sleep(Duration::from_millis(100));
     }
 
-    Err(anyhow!("Timeout waiting for condition after {}ms", timeout_ms))
+    Err(anyhow!(
+        "Timeout waiting for condition after {}ms",
+        timeout_ms
+    ))
 }
 
 #[cfg(test)]
@@ -150,17 +164,18 @@ mod notepad_tests {
     #[test]
     #[serial]
     fn test_notepad_launch_and_detect() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         assert!(!window.id.is_empty());
-        assert!(window.name.to_lowercase().contains("notepad") ||
-                window.name.to_lowercase().contains("untitled"));
+        assert!(
+            window.name.to_lowercase().contains("notepad")
+                || window.name.to_lowercase().contains("untitled")
+        );
         assert_eq!(window.control_type, "Window");
 
         app.close().expect("Failed to close Notepad");
@@ -169,16 +184,16 @@ mod notepad_tests {
     #[test]
     #[serial]
     fn test_notepad_text_input_via_uia() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Focus the window
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus Notepad");
 
         thread::sleep(Duration::from_millis(300));
@@ -198,19 +213,20 @@ mod notepad_tests {
             .expect("Failed to find edit control");
 
         // Set focus on edit control
-        service.set_focus(&edit.id)
+        service
+            .set_focus(&edit.id)
             .expect("Failed to focus edit control");
 
         // Set text value
         let test_text = "Hello from Windows Automation MCP!\nThis is line 2.";
-        service.set_value(&edit.id, test_text)
+        service
+            .set_value(&edit.id, test_text)
             .expect("Failed to set text");
 
         thread::sleep(Duration::from_millis(500));
 
         // Verify text was set
-        let retrieved_text = service.get_value(&edit.id)
-            .expect("Failed to get text");
+        let retrieved_text = service.get_value(&edit.id).expect("Failed to get text");
 
         assert!(retrieved_text.contains("Hello from Windows Automation"));
 
@@ -220,23 +236,24 @@ mod notepad_tests {
     #[test]
     #[serial]
     fn test_notepad_keyboard_input() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Focus the window
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus Notepad");
 
         thread::sleep(Duration::from_millis(300));
 
         // Type text using keyboard simulation
-        keyboard.send_text("Testing keyboard input simulation")
+        keyboard
+            .send_text("Testing keyboard input simulation")
             .expect("Failed to send text");
 
         thread::sleep(Duration::from_millis(500));
@@ -255,8 +272,7 @@ mod notepad_tests {
         let edit = find_element_with_retry(&service, Some(&window.id), &query, 5)
             .expect("Failed to find edit control");
 
-        let text = service.get_value(&edit.id)
-            .expect("Failed to get text");
+        let text = service.get_value(&edit.id).expect("Failed to get text");
 
         assert!(text.contains("Testing keyboard input"));
 
@@ -266,16 +282,16 @@ mod notepad_tests {
     #[test]
     #[serial]
     fn test_notepad_special_keys() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus Notepad");
 
         thread::sleep(Duration::from_millis(300));
@@ -291,7 +307,8 @@ mod notepad_tests {
 
         // Select all text (Ctrl+A)
         use windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
-        keyboard.hotkey(&[VK_CONTROL.0 as u16], 0x41) // 'A'
+        keyboard
+            .hotkey(&[VK_CONTROL.0 as u16], 0x41) // 'A'
             .expect("Failed to press Ctrl+A");
 
         thread::sleep(Duration::from_millis(300));
@@ -310,8 +327,7 @@ mod notepad_tests {
         let edit = find_element_with_retry(&service, Some(&window.id), &query, 5)
             .expect("Failed to find edit control");
 
-        let text = service.get_value(&edit.id)
-            .expect("Failed to get text");
+        let text = service.get_value(&edit.id).expect("Failed to get text");
 
         // Should contain all three lines
         assert!(text.contains("Line 1"));
@@ -324,15 +340,15 @@ mod notepad_tests {
     #[test]
     #[serial]
     fn test_notepad_menu_navigation() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus Notepad");
 
         thread::sleep(Duration::from_millis(300));
@@ -372,16 +388,16 @@ mod notepad_tests {
     #[test]
     #[serial]
     fn test_notepad_bounding_rectangle() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Get window bounds
-        let bounds = service.bounding_rect(&window.id)
+        let bounds = service
+            .bounding_rect(&window.id)
             .expect("Failed to get bounding rect");
 
         assert!(bounds.is_some(), "Window should have bounding rectangle");
@@ -407,8 +423,7 @@ mod calculator_tests {
     #[test]
     #[serial]
     fn test_calculator_launch_and_detect() {
-        let app = TestApp::launch("calc.exe", &[])
-            .expect("Failed to launch Calculator");
+        let app = TestApp::launch("calc.exe", &[]).expect("Failed to launch Calculator");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -424,15 +439,15 @@ mod calculator_tests {
     #[test]
     #[serial]
     fn test_calculator_button_click() {
-        let app = TestApp::launch("calc.exe", &[])
-            .expect("Failed to launch Calculator");
+        let app = TestApp::launch("calc.exe", &[]).expect("Failed to launch Calculator");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
         let window = find_window_with_retry(&service, "calculator", 5)
             .expect("Failed to find Calculator window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus Calculator");
 
         thread::sleep(Duration::from_millis(500));
@@ -455,13 +470,13 @@ mod calculator_tests {
                 let button = &elements[0];
 
                 // Check if button supports invoke pattern
-                let patterns = service.check_patterns(&button.id)
+                let patterns = service
+                    .check_patterns(&button.id)
                     .expect("Failed to check patterns");
 
                 if patterns.invoke {
                     // Click the button
-                    service.invoke(&button.id)
-                        .expect("Failed to invoke button");
+                    service.invoke(&button.id).expect("Failed to invoke button");
 
                     thread::sleep(Duration::from_millis(300));
                 } else {
@@ -479,8 +494,7 @@ mod calculator_tests {
     #[test]
     #[serial]
     fn test_calculator_keyboard_input() {
-        let app = TestApp::launch("calc.exe", &[])
-            .expect("Failed to launch Calculator");
+        let app = TestApp::launch("calc.exe", &[]).expect("Failed to launch Calculator");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
@@ -488,7 +502,8 @@ mod calculator_tests {
         let window = find_window_with_retry(&service, "calculator", 5)
             .expect("Failed to find Calculator window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus Calculator");
 
         thread::sleep(Duration::from_millis(500));
@@ -513,8 +528,7 @@ mod calculator_tests {
     #[test]
     #[serial]
     fn test_calculator_pattern_detection() {
-        let app = TestApp::launch("calc.exe", &[])
-            .expect("Failed to launch Calculator");
+        let app = TestApp::launch("calc.exe", &[]).expect("Failed to launch Calculator");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
@@ -522,7 +536,8 @@ mod calculator_tests {
             .expect("Failed to find Calculator window");
 
         // Check patterns on window
-        let patterns = service.check_patterns(&window.id)
+        let patterns = service
+            .check_patterns(&window.id)
             .expect("Failed to check patterns");
 
         // Verify pattern structure
@@ -542,8 +557,7 @@ mod file_explorer_tests {
     #[test]
     #[serial]
     fn test_explorer_launch_and_detect() {
-        let app = TestApp::launch("explorer.exe", &[])
-            .expect("Failed to launch Explorer");
+        let app = TestApp::launch("explorer.exe", &[]).expect("Failed to launch Explorer");
 
         thread::sleep(Duration::from_millis(1000));
 
@@ -551,10 +565,10 @@ mod file_explorer_tests {
 
         // Find Explorer window
         let windows = service.list_windows().expect("Failed to list windows");
-        let explorer_window = windows.iter().find(|w|
-            w.class_name.contains("CabinetWClass") ||
-            w.name.to_lowercase().contains("file explorer")
-        );
+        let explorer_window = windows.iter().find(|w| {
+            w.class_name.contains("CabinetWClass")
+                || w.name.to_lowercase().contains("file explorer")
+        });
 
         assert!(explorer_window.is_some(), "Should find Explorer window");
 
@@ -568,17 +582,16 @@ mod file_explorer_tests {
     #[test]
     #[serial]
     fn test_explorer_address_bar() {
-        let app = TestApp::launch("explorer.exe", &[])
-            .expect("Failed to launch Explorer");
+        let app = TestApp::launch("explorer.exe", &[]).expect("Failed to launch Explorer");
 
         thread::sleep(Duration::from_millis(1000));
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
         let windows = service.list_windows().expect("Failed to list windows");
-        let explorer_window = windows.iter().find(|w|
-            w.class_name.contains("CabinetWClass")
-        );
+        let explorer_window = windows
+            .iter()
+            .find(|w| w.class_name.contains("CabinetWClass"));
 
         if let Some(window) = explorer_window {
             // Try to find address bar
@@ -612,13 +625,12 @@ mod pattern_integration_tests {
     #[serial]
     fn test_invoke_pattern_on_button() {
         // Test invoke pattern using Notepad's close button
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Find close button
         let query = ElementQuery {
@@ -637,10 +649,14 @@ mod pattern_integration_tests {
             if !elements.is_empty() {
                 let close_button = &elements[0];
 
-                let patterns = service.check_patterns(&close_button.id)
+                let patterns = service
+                    .check_patterns(&close_button.id)
                     .expect("Failed to check patterns");
 
-                assert!(patterns.invoke, "Close button should support invoke pattern");
+                assert!(
+                    patterns.invoke,
+                    "Close button should support invoke pattern"
+                );
 
                 // Don't actually invoke to avoid closing the window
                 // service.invoke(&close_button.id).expect("Failed to invoke");
@@ -653,13 +669,12 @@ mod pattern_integration_tests {
     #[test]
     #[serial]
     fn test_value_pattern_on_edit() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         let query = ElementQuery {
             window: None,
@@ -675,21 +690,24 @@ mod pattern_integration_tests {
             .expect("Failed to find edit control");
 
         // Check patterns
-        let patterns = service.check_patterns(&edit.id)
+        let patterns = service
+            .check_patterns(&edit.id)
             .expect("Failed to check patterns");
 
-        assert!(patterns.value || patterns.text,
-            "Edit control should support value or text pattern");
+        assert!(
+            patterns.value || patterns.text,
+            "Edit control should support value or text pattern"
+        );
 
         // Test set_value
-        service.set_value(&edit.id, "Pattern test")
+        service
+            .set_value(&edit.id, "Pattern test")
             .expect("Failed to set value");
 
         thread::sleep(Duration::from_millis(300));
 
         // Test get_value
-        let value = service.get_value(&edit.id)
-            .expect("Failed to get value");
+        let value = service.get_value(&edit.id).expect("Failed to get value");
 
         assert!(value.contains("Pattern test"));
 
@@ -699,22 +717,23 @@ mod pattern_integration_tests {
     #[test]
     #[serial]
     fn test_text_pattern_reading() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus window");
 
         thread::sleep(Duration::from_millis(300));
 
         // Type some text
-        keyboard.send_text("Multi-line\ntext\npattern\ntest")
+        keyboard
+            .send_text("Multi-line\ntext\npattern\ntest")
             .expect("Failed to type text");
 
         thread::sleep(Duration::from_millis(500));
@@ -733,8 +752,7 @@ mod pattern_integration_tests {
         let edit = find_element_with_retry(&service, Some(&window.id), &query, 5)
             .expect("Failed to find edit control");
 
-        let text = service.get_value(&edit.id)
-            .expect("Failed to get text");
+        let text = service.get_value(&edit.id).expect("Failed to get text");
 
         assert!(text.contains("Multi-line"));
         assert!(text.contains("pattern"));
@@ -746,13 +764,12 @@ mod pattern_integration_tests {
     #[test]
     #[serial]
     fn test_unsupported_pattern_error() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Try to toggle a window (windows don't support toggle pattern)
         let result = service.toggle(&window.id);
@@ -773,22 +790,23 @@ mod mouse_integration_tests {
     #[test]
     #[serial]
     fn test_mouse_click_on_element() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let mouse = MouseSimulator::new().expect("Failed to create mouse");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Get window bounds
-        let bounds = service.bounding_rect(&window.id)
+        let bounds = service
+            .bounding_rect(&window.id)
             .expect("Failed to get bounds")
             .expect("Window should have bounds");
 
         // Click center of window
-        mouse.click_rect_center(&bounds, MouseButton::Left)
+        mouse
+            .click_rect_center(&bounds, MouseButton::Left)
             .expect("Failed to click window center");
 
         thread::sleep(Duration::from_millis(300));
@@ -799,15 +817,14 @@ mod mouse_integration_tests {
     #[test]
     #[serial]
     fn test_mouse_click_edit_control() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let mouse = MouseSimulator::new().expect("Failed to create mouse");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         let query = ElementQuery {
             window: None,
@@ -823,24 +840,26 @@ mod mouse_integration_tests {
             .expect("Failed to find edit control");
 
         // Get edit control bounds
-        let bounds = service.bounding_rect(&edit.id)
+        let bounds = service
+            .bounding_rect(&edit.id)
             .expect("Failed to get bounds")
             .expect("Edit should have bounds");
 
         // Click to focus
-        mouse.click_rect_center(&bounds, MouseButton::Left)
+        mouse
+            .click_rect_center(&bounds, MouseButton::Left)
             .expect("Failed to click edit");
 
         thread::sleep(Duration::from_millis(300));
 
         // Type after clicking
-        keyboard.send_text("Clicked and typed")
+        keyboard
+            .send_text("Clicked and typed")
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
 
-        let text = service.get_value(&edit.id)
-            .expect("Failed to get text");
+        let text = service.get_value(&edit.id).expect("Failed to get text");
 
         assert!(text.contains("Clicked and typed"));
 
@@ -850,24 +869,23 @@ mod mouse_integration_tests {
     #[test]
     #[serial]
     fn test_mouse_double_click() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let mouse = MouseSimulator::new().expect("Failed to create mouse");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus window");
 
         thread::sleep(Duration::from_millis(300));
 
         // Type a word
-        keyboard.send_text("doubleclick")
-            .expect("Failed to type");
+        keyboard.send_text("doubleclick").expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
 
@@ -884,7 +902,8 @@ mod mouse_integration_tests {
         let edit = find_element_with_retry(&service, Some(&window.id), &query, 5)
             .expect("Failed to find edit control");
 
-        let bounds = service.bounding_rect(&edit.id)
+        let bounds = service
+            .bounding_rect(&edit.id)
             .expect("Failed to get bounds")
             .expect("Edit should have bounds");
 
@@ -893,10 +912,12 @@ mod mouse_integration_tests {
         let center_y = (bounds.top + bounds.height / 2.0) as i32;
 
         // Perform double-click
-        mouse.click(center_x, center_y, MouseButton::Left)
+        mouse
+            .click(center_x, center_y, MouseButton::Left)
             .expect("Failed to click");
         thread::sleep(Duration::from_millis(50));
-        mouse.click(center_x, center_y, MouseButton::Left)
+        mouse
+            .click(center_x, center_y, MouseButton::Left)
             .expect("Failed to click");
 
         thread::sleep(Duration::from_millis(300));
@@ -912,16 +933,16 @@ mod screen_capture_integration_tests {
     #[test]
     #[serial]
     fn test_capture_element_region() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Get window bounds
-        let bounds = service.bounding_rect(&window.id)
+        let bounds = service
+            .bounding_rect(&window.id)
             .expect("Failed to get bounds")
             .expect("Window should have bounds");
 
@@ -931,7 +952,8 @@ mod screen_capture_integration_tests {
             bounds.top as u32,
             bounds.width as u32,
             bounds.height as u32,
-        ).expect("Failed to capture region");
+        )
+        .expect("Failed to capture region");
 
         assert_eq!(capture.pixels.width(), bounds.width as u32);
         assert_eq!(capture.pixels.height(), bounds.height as u32);
@@ -944,22 +966,23 @@ mod screen_capture_integration_tests {
     #[test]
     #[serial]
     fn test_capture_edit_control() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
         let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus window");
 
         thread::sleep(Duration::from_millis(300));
 
         // Type visible text
-        keyboard.send_text("Screenshot Test")
+        keyboard
+            .send_text("Screenshot Test")
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
@@ -977,7 +1000,8 @@ mod screen_capture_integration_tests {
         let edit = find_element_with_retry(&service, Some(&window.id), &query, 5)
             .expect("Failed to find edit control");
 
-        let bounds = service.bounding_rect(&edit.id)
+        let bounds = service
+            .bounding_rect(&edit.id)
             .expect("Failed to get bounds")
             .expect("Edit should have bounds");
 
@@ -987,7 +1011,8 @@ mod screen_capture_integration_tests {
             bounds.top as u32,
             bounds.width as u32,
             bounds.height as u32,
-        ).expect("Failed to capture edit control");
+        )
+        .expect("Failed to capture edit control");
 
         assert!(capture.pixels.width() > 0);
         assert!(capture.pixels.height() > 0);
@@ -998,21 +1023,20 @@ mod screen_capture_integration_tests {
     #[test]
     #[serial]
     fn test_verify_element_bounds_accuracy() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
-        let bounds = service.bounding_rect(&window.id)
+        let bounds = service
+            .bounding_rect(&window.id)
             .expect("Failed to get bounds")
             .expect("Window should have bounds");
 
         // Verify bounds are within screen dimensions
-        let screen = capture_primary_screen()
-            .expect("Failed to capture screen");
+        let screen = capture_primary_screen().expect("Failed to capture screen");
 
         assert!(bounds.left >= 0.0);
         assert!(bounds.top >= 0.0);
@@ -1030,13 +1054,12 @@ mod focus_and_window_management_tests {
     #[test]
     #[serial]
     fn test_set_focus_on_element() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         let query = ElementQuery {
             window: None,
@@ -1052,8 +1075,7 @@ mod focus_and_window_management_tests {
             .expect("Failed to find edit control");
 
         // Set focus should succeed
-        service.set_focus(&edit.id)
-            .expect("Failed to set focus");
+        service.set_focus(&edit.id).expect("Failed to set focus");
 
         thread::sleep(Duration::from_millis(300));
 
@@ -1063,23 +1085,22 @@ mod focus_and_window_management_tests {
     #[test]
     #[serial]
     fn test_focus_window_brings_to_foreground() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Focus window should bring it to foreground
-        service.focus_window(&window.id)
+        service
+            .focus_window(&window.id)
             .expect("Failed to focus window");
 
         thread::sleep(Duration::from_millis(500));
 
         // Window should still be findable and accessible
-        let windows = service.list_windows()
-            .expect("Failed to list windows");
+        let windows = service.list_windows().expect("Failed to list windows");
 
         let still_there = windows.iter().any(|w| w.id == window.id);
         assert!(still_there, "Window should still exist after focusing");
@@ -1095,13 +1116,12 @@ mod error_handling_integration_tests {
     #[test]
     #[serial]
     fn test_invoke_on_closed_window() {
-        let mut app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let mut app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         let window_id = window.id.clone();
 
@@ -1119,13 +1139,12 @@ mod error_handling_integration_tests {
     #[test]
     #[serial]
     fn test_get_value_on_non_text_element() {
-        let app = TestApp::launch("notepad.exe", &[])
-            .expect("Failed to launch Notepad");
+        let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let window = find_window_with_retry(&service, "notepad", 5)
-            .expect("Failed to find Notepad window");
+        let window =
+            find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
 
         // Try to get value from window (which doesn't have value pattern)
         let result = service.get_value(&window.id);
