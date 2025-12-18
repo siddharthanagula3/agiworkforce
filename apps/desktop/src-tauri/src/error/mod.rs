@@ -84,6 +84,12 @@ impl From<rusqlite::Error> for AGIError {
     }
 }
 
+impl From<tokio_postgres::Error> for AGIError {
+    fn from(err: tokio_postgres::Error) -> Self {
+        AGIError::Database(err.to_string())
+    }
+}
+
 /// Tool-specific errors
 #[derive(Debug, Error, Serialize, Deserialize, Clone)]
 #[serde(tag = "tool_type", content = "message")]
