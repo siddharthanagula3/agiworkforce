@@ -3,7 +3,7 @@ pub mod executor;
 pub mod input;
 #[cfg(windows)]
 pub mod inspector;
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod integration_tests;
 pub(crate) mod os_lock;
 pub mod recorder;
@@ -19,78 +19,93 @@ use std::sync::Mutex;
 
 use self::input::{ClipboardManager, KeyboardSimulator, MouseSimulator};
 
-#[cfg(windows)]
 use self::uia::UIAutomationService;
 
 // Stub for non-Windows platforms
 #[cfg(not(windows))]
-pub struct UIAutomationService;
+pub mod uia {
+    pub use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
 
-#[cfg(not(windows))]
-impl UIAutomationService {
-    pub fn new() -> anyhow::Result<Self> {
-        Ok(Self)
+    pub struct UIPatterns {
+        pub invoke: bool,
+        pub value: bool,
+        pub toggle: bool,
+        pub text: bool,
     }
 
-    pub fn invoke(&self, _element_id: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+    pub struct UIAutomationService;
 
-    pub fn bounding_rect(
-        &self,
-        _element_id: &str,
-    ) -> anyhow::Result<Option<types::BoundingRectangle>> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+    impl UIAutomationService {
+        pub fn new() -> anyhow::Result<Self> {
+            Ok(Self)
+        }
 
-    pub fn set_focus(&self, _element_id: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+        pub fn invoke(&self, _element_id: &str) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
 
-    pub fn find_elements(
-        &self,
-        _parent_id: Option<String>,
-        _query: &types::ElementQuery,
-    ) -> anyhow::Result<Vec<types::UIElementInfo>> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+        pub fn bounding_rect(
+            &self,
+            _element_id: &str,
+        ) -> anyhow::Result<Option<BoundingRectangle>> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
 
-    pub fn toggle(&self, _element_id: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+        pub fn set_focus(&self, _element_id: &str) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
 
-    pub fn set_value(&self, _element_id: &str, _value: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+        pub fn find_elements(
+            &self,
+            _parent_id: Option<String>,
+            _query: &ElementQuery,
+        ) -> anyhow::Result<Vec<UIElementInfo>> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
 
-    pub fn list_windows(&self) -> anyhow::Result<Vec<types::UIElementInfo>> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+        pub fn toggle(&self, _element_id: &str) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
 
-    pub fn get_value(&self, _element_id: &str) -> anyhow::Result<String> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
-    }
+        pub fn set_value(&self, _element_id: &str, _value: &str) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
 
-    pub fn focus_window(&self, _window_name: &str) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!(
-            "UI Automation not available on this platform"
-        ))
+        pub fn list_windows(&self) -> anyhow::Result<Vec<UIElementInfo>> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
+
+        pub fn get_value(&self, _element_id: &str) -> anyhow::Result<String> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
+
+        pub fn focus_window(&self, _window_name: &str) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
+
+        pub fn check_patterns(&self, _element_id: &str) -> anyhow::Result<UIPatterns> {
+            Err(anyhow::anyhow!(
+                "UI Automation not available on this platform"
+            ))
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct OcrResult {
     pub text: String,
     pub confidence: f32,
