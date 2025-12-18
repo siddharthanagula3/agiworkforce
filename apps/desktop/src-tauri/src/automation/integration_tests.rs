@@ -21,7 +21,10 @@
 use super::*;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 use crate::automation::screen::{capture_primary_screen, capture_region};
+use crate::automation::types::UIElementInfo as ElementInfo;
 use crate::automation::uia::{BoundingRectangle, ElementQuery, UIAutomationService};
+use anyhow::anyhow;
+use enigo::Key;
 use serial_test::serial;
 use std::process::{Child, Command};
 use std::thread;
@@ -119,7 +122,7 @@ pub fn find_element_with_retry(
     max_attempts: u32,
 ) -> anyhow::Result<ElementInfo> {
     for attempt in 1..=max_attempts {
-        let elements = service.find_elements(window_id, query)?;
+        let elements = service.find_elements(window_id.map(String::from), query)?;
 
         if !elements.is_empty() {
             return Ok(elements[0].clone());
@@ -233,13 +236,13 @@ mod notepad_tests {
         app.close().expect("Failed to close Notepad");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_notepad_keyboard_input() {
+    async fn test_notepad_keyboard_input() {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -254,6 +257,7 @@ mod notepad_tests {
         // Type text using keyboard simulation
         keyboard
             .send_text("Testing keyboard input simulation")
+            .await
             .expect("Failed to send text");
 
         thread::sleep(Duration::from_millis(500));
@@ -279,13 +283,13 @@ mod notepad_tests {
         app.close().expect("Failed to close Notepad");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_notepad_special_keys() {
+    async fn test_notepad_special_keys() {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -297,18 +301,22 @@ mod notepad_tests {
         thread::sleep(Duration::from_millis(300));
 
         // Type multi-line text
-        keyboard.send_text("Line 1").expect("Failed to type");
-        keyboard.press_key(0x0D).expect("Failed to press Enter"); // VK_RETURN
-        keyboard.send_text("Line 2").expect("Failed to type");
-        keyboard.press_key(0x0D).expect("Failed to press Enter");
-        keyboard.send_text("Line 3").expect("Failed to type");
+        keyboard.send_text("Line 1").await.expect("Failed to type");
+        keyboard
+            .press_key(Key::Return)
+            .expect("Failed to press Enter"); // VK_RETURN
+        keyboard.send_text("Line 2").await.expect("Failed to type");
+        keyboard
+            .press_key(Key::Return)
+            .expect("Failed to press Enter");
+        keyboard.send_text("Line 3").await.expect("Failed to type");
 
         thread::sleep(Duration::from_millis(500));
 
         // Select all text (Ctrl+A)
         use windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
         keyboard
-            .hotkey(&[VK_CONTROL.0 as u16], 0x41) // 'A'
+            .send_hotkey(&[Key::Control], Key::Other(0x41)) // 'A'
             .expect("Failed to press Ctrl+A");
 
         thread::sleep(Duration::from_millis(300));
@@ -364,7 +372,7 @@ mod notepad_tests {
             max_results: Some(1),
         };
 
-        let result = service.find_elements(Some(&window.id), &query);
+        let result = service.find_elements(Some(window.id.clone()), &query);
 
         // Menu might not be accessible without keyboard navigation
         // This test verifies the query mechanism works
@@ -463,7 +471,7 @@ mod calculator_tests {
             max_results: Some(1),
         };
 
-        let button_result = service.find_elements(Some(&window.id), &query);
+        let button_result = service.find_elements(Some(window.id.clone()), &query);
 
         if let Ok(elements) = button_result {
             if !elements.is_empty() {
@@ -491,13 +499,13 @@ mod calculator_tests {
         app.close().expect("Failed to close Calculator");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_calculator_keyboard_input() {
+    async fn test_calculator_keyboard_input() {
         let app = TestApp::launch("calc.exe", &[]).expect("Failed to launch Calculator");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard simulator");
 
         let window = find_window_with_retry(&service, "calculator", 5)
             .expect("Failed to find Calculator window");
@@ -509,13 +517,15 @@ mod calculator_tests {
         thread::sleep(Duration::from_millis(500));
 
         // Type calculation: 5 + 3 =
-        keyboard.send_text("5").expect("Failed to type 5");
+        keyboard.send_text("5").await.expect("Failed to type 5");
         thread::sleep(Duration::from_millis(100));
-        keyboard.send_text("+").expect("Failed to type +");
+        keyboard.send_text("+").await.expect("Failed to type +");
         thread::sleep(Duration::from_millis(100));
-        keyboard.send_text("3").expect("Failed to type 3");
+        keyboard.send_text("3").await.expect("Failed to type 3");
         thread::sleep(Duration::from_millis(100));
-        keyboard.press_key(0x0D).expect("Failed to press Enter"); // =
+        keyboard
+            .press_key(Key::Return)
+            .expect("Failed to press Enter"); // =
 
         thread::sleep(Duration::from_millis(500));
 
@@ -605,7 +615,7 @@ mod file_explorer_tests {
                 max_results: Some(10),
             };
 
-            let result = service.find_elements(Some(&window.id), &query);
+            let result = service.find_elements(Some(window.id.clone()), &query);
 
             if let Ok(elements) = result {
                 // Explorer has multiple edit controls (address bar, search box)
@@ -643,7 +653,7 @@ mod pattern_integration_tests {
             max_results: Some(1),
         };
 
-        let result = service.find_elements(Some(&window.id), &query);
+        let result = service.find_elements(Some(window.id.clone()), &query);
 
         if let Ok(elements) = result {
             if !elements.is_empty() {
@@ -714,13 +724,13 @@ mod pattern_integration_tests {
         app.close().expect("Failed to close Notepad");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_text_pattern_reading() {
+    async fn test_text_pattern_reading() {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -734,6 +744,7 @@ mod pattern_integration_tests {
         // Type some text
         keyboard
             .send_text("Multi-line\ntext\npattern\ntest")
+            .await
             .expect("Failed to type text");
 
         thread::sleep(Duration::from_millis(500));
@@ -793,7 +804,7 @@ mod mouse_integration_tests {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let mouse = MouseSimulator::new().expect("Failed to create mouse");
+        let mut mouse = MouseSimulator::new().expect("Failed to create mouse");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -814,14 +825,14 @@ mod mouse_integration_tests {
         app.close().expect("Failed to close Notepad");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_mouse_click_edit_control() {
+    async fn test_mouse_click_edit_control() {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let mouse = MouseSimulator::new().expect("Failed to create mouse");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
+        let mut mouse = MouseSimulator::new().expect("Failed to create mouse");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -855,6 +866,7 @@ mod mouse_integration_tests {
         // Type after clicking
         keyboard
             .send_text("Clicked and typed")
+            .await
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
@@ -866,14 +878,14 @@ mod mouse_integration_tests {
         app.close().expect("Failed to close Notepad");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_mouse_double_click() {
+    async fn test_mouse_double_click() {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let mouse = MouseSimulator::new().expect("Failed to create mouse");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
+        let mut mouse = MouseSimulator::new().expect("Failed to create mouse");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -885,7 +897,10 @@ mod mouse_integration_tests {
         thread::sleep(Duration::from_millis(300));
 
         // Type a word
-        keyboard.send_text("doubleclick").expect("Failed to type");
+        keyboard
+            .send_text("doubleclick")
+            .await
+            .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
 
@@ -948,8 +963,8 @@ mod screen_capture_integration_tests {
 
         // Capture the window region
         let capture = capture_region(
-            bounds.left as u32,
-            bounds.top as u32,
+            bounds.left as i32,
+            bounds.top as i32,
             bounds.width as u32,
             bounds.height as u32,
         )
@@ -957,19 +972,19 @@ mod screen_capture_integration_tests {
 
         assert_eq!(capture.pixels.width(), bounds.width as u32);
         assert_eq!(capture.pixels.height(), bounds.height as u32);
-        assert_eq!(capture.x, bounds.left as u32);
-        assert_eq!(capture.y, bounds.top as u32);
+        assert_eq!(capture.x, bounds.left as i32);
+        assert_eq!(capture.y, bounds.top as i32);
 
         app.close().expect("Failed to close Notepad");
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_capture_edit_control() {
+    async fn test_capture_edit_control() {
         let app = TestApp::launch("notepad.exe", &[]).expect("Failed to launch Notepad");
 
         let service = UIAutomationService::new().expect("Failed to create service");
-        let keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
+        let mut keyboard = KeyboardSimulator::new().expect("Failed to create keyboard");
 
         let window =
             find_window_with_retry(&service, "notepad", 5).expect("Failed to find Notepad window");
@@ -983,6 +998,7 @@ mod screen_capture_integration_tests {
         // Type visible text
         keyboard
             .send_text("Screenshot Test")
+            .await
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
@@ -1007,8 +1023,8 @@ mod screen_capture_integration_tests {
 
         // Capture edit control
         let capture = capture_region(
-            bounds.left as u32,
-            bounds.top as u32,
+            bounds.left as i32,
+            bounds.top as i32,
             bounds.width as u32,
             bounds.height as u32,
         )

@@ -20,7 +20,7 @@ pub use dxgi::{list_displays, ScreenInfo};
 pub use ocr::{perform_ocr, OcrResult};
 
 #[cfg(not(feature = "ocr"))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct OcrResult {
     pub text: String,
     pub confidence: f32,
