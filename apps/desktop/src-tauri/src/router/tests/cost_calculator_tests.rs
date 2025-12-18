@@ -68,6 +68,7 @@ mod tests {
     fn test_cost_rounding() {
         let cost = 0.123456789f64;
         let rounded = (cost * 100000.0).round() / 100000.0;
-        assert!(rounded > 0.12345 && rounded < 0.12346);
+        // Rounding 0.123456789 to 5 decimal places gives 0.12346
+        assert!((rounded - 0.12346).abs() < 1e-10);
     }
 }
