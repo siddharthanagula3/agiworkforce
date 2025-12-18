@@ -5,10 +5,16 @@ use std::io::{Read, Write};
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ShellType {
+    // Windows shells
     PowerShell,
     Cmd,
     Wsl,
     GitBash,
+    // Unix shells
+    Zsh,
+    Bash,
+    Fish,
+    Sh,
 }
 
 pub struct PtySession {
@@ -164,6 +170,35 @@ fn get_shell_command(shell_type: &ShellType) -> Result<CommandBuilder> {
             }
 
             found.ok_or_else(|| Error::Generic("Git Bash not found".to_string()))?
+        }
+        // Unix shells
+        ShellType::Zsh => {
+            if which::which("zsh").is_ok() {
+                "zsh"
+            } else {
+                return Err(Error::Generic("zsh not found".to_string()));
+            }
+        }
+        ShellType::Bash => {
+            if which::which("bash").is_ok() {
+                "bash"
+            } else {
+                return Err(Error::Generic("bash not found".to_string()));
+            }
+        }
+        ShellType::Fish => {
+            if which::which("fish").is_ok() {
+                "fish"
+            } else {
+                return Err(Error::Generic("fish not found".to_string()));
+            }
+        }
+        ShellType::Sh => {
+            if which::which("sh").is_ok() {
+                "sh"
+            } else {
+                return Err(Error::Generic("sh not found".to_string()));
+            }
         }
     };
 

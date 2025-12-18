@@ -114,354 +114,428 @@ interface ApiState {
   clearError: () => void;
 }
 
-export const useApiStore = create<ApiState>((set, get) => ({
-  // Initial state
-  currentRequest: {
-    method: 'GET',
-    url: 'https://api.example.com',
-    headers: { 'Content-Type': 'application/json' },
-  },
-  response: null,
-  loading: false,
-  error: null,
-  savedRequests: [],
-  templates: [],
-  oauthClients: new Map(),
-  tokens: new Map(),
-  history: [],
+export const useApiStore = create<ApiState>((set, get) => {
+  // SECURITY: Redact sensitive headers from request history
+  const SENSITIVE_HEADERS = [
+    'authorization',
+    'x-api-key',
+    'api-key',
+    'x-auth-token',
+    'cookie',
+    'set-cookie',
+    'x-access-token',
+    'x-refresh-token',
+  ];
 
-  // Updated Nov 16, 2025: Added comprehensive error handling and cleanup
-  executeRequest: async (request: ApiRequest) => {
-    set({ loading: true, error: null });
-    try {
-      const response = await invoke<ApiResponse>('api_request', { request });
-      set((state) => ({
-        response,
-        loading: false,
-        error: null,
-        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
-      }));
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] executeRequest failed:', errorMessage);
-      set({ loading: false, error: errorMessage, response: null });
-      throw error;
+  const redactSensitiveHeaders = (
+    headers: Record<string, string> | undefined,
+  ): Record<string, string> | undefined => {
+    if (!headers) return headers;
+    const redacted: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (SENSITIVE_HEADERS.includes(key.toLowerCase())) {
+        redacted[key] = '[REDACTED]';
+      } else {
+        redacted[key] = value;
+      }
     }
-  },
+    return redacted;
+  };
 
-  get: async (url: string) => {
-    set({ loading: true, error: null });
-    try {
-      const response = await invoke<ApiResponse>('api_get', { url });
-      const request: ApiRequest = { method: 'GET', url };
+  const redactRequest = (request: ApiRequest): ApiRequest => ({
+    ...request,
+    headers: redactSensitiveHeaders(request.headers),
+  });
+
+  const redactResponse = (response: ApiResponse): ApiResponse => ({
+    ...response,
+    headers: redactSensitiveHeaders(response.headers) || {},
+  });
+
+  return {
+    // Initial state
+    currentRequest: {
+      method: 'GET',
+      url: 'https://api.example.com',
+      headers: { 'Content-Type': 'application/json' },
+    },
+    response: null,
+    loading: false,
+    error: null,
+    savedRequests: [],
+    templates: [],
+    oauthClients: new Map(),
+    tokens: new Map(),
+    history: [],
+
+    // Updated Nov 16, 2025: Added comprehensive error handling and cleanup
+    executeRequest: async (request: ApiRequest) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_request', { request });
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] executeRequest failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    get: async (url: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_get', { url });
+        const request: ApiRequest = { method: 'GET', url };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] GET request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    post: async (url: string, body: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_post_json', { url, body });
+        const request: ApiRequest = {
+          method: 'POST',
+          url,
+          body,
+          headers: { 'Content-Type': 'application/json' },
+        };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] POST request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    put: async (url: string, body: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_put_json', { url, body });
+        const request: ApiRequest = {
+          method: 'PUT',
+          url,
+          body,
+          headers: { 'Content-Type': 'application/json' },
+        };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] PUT request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    delete: async (url: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_delete', { url });
+        const request: ApiRequest = { method: 'DELETE', url };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] DELETE request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    // Request management
+    setCurrentRequest: (request: Partial<ApiRequest>) => {
       set((state) => ({
-        response,
-        loading: false,
-        error: null,
-        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
+        currentRequest: { ...state.currentRequest, ...request },
       }));
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] GET request failed:', errorMessage);
-      set({ loading: false, error: errorMessage, response: null });
-      throw error;
-    }
-  },
+    },
 
-  post: async (url: string, body: string) => {
-    set({ loading: true, error: null });
-    try {
-      const response = await invoke<ApiResponse>('api_post_json', { url, body });
-      const request: ApiRequest = {
-        method: 'POST',
-        url,
-        body,
-        headers: { 'Content-Type': 'application/json' },
+    saveRequest: (name: string, request: ApiRequest) => {
+      const savedRequest: SavedRequest = {
+        id: `req_${Date.now()}`,
+        name,
+        request,
+        createdAt: Date.now(),
       };
+
       set((state) => ({
-        response,
-        loading: false,
-        error: null,
-        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
+        savedRequests: [...state.savedRequests, savedRequest],
       }));
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] POST request failed:', errorMessage);
-      set({ loading: false, error: errorMessage, response: null });
-      throw error;
-    }
-  },
+    },
 
-  put: async (url: string, body: string) => {
-    set({ loading: true, error: null });
-    try {
-      const response = await invoke<ApiResponse>('api_put_json', { url, body });
-      const request: ApiRequest = {
-        method: 'PUT',
-        url,
-        body,
-        headers: { 'Content-Type': 'application/json' },
-      };
+    loadRequest: (id: string) => {
+      const saved = get().savedRequests.find((r) => r.id === id);
+      if (saved) {
+        set({ currentRequest: saved.request });
+      }
+    },
+
+    deleteRequest: (id: string) => {
       set((state) => ({
-        response,
-        loading: false,
-        error: null,
-        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
+        savedRequests: state.savedRequests.filter((r) => r.id !== id),
       }));
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] PUT request failed:', errorMessage);
-      set({ loading: false, error: errorMessage, response: null });
-      throw error;
-    }
-  },
+    },
 
-  delete: async (url: string) => {
-    set({ loading: true, error: null });
-    try {
-      const response = await invoke<ApiResponse>('api_delete', { url });
-      const request: ApiRequest = { method: 'DELETE', url };
-      set((state) => ({
-        response,
-        loading: false,
-        error: null,
-        history: [...state.history.slice(-99), { request, response, timestamp: Date.now() }],
-      }));
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] DELETE request failed:', errorMessage);
-      set({ loading: false, error: errorMessage, response: null });
-      throw error;
-    }
-  },
+    // Updated Nov 16, 2025: Added proper error handling to OAuth methods
+    createOAuthClient: async (clientId: string, config: OAuth2Config) => {
+      try {
+        await invoke('api_oauth_create_client', { clientId, config });
+        set((state) => {
+          const newClients = new Map(state.oauthClients);
+          newClients.set(clientId, config);
+          return { oauthClients: newClients, error: null };
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] createOAuthClient failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
 
-  // Request management
-  setCurrentRequest: (request: Partial<ApiRequest>) => {
-    set((state) => ({
-      currentRequest: { ...state.currentRequest, ...request },
-    }));
-  },
+    getAuthUrl: async (clientId: string, state: string, usePkce: boolean) => {
+      try {
+        const url = await invoke<string>('api_oauth_get_auth_url', {
+          clientId,
+          stateParam: state,
+          usePkce,
+        });
+        set({ error: null });
+        return url;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] getAuthUrl failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
 
-  saveRequest: (name: string, request: ApiRequest) => {
-    const savedRequest: SavedRequest = {
-      id: `req_${Date.now()}`,
-      name,
-      request,
-      createdAt: Date.now(),
-    };
+    exchangeCode: async (clientId: string, code: string) => {
+      try {
+        const token = await invoke<TokenResponse>('api_oauth_exchange_code', {
+          clientId,
+          code,
+        });
 
-    set((state) => ({
-      savedRequests: [...state.savedRequests, savedRequest],
-    }));
-  },
+        set((state) => {
+          const newTokens = new Map(state.tokens);
+          newTokens.set(clientId, token);
+          return { tokens: newTokens, error: null };
+        });
 
-  loadRequest: (id: string) => {
-    const saved = get().savedRequests.find((r) => r.id === id);
-    if (saved) {
-      set({ currentRequest: saved.request });
-    }
-  },
+        return token;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] exchangeCode failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
 
-  deleteRequest: (id: string) => {
-    set((state) => ({
-      savedRequests: state.savedRequests.filter((r) => r.id !== id),
-    }));
-  },
+    refreshToken: async (clientId: string, refreshToken: string) => {
+      try {
+        const token = await invoke<TokenResponse>('api_oauth_refresh_token', {
+          clientId,
+          refreshToken,
+        });
 
-  // Updated Nov 16, 2025: Added proper error handling to OAuth methods
-  createOAuthClient: async (clientId: string, config: OAuth2Config) => {
-    try {
-      await invoke('api_oauth_create_client', { clientId, config });
-      set((state) => {
-        const newClients = new Map(state.oauthClients);
-        newClients.set(clientId, config);
-        return { oauthClients: newClients, error: null };
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] createOAuthClient failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
+        set((state) => {
+          const newTokens = new Map(state.tokens);
+          newTokens.set(clientId, token);
+          return { tokens: newTokens, error: null };
+        });
 
-  getAuthUrl: async (clientId: string, state: string, usePkce: boolean) => {
-    try {
-      const url = await invoke<string>('api_oauth_get_auth_url', {
-        clientId,
-        stateParam: state,
-        usePkce,
-      });
+        return token;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] refreshToken failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    clientCredentials: async (clientId: string) => {
+      try {
+        const token = await invoke<TokenResponse>('api_oauth_client_credentials', {
+          clientId,
+        });
+
+        set((state) => {
+          const newTokens = new Map(state.tokens);
+          newTokens.set(clientId, token);
+          return { tokens: newTokens, error: null };
+        });
+
+        return token;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] clientCredentials failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    // Updated Nov 16, 2025: Added error handling to template and parsing methods
+    renderTemplate: async (template: RequestTemplate, variables: Record<string, string>) => {
+      try {
+        const rendered = await invoke<any>('api_render_template', {
+          template,
+          variables,
+        });
+
+        set({ error: null });
+        return {
+          method: rendered.method,
+          url: rendered.url,
+          headers: rendered.headers || {},
+          body: rendered.body,
+        } as ApiRequest;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] renderTemplate failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    extractVariables: async (templateStr: string) => {
+      try {
+        const variables = await invoke<string[]>('api_extract_template_variables', {
+          templateStr,
+        });
+        set({ error: null });
+        return variables;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] extractVariables failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    validateTemplate: async (templateStr: string) => {
+      try {
+        await invoke('api_validate_template', { templateStr });
+        set({ error: null });
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] validateTemplate failed:', errorMessage);
+        set({ error: errorMessage });
+        return false;
+      }
+    },
+
+    // Response parsing
+    parseResponse: async (body: string, contentType?: string) => {
+      try {
+        const parsed = await invoke<any>('api_parse_response', {
+          body,
+          contentType,
+        });
+        set({ error: null });
+        return parsed;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] parseResponse failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    extractJsonPath: async (body: string, path: string) => {
+      try {
+        const result = await invoke<any>('api_extract_json_path', {
+          body,
+          path,
+        });
+        set({ error: null });
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] extractJsonPath failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    // UI state
+    clearResponse: () => {
+      set({ response: null });
+    },
+
+    clearError: () => {
       set({ error: null });
-      return url;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] getAuthUrl failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  exchangeCode: async (clientId: string, code: string) => {
-    try {
-      const token = await invoke<TokenResponse>('api_oauth_exchange_code', {
-        clientId,
-        code,
-      });
-
-      set((state) => {
-        const newTokens = new Map(state.tokens);
-        newTokens.set(clientId, token);
-        return { tokens: newTokens, error: null };
-      });
-
-      return token;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] exchangeCode failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  refreshToken: async (clientId: string, refreshToken: string) => {
-    try {
-      const token = await invoke<TokenResponse>('api_oauth_refresh_token', {
-        clientId,
-        refreshToken,
-      });
-
-      set((state) => {
-        const newTokens = new Map(state.tokens);
-        newTokens.set(clientId, token);
-        return { tokens: newTokens, error: null };
-      });
-
-      return token;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] refreshToken failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  clientCredentials: async (clientId: string) => {
-    try {
-      const token = await invoke<TokenResponse>('api_oauth_client_credentials', {
-        clientId,
-      });
-
-      set((state) => {
-        const newTokens = new Map(state.tokens);
-        newTokens.set(clientId, token);
-        return { tokens: newTokens, error: null };
-      });
-
-      return token;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] clientCredentials failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  // Updated Nov 16, 2025: Added error handling to template and parsing methods
-  renderTemplate: async (template: RequestTemplate, variables: Record<string, string>) => {
-    try {
-      const rendered = await invoke<any>('api_render_template', {
-        template,
-        variables,
-      });
-
-      set({ error: null });
-      return {
-        method: rendered.method,
-        url: rendered.url,
-        headers: rendered.headers || {},
-        body: rendered.body,
-      } as ApiRequest;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] renderTemplate failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  extractVariables: async (templateStr: string) => {
-    try {
-      const variables = await invoke<string[]>('api_extract_template_variables', {
-        templateStr,
-      });
-      set({ error: null });
-      return variables;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] extractVariables failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  validateTemplate: async (templateStr: string) => {
-    try {
-      await invoke('api_validate_template', { templateStr });
-      set({ error: null });
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] validateTemplate failed:', errorMessage);
-      set({ error: errorMessage });
-      return false;
-    }
-  },
-
-  // Response parsing
-  parseResponse: async (body: string, contentType?: string) => {
-    try {
-      const parsed = await invoke<any>('api_parse_response', {
-        body,
-        contentType,
-      });
-      set({ error: null });
-      return parsed;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] parseResponse failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  extractJsonPath: async (body: string, path: string) => {
-    try {
-      const result = await invoke<any>('api_extract_json_path', {
-        body,
-        path,
-      });
-      set({ error: null });
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[apiStore] extractJsonPath failed:', errorMessage);
-      set({ error: errorMessage });
-      throw error;
-    }
-  },
-
-  // UI state
-  clearResponse: () => {
-    set({ response: null });
-  },
-
-  clearError: () => {
-    set({ error: null });
-  },
-}));
+    },
+  };
+});

@@ -6,9 +6,10 @@
 /// # Security Features
 /// - Cryptographically secure random secret generation
 /// - OS keyring integration (Windows Credential Manager, macOS Keychain, Linux Secret Service)
-/// - Database fallback with encrypted storage
+/// - Database fallback with AES-256-GCM encrypted storage
 /// - Automatic secret rotation support
 /// - No secrets logged or exposed in error messages
+use super::encryption::{decrypt_secret, encrypt_secret, EncryptedSecret};
 use base64::{engine::general_purpose, Engine as _};
 use keyring::Entry;
 use rand::RngCore;
@@ -18,8 +19,11 @@ use tracing::{debug, error, info, warn};
 
 const JWT_SECRET_KEY: &str = "agiworkforce.jwt_secret";
 const JWT_SECRET_DB_KEY: &str = "jwt_secret";
+const DB_ENCRYPTION_KEY_NAME: &str = "agiworkforce.db_encryption_key";
 const SERVICE_NAME: &str = "AGI Workforce";
 const SECRET_LENGTH: usize = 64; // 512 bits for JWT secret
+const ENCRYPTION_KEY_LENGTH: usize = 32; // 256 bits for AES-256
+
 
 /// Error types for secret management operations
 #[derive(Debug, thiserror::Error)]
@@ -44,7 +48,11 @@ pub enum SecretError {
 
     #[error("Invalid secret format")]
     InvalidSecretFormat,
+
+    #[error("Encryption/decryption failed: {0}")]
+    EncryptionError(String),
 }
+
 
 /// Manages cryptographic secrets with secure storage
 pub struct SecretManager {
@@ -210,24 +218,35 @@ impl SecretManager {
             .map_err(SecretError::KeyringRetrieveError)
     }
 
-    /// Store secret in database (fallback storage)
+    /// Store secret in database (fallback storage) with AES-256-GCM encryption
     fn store_secret_in_database(&self, secret: &str) -> Result<(), SecretError> {
-        let conn = self.db_conn.lock().unwrap();
+        // Get or create the database encryption key from keyring
+        let encryption_key = self.get_or_create_db_encryption_key()?;
+
+        // Encrypt the secret
+        let encrypted = encrypt_secret(&encryption_key, secret)
+            .map_err(SecretError::EncryptionError)?;
+
+        // Serialize the encrypted secret to JSON
+        let encrypted_json = serde_json::to_string(&encrypted)
+            .map_err(|e| SecretError::EncryptionError(format!("Failed to serialize: {}", e)))?;
+
+        let conn = self.db_conn.lock().unwrap_or_else(|e| e.into_inner());
 
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value, encrypted) VALUES (?1, ?2, 1)",
-            rusqlite::params![JWT_SECRET_DB_KEY, secret],
+            rusqlite::params![JWT_SECRET_DB_KEY, encrypted_json],
         )
         .map_err(SecretError::DatabaseStoreError)?;
 
         Ok(())
     }
 
-    /// Retrieve secret from database
+    /// Retrieve and decrypt secret from database
     fn get_secret_from_database(&self) -> Result<String, SecretError> {
-        let conn = self.db_conn.lock().unwrap();
+        let conn = self.db_conn.lock().unwrap_or_else(|e| e.into_inner());
 
-        let secret: String = conn
+        let encrypted_json: String = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = ?1 AND encrypted = 1",
                 rusqlite::params![JWT_SECRET_DB_KEY],
@@ -235,12 +254,65 @@ impl SecretManager {
             )
             .map_err(SecretError::DatabaseRetrieveError)?;
 
-        if secret.is_empty() {
+        if encrypted_json.is_empty() {
             return Err(SecretError::SecretNotFound);
         }
 
-        Ok(secret)
+        // Drop the lock before getting the encryption key (which may need to access keyring)
+        drop(conn);
+
+        // Get the database encryption key from keyring
+        let encryption_key = self.get_db_encryption_key()?;
+
+        // Deserialize the encrypted secret from JSON
+        let encrypted: EncryptedSecret = serde_json::from_str(&encrypted_json)
+            .map_err(|e| SecretError::EncryptionError(format!("Failed to deserialize: {}", e)))?;
+
+        // Decrypt the secret
+        decrypt_secret(&encryption_key, &encrypted)
+            .map_err(SecretError::EncryptionError)
     }
+
+    /// Get or create a database encryption key stored in the OS keyring
+    fn get_or_create_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
+        // Try to get existing key
+        if let Ok(key) = self.get_db_encryption_key() {
+            return Ok(key);
+        }
+
+        // Generate a new key
+        let mut key_bytes = vec![0u8; ENCRYPTION_KEY_LENGTH];
+        rand::thread_rng()
+            .try_fill_bytes(&mut key_bytes)
+            .map_err(|_| SecretError::GenerationError)?;
+
+        // Store it in keyring
+        let entry = Entry::new(SERVICE_NAME, DB_ENCRYPTION_KEY_NAME)
+            .map_err(SecretError::KeyringStoreError)?;
+
+        let key_base64 = general_purpose::STANDARD.encode(&key_bytes);
+        entry
+            .set_password(&key_base64)
+            .map_err(SecretError::KeyringStoreError)?;
+
+        info!("Generated new database encryption key");
+        Ok(key_bytes)
+    }
+
+    /// Get the database encryption key from keyring
+    fn get_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
+        let entry = Entry::new(SERVICE_NAME, DB_ENCRYPTION_KEY_NAME)
+            .map_err(SecretError::KeyringRetrieveError)?;
+
+        let key_base64 = entry
+            .get_password()
+            .map_err(SecretError::KeyringRetrieveError)?;
+
+        general_purpose::STANDARD
+            .decode(&key_base64)
+            .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)))
+    }
+
 
     /// Delete secret from all storage locations
     ///
