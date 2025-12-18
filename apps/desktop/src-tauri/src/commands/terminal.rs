@@ -24,26 +24,44 @@ pub async fn execute_terminal_command(
 
     tracing::info!("Executing independent terminal command: {}", command);
 
-    // SECURITY: Validate command for dangerous patterns
+    // SECURITY: Validate command for dangerous patterns and shell injection
+    // Normalize command: remove extra whitespace and convert to lowercase
+    let normalized = command
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+
+    // Block dangerous command patterns (normalized for whitespace variations)
     let dangerous_patterns = [
         "rm -rf /",
         "rm -rf /*",
+        "rm -r /",
         "dd if=",
         ":(){ :|:& };:", // fork bomb
         "mkfs",
         "format c:",
         "> /dev/sda",
-        "chmod -R 777 /",
+        "> /dev/",
+        "chmod -r 777 /",
         "shutdown",
         "reboot",
         "halt",
         "init 0",
         "init 6",
+        "sudo rm",
+        "curl | sh",
+        "curl | bash",
+        "wget | sh",
+        "wget | bash",
+        "eval $(",
+        "base64 -d |",
+        "> /etc/passwd",
+        "> /etc/shadow",
     ];
 
-    let command_lower = command.to_lowercase();
     for pattern in &dangerous_patterns {
-        if command_lower.contains(&pattern.to_lowercase()) {
+        if normalized.contains(pattern) {
             tracing::warn!("Blocked dangerous command pattern: {}", pattern);
             return Err(format!(
                 "Command blocked for security: contains dangerous pattern '{}'",
@@ -51,6 +69,39 @@ pub async fn execute_terminal_command(
             ));
         }
     }
+
+    // SECURITY: Block shell metacharacters that enable command chaining/injection
+    // These characters allow attackers to execute additional commands
+    let dangerous_metacharacters = [
+        '`',  // Command substitution
+        '$',  // Variable expansion (can be used for command substitution with $())
+        '\n', // Newline (command separator)
+        '\r', // Carriage return
+    ];
+
+    for meta in &dangerous_metacharacters {
+        if command.contains(*meta) {
+            let display_char = match *meta {
+                '\n' | '\r' => "newline".to_string(),
+                c => c.to_string(),
+            };
+            tracing::warn!("Blocked command containing shell metacharacter: {:?}", meta);
+            return Err(format!(
+                "Command blocked for security: contains shell metacharacter '{}'",
+                display_char
+            ));
+        }
+    }
+
+
+    // Allow common operators but log a warning for audit
+    let audit_operators = ['|', ';', '&', '<', '>'];
+    for op in &audit_operators {
+        if command.contains(*op) {
+            tracing::info!("Command contains shell operator '{}': {}", op, command);
+        }
+    }
+
 
     // Validate cwd if provided
     if let Some(ref dir) = cwd {
