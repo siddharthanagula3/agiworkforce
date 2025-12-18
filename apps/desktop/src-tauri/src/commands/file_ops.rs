@@ -100,7 +100,7 @@ fn validate_path_security(path: &str) -> Result<(), String> {
 }
 
 /// Check if a path is blacklisted (sensitive system directories)
-fn is_blacklisted_path(path: &str) -> bool {
+pub(crate) fn is_blacklisted_path(path: &str) -> bool {
     let path_lower = path.to_lowercase();
     let blacklist = [
         "c:\\windows\\system32",

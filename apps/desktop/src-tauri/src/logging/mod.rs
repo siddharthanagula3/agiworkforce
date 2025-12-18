@@ -157,7 +157,7 @@ pub fn filter_sensitive_data(input: &str) -> String {
             "SECRET=***",
         ),
         (
-            r#"(?i)(bearer|authorization)\s*[:=]\s*['"]?([a-zA-Z0-9._-]+)['"]?"#,
+            r#"(?i)(bearer|authorization)\s*[:=]?\s*(?:bearer\s+)?['"]?([a-zA-Z0-9._-]+)['"]?"#,
             "BEARER=***",
         ),
         (

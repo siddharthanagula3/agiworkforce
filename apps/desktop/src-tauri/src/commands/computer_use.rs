@@ -7,8 +7,9 @@ use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
 
-#[cfg(target_os = "windows")]
-use crate::automation::screen;
+// Cross-platform inputs
+use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
+use xcap::Monitor;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenCapture {
@@ -99,35 +100,47 @@ pub async fn computer_use_capture_screen(
 ) -> Result<ScreenCapture, String> {
     tracing::info!("Capturing screen");
 
-    #[cfg(target_os = "windows")]
+    // Cross-platform screen capture using xcap
+    let monitors = Monitor::all().map_err(|e| format!("Failed to list monitors: {}", e))?;
+    let monitor = monitors.first().ok_or("No monitors found")?;
+
+    let image = monitor
+        .capture_image()
+        .map_err(|e| format!("Failed to capture screen: {}", e))?;
+
+    let width = image.width();
+    let height = image.height();
+
+    // Convert to PNG bytes
+    let mut png_bytes = Vec::new();
     {
-        let screenshot =
-            capture_screenshot().map_err(|e| format!("Failed to capture screenshot: {}", e))?;
+        let mut cursor = std::io::Cursor::new(&mut png_bytes);
+        use image::ImageEncoder;
+        image::codecs::png::PngEncoder::new(&mut cursor)
+            .write_image(image.as_raw(), width, height, image::ColorType::Rgba8)
+            .map_err(|e| format!("Failed to encode image: {}", e))?;
+    }
 
-        let capture = ScreenCapture {
-            image_data: screenshot.image_data,
-            width: screenshot.width,
-            height: screenshot.height,
-            timestamp: current_timestamp(),
-        };
+    use base64::{engine::general_purpose, Engine as _};
+    let image_data = general_purpose::STANDARD.encode(&png_bytes);
 
-        // Add to current session
-        let computer_state = state.lock().await;
-        if let Some(session_id) = computer_state.current_session.lock().await.as_ref() {
-            let mut sessions = computer_state.sessions.lock().await;
-            if let Some(session) = sessions.iter_mut().find(|s| &s.id == session_id) {
-                session.screenshots.push(capture.clone());
-            }
+    let capture = ScreenCapture {
+        image_data,
+        width,
+        height,
+        timestamp: current_timestamp(),
+    };
+
+    // Add to current session
+    let computer_state = state.lock().await;
+    if let Some(session_id) = computer_state.current_session.lock().await.as_ref() {
+        let mut sessions = computer_state.sessions.lock().await;
+        if let Some(session) = sessions.iter_mut().find(|s| &s.id == session_id) {
+            session.screenshots.push(capture.clone());
         }
-
-        Ok(capture)
     }
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = state;
-        Err("Screen capture not supported on this platform".to_string())
-    }
+    Ok(capture)
 }
 
 /// Perform mouse click
@@ -139,31 +152,22 @@ pub async fn computer_use_click(
 ) -> Result<(), String> {
     tracing::info!("Clicking at ({}, {})", x, y);
 
-    #[cfg(target_os = "windows")]
-    {
-        click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
+    perform_click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
 
-        // Record action
-        let computer_state = state.lock().await;
-        record_action(
-            &computer_state,
-            ComputerAction {
-                action_type: ActionType::Click,
-                coordinates: Some((x, y)),
-                text: None,
-                key: None,
-            },
-        )
-        .await;
+    // Record action
+    let computer_state = state.lock().await;
+    record_action(
+        &computer_state,
+        ComputerAction {
+            action_type: ActionType::Click,
+            coordinates: Some((x, y)),
+            text: None,
+            key: None,
+        },
+    )
+    .await;
 
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = state;
-        Err("Mouse control not supported on this platform".to_string())
-    }
+    Ok(())
 }
 
 /// Move mouse
@@ -175,31 +179,22 @@ pub async fn computer_use_move_mouse(
 ) -> Result<(), String> {
     tracing::info!("Moving mouse to ({}, {})", x, y);
 
-    #[cfg(target_os = "windows")]
-    {
-        move_to(x, y).map_err(|e| format!("Failed to move mouse: {}", e))?;
+    perform_move(x, y).map_err(|e| format!("Failed to move mouse: {}", e))?;
 
-        // Record action
-        let computer_state = state.lock().await;
-        record_action(
-            &computer_state,
-            ComputerAction {
-                action_type: ActionType::MoveMouse,
-                coordinates: Some((x, y)),
-                text: None,
-                key: None,
-            },
-        )
-        .await;
+    // Record action
+    let computer_state = state.lock().await;
+    record_action(
+        &computer_state,
+        ComputerAction {
+            action_type: ActionType::MoveMouse,
+            coordinates: Some((x, y)),
+            text: None,
+            key: None,
+        },
+    )
+    .await;
 
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = state;
-        Err("Mouse control not supported on this platform".to_string())
-    }
+    Ok(())
 }
 
 /// Type text
@@ -210,31 +205,22 @@ pub async fn computer_use_type_text(
 ) -> Result<(), String> {
     tracing::info!("Typing text: {}", text);
 
-    #[cfg(target_os = "windows")]
-    {
-        type_text(&text).map_err(|e| format!("Failed to type text: {}", e))?;
+    perform_type(&text).map_err(|e| format!("Failed to type text: {}", e))?;
 
-        // Record action
-        let computer_state = state.lock().await;
-        record_action(
-            &computer_state,
-            ComputerAction {
-                action_type: ActionType::Type,
-                coordinates: None,
-                text: Some(text),
-                key: None,
-            },
-        )
-        .await;
+    // Record action
+    let computer_state = state.lock().await;
+    record_action(
+        &computer_state,
+        ComputerAction {
+            action_type: ActionType::Type,
+            coordinates: None,
+            text: Some(text),
+            key: None,
+        },
+    )
+    .await;
 
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = state;
-        Err("Keyboard control not supported on this platform".to_string())
-    }
+    Ok(())
 }
 
 /// Get session history
@@ -317,56 +303,20 @@ fn current_timestamp() -> u64 {
         .as_secs()
 }
 
-#[cfg(target_os = "windows")]
-fn capture_screenshot() -> Result<ScreenCapture, anyhow::Error> {
-    use base64::{engine::general_purpose, Engine as _};
-    use image::ImageEncoder;
-
-    let captured = screen::capture_primary_screen()?;
-    let (width, height) = captured.pixels.dimensions();
-
-    // Convert to PNG and base64 encode
-    let mut png_bytes = Vec::new();
-    {
-        let mut cursor = std::io::Cursor::new(&mut png_bytes);
-        image::codecs::png::PngEncoder::new(&mut cursor).write_image(
-            captured.pixels.as_raw(),
-            width,
-            height,
-            image::ColorType::Rgba8,
-        )?;
-    }
-
-    let image_data = general_purpose::STANDARD.encode(&png_bytes);
-
-    Ok(ScreenCapture {
-        image_data,
-        width,
-        height,
-        timestamp: current_timestamp(),
-    })
-}
-
-#[cfg(target_os = "windows")]
-fn click(x: i32, y: i32) -> Result<(), anyhow::Error> {
-    use enigo::{Enigo, Mouse, Settings};
+fn perform_click(x: i32, y: i32) -> Result<(), anyhow::Error> {
     let mut enigo = Enigo::new(&Settings::default())?;
-    enigo.move_mouse(x, y, enigo::Coordinate::Abs)?;
-    enigo.button(enigo::Button::Left, enigo::Direction::Click)?;
+    enigo.move_mouse(x, y, Coordinate::Abs)?;
+    enigo.button(Button::Left, Direction::Click)?;
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-fn move_to(x: i32, y: i32) -> Result<(), anyhow::Error> {
-    use enigo::{Enigo, Mouse, Settings};
+fn perform_move(x: i32, y: i32) -> Result<(), anyhow::Error> {
     let mut enigo = Enigo::new(&Settings::default())?;
-    enigo.move_mouse(x, y, enigo::Coordinate::Abs)?;
+    enigo.move_mouse(x, y, Coordinate::Abs)?;
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-fn type_text(text: &str) -> Result<(), anyhow::Error> {
-    use enigo::{Enigo, Keyboard, Settings};
+fn perform_type(text: &str) -> Result<(), anyhow::Error> {
     let mut enigo = Enigo::new(&Settings::default())?;
     enigo.text(text)?;
     Ok(())

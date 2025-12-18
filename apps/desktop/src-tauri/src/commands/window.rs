@@ -2,10 +2,10 @@ use crate::{
     state::{AppState, DockPosition},
     window,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowStatePayload {
     pub pinned: bool,

@@ -15,30 +15,38 @@ The project emphasizes safety through a tool approval system, where "dangerous" 
 - **Desktop Framework:** [Tauri](https://tauri.app/) (Rust backend, webview frontend)
 - **Frontend:** [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
 - **Backend (Rust):** [Tokio](https://tokio.rs/) for async runtime, [Serde](https://serde.rs/) for serialization, and numerous other crates for specific functionalities (see `apps/desktop/src-tauri/Cargo.toml`).
+- **Model Context Protocol (MCP):** Supports connecting to various data sources (Supabase, GitHub, local filesystem, etc.) via MCP servers. Configuration is handled via `.mcp.json` and `apps/desktop/mcp-servers-config.example.json`.
 - **Package Management:** [pnpm workspaces](https://pnpm.io/workspaces)
 - **State Management:** [Zustand](https://zustand-demo.pmnd.rs/)
 - **Testing:** [Vitest](https://vitest.dev/) for frontend unit/integration tests, [Playwright](https://playwright.dev/) for End-to-End tests, and `cargo test` for Rust tests.
 - **CI/CD:** GitHub Actions
 
-### Repository Structure
+## Repository Structure & Organization
 
 The project is a monorepo organized using pnpm workspaces.
 
 ```
 /
 ├── apps/
-│   ├── desktop/              # Main Tauri desktop application
-│   │   ├── src/              # React frontend source
+│   ├── desktop/              # Main Tauri desktop application (React + Rust)
+│   │   ├── src/              # React frontend source (components, pages, stores, etc.)
 │   │   └── src-tauri/        # Rust backend source
 │   ├── extension/            # Minimal browser extension scaffold
 ├── packages/
 │   ├── types/                # Shared TypeScript types for the monorepo
 │   └── utils/                # Shared utility functions
 ├── services/
-│   ├── api-gateway/          # Experimental backend services
-│   └── signaling-server/
+│   ├── api-gateway/          # Backend services (Node.js)
+│   └── signaling-server/     # Signaling server
+├── dev-scripts/              # Helper scripts for development
 └── ... (config files, docs, etc.)
 ```
+
+**Note on Organization:**
+
+- Feature-first domains are preferred under `apps/desktop/src/{components,pages,services,stores,api,lib,utils,types}`.
+- Shared code sits in `packages/`.
+- `ui-components` package has been removed; shared UI primitives should be kept local to `apps/desktop/src/components` until a real package is needed.
 
 ## Building and Running
 
@@ -47,7 +55,7 @@ The project is a monorepo organized using pnpm workspaces.
 - Node.js (version specified in `package.json` `engines` field)
 - pnpm (version specified in `package.json` `engines` field)
 - Rust toolchain (version specified in `rust-toolchain.toml`)
-- Platform-specific build tools (see `INSTALLATION.md`)
+- Platform-specific build tools (see `INSTALLATION.md` if available, or Tauri docs)
 
 ### Development
 
@@ -61,6 +69,7 @@ To run the desktop application in a live-reloading development environment:
     ```bash
     pnpm dev:desktop
     ```
+    (Or `pnpm build:all` to build workspace packages without the desktop app)
 
 ### Building
 
@@ -92,32 +101,62 @@ The project has a comprehensive testing strategy.
   ```bash
   pnpm --filter @agiworkforce/desktop test
   ```
+  Use `... test:coverage` to monitor deltas.
 - **End-to-End Tests (Playwright):**
   ```bash
   pnpm --filter @agiworkforce/desktop test:e2e
   ```
+  Use `... test:smoke` for quick sanity checks and `... test:e2e:ui` for interactive debugging.
 - **Rust Tests:**
   ```bash
   cd apps/desktop/src-tauri
   cargo test
   ```
+  Run `cargo fmt && cargo clippy` before shipping backend changes.
 
 ## Development Conventions
 
+### Coding Style & Naming
+
+- **TypeScript-first:** Prefer `.tsx` for UI.
+- **Formatting:** Prettier (2-space, single quotes). Enforced via `husky` and `lint-staged`.
+- **Linting:** ESLint (TS/React) and `clippy` (Rust).
+- **Naming:**
+  - React components/types: `PascalCase`
+  - Hooks: `useThing.ts`
+  - Utilities: `camelCase`
+  - Files/folders: `kebab-case` (e.g., `src/hooks`, `src/stores`)
+
 ### Commits and Pull Requests
 
-- **Commit Messages:** The project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification. This is enforced by `commitlint`.
-  - Examples: `feat(chat): add new feature`, `fix(ui): correct a styling bug`.
-- **Branching:** Feature branches should be named according to their purpose (e.g., `feature/new-sidebar`, `fix/login-bug`).
-- **Pull Requests:** A PR template is provided to ensure all necessary information is included. All CI checks (linting, testing, building) must pass before a PR can be merged.
+- **Commit Messages:** Follow [Conventional Commits](https://www.conventionalcommits.org/).
+  - Examples: `feat(ui): add agent graph panel`, `fix(api): guard null session`.
+- **Pull Requests:** Include summary, linked issue, checklist of checks run (`pnpm test`, lint, typecheck, e2e), and screenshots for UI changes.
 
-### Coding Style
+### Configuration & Security
 
-- **Formatting:** Code is automatically formatted using [Prettier](https://prettier.io/). A pre-commit hook is set up via `husky` and `lint-staged` to enforce this.
-- **Linting:** [ESLint](https://eslint.org/) is used for the TypeScript/React codebase, and `clippy` is used for the Rust codebase.
-- **State Management:** Global state is managed with Zustand. Component-local state should use React's built-in hooks (`useState`, `useReducer`).
+- **Secrets:** Managed via `.env` file in `apps/desktop`. Use `.env.example` as a template. **Never commit real secrets.**
+- **MCP:** Use `mcp-servers-config.example.json` for MCP server setup.
+- **Rust:** Tauri builds depend on the pinned Rust toolchain (see `rust-toolchain.toml`).
 
-### Configuration
+## Architecture & Design (Nov 2025 Alignment)
 
-- API keys and other secrets are managed via a `.env` file in the `apps/desktop` directory. Copy `.env.example` to `.env` to get started.
-- The application can be configured to use different LLM providers and custom servers.
+### Desktop Architecture
+
+- **Rust Core:** Exposes stable Tauri commands. Modules aligned to domains (`automation`, `agent`, `billing`, `security`, `window`, `commands`).
+- **State Management:** Co-locate Zustand stores per domain. Persist via `windowStatePersistence` or Rust DB only when needed.
+- **Data Layer:** `api/` for HTTP + MCP clients, `services/` for orchestration, `stores/` for UI state.
+
+### Unified Agentic Chat & Automation UX
+
+- **Shell:** Single-pane conversational UI with right-rail tool/trace panel; command palette (`Cmd/Ctrl+K`).
+- **Tasks:** Multi-step plans surfaced inline; tool invocations shown with structured cards.
+- **Context:** Unified context panel (files, calendar, browser tabs, etc.) with explicit opt-in.
+- **Execution:** Enforce per-task capability scopes (files, network) with human-readable prompts.
+- **Performance:** Stream tokens; prefer server-side or local LLM fallbacks gated by `local-llm` feature.
+
+### Backend, Auth, and Subscription
+
+- **Auth:** Desktop auth relies on website/OIDC handoff, exchanging for a short-lived desktop token.
+- **Subscriptions:** Managed in `services/api-gateway`. No billing logic in the client.
+- **Telemetry:** Behind explicit consent; sent via gateway with privacy filters.
