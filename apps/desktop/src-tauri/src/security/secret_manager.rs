@@ -24,7 +24,6 @@ const SERVICE_NAME: &str = "AGI Workforce";
 const SECRET_LENGTH: usize = 64; // 512 bits for JWT secret
 const ENCRYPTION_KEY_LENGTH: usize = 32; // 256 bits for AES-256
 
-
 /// Error types for secret management operations
 #[derive(Debug, thiserror::Error)]
 pub enum SecretError {
@@ -52,7 +51,6 @@ pub enum SecretError {
     #[error("Encryption/decryption failed: {0}")]
     EncryptionError(String),
 }
-
 
 /// Manages cryptographic secrets with secure storage
 pub struct SecretManager {
@@ -224,8 +222,8 @@ impl SecretManager {
         let encryption_key = self.get_or_create_db_encryption_key()?;
 
         // Encrypt the secret
-        let encrypted = encrypt_secret(&encryption_key, secret)
-            .map_err(SecretError::EncryptionError)?;
+        let encrypted =
+            encrypt_secret(&encryption_key, secret).map_err(SecretError::EncryptionError)?;
 
         // Serialize the encrypted secret to JSON
         let encrypted_json = serde_json::to_string(&encrypted)
@@ -269,8 +267,7 @@ impl SecretManager {
             .map_err(|e| SecretError::EncryptionError(format!("Failed to deserialize: {}", e)))?;
 
         // Decrypt the secret
-        decrypt_secret(&encryption_key, &encrypted)
-            .map_err(SecretError::EncryptionError)
+        decrypt_secret(&encryption_key, &encrypted).map_err(SecretError::EncryptionError)
     }
 
     /// Get or create a database encryption key stored in the OS keyring
@@ -312,7 +309,6 @@ impl SecretManager {
             .decode(&key_base64)
             .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)))
     }
-
 
     /// Delete secret from all storage locations
     ///
