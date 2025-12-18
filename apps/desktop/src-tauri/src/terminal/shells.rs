@@ -123,7 +123,7 @@ pub fn get_default_shell() -> ShellType {
             ShellType::Sh
         }
     }
-    
+
     #[cfg(windows)]
     {
         // Prefer PowerShell on Windows
@@ -143,7 +143,10 @@ mod tests {
     fn test_detect_available_shells() {
         let shells = detect_available_shells();
         // At least one shell should be available on any platform
-        assert!(!shells.is_empty(), "Expected at least one shell to be available");
+        assert!(
+            !shells.is_empty(),
+            "Expected at least one shell to be available"
+        );
 
         // Check that all detected shells have the available flag set
         for shell in &shells {
@@ -155,13 +158,16 @@ mod tests {
     #[test]
     fn test_get_default_shell() {
         let default = get_default_shell();
-        
+
         #[cfg(unix)]
         {
             // On Unix, should return zsh, bash, or sh
-            assert!(matches!(default, ShellType::Zsh | ShellType::Bash | ShellType::Sh));
+            assert!(matches!(
+                default,
+                ShellType::Zsh | ShellType::Bash | ShellType::Sh
+            ));
         }
-        
+
         #[cfg(windows)]
         {
             // On Windows, should return PowerShell or Cmd
