@@ -47,6 +47,7 @@ pub struct ChatMessage {
 pub enum ContentPart {
     Text { text: String },
     Image { image: ImageInput },
+    Video { video: VideoInput },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +67,38 @@ pub enum ImageFormat {
     Png,
     Jpeg,
     Webp,
+}
+
+/// Video input for multimodal models (Gemini, GPT-4V with video support)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoInput {
+    /// Video data (bytes or URI reference)
+    pub data: VideoData,
+    /// Video format
+    pub format: VideoFormat,
+    /// Duration in seconds (if known)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<f64>,
+}
+
+/// Video data can be raw bytes or a cloud URI
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum VideoData {
+    /// Raw video bytes (for small videos, base64 encoded in API calls)
+    Bytes(Vec<u8>),
+    /// URI reference (for cloud-stored videos, e.g., Google Cloud Storage)
+    Uri(String),
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoFormat {
+    Mp4,
+    Webm,
+    Mov,
+    Avi,
+    Mkv,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
