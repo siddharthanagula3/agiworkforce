@@ -3,9 +3,10 @@ mod tests {
     use super::super::file_ops::*;
     use rusqlite::Connection;
     use std::fs;
-    use std::sync::Mutex;
+    // use std::sync::Mutex;
     use tempfile::tempdir;
 
+    #[allow(dead_code)]
     fn setup_test_db() -> crate::commands::AppDatabase {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
@@ -42,7 +43,9 @@ mod tests {
         )
         .unwrap();
 
-        crate::commands::AppDatabase(Mutex::new(conn))
+        crate::commands::AppDatabase {
+            conn: std::sync::Arc::new(std::sync::Mutex::new(conn)),
+        }
     }
 
     #[tokio::test]

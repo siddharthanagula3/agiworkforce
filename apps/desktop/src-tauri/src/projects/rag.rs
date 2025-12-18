@@ -326,7 +326,7 @@ mod tests {
             file_name: "test.txt".to_string(),
             file_type: "txt".to_string(),
             size: 1000,
-            content: "This is sentence one. This is sentence two. This is sentence three."
+            content: "This is sentence one. This is sentence two. This is sentence three. This is sentence four. This is sentence five. This is sentence six."
                 .to_string(),
             metadata: None,
             indexed_at: chrono::Utc::now().to_rfc3339(),
