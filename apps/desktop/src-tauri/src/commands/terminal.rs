@@ -93,7 +93,6 @@ pub async fn execute_terminal_command(
         }
     }
 
-
     // Allow common operators but log a warning for audit
     let audit_operators = ['|', ';', '&', '<', '>'];
     for op in &audit_operators {
@@ -101,7 +100,6 @@ pub async fn execute_terminal_command(
             tracing::info!("Command contains shell operator '{}': {}", op, command);
         }
     }
-
 
     // Validate cwd if provided
     if let Some(ref dir) = cwd {
