@@ -1,10 +1,8 @@
+#![allow(dead_code, unused_imports)]
 /// Example usage patterns for the AgentOrchestrator
 ///
 /// This file demonstrates common patterns for using parallel agent orchestration
 /// to achieve complex goals with multiple concurrent agents.
-
-#![allow(dead_code)]
-
 use super::*;
 use crate::automation::AutomationService;
 use crate::router::LLMRouter;
@@ -59,7 +57,10 @@ pub async fn example_parallel_code_analysis(
 
     let agent_ids = orchestrator.spawn_parallel(goals).await?;
 
-    println!("Spawned {} agents for parallel code analysis", agent_ids.len());
+    println!(
+        "Spawned {} agents for parallel code analysis",
+        agent_ids.len()
+    );
 
     // Wait for all agents to complete
     let results = orchestrator.wait_for_all().await;
@@ -159,9 +160,7 @@ pub async fn example_sequential_workflow(
 /// Example 3: Resource Locking
 ///
 /// Demonstrates how to prevent conflicts when multiple agents need the same resources
-pub async fn example_resource_locking(
-    orchestrator: &AgentOrchestrator,
-) -> anyhow::Result<()> {
+pub async fn example_resource_locking(orchestrator: &AgentOrchestrator) -> anyhow::Result<()> {
     let resource_lock = orchestrator.get_resource_lock();
 
     // Agent 1 tries to acquire file lock
@@ -279,7 +278,7 @@ pub async fn example_monitoring(orchestrator: &AgentOrchestrator) -> anyhow::Res
         },
     ];
 
-    let agent_ids = orchestrator.spawn_parallel(goals).await?;
+    let _agent_ids = orchestrator.spawn_parallel(goals).await?;
 
     // Monitor progress
     loop {

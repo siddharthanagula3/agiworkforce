@@ -45,6 +45,13 @@ pub struct AgentResult {
     pub execution_time_ms: u64,
 }
 
+/// Result of processing a natural language instruction
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestratorResult {
+    pub success: bool,
+    pub summary: String,
+}
+
 /// Coordination pattern for multi-agent execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CoordinationPattern {
@@ -535,6 +542,49 @@ impl AgentOrchestrator {
 
         tracing::info!("[Orchestrator] Cleaned up {} completed agents", removed);
         Ok(removed)
+    }
+
+    /// Process a natural language instruction
+    pub async fn process_instruction(&self, instruction: &str) -> Result<OrchestratorResult> {
+        tracing::info!("[Orchestrator] Processing instruction: {}", instruction);
+
+        let goal = Goal {
+            id: format!("goal_{}", &Uuid::new_v4().to_string()[..8]),
+            description: instruction.to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![],
+            success_criteria: vec![],
+        };
+
+        let agent_id = self.spawn_agent(goal).await?;
+
+        // Wait for completion (simple polling with timeout)
+        // Note: This holds the lock on the orchestrator if called from within a lock,
+        // effectively serializing requests. For a prototype, this is acceptable.
+        let max_attempts = 300; // 30 seconds
+        for _ in 0..max_attempts {
+            if let Some(status) = self.get_agent_status(&agent_id).await {
+                if status.status == AgentState::Completed {
+                    return Ok(OrchestratorResult {
+                        success: true,
+                        summary: "Agent completed task successfully.".to_string(),
+                    });
+                }
+                if status.status == AgentState::Failed {
+                    return Ok(OrchestratorResult {
+                        success: false,
+                        summary: format!("Agent failed: {}", status.error.unwrap_or_default()),
+                    });
+                }
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        Ok(OrchestratorResult {
+            success: false,
+            summary: "Agent execution timed out.".to_string(),
+        })
     }
 }
 

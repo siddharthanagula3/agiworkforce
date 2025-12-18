@@ -62,6 +62,14 @@ pub mod voice;
 pub mod window;
 pub mod workspace;
 
+// Test modules (conditionally compiled)
+#[cfg(test)]
+mod file_ops_tests;
+#[cfg(test)]
+mod github_test;
+#[cfg(test)]
+mod window_tests;
+
 pub use agent::*;
 pub use agi::*;
 pub use ai_employees::*;

@@ -151,6 +151,9 @@ impl AnthropicProvider {
                             },
                         });
                     }
+                    ContentPart::Video { .. } => {
+                        // Anthropic doesn't support direct video bytes yet
+                    }
                 }
             }
 

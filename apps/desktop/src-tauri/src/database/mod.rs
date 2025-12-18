@@ -2,6 +2,7 @@ pub mod connection;
 pub mod mysql_client;
 pub mod nosql_client;
 pub mod pool;
+pub mod postgres;
 pub mod postgres_client;
 pub mod query_builder;
 pub mod redis_client;
