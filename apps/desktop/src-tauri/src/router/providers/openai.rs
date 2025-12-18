@@ -200,6 +200,10 @@ impl OpenAIProvider {
                             },
                         });
                     }
+                    ContentPart::Video { .. } => {
+                        // OpenAI currently doesn't support direct video bytes/URIs in the same way as Gemini
+                        // in this unified router implementation.
+                    }
                 }
             }
 
