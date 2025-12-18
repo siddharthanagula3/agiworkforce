@@ -65,9 +65,9 @@ impl Default for PersistentWindowState {
 
 #[derive(Clone)]
 pub struct AppState {
-    inner: Arc<RwLock<PersistentWindowState>>,
-    storage_path: Arc<PathBuf>,
-    suppress_events: Arc<AtomicBool>,
+    pub(crate) inner: Arc<RwLock<PersistentWindowState>>,
+    pub(crate) storage_path: Arc<PathBuf>,
+    pub(crate) suppress_events: Arc<AtomicBool>,
 }
 
 impl AppState {

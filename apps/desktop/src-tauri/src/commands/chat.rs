@@ -259,7 +259,7 @@ pub struct ConversationStats {
 // Updated Nov 16, 2025: Added input validation for title length
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_create_conversation(
+pub fn chat_create_conversation(
     db: State<'_, AppDatabase>,
     request: CreateConversationRequest,
 ) -> Result<Conversation, String> {
@@ -280,9 +280,7 @@ pub async fn chat_create_conversation(
 }
 
 #[tauri::command]
-pub async fn chat_get_conversations(
-    db: State<'_, AppDatabase>,
-) -> Result<Vec<Conversation>, String> {
+pub fn chat_get_conversations(db: State<'_, AppDatabase>) -> Result<Vec<Conversation>, String> {
     let conn = db.connection()?;
     repository::list_conversations(&conn, 1000, 0)
         .map_err(|e| format!("Failed to list conversations: {}", e))
@@ -291,10 +289,7 @@ pub async fn chat_get_conversations(
 // Updated Nov 16, 2025: Added input validation for conversation ID
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_get_conversation(
-    db: State<'_, AppDatabase>,
-    id: i64,
-) -> Result<Conversation, String> {
+pub fn chat_get_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<Conversation, String> {
     // Validate ID is positive
     if id <= 0 {
         return Err(format!(
@@ -311,7 +306,7 @@ pub async fn chat_get_conversation(
 // Updated Nov 16, 2025: Added input validation for ID and title
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_update_conversation(
+pub fn chat_update_conversation(
     db: State<'_, AppDatabase>,
     id: i64,
     request: UpdateConversationRequest,
@@ -341,7 +336,7 @@ pub async fn chat_update_conversation(
 // Updated Nov 16, 2025: Added input validation for ID
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
+pub fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
     // Validate ID is positive
     if id <= 0 {
         return Err(format!(
@@ -358,7 +353,7 @@ pub async fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Re
 // Updated Nov 16, 2025: Added comprehensive input validation
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_create_message(
+pub fn chat_create_message(
     db: State<'_, AppDatabase>,
     request: CreateMessageRequest,
 ) -> Result<Message, String> {
@@ -426,7 +421,7 @@ pub async fn chat_create_message(
 // Updated Nov 16, 2025: Added input validation for conversation ID
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_get_messages(
+pub fn chat_get_messages(
     db: State<'_, AppDatabase>,
     conversation_id: i64,
 ) -> Result<Vec<Message>, String> {
@@ -450,7 +445,7 @@ pub async fn chat_get_messages(
 // Updated Nov 16, 2025: Added input validation for ID and content
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_update_message(
+pub fn chat_update_message(
     db: State<'_, AppDatabase>,
     id: i64,
     content: String,
@@ -477,7 +472,7 @@ pub async fn chat_update_message(
 // Updated Nov 16, 2025: Added input validation for ID
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_delete_message(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
+pub fn chat_delete_message(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
     // Validate ID is positive
     if id <= 0 {
         return Err(format!("Invalid message ID: {}. ID must be positive", id));
@@ -491,7 +486,7 @@ pub async fn chat_delete_message(db: State<'_, AppDatabase>, id: i64) -> Result<
 // Updated Nov 16, 2025: Added input validation for conversation ID
 // Updated Nov 30, 2025: Migrated to async with tokio::sync::Mutex
 #[tauri::command]
-pub async fn chat_get_conversation_stats(
+pub fn chat_get_conversation_stats(
     db: State<'_, AppDatabase>,
     conversation_id: i64,
 ) -> Result<ConversationStats, String> {
@@ -613,9 +608,7 @@ pub struct CostOverviewResponse {
 }
 
 #[tauri::command]
-pub async fn chat_get_cost_overview(
-    db: State<'_, AppDatabase>,
-) -> Result<CostOverviewResponse, String> {
+pub fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverviewResponse, String> {
     let conn = db.connection()?;
 
     let now = Utc::now();
@@ -655,7 +648,7 @@ pub struct CostAnalyticsResponse {
 
 // Updated Nov 16, 2025: Added input validation for days parameter
 #[tauri::command]
-pub async fn chat_get_cost_analytics(
+pub fn chat_get_cost_analytics(
     db: State<'_, AppDatabase>,
     days: Option<i64>,
     provider: Option<String>,
@@ -721,7 +714,7 @@ pub async fn chat_get_cost_analytics(
 
 // Updated Nov 16, 2025: Added input validation for budget amount
 #[tauri::command]
-pub async fn chat_set_monthly_budget(
+pub fn chat_set_monthly_budget(
     db: State<'_, AppDatabase>,
     amount: Option<f64>,
 ) -> Result<(), String> {
