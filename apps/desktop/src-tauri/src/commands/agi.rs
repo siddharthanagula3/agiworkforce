@@ -243,7 +243,7 @@ pub async fn agi_stop() -> Result<(), String> {
 // ============================================================================
 
 // Global orchestrator instance
-static ORCHESTRATOR: Mutex<Option<Arc<TokioMutex<AgentOrchestrator>>>> = Mutex::new(None);
+pub static ORCHESTRATOR: Mutex<Option<Arc<TokioMutex<AgentOrchestrator>>>> = Mutex::new(None);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrchestratorInitRequest {

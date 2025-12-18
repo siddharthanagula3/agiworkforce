@@ -49,10 +49,12 @@ mod tests {
         let mut state = create_test_state();
 
         // Update fullscreen to true
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         let result = window_get_state(tauri::State::from(&state));
 
@@ -66,10 +68,12 @@ mod tests {
         let mut state = create_test_state();
 
         // Set dock position
-        state.update(|s| {
-            s.dock = Some(DockPosition::Left);
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.dock = Some(DockPosition::Left);
+                true
+            })
+            .unwrap();
 
         let result = window_get_state(tauri::State::from(&state));
 
@@ -83,10 +87,12 @@ mod tests {
         let mut state = create_test_state();
 
         // Set maximized
-        state.update(|s| {
-            s.maximized = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.maximized = true;
+                true
+            })
+            .unwrap();
 
         let result = window_get_state(tauri::State::from(&state));
 
@@ -158,18 +164,22 @@ mod tests {
         let state = create_test_state();
 
         // Toggle on
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         assert_eq!(state.snapshot().fullscreen, true);
 
         // Toggle off
-        state.update(|s| {
-            s.fullscreen = false;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = false;
+                true
+            })
+            .unwrap();
 
         assert_eq!(state.snapshot().fullscreen, false);
     }
@@ -179,19 +189,23 @@ mod tests {
         let mut state = create_test_state();
 
         // Set initial state
-        state.update(|s| {
-            s.pinned = true;
-            s.always_on_top = true;
-            s.dock = Some(DockPosition::Left);
-            s.maximized = false;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.pinned = true;
+                s.always_on_top = true;
+                s.dock = Some(DockPosition::Left);
+                s.maximized = false;
+                true
+            })
+            .unwrap();
 
         // Update only fullscreen
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         // Verify other fields are preserved
         let snapshot = state.snapshot();
@@ -207,21 +221,25 @@ mod tests {
         let state = create_test_state();
 
         // Set both to true
-        state.update(|s| {
-            s.fullscreen = true;
-            s.maximized = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                s.maximized = true;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         assert_eq!(snapshot.fullscreen, true);
         assert_eq!(snapshot.maximized, true);
 
         // Turn off fullscreen, keep maximized
-        state.update(|s| {
-            s.fullscreen = false;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = false;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         assert_eq!(snapshot.fullscreen, false);
@@ -236,10 +254,12 @@ mod tests {
         assert_eq!(snapshot1.fullscreen, false);
 
         // Update state
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         // Original snapshot should be unchanged
         assert_eq!(snapshot1.fullscreen, false);
@@ -298,10 +318,12 @@ mod tests {
         let state = create_test_state();
 
         // Update fullscreen
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         // Access state without cloning
         let fullscreen_value = state.with_state(|s| s.fullscreen);
@@ -331,9 +353,7 @@ mod tests {
     fn test_suppress_events_with_error() {
         let state = create_test_state();
 
-        let result = state.suppress_events(|| {
-            Err::<(), _>(tauri::Error::FailedToSendMessage)
-        });
+        let result = state.suppress_events(|| Err::<(), _>(tauri::Error::FailedToSendMessage));
 
         assert!(result.is_err());
         // Flag should still be reset even on error
@@ -398,16 +418,20 @@ mod tests {
         let state = create_test_state();
 
         // Set dock position
-        state.update(|s| {
-            s.dock = Some(DockPosition::Left);
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.dock = Some(DockPosition::Left);
+                true
+            })
+            .unwrap();
 
         // Set fullscreen
-        state.update(|s| {
-            s.fullscreen = true;
-            true
-        }).unwrap();
+        state
+            .update(|s| {
+                s.fullscreen = true;
+                true
+            })
+            .unwrap();
 
         let snapshot = state.snapshot();
         assert_eq!(snapshot.dock, Some(DockPosition::Left));

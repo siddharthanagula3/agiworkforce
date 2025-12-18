@@ -13,6 +13,7 @@
 // - tool_executor: Execution tracking and statistics
 
 pub mod client;
+pub mod client_stub;
 pub mod config;
 pub mod error;
 pub mod events;
