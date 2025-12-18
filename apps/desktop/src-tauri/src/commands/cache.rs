@@ -456,7 +456,7 @@ mod tests {
     fn test_cache_stats_calculation() {
         let conn = Connection::open_in_memory().unwrap();
 
-        // Create cache_entries table
+        // Create cache_entries table with all required columns including hit_count, cost_saved, tokens_saved
         conn.execute(
             "CREATE TABLE cache_entries (
                 id INTEGER PRIMARY KEY,
@@ -469,16 +469,19 @@ mod tests {
                 cost REAL,
                 created_at TEXT,
                 last_used_at TEXT,
-                expires_at TEXT
+                expires_at TEXT,
+                hit_count INTEGER DEFAULT 0,
+                cost_saved REAL DEFAULT 0.0,
+                tokens_saved INTEGER DEFAULT 0
             )",
             [],
         )
         .unwrap();
 
-        // Insert test data
+        // Insert test data with hit_count and cost_saved values
         conn.execute(
-            "INSERT INTO cache_entries (cache_key, provider, model, prompt_hash, response, tokens, cost, created_at, last_used_at, expires_at)
-             VALUES ('key1', 'openai', 'gpt-4', 'hash1', 'response1', 100, 0.01, '2024-01-01', '2024-01-01', '2024-12-31')",
+            "INSERT INTO cache_entries (cache_key, provider, model, prompt_hash, response, tokens, cost, created_at, last_used_at, expires_at, hit_count, cost_saved, tokens_saved)
+             VALUES ('key1', 'openai', 'gpt-4', 'hash1', 'response1', 100, 0.01, '2024-01-01', '2024-01-01', '2024-12-31', 5, 0.05, 500)",
             [],
         )
         .unwrap();
@@ -487,7 +490,8 @@ mod tests {
 
         assert_eq!(stats.entries, 1);
         assert!(stats.size_mb > 0.0);
-        assert_eq!(stats.savings_usd, Some(0.01));
+        assert_eq!(stats.savings_usd, Some(0.05)); // cost_saved value
+        assert_eq!(stats.hits, 5); // hit_count value
     }
 }
 
