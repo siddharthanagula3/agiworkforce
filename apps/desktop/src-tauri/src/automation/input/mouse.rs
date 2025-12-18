@@ -111,6 +111,16 @@ impl MouseSimulator {
         self.click(x, y, button)
     }
 
+    /// Click the center of a bounding rectangle (Stub for non-Windows)
+    #[cfg(not(windows))]
+    pub fn click_rect_center(
+        &mut self,
+        _rect: &crate::automation::types::BoundingRectangle,
+        _button: MouseButton,
+    ) -> Result<()> {
+        Err(anyhow!("UI Automation not available on this platform"))
+    }
+
     pub fn drag(&mut self, start: (i32, i32), end: (i32, i32)) -> Result<()> {
         self.move_to(start.0, start.1)?;
         {
