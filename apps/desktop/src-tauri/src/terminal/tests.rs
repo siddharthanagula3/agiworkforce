@@ -6,7 +6,10 @@ mod tests {
     fn test_shell_detection() {
         let shells = detect_available_shells();
         // At least one shell should be available on any platform
-        assert!(!shells.is_empty(), "Expected at least one shell to be available");
+        assert!(
+            !shells.is_empty(),
+            "Expected at least one shell to be available"
+        );
 
         // Check that all detected shells have valid paths
         for shell in &shells {
@@ -18,13 +21,16 @@ mod tests {
     #[test]
     fn test_default_shell() {
         let default = get_default_shell();
-        
+
         #[cfg(unix)]
         {
             // On Unix, should return zsh, bash, or sh
-            assert!(matches!(default, ShellType::Zsh | ShellType::Bash | ShellType::Sh));
+            assert!(matches!(
+                default,
+                ShellType::Zsh | ShellType::Bash | ShellType::Sh
+            ));
         }
-        
+
         #[cfg(windows)]
         {
             // On Windows, should return PowerShell or Cmd
