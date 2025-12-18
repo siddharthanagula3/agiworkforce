@@ -171,10 +171,7 @@ mod tests {
         let event = DangerousOpEvent {
             operation: "delete".to_string(),
             file_count: 15,
-            paths: vec![
-                "/path/file1.txt".to_string(),
-                "/path/file2.txt".to_string(),
-            ],
+            paths: vec!["/path/file1.txt".to_string(), "/path/file2.txt".to_string()],
         };
 
         let json = serde_json::to_string(&event).unwrap();

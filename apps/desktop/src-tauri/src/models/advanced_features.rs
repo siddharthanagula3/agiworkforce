@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Tool execution status
@@ -76,7 +76,7 @@ pub struct MessageDraft {
     pub conversation_id: String,
     pub content: String,
     #[serde(default)]
-    pub attachments: Vec<String>,  // file IDs
+    pub attachments: Vec<String>, // file IDs
     pub focus_mode: Option<String>,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub saved_at: DateTime<Utc>,
@@ -205,6 +205,6 @@ pub struct SearchFilters {
 pub struct SmartSuggestion {
     pub text: String,
     pub context: String,
-    pub confidence: f32, // 0.0-1.0
+    pub confidence: f32,  // 0.0-1.0
     pub category: String, // "continue", "clarify", "explore", "action"
 }

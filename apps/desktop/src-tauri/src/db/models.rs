@@ -22,6 +22,17 @@ impl Conversation {
     }
 }
 
+impl Default for Conversation {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            title: "New Conversation".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+}
+
 /// Message role in a conversation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

@@ -472,7 +472,12 @@ pub fn run() {
             commands::messaging::get_messaging_history,
             commands::messaging::disconnect_platform,
             commands::messaging::list_messaging_connections,
+            // Media Generation Commands (New)
+            commands::media::media_generate_image,
+            commands::media::media_generate_video,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+pub mod models; // Exposed models directory

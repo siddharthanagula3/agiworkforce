@@ -1,11 +1,11 @@
-﻿import { invoke, listen } from '@/lib/tauri-mock';
+﻿import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Layers, Square } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
-import { isTauri } from '../../lib/tauri-mock';
 import { useCostStore } from '../../stores/costStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
@@ -21,6 +21,7 @@ import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { MediaLab } from './MediaLab';
 import { ProjectsView } from './ProjectsView';
+const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
 export const UnifiedAgenticChat: React.FC<{
   className?: string;
