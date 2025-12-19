@@ -609,10 +609,8 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
         })
         .map_err(|e| format!("Failed to query provider stats: {}", e))?;
 
-    for row in provider_rows {
-        if let Ok((provider, usage)) = row {
-            by_provider.insert(provider, usage);
-        }
+    for (provider, usage) in provider_rows.flatten() {
+        by_provider.insert(provider, usage);
     }
 
     // 3. Get stats by model
@@ -643,10 +641,8 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
         })
         .map_err(|e| format!("Failed to query model stats: {}", e))?;
 
-    for row in model_rows {
-        if let Ok((model, usage)) = row {
-            by_model.insert(model, usage);
-        }
+    for (model, usage) in model_rows.flatten() {
+        by_model.insert(model, usage);
     }
 
     Ok(UsageStats {
