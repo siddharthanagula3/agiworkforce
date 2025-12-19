@@ -146,7 +146,7 @@ fn default_drag_duration() -> u32 {
 #[tauri::command]
 pub fn automation_list_windows(app: AppHandle) -> Result<Vec<UIElementInfo>, String> {
     ensure_overlay_ready(&app);
-    with_service(|service| service.uia.list_windows()).map_err(|err| err.to_string())
+    with_service(|service| service.native.list_windows()).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -163,29 +163,32 @@ pub fn automation_find_elements(
         max_results: request.max_results,
     };
 
-    with_service(|service| service.uia.find_elements(request.parent_id, &query))
+    with_service(|service| service.native.find_elements(request.parent_id, &query))
         .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
 pub fn automation_invoke(request: InvokeRequest) -> Result<(), String> {
-    with_service(|service| service.uia.invoke(&request.element_id)).map_err(|err| err.to_string())
+    with_service(|service| service.native.invoke(&request.element_id))
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
 pub fn automation_set_value(request: ValueRequest) -> Result<(), String> {
     with_service(|service| {
         if request.focus.unwrap_or(false) {
-            service.uia.set_focus(&request.element_id)?;
+            service.native.set_focus(&request.element_id)?;
         }
-        service.uia.set_value(&request.element_id, &request.value)
+        service
+            .native
+            .set_value(&request.element_id, &request.value)
     })
     .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
 pub fn automation_get_value(element_id: String) -> Result<String, String> {
-    with_service(|service| service.uia.get_value(&element_id)).map_err(|err| err.to_string())
+    with_service(|service| service.native.get_value(&element_id)).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -195,12 +198,12 @@ pub fn automation_get_text(element_id: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn automation_toggle(element_id: String) -> Result<(), String> {
-    with_service(|service| service.uia.toggle(&element_id)).map_err(|err| err.to_string())
+    with_service(|service| service.native.toggle(&element_id)).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
 pub fn automation_focus_window(element_id: String) -> Result<(), String> {
-    with_service(|service| service.uia.focus_window(&element_id)).map_err(|err| err.to_string())
+    with_service(|service| service.native.focus_window(&element_id)).map_err(|err| err.to_string())
 }
 
 // Updated Nov 16, 2025: Added input validation
@@ -289,7 +292,7 @@ pub fn automation_click(
     let click_result = with_service(|service| {
         let (x, y) = if let Some(element_id) = &request.element_id {
             let rect = service
-                .uia
+                .native
                 .bounding_rect(element_id)?
                 .ok_or_else(|| anyhow!("Element {element_id} has no bounding rectangle"))?;
             let x = (rect.left + rect.width / 2.0).round() as i32;
@@ -548,7 +551,7 @@ pub async fn automation_screenshot(
     }
 
     if let Some(ref element_id) = request.element_id {
-        let bounds = with_service(|service| service.uia.bounding_rect(element_id))
+        let bounds = with_service(|service| service.native.bounding_rect(element_id))
             .map_err(|err| err.to_string())?;
         if let Some(bounds) = bounds {
             let width = bounds.width.round().max(1.0) as u32;
@@ -599,10 +602,10 @@ async fn execute_text_input(
     let location = match with_service(|service| {
         if let Some(element_id) = &element_id {
             if should_focus {
-                let _ = service.uia.set_focus(element_id);
+                let _ = service.native.set_focus(element_id);
             }
 
-            if let Some(bounds) = service.uia.bounding_rect(element_id)? {
+            if let Some(bounds) = service.native.bounding_rect(element_id)? {
                 let x = (bounds.left + bounds.width / 2.0).round() as i32;
                 let y = (bounds.top + bounds.height / 2.0).round() as i32;
                 return Ok(Some((x, y)));
