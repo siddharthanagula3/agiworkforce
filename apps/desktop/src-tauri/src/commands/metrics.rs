@@ -71,27 +71,6 @@ pub async fn get_metrics_history(
     collector.0.get_metrics_history(&user_id, days).await
 }
 
-/// Get employee performance metrics
-#[tauri::command]
-pub async fn get_employee_performance(
-    user_id: String,
-    days: Option<i64>,
-    collector: State<'_, MetricsCollectorState>,
-) -> Result<Vec<crate::metrics::EmployeePerformance>, String> {
-    let stats = if let Some(d) = days {
-        match d {
-            1 => collector.0.get_realtime_stats(&user_id)?.today,
-            7 => collector.0.get_realtime_stats(&user_id)?.this_week,
-            30 => collector.0.get_realtime_stats(&user_id)?.this_month,
-            _ => collector.0.get_realtime_stats(&user_id)?.all_time,
-        }
-    } else {
-        collector.0.get_realtime_stats(&user_id)?.all_time
-    };
-
-    Ok(stats.top_employees)
-}
-
 /// Compare automation to manual approach
 #[tauri::command]
 pub async fn compare_to_manual(

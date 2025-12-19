@@ -13,7 +13,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: '👨‍💼',
     description: 'Running a business with limited time and resources',
     perfectFor: 'Business owners who need to maximize productivity',
-    recommendedEmployees: ['Inbox Manager', 'Meeting Scheduler', 'Report Generator'],
+    recommendedDemos: ['Inbox Manager', 'Meeting Scheduler', 'Report Generator'],
   },
   {
     id: 'developer',
@@ -21,7 +21,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: '👨‍💻',
     description: 'Building software and automating workflows',
     perfectFor: 'Engineers who want to automate repetitive coding tasks',
-    recommendedEmployees: ['Code Reviewer', 'Documentation Writer', 'Test Generator'],
+    recommendedDemos: ['Code Reviewer', 'Documentation Writer', 'Test Generator'],
   },
   {
     id: 'operations',
@@ -29,7 +29,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: '📊',
     description: 'Managing processes and optimizing efficiency',
     perfectFor: 'Operations professionals streamlining business processes',
-    recommendedEmployees: ['Data Processor', 'Report Consolidator', 'Task Tracker'],
+    recommendedDemos: ['Data Processor', 'Report Consolidator', 'Task Tracker'],
   },
   {
     id: 'sales_marketing',
@@ -37,7 +37,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: '💼',
     description: 'Driving revenue and customer engagement',
     perfectFor: 'Sales and marketing teams scaling outreach',
-    recommendedEmployees: ['Lead Enricher', 'Email Campaigner', 'Content Creator'],
+    recommendedDemos: ['Lead Enricher', 'Email Campaigner', 'Content Creator'],
   },
   {
     id: 'designer',
@@ -45,7 +45,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: '🎨',
     description: 'Creating visual content and managing design assets',
     perfectFor: 'Creatives automating design workflows and asset management',
-    recommendedEmployees: ['Asset Organizer', 'Image Processor', 'Brand Guardian'],
+    recommendedDemos: ['Asset Organizer', 'Image Processor', 'Brand Guardian'],
   },
   {
     id: 'personal',
@@ -53,7 +53,7 @@ export const ROLE_OPTIONS: RoleOption[] = [
     icon: '👤',
     description: 'Automating personal tasks and productivity',
     perfectFor: 'Individuals wanting to save time on daily tasks',
-    recommendedEmployees: ['File Organizer', 'Email Assistant', 'Research Helper'],
+    recommendedDemos: ['File Organizer', 'Email Assistant', 'Research Helper'],
   },
 ];
 
@@ -68,8 +68,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 35,
       valueSavedMinutes: 150,
       valueSavedUsd: 75.0,
-      employeeId: 'inbox_manager',
-      employeeName: 'Inbox Manager',
+      demoId: 'inbox_manager',
+      demoName: 'Inbox Manager',
       isPopular: true,
       steps: [
         {
@@ -112,8 +112,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 25,
       valueSavedMinutes: 45,
       valueSavedUsd: 22.5,
-      employeeId: 'meeting_scheduler',
-      employeeName: 'Meeting Scheduler',
+      demoId: 'meeting_scheduler',
+      demoName: 'Meeting Scheduler',
       steps: [
         {
           id: 'availability',
@@ -149,8 +149,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 30,
       valueSavedMinutes: 120,
       valueSavedUsd: 60.0,
-      employeeId: 'report_generator',
-      employeeName: 'Report Generator',
+      demoId: 'report_generator',
+      demoName: 'Report Generator',
       steps: [
         {
           id: 'fetch',
@@ -189,8 +189,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 40,
       valueSavedMinutes: 30,
       valueSavedUsd: 25.0,
-      employeeId: 'code_reviewer',
-      employeeName: 'Code Reviewer',
+      demoId: 'code_reviewer',
+      demoName: 'Code Reviewer',
       isPopular: true,
       steps: [
         {
@@ -233,8 +233,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 35,
       valueSavedMinutes: 45,
       valueSavedUsd: 37.5,
-      employeeId: 'test_generator',
-      employeeName: 'Test Generator',
+      demoId: 'test_generator',
+      demoName: 'Test Generator',
       steps: [
         {
           id: 'analyze',
@@ -270,8 +270,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 30,
       valueSavedMinutes: 90,
       valueSavedUsd: 75.0,
-      employeeId: 'doc_writer',
-      employeeName: 'Documentation Writer',
+      demoId: 'doc_writer',
+      demoName: 'Documentation Writer',
       steps: [
         {
           id: 'scan',
@@ -310,8 +310,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 30,
       valueSavedMinutes: 180,
       valueSavedUsd: 90.0,
-      employeeId: 'data_processor',
-      employeeName: 'Data Processor',
+      demoId: 'data_processor',
+      demoName: 'Data Processor',
       isPopular: true,
       steps: [
         {
@@ -354,8 +354,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 25,
       valueSavedMinutes: 120,
       valueSavedUsd: 60.0,
-      employeeId: 'report_consolidator',
-      employeeName: 'Report Consolidator',
+      demoId: 'report_consolidator',
+      demoName: 'Report Consolidator',
       steps: [
         {
           id: 'collect',
@@ -394,8 +394,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 35,
       valueSavedMinutes: 200,
       valueSavedUsd: 100.0,
-      employeeId: 'lead_enricher',
-      employeeName: 'Lead Enricher',
+      demoId: 'lead_enricher',
+      demoName: 'Lead Enricher',
       isPopular: true,
       steps: [
         {
@@ -438,8 +438,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 30,
       valueSavedMinutes: 240,
       valueSavedUsd: 120.0,
-      employeeId: 'email_campaigner',
-      employeeName: 'Email Campaigner',
+      demoId: 'email_campaigner',
+      demoName: 'Email Campaigner',
       steps: [
         {
           id: 'segment',
@@ -478,8 +478,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 30,
       valueSavedMinutes: 90,
       valueSavedUsd: 45.0,
-      employeeId: 'asset_organizer',
-      employeeName: 'Asset Organizer',
+      demoId: 'asset_organizer',
+      demoName: 'Asset Organizer',
       isPopular: true,
       steps: [
         {
@@ -522,8 +522,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 25,
       valueSavedMinutes: 60,
       valueSavedUsd: 30.0,
-      employeeId: 'image_processor',
-      employeeName: 'Image Processor',
+      demoId: 'image_processor',
+      demoName: 'Image Processor',
       steps: [
         {
           id: 'load',
@@ -562,8 +562,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 25,
       valueSavedMinutes: 30,
       valueSavedUsd: 12.5,
-      employeeId: 'file_organizer',
-      employeeName: 'File Organizer',
+      demoId: 'file_organizer',
+      demoName: 'File Organizer',
       isPopular: true,
       steps: [
         {
@@ -600,8 +600,8 @@ export const ONBOARDING_DEMOS: Record<UserRole, OnboardingDemo[]> = {
       estimatedTimeSeconds: 30,
       valueSavedMinutes: 45,
       valueSavedUsd: 18.75,
-      employeeId: 'email_assistant',
-      employeeName: 'Email Assistant',
+      demoId: 'email_assistant',
+      demoName: 'Email Assistant',
       steps: [
         {
           id: 'scan',

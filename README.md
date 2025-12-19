@@ -76,12 +76,20 @@ pnpm lint                # Enforce code style
 
 ---
 
-## 📂 Repository Layout
+## Repository Structure & Organization
 
-- `apps/desktop`: Core Tauri application (React frontend + Rust backend)
-- `packages/types`: Shared TypeScript definitions
-- `packages/utils`: Cross-workspace utility helpers
-- `services/*`: Experimental microservices (api-gateway, signaling)
+The project is a monorepo organized using pnpm workspaces.
+
+```
+/
+├── apps/
+│   ├── desktop/              # Main Tauri desktop application (React + Rust)
+│   ├── extension/            # Minimal browser extension scaffold
+│   ├── web/                  # Marketing website (Next.js)
+├── packages/
+│   ├── types/                # Shared TypeScript types for the monorepo
+│   └── utils/                # Shared utility functions
+```
 
 ## ⚖️ License
 

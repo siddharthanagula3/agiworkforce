@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![warn(warnings)]
-#![allow(unsafe_code)]
 #![allow(unused_qualifications)]
 #![allow(clippy::should_implement_trait)]
 #![allow(clippy::too_many_arguments)]
@@ -13,11 +12,11 @@ use crate::commands::{
     ai_native::{CodeGeneratorState, ContextManagerState},
     load_persisted_calendar_accounts,
     security::AuthManagerState,
-    AIEmployeeState, ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState,
-    CodeEditingState, ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState,
-    FileWatcherState, GitHubState, LLMState, LSPState, McpState, ProductivityState,
-    SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState,
-    VoiceState, WorkflowEngineState, WorkspaceIndexState,
+    ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
+    ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
+    GitHubState, LLMState, LSPState, McpState, ProductivityState, SettingsServiceState,
+    SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState,
+    WorkflowEngineState, WorkspaceIndexState,
 };
 use crate::db::migrations;
 use crate::security::{AuthManager, SecretManager};
@@ -32,7 +31,6 @@ use tokio::sync::Mutex as TokioMutex;
 pub mod account;
 pub mod agent;
 pub mod agi;
-pub mod ai_employees;
 pub mod analytics;
 pub mod api;
 pub mod api_integrations;
@@ -375,36 +373,6 @@ pub fn run() {
                     tracing::warn!("Failed to initialize embedding service: {}", e);
                 }
             }
-
-            // Initialize AI Employee system
-            let employee_db = Arc::new(Mutex::new(
-                Connection::open(&db_path).context("Failed to open database for AI employees")?,
-            ));
-            let llm_router = Arc::new(Mutex::new(crate::router::LLMRouter::new()));
-            let tools = Arc::new(crate::agi::tools::ToolRegistry::new().context("Failed to initialize tool registry")?);
-            let employee_executor = Arc::new(
-                crate::ai_employees::executor::AIEmployeeExecutor::new(
-                    employee_db.clone(),
-                    llm_router,
-                    tools,
-                ),
-            );
-            let employee_marketplace = Arc::new(Mutex::new(
-                crate::ai_employees::marketplace::EmployeeMarketplace::new(employee_db.clone()),
-            ));
-            let employee_registry = Arc::new(Mutex::new(
-                crate::ai_employees::registry::AIEmployeeRegistry::new(employee_db.clone()),
-            ));
-            if let Ok(registry) = employee_registry.lock() {
-                if let Err(e) = registry.initialize() {
-                    tracing::warn!("Failed to initialize AI employee registry: {}", e);
-                }
-            }
-            app.manage(AIEmployeeState {
-                executor: employee_executor,
-                marketplace: employee_marketplace,
-                registry: employee_registry,
-            });
 
             // Initialize Hook Registry
             app.manage(crate::commands::HookRegistryState::new());
@@ -1068,7 +1036,16 @@ pub fn run() {
             crate::commands::update_session_activity,
             crate::commands::get_user_preference,
             crate::commands::set_user_preference,
-
+            crate::commands::select_demo,
+            crate::commands::record_demo_results,
+            crate::commands::mark_setup_completed,
+            crate::commands::complete_first_run,
+            crate::commands::get_first_run_session,
+            crate::commands::get_first_run_statistics,
+            crate::commands::skip_first_run,
+            crate::commands::start_first_run_experience,
+            crate::commands::has_completed_first_run,
+            crate::commands::update_first_run_step,
             // Billing (Stripe)
             crate::billing::billing_initialize,
             crate::billing::stripe_create_customer,
@@ -1092,6 +1069,8 @@ pub fn run() {
             crate::commands::subscribe_to_plan,
             crate::commands::upgrade_plan,
             crate::commands::cancel_subscription,
+            crate::commands::get_pricing_plans,
+            crate::commands::get_current_plan,
 
             // Workflow Orchestration (Additional)
             crate::commands::create_workflow,
@@ -1184,11 +1163,38 @@ pub fn run() {
             crate::commands::uninstall_template,
             crate::commands::get_template_categories,
 
+            // Analytics / Metrics
+            crate::commands::analytics_track_event,
+            crate::commands::analytics_flush_events,
+            crate::commands::analytics_get_session_id,
+            crate::commands::analytics_set_user_property,
+            crate::commands::metrics_get_system,
+            crate::commands::metrics_get_app,
+            crate::commands::feature_flag_get,
+            crate::commands::feature_flag_get_all,
+            crate::commands::analytics_delete_all_data,
+            crate::commands::metrics_increment_automations,
+            crate::commands::metrics_increment_goals,
+            crate::commands::metrics_set_mcp_servers,
+            crate::commands::metrics_set_cache_hit_rate,
+            crate::commands::analytics_calculate_roi,
+            crate::commands::analytics_get_process_metrics,
+            crate::commands::analytics_get_user_metrics,
+            crate::commands::analytics_get_tool_metrics,
+            crate::commands::analytics_get_metric_trends,
+            crate::commands::analytics_export_report,
+            crate::commands::analytics_generate_weekly_report,
+            crate::commands::analytics_generate_monthly_report,
+            crate::commands::analytics_get_top_processes,
+            crate::commands::analytics_save_snapshot,
+            // New commands to replace frontend mocks
+            crate::commands::analytics_get_usage_stats,
+            crate::commands::analytics_get_feature_usage,
+
             // Realtime / Metrics
             crate::commands::get_realtime_stats,
             crate::commands::record_automation_metrics,
             crate::commands::get_metrics_history,
-            crate::commands::get_employee_performance,
             crate::commands::compare_to_manual,
             crate::commands::compare_to_previous_period,
             crate::commands::compare_to_industry_benchmark,
@@ -1196,27 +1202,6 @@ pub fn run() {
             crate::commands::share_milestone,
             crate::commands::track_workflow_view,
             crate::commands::acknowledge_milestone,
-
-            // AI Employees
-            crate::commands::ai_employees_initialize,
-            crate::commands::ai_employees_get_all,
-            crate::commands::ai_employees_get_by_id,
-            crate::commands::ai_employees_search,
-            crate::commands::ai_employees_get_featured,
-            crate::commands::ai_employees_get_by_category,
-            crate::commands::ai_employees_hire,
-            crate::commands::ai_employees_fire,
-            crate::commands::ai_employees_get_user_employees,
-            crate::commands::ai_employees_assign_task,
-            crate::commands::ai_employees_execute_task,
-            crate::commands::ai_employees_get_task_status,
-            crate::commands::ai_employees_list_tasks,
-            crate::commands::ai_employees_run_demo,
-            crate::commands::ai_employees_get_stats,
-            crate::commands::ai_employees_publish,
-            crate::commands::update_custom_employee,
-            crate::commands::delete_custom_employee,
-            crate::commands::publish_employee_to_marketplace,
 
             // Background Tasks (Additional)
             crate::commands::bg_submit_task,

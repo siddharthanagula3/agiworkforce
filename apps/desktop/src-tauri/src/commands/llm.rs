@@ -1,3 +1,4 @@
+use crate::commands::chat::AppDatabase;
 use crate::router::providers::{
     anthropic::AnthropicProvider, deepseek::DeepSeekProvider, google::GoogleProvider,
     mistral::MistralProvider, ollama::OllamaProvider, openai::OpenAIProvider, qwen::QwenProvider,
@@ -387,84 +388,108 @@ pub struct ProviderUsage {
 
 #[tauri::command]
 pub async fn llm_get_available_models(
-    _state: State<'_, LLMState>,
+    state: State<'_, LLMState>,
 ) -> Result<Vec<ModelInfo>, String> {
-    // Return all supported models
-    // In a real implementation, this would query each provider for their available models
-    let models = vec![
+    let router = state.router.lock().await;
+
+    // Define all known models and their providers
+    let all_models = vec![
         // OpenAI
         ModelInfo {
             id: "gpt-5".to_string(),
             name: "GPT-5".to_string(),
             provider: "openai".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "gpt-4o".to_string(),
             name: "GPT-4o".to_string(),
             provider: "openai".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "o3".to_string(),
             name: "O3".to_string(),
             provider: "openai".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "gpt-4o-mini".to_string(),
             name: "GPT-4o Mini".to_string(),
             provider: "openai".to_string(),
-            available: true,
+            available: false,
         },
         // Anthropic
         ModelInfo {
             id: "claude-sonnet-4-5".to_string(),
             name: "Claude Sonnet 4.5".to_string(),
             provider: "anthropic".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "claude-haiku-4-5".to_string(),
             name: "Claude Haiku 4.5".to_string(),
             provider: "anthropic".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "claude-opus-4".to_string(),
             name: "Claude Opus 4".to_string(),
             provider: "anthropic".to_string(),
-            available: true,
+            available: false,
         },
         // Google
         ModelInfo {
             id: "gemini-2.5-pro".to_string(),
             name: "Gemini 2.5 Pro".to_string(),
             provider: "google".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "gemini-2.5-flash".to_string(),
             name: "Gemini 2.5 Flash".to_string(),
             provider: "google".to_string(),
-            available: true,
+            available: false,
         },
         // Ollama
         ModelInfo {
             id: "llama4-maverick".to_string(),
             name: "Llama 4 Maverick".to_string(),
             provider: "ollama".to_string(),
-            available: true,
+            available: false,
         },
         ModelInfo {
             id: "deepseek-coder-v3".to_string(),
             name: "DeepSeek Coder V3".to_string(),
             provider: "ollama".to_string(),
-            available: true,
+            available: false,
         },
     ];
 
-    Ok(models)
+    // Filter and update availability based on configured providers
+    let mut available_models = Vec::new();
+
+    for mut model in all_models {
+        let provider_enum = match model.provider.as_str() {
+            "openai" => Provider::OpenAI,
+            "anthropic" => Provider::Anthropic,
+            "google" => Provider::Google,
+            "ollama" => Provider::Ollama,
+            _ => continue,
+        };
+
+        if router.has_provider(provider_enum) {
+            model.available = true;
+            available_models.push(model);
+        }
+    }
+
+    // Always include Ollama models if Ollama is configured, but mark as available only if we can reach it
+    // For now, we rely on has_provider which checks if base_url is set.
+    // Ideally we would query Ollama tags here, but that requires async HTTP which we can do if needed.
+    // For simplicity, we just check configuration.
+
+    Ok(available_models)
 }
 
 #[tauri::command]
@@ -533,83 +558,103 @@ pub async fn llm_check_provider_status(
 }
 
 #[tauri::command]
-pub async fn llm_get_usage_stats() -> Result<UsageStats, String> {
-    // This would normally query the database for usage statistics
-    // For now, return empty stats
-    // TODO: Implement database queries to aggregate usage from chat history
+pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStats, String> {
+    let conn = db.connection()?;
 
+    // 1. Get total stats
+    let (total_tokens, total_cost, message_count) = conn
+        .query_row(
+            "SELECT 
+            COALESCE(SUM(tokens), 0) as total_tokens,
+            COALESCE(SUM(cost), 0.0) as total_cost,
+            COUNT(*) as message_count
+         FROM messages 
+         WHERE role = 'assistant'",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)? as u64,
+                    row.get::<_, f64>(1)?,
+                    row.get::<_, i64>(2)? as u64,
+                ))
+            },
+        )
+        .map_err(|e| format!("Failed to fetch total usage stats: {}", e))?;
+
+    // 2. Get stats by provider
     let mut by_provider = std::collections::HashMap::new();
-    by_provider.insert(
-        "openai".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "anthropic".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "google".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "ollama".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "xai".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "deepseek".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "qwen".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
-    by_provider.insert(
-        "mistral".to_string(),
-        ProviderUsage {
-            tokens: 0,
-            cost: 0.0,
-            messages: 0,
-        },
-    );
+    let mut stmt = conn
+        .prepare(
+            "SELECT 
+            COALESCE(provider, 'unknown') as provider,
+            COALESCE(SUM(tokens), 0) as tokens,
+            COALESCE(SUM(cost), 0.0) as cost,
+            COUNT(*) as messages
+         FROM messages 
+         WHERE role = 'assistant'
+         GROUP BY provider",
+        )
+        .map_err(|e| format!("Failed to prepare provider stats query: {}", e))?;
+
+    let provider_rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                ProviderUsage {
+                    tokens: row.get::<_, i64>(1)? as u64,
+                    cost: row.get::<_, f64>(2)?,
+                    messages: row.get::<_, i64>(3)? as u64,
+                },
+            ))
+        })
+        .map_err(|e| format!("Failed to query provider stats: {}", e))?;
+
+    for row in provider_rows {
+        if let Ok((provider, usage)) = row {
+            by_provider.insert(provider, usage);
+        }
+    }
+
+    // 3. Get stats by model
+    let mut by_model = std::collections::HashMap::new();
+    let mut stmt = conn
+        .prepare(
+            "SELECT 
+            COALESCE(model, 'unknown') as model,
+            COALESCE(SUM(tokens), 0) as tokens,
+            COALESCE(SUM(cost), 0.0) as cost,
+            COUNT(*) as messages
+         FROM messages 
+         WHERE role = 'assistant'
+         GROUP BY model",
+        )
+        .map_err(|e| format!("Failed to prepare model stats query: {}", e))?;
+
+    let model_rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                ProviderUsage {
+                    tokens: row.get::<_, i64>(1)? as u64,
+                    cost: row.get::<_, f64>(2)?,
+                    messages: row.get::<_, i64>(3)? as u64,
+                },
+            ))
+        })
+        .map_err(|e| format!("Failed to query model stats: {}", e))?;
+
+    for row in model_rows {
+        if let Ok((model, usage)) = row {
+            by_model.insert(model, usage);
+        }
+    }
 
     Ok(UsageStats {
-        total_tokens: 0,
-        total_cost: 0.0,
-        message_count: 0,
+        total_tokens,
+        total_cost,
+        message_count,
         by_provider,
-        by_model: std::collections::HashMap::new(),
+        by_model,
     })
 }
 

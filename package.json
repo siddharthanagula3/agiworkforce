@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "AGI Workforce monorepo (Tauri + React + Rust)",
+  "homepage": "https://agiworkforce.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/siddhartha/agiworkforce.git"
+  },
   "license": "MIT",
   "packageManager": "pnpm@9.15.3",
   "engines": {

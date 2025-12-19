@@ -130,7 +130,7 @@ pub struct TutorialStats {
 }
 
 pub use first_run::{
-    AIEmployeeRecommendation, DemoResult, FirstRunError, FirstRunExperience, FirstRunSession,
+    DemoRecommendation, DemoResult, FirstRunError, FirstRunExperience, FirstRunSession,
     FirstRunStatistics, OnboardingStep,
 };
 pub use instant_demo::{DemoError, DemoStatistics, InstantDemo};
