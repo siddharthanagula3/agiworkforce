@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { Bot, Github } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -17,6 +17,8 @@ export default function LoginPage() {
     setLoading(true);
     setMessage(null);
 
+    const supabase = getSupabaseClient();
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -31,6 +33,7 @@ export default function LoginPage() {
   };
 
   const handleOAuth = async (provider: 'github' | 'google') => {
+    const supabase = getSupabaseClient();
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
