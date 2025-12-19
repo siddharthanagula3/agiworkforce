@@ -82,7 +82,7 @@ xcap = "0.0.12"  # Cross-platform screen capture
 arboard = "3.4"  # Cross-platform clipboard
 
 # Terminal/PTY
-portable-pty = "0.8"
+portable-pty = "0.9"
 which = "6.0"
 
 # Security & Credentials
