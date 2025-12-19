@@ -1,28 +1,35 @@
 pub mod codegen;
 pub mod executor;
 pub mod input;
-#[cfg(windows)]
 pub mod inspector;
 #[cfg(all(test, windows))]
 mod integration_tests;
+#[cfg(target_os = "macos")]
+pub mod mac;
 pub(crate) mod os_lock;
 pub mod recorder;
 pub mod safety;
 pub mod screen;
 pub mod types;
-#[cfg(windows)]
+#[cfg(target_os = "windows")]
 pub mod uia;
 pub mod vision_planner;
+
+#[cfg(target_os = "windows")]
+use uia::inspector_impl as platform_impl;
+
+#[cfg(target_os = "macos")]
+use mac::inspector_impl as platform_impl;
+
+pub use platform_impl::InspectorService;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 use self::input::{ClipboardManager, KeyboardSimulator, MouseSimulator};
 
-use self::uia::UIAutomationService;
-
-// Stub for non-Windows platforms
-#[cfg(not(windows))]
+// Stub for non-Windows and non-macOS platforms
+#[cfg(not(any(windows, target_os = "macos")))]
 pub mod uia {
     pub use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
 
@@ -109,10 +116,10 @@ pub mod uia {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub struct InspectorService;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl InspectorService {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self)
@@ -156,8 +163,14 @@ impl InspectorService {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub type PlatformDriver = uia::UIAutomationService;
+
+#[cfg(target_os = "macos")]
+pub type PlatformDriver = mac::service::MacAutomationService;
+
 pub struct AutomationService {
-    pub uia: UIAutomationService,
+    pub native: PlatformDriver,
     pub keyboard: Mutex<KeyboardSimulator>,
     pub mouse: Mutex<MouseSimulator>,
     pub clipboard: ClipboardManager,
@@ -166,7 +179,7 @@ pub struct AutomationService {
 impl AutomationService {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
-            uia: UIAutomationService::new()?,
+            native: PlatformDriver::new()?,
             keyboard: Mutex::new(KeyboardSimulator::new()?),
             mouse: Mutex::new(MouseSimulator::new()?),
             clipboard: ClipboardManager::new()?,

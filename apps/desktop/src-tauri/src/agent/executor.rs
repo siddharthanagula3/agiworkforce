@@ -295,8 +295,8 @@ impl TaskExecutor {
             ClickTarget::UIAElement { element_id } => {
                 // Use UIA to click element
                 // set_focus and invoke handle element retrieval internally
-                self.automation.uia.set_focus(element_id)?;
-                self.automation.uia.invoke(element_id)?;
+                self.automation.native.set_focus(element_id)?;
+                self.automation.native.invoke(element_id)?;
                 Ok(())
             }
             ClickTarget::ImageMatch {

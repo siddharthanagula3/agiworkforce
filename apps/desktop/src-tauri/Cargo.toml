@@ -200,6 +200,12 @@ windows = { version = "0.56", features = [
     "Globalization"
 ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+accessibility-sys = "0.1.2"
+core-foundation = "0.9"
+objc = "0.2"
+cocoa = "0.25"
+
 
 [features]
 default = []
