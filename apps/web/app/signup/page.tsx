@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { Button, Input } from '@/components/ui';
 import { Bot } from 'lucide-react';
 
@@ -16,6 +16,8 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
+
+    const supabase = getSupabaseClient();
 
     const { error } = await supabase.auth.signUp({
       email,
