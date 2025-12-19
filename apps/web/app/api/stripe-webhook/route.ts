@@ -1,11 +1,8 @@
 import 'server-only';
 
-import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-
-import type { Database } from '@/types/database'; // local lightweight type (to be created) or fallback to any if missing
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -26,13 +23,13 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2023-10-16',
     })
   : null;
 
 const supabaseAdmin =
   SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
         auth: { persistSession: false },
       })
     : null;
@@ -48,27 +45,18 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   const planTier = (session.metadata?.['plan_tier'] as string | undefined) ?? 'pro';
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
-  const priceId =
-    (session.display_items &&
-      ((session.display_items[0] as Stripe.Checkout.SessionDisplayItem)?.price?.id ?? null)) ||
-    (session.line_items &&
-      Array.isArray(session.line_items.data) &&
-      (session.line_items.data[0]?.price?.id ?? null)) ||
-    null;
 
-  await supabaseAdmin
-    .from('subscriptions')
-    .upsert(
-      {
-        user_id: supabaseUserId,
-        status: 'active',
-        plan_tier: planTier,
-        stripe_customer_id: stripeCustomerId,
-        stripe_subscription_id: stripeSubId,
-        stripe_price_id: priceId,
-      },
-      { onConflict: 'user_id' },
-    );
+  await supabaseAdmin.from('subscriptions').upsert(
+    {
+      user_id: supabaseUserId,
+      status: 'active',
+      plan_tier: planTier,
+      stripe_customer_id: stripeCustomerId,
+      stripe_subscription_id: stripeSubId,
+      stripe_price_id: null,
+    },
+    { onConflict: 'user_id' },
+  );
 }
 
 export async function POST(request: Request) {
@@ -77,7 +65,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.text();
-  const signature = headers().get('stripe-signature');
+  const signature = request.headers.get('stripe-signature');
 
   if (!signature) {
     return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
@@ -131,5 +119,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ received: true }, { status: 200 });
 }
-
-
