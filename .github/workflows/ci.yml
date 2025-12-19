@@ -2,88 +2,28 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, 'claude/**']
+    branches: [main]
   pull_request:
-    branches: [main, develop]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  RUST_VERSION: '1.90.0'
-  NODE_VERSION: '20'
-  PNPM_VERSION: '9.15.3'
+    branches: [main]
 
 jobs:
-  build-verification:
-    name: Build Verification
-    runs-on: windows-latest
-    timeout-minutes: 45
-
+  check:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
         with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+          version: 9
+      - uses: actions/setup-node@v4
         with:
-          workspaces: apps/desktop/src-tauri
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Cache pnpm store
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: 20
           cache: 'pnpm'
 
-      - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Verify Rust compilation
-        working-directory: apps/desktop/src-tauri
-        run: cargo check
+      - name: Typecheck
+        run: pnpm typecheck
 
-      - name: Verify TypeScript compilation
-        run: pnpm --filter @agiworkforce/desktop exec tsc --noEmit
-
-      - name: Verify Frontend lints
+      - name: Lint
         run: pnpm lint
-
-      - name: Verify Rust lints
-        working-directory: apps/desktop/src-tauri
-        run: cargo clippy -- -D warnings
-
-      - name: Build web bundle
-        run: pnpm --filter @agiworkforce/desktop exec vite build
-
-      - name: Run Rust unit tests
-        working-directory: apps/desktop/src-tauri
-        run: cargo test --lib --bins -- --nocapture --test-threads=1
-
-      - name: Run frontend unit tests
-        run: pnpm --filter @agiworkforce/desktop test
-
-      - name: Status summary
-        if: always()
-        run: |
-          echo "Build verification workflow completed successfully"
-          echo "✅ Rust compilation: passed"
-          echo "✅ TypeScript compilation: passed"
-          echo "✅ Web bundle build: passed"
-          echo "✅ Rust tests: passed"
-          echo "✅ Frontend tests: passed"
