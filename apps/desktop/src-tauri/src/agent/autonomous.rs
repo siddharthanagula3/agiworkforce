@@ -4,6 +4,7 @@ use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::Mutex as TokioMutex;
 use tokio::time::sleep;
 
 const MAX_SELF_HEAL_RETRIES: usize = 3;
@@ -11,7 +12,7 @@ const MAX_SELF_HEAL_RETRIES: usize = 3;
 pub struct AutonomousAgent {
     config: AgentConfig,
     automation: Arc<AutomationService>,
-    router: Arc<LLMRouter>,
+    router: Arc<TokioMutex<LLMRouter>>,
     planner: TaskPlanner,
     executor: TaskExecutor,
     vision: VisionAutomation,
@@ -25,8 +26,9 @@ impl AutonomousAgent {
     pub fn new(
         config: AgentConfig,
         automation: Arc<AutomationService>,
-        router: Arc<LLMRouter>,
+        router: Arc<TokioMutex<LLMRouter>>,
     ) -> Result<Self> {
+        // Create planner with the shared router
         let planner = TaskPlanner::new(router.clone())?;
         let executor = TaskExecutor::new(automation.clone())?;
         let vision = VisionAutomation::new()?;

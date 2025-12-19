@@ -4,7 +4,6 @@ use crate::agent::{
 };
 use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
-use crate::router::LLMRouter;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -51,12 +50,9 @@ pub async fn agent_init(
         );
     }
 
-    // Get router from LLM state
-    let router = llm_state.router.lock().await;
-    // Create a new router instance for agent (since we can't clone)
-    // TODO: Refactor to share router properly
-    let router_for_agent = Arc::new(LLMRouter::new());
-    drop(router);
+    // Share the router from LLMState with the agent
+    // This ensures the agent has access to configured API keys
+    let router_for_agent = llm_state.router.clone();
 
     // Create a fresh automation service for the agent
     let automation_arc = Arc::new(
