@@ -942,7 +942,7 @@ impl ToolExecutor {
                     } else if let Some(element_id) =
                         target.get("element_id").and_then(|v| v.as_str())
                     {
-                        match automation.uia.invoke(element_id) {
+                        match automation.native.invoke(element_id) {
                             Ok(_) => Ok(ToolResult {
                                 success: true,
                                 data: json!({ "success": true, "action": "invoked", "element_id": element_id }),
@@ -966,10 +966,10 @@ impl ToolExecutor {
                             control_type: None,
                             max_results: Some(1),
                         };
-                        match automation.uia.find_elements(None, &query) {
+                        match automation.native.find_elements(None, &query) {
                             Ok(elements) => {
                                 if let Some(element) = elements.first() {
-                                    match automation.uia.invoke(&element.id) {
+                                    match automation.native.invoke(&element.id) {
                                         Ok(_) => Ok(ToolResult {
                                             success: true,
                                             data: json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }),
@@ -1059,7 +1059,7 @@ impl ToolExecutor {
 
                     // If element_id provided, focus and type
                     if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
-                        if let Err(e) = automation.uia.set_focus(element_id) {
+                        if let Err(e) = automation.native.set_focus(element_id) {
                             return Ok(ToolResult {
                                 success: false,
                                 data: json!(null),
@@ -1078,10 +1078,10 @@ impl ToolExecutor {
                             control_type: None,
                             max_results: Some(1),
                         };
-                        match automation.uia.find_elements(None, &query) {
+                        match automation.native.find_elements(None, &query) {
                             Ok(elements) => {
                                 if let Some(element) = elements.first() {
-                                    if let Err(e) = automation.uia.set_focus(&element.id) {
+                                    if let Err(e) = automation.native.set_focus(&element.id) {
                                         return Ok(ToolResult {
                                             success: false,
                                             data: json!(null),

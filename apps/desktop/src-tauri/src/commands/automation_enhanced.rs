@@ -4,6 +4,7 @@ use super::AppDatabase;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
+    inspector::UIInspector,
     recorder::{global_recorder, Recording, RecordingSession},
     types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
     InspectorService,
@@ -106,13 +107,28 @@ pub fn automation_find_element_by_selector(
     selector: ElementSelector,
 ) -> Result<Option<BasicElementInfo>, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector
+    let element_id = inspector
         .find_element_by_selector(&selector)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    if let Some(id) = element_id {
+        let details = inspector
+            .inspect_element_by_id(&id)
+            .map_err(|e| e.to_string())?;
+
+        Ok(Some(BasicElementInfo {
+            id: details.id,
+            name: details.name,
+            class_name: details.class_name,
+            control_type: details.control_type,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tauri::command]
-pub fn automation_generate_selector(element_id: String) -> Result<ElementSelector, String> {
+pub fn automation_generate_selector(element_id: String) -> Result<Vec<ElementSelector>, String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
     inspector
         .generate_selector(&element_id)
@@ -120,9 +136,13 @@ pub fn automation_generate_selector(element_id: String) -> Result<ElementSelecto
 }
 
 #[tauri::command]
-pub fn automation_get_element_tree() -> Result<DetailedElementInfo, String> {
+pub fn automation_get_element_tree(
+    element_id: String,
+) -> Result<(Option<BasicElementInfo>, Vec<BasicElementInfo>), String> {
     let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector.get_element_tree().map_err(|e| e.to_string())
+    inspector
+        .get_element_tree(&element_id)
+        .map_err(|e| e.to_string())
 }
 
 // ============================================================================

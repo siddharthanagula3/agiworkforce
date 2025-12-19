@@ -1,5 +1,6 @@
 use super::*;
-use serde::{Deserialize, Serialize};
+
+use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
 use windows::Win32::UI::Accessibility::{
     IUIAutomationCondition, TreeScope_Children, TreeScope_Subtree, UIA_AutomationIdPropertyId,
     UIA_ButtonControlTypeId, UIA_CheckBoxControlTypeId, UIA_ClassNamePropertyId,
@@ -8,41 +9,6 @@ use windows::Win32::UI::Accessibility::{
     UIA_NamePropertyId, UIA_TextControlTypeId, UIA_WindowControlTypeId, UIA_CONTROLTYPE_ID,
     UIA_PROPERTY_ID,
 };
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BoundingRectangle {
-    pub left: f64,
-    pub top: f64,
-    pub width: f64,
-    pub height: f64,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct UIElementInfo {
-    pub id: String,
-    pub name: String,
-    pub class_name: String,
-    pub control_type: String,
-    pub bounding_rect: Option<BoundingRectangle>,
-}
-
-#[derive(Debug, Deserialize, Clone, Default)]
-pub struct ElementQuery {
-    #[serde(default)]
-    pub window: Option<String>,
-    #[serde(default)]
-    pub window_class: Option<String>,
-    #[serde(default)]
-    pub name: Option<String>,
-    #[serde(default)]
-    pub class_name: Option<String>,
-    #[serde(default)]
-    pub automation_id: Option<String>,
-    #[serde(default)]
-    pub control_type: Option<String>,
-    #[serde(default)]
-    pub max_results: Option<usize>,
-}
 
 impl UIAutomationService {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {

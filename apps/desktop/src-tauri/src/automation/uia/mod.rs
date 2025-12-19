@@ -16,13 +16,14 @@ use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomat
 
 mod actions;
 mod element_tree;
+pub mod inspector_impl;
 mod patterns;
 mod wait;
 
 #[cfg(test)]
 mod tests;
 
-pub use element_tree::{BoundingRectangle, ElementQuery, UIElementInfo};
+pub use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
 pub use patterns::PatternCapabilities;
 pub use wait::WaitConfig;
 
