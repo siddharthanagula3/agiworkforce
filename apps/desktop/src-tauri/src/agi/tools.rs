@@ -796,6 +796,76 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Image Generation
+        self.register_tool(Tool {
+            id: "image_generate".to_string(),
+            name: "Generate Image".to_string(),
+            description: "Generate an image using AI (DALL-E 3, Imagen 3, SDXL)".to_string(),
+            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::APICall],
+            parameters: vec![
+                ToolParameter {
+                    name: "prompt".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Detailed description of the image to generate".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "provider".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Provider to use: 'dalle3', 'imagen', 'sdxl' (default: auto)"
+                        .to_string(),
+                    default: Some(serde_json::Value::String("auto".to_string())),
+                },
+                ToolParameter {
+                    name: "size".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description:
+                        "Size: '1024x1024', 'landscape', 'portrait' (default: '1024x1024')"
+                            .to_string(),
+                    default: Some(serde_json::Value::String("1024x1024".to_string())),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 50,
+                network_mb: 5.0, // Upload/Download
+            },
+            dependencies: vec![],
+        })?;
+
+        // Video Generation
+        self.register_tool(Tool {
+            id: "video_generate".to_string(),
+            name: "Generate Video".to_string(),
+            description: "Generate a video using AI (Google Veo)".to_string(),
+            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::APICall],
+            parameters: vec![
+                ToolParameter {
+                    name: "prompt".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Detailed description of the video to generate".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "duration_seconds".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Duration in seconds (default: 5)".to_string(),
+                    default: Some(serde_json::json!(5)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 100,
+                network_mb: 20.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // Email Tools
         self.register_tool(Tool {
             id: "email_send".to_string(),
