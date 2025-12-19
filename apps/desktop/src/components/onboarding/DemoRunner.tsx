@@ -22,11 +22,7 @@ interface ActionLogItem {
   timestamp: number;
 }
 
-export const DemoRunner: React.FC<DemoRunnerProps> = ({
-  demo,
-  progress,
-  isRunning,
-}) => {
+export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunning }) => {
   const [actionLog, setActionLog] = useState<ActionLogItem[]>([]);
   const [metrics, setMetrics] = useState({
     timeSaved: 0,
@@ -97,16 +93,12 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({
                 <Zap className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <CardTitle className="text-xl">{demo.employeeName}</CardTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {demo.title}
-                </p>
+                <CardTitle className="text-xl">{demo.demoName}</CardTitle>
+                <p className="text-sm text-muted-foreground mt-0.5">{demo.title}</p>
               </div>
             </div>
 
-            {isRunning && (
-              <Loader2 className="h-6 w-6 text-primary animate-spin" />
-            )}
+            {isRunning && <Loader2 className="h-6 w-6 text-primary animate-spin" />}
           </div>
         </CardHeader>
 
@@ -130,9 +122,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({
 
           {/* Current action */}
           <div className="bg-background/60 rounded-lg p-4 border border-primary/20">
-            <p className="text-sm font-medium text-muted-foreground mb-1">
-              Current Action:
-            </p>
+            <p className="text-sm font-medium text-muted-foreground mb-1">Current Action:</p>
             <p className="text-base font-semibold flex items-center gap-2">
               {isRunning && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
               {progress?.currentAction || 'Initializing...'}
@@ -209,17 +199,13 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({
                   <div className="flex-1">
                     <p
                       className={`text-sm font-medium ${
-                        action.completed
-                          ? 'text-foreground'
-                          : 'text-muted-foreground'
+                        action.completed ? 'text-foreground' : 'text-muted-foreground'
                       }`}
                     >
                       {action.description}
                     </p>
                     {action.completed && (
-                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                        ✓ Complete
-                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Complete</p>
                     )}
                   </div>
 
