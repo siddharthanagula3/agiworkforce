@@ -1554,6 +1554,102 @@ impl ToolExecutor {
                     metadata: HashMap::from([("language".to_string(), json!(language))]),
                 })
             }
+            "image_generate" => {
+                // ✅ Image generation implementation
+                let prompt = args
+                    .get("prompt")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing prompt parameter"))?
+                    .to_string();
+                let provider = args
+                    .get("provider")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let size = args
+                    .get("size")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                let request = crate::commands::media::MediaImageRequest {
+                    prompt: prompt.clone(),
+                    negative_prompt: None,
+                    provider,
+                    model: None,
+                    size,
+                    quality: None,
+                    style: None,
+                    n: Some(1),
+                };
+
+                match crate::commands::media::media_generate_image(request).await {
+                    Ok(response) => {
+                        let result_data = json!({
+                            "success": true,
+                            "images": response.images,
+                            "provider": response.provider,
+                            "cost": response.cost_estimate
+                        });
+                        Ok(ToolResult {
+                            success: true,
+                            data: result_data,
+                            error: None,
+                            metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                        })
+                    }
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Image generation failed: {}", e)),
+                        metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                    }),
+                }
+            }
+            "video_generate" => {
+                // ✅ Video generation implementation
+                let prompt = args
+                    .get("prompt")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing prompt parameter"))?
+                    .to_string();
+                let duration_secs = args
+                    .get("duration_seconds")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32);
+
+                let request = crate::commands::media::MediaVideoRequest {
+                    prompt: prompt.clone(),
+                    negative_prompt: None,
+                    duration_secs,
+                    resolution: None,
+                    style: None,
+                    model: None,
+                    plan: None,
+                };
+
+                match crate::commands::media::media_generate_video(request).await {
+                    Ok(response) => {
+                        let result_data = json!({
+                            "success": true,
+                            "video_url": response.video_url,
+                            "thumbnail_url": response.thumbnail_url,
+                            "id": response.id,
+                            "status": response.status
+                        });
+                        Ok(ToolResult {
+                            success: true,
+                            data: result_data,
+                            error: None,
+                            metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                        })
+                    }
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Video generation failed: {}", e)),
+                        metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                    }),
+                }
+            }
             "llm_reason" => {
                 // ✅ LLM sub-reasoning implementation
                 let prompt = args

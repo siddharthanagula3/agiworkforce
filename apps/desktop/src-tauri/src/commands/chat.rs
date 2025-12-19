@@ -10,10 +10,14 @@ use crate::db::repository;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 // use tokio::sync::Mutex as TokioMutex; // Unused
 use tracing::info;
+
+/// Global atomic flag for stopping stream generation
+static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 
 /// Detect if a user message indicates a complex multi-step task suitable for agent mode
 fn detect_agentic_intent(content: &str) -> bool {
@@ -590,13 +594,309 @@ pub async fn chat_send_message(
     }
 
     // 2. Standard LLM routing (Non-AGI)
+    use crate::router::{
+        llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
+        ChatMessage, LLMRequest, Provider,
+    };
+    use futures_util::StreamExt;
+
+    // Get or create conversation
+    let db = _db;
+    let conversation = {
+        let conn = db.connection()?;
+        if let Some(conv_id) = request.conversation_id {
+            repository::get_conversation(&conn, conv_id)
+                .map_err(|e| format!("Failed to get conversation: {}", e))?
+        } else {
+            // Create new conversation with first message as title
+            let title = request.content.chars().take(50).collect::<String>();
+            let id = repository::create_conversation(&conn, title)
+                .map_err(|e| format!("Failed to create conversation: {}", e))?;
+            repository::get_conversation(&conn, id)
+                .map_err(|e| format!("Failed to get new conversation: {}", e))?
+        }
+    };
+
+    // Save user message
+    let user_message = {
+        let conn = db.connection()?;
+        let msg = Message {
+            id: 0,
+            conversation_id: conversation.id,
+            role: MessageRole::User,
+            content: request.content.clone(),
+            tokens: None,
+            cost: None,
+            provider: None,
+            model: None,
+            created_at: Utc::now(),
+        };
+        let id = repository::create_message(&conn, &msg)
+            .map_err(|e| format!("Failed to save user message: {}", e))?;
+        repository::get_message(&conn, id)
+            .map_err(|e| format!("Failed to retrieve user message: {}", e))?
+    };
+
+    // Build conversation history for context
+    let history = {
+        let conn = db.connection()?;
+        repository::list_messages(&conn, conversation.id)
+            .map_err(|e| format!("Failed to load message history: {}", e))?
+    };
+
+    // Convert to LLM messages format
+    let llm_messages: Vec<ChatMessage> = history
+        .iter()
+        .map(|m| ChatMessage {
+            role: match m.role {
+                MessageRole::User => "user".to_string(),
+                MessageRole::Assistant => "assistant".to_string(),
+                MessageRole::System => "system".to_string(),
+            },
+            content: m.content.clone(),
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        })
+        .collect();
+
+    // Parse provider preference
+    let provider = request
+        .provider_override
+        .as_deref()
+        .or(request.provider.as_deref())
+        .and_then(|p| match p {
+            "openai" => Some(Provider::OpenAI),
+            "anthropic" => Some(Provider::Anthropic),
+            "google" => Some(Provider::Google),
+            "ollama" => Some(Provider::Ollama),
+            "xai" | "grok" => Some(Provider::XAI),
+            "deepseek" => Some(Provider::DeepSeek),
+            "qwen" | "alibaba" => Some(Provider::Qwen),
+            "mistral" | "mistralai" => Some(Provider::Mistral),
+            _ => None,
+        });
+
+    let model = request
+        .model_override
+        .or(request.model.clone())
+        .unwrap_or_else(|| "gpt-4o-mini".to_string());
+
+    // Build router context from task metadata
+    let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
+        intents: meta.intents.clone(),
+        requires_vision: meta.requires_vision,
+        token_estimate: meta.token_estimate.unwrap_or(0),
+        cost_priority: Default::default(),
+    });
+
+    let preferences = RouterPreferences {
+        provider,
+        model: Some(model.clone()),
+        strategy: RoutingStrategy::Auto,
+        context: router_context,
+    };
+
+    let llm_request = LLMRequest {
+        messages: llm_messages,
+        model: model.clone(),
+        temperature: Some(0.7),
+        max_tokens: Some(4096),
+        stream: request.stream.unwrap_or(false),
+        tools: None,
+        tool_choice: None,
+        thinking_mode: request.thinking_mode,
+    };
+
     let stream_mode = request.stream.unwrap_or(false);
+
     if stream_mode {
-        // Return placeholder for now as focus was on AGI bridge
-        return Err("Streaming non-AGI mode currently disabled during deep-wiring fix".to_string());
+        // Streaming mode: emit events for real-time updates
+        let router = _llm_state.router.lock().await;
+
+        // Reset stop flag before starting new generation
+        reset_stop_flag();
+
+        // Emit stream start
+        let _ = app_handle.emit(
+            "chat:stream-start",
+            serde_json::json!({
+                "conversation_id": conversation.id,
+                "message_id": 0,  // Will be assigned after saving
+                "created_at": Utc::now().to_rfc3339()
+            }),
+        );
+
+        match router
+            .send_message_streaming(&llm_request, &preferences)
+            .await
+        {
+            Ok(mut stream) => {
+                let mut full_content = String::new();
+                let mut token_count = 0u32;
+                let mut was_stopped = false;
+
+                while let Some(chunk_result) = stream.next().await {
+                    // Check if generation was stopped
+                    if should_stop_generation() {
+                        info!("[Chat] Generation stopped by user");
+                        was_stopped = true;
+                        break;
+                    }
+
+                    match chunk_result {
+                        Ok(chunk) => {
+                            full_content.push_str(&chunk.content);
+                            token_count += 1; // Rough estimate
+
+                            // Emit chunk to frontend
+                            let _ = app_handle.emit(
+                                "chat:stream-chunk",
+                                serde_json::json!({
+                                    "conversation_id": conversation.id,
+                                    "message_id": 0,
+                                    "delta": chunk.content,
+                                    "content": full_content
+                                }),
+                            );
+                        }
+                        Err(e) => {
+                            info!("[Chat] Stream error: {}", e);
+                            break;
+                        }
+                    }
+                }
+
+                // Add note if generation was stopped
+                if was_stopped && !full_content.is_empty() {
+                    full_content.push_str("\n\n*[Generation stopped by user]*");
+                }
+
+                // Save assistant message after streaming completes
+                let assistant_message = {
+                    let conn = db.connection()?;
+                    let msg = Message {
+                        id: 0,
+                        conversation_id: conversation.id,
+                        role: MessageRole::Assistant,
+                        content: full_content.clone(),
+                        tokens: Some(token_count as i32),
+                        cost: None, // TODO: Calculate from provider
+                        provider: provider.map(|p| p.as_string().to_string()),
+                        model: Some(model.clone()),
+                        created_at: Utc::now(),
+                    };
+                    let id = repository::create_message(&conn, &msg)
+                        .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+                    repository::get_message(&conn, id)
+                        .map_err(|e| format!("Failed to retrieve assistant message: {}", e))?
+                };
+
+                // Emit stream end
+                let _ = app_handle.emit(
+                    "chat:stream-end",
+                    serde_json::json!({
+                        "conversation_id": conversation.id,
+                        "message_id": assistant_message.id
+                    }),
+                );
+
+                let stats = {
+                    let conn = db.connection()?;
+                    let messages = repository::list_messages(&conn, conversation.id)
+                        .map_err(|e| format!("Failed to compute stats: {}", e))?;
+                    ConversationStats {
+                        message_count: messages.len(),
+                        total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
+                        total_cost: messages.iter().filter_map(|m| m.cost).sum(),
+                    }
+                };
+
+                return Ok(ChatSendMessageResponse {
+                    conversation,
+                    user_message,
+                    assistant_message,
+                    stats,
+                    last_message: Some(full_content),
+                });
+            }
+            Err(e) => {
+                return Err(format!("Streaming failed: {}", e));
+            }
+        }
     }
 
-    Err("Direct LLM routing not implemented in this phase".to_string())
+    // Non-streaming mode: get complete response
+    let candidates = {
+        let router = _llm_state.router.lock().await;
+        router.candidates(&llm_request, &preferences)
+    };
+
+    if candidates.is_empty() {
+        return Err(
+            "No LLM providers configured. Please add an API key in Settings > API Keys."
+                .to_string(),
+        );
+    }
+
+    let mut last_error: Option<String> = None;
+    for candidate in candidates {
+        let result = {
+            let router = _llm_state.router.lock().await;
+            router.invoke_candidate(&candidate, &llm_request).await
+        };
+
+        match result {
+            Ok(outcome) => {
+                // Save assistant message
+                let assistant_message = {
+                    let conn = db.connection()?;
+                    let msg = Message {
+                        id: 0,
+                        conversation_id: conversation.id,
+                        role: MessageRole::Assistant,
+                        content: outcome.response.content.clone(),
+                        tokens: outcome.response.tokens.map(|t| t as i32),
+                        cost: outcome.response.cost,
+                        provider: Some(outcome.provider.as_string().to_string()),
+                        model: Some(outcome.model.clone()),
+                        created_at: Utc::now(),
+                    };
+                    let id = repository::create_message(&conn, &msg)
+                        .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+                    repository::get_message(&conn, id)
+                        .map_err(|e| format!("Failed to retrieve assistant message: {}", e))?
+                };
+
+                let stats = {
+                    let conn = db.connection()?;
+                    let messages = repository::list_messages(&conn, conversation.id)
+                        .map_err(|e| format!("Failed to compute stats: {}", e))?;
+                    ConversationStats {
+                        message_count: messages.len(),
+                        total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
+                        total_cost: messages.iter().filter_map(|m| m.cost).sum(),
+                    }
+                };
+
+                return Ok(ChatSendMessageResponse {
+                    conversation,
+                    user_message,
+                    assistant_message,
+                    stats,
+                    last_message: Some(outcome.response.content),
+                });
+            }
+            Err(e) => {
+                last_error = Some(format!("{}: {}", candidate.provider.as_string(), e));
+            }
+        }
+    }
+
+    Err(format!(
+        "All providers failed. Last error: {}",
+        last_error.unwrap_or_else(|| "Unknown error".to_string())
+    ))
 }
 
 #[derive(Debug, Serialize)]
@@ -752,12 +1052,20 @@ pub fn chat_set_monthly_budget(
 }
 
 /// Stop the current streaming generation
-/// This sets a flag that the streaming loop checks to abort
+/// This sets the atomic flag that the streaming loop checks to abort
 #[tauri::command]
 pub async fn chat_stop_generation() -> Result<(), String> {
-    info!("Stopping chat generation");
-    // In a real implementation, this would set an atomic flag or use a cancellation token
-    // that the streaming loop checks. For now, we just log and return success.
-    // The frontend handles the UI state change.
+    info!("[Chat] Stopping generation - setting stop flag");
+    STOP_GENERATION.store(true, Ordering::SeqCst);
     Ok(())
+}
+
+/// Check if generation should be stopped
+pub fn should_stop_generation() -> bool {
+    STOP_GENERATION.load(Ordering::SeqCst)
+}
+
+/// Reset the stop flag (called at start of new generation)
+pub fn reset_stop_flag() {
+    STOP_GENERATION.store(false, Ordering::SeqCst);
 }

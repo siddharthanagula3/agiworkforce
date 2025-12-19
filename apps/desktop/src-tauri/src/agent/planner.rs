@@ -3,13 +3,14 @@ use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::sync::Arc;
+use tokio::sync::Mutex as TokioMutex;
 
 pub struct TaskPlanner {
-    router: Arc<LLMRouter>,
+    router: Arc<TokioMutex<LLMRouter>>,
 }
 
 impl TaskPlanner {
-    pub fn new(router: Arc<LLMRouter>) -> Result<Self> {
+    pub fn new(router: Arc<TokioMutex<LLMRouter>>) -> Result<Self> {
         Ok(Self { router })
     }
 
@@ -76,7 +77,7 @@ Return ONLY the JSON array, no other text."#,
 
         // Use router to get LLM response
         // It will automatically handle local vs cloud based on configuration and preferences
-        let response = match self.router.send_message(&prompt, None).await {
+        let response = match self.router.lock().await.send_message(&prompt, None).await {
             Ok(res) => res,
             Err(e) => {
                 tracing::warn!(
