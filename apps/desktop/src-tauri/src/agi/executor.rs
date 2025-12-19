@@ -417,7 +417,7 @@ impl AGIExecutor {
                     Ok(json!({ "success": true, "action": "clicked", "x": x, "y": y }))
                 } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                     // Element ID provided - use UIA invoke
-                    self.automation.uia.invoke(element_id)?;
+                    self.automation.native.invoke(element_id)?;
                     Ok(json!({ "success": true, "action": "invoked", "element_id": element_id }))
                 } else if let Some(text) = target.get("text").and_then(|v| v.as_str()) {
                     // Text provided - find element by name and click
@@ -431,9 +431,9 @@ impl AGIExecutor {
                         control_type: None,
                         max_results: Some(1),
                     };
-                    let elements = self.automation.uia.find_elements(None, &query)?;
+                    let elements = self.automation.native.find_elements(None, &query)?;
                     if let Some(element) = elements.first() {
-                        self.automation.uia.invoke(&element.id)?;
+                        self.automation.native.invoke(&element.id)?;
                         Ok(
                             json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }),
                         )
@@ -455,7 +455,7 @@ impl AGIExecutor {
 
                 // If element_id provided, focus and type
                 if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
-                    self.automation.uia.set_focus(element_id)?;
+                    self.automation.native.set_focus(element_id)?;
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
                     // Find element by text and focus
@@ -469,9 +469,9 @@ impl AGIExecutor {
                         control_type: None,
                         max_results: Some(1),
                     };
-                    let elements = self.automation.uia.find_elements(None, &query)?;
+                    let elements = self.automation.native.find_elements(None, &query)?;
                     if let Some(element) = elements.first() {
-                        self.automation.uia.set_focus(&element.id)?;
+                        self.automation.native.set_focus(&element.id)?;
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
                 }
