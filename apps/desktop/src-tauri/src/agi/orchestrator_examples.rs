@@ -1,13 +1,8 @@
-#![allow(dead_code, unused_imports)]
 /// Example usage patterns for the AgentOrchestrator
 ///
 /// This file demonstrates common patterns for using parallel agent orchestration
 /// to achieve complex goals with multiple concurrent agents.
 use super::*;
-use crate::automation::AutomationService;
-use crate::router::LLMRouter;
-use std::sync::Arc;
-use tokio::sync::Mutex as TokioMutex;
 
 /// Example 1: Parallel Code Analysis
 ///
@@ -416,7 +411,7 @@ pub async fn example_cleanup(orchestrator: &AgentOrchestrator) -> anyhow::Result
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
     // Note: These are integration-style tests that would require full setup
     // They are marked as ignored by default and should be run manually

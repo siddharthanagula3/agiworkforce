@@ -32,7 +32,7 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({
       <div className="text-center space-y-4">
         <h2 className="text-4xl font-bold tracking-tight">What best describes you?</h2>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          We'll recommend the perfect AI employees for your needs
+          We'll recommend the perfect automation demos for your needs
         </p>
       </div>
 
@@ -87,11 +87,11 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({
 
                 {/* Recommended employees */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-foreground">Recommended Employees:</p>
+                  <p className="text-xs font-semibold text-foreground">Recommended Automations:</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {role.recommendedEmployees.slice(0, 3).map((employee, index) => (
+                    {role.recommendedDemos.slice(0, 3).map((demo, index) => (
                       <Badge key={index} variant="secondary" className="text-xs px-2 py-0.5">
-                        {employee}
+                        {demo}
                       </Badge>
                     ))}
                   </div>
@@ -117,7 +117,7 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({
 
       {/* Help text */}
       <div className="text-center text-sm text-muted-foreground pt-4">
-        <p>Don't worry, you can explore all employees regardless of your role</p>
+        <p>Don't worry, you can explore all automation demos regardless of your role</p>
       </div>
     </div>
   );
