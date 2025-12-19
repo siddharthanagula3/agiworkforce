@@ -366,8 +366,7 @@ pub async fn set_user_preference(
 // Temporarily commented out during async migration - these modules use std::sync::Mutex
 // use crate::onboarding::instant_demo::InstantDemo;
 use crate::onboarding::{
-    AIEmployeeRecommendation, DemoResult, FirstRunExperience, FirstRunSession, FirstRunStatistics,
-    InstantDemo,
+    DemoResult, FirstRunExperience, FirstRunSession, FirstRunStatistics, InstantDemo,
 };
 
 /// Start first-run experience
@@ -391,48 +390,6 @@ pub async fn has_completed_first_run(
 ) -> Result<bool, String> {
     let first_run = FirstRunExperience::new(db.conn.clone());
     Ok(first_run.has_completed_first_run(&user_id))
-}
-
-/// Get recommended employees for user role
-#[tauri::command]
-pub async fn get_recommended_employees_for_role(
-    user_role: String,
-) -> Result<Vec<AIEmployeeRecommendation>, String> {
-    // Create a temporary first-run instance to access recommendations
-    // In production, this would be refactored to not need DB access
-    let recommendations = match user_role.as_str() {
-        "founder" | "ceo" | "executive" => vec![AIEmployeeRecommendation {
-            id: "inbox_manager".to_string(),
-            name: "Inbox Manager".to_string(),
-            description: "Categorizes emails, drafts responses, and escalates urgent items"
-                .to_string(),
-            estimated_time_saved_per_run: 150,
-            estimated_cost_saved_per_run: 75.0,
-            demo_duration_seconds: 30,
-            match_score: 95,
-        }],
-        "developer" | "engineer" => vec![AIEmployeeRecommendation {
-            id: "code_reviewer".to_string(),
-            name: "Code Reviewer".to_string(),
-            description: "Reviews PRs, suggests improvements, finds bugs and style issues"
-                .to_string(),
-            estimated_time_saved_per_run: 30,
-            estimated_cost_saved_per_run: 25.0,
-            demo_duration_seconds: 20,
-            match_score: 98,
-        }],
-        _ => vec![AIEmployeeRecommendation {
-            id: "data_entry_specialist".to_string(),
-            name: "Data Entry Specialist".to_string(),
-            description: "Processes documents, extracts data, enters into databases".to_string(),
-            estimated_time_saved_per_run: 90,
-            estimated_cost_saved_per_run: 45.0,
-            demo_duration_seconds: 25,
-            match_score: 85,
-        }],
-    };
-
-    Ok(recommendations)
 }
 
 /// Run instant demo for employee
@@ -472,17 +429,17 @@ pub async fn update_first_run_step(
         .map_err(|e| format!("Failed to update first-run step: {}", e))
 }
 
-/// Select employee for demo
+/// Select demo
 #[tauri::command]
-pub async fn select_demo_employee(
+pub async fn select_demo(
     db: State<'_, AppDatabase>,
     session_id: String,
-    employee_id: String,
+    demo_id: String,
 ) -> Result<(), String> {
     let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
-        .select_employee(&session_id, &employee_id)
-        .map_err(|e| format!("Failed to select employee: {}", e))
+        .select_demo(&session_id, &demo_id)
+        .map_err(|e| format!("Failed to select demo: {}", e))
 }
 
 /// Record demo results
@@ -498,16 +455,16 @@ pub async fn record_demo_results(
         .map_err(|e| format!("Failed to record demo results: {}", e))
 }
 
-/// Mark employee as hired
+/// Mark setup as completed (was hired)
 #[tauri::command]
-pub async fn mark_employee_hired(
+pub async fn mark_setup_completed(
     db: State<'_, AppDatabase>,
     session_id: String,
 ) -> Result<(), String> {
     let first_run = FirstRunExperience::new(db.conn.clone());
     first_run
-        .mark_employee_hired(&session_id)
-        .map_err(|e| format!("Failed to mark employee hired: {}", e))
+        .mark_setup_completed(&session_id)
+        .map_err(|e| format!("Failed to mark setup completed: {}", e))
 }
 
 /// Complete first-run experience

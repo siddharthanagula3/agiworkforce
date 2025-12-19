@@ -122,26 +122,13 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     loadUsageStats: async () => {
       set({ isLoadingStats: true });
       try {
-        // In a production system, this would query the backend
-        // For now, we'll create mock data
-        const stats: UsageStats = {
-          dau: 0,
-          mau: 0,
-          total_users: 0,
-          new_users_today: 0,
-          new_users_this_week: 0,
-          new_users_this_month: 0,
-          avg_session_duration_ms: 0,
-          total_events: 0,
-          events_today: 0,
-          retention_rate: 0,
-        };
+        const stats = await invoke<UsageStats>('analytics_get_usage_stats');
         set({ usageStats: stats });
       } catch (error) {
         console.error('Failed to load usage stats:', error);
         errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
           component: 'analyticsStore',
-          severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
+          severity: ErrorSeverity.MEDIUM,
         });
       } finally {
         set({ isLoadingStats: false });
@@ -151,34 +138,13 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // Load feature usage
     loadFeatureUsage: async () => {
       try {
-        // In a production system, this would query the backend
-        // For now, we'll create mock data
-        const usage: FeatureUsageStats[] = [
-          {
-            feature_name: 'parallel_execution',
-            usage_count: 0,
-            unique_users: 0,
-            trend: 'stable',
-          },
-          {
-            feature_name: 'browser_automation',
-            usage_count: 0,
-            unique_users: 0,
-            trend: 'stable',
-          },
-          {
-            feature_name: 'code_completion',
-            usage_count: 0,
-            unique_users: 0,
-            trend: 'up',
-          },
-        ];
+        const usage = await invoke<FeatureUsageStats[]>('analytics_get_feature_usage');
         set({ featureUsage: usage });
       } catch (error) {
         console.error('Failed to load feature usage:', error);
         errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
           component: 'analyticsStore',
-          severity: ErrorSeverity.MEDIUM, // Updated Nov 16, 2025: Fixed type safety
+          severity: ErrorSeverity.MEDIUM,
         });
       }
     },

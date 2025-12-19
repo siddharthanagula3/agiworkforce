@@ -13,7 +13,10 @@ import ErrorToastContainer from './components/errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
+import { initializeAccountStore } from './stores/accountStore';
+import { initializeAuthStore } from './stores/authStore';
 import useErrorStore from './stores/errorStore';
+
 // Lazy load heavy components for better bundle splitting
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -345,6 +348,20 @@ const DesktopShell = () => {
 };
 
 const App = () => {
+  // Initialize auth store listener on mount
+  useEffect(() => {
+    const unsubscribeAuth = initializeAuthStore();
+    const unsubscribeAccount = initializeAccountStore();
+    return () => {
+      if (typeof unsubscribeAuth === 'function') {
+        unsubscribeAuth();
+      }
+      if (typeof unsubscribeAccount === 'function') {
+        unsubscribeAccount();
+      }
+    };
+  }, []);
+
   // Updated Nov 16, 2025: Added proper URL parameter validation for security
   const isOverlayMode = (() => {
     if (typeof window === 'undefined') return false;

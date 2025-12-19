@@ -54,17 +54,17 @@ impl FirstRunExperience {
         let now = Utc::now().timestamp();
         let session_id = Uuid::new_v4().to_string();
 
-        // Get recommended employees based on user role
-        let recommended_employees = self.get_recommended_employees(user_role.unwrap_or("general"));
+        // Get recommended demos based on user role
+        let recommended_demos = self.get_recommended_demos(user_role.unwrap_or("general"));
 
         let session = FirstRunSession {
             id: session_id.clone(),
             user_id: user_id.to_string(),
             step: OnboardingStep::Welcome,
-            recommended_employees: recommended_employees.clone(),
+            recommended_demos: recommended_demos.clone(),
             demo_results: None,
             time_to_value_seconds: 0,
-            selected_employee_id: None,
+            selected_demo_id: None,
             started_at: now,
         };
 
@@ -78,7 +78,7 @@ impl FirstRunExperience {
                 user_id,
                 now,
                 serde_json::to_string(&session.step)?,
-                serde_json::to_string(&recommended_employees)?,
+                serde_json::to_string(&recommended_demos)?,
             ],
         )?;
 
@@ -95,11 +95,11 @@ impl FirstRunExperience {
         Ok(session)
     }
 
-    /// Get recommended AI employees based on user role
-    fn get_recommended_employees(&self, user_role: &str) -> Vec<AIEmployeeRecommendation> {
+    /// Get recommended demos based on user role
+    fn get_recommended_demos(&self, user_role: &str) -> Vec<DemoRecommendation> {
         match user_role {
             "founder" | "ceo" | "executive" => vec![
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "inbox_manager".to_string(),
                     name: "Inbox Manager".to_string(),
                     description: "Categorizes emails, drafts responses, and escalates urgent items"
@@ -109,7 +109,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 30,
                     match_score: 95,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "meeting_scheduler".to_string(),
                     name: "Meeting Scheduler".to_string(),
                     description: "Finds optimal meeting times, sends invites, handles conflicts"
@@ -119,7 +119,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 25,
                     match_score: 88,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "report_generator".to_string(),
                     name: "Report Generator".to_string(),
                     description: "Compiles data from multiple sources into formatted reports"
@@ -131,7 +131,7 @@ impl FirstRunExperience {
                 },
             ],
             "developer" | "engineer" => vec![
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "code_reviewer".to_string(),
                     name: "Code Reviewer".to_string(),
                     description: "Reviews PRs, suggests improvements, finds bugs and style issues"
@@ -141,7 +141,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 20,
                     match_score: 98,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "bug_investigator".to_string(),
                     name: "Bug Investigator".to_string(),
                     description: "Analyzes error logs, traces issues, suggests fixes".to_string(),
@@ -150,7 +150,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 40,
                     match_score: 90,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "documentation_writer".to_string(),
                     name: "Documentation Writer".to_string(),
                     description: "Generates API docs, README files, code comments".to_string(),
@@ -161,7 +161,7 @@ impl FirstRunExperience {
                 },
             ],
             "marketer" | "marketing" => vec![
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "social_media_monitor".to_string(),
                     name: "Social Media Monitor".to_string(),
                     description: "Tracks mentions, analyzes sentiment, drafts responses"
@@ -171,7 +171,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 35,
                     match_score: 95,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "content_creator".to_string(),
                     name: "Content Creator".to_string(),
                     description: "Generates blog posts, social content, newsletters".to_string(),
@@ -180,7 +180,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 45,
                     match_score: 92,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "analytics_reporter".to_string(),
                     name: "Analytics Reporter".to_string(),
                     description: "Pulls metrics, creates visualizations, identifies trends"
@@ -192,7 +192,7 @@ impl FirstRunExperience {
                 },
             ],
             "sales" | "bizdev" => vec![
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "lead_qualifier".to_string(),
                     name: "Lead Qualifier".to_string(),
                     description: "Researches leads, scores opportunities, drafts outreach"
@@ -202,7 +202,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 25,
                     match_score: 93,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "crm_updater".to_string(),
                     name: "CRM Updater".to_string(),
                     description: "Updates contact info, logs interactions, sets reminders"
@@ -212,7 +212,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 20,
                     match_score: 87,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "proposal_writer".to_string(),
                     name: "Proposal Writer".to_string(),
                     description: "Creates customized proposals, contracts, presentations"
@@ -224,7 +224,7 @@ impl FirstRunExperience {
                 },
             ],
             "accountant" | "finance" => vec![
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "invoice_processor".to_string(),
                     name: "Invoice Processor".to_string(),
                     description: "Extracts data from invoices, validates, enters into system"
@@ -234,7 +234,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 25,
                     match_score: 96,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "expense_categorizer".to_string(),
                     name: "Expense Categorizer".to_string(),
                     description: "Reviews receipts, categorizes expenses, flags anomalies"
@@ -244,7 +244,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 20,
                     match_score: 91,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "reconciliation_assistant".to_string(),
                     name: "Reconciliation Assistant".to_string(),
                     description: "Matches transactions, identifies discrepancies, suggests fixes"
@@ -256,7 +256,7 @@ impl FirstRunExperience {
                 },
             ],
             _ => vec![
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "data_entry_specialist".to_string(),
                     name: "Data Entry Specialist".to_string(),
                     description: "Processes documents, extracts data, enters into databases"
@@ -266,7 +266,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 25,
                     match_score: 85,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "inbox_manager".to_string(),
                     name: "Inbox Manager".to_string(),
                     description: "Categorizes emails, drafts responses, and escalates urgent items"
@@ -276,7 +276,7 @@ impl FirstRunExperience {
                     demo_duration_seconds: 30,
                     match_score: 80,
                 },
-                AIEmployeeRecommendation {
+                DemoRecommendation {
                     id: "file_organizer".to_string(),
                     name: "File Organizer".to_string(),
                     description:
@@ -305,16 +305,12 @@ impl FirstRunExperience {
         Ok(())
     }
 
-    /// Select an employee for demo
-    pub fn select_employee(
-        &self,
-        session_id: &str,
-        employee_id: &str,
-    ) -> Result<(), FirstRunError> {
+    /// Select a demo
+    pub fn select_demo(&self, session_id: &str, demo_id: &str) -> Result<(), FirstRunError> {
         let conn = self.db.lock().unwrap();
         conn.execute(
             "UPDATE first_run_sessions SET selected_employee_id = ?1, updated_at = ?2 WHERE id = ?3",
-            params![employee_id, Utc::now().timestamp(), session_id],
+            params![demo_id, Utc::now().timestamp(), session_id],
         )?;
         Ok(())
     }
@@ -351,8 +347,8 @@ impl FirstRunExperience {
         Ok(())
     }
 
-    /// Mark employee as hired
-    pub fn mark_employee_hired(&self, session_id: &str) -> Result<(), FirstRunError> {
+    /// Mark setup as completed (was hired)
+    pub fn mark_setup_completed(&self, session_id: &str) -> Result<(), FirstRunError> {
         let conn = self.db.lock().unwrap();
         conn.execute(
             "UPDATE first_run_sessions SET hired_employee = 1, updated_at = ?1 WHERE id = ?2",
@@ -376,7 +372,7 @@ impl FirstRunExperience {
     pub fn get_session(&self, session_id: &str) -> Result<FirstRunSession, FirstRunError> {
         let conn = self.db.lock().unwrap();
 
-        let (id, user_id, step_json, recommended_json, demo_json, time_to_value, selected_employee_id, started_at):
+        let (id, user_id, step_json, recommended_json, demo_json, time_to_value, selected_demo_id, started_at):
             (String, String, String, String, Option<String>, i64, Option<String>, i64) = conn.query_row(
             "SELECT id, user_id, step, recommended_employees, demo_results, time_to_value_seconds, selected_employee_id, started_at
              FROM first_run_sessions WHERE id = ?1",
@@ -397,13 +393,13 @@ impl FirstRunExperience {
             id,
             user_id,
             step: serde_json::from_str(&step_json)?,
-            recommended_employees: serde_json::from_str(&recommended_json)?,
+            recommended_demos: serde_json::from_str(&recommended_json)?,
             demo_results: demo_json
                 .as_ref()
                 .map(|s| serde_json::from_str(s))
                 .transpose()?,
             time_to_value_seconds: time_to_value as u64,
-            selected_employee_id,
+            selected_demo_id,
             started_at,
         })
     }
@@ -464,10 +460,10 @@ pub struct FirstRunSession {
     pub id: String,
     pub user_id: String,
     pub step: OnboardingStep,
-    pub recommended_employees: Vec<AIEmployeeRecommendation>,
+    pub recommended_demos: Vec<DemoRecommendation>,
     pub demo_results: Option<DemoResult>,
     pub time_to_value_seconds: u64,
-    pub selected_employee_id: Option<String>,
+    pub selected_demo_id: Option<String>,
     pub started_at: i64,
 }
 
@@ -484,7 +480,7 @@ pub enum OnboardingStep {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AIEmployeeRecommendation {
+pub struct DemoRecommendation {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -496,8 +492,8 @@ pub struct AIEmployeeRecommendation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DemoResult {
-    pub employee_id: String,
-    pub employee_name: String,
+    pub demo_id: String,
+    pub demo_name: String,
     pub task_description: String,
     pub input_summary: String,
     pub output_summary: String,
