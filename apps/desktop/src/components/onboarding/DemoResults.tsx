@@ -1,18 +1,11 @@
 import React from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
-import {
-  CheckCircle,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  ArrowRight,
-  Check,
-} from 'lucide-react';
+import { CheckCircle, Clock, DollarSign, TrendingUp, ArrowRight, Check } from 'lucide-react';
 
 interface DemoResult {
-  employeeId: string;
-  employeeName: string;
+  demoId: string;
+  demoName: string;
   taskDescription: string;
   inputSummary: string;
   outputSummary: string;
@@ -29,11 +22,7 @@ interface DemoResultsProps {
   onTryAnother?: () => void;
 }
 
-export const DemoResults: React.FC<DemoResultsProps> = ({
-  results,
-  onHire,
-  onTryAnother,
-}) => {
+export const DemoResults: React.FC<DemoResultsProps> = ({ results, onHire, onTryAnother }) => {
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6 py-8 px-4">
       {/* Success Header with Animation */}
@@ -49,8 +38,10 @@ export const DemoResults: React.FC<DemoResultsProps> = ({
                 Demo Complete!
               </h3>
               <p className="text-muted-foreground mt-3 text-lg">
-                {results.employeeName} successfully completed the task in just{' '}
-                <span className="font-bold text-foreground">{results.completionTimeSeconds} seconds</span>
+                {results.demoName} successfully completed the task in just{' '}
+                <span className="font-bold text-foreground">
+                  {results.completionTimeSeconds} seconds
+                </span>
               </p>
             </div>
           </div>
@@ -90,9 +81,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({
             <div className="flex flex-col items-center text-center space-y-2">
               <TrendingUp className="h-8 w-8 text-purple-500" />
               <div>
-                <div className="text-2xl font-bold">
-                  {(results.qualityScore * 100).toFixed(0)}%
-                </div>
+                <div className="text-2xl font-bold">{(results.qualityScore * 100).toFixed(0)}%</div>
                 <div className="text-xs text-muted-foreground">Quality Score</div>
               </div>
               <div className="text-xs text-muted-foreground">accuracy rate</div>
@@ -109,18 +98,14 @@ export const DemoResults: React.FC<DemoResultsProps> = ({
         <CardContent>
           <div className="grid grid-cols-[1fr,auto,1fr] gap-4 items-center">
             <div className="space-y-2">
-              <div className="text-sm font-semibold text-muted-foreground">
-                Input
-              </div>
+              <div className="text-sm font-semibold text-muted-foreground">Input</div>
               <p className="text-sm">{results.inputSummary}</p>
             </div>
 
             <ArrowRight className="h-6 w-6 text-muted-foreground" />
 
             <div className="space-y-2">
-              <div className="text-sm font-semibold text-muted-foreground">
-                Output
-              </div>
+              <div className="text-sm font-semibold text-muted-foreground">Output</div>
               <p className="text-sm font-semibold">{results.outputSummary}</p>
             </div>
           </div>
@@ -130,7 +115,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({
       {/* Actions Taken */}
       <Card>
         <CardHeader>
-          <CardTitle>What {results.employeeName} Did</CardTitle>
+          <CardTitle>What {results.demoName} Did</CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="space-y-3">
@@ -148,9 +133,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="pt-6">
           <div className="text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
-              If you run this automation daily...
-            </p>
+            <p className="text-sm text-muted-foreground">If you run this automation daily...</p>
             <div className="text-3xl font-bold text-primary">
               {(results.timeSavedMinutes * 30).toLocaleString()} minutes/month
             </div>
@@ -175,12 +158,7 @@ export const DemoResults: React.FC<DemoResultsProps> = ({
           Continue to Setup
         </Button>
 
-        <Button
-          size="lg"
-          variant="outline"
-          className="w-full text-lg h-12"
-          onClick={onTryAnother}
-        >
+        <Button size="lg" variant="outline" className="w-full text-lg h-12" onClick={onTryAnother}>
           Try Another Demo
         </Button>
       </div>

@@ -109,7 +109,7 @@ const getDefaultAccount = (): DesktopAccount => {
   return {
     id: null,
     email: devEmail || null,
-    displayName: devName || 'Local User',
+    displayName: devName || null,
     avatar: null,
     plan,
     planDisplayName: planDisplayNames[plan],

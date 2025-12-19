@@ -164,7 +164,7 @@ fn postgres_value_to_json(row: &Row, idx: usize) -> Result<JsonValue> {
         "float8" | "double precision" => {
             let val: Option<f64> = row.try_get(idx).ok();
             Ok(val
-                .and_then(|v| serde_json::Number::from_f64(v))
+                .and_then(serde_json::Number::from_f64)
                 .map(JsonValue::Number)
                 .unwrap_or(JsonValue::Null))
         }

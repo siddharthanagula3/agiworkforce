@@ -3,21 +3,14 @@ use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub struct TaskPlanner {
-    router: Arc<Mutex<LLMRouter>>,
+    router: Arc<LLMRouter>,
 }
 
 impl TaskPlanner {
-    pub fn new(_router: Arc<LLMRouter>) -> Result<Self> {
-        // Wrap router in Arc<Mutex> for async access
-        // Note: This requires router to be wrapped in Mutex at the source
-        // For now, we'll use a workaround by storing the Arc directly
-        // and accessing it through a Mutex when needed
-        Ok(Self {
-            router: Arc::new(Mutex::new(LLMRouter::new())), // TODO: Properly wrap the router
-        })
+    pub fn new(router: Arc<LLMRouter>) -> Result<Self> {
+        Ok(Self { router })
     }
 
     /// Plan a task by breaking it down into executable steps using LLM
@@ -81,67 +74,21 @@ Return ONLY the JSON array, no other text."#,
             description
         );
 
-        // Check token usage and use local LLM if needed
-        let use_local = self.should_use_local_llm().await?;
-
-        let response = if use_local {
-            self.plan_with_local_llm(description).await?
-        } else {
-            self.plan_with_cloud_llm(&prompt).await?
+        // Use router to get LLM response
+        // It will automatically handle local vs cloud based on configuration and preferences
+        let response = match self.router.send_message(&prompt, None).await {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::warn!(
+                    "[Planner] LLM planning failed: {}. Falling back to basic plan.",
+                    e
+                );
+                self.generate_basic_plan(description).await?
+            }
         };
 
         // Parse response into steps
         self.parse_plan(&response)
-    }
-
-    async fn plan_with_cloud_llm(&self, prompt: &str) -> Result<String> {
-        // Use router to get LLM response
-        use crate::router::{ChatMessage, LLMRequest, RouterPreferences, RoutingStrategy};
-
-        let request = LLMRequest {
-            messages: vec![ChatMessage {
-                role: "user".to_string(),
-                content: prompt.to_string(),
-                tool_calls: None,
-                tool_call_id: None,
-                multimodal_content: None,
-            }],
-            model: "".to_string(),
-            temperature: Some(0.7),
-            max_tokens: Some(4000),
-            stream: false,
-            tools: None,
-            tool_choice: None,
-            thinking_mode: None,
-        };
-
-        let preferences = RouterPreferences {
-            provider: None,
-            model: None,
-            strategy: RoutingStrategy::Auto,
-            context: None,
-        };
-
-        let router = self.router.lock().await;
-        let candidates = router.candidates(&request, &preferences);
-        drop(router);
-
-        if !candidates.is_empty() {
-            let router = self.router.lock().await;
-            if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
-                return Ok(outcome.response.content);
-            }
-        }
-
-        // Fallback to basic plan
-        self.generate_basic_plan(prompt).await
-    }
-
-    async fn plan_with_local_llm(&self, description: &str) -> Result<String> {
-        tracing::info!("[Planner] Using local LLM (Ollama) for planning");
-        // TODO: Integrate with Ollama
-        // For now, use basic plan
-        self.generate_basic_plan(description).await
     }
 
     async fn generate_basic_plan(&self, description: &str) -> Result<String> {
@@ -374,11 +321,5 @@ Return ONLY the JSON array, no other text."#,
             }),
             _ => Err(anyhow!("Unknown target type: {}", target_type)),
         }
-    }
-
-    async fn should_use_local_llm(&self) -> Result<bool> {
-        // TODO: Check token usage and decide
-        // For now, always prefer local if available
-        Ok(true)
     }
 }
