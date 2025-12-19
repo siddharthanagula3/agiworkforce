@@ -1,8 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseServerClient } from '../../lib/supabase-server';
 
 type SubscriptionRow = {
   status: string;
@@ -17,8 +16,7 @@ function getDownloadUrls() {
 }
 
 async function getUserAndSubscription() {
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = createSupabaseServerClient();
 
   const {
     data: { session },
@@ -69,7 +67,9 @@ export default async function DownloadPage() {
                 className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 hover:border-blue-500 transition-colors"
               >
                 <div className="text-lg font-semibold mb-2">macOS</div>
-                <p className="text-sm text-zinc-400 mb-3">Universal build for Apple Silicon/Intel</p>
+                <p className="text-sm text-zinc-400 mb-3">
+                  Universal build for Apple Silicon/Intel
+                </p>
                 <span className="inline-flex h-9 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-medium">
                   Download .dmg
                 </span>
@@ -113,5 +113,3 @@ export default async function DownloadPage() {
     </div>
   );
 }
-
-

@@ -1,9 +1,8 @@
 import 'server-only';
 
-import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseServerClient } from '../../../lib/supabase-server';
 
 type PlanTier = 'free' | 'pro' | 'max' | 'enterprise';
 
@@ -19,15 +18,16 @@ if (!STRIPE_SECRET_KEY) {
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2023-10-16',
     })
   : null;
 
-function getOrigin() {
-  const hdrs = headers();
-  const protocol = hdrs.get('x-forwarded-proto') ?? 'http';
-  const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? 'localhost:3000';
-  return `${protocol}://${host}`;
+function getOrigin(request: Request) {
+  const headerOrigin = request.headers.get('origin');
+  if (headerOrigin) return headerOrigin;
+
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}`;
 }
 
 function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'): string | null {
@@ -54,9 +54,7 @@ export async function POST(request: Request) {
   const plan: PlanTier = body?.plan ?? 'pro';
   const billingInterval: 'monthly' | 'annual' = body?.billingInterval ?? 'monthly';
 
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-
+  const supabase = createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -70,7 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unsupported plan' }, { status: 400 });
   }
 
-  const origin = getOrigin();
+  const origin = getOrigin(request);
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -97,5 +95,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
   }
 }
-
-

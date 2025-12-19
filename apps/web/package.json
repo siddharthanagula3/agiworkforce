@@ -10,12 +10,15 @@
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",
+    "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.89.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
     "next": "16.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "server-only": "^0.0.1",
+    "stripe": "^14.0.0",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
