@@ -17,7 +17,7 @@ export interface RoleOption {
   icon: string;
   description: string;
   perfectFor: string;
-  recommendedEmployees: string[];
+  recommendedDemos: string[];
 }
 
 export interface OnboardingDemo {
@@ -28,8 +28,8 @@ export interface OnboardingDemo {
   estimatedTimeSeconds: number;
   valueSavedMinutes: number;
   valueSavedUsd: number;
-  employeeId: string;
-  employeeName: string;
+  demoId: string;
+  demoName: string;
   isPopular?: boolean;
   steps: DemoStep[];
 }
@@ -50,8 +50,8 @@ export interface DemoProgress {
 }
 
 export interface DemoResult {
-  employeeId: string;
-  employeeName: string;
+  demoId: string;
+  demoName: string;
   taskDescription: string;
   inputSummary: string;
   outputSummary: string;

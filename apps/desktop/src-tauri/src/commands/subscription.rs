@@ -3,8 +3,13 @@
 //! High-level subscription management wrappers around Stripe integration.
 //! These commands provide a simplified API for managing subscriptions.
 
+use tauri::State;
+
 #[cfg(feature = "billing")]
 use crate::billing::{BillingStateWrapper, SubscriptionInfo};
+
+#[cfg(not(feature = "billing"))]
+use crate::billing::BillingStateWrapper;
 
 #[cfg(feature = "billing")]
 /// Subscribe to a plan
@@ -220,6 +225,111 @@ pub async fn upgrade_plan(_user_id: String, _new_plan_id: String) -> Result<Stri
 #[tauri::command]
 pub async fn cancel_subscription(_user_id: String, _subscription_id: String) -> Result<(), String> {
     Err("Billing feature is not enabled".to_string())
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct PricingPlan {
+    pub id: String,
+    pub tier: String,
+    pub name: String,
+    pub display_name: String,
+    pub description: String,
+    pub price_monthly_usd: f64,
+    pub price_annual_usd: f64,
+    pub features: Vec<String>,
+    pub limits: serde_json::Value,
+    pub is_popular: bool,
+    pub is_available: bool,
+}
+
+/// Get available pricing plans
+#[tauri::command]
+pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
+    Ok(vec![
+        PricingPlan {
+            id: "price_free".to_string(),
+            tier: "free".to_string(),
+            name: "free".to_string(),
+            display_name: "Free".to_string(),
+            description: "Essential tools for individual developers".to_string(),
+            price_monthly_usd: 0.0,
+            price_annual_usd: 0.0,
+            features: vec![
+                "Basic automation tools".to_string(),
+                "Local LLM support (Ollama)".to_string(),
+                "Community support".to_string(),
+                "50 cloud runs/month".to_string(),
+            ],
+            limits: serde_json::json!({
+                "automations": 5,
+                "api_calls": 1000,
+                "storage_gb": 1,
+                "team_members": 1
+            }),
+            is_popular: false,
+            is_available: true,
+        },
+        PricingPlan {
+            id: "price_pro".to_string(),
+            tier: "pro".to_string(),
+            name: "pro".to_string(),
+            display_name: "Pro".to_string(),
+            description: "Advanced features for power users".to_string(),
+            price_monthly_usd: 29.0,
+            price_annual_usd: 290.0,
+            features: vec![
+                "Unlimited local automations".to_string(),
+                "Advanced AI models (GPT-4, Claude)".to_string(),
+                "Priority support".to_string(),
+                "500 cloud runs/month".to_string(),
+                "Multi-step workflows".to_string(),
+            ],
+            limits: serde_json::json!({
+                "automations": null, // Unlimited
+                "api_calls": 10000,
+                "storage_gb": 10,
+                "team_members": 1
+            }),
+            is_popular: true,
+            is_available: true,
+        },
+        PricingPlan {
+            id: "price_team".to_string(),
+            tier: "team".to_string(),
+            name: "team".to_string(),
+            display_name: "Team".to_string(),
+            description: "Collaboration tools for small teams".to_string(),
+            price_monthly_usd: 99.0,
+            price_annual_usd: 990.0,
+            features: vec![
+                "Everything in Pro".to_string(),
+                "Team collaboration".to_string(),
+                "Shared workspaces".to_string(),
+                "2000 cloud runs/month".to_string(),
+                "Admin controls".to_string(),
+            ],
+            limits: serde_json::json!({
+                "automations": null,
+                "api_calls": 50000,
+                "storage_gb": 100,
+                "team_members": 5
+            }),
+            is_popular: false,
+            is_available: true,
+        },
+    ])
+}
+
+/// Get current plan for user
+#[tauri::command]
+pub async fn get_current_plan(
+    _user_id: String,
+    _state: State<'_, BillingStateWrapper>,
+) -> Result<PricingPlan, String> {
+    // In a real app, fetch from Stripe/DB. For now, return Free plan if no sub found.
+    // We could use stripe_get_active_subscription here.
+    let plans = get_pricing_plans().await?;
+    Ok(plans[0].clone()) // Return Free plan by default
 }
 
 /// Helper function to map plan IDs to plan names and billing intervals

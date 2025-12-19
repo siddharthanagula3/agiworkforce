@@ -1,6 +1,5 @@
 pub mod agent;
 pub mod agi;
-pub mod ai_employees;
 pub mod ai_native;
 pub mod analytics;
 pub mod api;
@@ -74,7 +73,6 @@ mod window_tests;
 
 pub use agent::*;
 pub use agi::*;
-pub use ai_employees::*;
 pub use ai_native::*;
 pub use analytics::*;
 pub use api::*;

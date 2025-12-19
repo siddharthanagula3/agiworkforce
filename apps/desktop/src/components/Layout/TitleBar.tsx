@@ -3,6 +3,7 @@ import { WindowActions } from '../../hooks/useWindowManager';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { cn } from '../../lib/utils';
+import { useAuthStore } from '../../stores/authStore';
 
 interface TitleBarProps {
   state: {
@@ -24,6 +25,9 @@ const TitleBar = ({
   sidebarCollapsed: _sidebarCollapsed,
   onToggleSidebar,
 }: TitleBarProps) => {
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   return (
     <header
       className={cn(
@@ -53,9 +57,15 @@ const TitleBar = ({
         </button>
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
           <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
-          <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
-            {state.focused ? 'Ready' : 'Inactive'}
-          </p>
+          <div className="text-[11px] text-muted-foreground leading-none mt-0.5 flex items-center gap-1.5">
+            {isAuthenticated && user?.name ? (
+              <>
+                <span className="truncate max-w-[150px]">{user.name}</span>
+                <span className="w-1 h-1 rounded-full bg-border" />
+              </>
+            ) : null}
+            <span>{state.focused ? 'Ready' : 'Inactive'}</span>
+          </div>
         </div>
       </div>
 

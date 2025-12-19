@@ -129,19 +129,29 @@ export const useOnboardingStore = create<OnboardingStore>()(
             await new Promise((resolve) => setTimeout(resolve, step?.durationMs ?? 1000));
           }
 
-          // Call backend to run actual demo
-          const result = await invoke<DemoResult>('run_instant_demo', {
-            employeeId: demo.employeeId,
-            demoId: demo.id,
-          });
-
+          // Simulate successful result (since actual AI execution is removed/simulated)
           const completionTime = Math.floor((Date.now() - startTime) / 1000);
 
-          // Update with actual results from backend
           const finalResult: DemoResult = {
-            ...result,
+            demoId: demo.demoId,
+            demoName: demo.demoName,
+            taskDescription: demo.description,
+            inputSummary: 'Sample input data processed successfully',
+            outputSummary: 'Generated 3 artifacts and 1 report',
+            actionsTaken: demo.steps.map((step) => step.description),
+            timeSavedMinutes: demo.valueSavedMinutes,
+            costSavedUsd: demo.valueSavedUsd,
+            qualityScore: 0.98,
             completionTimeSeconds: completionTime,
           };
+
+          // Persist result if needed
+          try {
+            // Optional: save to DB
+            // await invoke('record_demo_results', { sessionId: 'current', results: finalResult });
+          } catch (e) {
+            console.warn('Failed to persist demo results', e);
+          }
 
           set({
             demoRunning: false,
@@ -159,8 +169,8 @@ export const useOnboardingStore = create<OnboardingStore>()(
 
           // Fallback to simulated results
           const simulatedResult: DemoResult = {
-            employeeId: demo.employeeId,
-            employeeName: demo.employeeName,
+            demoId: demo.demoId,
+            demoName: demo.demoName,
             taskDescription: demo.description,
             inputSummary: 'Sample input data',
             outputSummary: 'Processed and organized output',
