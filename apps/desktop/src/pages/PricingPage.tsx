@@ -15,6 +15,7 @@ import { PaymentMethodsTab } from '../components/pricing/PaymentMethodsTab';
 import { InvoiceDetailModal } from '../components/pricing/InvoiceDetailModal';
 import { PlanChangeModal } from '../components/pricing/PlanChangeModal';
 import { usePricingStore } from '../stores/pricingStore';
+import { useAuthStore } from '../stores/authStore';
 import { cn } from '../lib/utils';
 
 const tabs = [
@@ -28,19 +29,24 @@ type TabId = (typeof tabs)[number]['id'];
 
 export function PricingPage() {
   const { fetchPlans, fetchCurrentPlan } = usePricingStore();
+  const userId = useAuthStore((state) => state.user?.id);
   const [activeTab, setActiveTab] = useState<TabId>('plans');
 
   useEffect(() => {
     const initializeData = async () => {
       try {
-        await Promise.all([fetchPlans(), fetchCurrentPlan('default-user')]);
+        if (userId) {
+          await Promise.all([fetchPlans(), fetchCurrentPlan(userId)]);
+        } else {
+          await fetchPlans();
+        }
       } catch (error) {
         console.error('Failed to initialize pricing data:', error);
       }
     };
 
     void initializeData();
-  }, [fetchPlans, fetchCurrentPlan]);
+  }, [fetchPlans, fetchCurrentPlan, userId]);
 
   return (
     <div className="flex h-full flex-col bg-zinc-950">

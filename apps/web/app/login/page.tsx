@@ -1,10 +1,10 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { getSupabaseClient } from '@/lib/supabase';
 import { Bot, Github } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { getSupabaseClient } from '../../services/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
