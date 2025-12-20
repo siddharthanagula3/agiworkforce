@@ -18,7 +18,7 @@ type CustomFixtures = {
   onboardingPage: OnboardingPage;
   testDb: TestDatabase;
   mockLLM: MockLLMProvider;
-  screenshot: ScreenshotHelper;
+  screenshotHelper: ScreenshotHelper;
   waitHelper: WaitHelper;
 };
 
@@ -66,7 +66,7 @@ export const test = base.extend<CustomFixtures>({
   },
 
   // Screenshot helper fixture
-  screenshot: async ({ page }, use) => {
+  screenshotHelper: async ({ page }, use) => {
     const helper = new ScreenshotHelper(page);
     await use(helper);
   },

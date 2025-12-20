@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { createSupabaseServerClient } from '../../../services/supabase-server';
 
 type PlanTier = 'free' | 'pro' | 'max' | 'enterprise';
 
