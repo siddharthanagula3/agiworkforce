@@ -1812,6 +1812,259 @@ impl ToolExecutor {
                     })
                 }
             }
+            "image_analyze" => {
+                // ✅ Vision/image analysis implementation
+                let image_path = args
+                    .get("image_path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing image_path parameter"))?
+                    .to_string();
+                let question = args
+                    .get("question")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Describe this image in detail")
+                    .to_string();
+                let _detail = args
+                    .get("detail")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("auto")
+                    .to_string();
+
+                if let Some(ref app) = self.app_handle {
+                    use crate::commands::vision::vision_answer_question;
+                    use crate::commands::{AppDatabase, LLMState};
+                    use tauri::Manager;
+
+                    let llm_state = app.state::<LLMState>();
+                    let db_state = app.state::<AppDatabase>();
+
+                    match vision_answer_question(
+                        image_path.clone(),
+                        question.clone(),
+                        None, // provider
+                        None, // model
+                        llm_state,
+                        db_state,
+                    )
+                    .await
+                    {
+                        Ok(response) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "analysis": response.content,
+                                "image_path": image_path,
+                                "question": question,
+                                "model": response.model,
+                                "tokens": response.tokens,
+                                "processing_time_ms": response.processing_time_ms,
+                            }),
+                            error: None,
+                            metadata: HashMap::from([
+                                ("image_path".to_string(), json!(image_path)),
+                                ("question".to_string(), json!(question)),
+                            ]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Image analysis failed: {}", e)),
+                            metadata: HashMap::from([(
+                                "image_path".to_string(),
+                                json!(image_path),
+                            )]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for image analysis".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "git_status" => {
+                // ✅ Git status implementation
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    });
+                }
+
+                use crate::commands::git::git_status;
+
+                match git_status(path.clone()).await {
+                    Ok(status) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "branch": status.branch,
+                            "staged": status.staged,
+                            "unstaged": status.unstaged,
+                            "untracked": status.untracked,
+                            "conflicts": status.conflicts,
+                            "ahead": status.ahead,
+                            "behind": status.behind,
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Git status failed: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                }
+            }
+            "git_commit" => {
+                // ✅ Git commit implementation
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+                let message = args
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing message parameter"))?
+                    .to_string();
+
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    });
+                }
+
+                use crate::commands::git::git_commit;
+
+                match git_commit(path.clone(), message.clone()).await {
+                    Ok(commit_id) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "success": true,
+                            "commit_id": commit_id,
+                            "message": message,
+                        }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("path".to_string(), json!(path)),
+                            ("message".to_string(), json!(message)),
+                        ]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Git commit failed: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                }
+            }
+            "git_clone" => {
+                // ✅ Git clone implementation
+                let url = args
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing url parameter"))?
+                    .to_string();
+                let destination = args
+                    .get("destination")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing destination parameter"))?
+                    .to_string();
+
+                if let Err(e) = self.validate_path(&destination).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("destination".to_string(), json!(destination))]),
+                    });
+                }
+
+                use crate::commands::git::git_clone;
+
+                match git_clone(url.clone(), destination.clone()).await {
+                    Ok(msg) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "success": true,
+                            "message": msg,
+                            "url": url,
+                            "destination": destination,
+                        }),
+                        error: None,
+                        metadata: HashMap::from([
+                            ("url".to_string(), json!(url)),
+                            ("destination".to_string(), json!(destination)),
+                        ]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Git clone failed: {}", e)),
+                        metadata: HashMap::from([("url".to_string(), json!(url))]),
+                    }),
+                }
+            }
+            "git_add" => {
+                // ✅ Git add implementation
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing path parameter"))?
+                    .to_string();
+                let files: Vec<String> = args
+                    .get("files")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| vec![".".to_string()]);
+
+                if let Err(e) = self.validate_path(&path).await {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    });
+                }
+
+                use crate::commands::git::git_add;
+
+                match git_add(path.clone(), files.clone()).await {
+                    Ok(msg) => Ok(ToolResult {
+                        success: true,
+                        data: json!({
+                            "success": true,
+                            "message": msg,
+                            "files": files,
+                        }),
+                        error: None,
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                    Err(e) => Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some(format!("Git add failed: {}", e)),
+                        metadata: HashMap::from([("path".to_string(), json!(path))]),
+                    }),
+                }
+            }
             _ => Err(anyhow!("Unknown tool: {}", tool.id)),
         }
     }

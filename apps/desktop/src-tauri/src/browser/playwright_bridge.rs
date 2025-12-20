@@ -118,9 +118,9 @@ impl PlaywrightBridge {
 
         tracing::info!("Starting Playwright server on port {}", self.config.ws_port);
 
-        // Start a simple Node.js WebSocket server that manages Playwright
-        // In production, this would launch a proper Playwright server
-        // For now, we'll use Chrome DevTools Protocol directly
+        // Browser automation uses Chrome DevTools Protocol (CDP)
+        // via the --remote-debugging-port flag in launch_browser()
+        // This enables page navigation, screenshots, and DOM access
         let child = Command::new("cmd")
             .args([
                 "/C",

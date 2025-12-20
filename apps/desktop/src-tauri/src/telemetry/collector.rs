@@ -104,16 +104,52 @@ impl TelemetryCollector {
             user_id: self.user_id.read().await.clone(),
         };
 
-        // In a production system, you would send this to your analytics backend
-        // For now, we'll just log it
         tracing::debug!(
             batch_id = %batch.batch_id,
             events_count = batch.events.len(),
             "Flushing analytics batch"
         );
 
-        // TODO: Send batch to analytics backend
-        // self.send_batch(batch).await?;
+        // Send batch to analytics backend if endpoint is configured
+        if let Ok(endpoint) = std::env::var("TELEMETRY_ENDPOINT") {
+            if !endpoint.is_empty() {
+                match Self::send_batch_to_backend(&endpoint, &batch).await {
+                    Ok(_) => {
+                        tracing::debug!("Successfully sent analytics batch {}", batch.batch_id);
+                    }
+                    Err(e) => {
+                        // Log error but don't fail - telemetry should never block the app
+                        tracing::warn!(
+                            "Failed to send analytics batch: {}. Events will be lost.",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Send batch to analytics backend
+    async fn send_batch_to_backend(endpoint: &str, batch: &EventBatch) -> Result<()> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()?;
+
+        let response = client
+            .post(endpoint)
+            .header("Content-Type", "application/json")
+            .json(batch)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Analytics backend returned error: {}",
+                response.status()
+            ));
+        }
 
         Ok(())
     }
