@@ -27,6 +27,7 @@ use crate::billing::BillingStateWrapper;
 pub async fn subscribe_to_plan(
     user_id: String,
     plan_id: String,
+    billing_interval: Option<String>,
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::commands::AppDatabase>,
 ) -> Result<SubscriptionInfo, String> {
@@ -67,7 +68,12 @@ pub async fn subscribe_to_plan(
 
     // Get plan details from database or configuration
     // For now, we'll use default plan names based on common tiers
-    let (plan_name, billing_interval) = get_plan_details(&plan_id);
+    let (plan_name, mut interval) = get_plan_details(&plan_id);
+
+    // Override interval if provided
+    if let Some(i) = billing_interval {
+        interval = i;
+    }
 
     // Create subscription with optional 14-day trial for new subscribers
     drop(db); // Release database lock before async operation
@@ -88,7 +94,7 @@ pub async fn subscribe_to_plan(
             &plan_id,
             Some(14), // 14-day trial for new subscriptions
             &plan_name,
-            &billing_interval,
+            &interval,
         )
         .await
         .map_err(|e| format!("Failed to create subscription: {}", e))
@@ -209,7 +215,11 @@ pub async fn cancel_subscription(
 #[cfg(not(feature = "billing"))]
 /// Stub for subscribe_to_plan when billing feature is disabled
 #[tauri::command]
-pub async fn subscribe_to_plan(_user_id: String, _plan_id: String) -> Result<String, String> {
+pub async fn subscribe_to_plan(
+    _user_id: String,
+    _plan_id: String,
+    _billing_interval: Option<String>,
+) -> Result<String, String> {
     Err("Billing feature is not enabled".to_string())
 }
 
@@ -275,13 +285,13 @@ pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
             name: "pro".to_string(),
             display_name: "Pro".to_string(),
             description: "Advanced features for power users".to_string(),
-            price_monthly_usd: 29.0,
-            price_annual_usd: 290.0,
+            price_monthly_usd: 29.99,
+            price_annual_usd: 299.88,
             features: vec![
                 "Unlimited local automations".to_string(),
                 "Advanced AI models (GPT-4, Claude)".to_string(),
                 "Priority support".to_string(),
-                "500 cloud runs/month".to_string(),
+                "$25/mo Token Credits included".to_string(),
                 "Multi-step workflows".to_string(),
             ],
             limits: serde_json::json!({
@@ -294,23 +304,24 @@ pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
             is_available: true,
         },
         PricingPlan {
-            id: "price_team".to_string(),
-            tier: "team".to_string(),
-            name: "team".to_string(),
-            display_name: "Team".to_string(),
-            description: "Collaboration tools for small teams".to_string(),
-            price_monthly_usd: 99.0,
-            price_annual_usd: 990.0,
+            id: "price_max".to_string(),
+            tier: "max".to_string(),
+            name: "max".to_string(),
+            display_name: "Max".to_string(),
+            description: "For professionals and teams demanding maximum performance".to_string(),
+            price_monthly_usd: 299.99,
+            price_annual_usd: 2999.88,
             features: vec![
                 "Everything in Pro".to_string(),
-                "Team collaboration".to_string(),
-                "Shared workspaces".to_string(),
-                "2000 cloud runs/month".to_string(),
-                "Admin controls".to_string(),
+                "$300/mo Cloud Credits".to_string(),
+                "Dedicated Support Channel".to_string(),
+                "Early Access to New Features".to_string(),
+                "Higher Rate Limits".to_string(),
+                "Priority Queue Access".to_string(),
             ],
             limits: serde_json::json!({
                 "automations": null,
-                "api_calls": 50000,
+                "api_calls": 100000,
                 "storage_gb": 100,
                 "team_members": 5
             }),

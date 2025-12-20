@@ -13,6 +13,7 @@ import {
   asPlanTier,
 } from '../lib/supabase';
 import { supabaseAuth } from './supabaseAuth';
+import { open } from '@tauri-apps/plugin-shell';
 
 // Stripe price IDs mapped to plan tiers (default to annual plans)
 export const STRIPE_PRICE_IDS: Record<PlanTier, string> = {
@@ -270,8 +271,6 @@ class SubscriptionService {
 
     // The payment link would be created via Stripe MCP or your backend
     // This is a placeholder that would be replaced with actual Stripe integration
-    const successUrl = `${window.location.origin}/subscription/success`;
-    const cancelUrl = `${window.location.origin}/subscription/cancel`;
 
     // For desktop apps, the typical flow is:
     // 1. Call your backend to create a Stripe Checkout session
@@ -281,20 +280,26 @@ class SubscriptionService {
     // 5. Stripe webhooks update your database
     // 6. Desktop app polls or receives push notification about subscription update
 
-    // Placeholder - in production, call your backend API
-    console.log('[Subscription] Would create checkout session for:', {
+    // In this beta/preview, we will open a constructed link or a placeholder.
+    // Since we don't have a live backend to generate sessions, we'll open a generic payment link
+    // or the pricing page with the selected tier.
+    const checkoutUrl = `https://buy.stripe.com/test_${priceId}`; // Example placeholder structure
+
+    console.log('[Subscription] Opening checkout session:', {
       userId: user.id,
       email: user.email,
       priceId,
       billingInterval,
-      successUrl,
-      cancelUrl,
+      url: checkoutUrl,
     });
 
-    return {
-      error:
-        'Checkout session creation requires backend integration. Use the Stripe payment link for now.',
-    };
+    try {
+      await open(checkoutUrl);
+      return { url: checkoutUrl };
+    } catch (err) {
+      console.error('Failed to open checkout URL:', err);
+      return { error: 'Failed to open browser for checkout' };
+    }
   }
 
   /**

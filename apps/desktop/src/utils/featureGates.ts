@@ -38,7 +38,7 @@ export interface UsageLimitCheckResult {
  */
 export function checkFeatureAccess(
   feature: FeatureId,
-  subscription?: SubscriptionInfo | null
+  subscription?: SubscriptionInfo | null,
 ): FeatureCheckResult {
   // Free tier or no subscription
   if (!subscription || subscription.plan_name === 'free') {
@@ -77,24 +77,26 @@ export function checkFeatureAccess(
     case 'advanced_ui_automation':
     case 'email_support':
     case 'llm_cost_tracking':
-      return planName !== 'free' ? { allowed: true } : {
-        allowed: false,
-        reason: 'Upgrade to Pro to access this feature',
-        upgradeRequired: true,
-        suggestedPlan: 'pro',
-      };
+      return planName !== 'free'
+        ? { allowed: true }
+        : {
+            allowed: false,
+            reason: 'Upgrade to Pro to access this feature',
+            upgradeRequired: true,
+            suggestedPlan: 'pro',
+          };
 
     case 'priority_support':
     case 'custom_workflows':
     case 'webhook_integration':
     case 'analytics':
-      return ['proplus', 'team', 'enterprise'].includes(planName)
+      return ['max', 'team', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,
-            reason: 'Upgrade to Pro+ to access this feature',
+            reason: 'Upgrade to Max to access this feature',
             upgradeRequired: true,
-            suggestedPlan: 'proplus',
+            suggestedPlan: 'max',
           };
 
     case 'team_features':
@@ -119,7 +121,7 @@ export function checkFeatureAccess(
 export function checkUsageLimit(
   usageType: 'automations' | 'apiCalls' | 'storage',
   currentUsage: number,
-  subscription?: SubscriptionInfo | null
+  subscription?: SubscriptionInfo | null,
 ): UsageLimitCheckResult {
   const planName = subscription?.plan_name || 'free';
   const plan = getPlanById(planName);
@@ -166,7 +168,9 @@ export function checkUsageLimit(
     currentUsage,
     limit,
     percentageUsed,
-    reason: withinLimit ? undefined : `You've reached your ${usageType} limit. Upgrade to increase your limits.`,
+    reason: withinLimit
+      ? undefined
+      : `You've reached your ${usageType} limit. Upgrade to increase your limits.`,
   };
 }
 
@@ -243,7 +247,7 @@ export function getDaysUntilRenewal(subscription: SubscriptionInfo | null): numb
 export function shouldShowUsageWarning(
   usageType: 'automations' | 'apiCalls' | 'storage',
   currentUsage: number,
-  subscription?: SubscriptionInfo | null
+  subscription?: SubscriptionInfo | null,
 ): boolean {
   const limitCheck = checkUsageLimit(usageType, currentUsage, subscription);
 
@@ -255,10 +259,7 @@ export function shouldShowUsageWarning(
 /**
  * Get recommended upgrade plan based on current usage
  */
-export function getRecommendedUpgrade(
-  usage: UsageStats,
-  currentPlan: string
-): string | null {
+export function getRecommendedUpgrade(usage: UsageStats, currentPlan: string): string | null {
   const plan = getPlanById(currentPlan);
   if (!plan) return null;
 
@@ -272,13 +273,13 @@ export function getRecommendedUpgrade(
     }
   }
 
-  // Pro tier: recommend Pro+ if exceeding limits
+  // Pro tier: recommend Max if exceeding limits
   if (currentPlan === 'pro') {
     if (
       (plan.limits.apiCalls && usage.api_calls_made >= plan.limits.apiCalls * 0.9) ||
       (plan.limits.storage && usage.storage_used_mb >= plan.limits.storage * 0.9)
     ) {
-      return 'proplus';
+      return 'max';
     }
   }
 
@@ -303,7 +304,7 @@ export function formatUsage(value: number, type: 'automations' | 'apiCalls' | 's
  */
 export function formatLimit(
   limit: number | null,
-  type: 'automations' | 'apiCalls' | 'storage'
+  type: 'automations' | 'apiCalls' | 'storage',
 ): string {
   if (limit === null) return 'Unlimited';
 

@@ -183,12 +183,71 @@ impl ClipboardMonitor {
 
         // Check for images if enabled
         if config.track_images {
-            // TODO: Implement image clipboard tracking using clipboard_win formats
+            if let Ok(has_bitmap) =
+                clipboard_win::is_format_avail(clipboard_win::formats::CF_BITMAP)
+            {
+                if has_bitmap {
+                    // Image detected in clipboard
+                    let entry = ClipboardEntry {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        data_type: ClipboardDataType::Image,
+                        content: None,
+                        file_path: None,
+                        thumbnail: Some("[Image in clipboard]".to_string()),
+                        size: 0, // Size unknown for raw bitmap
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        source_app: Self::get_foreground_app_name(),
+                    };
+
+                    // Only save if this is a new clipboard event (different from last)
+                    let mut last = last_content.lock().await;
+                    let image_marker = "[IMAGE_CLIPBOARD]".to_string();
+                    if last.as_ref() != Some(&image_marker) {
+                        *last = Some(image_marker);
+                        Self::save_to_database(db_path, &entry)?;
+
+                        let mut hist = history.lock().await;
+                        hist.push(entry);
+                        if hist.len() > config.max_history {
+                            hist.remove(0);
+                        }
+                    }
+                }
+            }
         }
 
         // Check for files if enabled
         if config.track_files {
-            // TODO: Implement file clipboard tracking
+            if let Ok(has_files) = clipboard_win::is_format_avail(clipboard_win::formats::CF_HDROP)
+            {
+                if has_files {
+                    // File(s) detected in clipboard
+                    let entry = ClipboardEntry {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        data_type: ClipboardDataType::File,
+                        content: None,
+                        file_path: Some("[File(s) in clipboard]".to_string()),
+                        thumbnail: None,
+                        size: 0,
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        source_app: Self::get_foreground_app_name(),
+                    };
+
+                    // Only save if this is a new clipboard event
+                    let mut last = last_content.lock().await;
+                    let file_marker = "[FILE_CLIPBOARD]".to_string();
+                    if last.as_ref() != Some(&file_marker) {
+                        *last = Some(file_marker);
+                        Self::save_to_database(db_path, &entry)?;
+
+                        let mut hist = history.lock().await;
+                        hist.push(entry);
+                        if hist.len() > config.max_history {
+                            hist.remove(0);
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
