@@ -26,7 +26,7 @@ export function PlansTab() {
       if (currentPlan) {
         await upgradePlan(planId, userId);
       } else {
-        await subscribeToPlan(planId, userId);
+        await subscribeToPlan(planId, userId, billingCycle);
       }
     } catch (error) {
       console.error('Failed to select plan:', error);

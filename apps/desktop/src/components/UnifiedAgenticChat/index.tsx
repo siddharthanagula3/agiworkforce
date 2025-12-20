@@ -13,6 +13,7 @@ import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore
 import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
 import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
 import { Button } from '../ui/Button';
+import { CloudStoragePanel } from '../Cloud/CloudStoragePanel';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { ArtifactsView } from './ArtifactsView';
@@ -489,7 +490,7 @@ export const UnifiedAgenticChat: React.FC<{
                 <Layers className="h-4 w-4" />
                 <span>Workspace</span>
                 <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-slate-400">
-                  Code + Terminal
+                  Code + Terminal + Cloud
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -504,7 +505,7 @@ export const UnifiedAgenticChat: React.FC<{
                 </Button>
               </div>
             </div>
-            <div className="grid h-[calc(80vh-52px)] grid-cols-1 gap-3 overflow-hidden p-3 md:grid-cols-2">
+            <div className="grid h-[calc(80vh-52px)] grid-cols-1 gap-3 overflow-hidden p-3 md:grid-cols-3">
               <div className="rounded-xl border border-white/10 bg-[#0f111d]">
                 <TerminalWorkspace className="h-full" />
               </div>
@@ -512,6 +513,9 @@ export const UnifiedAgenticChat: React.FC<{
                 <div className="flex h-full items-center justify-center text-sm text-slate-400">
                   Hook your editor/file tree here for a full code view.
                 </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-[#0f111d] overflow-hidden">
+                <CloudStoragePanel />
               </div>
             </div>
           </div>

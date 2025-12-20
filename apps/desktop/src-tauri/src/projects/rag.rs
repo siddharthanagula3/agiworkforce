@@ -155,18 +155,72 @@ impl RAGEngine {
     }
 
     pub fn generate_embedding(&self, text: &str) -> Result<Vec<f32>> {
-        // TODO: Integrate with actual embedding model
-        // For now, return a dummy embedding
-        // In production, this would call:
-        // - OpenAI embeddings API
-        // - Local embedding model (sentence-transformers)
-        // - Anthropic embeddings API
+        // Try to get embedding from LLM provider via HTTP
+        // Uses OPENAI_API_KEY environment variable
+        if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
+            if !api_key.is_empty() {
+                return self.generate_openai_embedding(text, &api_key);
+            }
+        }
 
-        let dummy_embedding: Vec<f32> = (0..384)
-            .map(|i| ((text.len() as f32 + i as f32) * 0.001) % 1.0)
-            .collect();
+        // Fallback to simple TF-IDF-like embedding
+        // This provides some semantic value while not requiring API
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let mut embedding = vec![0.0f32; 384];
 
-        Ok(dummy_embedding)
+        for (i, word) in words.iter().enumerate() {
+            // Simple hash-based embedding
+            let hash = word
+                .bytes()
+                .fold(0u64, |acc, b| acc.wrapping_add(b as u64).wrapping_mul(31));
+            let idx = (hash % 384) as usize;
+            embedding[idx] += 1.0 / (1.0 + i as f32);
+        }
+
+        // Normalize
+        let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if norm > 0.0 {
+            for x in embedding.iter_mut() {
+                *x /= norm;
+            }
+        }
+
+        Ok(embedding)
+    }
+
+    fn generate_openai_embedding(&self, text: &str, api_key: &str) -> Result<Vec<f32>> {
+        // Create a blocking runtime for HTTP call
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
+        rt.block_on(async {
+            let client = reqwest::Client::new();
+            let response = client
+                .post("https://api.openai.com/v1/embeddings")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": "text-embedding-3-small",
+                    "input": text
+                }))
+                .send()
+                .await?;
+
+            if !response.status().is_success() {
+                return Err(anyhow::anyhow!("OpenAI API error: {}", response.status()));
+            }
+
+            let json: serde_json::Value = response.json().await?;
+            let embedding: Vec<f32> = json["data"][0]["embedding"]
+                .as_array()
+                .ok_or_else(|| anyhow::anyhow!("Invalid embedding response"))?
+                .iter()
+                .filter_map(|v| v.as_f64().map(|f| f as f32))
+                .collect();
+
+            Ok(embedding)
+        })
     }
 
     pub fn cosine_similarity(&self, a: &[f32], b: &[f32]) -> f32 {

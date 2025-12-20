@@ -12,15 +12,13 @@ The project emphasizes safety through a tool approval system, where "dangerous" 
 
 ### Key Technologies
 
-- **Desktop Framework:** [Tauri](https://tauri.app/) (Rust backend, webview frontend)
-- **Web Frontend:** [Next.js](https://nextjs.org/) (React, TypeScript, Tailwind CSS)
-- **Desktop Frontend:** [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
-- **Backend (Rust):** [Tokio](https://tokio.rs/) for async runtime, [Serde](https://serde.rs/) for serialization, and numerous other crates for specific functionalities (see `apps/desktop/src-tauri/Cargo.toml`).
+- **Desktop Framework:** [Tauri v2](https://tauri.app/) (Rust backend, webview frontend)
+- **Frontend:** [React 18](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
+- **Backend (Rust):** [Tokio](https://tokio.rs/) for async runtime, [Serde](https://serde.rs/) for serialization, and SQLite for local data.
 - **Model Context Protocol (MCP):** Supports connecting to various data sources (Supabase, GitHub, local filesystem, etc.) via MCP servers. Configuration is handled via `.mcp.json` and `apps/desktop/mcp-servers-config.example.json`.
 - **Package Management:** [pnpm workspaces](https://pnpm.io/workspaces)
 - **State Management:** [Zustand](https://zustand-demo.pmnd.rs/)
 - **Testing:** [Vitest](https://vitest.dev/) for frontend unit/integration tests, [Playwright](https://playwright.dev/) for End-to-End tests, and `cargo test` for Rust tests.
-- **CI/CD:** GitHub Actions
 
 ## Repository Structure & Organization
 
@@ -32,16 +30,15 @@ The project is a monorepo organized using pnpm workspaces.
 │   ├── desktop/              # Main Tauri desktop application (React + Rust)
 │   │   ├── src/              # React frontend source (components, pages, stores, etc.)
 │   │   └── src-tauri/        # Rust backend source
-│   ├── web/                  # Marketing and web portal (Next.js)
-│   ├── extension/            # Browser extension scaffold
+│   ├── web/                  # Next.js marketing website
+│   ├── extension/            # Browser extension
 ├── packages/
 │   ├── types/                # Shared TypeScript types for the monorepo
 │   └── utils/                # Shared utility functions
 ├── services/
 │   ├── api-gateway/          # Backend services (Node.js)
 │   └── signaling-server/     # Signaling server
-├── dev-scripts/              # Helper scripts for development (e.g., reset-app.ps1)
-├── examples/                 # Usage examples and hook scripts
+├── dev-scripts/              # Helper scripts for development
 └── ... (config files, docs, etc.)
 ```
 
@@ -49,16 +46,18 @@ The project is a monorepo organized using pnpm workspaces.
 
 - Feature-first domains are preferred under `apps/desktop/src/{components,pages,services,stores,api,lib,utils,types}`.
 - Shared code sits in `packages/`.
-- `ui-components` package has been removed; shared UI primitives should be kept local to `apps/desktop/src/components` until a real package is needed.
 
 ## Building and Running
 
 ### Prerequisites
 
-- Node.js (version specified in `package.json` `engines` field)
-- pnpm (version specified in `package.json` `engines` field)
-- Rust toolchain (version specified in `rust-toolchain.toml`)
-- Platform-specific build tools (see `INSTALLATION.md` if available, or Tauri docs)
+- **Node.js**: >= 20.11.0
+- **pnpm**: >= 9.15.0
+- **Rust**: 1.90.0 (pinned in `rust-toolchain.toml`)
+- **Platform-specific build tools**:
+  - macOS: Xcode Command Line Tools
+  - Windows: Visual Studio Build Tools (C++)
+  - Linux: WebKit2GTK and build-essential
 
 ### Development
 
@@ -142,14 +141,7 @@ The project has a comprehensive testing strategy.
 - **MCP:** Use `mcp-servers-config.example.json` for MCP server setup.
 - **Rust:** Tauri builds depend on the pinned Rust toolchain (see `rust-toolchain.toml`).
 
-## Core Documentation
-
-- **AGENTS.md:** Primary repository guidelines and developer onboarding.
-- **NEXT_STEPS.md:** Tracking Vercel deployment and upcoming tasks.
-- **WARP.md:** Context for Warp terminal users.
-- **CLAUDE.md:** Context for Claude Dev/Cline users.
-
-## Architecture & Design (Dec 2025 Alignment)
+## Architecture & Design
 
 ### Desktop Architecture
 
@@ -164,9 +156,3 @@ The project has a comprehensive testing strategy.
 - **Context:** Unified context panel (files, calendar, browser tabs, etc.) with explicit opt-in.
 - **Execution:** Enforce per-task capability scopes (files, network) with human-readable prompts.
 - **Performance:** Stream tokens; prefer server-side or local LLM fallbacks gated by `local-llm` feature.
-
-### Backend, Auth, and Subscription
-
-- **Auth:** Desktop auth relies on website/OIDC handoff, exchanging for a short-lived desktop token.
-- **Subscriptions:** Managed in `services/api-gateway`. No billing logic in the client.
-- **Telemetry:** Behind explicit consent; sent via gateway with privacy filters.

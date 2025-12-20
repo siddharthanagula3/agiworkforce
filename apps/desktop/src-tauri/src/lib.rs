@@ -97,13 +97,14 @@ pub mod test_utils;
 pub fn run() {
     // Initialize telemetry (logging, tracing, metrics)
     let _telemetry_guard = match telemetry::init() {
-        Ok(guard) => guard,
+        Ok(guard) => Some(guard),
         Err(e) => {
-            eprintln!("Failed to initialize telemetry: {}", e);
-            // Return a dummy guard or handle failure?
-            // For now we just log to stderr and continue, as crashing on telemetry is bad UX.
-            // In production, init() failure is rare unless file system is broken.
-            telemetry::init().unwrap_or_else(|_| panic!("Critical: Failed to init telemetry"))
+            eprintln!(
+                "Failed to initialize telemetry: {}. Continuing without telemetry.",
+                e
+            );
+            // Continue without telemetry - better UX than crashing
+            None
         }
     };
 
@@ -124,9 +125,9 @@ pub fn run() {
             let app_data_dir = match app.path().app_data_dir() {
                 Ok(dir) => dir,
                 Err(e) => {
-                    tracing::error!("Failed to get app data dir: {}", e);
-                    // Fallback to temp dir or panic? Panic is probably safer than writing to random places.
-                    panic!("Failed to get app data dir: {}", e);
+                    tracing::error!("Failed to get app data dir: {}. Falling back to temp directory.", e);
+                    // Fallback to temp dir instead of panicking
+                    std::env::temp_dir().join("agiworkforce")
                 }
             };
             // Ensure directory exists
