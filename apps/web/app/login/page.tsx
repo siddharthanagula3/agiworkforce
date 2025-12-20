@@ -9,7 +9,7 @@ import { getSupabaseClient } from '../../services/supabase';
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/';
+  const redirectTo = searchParams.get('redirectTo') || '/get-started';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
