@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Label } from '../ui/Label';
 import { Input } from '../ui/Input';
@@ -6,33 +6,28 @@ import { Button } from '../ui/Button';
 import { Slider } from '../ui/Slider';
 import { Separator } from '../ui/Separator';
 import { usePricingStore } from '../../stores/pricingStore';
+import { useAuthStore } from '../../stores/authStore';
 import { TrendingUp } from 'lucide-react';
 
-export function PricingCalculator() {
+export const PricingCalculator: React.FC = () => {
+  const { subscribeToPlan } = usePricingStore();
+  const userId = useAuthStore((state) => state.user?.id);
   const [hoursPerMonth, setHoursPerMonth] = useState(40);
   const [hourlyRate, setHourlyRate] = useState(50);
-  const { calculateEstimate, costEstimate, subscribeToPlan } = usePricingStore();
-
-  useEffect(() => {
-    calculateEstimate(hoursPerMonth, hourlyRate);
-  }, [hoursPerMonth, hourlyRate, calculateEstimate]);
 
   const handleSubscribe = async () => {
-    try {
-      // In production, get real userId
-      await subscribeToPlan('pro', 'default-user');
-    } catch (error) {
-      console.error('Failed to subscribe:', error);
+    if (userId) {
+      await subscribeToPlan('pro', userId);
     }
   };
 
-  const valueSaved = costEstimate?.value_saved_usd ?? 0;
-  const planCost = costEstimate?.plan_cost_usd ?? 39;
-  const netSavings = costEstimate?.net_savings_usd ?? 0;
-  const roiMultiplier = costEstimate?.roi_multiplier ?? 0;
+  const planCost = 29.99;
+  const valueSaved = hoursPerMonth * hourlyRate;
+  const netSavings = valueSaved - planCost;
+  const roiMultiplier = planCost > 0 ? valueSaved / planCost : 0;
 
   return (
-    <Card className="sticky top-4">
+    <Card className="sticky top-4 bg-zinc-900/50 border-zinc-800">
       <CardHeader>
         <CardTitle>Calculate Your Savings</CardTitle>
         <CardDescription>See how much AGI Workforce saves you</CardDescription>
@@ -96,9 +91,7 @@ export function PricingCalculator() {
           <Separator className="my-2" />
           <div className="flex items-center justify-between">
             <span className="font-semibold">Net savings</span>
-            <span className="text-2xl font-bold text-primary">
-              ${netSavings.toLocaleString()}
-            </span>
+            <span className="text-2xl font-bold text-primary">${netSavings.toLocaleString()}</span>
           </div>
           <div className="flex items-center justify-center gap-2 mt-3 p-2 bg-primary/10 rounded-md">
             <TrendingUp className="h-4 w-4 text-primary" />
@@ -118,4 +111,4 @@ export function PricingCalculator() {
       </CardContent>
     </Card>
   );
-}
+};

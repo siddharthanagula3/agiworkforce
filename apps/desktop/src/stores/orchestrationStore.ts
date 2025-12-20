@@ -148,7 +148,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => ({
     try {
       const workflowDef: WorkflowDefinition = {
         id: '',
-        user_id: workflow.user_id || 'default-user',
+        user_id: workflow.user_id || 'anonymous',
         name: workflow.name || 'Untitled Workflow',
         description: workflow.description,
         nodes: workflow.nodes || [],

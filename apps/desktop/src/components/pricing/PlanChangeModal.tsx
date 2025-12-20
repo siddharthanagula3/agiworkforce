@@ -10,24 +10,30 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { usePricingStore } from '../../stores/pricingStore';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
 import { cn } from '../../lib/utils';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export function PlanChangeModal() {
-  const { isPlanChangeModalOpen, closePlanChangeModal, planChangeEstimate, upgradePlan } =
-    usePricingStore();
+  const {
+    isPlanChangeModalOpen,
+    currentPlan,
+    planChangeEstimate,
+    closePlanChangeModal,
+    upgradePlan,
+  } = usePricingStore();
+  const userId = useAuthStore((state) => state.user?.id);
 
   if (!planChangeEstimate) return null;
 
-  const { current_plan, new_plan, is_upgrade, changes, prorated_amount_usd, next_billing_date } =
+  const { new_plan, is_upgrade, prorated_amount_usd, next_billing_date, changes } =
     planChangeEstimate;
 
   const handleConfirm = async () => {
-    try {
-      await upgradePlan(new_plan.id, 'default-user');
-    } catch (error) {
-      console.error('Failed to change plan:', error);
+    if (userId && new_plan.id) {
+      await upgradePlan(new_plan.id, userId);
     }
+    closePlanChangeModal();
   };
 
   return (
@@ -43,7 +49,10 @@ export function PlanChangeModal() {
         <div className="space-y-6">
           {/* Plan Comparison */}
           <div className="grid grid-cols-2 gap-4">
-            <PlanComparisonCard plan={current_plan} label="Current Plan" />
+            <PlanComparisonCard
+              plan={currentPlan || { name: 'Free', pricing_model: 'free' }}
+              label="Current Plan"
+            />
             <PlanComparisonCard plan={new_plan} label="New Plan" highlighted />
           </div>
 
@@ -76,9 +85,7 @@ export function PlanChangeModal() {
                   <span className="font-semibold">${prorated_amount_usd.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">
-                    Next billing (${new_plan.base_price_usd ?? 0}/mo)
-                  </span>
+                  <span className="text-sm">Next billing (${new_plan.base_price_usd ?? 0}/mo)</span>
                   <span className="text-sm text-muted-foreground">
                     {new Date(next_billing_date).toLocaleDateString()}
                   </span>
@@ -91,9 +98,7 @@ export function PlanChangeModal() {
                   <span className="font-semibold">${prorated_amount_usd.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">
-                    New rate (${new_plan.base_price_usd ?? 0}/mo)
-                  </span>
+                  <span className="text-sm">New rate (${new_plan.base_price_usd ?? 0}/mo)</span>
                   <span className="text-sm text-muted-foreground">
                     Starts {new Date(next_billing_date).toLocaleDateString()}
                   </span>
