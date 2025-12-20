@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { createSupabaseServerClient } from '../../../services/supabase-server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,18 +9,20 @@ export async function GET(request: Request) {
   if (!platform || !['mac', 'windows', 'linux'].includes(platform)) {
     return NextResponse.json(
       { error: 'Invalid platform requested. Must be mac, windows, or linux.' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   // 2. Check Authentication
   const supabase = await createSupabaseServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   if (!session) {
     return NextResponse.json(
       { error: 'Authentication required to download beta binaries.' },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
   if (!subscription || subscription.status !== 'active') {
     return NextResponse.json(
       { error: 'A Pro subscription is required to access the public beta.' },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -50,7 +52,7 @@ export async function GET(request: Request) {
   if (!url) {
     return NextResponse.json(
       { error: `Download for ${platform} is currently unavailable.` },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
