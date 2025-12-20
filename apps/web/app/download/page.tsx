@@ -1,7 +1,10 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '../../lib/supabase-server';
+import { createSupabaseServerClient } from '@/services/supabase-server';
+import { DownloadSection } from '@/components/DownloadSection';
+import { Bot } from 'lucide-react';
+import Link from 'next/link';
 
 type SubscriptionRow = {
   status: string;
@@ -9,14 +12,14 @@ type SubscriptionRow = {
 
 function getDownloadUrls() {
   return {
-    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC,
-    windows: process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS,
-    linux: process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX,
+    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agi-workforce-mac.dmg',
+    windows: process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS || '/downloads/agi-workforce-win.exe',
+    linux: process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX || '/downloads/agi-workforce-linux.AppImage',
   };
 }
 
 async function getUserAndSubscription() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
 
   const {
     data: { session },
@@ -52,64 +55,56 @@ export default async function DownloadPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
-      <main className="flex flex-1 items-center justify-center px-4">
-        <div className="w-full max-w-2xl space-y-8 text-center">
-          <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Download AGI Workforce</h1>
-          <p className="text-zinc-400">
-            Thanks for being a Pro subscriber. Choose your platform below to download the latest
-            desktop agent.
-          </p>
+      <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
+            <Bot className="h-6 w-6 text-blue-500" />
+            <span>AGI Workforce</span>
+          </Link>
+          <Link
+            href="/"
+            className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+          >
+            Back to Home
+          </Link>
+        </div>
+      </header>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {downloads.mac && (
-              <a
-                href={downloads.mac}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 hover:border-blue-500 transition-colors"
-              >
-                <div className="text-lg font-semibold mb-2">macOS</div>
-                <p className="text-sm text-zinc-400 mb-3">
-                  Universal build for Apple Silicon/Intel
-                </p>
-                <span className="inline-flex h-9 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-medium">
-                  Download .dmg
-                </span>
-              </a>
-            )}
-
-            {downloads.windows && (
-              <a
-                href={downloads.windows}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 hover:border-blue-500 transition-colors"
-              >
-                <div className="text-lg font-semibold mb-2">Windows</div>
-                <p className="text-sm text-zinc-400 mb-3">Supports Windows 10 and later</p>
-                <span className="inline-flex h-9 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-medium">
-                  Download .exe
-                </span>
-              </a>
-            )}
-
-            {downloads.linux && (
-              <a
-                href={downloads.linux}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 hover:border-blue-500 transition-colors"
-              >
-                <div className="text-lg font-semibold mb-2">Linux</div>
-                <p className="text-sm text-zinc-400 mb-3">AppImage for modern distros</p>
-                <span className="inline-flex h-9 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-medium">
-                  Download AppImage
-                </span>
-              </a>
-            )}
+      <main className="flex flex-1 items-center justify-center px-4 pt-24 pb-12">
+        <div className="w-full max-w-5xl space-y-12">
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl font-bold tracking-tight md:text-6xl bg-clip-text text-transparent bg-gradient-to-b from-white to-white/50">
+              Download AGI Workforce
+            </h1>
+            <p className="text-zinc-400 text-lg max-w-2xl mx-auto leading-relaxed">
+              Experience the power of an autonomous AI workforce directly on your machine. 
+              Secure, private, and blazing fast.
+            </p>
           </div>
 
+          <DownloadSection downloads={downloads} />
+
           {!(downloads.mac || downloads.windows || downloads.linux) && (
-            <p className="text-sm text-red-400">
-              Download URLs are not configured. Please set the NEXT_PUBLIC_DOWNLOAD_URL_* env vars.
-            </p>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-center">
+              <p className="text-sm text-red-400 font-medium">
+                Download servers are currently being updated. Please check back in a few minutes.
+              </p>
+            </div>
           )}
+
+          <div className="text-center text-sm text-zinc-500">
+            <p>By downloading, you agree to our Terms of Service and Privacy Policy.</p>
+          </div>
         </div>
       </main>
+
+      <footer className="border-t border-white/10 bg-black py-12">
+        <div className="container mx-auto px-4 text-center">
+          <div className="text-sm text-zinc-600">
+            © {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
