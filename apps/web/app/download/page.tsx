@@ -79,9 +79,9 @@ export default async function DownloadPage() {
     );
   }
 
-  // Not logged in: send to login
+  // Not logged in: send to login with redirect back to download
   if (!userId) {
-    redirect('/login');
+    redirect('/login?redirectTo=/download');
   }
 
   // Logged in but no active subscription: send to pricing/upgrade flow
