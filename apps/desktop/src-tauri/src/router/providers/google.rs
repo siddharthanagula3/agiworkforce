@@ -114,6 +114,18 @@ struct GoogleUsageMetadata {
     total_token_count: Option<u32>,
 }
 
+#[derive(Debug, Deserialize)]
+struct GoogleErrorResponse {
+    error: GoogleError,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleError {
+    code: i32,
+    message: String,
+    status: String,
+}
+
 pub struct GoogleProvider {
     api_key: String,
     client: Client,
@@ -241,6 +253,29 @@ impl GoogleProvider {
 
         parts
     }
+
+    async fn handle_error(response: reqwest::Response) -> String {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+
+        // Try to parse structured error
+        if let Ok(json_error) = serde_json::from_str::<GoogleErrorResponse>(&error_text) {
+            return format!(
+                "Google API Error {}: {} ({})",
+                json_error.error.code, json_error.error.message, json_error.error.status
+            );
+        }
+
+        if status.as_u16() == 429 {
+            return "Google API Rate Limit Exceeded. Please try again later or upgrade your plan."
+                .to_string();
+        }
+
+        format!("Google API error {}: {}", status, error_text)
+    }
 }
 
 #[async_trait::async_trait]
@@ -293,12 +328,8 @@ impl LLMProvider for GoogleProvider {
             .await?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Google API error {}: {}", status, error_text).into());
+            let error_msg = Self::handle_error(response).await;
+            return Err(error_msg.into());
         }
 
         let google_response: GoogleResponse = response.json().await?;
@@ -451,12 +482,8 @@ impl LLMProvider for GoogleProvider {
             .await?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Google API error {}: {}", status, error_text).into());
+            let error_msg = Self::handle_error(response).await;
+            return Err(error_msg.into());
         }
 
         tracing::debug!("Google streaming response received, starting SSE parsing");
@@ -466,5 +493,39 @@ impl LLMProvider for GoogleProvider {
             response,
             crate::router::Provider::Google,
         )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_cost() {
+        // Test Gemini 2.5 Pro (1.25 input / 5.0 output per 1M)
+        let cost = GoogleProvider::calculate_cost("gemini-2.5-pro", 1_000_000, 1_000_000);
+        assert_eq!(cost, 6.25);
+
+        // Test Gemini 1.5 Flash (0.075 input / 0.3 output per 1M)
+        let cost = GoogleProvider::calculate_cost("gemini-1.5-flash", 1_000_000, 1_000_000);
+        assert_eq!(cost, 0.375);
+    }
+
+    #[test]
+    fn test_convert_role() {
+        assert_eq!(GoogleProvider::convert_role("user"), "user");
+        assert_eq!(GoogleProvider::convert_role("assistant"), "model");
+        assert_eq!(GoogleProvider::convert_role("system"), "system");
+    }
+
+    #[test]
+    fn test_convert_content_text() {
+        let parts = GoogleProvider::convert_content("Hello world", None);
+        assert_eq!(parts.len(), 1);
+        if let GooglePart::Text { text } = &parts[0] {
+            assert_eq!(text, "Hello world");
+        } else {
+            panic!("Expected Text part");
+        }
     }
 }

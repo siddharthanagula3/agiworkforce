@@ -295,3 +295,48 @@ impl LLMProvider for OllamaProvider {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::router::{ChatMessage, LLMRequest};
+
+    #[tokio::test]
+    #[ignore] // Requires local Ollama instance running
+    async fn test_real_ollama_connection_attempt() {
+        let provider = OllamaProvider::new(None);
+
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "tinyllama".to_string(),
+            temperature: Some(0.7),
+            max_tokens: Some(10),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+        };
+
+        let result = provider.send_message(&request).await;
+
+        match result {
+            Ok(response) => {
+                println!("Ollama connection SUCCESS");
+                println!("Response content: {}", response.content);
+                assert!(
+                    !response.content.is_empty(),
+                    "Response content should not be empty"
+                );
+            }
+            Err(e) => {
+                panic!("Ollama connection FAILED: {}", e);
+            }
+        }
+    }
+}

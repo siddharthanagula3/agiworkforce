@@ -22,6 +22,20 @@ test.describe('Settings and Configuration', () => {
   let settingsSnapshot: SettingsSnapshot;
 
   test.beforeEach(async ({ page, settingsPage }) => {
+    // Bypass authentication
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        'auth-storage',
+        JSON.stringify({
+          state: {
+            isAuthenticated: true,
+            user: { id: 'test-user', email: 'test@example.com', name: 'Test User' },
+          },
+          version: 0,
+        }),
+      );
+    });
+
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 

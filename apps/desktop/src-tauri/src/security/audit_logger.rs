@@ -124,8 +124,10 @@ impl AuditLogger {
 
         #[cfg(not(debug_assertions))]
         {
-            // In production, we MUST have a secure key
-            panic!("CRITICAL SECURITY ERROR: AUDIT_HMAC_KEY environment variable not set. Application cannot start securely.");
+            // In production, return an error if no secure key is configured
+            Err(Error::Other(
+                "AUDIT_HMAC_KEY environment variable not set. Audit logging requires a secure HMAC key.".to_string()
+            ))
         }
     }
 

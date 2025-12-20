@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { FeedbackDialog } from '../feedback';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { CommandPalette } from './CommandPalette';
 import { DynamicSidecar } from './DynamicSidecar';
@@ -24,6 +25,7 @@ export function AppLayout({
 }: AppLayoutProps) {
   // const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Moved to store
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
@@ -141,6 +143,7 @@ export function AppLayout({
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
         onOpenBilling={onOpenBilling}
+        onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenWorkspace={onOpenWorkspace}
         onOpenMediaLab={onOpenMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
@@ -193,6 +196,9 @@ export function AppLayout({
           />
         </div>
       )}
+
+      {/* Feedback Dialog */}
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
 
       {/* Command Palette (Cmd+K) */}
       <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />

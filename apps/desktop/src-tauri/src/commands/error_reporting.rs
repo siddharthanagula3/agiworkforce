@@ -24,8 +24,47 @@ pub async fn error_report(error_data: ErrorReport) -> Result<(), String> {
         "Error reported from frontend"
     );
 
-    // TODO: Send to external error reporting service (e.g., Sentry)
-    // For now, just log it
+    // Send to Sentry if configured
+    if let Ok(sentry_dsn) = std::env::var("SENTRY_DSN") {
+        if !sentry_dsn.is_empty() {
+            // Build error payload for Sentry API
+            let payload = serde_json::json!({
+                "event_id": uuid::Uuid::new_v4().to_string(),
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "level": "error",
+                "logger": "agiworkforce",
+                "message": {
+                    "formatted": format!("{}: {}", error_data.error_type, error_data.message)
+                },
+                "exception": {
+                    "values": [{
+                        "type": error_data.error_type,
+                        "value": error_data.message,
+                        "stacktrace": error_data.stack_trace.map(|s| {
+                            serde_json::json!({ "frames": [{ "function": s }] })
+                        })
+                    }]
+                },
+                "extra": error_data.context
+            });
+
+            // Send async to Sentry store endpoint
+            let sentry_url = format!("{}/api/store/", sentry_dsn.trim_end_matches('/'));
+            tokio::spawn(async move {
+                if let Ok(client) = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(5))
+                    .build()
+                {
+                    let _ = client
+                        .post(&sentry_url)
+                        .header("Content-Type", "application/json")
+                        .json(&payload)
+                        .send()
+                        .await;
+                }
+            });
+        }
+    }
 
     Ok(())
 }

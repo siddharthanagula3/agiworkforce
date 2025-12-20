@@ -1,43 +1,61 @@
 # AGI Workforce Desktop App
 
-Tauri + Vite + React desktop workspace for the AGI Workforce project.
+The main Tauri-based desktop application for AGI Workforce.
+
+## Quick Start
+
+```bash
+# From repository root
+pnpm dev:desktop
+
+# Or from this directory
+pnpm dev
+```
 
 ## Structure
 
-- `src/`: Frontend code (components, pages, stores, api, utils, types)
-- `src-tauri/`: Rust backend (Tauri commands, event emitters)
-- `future_scope/`: Archived/disabled features (employees, marketplace, ROI dashboard); excluded from builds and lint/typecheck.
+- `src/`: React frontend (components, pages, stores, services, api, utils, types)
+- `src-tauri/`: Rust backend (Tauri commands, event emitters, business logic)
+- `e2e/`: Playwright end-to-end tests
+- `playwright/`: Additional Playwright test suites
 
-## Environment
+## Environment Setup
 
-Copy `.env.example` → `.env` in this directory and set provider keys (`VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`, `VITE_GOOGLE_API_KEY`, optional Sentry/telemetry flags). MCP servers can be configured via `mcp-servers-config.example.json`.
+1. Copy `.env.example` to `.env`
+2. Add your API keys:
+   - `VITE_OPENAI_API_KEY`
+   - `VITE_ANTHROPIC_API_KEY`
+   - `VITE_GOOGLE_API_KEY`
+   - `VITE_ENABLE_OLLAMA` (optional, for local LLM)
 
-## Commands
+3. Configure MCP servers (optional):
+   - Copy `mcp-servers-config.example.json` to `mcp-servers-config.json`
+   - Configure your MCP server connections
 
-From repository root (preferred):
-
-```bash
-pnpm dev:desktop                   # Tauri + Vite dev loop
-pnpm build:desktop                 # Build frontend + Tauri bundles
-pnpm --filter @agiworkforce/desktop test         # Vitest
-pnpm --filter @agiworkforce/desktop test:e2e     # Playwright
-pnpm --filter @agiworkforce/desktop typecheck     # TS check
-pnpm lint                          # ESLint (future_scope ignored)
-```
-
-From `apps/desktop`:
+## Development
 
 ```bash
-pnpm dev        # Vite + Tauri dev
-pnpm build      # Vite build + tauri build
-pnpm test       # Vitest
-pnpm test:e2e   # Playwright
-pnpm typecheck  # TS check
-pnpm lint:fix   # ESLint fix
+pnpm dev          # Vite + Tauri dev server
+pnpm build        # Production build
+pnpm test         # Vitest unit tests
+pnpm test:e2e     # Playwright E2E tests
+pnpm typecheck    # TypeScript check
+pnpm lint:fix      # Fix linting issues
 ```
 
 ## Notes
 
-- Rust toolchain pinned to 1.90.0 (see `rust-toolchain.toml`).
-- Builds are unsigned; no auto-updater configured.
-- Approval workflow prompts for dangerous tools when safe mode is enabled.
+- Rust toolchain pinned to 1.90.0 (see `rust-toolchain.toml`)
+- Builds are unsigned; no auto-updater configured
+- Approval workflow prompts for dangerous tools when safe mode is enabled
+- See main [README.md](../../README.md) for full documentation
+
+## Supported AI Providers
+
+### Google (Gemini)
+
+- **Chat/Text:** Gemini 1.5 Pro, 1.5 Flash, 2.5 Pro (preview) via `generativelanguage.googleapis.com`
+- **Vision:** Multimodal support (Images, Video files)
+- **Image Generation:** Google Imagen 3 (Pro & Lite)
+- **Video Generation:** Google Veo (Preview)
+- **Authentication:** API Key (`VITE_GOOGLE_API_KEY` or Settings)

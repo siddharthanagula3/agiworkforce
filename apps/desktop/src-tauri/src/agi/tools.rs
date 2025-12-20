@@ -1457,6 +1457,58 @@ impl ToolRegistry {
             dependencies: vec!["git_commit".to_string()],
         })?;
 
+        self.register_tool(Tool {
+            id: "git_status".to_string(),
+            name: "Git Status".to_string(),
+            description: "Get the status of a Git repository including branch, staged, modified, and untracked files".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: true,
+                description: "Repository path".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_clone".to_string(),
+            name: "Git Clone".to_string(),
+            description: "Clone a Git repository from a remote URL".to_string(),
+            capabilities: vec![
+                ToolCapability::SystemOperation,
+                ToolCapability::NetworkOperation,
+            ],
+            parameters: vec![
+                ToolParameter {
+                    name: "url".to_string(),
+                    parameter_type: ParameterType::URL,
+                    required: true,
+                    description: "Remote repository URL".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "destination".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: true,
+                    description: "Local destination path".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 10.0,
+                memory_mb: 100,
+                network_mb: 50.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // GitHub Operations
         self.register_tool(Tool {
             id: "github_create_repo".to_string(),
