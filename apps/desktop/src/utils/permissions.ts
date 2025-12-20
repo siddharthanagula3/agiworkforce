@@ -1,4 +1,11 @@
-import { UserRole } from '../services/auth';
+/**
+ * User roles for permission management
+ */
+export enum UserRole {
+  Viewer = 'viewer',
+  Editor = 'editor',
+  Admin = 'admin',
+}
 
 export enum Permission {
   // File operations
