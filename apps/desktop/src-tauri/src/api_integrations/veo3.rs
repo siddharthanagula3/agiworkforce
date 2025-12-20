@@ -81,12 +81,11 @@ impl Veo3Client {
         &self,
         request: &VideoGenerationRequest,
     ) -> Result<VideoGenerationResponse> {
-        let url = format!("{}/videos:generate", self.base_url);
+        let url = format!("{}/videos:generate?key={}", self.base_url, self.api_key);
 
         let response = self
             .client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
             .json(request)
             .send()
@@ -114,12 +113,11 @@ impl Veo3Client {
 
     /// Check the status of a video generation job
     pub async fn check_status(&self, video_id: &str) -> Result<VideoGenerationResponse> {
-        let url = format!("{}/videos/{}", self.base_url, video_id);
+        let url = format!("{}/videos/{}?key={}", self.base_url, video_id, self.api_key);
 
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .send()
             .await
             .map_err(APIError::HttpError)?;
@@ -221,5 +219,22 @@ mod tests {
     fn test_video_status() {
         assert_eq!(VideoStatus::Completed, VideoStatus::Completed);
         assert_ne!(VideoStatus::Processing, VideoStatus::Failed);
+    }
+
+    #[test]
+    fn test_response_deserialization() {
+        let json = r#"{
+            "id": "12345",
+            "status": "Completed",
+            "video_url": "https://example.com/video.mp4",
+            "thumbnail_url": "https://example.com/thumb.jpg",
+            "duration_secs": 10,
+            "created_at": 1678886400
+        }"#;
+
+        let response: VideoGenerationResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.id, "12345");
+        assert_eq!(response.status, VideoStatus::Completed);
+        assert_eq!(response.video_url.unwrap(), "https://example.com/video.mp4");
     }
 }

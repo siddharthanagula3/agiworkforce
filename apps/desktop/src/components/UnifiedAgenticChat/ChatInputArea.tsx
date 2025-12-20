@@ -69,7 +69,7 @@ const FOCUS_MODES: { value: FocusMode; label: string; placeholder: string }[] = 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   onStopGeneration,
-  onOpenBilling,
+  onOpenBilling: _onOpenBilling,
   disabled = false,
   placeholder: defaultPlaceholder = 'Ask me anything...',
   maxLength = 10000,
@@ -109,9 +109,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const selectedModel = useModelStore((state) => state.selectedModel);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
-  const { account, isPro } = useAccountStore();
-  const displayName = account.displayName;
-  const planDisplayName = account.planDisplayName;
+  const { account: _account, isPro: _isPro } = useAccountStore();
   const prefersReducedMotion = useReducedMotion();
 
   const {
@@ -446,43 +444,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </button>
           ))}
         </motion.div>
-
-        {/* Greeting - Only in Empty State */}
-        <AnimatePresence>
-          {isEmptyState && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="absolute bottom-full left-0 w-full mb-8 text-center pointer-events-none"
-            >
-              <div className="inline-flex items-center justify-center p-1.5 mb-6 rounded-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 backdrop-blur-sm">
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 px-2">
-                  {planDisplayName} plan
-                  {!isPro && (
-                    <>
-                      {' '}
-                      ·{' '}
-                      <button
-                        onClick={() => onOpenBilling?.()}
-                        className="underline decoration-zinc-400 cursor-pointer pointer-events-auto hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-                      >
-                        Upgrade
-                      </button>
-                    </>
-                  )}
-                </span>
-              </div>
-              <h1 className="text-4xl md:text-5xl font-serif text-zinc-900 dark:text-[#f8f5f1] mb-2 tracking-tight">
-                <span className="text-terra-cotta-600 dark:text-terra-cotta-400 inline-block mr-2">
-                  ✴
-                </span>
-                {displayName ? `Back at it, ${displayName}` : 'Back at it'}
-              </h1>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         <div
           className={cn(

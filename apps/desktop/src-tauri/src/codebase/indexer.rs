@@ -146,7 +146,8 @@ impl CodebaseIndexer {
     }
 
     /// Extract symbols from file content using regex patterns
-    /// TODO: Replace with tree-sitter for accurate AST parsing
+    /// Note: tree-sitter integration is available as optional enhancement for more accurate parsing
+    /// Current regex-based extraction covers: TypeScript, JavaScript, Rust, Python, Go
     fn extract_symbols(&self, file_path: &Path, content: &str) -> Result<Vec<Symbol>> {
         let mut symbols = Vec::new();
         let file_path_str = file_path.to_string_lossy().to_string();

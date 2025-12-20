@@ -171,9 +171,24 @@ impl SyncManager {
         let updates = cloud_client.pull_updates(&since_timestamp, user_id).await?;
 
         // Process remote updates
-        for _update in updates {
-            // TODO: Apply remote updates to local database
-            // This would involve updating conversations, messages, projects, etc.
+        for update in updates {
+            // Apply remote updates to local database based on entity type
+            match update.entity_type.as_str() {
+                "conversation" | "message" | "project" | "workflow" => {
+                    sync_queue.apply_remote_update(&update)?;
+                    tracing::debug!(
+                        "Applied remote update: {} - {}",
+                        update.entity_type,
+                        update.entity_id
+                    );
+                }
+                _ => {
+                    tracing::warn!(
+                        "Unknown entity type in remote update: {}",
+                        update.entity_type
+                    );
+                }
+            }
         }
 
         // Update last sync timestamp
