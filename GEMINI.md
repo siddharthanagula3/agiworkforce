@@ -13,7 +13,8 @@ The project emphasizes safety through a tool approval system, where "dangerous" 
 ### Key Technologies
 
 - **Desktop Framework:** [Tauri](https://tauri.app/) (Rust backend, webview frontend)
-- **Frontend:** [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
+- **Web Frontend:** [Next.js](https://nextjs.org/) (React, TypeScript, Tailwind CSS)
+- **Desktop Frontend:** [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
 - **Backend (Rust):** [Tokio](https://tokio.rs/) for async runtime, [Serde](https://serde.rs/) for serialization, and numerous other crates for specific functionalities (see `apps/desktop/src-tauri/Cargo.toml`).
 - **Model Context Protocol (MCP):** Supports connecting to various data sources (Supabase, GitHub, local filesystem, etc.) via MCP servers. Configuration is handled via `.mcp.json` and `apps/desktop/mcp-servers-config.example.json`.
 - **Package Management:** [pnpm workspaces](https://pnpm.io/workspaces)
@@ -31,14 +32,16 @@ The project is a monorepo organized using pnpm workspaces.
 │   ├── desktop/              # Main Tauri desktop application (React + Rust)
 │   │   ├── src/              # React frontend source (components, pages, stores, etc.)
 │   │   └── src-tauri/        # Rust backend source
-│   ├── extension/            # Minimal browser extension scaffold
+│   ├── web/                  # Marketing and web portal (Next.js)
+│   ├── extension/            # Browser extension scaffold
 ├── packages/
 │   ├── types/                # Shared TypeScript types for the monorepo
 │   └── utils/                # Shared utility functions
 ├── services/
 │   ├── api-gateway/          # Backend services (Node.js)
 │   └── signaling-server/     # Signaling server
-├── dev-scripts/              # Helper scripts for development
+├── dev-scripts/              # Helper scripts for development (e.g., reset-app.ps1)
+├── examples/                 # Usage examples and hook scripts
 └── ... (config files, docs, etc.)
 ```
 
@@ -139,7 +142,14 @@ The project has a comprehensive testing strategy.
 - **MCP:** Use `mcp-servers-config.example.json` for MCP server setup.
 - **Rust:** Tauri builds depend on the pinned Rust toolchain (see `rust-toolchain.toml`).
 
-## Architecture & Design (Nov 2025 Alignment)
+## Core Documentation
+
+- **AGENTS.md:** Primary repository guidelines and developer onboarding.
+- **NEXT_STEPS.md:** Tracking Vercel deployment and upcoming tasks.
+- **WARP.md:** Context for Warp terminal users.
+- **CLAUDE.md:** Context for Claude Dev/Cline users.
+
+## Architecture & Design (Dec 2025 Alignment)
 
 ### Desktop Architecture
 

@@ -18,11 +18,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   // Read from account store instead of hardcoded values
   const { displayName, email, avatar } = useAccountStore((state) => state.account);
 
-  const name = displayName || 'User';
+  const name = displayName || email?.split('@')[0] || 'Account';
   const userEmail = email || '';
 
   const initials = name
-    .split(' ')
+    .split(/[\s._-]+/)
+    .filter(Boolean)
     .map((n) => n[0])
     .join('')
     .toUpperCase()
