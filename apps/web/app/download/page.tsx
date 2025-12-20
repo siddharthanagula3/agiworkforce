@@ -1,10 +1,10 @@
 'use server';
 
-import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/services/supabase-server';
-import { DownloadSection } from '@/components/DownloadSection';
 import { Bot } from 'lucide-react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { DownloadSection } from '../../components/DownloadSection';
+import { createSupabaseServerClient } from '../../services/supabase-server';
 
 type SubscriptionRow = {
   status: string;
@@ -77,8 +77,8 @@ export default async function DownloadPage() {
               Download AGI Workforce
             </h1>
             <p className="text-zinc-400 text-lg max-w-2xl mx-auto leading-relaxed">
-              Experience the power of an autonomous AI workforce directly on your machine. 
-              Secure, private, and blazing fast.
+              Experience the power of an autonomous AI workforce directly on your machine. Secure,
+              private, and blazing fast.
             </p>
           </div>
 

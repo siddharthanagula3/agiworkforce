@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { SettingsSnapshot } from './page-objects/SettingsPage';
 import { createErrorHandler } from './utils/error-handler';
 

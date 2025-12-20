@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Save, Play, Settings } from 'lucide-react';
 import { useOrchestrationStore } from '../../stores/orchestrationStore';
+import { useAuthStore } from '../../stores/authStore';
 import { OrchestrationCanvas } from './OrchestrationCanvas';
 import { NodeLibrary } from './NodeLibrary';
 import { NodeEditor } from './NodeEditor';
@@ -23,6 +24,8 @@ export const WorkflowBuilder: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [executing, setExecuting] = useState(false);
 
+  const userId = useAuthStore((state) => state.user?.id);
+
   useEffect(() => {
     if (selectedWorkflow) {
       setWorkflowName(selectedWorkflow.name);
@@ -38,7 +41,7 @@ export const WorkflowBuilder: React.FC = () => {
       edges,
       triggers: [],
       metadata: {},
-      user_id: 'default-user',
+      user_id: userId || 'anonymous',
     };
 
     if (selectedWorkflow) {

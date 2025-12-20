@@ -2,24 +2,21 @@ import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/Table';
 import { usePricingStore } from '../../stores/pricingStore';
-import { Download, Eye, TrendingUp, DollarSign, FileText } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
+import { DollarSign, TrendingUp, FileText, Eye, Download } from 'lucide-react';
 import type { Invoice, InvoiceStatus } from '../../types/pricing';
 
 export function InvoicesTab() {
   const { invoices, fetchInvoices, selectInvoice, openInvoiceDetailModal } = usePricingStore();
+  const userId = useAuthStore((state) => state.user?.id);
 
   useEffect(() => {
-    void fetchInvoices('default-user');
-  }, [fetchInvoices]);
+    if (userId) {
+      void fetchInvoices(userId);
+    }
+  }, [fetchInvoices, userId]);
 
   // Calculate totals
   const totalSpent = invoices.reduce((sum, inv) => sum + inv.total_amount_usd, 0);
@@ -70,9 +67,7 @@ export function InvoicesTab() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-1">Net ROI</div>
-                <div className="text-2xl font-bold text-primary">
-                  {roiMultiplier.toFixed(1)}x
-                </div>
+                <div className="text-2xl font-bold text-primary">{roiMultiplier.toFixed(1)}x</div>
               </div>
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <FileText className="h-6 w-6 text-primary" />
@@ -174,7 +169,10 @@ function InvoiceRow({ invoice, onView }: InvoiceRowProps) {
 }
 
 function StatusBadge({ status }: { status: InvoiceStatus }) {
-  const variants: Record<InvoiceStatus, { variant: 'default' | 'outline' | 'secondary'; label: string }> = {
+  const variants: Record<
+    InvoiceStatus,
+    { variant: 'default' | 'outline' | 'secondary'; label: string }
+  > = {
     draft: { variant: 'outline', label: 'Draft' },
     sent: { variant: 'secondary', label: 'Sent' },
     paid: { variant: 'default', label: 'Paid' },
