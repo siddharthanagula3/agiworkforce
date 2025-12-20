@@ -5,79 +5,85 @@
  */
 
 import {
-  UsageStats,
-  FeatureUsageStats,
-  RetentionCohort,
-  FunnelStep,
-  ErrorStats,
-  TimeSeriesData,
   CategoryData,
+  ErrorStats,
+  FeatureUsageStats,
+  FunnelStep,
+  RetentionCohort,
+  TimeSeriesData,
+  UsageStats,
 } from '../types/analytics';
+
+// Detect if we're running in Tauri context
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// Default empty stats for web fallback
+const defaultEmptyStats: UsageStats = {
+  dau: 0,
+  mau: 0,
+  total_users: 0,
+  new_users_today: 0,
+  new_users_this_week: 0,
+  new_users_this_month: 0,
+  avg_session_duration_ms: 0,
+  total_events: 0,
+  events_today: 0,
+  retention_rate: 0,
+};
 
 /**
  * Query daily active users (DAU)
  */
-export async function queryDAU(_dateRange?: {
-  start: Date;
-  end: Date;
-}): Promise<number> {
-  // In production, this would query the backend
-  // For now, return mock data
-  return 0;
+export async function queryDAU(_dateRange?: { start: Date; end: Date }): Promise<number> {
+  // DAU is part of the usage stats response
+  const stats = await queryUsageStats();
+  return stats.dau;
 }
 
 /**
  * Query monthly active users (MAU)
  */
-export async function queryMAU(_dateRange?: {
-  start: Date;
-  end: Date;
-}): Promise<number> {
-  // In production, this would query the backend
-  return 0;
+export async function queryMAU(_dateRange?: { start: Date; end: Date }): Promise<number> {
+  // MAU is part of the usage stats response
+  const stats = await queryUsageStats();
+  return stats.mau;
 }
 
 /**
- * Query usage stats
+ * Query usage stats from backend
  */
 export async function queryUsageStats(): Promise<UsageStats> {
-  // In production, this would query the backend
-  return {
-    dau: await queryDAU(),
-    mau: await queryMAU(),
-    total_users: 0,
-    new_users_today: 0,
-    new_users_this_week: 0,
-    new_users_this_month: 0,
-    avg_session_duration_ms: 0,
-    total_events: 0,
-    events_today: 0,
-    retention_rate: 0,
-  };
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return await invoke<UsageStats>('analytics_get_usage_stats');
+    } catch (error) {
+      console.error('[Analytics] Failed to get usage stats:', error);
+      return defaultEmptyStats;
+    }
+  }
+  // Web fallback - return empty stats
+  return defaultEmptyStats;
 }
 
 /**
- * Query feature usage by date range
+ * Query feature usage from backend
  */
-export async function queryFeatureUsage(
-  _dateRange?: { start: Date; end: Date }
-): Promise<FeatureUsageStats[]> {
-  // In production, this would query the backend
-  const features = [
-    'parallel_execution',
-    'autonomous_agent',
-    'browser_automation',
-    'code_completion',
-    'vision_automation',
-    'streaming_responses',
-  ];
-
-  return features.map((name) => ({
-    feature_name: name,
-    usage_count: Math.floor(Math.random() * 1000),
-    unique_users: Math.floor(Math.random() * 100),
-    trend: Math.random() > 0.5 ? 'up' : ('stable' as const),
-  }));
+export async function queryFeatureUsage(_dateRange?: {
+  start: Date;
+  end: Date;
+}): Promise<FeatureUsageStats[]> {
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return await invoke<FeatureUsageStats[]>('analytics_get_feature_usage');
+    } catch (error) {
+      console.error('[Analytics] Failed to get feature usage:', error);
+      return [];
+    }
+  }
+  // Web fallback - return empty array
+  return [];
 }
 
 /**
@@ -95,9 +101,7 @@ export async function queryAvgSessionDuration(_dateRange?: {
 /**
  * Query retention rate
  */
-export async function queryRetentionRate(
-  cohortDate: Date
-): Promise<RetentionCohort> {
+export async function queryRetentionRate(cohortDate: Date): Promise<RetentionCohort> {
   // In production, this would query the backend
   return {
     cohort_date: cohortDate.toISOString(),
@@ -111,9 +115,7 @@ export async function queryRetentionRate(
 /**
  * Query conversion funnel
  */
-export async function queryConversionFunnel(
-  funnelName: string
-): Promise<FunnelStep[]> {
+export async function queryConversionFunnel(funnelName: string): Promise<FunnelStep[]> {
   // In production, this would query the backend
   // Example: Onboarding funnel
   if (funnelName === 'onboarding') {
@@ -186,12 +188,12 @@ export async function queryErrorStats(_dateRange?: {
  */
 export async function queryTimeSeriesData(
   _metric: 'dau' | 'events' | 'session_duration',
-  dateRange: { start: Date; end: Date }
+  dateRange: { start: Date; end: Date },
 ): Promise<TimeSeriesData[]> {
   // In production, this would query the backend
   const data: TimeSeriesData[] = [];
   const days = Math.ceil(
-    (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24)
+    (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   for (let i = 0; i < days; i++) {
@@ -212,7 +214,7 @@ export async function queryTimeSeriesData(
  * Query category data for charts (e.g., feature usage breakdown)
  */
 export async function queryCategoryData(
-  category: 'features' | 'errors' | 'pages'
+  category: 'features' | 'errors' | 'pages',
 ): Promise<CategoryData[]> {
   // In production, this would query the backend
   if (category === 'features') {
@@ -252,7 +254,7 @@ export async function queryCategoryData(
  */
 export async function queryTopEvents(
   limit: number = 10,
-  _dateRange?: { start: Date; end: Date }
+  _dateRange?: { start: Date; end: Date },
 ): Promise<{ event_name: string; count: number }[]> {
   // In production, this would query the backend
   return [
@@ -272,16 +274,14 @@ export async function queryTopEvents(
 /**
  * Query performance metrics over time
  */
-export async function queryPerformanceMetrics(
-  dateRange: { start: Date; end: Date }
-): Promise<{
+export async function queryPerformanceMetrics(dateRange: { start: Date; end: Date }): Promise<{
   avg_page_load_time: TimeSeriesData[];
   avg_api_response_time: TimeSeriesData[];
   memory_usage: TimeSeriesData[];
 }> {
   // In production, this would query the backend
   const days = Math.ceil(
-    (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24)
+    (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   const generateData = (baseValue: number) => {
@@ -310,7 +310,7 @@ export async function queryPerformanceMetrics(
  */
 export async function exportAnalyticsReport(
   format: 'json' | 'csv',
-  dateRange: { start: Date; end: Date }
+  dateRange: { start: Date; end: Date },
 ): Promise<Blob> {
   // In production, this would generate a full report
   const data = {

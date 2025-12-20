@@ -1,5 +1,3 @@
-'use server';
-
 import { Bot } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -18,28 +16,68 @@ function getDownloadUrls() {
   };
 }
 
-async function getUserAndSubscription() {
-  const supabase = await createSupabaseServerClient();
+async function getUserAndSubscription(): Promise<{
+  userId: string | null;
+  subscription: SubscriptionRow | null;
+  error?: string;
+}> {
+  try {
+    // Check if Supabase env vars are configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('Supabase environment variables not configured');
+      return { userId: null, subscription: null, error: 'Configuration error' };
+    }
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    const supabase = await createSupabaseServerClient();
 
-  if (!session?.user) {
-    return { userId: null as string | null, subscription: null as SubscriptionRow | null };
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      return { userId: null, subscription: null };
+    }
+
+    if (!session?.user) {
+      return { userId: null, subscription: null };
+    }
+
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
+      .select('status')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+
+    if (subError) {
+      console.error('Subscription query error:', subError);
+    }
+
+    return { userId: session.user.id, subscription };
+  } catch (error) {
+    console.error('getUserAndSubscription error:', error);
+    return { userId: null, subscription: null, error: 'Server error' };
   }
-
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('status')
-    .eq('user_id', session.user.id)
-    .maybeSingle();
-
-  return { userId: session.user.id, subscription };
 }
 
 export default async function DownloadPage() {
-  const { userId, subscription } = await getUserAndSubscription();
+  const { userId, subscription, error } = await getUserAndSubscription();
+
+  // If there's a configuration error, show a friendly message instead of crashing
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Service Temporarily Unavailable</h1>
+          <p className="text-zinc-400">Please try again later or contact support.</p>
+          <Link href="/" className="text-blue-400 hover:underline">
+            Return to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // Not logged in: send to login
   if (!userId) {
