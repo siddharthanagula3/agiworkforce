@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '../../../lib/supabase-server';
+import { createSupabaseServerClient } from '@/services/supabase-server';
 
 type PlanTier = 'free' | 'pro' | 'max' | 'enterprise';
 
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   const plan: PlanTier = body?.plan ?? 'pro';
   const billingInterval: 'monthly' | 'annual' = body?.billingInterval ?? 'monthly';
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
