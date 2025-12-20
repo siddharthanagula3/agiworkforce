@@ -9,6 +9,8 @@ type PlanTier = 'free' | 'pro' | 'max' | 'enterprise';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PRICE_PRO_MONTHLY = process.env.STRIPE_PRICE_PRO_MONTHLY;
 const STRIPE_PRICE_PRO_YEARLY = process.env.STRIPE_PRICE_PRO_YEARLY;
+const STRIPE_PRICE_MAX_MONTHLY = process.env.STRIPE_PRICE_MAX_MONTHLY;
+const STRIPE_PRICE_MAX_YEARLY = process.env.STRIPE_PRICE_MAX_YEARLY;
 
 if (!STRIPE_SECRET_KEY) {
   console.warn(
@@ -31,6 +33,11 @@ function getOrigin(request: Request) {
 }
 
 function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'): string | null {
+  // Enterprise is custom/negotiated pricing, not available via self-serve checkout
+  if (plan === 'enterprise') {
+    return null;
+  }
+
   if (plan === 'pro') {
     if (billingInterval === 'monthly') {
       return STRIPE_PRICE_PRO_MONTHLY ?? null;
@@ -38,7 +45,13 @@ function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'
     return STRIPE_PRICE_PRO_YEARLY ?? null;
   }
 
-  // For now, only Pro is sold self-serve via this checkout route.
+  if (plan === 'max') {
+    if (billingInterval === 'monthly') {
+      return STRIPE_PRICE_MAX_MONTHLY ?? null;
+    }
+    return STRIPE_PRICE_MAX_YEARLY ?? null;
+  }
+
   return null;
 }
 
@@ -63,9 +76,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Enterprise is custom/negotiated pricing - direct users to sales/contact
+  if (plan === 'enterprise') {
+    return NextResponse.json(
+      {
+        error:
+          'Enterprise plans require custom pricing. Please contact sales for more information.',
+      },
+      { status: 400 },
+    );
+  }
+
   const priceId = getPriceIdForPlan(plan, billingInterval);
   if (!priceId) {
-    return NextResponse.json({ error: 'Unsupported plan' }, { status: 400 });
+    return NextResponse.json({ error: 'Unsupported plan or billing interval' }, { status: 400 });
   }
 
   const origin = getOrigin(request);

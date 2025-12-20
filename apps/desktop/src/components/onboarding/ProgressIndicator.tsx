@@ -35,7 +35,13 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         {/* Back button */}
         <div className="w-24">
           {showBack && currentStep > 0 && onBack ? (
-            <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              className="gap-1"
+              data-testid="onboarding-back"
+            >
               <ChevronLeft className="h-4 w-4" />
               Back
             </Button>
@@ -46,7 +52,10 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
 
         {/* Step counter */}
         <div className="text-center">
-          <span className="text-sm font-medium text-muted-foreground">
+          <span
+            className="text-sm font-medium text-muted-foreground"
+            data-testid="onboarding-progress"
+          >
             Step {currentStep + 1} of {totalSteps}
           </span>
         </div>
@@ -54,7 +63,13 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         {/* Skip button */}
         <div className="w-24 flex justify-end">
           {showSkip && onSkip ? (
-            <Button variant="ghost" size="sm" onClick={onSkip} className="gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSkip}
+              className="gap-1"
+              data-testid="onboarding-skip"
+            >
               Skip
               <X className="h-4 w-4" />
             </Button>
@@ -73,10 +88,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
 
           return (
             <div key={index} className="flex items-center">
-              <div
-                className="flex flex-col items-center gap-1"
-                title={label}
-              >
+              <div className="flex flex-col items-center gap-1" title={label}>
                 <div
                   className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
                     isCompleted

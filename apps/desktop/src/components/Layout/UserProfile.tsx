@@ -1,18 +1,20 @@
-import React from 'react';
-import { Settings, CreditCard } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
+import { CreditCard, MessageSquare, Settings } from 'lucide-react';
+import React from 'react';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
 
 interface UserProfileProps {
   onSettingsClick?: () => void;
   onBillingClick?: () => void;
+  onFeedbackClick?: () => void;
   collapsed?: boolean;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
   onSettingsClick,
   onBillingClick,
+  onFeedbackClick,
   collapsed = false,
 }) => {
   // Read from account store instead of hardcoded values
@@ -108,6 +110,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             >
               <CreditCard className="h-4 w-4 text-zinc-400" />
               <span>Billing</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onFeedbackClick?.();
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
+            >
+              <MessageSquare className="h-4 w-4 text-zinc-400" />
+              <span>Send Feedback</span>
             </button>
           </div>
         </Popover.Content>

@@ -35,7 +35,7 @@ const supabaseAdmin =
     : null;
 
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
-  if (!supabaseAdmin) return;
+  if (!supabaseAdmin || !stripe) return;
 
   const supabaseUserId = session.metadata?.['supabase_user_id'];
   if (!supabaseUserId) {
@@ -46,17 +46,119 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
 
+  // Extract price ID from line items (need to expand if not already expanded)
+  let stripePriceId: string | null = null;
+  if (session.line_items?.data && session.line_items.data.length > 0) {
+    stripePriceId = session.line_items.data[0].price?.id || null;
+  } else if (stripe && session.id) {
+    // If line items not expanded, retrieve the session with expanded line items
+    try {
+      const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ['line_items'],
+      });
+      if (expandedSession.line_items?.data && expandedSession.line_items.data.length > 0) {
+        stripePriceId = expandedSession.line_items.data[0].price?.id || null;
+      }
+    } catch (error) {
+      console.error('[billing] Failed to retrieve expanded session:', error);
+    }
+  }
+
+  // Fetch subscription details if subscription ID exists
+  let currentPeriodStart: Date | null = null;
+  let currentPeriodEnd: Date | null = null;
+  let status: string = 'active';
+  let cancelAtPeriodEnd: boolean = false;
+  let canceledAt: Date | null = null;
+
+  if (stripeSubId && stripe) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+      status = subscription.status;
+      currentPeriodStart = new Date(subscription.current_period_start * 1000);
+      currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+      cancelAtPeriodEnd = subscription.cancel_at_period_end;
+      canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
+
+      // Extract price ID from subscription if not found in session
+      if (!stripePriceId && subscription.items.data.length > 0) {
+        stripePriceId = subscription.items.data[0].price.id;
+      }
+    } catch (error) {
+      console.error('[billing] Failed to retrieve subscription details:', error);
+    }
+  }
+
   await supabaseAdmin.from('subscriptions').upsert(
     {
       user_id: supabaseUserId,
-      status: 'active',
+      status: status,
       plan_tier: planTier,
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: stripeSubId,
-      stripe_price_id: null,
+      stripe_price_id: stripePriceId,
+      current_period_start: currentPeriodStart?.toISOString() || null,
+      current_period_end: currentPeriodEnd?.toISOString() || null,
+      cancel_at_period_end: cancelAtPeriodEnd,
+      canceled_at: canceledAt?.toISOString() || null,
     },
     { onConflict: 'user_id' },
   );
+}
+
+async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Subscription) {
+  if (!supabaseAdmin) return;
+
+  const stripeSubId = subscription.id;
+  const stripeCustomerId = subscription.customer as string | null;
+
+  // Extract price ID from subscription items
+  let stripePriceId: string | null = null;
+  if (subscription.items.data.length > 0) {
+    stripePriceId = subscription.items.data[0].price.id;
+  }
+
+  // Determine plan tier from price ID or metadata
+  let planTier: string = 'pro';
+  if (subscription.metadata?.plan_tier) {
+    planTier = subscription.metadata.plan_tier;
+  }
+
+  const updateData: {
+    status: string;
+    stripe_price_id: string | null;
+    current_period_start: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+    canceled_at: string | null;
+    plan_tier?: string;
+  } = {
+    status: subscription.status,
+    stripe_price_id: stripePriceId,
+    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+    cancel_at_period_end: subscription.cancel_at_period_end,
+    canceled_at: subscription.canceled_at
+      ? new Date(subscription.canceled_at * 1000).toISOString()
+      : null,
+  };
+
+  // Only update plan_tier if we have it from metadata
+  if (subscription.metadata?.plan_tier) {
+    updateData.plan_tier = planTier;
+  }
+
+  if (stripeSubId) {
+    await supabaseAdmin
+      .from('subscriptions')
+      .update(updateData)
+      .eq('stripe_subscription_id', stripeSubId);
+  } else if (stripeCustomerId) {
+    await supabaseAdmin
+      .from('subscriptions')
+      .update(updateData)
+      .eq('stripe_customer_id', stripeCustomerId);
+  }
 }
 
 export async function POST(request: Request) {
@@ -86,15 +188,51 @@ export async function POST(request: Request) {
         await upsertSubscriptionFromSession(session);
         break;
       }
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        await updateSubscriptionFromStripeSubscription(subscription);
+        break;
+      }
       case 'invoice.payment_succeeded': {
-        // For renewals, keep status active
+        // For renewals, update subscription status and period dates
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string | null;
-        if (supabaseAdmin && stripeCustomerId) {
-          await supabaseAdmin
-            .from('subscriptions')
-            .update({ status: 'active' })
-            .eq('stripe_customer_id', stripeCustomerId);
+        const stripeSubId = invoice.subscription as string | null;
+
+        if (supabaseAdmin && stripe) {
+          const updateData: {
+            status: string;
+            current_period_start?: string;
+            current_period_end?: string;
+          } = { status: 'active' };
+
+          // If we have a subscription ID, fetch full subscription details
+          if (stripeSubId) {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+              updateData.status = subscription.status;
+              updateData.current_period_start = new Date(
+                subscription.current_period_start * 1000,
+              ).toISOString();
+              updateData.current_period_end = new Date(
+                subscription.current_period_end * 1000,
+              ).toISOString();
+            } catch (error) {
+              console.error('[billing] Failed to retrieve subscription for invoice:', error);
+            }
+          }
+
+          if (stripeSubId) {
+            await supabaseAdmin
+              .from('subscriptions')
+              .update(updateData)
+              .eq('stripe_subscription_id', stripeSubId);
+          } else if (stripeCustomerId) {
+            await supabaseAdmin
+              .from('subscriptions')
+              .update(updateData)
+              .eq('stripe_customer_id', stripeCustomerId);
+          }
         }
         break;
       }
@@ -104,8 +242,32 @@ export async function POST(request: Request) {
         if (supabaseAdmin) {
           await supabaseAdmin
             .from('subscriptions')
-            .update({ status: 'canceled' })
+            .update({
+              status: 'canceled',
+              canceled_at: new Date().toISOString(),
+            })
             .eq('stripe_subscription_id', stripeSubId);
+        }
+        break;
+      }
+      case 'invoice.payment_failed': {
+        // Update subscription status to past_due on payment failure
+        const invoice = event.data.object as Stripe.Invoice;
+        const stripeCustomerId = invoice.customer as string | null;
+        const stripeSubId = invoice.subscription as string | null;
+
+        if (supabaseAdmin) {
+          if (stripeSubId) {
+            await supabaseAdmin
+              .from('subscriptions')
+              .update({ status: 'past_due' })
+              .eq('stripe_subscription_id', stripeSubId);
+          } else if (stripeCustomerId) {
+            await supabaseAdmin
+              .from('subscriptions')
+              .update({ status: 'past_due' })
+              .eq('stripe_customer_id', stripeCustomerId);
+          }
         }
         break;
       }

@@ -72,65 +72,128 @@ pub struct PlanInfo {
 // ============================================================================
 
 /// Initiate device linking flow
-///
-/// TODO: Implement actual HTTP request to AGI Workforce API
 #[tauri::command]
 pub async fn device_link_initiate(
-    _request: DeviceLinkRequest,
+    request: DeviceLinkRequest,
 ) -> Result<DeviceLinkResponse, String> {
-    // TODO: POST to https://api.agiworkforce.com/api/device/link
-    // TODO: Return real link code and device ID
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
-    Err("Device linking not yet implemented - requires web backend".to_string())
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    // Example implementation:
-    // let client = reqwest::Client::new();
-    // let response = client
-    //     .post("https://api.agiworkforce.com/api/device/link")
-    //     .json(&request)
-    //     .send()
-    //     .await
-    //     .map_err(|e| e.to_string())?;
-    //
-    // let link_response: DeviceLinkResponse = response
-    //     .json()
-    //     .await
-    //     .map_err(|e| e.to_string())?;
-    //
-    // Ok(link_response)
+    let response = client
+        .post(format!("{}/api/device/link", api_base))
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("Device link request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("API error {}: {}", status, error_text));
+    }
+
+    response
+        .json::<DeviceLinkResponse>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 /// Poll for device link completion
-///
-/// TODO: Implement actual HTTP request to AGI Workforce API
 #[tauri::command]
-pub async fn device_link_poll(_request: DevicePollRequest) -> Result<DevicePollResponse, String> {
-    // TODO: POST to https://api.agiworkforce.com/api/device/poll
-    // TODO: Return auth tokens if approved
+pub async fn device_link_poll(request: DevicePollRequest) -> Result<DevicePollResponse, String> {
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
-    Err("Device link polling not yet implemented - requires web backend".to_string())
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .post(format!("{}/api/device/poll", api_base))
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("Device poll request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("API error {}: {}", status, error_text));
+    }
+
+    response
+        .json::<DevicePollResponse>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 /// Fetch user profile from backend
-///
-/// TODO: Implement actual HTTP request to AGI Workforce API
 #[tauri::command]
-pub async fn fetch_user_profile(_access_token: String) -> Result<UserProfile, String> {
-    // TODO: GET https://api.agiworkforce.com/api/me
-    // TODO: Include Authorization: Bearer {access_token} header
+pub async fn fetch_user_profile(access_token: String) -> Result<UserProfile, String> {
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
-    Err("User profile sync not yet implemented - requires web backend".to_string())
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(format!("{}/api/me", api_base))
+        .header("Authorization", format!("Bearer {}", access_token))
+        .send()
+        .await
+        .map_err(|e| format!("Profile fetch failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("API error {}: {}", status, error_text));
+    }
+
+    response
+        .json::<UserProfile>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 /// Refresh OAuth access token
-///
-/// TODO: Implement token refresh logic
 #[tauri::command]
-pub async fn oauth_refresh(_refresh_token: String) -> Result<serde_json::Value, String> {
-    // TODO: POST to https://api.agiworkforce.com/oauth/refresh
-    // TODO: Return new access_token and refresh_token
+pub async fn oauth_refresh(refresh_token: String) -> Result<serde_json::Value, String> {
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
-    Err("Token refresh not yet implemented - requires web backend".to_string())
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .post(format!("{}/oauth/refresh", api_base))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "refresh_token": refresh_token }))
+        .send()
+        .await
+        .map_err(|e| format!("Token refresh failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("API error {}: {}", status, error_text));
+    }
+
+    response
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 // ============================================================================
