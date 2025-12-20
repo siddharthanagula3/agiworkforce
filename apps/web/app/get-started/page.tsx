@@ -13,19 +13,19 @@ function getDownloadUrl() {
 
   if (userAgent.includes('mac') || userAgent.includes('darwin')) {
     return {
-      url: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agi-workforce-mac.dmg',
+      url: '/api/download-beta?platform=mac',
       platform: 'macOS',
       filename: 'AGI-Workforce.dmg',
     };
   } else if (userAgent.includes('win')) {
     return {
-      url: process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS || '/downloads/agi-workforce-win.exe',
+      url: '/api/download-beta?platform=windows',
       platform: 'Windows',
       filename: 'AGI-Workforce-Setup.exe',
     };
   } else if (userAgent.includes('linux')) {
     return {
-      url: process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX || '/downloads/agi-workforce-linux.AppImage',
+      url: '/api/download-beta?platform=linux',
       platform: 'Linux',
       filename: 'AGI-Workforce.AppImage',
     };
@@ -33,7 +33,7 @@ function getDownloadUrl() {
 
   // Default to Mac
   return {
-    url: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agi-workforce-mac.dmg',
+    url: '/api/download-beta?platform=mac',
     platform: 'macOS',
     filename: 'AGI-Workforce.dmg',
   };
@@ -137,26 +137,19 @@ export default function GetStartedPage() {
             <p className="text-zinc-500 text-sm">Looking for a different platform?</p>
             <div className="flex flex-wrap justify-center gap-4">
               <a
-                href={
-                  process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agi-workforce-mac.dmg'
-                }
+                href="/api/download-beta?platform=mac"
                 className="text-sm text-zinc-400 hover:text-white transition-colors underline"
               >
                 macOS
               </a>
               <a
-                href={
-                  process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS || '/downloads/agi-workforce-win.exe'
-                }
+                href="/api/download-beta?platform=windows"
                 className="text-sm text-zinc-400 hover:text-white transition-colors underline"
               >
                 Windows
               </a>
               <a
-                href={
-                  process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX ||
-                  '/downloads/agi-workforce-linux.AppImage'
-                }
+                href="/api/download-beta?platform=linux"
                 className="text-sm text-zinc-400 hover:text-white transition-colors underline"
               >
                 Linux
