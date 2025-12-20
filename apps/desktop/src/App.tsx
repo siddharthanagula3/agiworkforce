@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { invoke, isTauri } from './lib/tauri-mock';
+import { isTauri } from './lib/tauri-mock';
 
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import TitleBar from './components/Layout/TitleBar';
@@ -14,7 +14,7 @@ import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeAccountStore } from './stores/accountStore';
-import { initializeAuthStore } from './stores/authStore';
+import { initializeAuthStore, useAuthStore } from './stores/authStore';
 import useErrorStore from './stores/errorStore';
 
 // Lazy load heavy components for better bundle splitting
@@ -23,9 +23,9 @@ const VisualizationLayer = lazy(() =>
     default: m.VisualizationLayer,
   })),
 );
-const OnboardingWizard = lazy(() =>
-  import('./components/onboarding/OnboardingWizardNew').then((m) => ({
-    default: m.OnboardingWizardNew,
+const AuthPage = lazy(() =>
+  import('./components/Auth/AuthPage').then((m) => ({
+    default: m.AuthPage,
   })),
 );
 const SettingsPanel = lazy(() =>
@@ -57,8 +57,11 @@ const DesktopShell = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [billingPageOpen, setBillingPageOpen] = useState(false);
-  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
+
+  // Auth state
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isAuthLoading = useAuthStore((state) => state.isLoading);
 
   const clearHistory = useUnifiedChatStore((store) => store.clearHistory);
   const ensureActiveConversation = useUnifiedChatStore((store) => store.ensureActiveConversation);
@@ -142,57 +145,6 @@ const DesktopShell = () => {
   useEffect(() => {
     ensureActiveConversation();
   }, [ensureActiveConversation]);
-
-  // Check onboarding status on mount
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      try {
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(
-            () => reject(new Error('Onboarding status check timed out')),
-            3000,
-          );
-        });
-
-        const statusPromise = invoke<{ completed: boolean }>('get_onboarding_status');
-
-        const status = await Promise.race([statusPromise, timeoutPromise]);
-
-        // Clear timeout if status resolved first
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-
-        // Type guard to ensure status has the expected shape
-        if (status && typeof status === 'object' && 'completed' in status) {
-          if (import.meta.env.DEV) {
-            console.log('Onboarding status:', status);
-          }
-          setOnboardingComplete(status.completed);
-        } else {
-          throw new Error('Invalid onboarding status response');
-        }
-      } catch (error) {
-        // Clear timeout on error
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-
-        console.error('Failed to check onboarding status:', error);
-        addError({
-          type: 'ONBOARDING_ERROR',
-          severity: 'warning',
-          message: 'Failed to check onboarding status',
-          details: error instanceof Error ? error.message : String(error),
-        });
-        // Default to true (skip onboarding) on error to prevent app from being stuck
-        setOnboardingComplete(true);
-      }
-    };
-    void checkOnboarding();
-  }, [addError]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -284,23 +236,23 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  // Show loading state while checking onboarding
-  if (onboardingComplete === null) {
+  // Show loading state while checking auth
+  if (isAuthLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-zinc-950">
         <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <p className="text-zinc-400">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // Show onboarding if not complete
-  if (!onboardingComplete) {
+  // Show auth page if not authenticated
+  if (!isAuthenticated) {
     return (
       <Suspense fallback={<LoadingFallback />}>
-        <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />
+        <AuthPage />
       </Suspense>
     );
   }
