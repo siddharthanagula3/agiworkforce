@@ -3,11 +3,13 @@ import { ArrowRight, Check, Coins, Shield, Sparkles, Star, Zap } from 'lucide-re
 import { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { usePricingStore } from '../../stores/pricingStore';
+import { useAuthStore } from '../../stores/authStore';
 import type { PricingPlan } from '../../types/pricing';
 import { Button } from '../ui/Button';
 
 export function PlansTab() {
   const { plans, currentPlan, fetchPlans, subscribeToPlan, upgradePlan } = usePricingStore();
+  const userId = useAuthStore((state) => state.user?.id);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
 
   useEffect(() => {
@@ -15,11 +17,16 @@ export function PlansTab() {
   }, [fetchPlans]);
 
   const handleSelectPlan = async (planId: string) => {
+    if (!userId) {
+      console.error('Cannot select plan: No user ID');
+      return;
+    }
+
     try {
       if (currentPlan) {
-        await upgradePlan(planId, 'default-user');
+        await upgradePlan(planId, userId);
       } else {
-        await subscribeToPlan(planId, 'default-user');
+        await subscribeToPlan(planId, userId);
       }
     } catch (error) {
       console.error('Failed to select plan:', error);

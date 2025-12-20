@@ -668,6 +668,20 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             </p>
           )}
 
+          <div className="pt-2 border-t border-border/50">
+            <p className="text-center text-xs text-muted-foreground">
+              Prefer the web?{' '}
+              <a
+                href="https://agiworkforce.com/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-violet-500 hover:text-violet-400 transition-colors"
+              >
+                Sign up on our website
+              </a>
+            </p>
+          </div>
+
           {(mode === 'magic-link' || mode === 'reset-password') && (
             <p className="text-center text-sm text-muted-foreground">
               <button

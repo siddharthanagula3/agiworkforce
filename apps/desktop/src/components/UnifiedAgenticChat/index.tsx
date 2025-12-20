@@ -468,7 +468,11 @@ export const UnifiedAgenticChat: React.FC<{
           <>
             <BudgetAlertsPanel />
             <ChatStream onOpenSidecar={openSidecar} />
-            <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
+            <ChatInputArea
+              onSend={handleSendMessage}
+              onStopGeneration={handleStopGeneration}
+              onOpenBilling={onOpenBilling}
+            />
           </>
         ) : activeView === 'projects' ? (
           <ProjectsView />

@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
 
       getCurrentUserId: () => {
         const state = get();
-        return state.user?.id || 'default-user';
+        return state.user?.id || '';
       },
 
       clearAuth: () => {
