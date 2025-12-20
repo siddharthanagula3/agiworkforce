@@ -1,35 +1,60 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { Bot, CheckCircle2, Mail } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle2, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
 
 export default function SignupPage() {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signupComplete, setSignupComplete] = useState(false);
+  const [existingUser, setExistingUser] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setExistingUser(false);
 
     const supabase = getSupabaseClient();
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          full_name: fullName,
+          display_name: fullName.split(' ')[0] || fullName,
+        },
       },
     });
 
     if (signUpError) {
-      setError(signUpError.message);
+      // Handle specific error messages
+      if (
+        signUpError.message.toLowerCase().includes('already registered') ||
+        signUpError.message.toLowerCase().includes('user already exists')
+      ) {
+        setExistingUser(true);
+        setError('An account with this email already exists. Please sign in instead.');
+      } else {
+        setError(signUpError.message);
+      }
+    } else if (data?.user) {
+      // Check if user already exists (Supabase returns user with identities = [] for existing users)
+      // This is a security feature to prevent email enumeration
+      if (data.user.identities && data.user.identities.length === 0) {
+        setExistingUser(true);
+        setError('An account with this email already exists. Please sign in instead.');
+      } else {
+        setSignupComplete(true);
+      }
     } else {
       setSignupComplete(true);
     }
@@ -93,6 +118,15 @@ export default function SignupPage() {
         <form onSubmit={handleSignup} className="mt-8 space-y-4">
           <div>
             <Input
+              type="text"
+              placeholder="Full name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Input
               type="email"
               placeholder="Email address"
               value={email}
@@ -112,9 +146,23 @@ export default function SignupPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 p-3 rounded">
-              {error}
-            </p>
+            <div
+              className={`flex items-start gap-3 text-sm p-3 rounded border ${
+                existingUser
+                  ? 'text-amber-500 bg-amber-500/10 border-amber-500/20'
+                  : 'text-red-500 bg-red-500/10 border-red-500/20'
+              }`}
+            >
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p>{error}</p>
+                {existingUser && (
+                  <Link href="/login" className="text-blue-400 hover:underline mt-1 inline-block">
+                    Go to Sign In →
+                  </Link>
+                )}
+              </div>
+            </div>
           )}
 
           <Button type="submit" className="w-full h-12" disabled={loading}>
