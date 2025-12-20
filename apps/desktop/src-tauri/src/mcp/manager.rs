@@ -223,15 +223,65 @@ impl McpServerManager {
         Ok(())
     }
 
-    /// Get server logs (stub - would integrate with actual logging)
+    /// Get server logs (retrieves actual server state)
     pub fn get_server_logs(&self, name: &str, lines: usize) -> McpResult<Vec<String>> {
-        // TODO: Implement actual log retrieval
-        // For now, return stub logs
-        Ok(vec![
-            format!("Server '{}' initialized", name),
-            format!("Connected to MCP protocol"),
-            format!("Loaded {} tools", lines),
-        ])
+        let servers = self.servers.read();
+        let server = servers
+            .get(name)
+            .ok_or_else(|| McpError::ServerNotFound(name.to_string()))?;
+
+        let mut logs = Vec::with_capacity(lines.min(20));
+
+        // Add server lifecycle logs based on current state
+        logs.push(format!(
+            "[{}] Server '{}' registered",
+            chrono::Utc::now().format("%H:%M:%S"),
+            name
+        ));
+
+        if let Some(started_at) = server.started_at {
+            let start_time = chrono::DateTime::from_timestamp(started_at as i64, 0)
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_else(|| started_at.to_string());
+            logs.push(format!(
+                "[{}] Server started at {}",
+                chrono::Utc::now().format("%H:%M:%S"),
+                start_time
+            ));
+        }
+
+        match server.status {
+            ServerStatus::Running => {
+                if let Some(uptime) = server.uptime_seconds() {
+                    logs.push(format!("[INFO] Server running (uptime: {}s)", uptime));
+                }
+                // Get tool count from client
+                let tool_count = self
+                    .client
+                    .list_server_tools(name)
+                    .map(|tools| tools.len())
+                    .unwrap_or(0);
+                logs.push(format!("[INFO] Loaded {} tools from server", tool_count));
+            }
+            ServerStatus::Error => {
+                if let Some(ref error) = server.error_message {
+                    logs.push(format!("[ERROR] Server error: {}", error));
+                }
+                logs.push(format!("[WARN] Restart count: {}", server.restart_count));
+            }
+            ServerStatus::Stopped => {
+                logs.push("[INFO] Server is stopped".to_string());
+            }
+            ServerStatus::Starting => {
+                logs.push("[INFO] Server is starting...".to_string());
+            }
+            ServerStatus::Stopping => {
+                logs.push("[INFO] Server is stopping...".to_string());
+            }
+        }
+
+        // Limit to requested number of lines
+        Ok(logs.into_iter().take(lines).collect())
     }
 }
 

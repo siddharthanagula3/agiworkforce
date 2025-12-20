@@ -27,6 +27,7 @@ interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
   onOpenBilling?: () => void;
+  onOpenFeedback?: () => void;
   onOpenWorkspace?: () => void;
   onOpenMediaLab?: () => void;
   collapsed?: boolean;
@@ -82,6 +83,7 @@ export function Sidebar({
   className,
   onOpenSettings,
   onOpenBilling,
+  onOpenFeedback,
   onOpenWorkspace,
   onOpenMediaLab,
   collapsed = false,
@@ -606,6 +608,7 @@ export function Sidebar({
           <UserProfile
             onSettingsClick={onOpenSettings}
             onBillingClick={onOpenBilling}
+            onFeedbackClick={onOpenFeedback}
             collapsed={collapsed}
           />
         </div>

@@ -46,7 +46,7 @@ interface PricingState {
   // Actions - Plans
   fetchPlans: () => Promise<void>;
   fetchCurrentPlan: (userId: string) => Promise<void>;
-  subscribeToPlan: (planId: string, userId: string) => Promise<void>;
+  subscribeToPlan: (planId: string, userId: string, billingInterval?: string) => Promise<void>;
   upgradePlan: (planId: string, userId: string) => Promise<void>;
   cancelSubscription: (userId: string) => Promise<void>;
   getPlanChangeEstimate: (newPlanId: string, userId: string) => Promise<void>;
@@ -122,10 +122,10 @@ export const usePricingStore = create<PricingState>()(
       }
     },
 
-    subscribeToPlan: async (planId: string, userId: string) => {
+    subscribeToPlan: async (planId: string, userId: string, billingInterval?: string) => {
       set({ plansLoading: true, error: null });
       try {
-        await invoke('subscribe_to_plan', { userId, planId });
+        await invoke('subscribe_to_plan', { userId, planId, billingInterval });
         await get().fetchCurrentPlan(userId);
         set({ plansLoading: false });
       } catch (error) {

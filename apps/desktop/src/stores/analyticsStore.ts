@@ -19,6 +19,7 @@ import {
   SystemMetrics,
   UsageStats,
 } from '../types/analytics';
+import type { AllTimeStats, ChartDataPoint, TopEmployee } from '../types/roi';
 
 interface AnalyticsState {
   // Metrics
@@ -36,11 +37,11 @@ interface AnalyticsState {
   isLoadingStats: boolean;
 
   // ROI Analytics State
-  roiReport: any | null;
-  processMetrics: any[];
-  userMetrics: any[];
-  toolMetrics: any[];
-  trends: Record<string, any[]>;
+  roiReport: AllTimeStats | null;
+  processMetrics: ChartDataPoint[];
+  userMetrics: TopEmployee[];
+  toolMetrics: ChartDataPoint[];
+  trends: Record<string, ChartDataPoint[]>;
   isLoadingROI: boolean;
 
   // Actions
@@ -197,7 +198,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         console.error('Failed to export analytics data:', error);
         errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
           component: 'analyticsStore',
-          severity: 'high' as any,
+          severity: ErrorSeverity.HIGH,
         });
       }
     },
@@ -220,7 +221,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         console.error('Failed to delete analytics data:', error);
         errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
           component: 'analyticsStore',
-          severity: 'high' as any,
+          severity: ErrorSeverity.HIGH,
         });
       }
     },
@@ -238,11 +239,11 @@ export const useAnalyticsStore = create<AnalyticsState>()(
     // ==================== ROI Analytics Methods ====================
 
     // ROI State
-    roiReport: null as any | null,
-    processMetrics: [] as any[],
-    userMetrics: [] as any[],
-    toolMetrics: [] as any[],
-    trends: {} as Record<string, any[]>,
+    roiReport: null as AllTimeStats | null,
+    processMetrics: [] as ChartDataPoint[],
+    userMetrics: [] as TopEmployee[],
+    toolMetrics: [] as ChartDataPoint[],
+    trends: {} as Record<string, ChartDataPoint[]>,
 
     isLoadingROI: false,
 
@@ -260,7 +261,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
         console.error('Failed to calculate ROI:', error);
         errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {
           component: 'analyticsStore',
-          severity: 'high' as any,
+          severity: ErrorSeverity.HIGH,
         });
         throw error;
       } finally {
