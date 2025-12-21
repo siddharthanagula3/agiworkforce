@@ -68,7 +68,7 @@ export default function PricingPage() {
                 Simple pricing for your AI workforce
               </h1>
               <p className="text-zinc-400 max-w-2xl mx-auto mb-8">
-                Start free, upgrade when you're ready to deploy autonomous agents across your
+                Start free, upgrade when you&apos;re ready to deploy autonomous agents across your
                 desktop and web.
               </p>
 
@@ -104,10 +104,12 @@ export default function PricingPage() {
               <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 flex flex-col relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/5 to-transparent pointer-events-none" />
                 <div className="relative">
-                  <div className="inline-flex items-center rounded-full bg-emerald-600/20 px-3 py-1 text-xs font-medium text-emerald-200 mb-3">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 mr-2" />
-                    Introductory Offer
-                  </div>
+                  {billingInterval === 'annual' && (
+                    <div className="inline-flex items-center rounded-full bg-emerald-600/20 px-3 py-1 text-xs font-medium text-emerald-200 mb-3">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 mr-2" />
+                      Introductory Offer
+                    </div>
+                  )}
                   <h2 className="text-xl font-semibold mb-2">Hobby</h2>
                   <p className="text-zinc-400 mb-4 h-10">
                     Perfect for getting started with AI automation.
@@ -134,6 +136,11 @@ export default function PricingPage() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400" /> Community support
                   </li>
+                  {billingInterval === 'annual' && (
+                    <li className="flex gap-2">
+                      <Check className="h-4 w-4 text-emerald-400" /> $10 worth of tokens
+                    </li>
+                  )}
                 </ul>
                 <Button
                   variant="outline"
