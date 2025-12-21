@@ -53,12 +53,16 @@ pub async fn browser_init(state: State<'_, BrowserStateWrapper>) -> Result<Strin
 pub async fn browser_launch(
     browser_type: String,
     headless: bool,
+    profile_name: Option<String>,
+    proxy: Option<String>,
     state: State<'_, BrowserStateWrapper>,
 ) -> Result<String, String> {
     tracing::info!(
-        "Launching {} browser (headless: {})",
+        "Launching {} browser (headless: {}, profile: {:?}, proxy: {:?})",
         browser_type,
-        headless
+        headless,
+        profile_name,
+        proxy
     );
 
     let browser_state = state.inner().lock().await;
@@ -70,8 +74,21 @@ pub async fn browser_launch(
         _ => return Err(format!("Unsupported browser type: {}", browser_type)),
     };
 
+    let user_data_dir = if let Some(name) = profile_name {
+        let mut path = dirs::data_dir()
+            .ok_or_else(|| "Failed to get data directory".to_string())?;
+        path.push("agiworkforce");
+        path.push("profiles");
+        path.push(name);
+        Some(path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
     let options = BrowserOptions {
         headless,
+        user_data_dir,
+        proxy,
         ..Default::default()
     };
 
