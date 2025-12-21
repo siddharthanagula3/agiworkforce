@@ -205,7 +205,7 @@ export async function mcpCallTool(
     }
     return await invokeWithRetry<unknown>(
       'mcp_call_tool',
-      { toolId, arguments: arguments_ },
+      { tool_id: toolId, arguments: arguments_ },
       MCP_TOOL_CALL_TIMEOUT_MS,
     );
   } catch (error) {
@@ -219,12 +219,8 @@ export async function mcpCallTool(
  */
 export async function mcpGetConfig(): Promise<McpServersConfig> {
   try {
-    const config = await invokeWithTimeout<string>('mcp_get_config');
-    try {
-      return JSON.parse(config);
-    } catch (parseError) {
-      throw new Error(`Failed to parse MCP config: ${parseError}`);
-    }
+    // Rust command returns the config object directly, not a string
+    return await invokeWithTimeout<McpServersConfig>('mcp_get_config');
   } catch (error) {
     throw new Error(`Failed to get MCP configuration: ${error}`);
   }
@@ -239,13 +235,8 @@ export async function mcpUpdateConfig(config: McpServersConfig): Promise<string>
     if (!config || typeof config !== 'object') {
       throw new Error('config must be a valid McpServersConfig object');
     }
-    let configJson: string;
-    try {
-      configJson = JSON.stringify(config);
-    } catch (stringifyError) {
-      throw new Error(`Failed to serialize MCP config: ${stringifyError}`);
-    }
-    return await invokeWithTimeout<string>('mcp_update_config', { config: configJson });
+    // Send as object using the correct key 'new_config'
+    return await invokeWithTimeout<string>('mcp_update_config', { new_config: config });
   } catch (error) {
     throw new Error(`Failed to update MCP configuration: ${error}`);
   }
@@ -278,7 +269,11 @@ export async function mcpStoreCredential(
     if (value === undefined || value === null) {
       throw new Error('credential value cannot be null or undefined');
     }
-    return await invokeWithTimeout<string>('mcp_store_credential', { serverName, key, value });
+    return await invokeWithTimeout<string>('mcp_store_credential', {
+      server_name: serverName,
+      key,
+      value,
+    });
   } catch (error) {
     throw new Error(`Failed to store credential for server '${serverName}': ${error}`);
   }

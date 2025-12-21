@@ -45,6 +45,7 @@ impl McpState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct McpServerInfo {
     pub name: String,
     pub enabled: bool,
@@ -54,6 +55,7 @@ pub struct McpServerInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct McpToolInfo {
     pub id: String,
     pub name: String,

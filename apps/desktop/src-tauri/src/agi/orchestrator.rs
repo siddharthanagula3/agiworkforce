@@ -482,11 +482,25 @@ impl AgentOrchestrator {
                 if let Some(status) = self.get_agent_status(agent_id).await {
                     if status.status == AgentState::Completed || status.status == AgentState::Failed
                     {
+                        // Lock agents to get the core and remove the agent
+                        let mut agents_guard = self.agents.lock().await;
+
                         // Collect result
+                        let final_output = if let Some(agent) = agents_guard.get(agent_id) {
+                            if let Some(ctx) = agent.core.get_goal_status(&agent.goal.id) {
+                                // Prefer the last tool result as the output
+                                ctx.tool_results.last().map(|tr| tr.result.clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+
                         let result = AgentResult {
                             agent_id: agent_id.clone(),
                             success: status.status == AgentState::Completed,
-                            result: None, // TODO: Extract actual result from core
+                            result: final_output,
                             error: status.error,
                             execution_time_ms: if let (Some(start), Some(end)) =
                                 (status.started_at, status.completed_at)
@@ -499,8 +513,7 @@ impl AgentOrchestrator {
                         results.push(result);
 
                         // Remove completed agent
-                        let mut agents = self.agents.lock().await;
-                        agents.remove(agent_id);
+                        agents_guard.remove(agent_id);
                     }
                 }
             }

@@ -324,26 +324,51 @@ impl RAGEngine {
     }
 
     pub fn extract_text_from_file(&self, file_path: &str, file_type: &str) -> Result<String> {
-        // TODO: Implement text extraction based on file type
         match file_type.to_lowercase().as_str() {
-            "txt" | "md" | "markdown" => {
+            "txt" | "md" | "markdown" | "rs" | "ts" | "tsx" | "js" | "json" | "toml" | "yaml"
+            | "yml" => {
                 let content = std::fs::read_to_string(file_path)?;
                 Ok(content)
             }
             "pdf" => {
-                // TODO: Use pdf-extract or similar library
-                Ok(String::from("PDF extraction not yet implemented"))
+                // Use pdf-extract to get text
+                pdf_extract::extract_text(file_path)
+                    .map_err(|e| anyhow::anyhow!("Failed to extract PDF text: {}", e))
             }
             "docx" => {
-                // TODO: Use docx parsing library
-                Ok(String::from("DOCX extraction not yet implemented"))
+                // Extract text from DOCX (zip of XMLs)
+                let file = std::fs::File::open(file_path)?;
+                let mut archive = zip::ZipArchive::new(file)?;
+
+                // DOCX text is mainly in word/document.xml
+                let mut document_xml = archive
+                    .by_name("word/document.xml")
+                    .map_err(|_| anyhow::anyhow!("Invalid DOCX: missing word/document.xml"))?;
+
+                let mut xml_content = String::new();
+                std::io::Read::read_to_string(&mut document_xml, &mut xml_content)?;
+
+                // Simple XML tag stripping (robust enough for plain text indexing)
+                // This preserves spaces but removes all <w:t> tags etc
+                // A proper parser like roxmltree could be used, but regex is faster for just stripping
+                let re = regex::Regex::new(r"<[^>]*>").unwrap();
+                let text = re.replace_all(&xml_content, "").to_string();
+
+                // Decode HTML/XML entities if necessary, but for now just returning the raw text
+                // usually docx xml doesn't heavily entity-encode normal text besides &lt; &gt; etc
+                Ok(text)
             }
             "html" | "htm" => {
-                // TODO: Use HTML parser to extract text
                 let content = std::fs::read_to_string(file_path)?;
                 Ok(self.strip_html_tags(&content))
             }
-            _ => Ok(std::fs::read_to_string(file_path)?),
+            _ => {
+                // Try reading as plain text for unknown types, fallback to error if binary
+                match std::fs::read_to_string(file_path) {
+                    Ok(content) => Ok(content),
+                    Err(_) => Ok(format!("Unsupported file type: {}", file_type)),
+                }
+            }
         }
     }
 

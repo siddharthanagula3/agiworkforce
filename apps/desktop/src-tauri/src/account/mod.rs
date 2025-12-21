@@ -132,6 +132,15 @@ pub async fn device_link_poll(request: DevicePollRequest) -> Result<DevicePollRe
     response
         .json::<DevicePollResponse>()
         .await
+        .map(|resp| {
+            // Auto-save token if present
+            if let Some(token) = &resp.access_token {
+                if let Err(e) = store_access_token(token) {
+                    eprintln!("Failed to securely store token: {}", e);
+                }
+            }
+            resp
+        })
         .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
@@ -190,35 +199,41 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<serde_json::Value, S
         return Err(format!("API error {}: {}", status, error_text));
     }
 
-    response
+    let result = response
         .json::<serde_json::Value>()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Update stored token if new one provided
+    if let Some(new_token) = result.get("access_token").and_then(|t| t.as_str()) {
+        if let Err(e) = store_access_token(new_token) {
+            eprintln!("Failed to update stored token: {}", e);
+        }
+    }
+
+    Ok(result)
 }
 
 // ============================================================================
-// Token Storage (to be implemented)
+// Token Storage Implementation
 // ============================================================================
 
-// TODO: Implement secure token storage using Windows Credential Manager
-// Example:
-//
-// use keyring::Entry;
-//
-// pub fn store_access_token(token: &str) -> Result<(), String> {
-//     let entry = Entry::new("AGI Workforce", "access_token")
-//         .map_err(|e| e.to_string())?;
-//     entry.set_password(token).map_err(|e| e.to_string())
-// }
-//
-// pub fn get_access_token() -> Result<String, String> {
-//     let entry = Entry::new("AGI Workforce", "access_token")
-//         .map_err(|e| e.to_string())?;
-//     entry.get_password().map_err(|e| e.to_string())
-// }
-//
-// pub fn delete_access_token() -> Result<(), String> {
-//     let entry = Entry::new("AGI Workforce", "access_token")
-//         .map_err(|e| e.to_string())?;
-//     entry.delete_password().map_err(|e| e.to_string())
-// }
+use keyring::Entry;
+
+/// Store access token securely in OS keychain
+pub fn store_access_token(token: &str) -> Result<(), String> {
+    let entry = Entry::new("AGI Workforce", "access_token").map_err(|e| e.to_string())?;
+    entry.set_password(token).map_err(|e| e.to_string())
+}
+
+/// Retrieve access token from OS keychain
+pub fn get_access_token() -> Result<String, String> {
+    let entry = Entry::new("AGI Workforce", "access_token").map_err(|e| e.to_string())?;
+    entry.get_password().map_err(|e| e.to_string())
+}
+
+/// Delete access token from OS keychain
+pub fn delete_access_token() -> Result<(), String> {
+    let entry = Entry::new("AGI Workforce", "access_token").map_err(|e| e.to_string())?;
+    entry.delete_password().map_err(|e| e.to_string())
+}

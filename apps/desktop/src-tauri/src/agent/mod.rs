@@ -29,6 +29,7 @@ use std::time::Duration;
 
 /// Task status during execution
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum TaskStatus {
     Pending,
     Planning,
@@ -61,40 +62,71 @@ impl Serialize for Task {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("Task", 9)?;
+        let mut state = serializer.serialize_struct("Task", 11)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("description", &self.description)?;
         state.serialize_field("status", &self.status)?;
-        state.serialize_field("created_at_secs", &self.created_at.elapsed().as_secs())?;
-        state.serialize_field("updated_at_secs", &self.updated_at.elapsed().as_secs())?;
+        state.serialize_field("createdAtSecs", &self.created_at.elapsed().as_secs())?;
+        state.serialize_field("updatedAtSecs", &self.updated_at.elapsed().as_secs())?;
         state.serialize_field("steps", &self.steps)?;
-        state.serialize_field("current_step", &self.current_step)?;
-        state.serialize_field("max_retries", &self.max_retries)?;
-        state.serialize_field("retry_count", &self.retry_count)?;
-        state.serialize_field("requires_approval", &self.requires_approval)?;
-        state.serialize_field("auto_approve", &self.auto_approve)?;
+        state.serialize_field("currentStep", &self.current_step)?;
+        state.serialize_field("maxRetries", &self.max_retries)?;
+        state.serialize_field("retryCount", &self.retry_count)?;
+        state.serialize_field("requiresApproval", &self.requires_approval)?;
+        state.serialize_field("autoApprove", &self.auto_approve)?;
         state.end()
     }
 }
 
 impl<'de> Deserialize<'de> for Task {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        // Simplified deserialization - Instant will be set to now()
-        let _created_at = std::time::Instant::now();
-        let _updated_at = std::time::Instant::now();
-        // ... rest of fields would be deserialized normally
-        // This is a simplified version
-        Err(serde::de::Error::custom(
-            "Task deserialization not fully implemented",
-        ))
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TaskSurrogate {
+            id: String,
+            description: String,
+            status: TaskStatus,
+            created_at_secs: u64,
+            updated_at_secs: u64,
+            steps: Vec<TaskStep>,
+            current_step: usize,
+            max_retries: usize,
+            retry_count: usize,
+            requires_approval: bool,
+            auto_approve: bool,
+        }
+
+        let helper = TaskSurrogate::deserialize(deserializer)?;
+        let now = std::time::Instant::now();
+        let created_at = now
+            .checked_sub(std::time::Duration::from_secs(helper.created_at_secs))
+            .unwrap_or(now);
+        let updated_at = now
+            .checked_sub(std::time::Duration::from_secs(helper.updated_at_secs))
+            .unwrap_or(now);
+
+        Ok(Task {
+            id: helper.id,
+            description: helper.description,
+            status: helper.status,
+            created_at,
+            updated_at,
+            steps: helper.steps,
+            current_step: helper.current_step,
+            max_retries: helper.max_retries,
+            retry_count: helper.retry_count,
+            requires_approval: helper.requires_approval,
+            auto_approve: helper.auto_approve,
+        })
     }
 }
 
 /// A single step in a task execution plan
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskStep {
     pub id: String,
     pub action: Action,
@@ -106,6 +138,7 @@ pub struct TaskStep {
 
 /// Actions the agent can perform
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum Action {
     /// Take a screenshot of the current screen
     Screenshot { region: Option<ScreenRegion> },
@@ -138,6 +171,7 @@ pub enum Action {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum ClickTarget {
     Coordinates { x: i32, y: i32 },
     UIAElement { element_id: String },
@@ -146,6 +180,7 @@ pub enum ClickTarget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScreenRegion {
     pub x: i32,
     pub y: i32,
@@ -154,6 +189,7 @@ pub struct ScreenRegion {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ScrollDirection {
     Up,
     Down,
@@ -163,6 +199,7 @@ pub enum ScrollDirection {
 
 /// Execution result for a task step
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StepResult {
     pub step_id: String,
     pub success: bool,
@@ -174,6 +211,7 @@ pub struct StepResult {
 
 /// Configuration for the autonomous agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentConfig {
     pub auto_approve: bool,
     pub max_concurrent_tasks: usize,
@@ -188,6 +226,7 @@ pub struct AgentConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ScreenshotQuality {
     Low,    // Faster, lower quality
     Medium, // Balanced
@@ -195,6 +234,7 @@ pub enum ScreenshotQuality {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum VisionModel {
     LocalOCR,    // Use local OCR (faster, no API calls)
     CloudVision, // Use cloud vision API (more accurate)
