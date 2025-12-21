@@ -4,7 +4,6 @@ use crate::agi::{
 };
 use crate::automation::AutomationService;
 use crate::commands::llm::LLMState;
-use crate::router::LLMRouter;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -13,6 +12,7 @@ use tauri::State;
 use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubmitGoalRequest {
     pub description: String,
     pub priority: Option<String>,
@@ -21,16 +21,19 @@ pub struct SubmitGoalRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubmitGoalResponse {
     pub goal_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GoalStatusResponse {
     pub context: ExecutionContext,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubmitParallelGoalRequest {
     pub description: String,
     pub priority: Option<String>,
@@ -40,6 +43,7 @@ pub struct SubmitParallelGoalRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubmitParallelGoalResponse {
     pub best_result: ScoredResult,
 }
@@ -62,12 +66,8 @@ pub async fn agi_init(
         );
     }
 
-    // Get router from LLM state
-    let router = llm_state.router.lock().await;
-    // Create a new router instance for AGI (since we can't clone)
-    // TODO: Refactor to share router properly
-    let router_for_agi = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
-    drop(router);
+    // Share router from LLM state
+    let router_for_agi = llm_state.router.clone();
 
     // Clone the automation service for AGI use
     // Note: We need to create a new Arc for the AGICore
@@ -246,12 +246,14 @@ pub async fn agi_stop() -> Result<(), String> {
 pub static ORCHESTRATOR: Mutex<Option<Arc<TokioMutex<AgentOrchestrator>>>> = Mutex::new(None);
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OrchestratorInitRequest {
     pub max_agents: usize, // Maximum number of concurrent agents
     pub config: AGIConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpawnAgentRequest {
     pub description: String,
     pub priority: Option<String>,
@@ -260,16 +262,19 @@ pub struct SpawnAgentRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpawnAgentResponse {
     pub agent_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpawnParallelAgentsRequest {
     pub goals: Vec<SpawnAgentRequest>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpawnParallelAgentsResponse {
     pub agent_ids: Vec<String>,
 }
@@ -289,11 +294,8 @@ pub async fn orchestrator_init(
         );
     }
 
-    // Get router from LLM state
-    let router = llm_state.router.lock().await;
-    // Create a new router instance for orchestrator
-    let router_for_orchestrator = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
-    drop(router);
+    // Share router from LLM state
+    let router_for_orchestrator = llm_state.router.clone();
 
     // Create a fresh automation service for the orchestrator
     let automation_arc = Arc::new(

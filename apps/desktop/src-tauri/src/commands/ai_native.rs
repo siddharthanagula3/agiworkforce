@@ -7,6 +7,7 @@ use crate::commands::llm::LLMState;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
+use walkdir::WalkDir;
 
 /// Placeholder state - not actually used
 pub struct ContextManagerState(pub Arc<Mutex<()>>);
@@ -14,7 +15,7 @@ pub struct ContextManagerState(pub Arc<Mutex<()>>);
 /// Placeholder state - not actually used
 pub struct CodeGeneratorState(pub Arc<Mutex<()>>);
 
-/// Analyze project and build context (STUBBED - not implemented)
+/// Analyze project and build context
 #[tauri::command]
 pub async fn ai_analyze_project(
     llm_state: State<'_, LLMState>,
@@ -22,10 +23,36 @@ pub async fn ai_analyze_project(
     project_root: String,
 ) -> Result<String, String> {
     let router = llm_state.router.lock().await;
-    // Simple implementation: List files and ask LLM to analyze structure
-    // For a real implementation, we'd recursively read files.
-    // Here we just acknowledge the request live.
-    let prompt = format!("Analyze the project structure at: {}. Provide a high-level summary of what a project in this location likely contains based on standard conventions.", project_root);
+
+    // Collect file structure
+    let mut structure = String::new();
+    let walker = WalkDir::new(&project_root)
+        .max_depth(3) // Limit depth to avoid massive context
+        .into_iter();
+
+    let mut file_count = 0;
+    for entry in walker.filter_entry(|e| {
+        let name = e.file_name().to_string_lossy();
+        // Skip hidden files and common ignore dirs
+        !name.starts_with('.') && name != "node_modules" && name != "target" && name != "dist"
+    }) {
+        if let Ok(entry) = entry {
+            let depth = entry.depth();
+            let indent = "  ".repeat(depth);
+            let name = entry.file_name().to_string_lossy();
+            structure.push_str(&format!("{}{}\n", indent, name));
+            file_count += 1;
+            if file_count > 200 {
+                structure.push_str("... (truncated)\n");
+                break;
+            }
+        }
+    }
+
+    let prompt = format!(
+        "Analyze the project structure at: {}.\n\nFile Structure:\n{}\n\nProvide a high-level summary of what this project likely does and its architecture based on standard conventions.",
+        project_root, structure
+    );
 
     router
         .send_message(&prompt, None)

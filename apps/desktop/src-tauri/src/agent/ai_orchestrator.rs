@@ -327,12 +327,21 @@ impl AIOrchestrator {
         match task.agent_type {
             AgentType::CodeGenerator => {
                 // Use code generator
+                // TODO: Parse target files from description or task metadata
+                let target_files = vec![];
+
+                // Enhance context with RAG results if available (simulated here since we don't pass RAG context to execute_task yet)
+                let enhanced_context = format!(
+                    "Task Context: {}\nTools: {:?}",
+                    task.description, task.tools_needed
+                );
+
                 let request = crate::agent::code_generator::CodeGenRequest {
                     task_id: task.id.clone(),
                     description: task.description.clone(),
-                    target_files: vec![],
+                    target_files,
                     constraints: vec![],
-                    context: "".to_string(),
+                    context: enhanced_context,
                 };
 
                 let result = self.code_generator.generate_code(request).await?;
@@ -341,25 +350,50 @@ impl AIOrchestrator {
 
             AgentType::TestAgent => {
                 // Generate tests
-                let files = vec![]; // Would get from previous task
-                let result = self.code_generator.generate_tests(files, None).await?;
+                // TODO: Get source files from previous task results or description
+                let files = vec![];
+
+                // Pass test framework preference if specified in tools/description
+                let test_framework = if task.tools_needed.contains(&"jest".to_string()) {
+                    Some("jest".to_string())
+                } else {
+                    None
+                };
+
+                let result = self
+                    .code_generator
+                    .generate_tests(files, test_framework)
+                    .await?;
                 Ok(serde_json::to_value(result)?)
             }
 
             AgentType::GeneralPurpose => {
                 // Use MCP tools
                 if let Some(ref registry) = self.mcp_registry {
-                    // Find appropriate tool (for future use)
-                    let _tools = registry.get_all_tool_definitions();
-                    // Execute tool (simplified)
+                    // Execute tool requested in tools_needed
+                    let mut tool_results = Vec::new();
+                    for tool_name in &task.tools_needed {
+                        if let Ok(tool) = registry.get_tool(tool_name) {
+                            // This is still a simplified execution as we need arguments
+                            // In a real implementation, arguments would come from LLM parsing
+                            tool_results.push(serde_json::json!({
+                                "tool": tool_name,
+                                "status": "executed (simulated)",
+                                "description": tool.description
+                            }));
+                        }
+                    }
+
                     Ok(serde_json::json!({
                         "status": "completed",
                         "task": task.description,
+                        "tool_results": tool_results
                     }))
                 } else {
                     Ok(serde_json::json!({
                         "status": "completed",
                         "task": task.description,
+                        "note": "No MCP registry available"
                     }))
                 }
             }
