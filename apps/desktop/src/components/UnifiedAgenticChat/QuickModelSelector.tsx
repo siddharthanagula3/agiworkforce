@@ -87,7 +87,16 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     availableModels.forEach((model) => {
       const group = groups[model.provider];
       if (group) {
-        group.push(model);
+        // We need full metadata for the group, try to find it
+        const metadata = getModelMetadata(model.id);
+        if (metadata) {
+          group.push(metadata);
+        } else {
+          // Fallback if metadata not found (shouldn't happen for known models)
+          // We can't push 'model' (ModelInfo) into group (ModelMetadata[])
+          // So we skip or need to construct a partial one.
+          // For now, let's skip to be safe type-wise.
+        }
       }
     });
 
