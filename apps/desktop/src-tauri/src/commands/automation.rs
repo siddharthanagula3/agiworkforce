@@ -27,6 +27,7 @@ use crate::{
 };
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FindElementsRequest {
     #[serde(default)]
     pub parent_id: Option<String>,
@@ -47,11 +48,13 @@ pub struct FindElementsRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InvokeRequest {
     pub element_id: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValueRequest {
     pub element_id: String,
     pub value: String,
@@ -60,6 +63,7 @@ pub struct ValueRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClickRequest {
     #[serde(default)]
     pub element_id: Option<String>,
@@ -72,6 +76,7 @@ pub struct ClickRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScreenshotRequest {
     #[serde(default)]
     pub element_id: Option<String>,
@@ -88,6 +93,7 @@ pub struct ScreenshotRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OverlayClickPayload {
     pub x: i32,
     pub y: i32,
@@ -96,6 +102,7 @@ pub struct OverlayClickPayload {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OverlayTypePayload {
     pub x: i32,
     pub y: i32,
@@ -103,6 +110,7 @@ pub struct OverlayTypePayload {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OverlayRegionPayload {
     pub x: i32,
     pub y: i32,
@@ -111,6 +119,7 @@ pub struct OverlayRegionPayload {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendKeysRequest {
     pub text: String,
     #[serde(default)]
@@ -124,6 +133,7 @@ pub struct SendKeysRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HotkeyRequest {
     pub key: u16,
     #[serde(default)]
@@ -131,6 +141,7 @@ pub struct HotkeyRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DragDropRequest {
     pub from_x: i32,
     pub from_y: i32,
@@ -258,7 +269,7 @@ pub fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
         service
             .keyboard
             .lock()
-            .unwrap()
+            .map_err(|e| anyhow!("Failed to lock keyboard service: {}", e))?
             .send_hotkey(&modifiers, key)
     })
     .map_err(|err| err.to_string())
@@ -311,7 +322,11 @@ pub fn automation_click(
             _ => MouseButton::Left,
         };
 
-        service.mouse.lock().unwrap().click(x, y, button)?;
+        service
+            .mouse
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock mouse service: {}", e))?
+            .click(x, y, button)?;
         Ok((x, y, button_name))
     })
     .map_err(|err| err.to_string());
