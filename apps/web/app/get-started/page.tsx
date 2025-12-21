@@ -40,28 +40,13 @@ function getDownloadUrl() {
 }
 
 export default function GetStartedPage() {
-  const [downloadInfo, setDownloadInfo] = useState<{
+  const [downloadInfo] = useState<{
     url: string;
     platform: string;
     filename: string;
-  } | null>(null);
+  } | null>(() => getDownloadUrl());
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [autoDownloadAttempted, setAutoDownloadAttempted] = useState(false);
-
-  useEffect(() => {
-    const info = getDownloadUrl();
-    setDownloadInfo(info);
-
-    // Auto-start download after a short delay
-    if (info && !autoDownloadAttempted) {
-      const timer = setTimeout(() => {
-        triggerDownload(info.url);
-        setAutoDownloadAttempted(true);
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [autoDownloadAttempted]);
 
   const triggerDownload = (url: string) => {
     setDownloadStarted(true);
@@ -73,6 +58,18 @@ export default function GetStartedPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  useEffect(() => {
+    // Auto-start download after a short delay
+    if (downloadInfo && !autoDownloadAttempted) {
+      const timer = setTimeout(() => {
+        triggerDownload(downloadInfo.url);
+        setAutoDownloadAttempted(true);
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [autoDownloadAttempted, downloadInfo]);
 
   const handleManualDownload = () => {
     if (downloadInfo) {
@@ -100,7 +97,7 @@ export default function GetStartedPage() {
 
           {/* Main Message */}
           <div className="space-y-4">
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">You're all set!</h1>
+            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">You&apos;re all set!</h1>
             <p className="text-xl text-zinc-400">Your download should start automatically...</p>
           </div>
 
@@ -121,7 +118,9 @@ export default function GetStartedPage() {
             )}
 
             <div className="border-t border-zinc-800 pt-6">
-              <p className="text-zinc-500 mb-4">Download didn't start? Click the button below:</p>
+              <p className="text-zinc-500 mb-4">
+                Download didn&apos;t start? Click the button below:
+              </p>
               <Button
                 onClick={handleManualDownload}
                 className="h-14 px-8 text-lg bg-blue-600 hover:bg-blue-700"
