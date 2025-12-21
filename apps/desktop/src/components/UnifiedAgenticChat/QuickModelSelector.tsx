@@ -85,8 +85,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     });
 
     availableModels.forEach((model) => {
-      if (groups[model.provider]) {
-        groups[model.provider].push(model);
+      const group = groups[model.provider];
+      if (group) {
+        group.push(model);
       }
     });
 
