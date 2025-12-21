@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Result as AnyResult};
 use crate::error::AGIError;
+use anyhow::{anyhow, Result as AnyResult};
 use enigo::Key;
 use serde::Deserialize;
 use serde_json::json;
@@ -170,8 +170,7 @@ pub fn automation_find_elements(
 
 #[tauri::command]
 pub fn automation_invoke(request: InvokeRequest) -> Result<(), AGIError> {
-    with_service(|service| service.native.invoke(&request.element_id))
-        .map_err(AGIError::from)
+    with_service(|service| service.native.invoke(&request.element_id)).map_err(AGIError::from)
 }
 
 #[tauri::command]
