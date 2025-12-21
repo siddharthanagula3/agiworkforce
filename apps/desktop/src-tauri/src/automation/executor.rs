@@ -395,17 +395,15 @@ impl ExecutorService {
         // Get target coordinates from metadata or value
         let target_coords = if let Some(ref coords) = action.coordinates {
             (coords.x, coords.y)
-        } else {
-            if let Some(val) = &action.value {
-                let parts: Vec<&str> = val.split(',').collect();
-                if parts.len() == 2 {
-                    (parts[0].trim().parse()?, parts[1].trim().parse()?)
-                } else {
-                    return Err(anyhow!("Invalid drag target coordinates in value"));
-                }
+        } else if let Some(val) = &action.value {
+            let parts: Vec<&str> = val.split(',').collect();
+            if parts.len() == 2 {
+                (parts[0].trim().parse()?, parts[1].trim().parse()?)
             } else {
-                return Err(anyhow!("Drag action requires target coordinates"));
+                return Err(anyhow!("Invalid drag target coordinates in value"));
             }
+        } else {
+            return Err(anyhow!("Drag action requires target coordinates"));
         };
 
         let mut mouse = MouseSimulator::new()?;
