@@ -114,10 +114,14 @@ export default function PricingPage() {
                   </p>
                   <div className="flex items-baseline gap-2 mb-1">
                     <div className="text-3xl font-bold">$0</div>
-                    <div className="text-zinc-500 text-sm line-through">$10</div>
+                    <div className="text-zinc-500 text-sm line-through">
+                      ${billingInterval === 'annual' ? '8' : '10'}
+                    </div>
+                    <div className="text-zinc-300 text-sm">/month</div>
                   </div>
                   <div className="text-xs text-zinc-500 mb-6">
-                    First 3 months free, then $10/month
+                    First 3 months free, then $
+                    {billingInterval === 'annual' ? '96/year' : '10/month'}
                   </div>
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-300 flex-1 relative">
