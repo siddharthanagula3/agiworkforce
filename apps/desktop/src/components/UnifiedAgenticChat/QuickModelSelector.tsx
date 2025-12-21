@@ -1,12 +1,7 @@
 import { invoke } from '@/lib/tauri-mock';
 import { Brain, Check, Sparkles, Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  getModelMetadata,
-  getProviderModels,
-  PROVIDER_LABELS,
-  type ModelMetadata,
-} from '../../constants/llm';
+import { getModelMetadata, PROVIDER_LABELS, type ModelMetadata } from '../../constants/llm';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { cn } from '../../lib/utils';
 import { useModelStore } from '../../stores/modelStore';
@@ -31,19 +26,29 @@ const AUTO_MODEL_ID = 'auto';
 export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorProps) => {
   const {
     selectedModel,
-    favorites,
-    recentModels,
+    availableModels,
     selectModel,
     thinkingModeEnabled,
     toggleThinkingMode,
+    getAvailableModels,
   } = useModelStore((state) => ({
     selectedModel: state.selectedModel,
+    availableModels: state.availableModels,
     favorites: state.favorites,
     recentModels: state.recentModels,
     selectModel: state.selectModel,
     thinkingModeEnabled: state.thinkingModeEnabled,
     toggleThinkingMode: state.toggleThinkingMode,
+    getAvailableModels: state.getAvailableModels,
   }));
+
+  useEffect(() => {
+    // Only fetch if we only have the default models (approximate check)
+    if (availableModels.length <= 15) {
+      void getAvailableModels();
+    }
+  }, [getAvailableModels, availableModels.length]);
+
   const messages = useUnifiedChatStore((state) => state.messages);
   const [suggestion, setSuggestion] = useState<RouterSuggestion | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -79,28 +84,14 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       groups[p] = [];
     });
 
-    const addModel = (metadata: ModelMetadata) => {
-      const providerGroup = groups[metadata.provider];
-      if (providerGroup && !providerGroup.some((m) => m.id === metadata.id)) {
-        providerGroup.push(metadata);
+    availableModels.forEach((model) => {
+      if (groups[model.provider]) {
+        groups[model.provider].push(model);
       }
-    };
-
-    allProviders.forEach((provider) => {
-      getProviderModels(provider).forEach(addModel);
-    });
-
-    favorites.forEach((id) => {
-      const meta = getModelMetadata(id);
-      if (meta) addModel(meta);
-    });
-    recentModels.forEach((id) => {
-      const meta = getModelMetadata(id);
-      if (meta) addModel(meta);
     });
 
     return groups;
-  }, [favorites, recentModels]);
+  }, [availableModels]);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,7 +135,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       return;
     }
 
-    const metadata = getModelMetadata(modelId);
+    const metadata = availableModels.find((m) => m.id === modelId) || getModelMetadata(modelId);
     if (!metadata) {
       return;
     }
@@ -154,7 +145,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   };
 
   const isAutoMode = selectedModel === AUTO_MODEL_ID;
-  const suggestedMetadata = suggestion ? getModelMetadata(suggestion.model) : null;
+  const suggestedMetadata = suggestion
+    ? availableModels.find((m) => m.id === suggestion.model) || getModelMetadata(suggestion.model)
+    : null;
 
   return (
     <div
