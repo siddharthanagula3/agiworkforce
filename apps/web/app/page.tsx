@@ -18,7 +18,7 @@ export default function Home() {
             <Link href="#security" className="hover:text-white transition-colors">
               Security
             </Link>
-            <Link href="#pricing" className="hover:text-white transition-colors">
+            <Link href="/pricing" className="hover:text-white transition-colors">
               Pricing
             </Link>
           </nav>
