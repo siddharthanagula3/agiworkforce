@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result as AnyResult};
+use crate::error::AGIError;
 use enigo::Key;
 use serde::Deserialize;
 use serde_json::json;
@@ -144,15 +145,15 @@ fn default_drag_duration() -> u32 {
 }
 
 #[tauri::command]
-pub fn automation_list_windows(app: AppHandle) -> Result<Vec<UIElementInfo>, String> {
+pub fn automation_list_windows(app: AppHandle) -> Result<Vec<UIElementInfo>, AGIError> {
     ensure_overlay_ready(&app);
-    with_service(|service| service.native.list_windows()).map_err(|err| err.to_string())
+    with_service(|service| service.native.list_windows()).map_err(AGIError::from)
 }
 
 #[tauri::command]
 pub fn automation_find_elements(
     request: FindElementsRequest,
-) -> Result<Vec<UIElementInfo>, String> {
+) -> Result<Vec<UIElementInfo>, AGIError> {
     let query = ElementQuery {
         window: request.window,
         window_class: request.window_class,
@@ -164,17 +165,17 @@ pub fn automation_find_elements(
     };
 
     with_service(|service| service.native.find_elements(request.parent_id, &query))
-        .map_err(|err| err.to_string())
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
-pub fn automation_invoke(request: InvokeRequest) -> Result<(), String> {
+pub fn automation_invoke(request: InvokeRequest) -> Result<(), AGIError> {
     with_service(|service| service.native.invoke(&request.element_id))
-        .map_err(|err| err.to_string())
+        .map_err(AGIError::from)
 }
 
 #[tauri::command]
-pub fn automation_set_value(request: ValueRequest) -> Result<(), String> {
+pub fn automation_set_value(request: ValueRequest) -> Result<(), AGIError> {
     with_service(|service| {
         if request.focus.unwrap_or(false) {
             service.native.set_focus(&request.element_id)?;
@@ -183,27 +184,27 @@ pub fn automation_set_value(request: ValueRequest) -> Result<(), String> {
             .native
             .set_value(&request.element_id, &request.value)
     })
-    .map_err(|err| err.to_string())
+    .map_err(AGIError::from)
 }
 
 #[tauri::command]
-pub fn automation_get_value(element_id: String) -> Result<String, String> {
-    with_service(|service| service.native.get_value(&element_id)).map_err(|err| err.to_string())
+pub fn automation_get_value(element_id: String) -> Result<String, AGIError> {
+    with_service(|service| service.native.get_value(&element_id)).map_err(AGIError::from)
 }
 
 #[tauri::command]
-pub fn automation_get_text(element_id: String) -> Result<String, String> {
+pub fn automation_get_text(element_id: String) -> Result<String, AGIError> {
     automation_get_value(element_id)
 }
 
 #[tauri::command]
-pub fn automation_toggle(element_id: String) -> Result<(), String> {
-    with_service(|service| service.native.toggle(&element_id)).map_err(|err| err.to_string())
+pub fn automation_toggle(element_id: String) -> Result<(), AGIError> {
+    with_service(|service| service.native.toggle(&element_id)).map_err(AGIError::from)
 }
 
 #[tauri::command]
-pub fn automation_focus_window(element_id: String) -> Result<(), String> {
-    with_service(|service| service.native.focus_window(&element_id)).map_err(|err| err.to_string())
+pub fn automation_focus_window(element_id: String) -> Result<(), AGIError> {
+    with_service(|service| service.native.focus_window(&element_id)).map_err(AGIError::from)
 }
 
 // Updated Nov 16, 2025: Added input validation
