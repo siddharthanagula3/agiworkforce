@@ -392,76 +392,63 @@ pub async fn llm_get_available_models(
 ) -> Result<Vec<ModelInfo>, String> {
     let router = state.router.lock().await;
 
-    // Define all known models and their providers
+    // Define all known models and their providers (Remote providers)
     let all_models = vec![
         // OpenAI
         ModelInfo {
-            id: "gpt-5".to_string(),
-            name: "GPT-5".to_string(),
+            id: "gpt-5.2".to_string(),
+            name: "GPT-5.2".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "gpt-4o".to_string(),
-            name: "GPT-4o".to_string(),
+            id: "gpt-5.2-turbo".to_string(),
+            name: "GPT-5.2 Turbo".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "o3".to_string(),
-            name: "O3".to_string(),
-            provider: "openai".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "gpt-4o-mini".to_string(),
-            name: "GPT-4o Mini".to_string(),
+            id: "gpt-5.2-reasoner".to_string(),
+            name: "GPT-5.2 Reasoner".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
         // Anthropic
         ModelInfo {
             id: "claude-sonnet-4-5".to_string(),
-            name: "Claude Sonnet 4.5".to_string(),
+            name: "Claude 4.5 Sonnet".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
         ModelInfo {
             id: "claude-haiku-4-5".to_string(),
-            name: "Claude Haiku 4.5".to_string(),
+            name: "Claude 4.5 Haiku".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "claude-opus-4".to_string(),
-            name: "Claude Opus 4".to_string(),
+            id: "claude-opus-4-5".to_string(),
+            name: "Claude 4.5 Opus".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
         // Google
         ModelInfo {
-            id: "gemini-2.5-pro".to_string(),
-            name: "Gemini 2.5 Pro".to_string(),
+            id: "gemini-3-pro".to_string(),
+            name: "Gemini 3 Pro".to_string(),
             provider: "google".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "gemini-2.5-flash".to_string(),
-            name: "Gemini 2.5 Flash".to_string(),
+            id: "gemini-3-flash".to_string(),
+            name: "Gemini 3 Flash".to_string(),
             provider: "google".to_string(),
             available: false,
         },
-        // Ollama
         ModelInfo {
-            id: "llama4-maverick".to_string(),
-            name: "Llama 4 Maverick".to_string(),
-            provider: "ollama".to_string(),
-            available: false,
-        },
-        ModelInfo {
-            id: "deepseek-coder-v3".to_string(),
-            name: "DeepSeek Coder V3".to_string(),
-            provider: "ollama".to_string(),
+            id: "gemini-3-ultra".to_string(),
+            name: "Gemini 3 Ultra".to_string(),
+            provider: "google".to_string(),
             available: false,
         },
     ];
@@ -474,7 +461,7 @@ pub async fn llm_get_available_models(
             "openai" => Provider::OpenAI,
             "anthropic" => Provider::Anthropic,
             "google" => Provider::Google,
-            "ollama" => Provider::Ollama,
+            // Ollama handled dynamically below
             _ => continue,
         };
 
@@ -484,10 +471,27 @@ pub async fn llm_get_available_models(
         }
     }
 
-    // Always include Ollama models if Ollama is configured, but mark as available only if we can reach it
-    // For now, we rely on has_provider which checks if base_url is set.
-    // Ideally we would query Ollama tags here, but that requires async HTTP which we can do if needed.
-    // For simplicity, we just check configuration.
+    // Dynamic Ollama Model Fetching
+    if router.has_provider(Provider::Ollama) {
+        // We call the helper function directly (not via tauri command wrapper)
+        // Note: llm_list_ollama_models is async, so we await it.
+        // Since we are inside an async command, this is fine.
+        match llm_list_ollama_models().await {
+            Ok(ollama_models) => {
+                available_models.extend(ollama_models);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to fetch Ollama models: {}", e);
+                // Fallback to defaults if fetch fails
+                available_models.push(ModelInfo {
+                    id: "llama4-70b-instruct".to_string(),
+                    name: "Llama 4 70B Instruct (Offline)".to_string(),
+                    provider: "ollama".to_string(),
+                    available: false, // Mark unavailable if we couldn't fetch
+                });
+            }
+        }
+    }
 
     Ok(available_models)
 }
@@ -652,6 +656,78 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
         by_provider,
         by_model,
     })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaModelDetails {
+    pub parameter_size: Option<String>,
+    pub quantization_level: Option<String>,
+    pub family: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaModel {
+    pub name: String,
+    pub size: Option<u64>,
+    pub details: Option<OllamaModelDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaTagsResponse {
+    pub models: Vec<OllamaModel>,
+}
+
+#[tauri::command]
+pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get("http://localhost:11434/api/tags")
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to Ollama: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Ollama API returned error: {}", response.status()));
+    }
+
+    let tags_response: OllamaTagsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+
+    let models = tags_response
+        .models
+        .into_iter()
+        .map(|m| {
+            let param_size = m
+                .details
+                .as_ref()
+                .and_then(|d| d.parameter_size.clone())
+                .unwrap_or_default();
+
+            // Heuristic to highlight small models
+            let is_small = param_size.ends_with('B')
+                && param_size
+                    .trim_end_matches('B')
+                    .parse::<f64>()
+                    .unwrap_or(100.0)
+                    <= 20.0;
+
+            ModelInfo {
+                id: m.name.clone(),
+                name: if is_small {
+                    format!("{} ({} - Recommended)", m.name, param_size)
+                } else {
+                    format!("{} ({})", m.name, param_size)
+                },
+                provider: "ollama".to_string(),
+                available: true,
+            }
+        })
+        .collect();
+
+    Ok(models)
 }
 
 #[tauri::command]

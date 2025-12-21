@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sysinfo::System;
+use sysinfo::{Networks, System};
 
 /// System metrics collected from the host
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +30,7 @@ pub struct AppMetrics {
 /// Metrics collector for system and app metrics
 pub struct AnalyticsMetricsCollector {
     system: System,
+    networks: Networks,
     app_metrics: AppMetrics,
 }
 
@@ -38,9 +39,11 @@ impl AnalyticsMetricsCollector {
     pub fn new() -> Self {
         let mut system = System::new_all();
         system.refresh_all();
+        let networks = Networks::new_with_refreshed_list();
 
         Self {
             system,
+            networks,
             app_metrics: AppMetrics::default(),
         }
     }
@@ -49,6 +52,7 @@ impl AnalyticsMetricsCollector {
     pub fn collect_system_metrics(&mut self) -> SystemMetrics {
         // Refresh system info
         self.system.refresh_all();
+        self.networks.refresh(); // Refresh networks list
 
         // CPU usage (average across all cores)
         let cpu_usage = self
@@ -63,14 +67,28 @@ impl AnalyticsMetricsCollector {
         let memory_used_mb = self.system.used_memory() / 1024 / 1024;
         let memory_total_mb = self.system.total_memory() / 1024 / 1024;
 
-        // Disk usage (first disk) - TODO: wire up sysinfo disks API
-        let (disk_used_gb, disk_total_gb) = (0.0, 0.0);
+        // Disk usage (first disk)
+        // Refresh disks list first
+        let disks = sysinfo::Disks::new_with_refreshed_list();
+        let (disk_used_gb, disk_total_gb) = if let Some(disk) = disks.list().first() {
+            let total = disk.total_space() as f64 / 1024.0 / 1024.0 / 1024.0;
+            let available = disk.available_space() as f64 / 1024.0 / 1024.0 / 1024.0;
+            (total - available, total)
+        } else {
+            (0.0, 0.0)
+        };
 
-        // Network usage (sum of all interfaces) - TODO: wire up sysinfo networks API
-        let (network_rx_bytes, network_tx_bytes) = (0u64, 0u64);
+        // Network usage (sum of all interfaces)
+        let (network_rx_bytes, network_tx_bytes) =
+            self.networks.iter().fold((0, 0), |acc, (_, data)| {
+                (
+                    acc.0 + data.total_received(),
+                    acc.1 + data.total_transmitted(),
+                )
+            });
 
-        // System uptime - TODO: use sysinfo uptime API when available
-        let uptime_seconds = 0;
+        // System uptime
+        let uptime_seconds = sysinfo::System::uptime();
 
         SystemMetrics {
             cpu_usage,
