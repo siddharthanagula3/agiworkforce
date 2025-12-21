@@ -144,6 +144,34 @@ impl McpToolRegistry {
             .collect()
     }
 
+    /// Get a specific tool by ID
+    pub fn get_tool(&self, tool_id: &str) -> McpResult<Tool> {
+        // Parse tool_id: "mcp_<server>_<tool>"
+        let parts: Vec<&str> = tool_id.split('_').collect();
+        if parts.len() < 3 || parts[0] != "mcp" {
+            return Err(crate::mcp::McpError::ToolNotFound(format!(
+                "Invalid tool ID format: {}",
+                tool_id
+            )));
+        }
+
+        let server_name = parts[1];
+        let tool_name = parts[2..].join("_");
+
+        let tools = self.mcp_client.list_server_tools(server_name)?;
+        let tool = tools
+            .into_iter()
+            .find(|t| t.name == tool_name)
+            .ok_or_else(|| {
+                crate::mcp::McpError::ToolNotFound(format!(
+                    "Tool {} not found on server {}",
+                    tool_name, server_name
+                ))
+            })?;
+
+        Ok(self.mcp_tool_to_schema(server_name, &tool))
+    }
+
     /// Get tools from a specific server
     pub fn get_server_tools(&self, server_name: &str) -> McpResult<Vec<Tool>> {
         let tools = self.mcp_client.list_server_tools(server_name)?;

@@ -149,6 +149,7 @@ pub struct BoundingRectangle {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct UIElementInfo {
     pub id: String,
     pub name: String,
@@ -158,6 +159,7 @@ pub struct UIElementInfo {
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ElementQuery {
     #[serde(default)]
     pub window: Option<String>,
@@ -176,6 +178,7 @@ pub struct ElementQuery {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DetailedElementInfo {
     pub id: String,
     pub name: String,
@@ -192,6 +195,7 @@ pub struct DetailedElementInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BasicElementInfo {
     pub id: String,
     pub name: String,
@@ -200,6 +204,7 @@ pub struct BasicElementInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ElementSelector {
     pub selector_type: SelectorType,
     pub value: String,
