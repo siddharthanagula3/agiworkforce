@@ -72,7 +72,7 @@ export default function SignupPage() {
 
           <div className="space-y-2">
             <h2 className="text-3xl font-bold">Check your email</h2>
-            <p className="text-zinc-400">We've sent a confirmation link to</p>
+            <p className="text-zinc-400">We&apos;ve sent a confirmation link to</p>
             <p className="text-white font-medium text-lg">{email}</p>
           </div>
 
@@ -87,7 +87,7 @@ export default function SignupPage() {
 
           <div className="space-y-3">
             <p className="text-sm text-zinc-500">
-              Didn't receive the email? Check your spam folder.
+              Didn&apos;t receive the email? Check your spam folder.
             </p>
             <Link href="/login">
               <Button variant="outline" className="w-full">

@@ -1,7 +1,7 @@
 'use client';
 
 import { Apple, Laptop, Terminal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { triggerDownload } from '../services/download';
 import { cn } from '../utils/cn';
 
@@ -12,15 +12,14 @@ interface DownloadUrls {
 }
 
 export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
-  const [detectedOS, setDetectedOS] = useState<'mac' | 'windows' | 'linux' | 'unknown'>('windows');
-
-  useEffect(() => {
+  const [detectedOS] = useState<'mac' | 'windows' | 'linux' | 'unknown'>(() => {
+    if (typeof window === 'undefined') return 'windows';
     const userAgent = window.navigator.userAgent.toLowerCase();
-    if (userAgent.indexOf('mac') !== -1) setDetectedOS('mac');
-    else if (userAgent.indexOf('linux') !== -1) setDetectedOS('linux');
-    else if (userAgent.indexOf('win') !== -1) setDetectedOS('windows');
-    else setDetectedOS('unknown');
-  }, []);
+    if (userAgent.indexOf('mac') !== -1) return 'mac';
+    if (userAgent.indexOf('linux') !== -1) return 'linux';
+    if (userAgent.indexOf('win') !== -1) return 'windows';
+    return 'unknown';
+  });
 
   const platforms = [
     {
