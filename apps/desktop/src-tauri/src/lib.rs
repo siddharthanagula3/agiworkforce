@@ -1192,6 +1192,14 @@ pub fn run() {
             crate::commands::analytics_get_usage_stats,
             crate::commands::analytics_get_feature_usage,
 
+            // Error Reporting
+            crate::commands::error_report,
+            crate::commands::error_report_batch,
+            crate::commands::error_get_logs,
+            crate::commands::error_clear_logs,
+            crate::commands::error_get_stats,
+            crate::commands::error_export_logs,
+
             // Realtime / Metrics
             crate::commands::get_realtime_stats,
             crate::commands::record_automation_metrics,
@@ -1246,6 +1254,22 @@ pub fn run() {
             crate::commands::agent::agent_list_tasks,
             crate::commands::agent::agent_stop,
             crate::commands::security::auth_login,
+
+            // Governance & Audit
+            crate::commands::governance::get_audit_events,
+            crate::commands::governance::verify_audit_event,
+            crate::commands::governance::verify_audit_integrity,
+            crate::commands::governance::log_tool_execution,
+            crate::commands::governance::log_workflow_execution,
+            crate::commands::governance::create_approval_request,
+            crate::commands::governance::get_pending_approvals,
+            crate::commands::governance::get_approval_request,
+            crate::commands::governance::approve_request,
+            crate::commands::governance::reject_request,
+            crate::commands::governance::requires_approval,
+            crate::commands::governance::calculate_risk_level,
+            crate::commands::governance::get_approval_statistics,
+            crate::commands::governance::expire_timed_out_requests,
 
             // Tutorial
             crate::commands::tutorials::get_user_credits,
