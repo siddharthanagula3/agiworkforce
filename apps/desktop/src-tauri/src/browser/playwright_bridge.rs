@@ -25,6 +25,7 @@ pub struct BrowserOptions {
     pub args: Vec<String>,
     pub viewport: Option<Viewport>,
     pub timeout: Option<u64>,
+    pub proxy: Option<String>,
 }
 
 impl Default for BrowserOptions {
@@ -35,6 +36,7 @@ impl Default for BrowserOptions {
             args: vec![],
             viewport: Some(Viewport::default()),
             timeout: Some(30000),
+            proxy: None,
         }
     }
 }
@@ -232,6 +234,11 @@ impl PlaywrightBridge {
         // Add user data directory
         if let Some(ref user_data_dir) = options.user_data_dir {
             args.push(format!("--user-data-dir={}", user_data_dir));
+        }
+
+        // Add proxy
+        if let Some(ref proxy) = options.proxy {
+            args.push(format!("--proxy-server={}", proxy));
         }
 
         // Add custom args
