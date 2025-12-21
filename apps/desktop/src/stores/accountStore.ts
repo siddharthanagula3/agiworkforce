@@ -100,6 +100,7 @@ const getDefaultAccount = (): DesktopAccount => {
 
   const plan: PlanTier = devPlan || 'free';
   const planDisplayNames: Record<PlanTier, string> = {
+    hobby: 'Hobby',
     free: 'Free',
     pro: 'Pro',
     max: 'Max',
@@ -392,6 +393,7 @@ export function hasFeature(featureKey: string): boolean {
  */
 export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
+    hobby: 'Perfect for getting started; 3-month free trial; $10/month',
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; Priority support',
     max: 'Maximum performance; $300/mo credits; Dedicated support',
