@@ -257,22 +257,22 @@ pub struct PricingPlan {
 pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
     Ok(vec![
         PricingPlan {
-            id: "price_free".to_string(),
-            tier: "free".to_string(),
-            name: "free".to_string(),
-            display_name: "Free".to_string(),
-            description: "Essential tools for individual developers".to_string(),
-            price_monthly_usd: 0.0,
-            price_annual_usd: 0.0,
+            id: "price_hobby".to_string(),
+            tier: "hobby".to_string(),
+            name: "hobby".to_string(),
+            display_name: "Hobby".to_string(),
+            description: "Perfect for getting started with AI automation".to_string(),
+            price_monthly_usd: 10.0,
+            price_annual_usd: 120.0, // $10/month * 12
             features: vec![
-                "Basic automation tools".to_string(),
-                "Local LLM support (Ollama)".to_string(),
+                "Free to use own APIs".to_string(),
+                "Core desktop agent".to_string(),
                 "Community support".to_string(),
-                "50 cloud runs/month".to_string(),
+                "3-month free trial".to_string(),
             ],
             limits: serde_json::json!({
-                "automations": 5,
-                "api_calls": 1000,
+                "automations": 10,
+                "api_calls": 100,
                 "storage_gb": 1,
                 "team_members": 1
             }),
@@ -337,10 +337,10 @@ pub async fn get_current_plan(
     _user_id: String,
     _state: State<'_, BillingStateWrapper>,
 ) -> Result<PricingPlan, String> {
-    // In a real app, fetch from Stripe/DB. For now, return Free plan if no sub found.
+    // In a real app, fetch from Stripe/DB. For now, return Hobby plan if no sub found.
     // We could use stripe_get_active_subscription here.
     let plans = get_pricing_plans().await?;
-    Ok(plans[0].clone()) // Return Free plan by default
+    Ok(plans[0].clone()) // Return Hobby plan by default
 }
 
 /// Helper function to map plan IDs to plan names and billing intervals

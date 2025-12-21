@@ -5,7 +5,8 @@
  */
 
 export const STRIPE_PRICE_IDS = {
-  free: null, // Free tier has no Stripe price
+  hobby_monthly: null, // Will be set from environment variable or Stripe
+  free: null, // Free tier has no Stripe price (deprecated, use hobby)
   pro_monthly: 'price_1234567890pro_monthly', // Replace with actual Stripe Price ID
   pro_yearly: 'price_1234567890pro_yearly', // Replace with actual Stripe Price ID
   proplus_monthly: 'price_1234567890proplus_monthly', // Replace with actual Stripe Price ID
@@ -15,7 +16,7 @@ export const STRIPE_PRICE_IDS = {
 } as const;
 
 export interface PricingPlan {
-  id: 'free' | 'pro' | 'proplus' | 'team' | 'enterprise';
+  id: 'hobby' | 'free' | 'pro' | 'proplus' | 'team' | 'enterprise';
   name: string;
   description: string;
   monthlyPrice: number;
@@ -36,21 +37,20 @@ export interface PricingPlan {
 
 export const PRICING_PLANS: PricingPlan[] = [
   {
-    id: 'free',
-    name: 'Free',
-    description: 'Perfect for trying out AGI Workforce',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
+    id: 'hobby',
+    name: 'Hobby',
+    description: 'Perfect for getting started with AI automation',
+    monthlyPrice: 10,
+    yearlyPrice: 120, // $10/month * 12
     stripePriceId: {
-      monthly: null,
-      yearly: null,
+      monthly: STRIPE_PRICE_IDS.hobby_monthly,
+      yearly: null, // Hobby only supports monthly billing
     },
     features: [
-      '10 automations per month',
-      '100 API calls per day',
-      'Basic UI automation',
+      'Free to use own APIs',
+      'Core desktop agent',
       'Community support',
-      '1 GB storage',
+      '3-month free trial',
     ],
     limits: {
       automations: 10,
@@ -167,8 +167,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
 ];
 
-// No free trial - users pay from day 1
-export const TRIAL_PERIOD_DAYS = 0;
+// Trial period for Hobby plan (90 days = 3 months)
+export const HOBBY_TRIAL_PERIOD_DAYS = 90;
 
 export const GRACE_PERIOD_DAYS = 7; // Days after subscription expires before features are disabled
 
