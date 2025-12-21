@@ -100,28 +100,44 @@ export default function PricingPage() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3 max-w-6xl mx-auto">
-              {/* Free Plan */}
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 flex flex-col">
-                <h2 className="text-xl font-semibold mb-2">Free</h2>
-                <p className="text-zinc-400 mb-4 h-10">Get started with basic automations.</p>
-                <div className="text-3xl font-bold mb-6">$0</div>
-                <ul className="space-y-3 text-sm text-zinc-300 flex-1">
+              {/* Hobby Plan */}
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 flex flex-col relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/5 to-transparent pointer-events-none" />
+                <div className="relative">
+                  <div className="inline-flex items-center rounded-full bg-emerald-600/20 px-3 py-1 text-xs font-medium text-emerald-200 mb-3">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 mr-2" />
+                    Introductory Offer
+                  </div>
+                  <h2 className="text-xl font-semibold mb-2">Hobby</h2>
+                  <p className="text-zinc-400 mb-4 h-10">
+                    Perfect for getting started with AI automation.
+                  </p>
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <div className="text-3xl font-bold">$0</div>
+                    <div className="text-zinc-500 text-sm line-through">$10</div>
+                  </div>
+                  <div className="text-xs text-zinc-500 mb-6">
+                    First 3 months free, then $10/month
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm text-zinc-300 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-zinc-500" /> 3 automations per day
+                    <Check className="h-4 w-4 text-emerald-400" /> Free to use own APIs
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-zinc-500" /> Core desktop agent
+                    <Check className="h-4 w-4 text-emerald-400" /> Core desktop agent
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-zinc-500" /> Community support
+                    <Check className="h-4 w-4 text-emerald-400" /> Community support
                   </li>
                 </ul>
                 <Button
                   variant="outline"
-                  className="mt-6 w-full"
-                  onClick={() => router.push('/download')}
+                  className="mt-6 w-full border-emerald-600/50 text-emerald-300 hover:bg-emerald-600/10"
+                  onClick={() => handleUpgrade('hobby')}
+                  disabled={loadingPlan === 'hobby'}
                 >
-                  Continue Free
+                  {loadingPlan === 'hobby' ? 'Redirecting...' : 'Start Free Trial'}
                 </Button>
               </div>
 
@@ -150,7 +166,7 @@ export default function PricingPage() {
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Unlimited automations
+                    <Check className="h-4 w-4 text-blue-400" /> Unlimited automations*
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400" /> Web & UI automation
@@ -158,13 +174,8 @@ export default function PricingPage() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400" /> $25/mo token credits
                   </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Priority support
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Analytics
-                  </li>
                 </ul>
+                <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2"
                   onClick={() => handleUpgrade('pro')}
@@ -205,16 +216,8 @@ export default function PricingPage() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400" /> $300/mo token credits
                   </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> Custom workflows
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> Webhook integration
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> 1-hour response time
-                  </li>
                 </ul>
+                <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
                   onClick={() => handleUpgrade('max')}

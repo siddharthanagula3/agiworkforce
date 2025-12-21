@@ -17,7 +17,8 @@ import { open } from '@tauri-apps/plugin-shell';
 
 // Stripe price IDs mapped to plan tiers (default to annual plans)
 export const STRIPE_PRICE_IDS: Record<PlanTier, string> = {
-  free: 'price_1RxhcU0atLU7AWGTkVn2j7DS',
+  hobby: '', // Will be set from environment variable - $10/month with 3-month trial
+  free: 'price_1RxhcU0atLU7AWGTkVn2j7DS', // Deprecated
   pro: 'price_1SeqRd0atLU7AWGTiLWX2PaL', // Annual - $299.88/year ($24.99/mo)
   max: 'price_1SerIL0atLU7AWGT2c1HMEVJ', // Annual - $2999.88/year ($249.99/mo)
   enterprise: 'price_1Seoam0atLU7AWGT3lQ2wDav',
@@ -28,7 +29,8 @@ export const STRIPE_PRO_MONTHLY_PRICE_ID = 'price_1SeqRd0atLU7AWGTUSWQWEso'; // 
 export const STRIPE_MAX_MONTHLY_PRICE_ID = 'price_1SerIL0atLU7AWGTkcaeDZHu'; // $299.99/month
 
 export const STRIPE_PRODUCT_IDS: Record<PlanTier, string> = {
-  free: 'prod_StUbhCc9Y4aVwP',
+  hobby: 'prod_StUbhCc9Y4aVwP', // Updated FREE product to Hobby
+  free: 'prod_StUbhCc9Y4aVwP', // Deprecated, same as hobby
   pro: 'prod_StUazPLCB2MV6j',
   max: 'prod_Tc5TnOvtWWeGll',
   enterprise: 'prod_Tc2fXCzWqk1oDD',
@@ -49,8 +51,23 @@ export interface PlanFeatures {
 }
 
 export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
+  hobby: {
+    // $10/month with 3-month free trial
+    automationsPerDay: 10,
+    browserAutomation: false,
+    advancedUiAutomation: false,
+    emailSupport: false,
+    prioritySupport: false,
+    teamFeatures: false,
+    sso: false,
+    customWorkflows: false,
+    webhookIntegration: false,
+    analytics: false,
+    llmCostTracking: false,
+  },
   free: {
-    automationsPerDay: 3,
+    // Deprecated - kept for backward compatibility, same as hobby
+    automationsPerDay: 10,
     browserAutomation: false,
     advancedUiAutomation: false,
     emailSupport: false,
@@ -109,7 +126,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
 
 // Monthly token credits per plan (in cents)
 export const PLAN_MONTHLY_CREDITS: Record<PlanTier, number> = {
-  free: 0,
+  hobby: 0,
+  free: 0, // Deprecated
   pro: 2500, // $25/month
   max: 30000, // $300/month
   enterprise: 0, // Custom/negotiated
