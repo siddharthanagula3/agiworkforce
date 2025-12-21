@@ -58,6 +58,9 @@ interface ModelState {
   // Provider statuses
   providerStatuses: Record<Provider, ProviderStatus | null>;
 
+  // Available models list
+  availableModels: ModelInfo[];
+
   // Usage statistics
   usageStats: UsageStats | null;
 
@@ -137,6 +140,7 @@ export const useModelStore = create<ModelState>()(
         mistral: null,
         moonshot: null,
       },
+      availableModels: [],
       usageStats: null,
       thinkingModeEnabled: false,
       loading: false,
@@ -260,7 +264,7 @@ export const useModelStore = create<ModelState>()(
         set({ loading: true, error: null });
         try {
           const models = await invoke<ModelInfo[]>('llm_get_available_models');
-          set({ loading: false });
+          set({ loading: false, availableModels: models });
           return models;
         } catch (error) {
           console.error('Failed to get available models:', error);
@@ -268,12 +272,14 @@ export const useModelStore = create<ModelState>()(
 
           // Fallback to local metadata
           const allModels = getAllModels();
-          return allModels.map((model) => ({
+          const fallbackModels = allModels.map((model) => ({
             id: model.id,
             name: model.name,
             provider: model.provider,
             available: true,
           }));
+          set({ availableModels: fallbackModels });
+          return fallbackModels;
         }
       },
 
