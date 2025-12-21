@@ -6,17 +6,16 @@
 
 export const STRIPE_PRICE_IDS = {
   hobby_monthly: null, // Will be set from environment variable or Stripe
+  hobby_yearly: 'price_1SgeWY0atLU7AWGTjUudh7eA', // Annual Hobby Price ID
   free: null, // Free tier has no Stripe price (deprecated, use hobby)
-  pro_monthly: 'price_1234567890pro_monthly', // Replace with actual Stripe Price ID
-  pro_yearly: 'price_1234567890pro_yearly', // Replace with actual Stripe Price ID
-  proplus_monthly: 'price_1234567890proplus_monthly', // Replace with actual Stripe Price ID
-  proplus_yearly: 'price_1234567890proplus_yearly', // Replace with actual Stripe Price ID
-  team_monthly: 'price_1234567890team_monthly', // Replace with actual Stripe Price ID
-  team_yearly: 'price_1234567890team_yearly', // Replace with actual Stripe Price ID
+  pro_monthly: 'price_pro_monthly', // Replace with actual Stripe Price ID
+  pro_yearly: 'price_pro_yearly', // Replace with actual Stripe Price ID
+  max_monthly: 'price_max_monthly', // Replace with actual Stripe Price ID
+  max_yearly: 'price_max_yearly', // Replace with actual Stripe Price ID
 } as const;
 
 export interface PricingPlan {
-  id: 'hobby' | 'free' | 'pro' | 'proplus' | 'team' | 'enterprise';
+  id: 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
   name: string;
   description: string;
   monthlyPrice: number;
@@ -41,10 +40,10 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Hobby',
     description: 'Perfect for getting started with AI automation',
     monthlyPrice: 10,
-    yearlyPrice: 120, // $10/month * 12
+    yearlyPrice: 59.88, // $4.99/month * 12
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.hobby_monthly,
-      yearly: null, // Hobby only supports monthly billing
+      yearly: STRIPE_PRICE_IDS.hobby_yearly,
     },
     features: [
       'Free to use own APIs',
@@ -62,21 +61,18 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    description: 'For power users and professionals',
-    monthlyPrice: 20,
-    yearlyPrice: 200, // ~$16.67/month with yearly
+    description: 'Unlimited automations and advanced tools',
+    monthlyPrice: 29.99,
+    yearlyPrice: 299.88, // ~$24.99/month with yearly
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.pro_monthly,
       yearly: STRIPE_PRICE_IDS.pro_yearly,
     },
     features: [
       'Unlimited automations',
-      '10,000 API calls per day',
-      'Advanced UI automation',
-      'Browser automation',
+      'Web & UI automation',
+      '$25/mo token credits',
       'Email support',
-      '10 GB storage',
-      'LLM cost tracking',
     ],
     limits: {
       automations: null,
@@ -87,55 +83,21 @@ export const PRICING_PLANS: PricingPlan[] = [
     popular: true,
   },
   {
-    id: 'proplus',
-    name: 'Pro+',
-    description: 'Everything in Pro plus team features',
-    monthlyPrice: 60,
-    yearlyPrice: 600, // ~$50/month with yearly
+    id: 'max',
+    name: 'Max',
+    description: 'For heavy workloads and complex workflows',
+    monthlyPrice: 299.99,
+    yearlyPrice: 2999.88, // ~$249.99/month with yearly
     stripePriceId: {
-      monthly: STRIPE_PRICE_IDS.proplus_monthly,
-      yearly: STRIPE_PRICE_IDS.proplus_yearly,
+      monthly: STRIPE_PRICE_IDS.max_monthly,
+      yearly: STRIPE_PRICE_IDS.max_yearly,
     },
-    features: [
-      'Everything in Pro',
-      'Unlimited API calls',
-      'Priority support',
-      'Custom workflows',
-      '50 GB storage',
-      'Advanced analytics',
-      'Webhook integration',
-    ],
+    features: ['All Pro features', '$300/mo token credits', 'Priority support'],
     limits: {
       automations: null,
       apiCalls: null,
       storage: 51200, // 50 GB
       teamMembers: 1,
-    },
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    description: 'Collaboration features for teams',
-    monthlyPrice: 40, // per user
-    yearlyPrice: 400, // per user (~$33.33/month)
-    stripePriceId: {
-      monthly: STRIPE_PRICE_IDS.team_monthly,
-      yearly: STRIPE_PRICE_IDS.team_yearly,
-    },
-    features: [
-      'Everything in Pro+',
-      'Up to 10 team members',
-      'Shared automations',
-      'Team analytics',
-      'Role-based access control',
-      '100 GB shared storage',
-      'SSO (SAML)',
-    ],
-    limits: {
-      automations: null,
-      apiCalls: null,
-      storage: 102400, // 100 GB
-      teamMembers: 10,
     },
   },
   {
@@ -149,14 +111,12 @@ export const PRICING_PLANS: PricingPlan[] = [
       yearly: null,
     },
     features: [
-      'Everything in Team',
+      'Everything in Max',
       'Unlimited team members',
       'On-premise deployment',
       'Custom integrations',
       'Dedicated support',
-      'White-label options',
       'SLA guarantee',
-      'Custom storage',
     ],
     limits: {
       automations: null,
