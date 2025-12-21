@@ -20,58 +20,80 @@ impl TaskPlanner {
 
         // Use LLM to break down the task into steps
         let prompt = format!(
-            r#"You are an autonomous AI software engineer and automation engineer. 
-Break down the following task into concrete, executable steps that can be performed on a Windows desktop.
+            r#"You are an expert Autonomous AI Automation Engineer. Your goal is to break down high-level user tasks into a precise, robust sequence of executable steps for a Windows desktop environment.
 
 Task: {}
 
-For each step, specify:
-1. Action type (Screenshot, Click, Type, Navigate, WaitForElement, ExecuteCommand, ReadFile, WriteFile, SearchText, Scroll, PressKey)
-2. Target (coordinates, UIA element, image match, or text match)
-3. Description of what the step does
-4. Expected result (optional)
-5. Timeout in seconds (default 30)
-6. Whether to retry on failure (default true)
+### Guidelines:
+1.  **Think Step-by-Step:** Before generating the JSON plan, briefly analyze the task constraints, potential failure points, and the logical flow of operations.
+2.  **Atomic Actions:** Each step must be a single, discrete action (e.g., "Click", "Type", "Wait"). Do not combine complex logic into one step.
+3.  **Verification:** Whenever possible, include a `WaitForElement` or `Screenshot` step after a significant action (like clicking a submit button) to verify the UI state has changed.
+4.  **Error Handling:** Set `retry_on_failure: true` for actions that might be flaky (e.g., finding an element that loads asynchronously).
+5.  **Context:** Assume the agent has full control of the mouse and keyboard, and can see the screen via screenshots.
 
-Return a JSON array of steps. Each step should have:
-- id: unique step identifier
-- action: object with type and parameters
-- description: human-readable description
-- expected_result: optional expected outcome
-- timeout: timeout in seconds
-- retry_on_failure: boolean
+### Available Actions:
+- **Screenshot**: Capture the current state.
+- **Click**: Click a UI element (TextMatch, ImageMatch, Coordinates).
+- **Type**: Enter text into a field.
+- **Navigate**: Open a URL (if a browser is open).
+- **WaitForElement**: Pause until an element appears.
+- **ExecuteCommand**: Run a shell command.
+- **ReadFile / WriteFile**: File system operations.
+- **SearchText**: Find text on screen.
+- **Scroll**: Scroll the active window.
+- **PressKey**: Send keystrokes (e.g., "Enter", "Ctrl+C").
 
-Example format:
+### Output Format:
+First, provide a brief **Thinking Process** (analysis).
+Then, provide the **JSON Plan** inside a code block.
+
+Example:
+Thinking Process:
+The user wants to open Notepad and type "Hello".
+1. I need to find Notepad. I can use `ExecuteCommand` to launch it or search for it. Launching via command is more reliable.
+2. I need to wait for the Notepad window to appear.
+3. Then I can type the text.
+
+```json
 [
   {{
     "id": "step_1",
     "action": {{
-      "type": "Screenshot",
-      "region": null
+      "type": "ExecuteCommand",
+      "command": "notepad.exe"
     }},
-    "description": "Take screenshot to see current state",
-    "expected_result": "Screenshot saved",
+    "description": "Launch Notepad application",
+    "expected_result": "Notepad process starts",
     "timeout": 5,
     "retry_on_failure": false
   }},
   {{
     "id": "step_2",
     "action": {{
-      "type": "Click",
+      "type": "WaitForElement",
       "target": {{
         "type": "TextMatch",
-        "text": "Open",
+        "text": "Untitled",
         "fuzzy": true
       }}
     }},
-    "description": "Click the Open button",
-    "expected_result": "Dialog opens",
+    "description": "Wait for Notepad window to be visible",
     "timeout": 10,
+    "retry_on_failure": true
+  }},
+  {{
+    "id": "step_3",
+    "action": {{
+      "type": "Type",
+      "target": {{ "type": "Coordinates", "x": 0, "y": 0 }}, 
+      "text": "Hello World"
+    }},
+    "description": "Type greeting text into the active window",
+    "timeout": 5,
     "retry_on_failure": true
   }}
 ]
-
-Return ONLY the JSON array, no other text."#,
+```"#,
             description
         );
 
