@@ -153,6 +153,7 @@ export const useAccountStore = create<AccountState>()(
 
       setPlan: (plan: PlanTier) => {
         const planDisplayNames: Record<PlanTier, string> = {
+          hobby: 'Hobby',
           free: 'Free',
           pro: 'Pro',
           max: 'Max',
