@@ -173,6 +173,8 @@ impl SyncManager {
         // Process remote updates
         for update in updates {
             // Apply remote updates to local database based on entity type
+            // TODO: Implement apply_remote_update on SyncQueue or inject Database to SyncManager
+            /*
             match update.entity_type.as_str() {
                 "conversation" | "message" | "project" | "workflow" => {
                     sync_queue.apply_remote_update(&update)?;
@@ -184,11 +186,16 @@ impl SyncManager {
                 }
                 _ => {
                     tracing::warn!(
-                        "Unknown entity type in remote update: {}",
-                        update.entity_type
-                    );
+                    "Unknown entity type in remote update: {:?}",
+                    update.entity_type
+                );
                 }
             }
+            */
+            tracing::info!(
+                "Received remote update for {} (implementation pending)",
+                update.entity_id
+            );
         }
 
         // Update last sync timestamp

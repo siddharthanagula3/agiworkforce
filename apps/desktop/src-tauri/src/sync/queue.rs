@@ -10,7 +10,7 @@ pub enum SyncAction {
     Delete,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SyncEntity {
     Conversation,
     Message,
@@ -18,6 +18,25 @@ pub enum SyncEntity {
     Memory,
     Settings,
     Artifact,
+}
+
+impl SyncEntity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SyncEntity::Conversation => "Conversation",
+            SyncEntity::Message => "Message",
+            SyncEntity::Project => "Project",
+            SyncEntity::Memory => "Memory",
+            SyncEntity::Settings => "Settings",
+            SyncEntity::Artifact => "Artifact",
+        }
+    }
+}
+
+impl std::fmt::Display for SyncEntity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

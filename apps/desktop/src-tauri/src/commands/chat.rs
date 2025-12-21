@@ -538,7 +538,43 @@ pub async fn chat_send_message(
         request.content
     );
 
-    // 1. Detect if we should use AGI mode
+    // 1. Check Budget (Added for Analytics & Monitoring Task)
+    {
+        // Get settings and DB for budget check
+        let conn = _db
+            .connection()
+            .map_err(|e| format!("Budget check failed: {}", e))?;
+
+        // Check if budget is enabled and set
+        if let Ok(budget_setting) = repository::get_setting(&conn, "billing.monthly_budget") {
+            if let Ok(budget_limit) = budget_setting.value.parse::<f64>() {
+                if budget_limit > 0.0 {
+                    // Calculate start of current month
+                    let now = Utc::now();
+                    let start_of_month = now
+                        .date_naive()
+                        .with_day(1)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap()
+                        .and_utc();
+
+                    // Sum cost since start of month
+                    let current_usage =
+                        repository::sum_cost_since(&conn, start_of_month).unwrap_or(0.0);
+
+                    if current_usage >= budget_limit {
+                        return Err(format!(
+                            "Monthly budget exceeded. Usage: ${:.2}, Limit: ${:.2}. Please update settings.", 
+                            current_usage, budget_limit
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Detect if we should use AGI mode
     let use_agent = request
         .enable_agent_mode
         .unwrap_or_else(|| detect_agentic_intent(&request.content));
