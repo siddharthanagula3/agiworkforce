@@ -1176,39 +1176,173 @@ mod tests {
 
 /// Read a text file and return its content
 #[tauri::command]
-pub async fn file_read_text(file_path: String) -> Result<String, String> {
+pub async fn file_read_text(
+    file_path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<String, String> {
     validate_path_security(&file_path)?;
 
-    fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))
+    // Check permissions
+    if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
+        let error = "Permission denied".to_string();
+        log_file_operation(
+            &file_path,
+            FileOperation::Read,
+            false,
+            Some(error.clone()),
+            &state,
+        )
+        .await?;
+        return Err(error);
+    }
+
+    match fs::read_to_string(&file_path) {
+        Ok(content) => {
+            log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
+            Ok(content)
+        }
+        Err(e) => {
+            let error = format!("Failed to read file: {}", e);
+            log_file_operation(
+                &file_path,
+                FileOperation::Read,
+                false,
+                Some(error.clone()),
+                &state,
+            )
+            .await?;
+            Err(error)
+        }
+    }
 }
 
 /// Write text to a file
 #[tauri::command]
-pub async fn file_write_text(file_path: String, content: String) -> Result<(), String> {
+pub async fn file_write_text(
+    file_path: String,
+    content: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<(), String> {
     validate_path_security(&file_path)?;
+
+    // Check content size (100MB limit)
+    if content.len() > 100_000_000 {
+        return Err(format!(
+            "Content too large: {} bytes. Maximum is 100MB",
+            content.len()
+        ));
+    }
+
+    // Check permissions
+    if !check_file_permission(&file_path, FileOperation::Write, &state).await? {
+        let error = "Permission denied".to_string();
+        log_file_operation(
+            &file_path,
+            FileOperation::Write,
+            false,
+            Some(error.clone()),
+            &state,
+        )
+        .await?;
+        return Err(error);
+    }
 
     // Create parent directory if needed
     if let Some(parent) = Path::new(&file_path).parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
     }
 
-    fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))
+    match fs::write(&file_path, content) {
+        Ok(_) => {
+            log_file_operation(&file_path, FileOperation::Write, true, None, &state).await?;
+            Ok(())
+        }
+        Err(e) => {
+            let error = format!("Failed to write file: {}", e);
+            log_file_operation(
+                &file_path,
+                FileOperation::Write,
+                false,
+                Some(error.clone()),
+                &state,
+            )
+            .await?;
+            Err(error)
+        }
+    }
 }
 
 /// Read binary file as base64
 #[tauri::command]
-pub async fn file_read_binary(file_path: String) -> Result<String, String> {
+pub async fn file_read_binary(
+    file_path: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<String, String> {
     validate_path_security(&file_path)?;
 
-    let data = fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    // Check permissions
+    if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
+        let error = "Permission denied".to_string();
+        log_file_operation(
+            &file_path,
+            FileOperation::Read,
+            false,
+            Some(error.clone()),
+            &state,
+        )
+        .await?;
+        return Err(error);
+    }
 
-    Ok(general_purpose::STANDARD.encode(&data))
+    match fs::read(&file_path) {
+        Ok(data) => {
+            log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
+            Ok(general_purpose::STANDARD.encode(&data))
+        }
+        Err(e) => {
+            let error = format!("Failed to read file: {}", e);
+            log_file_operation(
+                &file_path,
+                FileOperation::Read,
+                false,
+                Some(error.clone()),
+                &state,
+            )
+            .await?;
+            Err(error)
+        }
+    }
 }
 
 /// Write binary file from base64
 #[tauri::command]
-pub async fn file_write_binary(file_path: String, base64_content: String) -> Result<(), String> {
+pub async fn file_write_binary(
+    file_path: String,
+    base64_content: String,
+    state: tauri::State<'_, AppDatabase>,
+) -> Result<(), String> {
     validate_path_security(&file_path)?;
+
+    // Check content size (roughly check base64 length, 100MB limit ~ 133MB base64)
+    if base64_content.len() > 134_000_000 {
+        return Err("Content too large. Maximum is 100MB decoded".to_string());
+    }
+
+    // Check permissions
+    if !check_file_permission(&file_path, FileOperation::Write, &state).await? {
+        let error = "Permission denied".to_string();
+        log_file_operation(
+            &file_path,
+            FileOperation::Write,
+            false,
+            Some(error.clone()),
+            &state,
+        )
+        .await?;
+        return Err(error);
+    }
 
     let data = general_purpose::STANDARD
         .decode(&base64_content)
@@ -1216,10 +1350,29 @@ pub async fn file_write_binary(file_path: String, base64_content: String) -> Res
 
     // Create parent directory if needed
     if let Some(parent) = Path::new(&file_path).parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
     }
 
-    fs::write(&file_path, data).map_err(|e| format!("Failed to write file: {}", e))
+    match fs::write(&file_path, data) {
+        Ok(_) => {
+            log_file_operation(&file_path, FileOperation::Write, true, None, &state).await?;
+            Ok(())
+        }
+        Err(e) => {
+            let error = format!("Failed to write file: {}", e);
+            log_file_operation(
+                &file_path,
+                FileOperation::Write,
+                false,
+                Some(error.clone()),
+                &state,
+            )
+            .await?;
+            Err(error)
+        }
+    }
 }
 
 /// Get simple file metadata
@@ -1280,6 +1433,13 @@ pub async fn undo_file_operation(
             // Restore previous content
             let content = content.ok_or("Content required for restore operation")?;
 
+            if content.len() > 100_000_000 {
+                return Err(format!(
+                    "Content too large: {} bytes. Maximum is 100MB",
+                    content.len()
+                ));
+            }
+
             if !check_file_permission(&path, FileOperation::Write, &state).await? {
                 return Err("Permission denied".to_string());
             }
@@ -1313,6 +1473,13 @@ pub async fn undo_file_operation(
         "create" => {
             // Create a file (undo a delete operation)
             let content = content.ok_or("Content required for create operation")?;
+
+            if content.len() > 100_000_000 {
+                return Err(format!(
+                    "Content too large: {} bytes. Maximum is 100MB",
+                    content.len()
+                ));
+            }
 
             if !check_file_permission(&path, FileOperation::Write, &state).await? {
                 return Err("Permission denied".to_string());
