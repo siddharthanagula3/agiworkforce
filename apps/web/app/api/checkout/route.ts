@@ -8,6 +8,8 @@ type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PRICE_HOBBY_MONTHLY = process.env.STRIPE_PRICE_HOBBY_MONTHLY;
+const STRIPE_PRICE_HOBBY_YEARLY =
+  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1SgeWY0atLU7AWGTjUudh7eA';
 const STRIPE_PRICE_PRO_MONTHLY = process.env.STRIPE_PRICE_PRO_MONTHLY;
 const STRIPE_PRICE_PRO_YEARLY = process.env.STRIPE_PRICE_PRO_YEARLY;
 const STRIPE_PRICE_MAX_MONTHLY = process.env.STRIPE_PRICE_MAX_MONTHLY;
@@ -40,9 +42,11 @@ function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'
   }
 
   if (plan === 'hobby') {
-    // Hobby plan only supports monthly billing
     if (billingInterval === 'monthly') {
       return STRIPE_PRICE_HOBBY_MONTHLY ?? null;
+    }
+    if (billingInterval === 'annual') {
+      return STRIPE_PRICE_HOBBY_YEARLY ?? null;
     }
     return null;
   }
@@ -105,7 +109,12 @@ export async function POST(request: Request) {
 
   try {
     // Hobby plan gets a 3-month free trial (90 days)
-    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+      metadata: {
+        plan_tier: plan,
+        supabase_user_id: user.id,
+      },
+    };
     if (plan === 'hobby') {
       subscriptionData.trial_period_days = 90;
     }
@@ -118,7 +127,7 @@ export async function POST(request: Request) {
           quantity: 1,
         },
       ],
-      subscription_data: Object.keys(subscriptionData).length > 0 ? subscriptionData : undefined,
+      subscription_data: subscriptionData,
       success_url: `${origin}/download?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       customer_email: user.email ?? undefined,
