@@ -53,27 +53,34 @@ export async function getCurrentSession() {
  * Canonical plan tier definition - use this everywhere
  * This is the single source of truth for plan tiers in the app.
  */
-export type PlanTier = 'free' | 'pro' | 'max' | 'enterprise';
+export type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
 
 /** Valid PlanTier values for runtime validation */
-const VALID_PLAN_TIERS: readonly PlanTier[] = ['free', 'pro', 'max', 'enterprise'] as const;
+const VALID_PLAN_TIERS: readonly PlanTier[] = [
+  'hobby',
+  'free',
+  'pro',
+  'max',
+  'enterprise',
+] as const;
 
 /**
  * Validate and coerce a string to PlanTier
- * Returns 'free' as the default if the value is invalid
+ * Returns 'hobby' as the default if the value is invalid (hobby replaces free)
  */
 export function asPlanTier(value: string | null | undefined): PlanTier {
   if (value && VALID_PLAN_TIERS.includes(value as PlanTier)) {
     return value as PlanTier;
   }
-  return 'free';
+  return 'hobby';
 }
 
 /**
  * Plan display names
  */
 export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
-  free: 'Free',
+  hobby: 'Hobby',
+  free: 'Free', // Deprecated, kept for backward compatibility
   pro: 'Pro',
   max: 'Max',
   enterprise: 'Enterprise',
