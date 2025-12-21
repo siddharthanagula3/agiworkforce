@@ -268,13 +268,13 @@ impl ExecutorService {
     async fn execute_action(
         &self,
         action: &ScriptAction,
-        _app_handle: Option<&AppHandle>,
+        app_handle: Option<&AppHandle>,
     ) -> Result<()> {
         match action.action_type.as_str() {
             "click" => self.execute_click(action).await,
             "type" => self.execute_type(action).await,
             "wait" => self.execute_wait(action).await,
-            "screenshot" => self.execute_screenshot(action).await,
+            "screenshot" => self.execute_screenshot(action, app_handle).await,
             "hotkey" => self.execute_hotkey(action).await,
             "drag" => self.execute_drag(action).await,
             "scroll" => self.execute_scroll(action).await,
@@ -323,9 +323,17 @@ impl ExecutorService {
     }
 
     /// Execute screenshot action
-    async fn execute_screenshot(&self, _action: &ScriptAction) -> Result<()> {
-        // Screenshot implementation would go here
-        // For now, just return success
+    async fn execute_screenshot(
+        &self,
+        action: &ScriptAction,
+        app_handle: Option<&AppHandle>,
+    ) -> Result<()> {
+        if let Some(app) = app_handle {
+            app.emit("automation:request_screenshot", serde_json::json!({
+                 "action_id": action.id,
+                 "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
+             }))?;
+        }
         Ok(())
     }
 
@@ -342,23 +350,97 @@ impl ExecutorService {
             return Err(anyhow!("Invalid hotkey format"));
         }
 
-        // Implementation would require parsing key codes
-        // For now, placeholder
+        let mut modifiers = Vec::new();
+        let mut key: Option<enigo::Key> = None;
+
+        for (i, part) in parts.iter().enumerate() {
+            let p = part.trim();
+            if i == parts.len() - 1 {
+                // Main key
+                // Simple mapping for common keys
+                key = Some(match p.to_lowercase().as_str() {
+                    "enter" | "return" => enigo::Key::Return,
+                    "tab" => enigo::Key::Tab,
+                    "space" => enigo::Key::Space,
+                    "backspace" => enigo::Key::Backspace,
+                    "delete" => enigo::Key::Delete,
+                    "escape" | "esc" => enigo::Key::Escape,
+                    "up" => enigo::Key::UpArrow,
+                    "down" => enigo::Key::DownArrow,
+                    "left" => enigo::Key::LeftArrow,
+                    "right" => enigo::Key::RightArrow,
+                    // For now, only support special keys in hotkeys until we resolve Key::Layout/Unicode
+                    _ => return Err(anyhow!("Unsupported key for hotkey: {}", p)),
+                });
+            } else {
+                // Modifier
+                if let Some(mod_key) = KeyboardSimulator::modifier_key(p) {
+                    modifiers.push(mod_key);
+                }
+            }
+        }
+
+        if let Some(k) = key {
+            let mut keyboard = KeyboardSimulator::new()?;
+            keyboard.send_hotkey(&modifiers, k)?;
+        }
+
         Ok(())
     }
 
     /// Execute drag action
     async fn execute_drag(&self, action: &ScriptAction) -> Result<()> {
-        let (_from_x, _from_y) = self.resolve_coordinates(action)?;
+        let (from_x, from_y) = self.resolve_coordinates(action)?;
 
         // Get target coordinates from metadata or value
-        // Placeholder for now
+        let target_coords = if let Some(ref coords) = action.coordinates {
+            (coords.x, coords.y)
+        } else {
+            if let Some(val) = &action.value {
+                let parts: Vec<&str> = val.split(',').collect();
+                if parts.len() == 2 {
+                    (parts[0].trim().parse()?, parts[1].trim().parse()?)
+                } else {
+                    return Err(anyhow!("Invalid drag target coordinates in value"));
+                }
+            } else {
+                return Err(anyhow!("Drag action requires target coordinates"));
+            }
+        };
+
+        let mut mouse = MouseSimulator::new()?;
+        // Use smooth drag and drop (default 500ms duration)
+        mouse
+            .drag_and_drop(from_x, from_y, target_coords.0, target_coords.1, 500)
+            .await?;
+
         Ok(())
     }
 
     /// Execute scroll action
-    async fn execute_scroll(&self, _action: &ScriptAction) -> Result<()> {
-        // Scroll implementation would go here
+    async fn execute_scroll(&self, action: &ScriptAction) -> Result<()> {
+        let amount = action
+            .value
+            .as_ref()
+            .and_then(|v| v.parse::<i32>().ok())
+            .unwrap_or(100);
+
+        let mut mouse = MouseSimulator::new()?;
+
+        // If selector provided, move mouse there first
+        if action.selector.is_some() || action.coordinates.is_some() {
+            if let Ok((x, y)) = self.resolve_coordinates(action) {
+                mouse.move_to(x, y)?;
+            }
+        }
+
+        // Scroll
+        if amount > 0 {
+            mouse.scroll_down(amount)?;
+        } else {
+            mouse.scroll_up(amount.abs())?;
+        }
+
         Ok(())
     }
 

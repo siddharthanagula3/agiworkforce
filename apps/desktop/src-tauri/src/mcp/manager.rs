@@ -22,6 +22,7 @@ pub struct ManagedServer {
     pub started_at: Option<u64>,
     pub error_message: Option<String>,
     pub restart_count: u32,
+    pub logs: Vec<String>,
 }
 
 impl ManagedServer {
@@ -33,6 +34,7 @@ impl ManagedServer {
             started_at: None,
             error_message: None,
             restart_count: 0,
+            logs: Vec::new(),
         }
     }
 
@@ -44,6 +46,15 @@ impl ManagedServer {
                 .as_secs()
                 - start
         })
+    }
+
+    pub fn add_log(&mut self, message: String) {
+        let timestamp = chrono::Utc::now().format("%H:%M:%S");
+        self.logs.push(format!("[{}] {}", timestamp, message));
+        // Keep last 1000 lines
+        if self.logs.len() > 1000 {
+            self.logs.drain(0..self.logs.len() - 1000);
+        }
     }
 }
 
@@ -76,6 +87,7 @@ impl McpServerManager {
             if let Some(server) = servers.get_mut(name) {
                 server.status = ServerStatus::Starting;
                 server.error_message = None;
+                server.add_log("Starting server...".to_string());
             } else {
                 return Err(McpError::ServerNotFound(name.to_string()));
             }
@@ -103,6 +115,7 @@ impl McpServerManager {
                             .unwrap()
                             .as_secs(),
                     );
+                    server.add_log("Server started successfully".to_string());
                     tracing::info!("MCP server '{}' started successfully", name);
                 }
                 Ok(())
@@ -111,7 +124,9 @@ impl McpServerManager {
                 let mut servers = self.servers.write();
                 if let Some(server) = servers.get_mut(name) {
                     server.status = ServerStatus::Error;
-                    server.error_message = Some(e.to_string());
+                    let msg = e.to_string();
+                    server.add_log(format!("Failed to start server: {}", msg));
+                    server.error_message = Some(msg);
                 }
                 Err(e)
             }
@@ -125,6 +140,7 @@ impl McpServerManager {
             let mut servers = self.servers.write();
             if let Some(server) = servers.get_mut(name) {
                 server.status = ServerStatus::Stopping;
+                server.add_log("Stopping server...".to_string());
             } else {
                 return Err(McpError::ServerNotFound(name.to_string()));
             }
@@ -137,6 +153,7 @@ impl McpServerManager {
                 if let Some(server) = servers.get_mut(name) {
                     server.status = ServerStatus::Stopped;
                     server.started_at = None;
+                    server.add_log("Server stopped".to_string());
                     tracing::info!("MCP server '{}' stopped successfully", name);
                 }
                 Ok(())
@@ -145,7 +162,9 @@ impl McpServerManager {
                 let mut servers = self.servers.write();
                 if let Some(server) = servers.get_mut(name) {
                     server.status = ServerStatus::Error;
-                    server.error_message = Some(e.to_string());
+                    let msg = e.to_string();
+                    server.add_log(format!("Error stopping server: {}", msg));
+                    server.error_message = Some(msg);
                 }
                 Err(e)
             }
@@ -168,6 +187,7 @@ impl McpServerManager {
             let mut servers = self.servers.write();
             if let Some(server) = servers.get_mut(name) {
                 server.restart_count += 1;
+                server.add_log("Restarting server...".to_string());
             }
         }
 
@@ -230,58 +250,16 @@ impl McpServerManager {
             .get(name)
             .ok_or_else(|| McpError::ServerNotFound(name.to_string()))?;
 
-        let mut logs = Vec::with_capacity(lines.min(20));
-
-        // Add server lifecycle logs based on current state
-        logs.push(format!(
-            "[{}] Server '{}' registered",
-            chrono::Utc::now().format("%H:%M:%S"),
-            name
-        ));
-
-        if let Some(started_at) = server.started_at {
-            let start_time = chrono::DateTime::from_timestamp(started_at as i64, 0)
-                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_else(|| started_at.to_string());
-            logs.push(format!(
-                "[{}] Server started at {}",
-                chrono::Utc::now().format("%H:%M:%S"),
-                start_time
-            ));
-        }
-
-        match server.status {
-            ServerStatus::Running => {
-                if let Some(uptime) = server.uptime_seconds() {
-                    logs.push(format!("[INFO] Server running (uptime: {}s)", uptime));
-                }
-                // Get tool count from client
-                let tool_count = self
-                    .client
-                    .list_server_tools(name)
-                    .map(|tools| tools.len())
-                    .unwrap_or(0);
-                logs.push(format!("[INFO] Loaded {} tools from server", tool_count));
-            }
-            ServerStatus::Error => {
-                if let Some(ref error) = server.error_message {
-                    logs.push(format!("[ERROR] Server error: {}", error));
-                }
-                logs.push(format!("[WARN] Restart count: {}", server.restart_count));
-            }
-            ServerStatus::Stopped => {
-                logs.push("[INFO] Server is stopped".to_string());
-            }
-            ServerStatus::Starting => {
-                logs.push("[INFO] Server is starting...".to_string());
-            }
-            ServerStatus::Stopping => {
-                logs.push("[INFO] Server is stopping...".to_string());
-            }
-        }
-
-        // Limit to requested number of lines
-        Ok(logs.into_iter().take(lines).collect())
+        // Return last N lines
+        let logs = server
+            .logs
+            .iter()
+            .rev()
+            .take(lines)
+            .rev()
+            .cloned()
+            .collect();
+        Ok(logs)
     }
 }
 
@@ -294,6 +272,7 @@ impl Clone for ManagedServer {
             started_at: self.started_at,
             error_message: self.error_message.clone(),
             restart_count: self.restart_count,
+            logs: self.logs.clone(),
         }
     }
 }

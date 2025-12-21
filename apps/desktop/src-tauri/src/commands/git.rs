@@ -619,26 +619,52 @@ pub async fn git_diff(
 
         let mut diffs = Vec::new();
 
-        diff.foreach(
-            &mut |delta, _progress| {
-                let path = delta
-                    .new_file()
-                    .path()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string();
-                diffs.push(GitDiff {
-                    file_path: path,
-                    additions: 0, // Calculating exact lines requires more complex diff parsing
-                    deletions: 0,
-                    diff_content: String::new(),
-                });
-                true
-            },
-            None,
-            None,
-            None,
-        )
+        diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
+            let path = delta
+                .new_file()
+                .path()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+
+            // Find or create the GitDiff entry for this file
+            let entry_idx =
+                if let Some(idx) = diffs.iter().position(|d: &GitDiff| d.file_path == path) {
+                    idx
+                } else {
+                    diffs.push(GitDiff {
+                        file_path: path.clone(),
+                        additions: 0,
+                        deletions: 0,
+                        diff_content: String::new(),
+                    });
+                    diffs.len() - 1
+                };
+
+            let entry = &mut diffs[entry_idx];
+
+            // Handle diff line content
+            let content = std::str::from_utf8(line.content()).unwrap_or("");
+            match line.origin() {
+                '+' | '>' => {
+                    entry.additions += 1;
+                    entry.diff_content.push_str(&format!("+{}", content));
+                }
+                '-' | '<' => {
+                    entry.deletions += 1;
+                    entry.diff_content.push_str(&format!("-{}", content));
+                }
+                ' ' | '=' => {
+                    entry.diff_content.push_str(&format!(" {}", content));
+                }
+                'H' | 'F' => {
+                    // Hunk headers and file headers
+                    entry.diff_content.push_str(content);
+                }
+                _ => {}
+            }
+            true
+        })
         .map_err(|e| e.message().to_string())?;
 
         Ok(diffs)
