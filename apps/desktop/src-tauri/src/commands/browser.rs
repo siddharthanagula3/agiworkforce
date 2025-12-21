@@ -75,8 +75,8 @@ pub async fn browser_launch(
     };
 
     let user_data_dir = if let Some(name) = profile_name {
-        let mut path = dirs::data_dir()
-            .ok_or_else(|| "Failed to get data directory".to_string())?;
+        let mut path =
+            dirs::data_dir().ok_or_else(|| "Failed to get data directory".to_string())?;
         path.push("agiworkforce");
         path.push("profiles");
         path.push(name);
