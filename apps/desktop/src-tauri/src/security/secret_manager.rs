@@ -55,12 +55,25 @@ pub enum SecretError {
 /// Manages cryptographic secrets with secure storage
 pub struct SecretManager {
     db_conn: Arc<Mutex<Connection>>,
+    service_name: String,
 }
 
 impl SecretManager {
     /// Create a new SecretManager with database connection
     pub fn new(db_conn: Arc<Mutex<Connection>>) -> Self {
-        Self { db_conn }
+        Self {
+            db_conn,
+            service_name: SERVICE_NAME.to_string(),
+        }
+    }
+
+    /// Create a new SecretManager with custom service name (useful for testing)
+    #[cfg(test)]
+    pub fn new_with_service_name(db_conn: Arc<Mutex<Connection>>, service_name: String) -> Self {
+        Self {
+            db_conn,
+            service_name,
+        }
     }
 
     /// Get or create the JWT secret
@@ -196,8 +209,8 @@ impl SecretManager {
 
     /// Store secret in OS keyring (primary storage)
     fn store_secret_in_keyring(&self, secret: &str) -> Result<(), SecretError> {
-        let entry =
-            Entry::new(SERVICE_NAME, JWT_SECRET_KEY).map_err(SecretError::KeyringStoreError)?;
+        let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
+            .map_err(SecretError::KeyringStoreError)?;
 
         entry
             .set_password(secret)
@@ -208,8 +221,8 @@ impl SecretManager {
 
     /// Retrieve secret from OS keyring
     fn get_secret_from_keyring(&self) -> Result<String, SecretError> {
-        let entry =
-            Entry::new(SERVICE_NAME, JWT_SECRET_KEY).map_err(SecretError::KeyringRetrieveError)?;
+        let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
+            .map_err(SecretError::KeyringRetrieveError)?;
 
         entry
             .get_password()
@@ -284,7 +297,7 @@ impl SecretManager {
             .map_err(|_| SecretError::GenerationError)?;
 
         // Store it in keyring
-        let entry = Entry::new(SERVICE_NAME, DB_ENCRYPTION_KEY_NAME)
+        let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
             .map_err(SecretError::KeyringStoreError)?;
 
         let key_base64 = general_purpose::STANDARD.encode(&key_bytes);
@@ -298,7 +311,7 @@ impl SecretManager {
 
     /// Get the database encryption key from keyring
     fn get_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
-        let entry = Entry::new(SERVICE_NAME, DB_ENCRYPTION_KEY_NAME)
+        let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
             .map_err(SecretError::KeyringRetrieveError)?;
 
         let key_base64 = entry
@@ -318,7 +331,7 @@ impl SecretManager {
     #[cfg(test)]
     pub fn delete_jwt_secret(&self) -> Result<(), SecretError> {
         // Delete from keyring
-        if let Ok(entry) = Entry::new(SERVICE_NAME, JWT_SECRET_KEY) {
+        if let Ok(entry) = Entry::new(&self.service_name, JWT_SECRET_KEY) {
             let _ = entry.delete_password(); // Ignore errors
         }
 
@@ -363,7 +376,12 @@ mod tests {
         )
         .unwrap();
 
-        SecretManager::new(Arc::new(Mutex::new(conn)))
+        // Generate random service name to avoid collisions
+        use rand::Rng;
+        let random_suffix: u32 = rand::thread_rng().gen();
+        let service_name = format!("AGI_Workforce_Test_{}", random_suffix);
+        
+        SecretManager::new_with_service_name(Arc::new(Mutex::new(conn)), service_name)
     }
 
     #[test]
