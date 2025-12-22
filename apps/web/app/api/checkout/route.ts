@@ -7,13 +7,18 @@ import { createSupabaseServerClient } from '../../../services/supabase-server';
 type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_PRICE_HOBBY_MONTHLY = process.env.STRIPE_PRICE_HOBBY_MONTHLY;
+const STRIPE_PRICE_HOBBY_MONTHLY =
+  process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwx10zEfO6BZMh7thtFU77';
 const STRIPE_PRICE_HOBBY_YEARLY =
-  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1SgeWY0atLU7AWGTjUudh7eA';
-const STRIPE_PRICE_PRO_MONTHLY = process.env.STRIPE_PRICE_PRO_MONTHLY;
-const STRIPE_PRICE_PRO_YEARLY = process.env.STRIPE_PRICE_PRO_YEARLY;
-const STRIPE_PRICE_MAX_MONTHLY = process.env.STRIPE_PRICE_MAX_MONTHLY;
-const STRIPE_PRICE_MAX_YEARLY = process.env.STRIPE_PRICE_MAX_YEARLY;
+  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwx20zEfO6BZMhbgpxL8TI';
+const STRIPE_PRICE_PRO_MONTHLY =
+  process.env.STRIPE_PRICE_PRO_MONTHLY ?? 'price_1Sgwx20zEfO6BZMh3ix7hivi';
+const STRIPE_PRICE_PRO_YEARLY =
+  process.env.STRIPE_PRICE_PRO_YEARLY ?? 'price_1Sgwx30zEfO6BZMhJXsduOyl';
+const STRIPE_PRICE_MAX_MONTHLY =
+  process.env.STRIPE_PRICE_MAX_MONTHLY ?? 'price_1Sgwx30zEfO6BZMhJqItFYKF';
+const STRIPE_PRICE_MAX_YEARLY =
+  process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW';
 
 if (!STRIPE_SECRET_KEY) {
   console.warn(
@@ -115,10 +120,6 @@ export async function POST(request: Request) {
         supabase_user_id: user.id,
       },
     };
-    if (plan === 'hobby') {
-      subscriptionData.trial_period_days = 90;
-    }
-
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
         },
       ],
       subscription_data: subscriptionData,
+      allow_promotion_codes: true,
       success_url: `${origin}/download?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       customer_email: user.email ?? undefined,

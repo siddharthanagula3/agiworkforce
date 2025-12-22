@@ -131,6 +131,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     current_period_end: string | null;
     cancel_at_period_end: boolean;
     canceled_at: string | null;
+    stripe_coupon_id?: string | null;
     plan_tier?: string;
   } = {
     status: subscription.status,
@@ -141,6 +142,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     canceled_at: subscription.canceled_at
       ? new Date(subscription.canceled_at * 1000).toISOString()
       : null,
+    stripe_coupon_id: subscription.discount?.coupon.id || null, // Capture active coupon
   };
 
   // Only update plan_tier if we have it from metadata
