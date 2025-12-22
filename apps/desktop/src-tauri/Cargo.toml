@@ -223,7 +223,7 @@ tauri-build = { version = "2.5.2", features = [] }
 tempfile = "3.10"
 mockall = "0.12"
 serial_test = "3.0"
-criterion = "0.5"
+criterion = "0.8"
 proptest = "1.4"
 
 # NOTE: Profile settings are controlled at workspace root (../../../Cargo.toml)
