@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import { NextResponse } from 'next/server';
 import path from 'path';
+import { createSupabaseServerClient } from '../../../services/supabase-server';
 
 const DOWNLOAD_INFO: Record<string, { filename: string; contentType: string; envVar: string }> = {
   mac: {
@@ -35,6 +36,33 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { error: 'Invalid platform. Must be mac, windows, or linux.' },
       { status: 400 },
+    );
+  }
+
+  // Check authentication and subscription
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return NextResponse.json({ error: 'Authentication required to download.' }, { status: 401 });
+  }
+
+  // Require active subscription
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('status')
+    .eq('user_id', session.user.id)
+    .maybeSingle();
+
+  const activeStatuses = ['active', 'trialing'];
+  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
+
+  if (!hasActiveSubscription) {
+    return NextResponse.json(
+      { error: 'Active subscription required to download.' },
+      { status: 403 },
     );
   }
 

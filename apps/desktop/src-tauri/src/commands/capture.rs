@@ -92,7 +92,7 @@ pub async fn capture_screen_full(
     let capture_id = Uuid::new_v4().to_string();
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64;
 
     let capture =
@@ -144,7 +144,7 @@ pub async fn capture_screen_region(
     let capture_id = Uuid::new_v4().to_string();
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64;
 
     let capture = capture_region(x, y, width, height)
@@ -363,7 +363,7 @@ pub async fn capture_screen_window(
     let capture_id = Uuid::new_v4().to_string();
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64;
 
     // Parse hwnd string to isize
@@ -424,7 +424,7 @@ pub async fn capture_from_clipboard(
     let capture_id = Uuid::new_v4().to_string();
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64;
 
     let capture =
@@ -491,6 +491,11 @@ fn persist_capture(
     let metadata_json = serde_json::to_string(metadata)
         .map_err(|e| format!("Failed to serialize metadata: {e}"))?;
 
+    let file_path_str = file_path.to_string_lossy().into_owned();
+    let thumbnail_path_str = thumbnail_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().into_owned());
+
     db.conn.lock()
         .map_err(|e| format!("Failed to lock database: {e}"))?
         .execute(
@@ -500,8 +505,8 @@ fn persist_capture(
                 capture_id,
                 conversation_id,
                 capture_type.as_str(),
-                file_path.to_str().unwrap(),
-                thumbnail_path.as_ref().map(|p| p.to_str().unwrap()),
+                file_path_str,
+                thumbnail_path_str,
                 &metadata_json,
                 timestamp,
             ],
@@ -510,8 +515,8 @@ fn persist_capture(
 
     Ok(CaptureResult {
         id: capture_id.to_string(),
-        path: file_path.to_str().unwrap().to_string(),
-        thumbnail_path: thumbnail_path.map(|p| p.to_str().unwrap().to_string()),
+        path: file_path.to_string_lossy().into_owned(),
+        thumbnail_path: thumbnail_path.map(|p| p.to_string_lossy().into_owned()),
         capture_type,
         metadata: metadata.clone(),
         created_at: timestamp,

@@ -43,14 +43,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Fetch customer ID from subscriptions table
+  // Fetch customer ID from subscriptions table - require active subscription
   const { data: subscription, error } = await supabase
     .from('subscriptions')
-    .select('stripe_customer_id')
+    .select('stripe_customer_id, status')
     .eq('user_id', user.id)
     .single();
 
-  if (error || !subscription?.stripe_customer_id) {
+  if (error || !subscription) {
+    return NextResponse.json({ error: 'No subscription found.' }, { status: 404 });
+  }
+
+  // Require active subscription
+  const activeStatuses = ['active', 'trialing'];
+  if (!activeStatuses.includes(subscription.status)) {
+    return NextResponse.json(
+      { error: 'Active subscription required to manage billing.' },
+      { status: 403 },
+    );
+  }
+
+  if (!subscription.stripe_customer_id) {
     return NextResponse.json({ error: 'No active subscription found to manage.' }, { status: 404 });
   }
 

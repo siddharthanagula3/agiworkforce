@@ -71,6 +71,8 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   let cancelAtPeriodEnd: boolean = false;
   let canceledAt: Date | null = null;
 
+  let stripeCouponId: string | null = null;
+
   if (stripeSubId && stripe) {
     try {
       const subscription = await stripe.subscriptions.retrieve(stripeSubId);
@@ -84,8 +86,32 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       if (!stripePriceId && subscription.items.data.length > 0) {
         stripePriceId = subscription.items.data[0].price.id;
       }
+
+      // Extract coupon ID from subscription discount
+      if (subscription.discount?.coupon?.id) {
+        stripeCouponId = subscription.discount.coupon.id;
+      }
     } catch (error) {
       console.error('[billing] Failed to retrieve subscription details:', error);
+    }
+  }
+
+  // Also check session for coupon/discount information
+  if (!stripeCouponId && stripe && session.id) {
+    try {
+      const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ['total_details.breakdown'],
+      });
+      // Check if there's a discount applied in the session
+      if (expandedSession.total_details?.breakdown?.discounts) {
+        // Get coupon from the first discount
+        const discount = expandedSession.total_details.breakdown.discounts[0];
+        if (discount?.discount?.coupon?.id) {
+          stripeCouponId = discount.discount.coupon.id;
+        }
+      }
+    } catch (error) {
+      console.error('[billing] Failed to retrieve session discount details:', error);
     }
   }
 
@@ -97,6 +123,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: stripeSubId,
       stripe_price_id: stripePriceId,
+      stripe_coupon_id: stripeCouponId,
       current_period_start: currentPeriodStart?.toISOString() || null,
       current_period_end: currentPeriodEnd?.toISOString() || null,
       cancel_at_period_end: cancelAtPeriodEnd,

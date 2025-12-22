@@ -483,7 +483,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             {!videoAllowed && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
-                Veo 3.1 rendering is gated to Pro or Max. Switch plans in Billing.
+                Veo 3.1 rendering is gated to Pro or Max. Switch plans on our website.
               </div>
             )}
 
