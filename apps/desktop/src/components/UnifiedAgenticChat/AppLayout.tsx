@@ -11,7 +11,6 @@ import { Sidebar } from './Sidebar';
 interface AppLayoutProps {
   children: React.ReactNode;
   onOpenSettings?: () => void;
-  onOpenBilling?: () => void;
   onOpenWorkspace?: () => void;
   onOpenMediaLab?: () => void;
 }
@@ -19,7 +18,6 @@ interface AppLayoutProps {
 export function AppLayout({
   children,
   onOpenSettings,
-  onOpenBilling,
   onOpenWorkspace,
   onOpenMediaLab,
 }: AppLayoutProps) {
@@ -142,7 +140,6 @@ export function AppLayout({
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
-        onOpenBilling={onOpenBilling}
         onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenWorkspace={onOpenWorkspace}
         onOpenMediaLab={onOpenMediaLab}

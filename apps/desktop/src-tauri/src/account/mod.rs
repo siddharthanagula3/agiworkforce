@@ -1,19 +1,17 @@
-// Account Module - Placeholder for future web backend integration
+// Account Module
 //
-// This module will contain Tauri commands for:
+// This module contains Tauri commands for:
 // - User authentication (device linking, OAuth)
 // - User profile management
 // - Subscription/plan management
 // - Billing information
 //
 // See: docs/ACCOUNT_INTEGRATION.md for implementation details
-//
-// TODO: Implement actual HTTP client for AGI Workforce API
-// TODO: Implement device linking flow
-// TODO: Implement token storage with Windows Credential Manager
-// TODO: Implement automatic token refresh
 
+use crate::api::{ApiRequest, AuthType, HttpMethod};
+use crate::commands::ApiState;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 // ============================================================================
 // Types (matching TypeScript interfaces)
@@ -68,146 +66,183 @@ pub struct PlanInfo {
 }
 
 // ============================================================================
-// Placeholder Tauri Commands
+// Tauri Commands
 // ============================================================================
 
 /// Initiate device linking flow
 #[tauri::command]
 pub async fn device_link_initiate(
     request: DeviceLinkRequest,
+    state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
     let api_base =
         std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let url = format!("{}/api/device/link", api_base);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let body =
+        serde_json::to_string(&request).map_err(|e| format!("Serialization error: {}", e))?;
 
-    let response = client
-        .post(format!("{}/api/device/link", api_base))
-        .header("Content-Type", "application/json")
-        .json(&request)
-        .send()
+    let api_request = ApiRequest {
+        method: HttpMethod::Post,
+        url,
+        body: Some(body),
+        headers: std::collections::HashMap::from([(
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        )]),
+        ..Default::default()
+    };
+
+    let response = state
+        .client
+        .execute(api_request)
         .await
-        .map_err(|e| format!("Device link request failed: {}", e))?;
+        .map_err(|e| format!("Device link request failed: {}", e))?; // ApiClient::execute already returns string error description in some way, but here it returns crate::error::Result. I need to map it.
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, error_text));
+    // Correct error mapping
+    // But wait, ApiClient returns crate::error::Result<ApiResponse>.
+    // Result::map_err(|e| format!("Device link request failed: {}", e)) should work as Error implements Display.
+
+    if !response.success {
+        return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    response
-        .json::<DeviceLinkResponse>()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))
+    serde_json::from_str(&response.body).map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 /// Poll for device link completion
 #[tauri::command]
-pub async fn device_link_poll(request: DevicePollRequest) -> Result<DevicePollResponse, String> {
+pub async fn device_link_poll(
+    request: DevicePollRequest,
+    state: State<'_, ApiState>,
+) -> Result<DevicePollResponse, String> {
     let api_base =
         std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let url = format!("{}/api/device/poll", api_base);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let body =
+        serde_json::to_string(&request).map_err(|e| format!("Serialization error: {}", e))?;
 
-    let response = client
-        .post(format!("{}/api/device/poll", api_base))
-        .header("Content-Type", "application/json")
-        .json(&request)
-        .send()
+    let api_request = ApiRequest {
+        method: HttpMethod::Post,
+        url,
+        body: Some(body),
+        headers: std::collections::HashMap::from([(
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        )]),
+        ..Default::default()
+    };
+
+    let response = state
+        .client
+        .execute(api_request)
         .await
         .map_err(|e| format!("Device poll request failed: {}", e))?;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, error_text));
+    if !response.success {
+        return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    response
-        .json::<DevicePollResponse>()
-        .await
-        .map(|resp| {
-            // Auto-save token if present
-            if let Some(token) = &resp.access_token {
-                if let Err(e) = store_access_token(token) {
-                    eprintln!("Failed to securely store token: {}", e);
-                }
-            }
-            resp
-        })
-        .map_err(|e| format!("Failed to parse response: {}", e))
+    let resp: DevicePollResponse = serde_json::from_str(&response.body)
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Auto-save token if present
+    if let Some(token) = &resp.access_token {
+        if let Err(e) = store_access_token(token) {
+            eprintln!("Failed to securely store token: {}", e);
+        }
+    }
+
+    // Also save refresh token if present
+    if let Some(refresh_token) = &resp.refresh_token {
+        if let Err(e) = store_refresh_token(refresh_token) {
+            eprintln!("Failed to securely store refresh token: {}", e);
+        }
+    }
+
+    Ok(resp)
 }
 
 /// Fetch user profile from backend
 #[tauri::command]
-pub async fn fetch_user_profile(access_token: String) -> Result<UserProfile, String> {
+pub async fn fetch_user_profile(
+    access_token: String,
+    state: State<'_, ApiState>,
+) -> Result<UserProfile, String> {
     let api_base =
         std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let url = format!("{}/api/me", api_base);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let api_request = ApiRequest {
+        method: HttpMethod::Get,
+        url,
+        auth: AuthType::Bearer {
+            token: access_token,
+        },
+        ..Default::default()
+    };
 
-    let response = client
-        .get(format!("{}/api/me", api_base))
-        .header("Authorization", format!("Bearer {}", access_token))
-        .send()
+    let response = state
+        .client
+        .execute(api_request)
         .await
         .map_err(|e| format!("Profile fetch failed: {}", e))?;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, error_text));
+    if !response.success {
+        return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    response
-        .json::<UserProfile>()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))
+    serde_json::from_str(&response.body).map_err(|e| format!("Failed to parse response: {}", e))
 }
 
 /// Refresh OAuth access token
 #[tauri::command]
-pub async fn oauth_refresh(refresh_token: String) -> Result<serde_json::Value, String> {
+pub async fn oauth_refresh(
+    refresh_token: String,
+    state: State<'_, ApiState>,
+) -> Result<serde_json::Value, String> {
     let api_base =
         std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let url = format!("{}/oauth/refresh", api_base);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
 
-    let response = client
-        .post(format!("{}/oauth/refresh", api_base))
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!({ "refresh_token": refresh_token }))
-        .send()
+    let api_request = ApiRequest {
+        method: HttpMethod::Post,
+        url,
+        body: Some(body),
+        headers: std::collections::HashMap::from([(
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        )]),
+        ..Default::default()
+    };
+
+    let response = state
+        .client
+        .execute(api_request)
         .await
         .map_err(|e| format!("Token refresh failed: {}", e))?;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, error_text));
+    if !response.success {
+        return Err(format!("API error {}: {}", response.status, response.body));
     }
 
-    let result = response
-        .json::<serde_json::Value>()
-        .await
+    let result: serde_json::Value = serde_json::from_str(&response.body)
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     // Update stored token if new one provided
     if let Some(new_token) = result.get("access_token").and_then(|t| t.as_str()) {
         if let Err(e) = store_access_token(new_token) {
             eprintln!("Failed to update stored token: {}", e);
+        }
+    }
+
+    // Update stored refresh token if new one provided
+    if let Some(new_refresh_token) = result.get("refresh_token").and_then(|t| t.as_str()) {
+        if let Err(e) = store_refresh_token(new_refresh_token) {
+            eprintln!("Failed to update stored refresh token: {}", e);
         }
     }
 
@@ -220,20 +255,42 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<serde_json::Value, S
 
 use keyring::Entry;
 
+fn get_service() -> String {
+    "AGI Workforce".to_string()
+}
+
 /// Store access token securely in OS keychain
 pub fn store_access_token(token: &str) -> Result<(), String> {
-    let entry = Entry::new("AGI Workforce", "access_token").map_err(|e| e.to_string())?;
+    let entry = Entry::new(&get_service(), "access_token").map_err(|e| e.to_string())?;
     entry.set_password(token).map_err(|e| e.to_string())
 }
 
 /// Retrieve access token from OS keychain
 pub fn get_access_token() -> Result<String, String> {
-    let entry = Entry::new("AGI Workforce", "access_token").map_err(|e| e.to_string())?;
+    let entry = Entry::new(&get_service(), "access_token").map_err(|e| e.to_string())?;
     entry.get_password().map_err(|e| e.to_string())
 }
 
 /// Delete access token from OS keychain
 pub fn delete_access_token() -> Result<(), String> {
-    let entry = Entry::new("AGI Workforce", "access_token").map_err(|e| e.to_string())?;
+    let entry = Entry::new(&get_service(), "access_token").map_err(|e| e.to_string())?;
+    entry.delete_password().map_err(|e| e.to_string())
+}
+
+/// Store refresh token securely in OS keychain
+pub fn store_refresh_token(token: &str) -> Result<(), String> {
+    let entry = Entry::new(&get_service(), "refresh_token").map_err(|e| e.to_string())?;
+    entry.set_password(token).map_err(|e| e.to_string())
+}
+
+/// Retrieve refresh token from OS keychain
+pub fn get_refresh_token() -> Result<String, String> {
+    let entry = Entry::new(&get_service(), "refresh_token").map_err(|e| e.to_string())?;
+    entry.get_password().map_err(|e| e.to_string())
+}
+
+/// Delete refresh token from OS keychain
+pub fn delete_refresh_token() -> Result<(), String> {
+    let entry = Entry::new(&get_service(), "refresh_token").map_err(|e| e.to_string())?;
     entry.delete_password().map_err(|e| e.to_string())
 }

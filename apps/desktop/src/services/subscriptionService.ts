@@ -1,8 +1,8 @@
 /**
  * Subscription Service
  *
- * Manages user subscriptions integrating Supabase (database) with Stripe (payments).
- * This service coordinates between the local database and Stripe for subscription management.
+ * Manages minimal user subscription state and feature gating.
+ * Redirects to website for all billing operations.
  */
 
 import {
@@ -13,28 +13,6 @@ import {
   asPlanTier,
 } from '../lib/supabase';
 import { supabaseAuth } from './supabaseAuth';
-import { open } from '@tauri-apps/plugin-shell';
-
-// Stripe price IDs mapped to plan tiers (default to annual plans)
-export const STRIPE_PRICE_IDS: Record<PlanTier, string> = {
-  hobby: '', // Will be set from environment variable - $10/month with 3-month trial
-  free: 'price_1RxhcU0atLU7AWGTkVn2j7DS', // Deprecated
-  pro: 'price_1SeqRd0atLU7AWGTiLWX2PaL', // Annual - $299.88/year ($24.99/mo)
-  max: 'price_1SerIL0atLU7AWGT2c1HMEVJ', // Annual - $2999.88/year ($249.99/mo)
-  enterprise: 'price_1Seoam0atLU7AWGT3lQ2wDav',
-};
-
-// Monthly price IDs for users who prefer monthly billing
-export const STRIPE_PRO_MONTHLY_PRICE_ID = 'price_1SeqRd0atLU7AWGTUSWQWEso'; // $29.99/month
-export const STRIPE_MAX_MONTHLY_PRICE_ID = 'price_1SerIL0atLU7AWGTkcaeDZHu'; // $299.99/month
-
-export const STRIPE_PRODUCT_IDS: Record<PlanTier, string> = {
-  hobby: 'prod_StUbhCc9Y4aVwP', // Updated FREE product to Hobby
-  free: 'prod_StUbhCc9Y4aVwP', // Deprecated, same as hobby
-  pro: 'prod_StUazPLCB2MV6j',
-  max: 'prod_Tc5TnOvtWWeGll',
-  enterprise: 'prod_Tc2fXCzWqk1oDD',
-};
 
 export interface PlanFeatures {
   automationsPerDay: number | 'unlimited';
@@ -52,7 +30,6 @@ export interface PlanFeatures {
 
 export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
   hobby: {
-    // $10/month with 3-month free trial
     automationsPerDay: 10,
     browserAutomation: false,
     advancedUiAutomation: false,
@@ -66,7 +43,6 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     llmCostTracking: false,
   },
   free: {
-    // Deprecated - kept for backward compatibility, same as hobby
     automationsPerDay: 10,
     browserAutomation: false,
     advancedUiAutomation: false,
@@ -80,8 +56,6 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     llmCostTracking: false,
   },
   pro: {
-    // $29.99/month or $24.99/month (billed yearly)
-    // Includes $25/month token credits
     automationsPerDay: 'unlimited',
     browserAutomation: true,
     advancedUiAutomation: true,
@@ -95,8 +69,6 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     llmCostTracking: true,
   },
   max: {
-    // $299.99/month or $249.99/month (billed yearly)
-    // Includes $300/month cloud credits
     automationsPerDay: 'unlimited',
     browserAutomation: true,
     advancedUiAutomation: true,
@@ -124,20 +96,10 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
   },
 };
 
-// Monthly token credits per plan (in cents)
-export const PLAN_MONTHLY_CREDITS: Record<PlanTier, number> = {
-  hobby: 0,
-  free: 0, // Deprecated
-  pro: 2500, // $25/month
-  max: 30000, // $300/month
-  enterprise: 0, // Custom/negotiated
-};
-
 export interface SubscriptionState {
   isLoading: boolean;
   error: string | null;
   subscription: Subscription | null;
-  plans: PricingPlan[];
   currentPlan: PricingPlan | null;
 }
 
@@ -148,7 +110,6 @@ class SubscriptionService {
     isLoading: false,
     error: null,
     subscription: null,
-    plans: [],
     currentPlan: null,
   };
 
@@ -172,31 +133,6 @@ class SubscriptionService {
       SubscriptionService.instance = new SubscriptionService();
     }
     return SubscriptionService.instance;
-  }
-
-  /**
-   * Fetch all available pricing plans
-   */
-  async fetchPlans(): Promise<PricingPlan[]> {
-    const supabase = getSupabase();
-    this.updateState({ isLoading: true, error: null });
-
-    try {
-      const { data, error } = await supabase
-        .from('pricing_plans')
-        .select('*')
-        .eq('is_active', true)
-        .order('price_cents', { ascending: true });
-
-      if (error) throw error;
-
-      this.updateState({ plans: data || [], isLoading: false });
-      return data || [];
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch plans';
-      this.updateState({ error: message, isLoading: false });
-      return [];
-    }
   }
 
   /**
@@ -251,120 +187,12 @@ class SubscriptionService {
   }
 
   /**
-   * Create a Stripe Checkout session for subscribing to a plan
-   * This should redirect the user to Stripe's hosted checkout page
-   *
-   * @param planTier - The plan tier to subscribe to
-   * @param billingInterval - 'monthly' or 'annual' (default: 'annual' for Pro)
-   */
-  async createCheckoutSession(
-    planTier: PlanTier,
-    billingInterval: 'monthly' | 'annual' = 'annual',
-  ): Promise<{ url: string } | { error: string }> {
-    const user = supabaseAuth.getUser();
-    const profile = supabaseAuth.getState().profile;
-
-    if (!user || !profile) {
-      return { error: 'Not authenticated' };
-    }
-
-    // Get the appropriate price ID based on tier and billing interval
-    let priceId: string | undefined;
-    if (planTier === 'pro') {
-      // Pro plan: annual by default ($24.99/mo billed yearly), or monthly ($29.99/mo)
-      priceId =
-        billingInterval === 'monthly'
-          ? STRIPE_PRO_MONTHLY_PRICE_ID // $29.99/month
-          : STRIPE_PRICE_IDS.pro; // $299.88/year ($24.99/mo)
-    } else {
-      priceId = STRIPE_PRICE_IDS[planTier];
-    }
-
-    if (!priceId) {
-      return { error: 'Invalid plan tier' };
-    }
-
-    // In a real implementation, this would call your backend API to create a Stripe Checkout session
-    // For now, we'll use a payment link approach
-
-    // The payment link would be created via Stripe MCP or your backend
-    // This is a placeholder that would be replaced with actual Stripe integration
-
-    // For desktop apps, the typical flow is:
-    // 1. Call your backend to create a Stripe Checkout session
-    // 2. Backend returns a checkout URL
-    // 3. Open that URL in the user's browser
-    // 4. User completes payment on Stripe
-    // 5. Stripe webhooks update your database
-    // 6. Desktop app polls or receives push notification about subscription update
-
-    // In this beta/preview, we will open a constructed link or a placeholder.
-    // Since we don't have a live backend to generate sessions, we'll open a generic payment link
-    // or the pricing page with the selected tier.
-    const checkoutUrl = `https://buy.stripe.com/test_${priceId}`; // Example placeholder structure
-
-    console.log('[Subscription] Opening checkout session:', {
-      userId: user.id,
-      email: user.email,
-      priceId,
-      billingInterval,
-      url: checkoutUrl,
-    });
-
-    try {
-      await open(checkoutUrl);
-      return { url: checkoutUrl };
-    } catch (err) {
-      console.error('Failed to open checkout URL:', err);
-      return { error: 'Failed to open browser for checkout' };
-    }
-  }
-
-  /**
-   * Create a Stripe Customer Portal session for managing subscription
-   */
-  async createPortalSession(): Promise<{ url: string } | { error: string }> {
-    const subscription = this.state.subscription;
-
-    if (!subscription?.stripe_customer_id) {
-      return { error: 'No active subscription found' };
-    }
-
-    // In production, call your backend to create a portal session
-    // The backend would use Stripe API to create a billing portal session
-    console.log(
-      '[Subscription] Would create portal session for customer:',
-      subscription.stripe_customer_id,
-    );
-
-    return {
-      error: 'Portal session creation requires backend integration.',
-    };
-  }
-
-  /**
    * Check if user has access to a specific feature based on their plan
    */
   hasFeatureAccess(feature: keyof PlanFeatures): boolean {
     const tier = asPlanTier(this.state.subscription?.plan_tier);
     const features = PLAN_FEATURES[tier];
     return !!features[feature];
-  }
-
-  /**
-   * Get features for a specific plan tier
-   */
-  getPlanFeatures(tier: PlanTier): PlanFeatures {
-    return PLAN_FEATURES[tier];
-  }
-
-  /**
-   * Check if user can upgrade to a higher plan
-   */
-  canUpgradeTo(targetTier: PlanTier): boolean {
-    const currentTier = asPlanTier(this.state.subscription?.plan_tier);
-    const tierOrder: PlanTier[] = ['free', 'pro', 'enterprise'];
-    return tierOrder.indexOf(targetTier) > tierOrder.indexOf(currentTier);
   }
 
   /**
@@ -430,41 +258,6 @@ class SubscriptionService {
       });
     } catch (error) {
       console.error('[Subscription] Error tracking usage:', error);
-    }
-  }
-
-  /**
-   * Get usage summary for current period
-   */
-  async getUsageSummary(): Promise<{ [key: string]: number }> {
-    const userId = supabaseAuth.getUser()?.id;
-    const subscription = this.state.subscription;
-
-    if (!userId || !subscription) return {};
-
-    const supabase = getSupabase();
-    const periodStart = subscription.current_period_start || new Date().toISOString();
-
-    try {
-      const { data, error } = await supabase
-        .from('usage_events')
-        .select('event_type, quantity')
-        .eq('user_id', userId)
-        .gte('created_at', periodStart);
-
-      if (error) throw error;
-
-      // Aggregate usage by event type
-      return (data || []).reduce(
-        (acc, event) => {
-          acc[event.event_type] = (acc[event.event_type] || 0) + (event.quantity ?? 0);
-          return acc;
-        },
-        {} as { [key: string]: number },
-      );
-    } catch (error) {
-      console.error('[Subscription] Error fetching usage summary:', error);
-      return {};
     }
   }
 }

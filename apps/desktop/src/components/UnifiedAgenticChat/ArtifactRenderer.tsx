@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { useTheme } from '../../hooks/useTheme';
 import { cn } from '../../lib/utils';
 import { useCodeStore } from '../../stores/codeStore';
+import { sanitizeHtml } from '../../utils/security';
 import type { Artifact } from '../../types/chat';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -494,12 +495,53 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
     );
   }
 
+  // Sanitize SVG to prevent XSS attacks
+  const sanitizedSvg = svg
+    ? sanitizeHtml(svg, {
+        allowedTags: [
+          'svg',
+          'path',
+          'circle',
+          'rect',
+          'line',
+          'polyline',
+          'polygon',
+          'g',
+          'text',
+          'tspan',
+          'defs',
+          'clipPath',
+          'use',
+          'image',
+        ],
+        allowedAttributes: {
+          '*': [
+            'fill',
+            'stroke',
+            'stroke-width',
+            'd',
+            'x',
+            'y',
+            'width',
+            'height',
+            'viewBox',
+            'xmlns',
+            'transform',
+            'opacity',
+            'class',
+            'id',
+          ],
+          svg: ['viewBox', 'xmlns', 'width', 'height', 'preserveAspectRatio'],
+        },
+      })
+    : null;
+
   return (
     <div className="p-4 bg-white/5 rounded-lg overflow-x-auto flex justify-center min-h-[200px] items-center">
-      {svg ? (
+      {sanitizedSvg ? (
         <div
           ref={containerRef}
-          dangerouslySetInnerHTML={{ __html: svg }}
+          dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
           className="w-full h-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
       ) : (

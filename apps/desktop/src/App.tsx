@@ -15,6 +15,8 @@ import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeAccountStore } from './stores/accountStore';
 import { initializeAuthStore, useAuthStore } from './stores/authStore';
+import { initializeBillingStore } from './stores/billingStore';
+import { initializeUsageStore } from './stores/usageStore';
 import useErrorStore from './stores/errorStore';
 
 // Lazy load heavy components for better bundle splitting
@@ -30,11 +32,6 @@ const AuthPage = lazy(() =>
 );
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
-);
-const BillingPageDialog = lazy(() =>
-  import('./components/pricing/BillingPageDialog').then((m) => ({
-    default: m.BillingPageDialog,
-  })),
 );
 const UnifiedAgenticChat = lazy(() =>
   import('./components/UnifiedAgenticChat').then((m) => ({
@@ -56,7 +53,6 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [billingPageOpen, setBillingPageOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   // Auth state
@@ -257,45 +253,53 @@ const DesktopShell = () => {
     );
   }
 
+  // Check subscription gate - require hobby+ tier subscription
+  const SubscriptionGate = lazy(() =>
+    import('./components/SubscriptionGate').then((m) => ({
+      default: m.SubscriptionGate,
+    })),
+  );
+
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
-      {!isTauri && (
-        <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
-          <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
-        </div>
-      )}
-      <TitleBar
-        state={{ focused: state.focused, maximized: state.maximized }}
-        actions={actions}
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        commandShortcutHint={commandShortcutHint}
-      />
-      <main className="flex flex-1 min-h-0 min-w-0 bg-zinc-950">
-        <div className="flex-1 overflow-hidden">
-          <Suspense fallback={<LoadingFallback />}>
-            <UnifiedAgenticChat
-              className="h-full w-full"
-              layout="default"
-              defaultSidecarOpen={false}
-              onOpenSettings={() => setSettingsPanelOpen(true)}
-              onOpenBilling={() => setBillingPageOpen(true)}
-            />
+    <Suspense fallback={<LoadingFallback />}>
+      <SubscriptionGate>
+        <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
+          {!isTauri && (
+            <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
+              <strong>Web Development Mode</strong> - Running without Tauri. Some features are
+              mocked.
+            </div>
+          )}
+          <TitleBar
+            state={{ focused: state.focused, maximized: state.maximized }}
+            actions={actions}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            commandShortcutHint={commandShortcutHint}
+          />
+          <main className="flex flex-1 min-h-0 min-w-0 bg-zinc-950">
+            <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<LoadingFallback />}>
+                <UnifiedAgenticChat
+                  className="h-full w-full"
+                  layout="default"
+                  defaultSidecarOpen={false}
+                  onOpenSettings={() => setSettingsPanelOpen(true)}
+                />
+              </Suspense>
+            </div>
+          </main>
+          <CommandPalette
+            open={commandPaletteOpen}
+            onOpenChange={setCommandPaletteOpen}
+            options={commandOptions}
+          />
+          <Suspense fallback={null}>
+            <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
           </Suspense>
+          <ErrorToastContainer position="top-right" />
         </div>
-      </main>
-      <CommandPalette
-        open={commandPaletteOpen}
-        onOpenChange={setCommandPaletteOpen}
-        options={commandOptions}
-      />
-      <Suspense fallback={null}>
-        <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <BillingPageDialog open={billingPageOpen} onOpenChange={setBillingPageOpen} />
-      </Suspense>
-      <ErrorToastContainer position="top-right" />
-    </div>
+      </SubscriptionGate>
+    </Suspense>
   );
 };
 
@@ -304,12 +308,20 @@ const App = () => {
   useEffect(() => {
     const unsubscribeAuth = initializeAuthStore();
     const unsubscribeAccount = initializeAccountStore();
+    const unsubscribeBilling = initializeBillingStore();
+    const unsubscribeUsage = initializeUsageStore();
     return () => {
       if (typeof unsubscribeAuth === 'function') {
         unsubscribeAuth();
       }
       if (typeof unsubscribeAccount === 'function') {
         unsubscribeAccount();
+      }
+      if (typeof unsubscribeBilling === 'function') {
+        unsubscribeBilling();
+      }
+      if (typeof unsubscribeUsage === 'function') {
+        unsubscribeUsage();
       }
     };
   }, []);

@@ -25,13 +25,18 @@ impl AGIMemory {
     }
 
     pub fn add(&self, event: String, data: serde_json::Value, importance: f64) -> Result<()> {
-        let mut memory = self.working_memory.lock().unwrap();
+        let mut memory = self
+            .working_memory
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to acquire working memory lock"))?;
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| anyhow::anyhow!("System time error: {}", e))?
+            .as_secs();
 
         let entry = MemoryEntry {
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp,
             event,
             data,
             importance,
@@ -48,16 +53,24 @@ impl AGIMemory {
     }
 
     pub fn get_recent(&self, limit: usize) -> Vec<MemoryEntry> {
-        let memory = self.working_memory.lock().unwrap();
-        memory.iter().rev().take(limit).cloned().collect()
+        self.working_memory
+            .lock()
+            .map(|memory| memory.iter().rev().take(limit).cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn search(&self, query: &str) -> Vec<MemoryEntry> {
-        let memory = self.working_memory.lock().unwrap();
-        memory
-            .iter()
-            .filter(|entry| entry.event.contains(query) || entry.data.to_string().contains(query))
-            .cloned()
-            .collect()
+        self.working_memory
+            .lock()
+            .map(|memory| {
+                memory
+                    .iter()
+                    .filter(|entry| {
+                        entry.event.contains(query) || entry.data.to_string().contains(query)
+                    })
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }

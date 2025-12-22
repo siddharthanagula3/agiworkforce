@@ -38,7 +38,6 @@ export interface SendOptions {
 export interface ChatInputAreaProps {
   onSend: (content: string, options: SendOptions) => Promise<void> | void;
   onStopGeneration?: () => void;
-  onOpenBilling?: () => void;
   disabled?: boolean;
   placeholder?: string;
   maxLength?: number;
@@ -69,7 +68,6 @@ const FOCUS_MODES: { value: FocusMode; label: string; placeholder: string }[] = 
 export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   onStopGeneration,
-  onOpenBilling: _onOpenBilling,
   disabled = false,
   placeholder: defaultPlaceholder = 'Ask me anything...',
   maxLength = 10000,
