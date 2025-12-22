@@ -171,6 +171,11 @@ impl TeamManager {
             .lock()
             .map_err(|e| format!("Database lock error: {}", e))?;
 
+        self.get_team_internal(&conn, team_id)
+    }
+
+    /// Internal method to get a team using an existing connection
+    fn get_team_internal(&self, conn: &Connection, team_id: &str) -> Result<Option<Team>, String> {
         let mut stmt = conn
             .prepare("SELECT id, name, description, owner_id, settings, created_at, updated_at FROM teams WHERE id = ?1")
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
@@ -306,7 +311,7 @@ impl TeamManager {
 
         // Check if team exists and get max_members setting
         let team = self
-            .get_team(team_id)?
+            .get_team_internal(&conn, team_id)?
             .ok_or_else(|| "Team not found".to_string())?;
 
         // Check member limit
@@ -594,9 +599,15 @@ impl TeamManager {
 
         // Add member to team
         drop(stmt);
+        drop(conn); // Drop lock before calling add_member which acquires its own lock
         self.add_member(&team_id, user_id, role, &invited_by)?;
 
         // Mark invitation as accepted
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| format!("Database lock error: {}", e))?;
+
         conn.execute(
             "UPDATE team_invitations SET accepted = 1 WHERE id = ?1",
             params![invitation_id],
@@ -604,7 +615,7 @@ impl TeamManager {
         .map_err(|e| format!("Failed to mark invitation as accepted: {}", e))?;
 
         // Get and return the team
-        self.get_team(&team_id)?
+        self.get_team_internal(&conn, &team_id)?
             .ok_or_else(|| "Team not found after accepting invitation".to_string())
     }
 
