@@ -3,6 +3,7 @@ import { CreditCard, MessageSquare, Settings } from 'lucide-react';
 import React from 'react';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
+import { openPricingPage } from '../../utils/navigation';
 
 interface UserProfileProps {
   onSettingsClick?: () => void;
@@ -105,6 +106,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               type="button"
               onClick={() => {
                 onBillingClick?.();
+                void openPricingPage();
               }}
               className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-zinc-200 transition-colors hover:bg-white/5"
             >

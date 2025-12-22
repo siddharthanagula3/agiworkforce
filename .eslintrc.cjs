@@ -72,6 +72,16 @@ module.exports = {
       },
     },
     {
+      files: ['apps/web/**/*.{ts,tsx,js,jsx}'],
+      settings: {
+        'import/resolver': {
+          typescript: {
+            project: ['./apps/web/tsconfig.json'],
+          },
+        },
+      },
+    },
+    {
       files: ['apps/extension/src/**/*.js'],
       globals: {
         chrome: 'readonly',

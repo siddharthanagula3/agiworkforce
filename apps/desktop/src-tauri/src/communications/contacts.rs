@@ -149,52 +149,84 @@ impl ContactManager {
     }
 
     pub async fn import_vcard(&self, file_path: &str) -> Result<usize> {
+        use tokio::io::{AsyncBufReadExt, BufReader};
+
         info!("Importing contacts from vCard file {}", file_path);
-        let content = fs::read_to_string(file_path)
+        let file = fs::File::open(file_path)
             .await
-            .map_err(|err| Error::Generic(format!("Failed to read vCard file: {}", err)))?;
+            .map_err(|err| Error::Generic(format!("Failed to open vCard file: {}", err)))?;
 
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
         let mut imported = 0usize;
+        let mut current_vcard_lines = Vec::new();
+        let mut inside_vcard = false;
 
-        for card in split_vcards(&content) {
-            if let Some(contact) = parse_vcard(card) {
-                let now = chrono::Utc::now().timestamp();
+        // Process file line by line to avoid loading everything into memory
+        while let Ok(Some(line)) = lines.next_line().await {
+            let trimmed = line.trim();
 
-                let email = contact.email.clone();
-                let display_name = contact.display_name.clone();
-                let first_name = contact.first_name.clone();
-                let last_name = contact.last_name.clone();
-                let phone = contact.phone.clone();
-                let company = contact.company.clone();
-                let notes = contact.notes.clone();
+            if trimmed == "BEGIN:VCARD" {
+                inside_vcard = true;
+                current_vcard_lines.clear();
+                continue;
+            }
 
-                let changes = self
-                    .conn
-                    .call(move |conn| {
-                        let rows = conn.execute(
-                            "INSERT INTO contacts (email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at)
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
-                             ON CONFLICT(email)
-                             DO UPDATE SET
-                                display_name = excluded.display_name,
-                                first_name = excluded.first_name,
-                                last_name = excluded.last_name,
-                                phone = excluded.phone,
-                                company = excluded.company,
-                                notes = excluded.notes,
-                                updated_at = excluded.updated_at",
-                            params![email, display_name, first_name, last_name, phone, company, notes, now],
-                        )?;
-                        Ok(rows)
-                    })
-                    .await
-                    .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
+            if trimmed == "END:VCARD" {
+                if inside_vcard {
+                    // Combine collected lines into a single vCard string for parsing
+                    // This is much smaller than the full file
+                    let vcard_content = current_vcard_lines.join("\n");
 
-                if changes > 0 {
-                    imported += 1;
+                    if let Some(contact) = parse_vcard(&vcard_content) {
+                        let now = chrono::Utc::now().timestamp();
+                        let email = contact.email.clone();
+                        let display_name = contact.display_name.clone();
+                        let first_name = contact.first_name.clone();
+                        let last_name = contact.last_name.clone();
+                        let phone = contact.phone.clone();
+                        let company = contact.company.clone();
+                        let notes = contact.notes.clone();
+
+                        // Upsert contact
+                        if let Ok(changes) = self.conn.call(move |conn| {
+                            let rows = conn.execute(
+                                "INSERT INTO contacts (email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at)
+                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+                                 ON CONFLICT(email)
+                                 DO UPDATE SET
+                                    display_name = excluded.display_name,
+                                    first_name = excluded.first_name,
+                                    last_name = excluded.last_name,
+                                    phone = excluded.phone,
+                                    company = excluded.company,
+                                    notes = excluded.notes,
+                                    updated_at = excluded.updated_at",
+                                params![email, display_name, first_name, last_name, phone, company, notes, now],
+                            )?;
+                            Ok(rows)
+                        }).await {
+                            if changes > 0 {
+                                imported += 1;
+                            }
+                        }
+                    }
+
+                    inside_vcard = false;
+                    current_vcard_lines.clear();
                 }
-            } else {
-                warn!("Skipping malformed vCard entry");
+                continue;
+            }
+
+            if inside_vcard {
+                current_vcard_lines.push(line);
+
+                // Safety guard: prevent unlimited memory growth for malformed vCards
+                if current_vcard_lines.len() > 1000 {
+                    warn!("Skipping malformed vCard entry: excessive lines");
+                    inside_vcard = false;
+                    current_vcard_lines.clear();
+                }
             }
         }
 
@@ -276,13 +308,6 @@ fn map_contact_row(row: &rusqlite::Row<'_>) -> SqliteResult<Contact> {
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
     })
-}
-
-fn split_vcards(content: &str) -> Vec<&str> {
-    content
-        .split("BEGIN:VCARD")
-        .filter(|chunk| !chunk.trim().is_empty())
-        .collect()
 }
 
 fn parse_vcard(chunk: &str) -> Option<Contact> {

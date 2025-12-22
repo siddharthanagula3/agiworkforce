@@ -35,6 +35,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
+import { canUseAPIKeys } from '../../utils/subscriptionGate';
+import { openPricingPage } from '../../utils/navigation';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -53,6 +55,7 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
   const [localKey, setLocalKey] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   useEffect(() => {
     setLocalKey(apiKeys[provider as keyof typeof apiKeys] || '');
@@ -60,6 +63,13 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
 
   const handleSave = async () => {
     if (!localKey.trim()) return;
+
+    // Check subscription before allowing API key save
+    if (!canUseAPIKeys()) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
     try {
       await setAPIKey(provider, localKey.trim());
       setTestResult('success');
@@ -72,6 +82,13 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
 
   const handleTest = async () => {
     if (!localKey.trim()) return;
+
+    // Check subscription before allowing API key test
+    if (!canUseAPIKeys()) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
     setTesting(true);
     setTestResult(null);
     try {
@@ -157,6 +174,43 @@ function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
       <p className="text-xs text-muted-foreground">
         Your API key is securely stored in the system keyring
       </p>
+
+      {showUpgradePrompt && (
+        <div className="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <Shield className="h-5 w-5 text-amber-400" />
+            </div>
+            <div className="flex-1 space-y-2">
+              <h4 className="text-sm font-semibold text-amber-200">Subscription Required</h4>
+              <p className="text-xs text-amber-300/80">
+                A Hobby plan or higher subscription is required to use API keys. Subscribe now to
+                unlock this feature.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setShowUpgradePrompt(false);
+                    void openPricingPage();
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                >
+                  Subscribe
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowUpgradePrompt(false)}
+                  className="text-xs"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

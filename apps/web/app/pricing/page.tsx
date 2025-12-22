@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { Header } from '../../components/layout/Header';
 
-export default function PricingPage() {
+function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('annual');
+  const searchParams = useSearchParams();
+  const showSubscriptionRequired = searchParams?.get('reason') === 'subscription_required';
 
   const handleUpgrade = async (plan: string) => {
     setLoadingPlan(plan);
@@ -30,9 +33,11 @@ export default function PricingPage() {
       } else {
         throw new Error('No checkout URL returned');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Checkout error:', err);
-      alert(err.message || 'An error occurred during checkout. Please try again.');
+      const errorMessage =
+        err instanceof Error ? err.message : 'An error occurred during checkout. Please try again.';
+      alert(errorMessage);
       setLoadingPlan(null);
     }
   };
@@ -52,6 +57,19 @@ export default function PricingPage() {
                 Start free, upgrade when you&apos;re ready to deploy autonomous agents across your
                 desktop and web.
               </p>
+
+              {showSubscriptionRequired && (
+                <div className="max-w-2xl mx-auto mb-8 p-4 bg-amber-900/20 border border-amber-900/40 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-amber-400 mb-1">Subscription Required</h3>
+                    <p className="text-sm text-zinc-300">
+                      An active subscription is required to access your account. Please select a
+                      plan below to continue.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Billing Toggle */}
               <div className="flex items-center justify-center gap-4">
@@ -117,7 +135,8 @@ export default function PricingPage() {
                     Billed $
                     <span className="text-zinc-300">
                       {billingInterval === 'annual' ? '59.88/year' : '10/month'}
-                    </span>
+                    </span>{' '}
+                    after trial
                   </div>
                 </div>
 
@@ -240,5 +259,13 @@ export default function PricingPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <PricingContent />
+    </Suspense>
   );
 }
