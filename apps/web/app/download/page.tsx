@@ -1,7 +1,8 @@
-import { Bot, Download } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { DownloadSection } from '../../components/DownloadSection';
+import { DirectDownloadButtons } from '../../components/DirectDownloadButtons';
 import { createSupabaseServerClient } from '../../services/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -14,45 +15,17 @@ function getDownloadUrls() {
   };
 }
 
-async function getUserSession(): Promise<{
-  userId: string | null;
-  error?: string;
-}> {
-  try {
-    // Check if Supabase env vars are configured
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('Supabase environment variables not configured');
-      return { userId: null, error: 'Configuration error' };
-    }
-
-    const supabase = await createSupabaseServerClient();
-
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      return { userId: null };
-    }
-
-    if (!session?.user) {
-      return { userId: null };
-    }
-
-    return { userId: session.user.id };
-  } catch (error) {
-    console.error('getUserSession error:', error);
-    return { userId: null, error: 'Server error' };
-  }
-}
-
 export default async function DownloadPage() {
-  const { userId, error } = await getUserSession();
+  const supabase = await createSupabaseServerClient();
 
-  // If there's a configuration error, show a friendly message instead of crashing
-  if (error) {
+  // Get session
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    console.error('Session error:', sessionError);
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white">
         <div className="text-center space-y-4">
@@ -67,15 +40,36 @@ export default async function DownloadPage() {
   }
 
   // Not logged in: send to login with redirect back to download
-  if (!userId) {
+  if (!session?.user) {
     redirect('/login?redirectTo=/download');
   }
 
-  // For beta: Skip subscription check and allow all logged-in users to download
-  // TODO: Re-enable subscription check for production
-  // if (!subscription || subscription.status !== 'active') {
-  //   redirect('/pricing');
-  // }
+  // const userId = session.user.id;
+
+  /* 
+  // Check subscription status - require active subscription
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('status, plan_tier')
+    .eq('user_id', userId)
+    .maybeSingle();
+  */
+
+  /* 
+  const activeStatuses = ['active', 'trialing'];
+  const hasActiveSubscription =
+    subscription && activeStatuses.includes(subscription.status); 
+  */
+
+  /* 
+  // Strict subscription check temporarily disabled for Beta access
+  if (!hasActiveSubscription) {
+    redirect('/pricing?reason=subscription_required');
+  }
+  */
+
+  // Optional: Show upgrade banner if no subscription
+  // const showUpgradeBanner = !hasActiveSubscription;
 
   const downloads = getDownloadUrls();
 
@@ -111,32 +105,7 @@ export default async function DownloadPage() {
           <DownloadSection downloads={downloads} />
 
           {/* Direct download buttons for beta users */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <a
-              href={downloads.mac}
-              download
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
-            >
-              <Download className="h-5 w-5" />
-              Download for macOS
-            </a>
-            <a
-              href={downloads.windows}
-              download
-              className="flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-medium transition-colors"
-            >
-              <Download className="h-5 w-5" />
-              Download for Windows
-            </a>
-            <a
-              href={downloads.linux}
-              download
-              className="flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-medium transition-colors"
-            >
-              <Download className="h-5 w-5" />
-              Download for Linux
-            </a>
-          </div>
+          <DirectDownloadButtons />
 
           <div className="text-center text-sm text-zinc-500">
             <p>By downloading, you agree to our Terms of Service and Privacy Policy.</p>

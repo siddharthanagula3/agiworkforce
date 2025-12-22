@@ -923,7 +923,7 @@ impl ToolExecutor {
                         match automation
                             .mouse
                             .lock()
-                            .unwrap()
+                            .map_err(|e| anyhow!("Failed to lock mouse mutex: {}", e))?
                             .click(x, y, MouseButton::Left)
                         {
                             Ok(_) => Ok(ToolResult {
