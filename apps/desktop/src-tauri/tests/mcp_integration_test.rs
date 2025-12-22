@@ -156,7 +156,7 @@ mod mcp_integration_tests {
             .unwrap();
 
         // Call a tool (stub returns success response)
-        let args = json!({
+        let _args = json!({
             "path": "/test/path"
         });
 
