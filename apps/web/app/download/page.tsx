@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { DownloadSection } from '../../components/DownloadSection';
 import { createSupabaseServerClient } from '../../services/supabase-server';
 
+export const dynamic = 'force-dynamic';
+
 function getDownloadUrls() {
   return {
     mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agi-workforce-mac.dmg',
