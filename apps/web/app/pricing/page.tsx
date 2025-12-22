@@ -20,18 +20,20 @@ export default function PricingPage() {
         body: JSON.stringify({ plan, billingInterval }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        setLoadingPlan(null);
-        return;
+        throw new Error(data.error || 'Failed to start checkout');
       }
 
-      const data = (await res.json()) as { url?: string };
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setLoadingPlan(null);
+        throw new Error('No checkout URL returned');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('Checkout error:', err);
+      alert(err.message || 'An error occurred during checkout. Please try again.');
       setLoadingPlan(null);
     }
   };
