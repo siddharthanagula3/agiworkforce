@@ -10,6 +10,7 @@ import { UserProfile } from './UserProfile';
 interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
+  onOpenBilling?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -17,6 +18,7 @@ interface SidebarProps {
 export function Sidebar({
   className,
   onOpenSettings,
+  onOpenBilling,
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
@@ -225,7 +227,7 @@ export function Sidebar({
       <div className="border-t border-white/10 px-3 py-3">
         <UserProfile
           onSettingsClick={onOpenSettings}
-          onBillingClick={onOpenSettings}
+          onBillingClick={onOpenBilling}
           collapsed={collapsed}
         />
       </div>

@@ -36,6 +36,24 @@ export interface PricingPlan {
 
 export const PRICING_PLANS: PricingPlan[] = [
   {
+    id: 'free',
+    name: 'Free',
+    description: 'Basic access to local models',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    stripePriceId: {
+      monthly: null,
+      yearly: null,
+    },
+    features: ['Local LLMs only', 'Basic automations'],
+    limits: {
+      automations: 5,
+      apiCalls: 50,
+      storage: 512,
+      teamMembers: 1,
+    },
+  },
+  {
     id: 'hobby',
     name: 'Hobby',
     description: 'Perfect for getting started with AI automation',

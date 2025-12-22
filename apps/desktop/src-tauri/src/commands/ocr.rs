@@ -95,7 +95,7 @@ fn preprocess_image(image_path: &str) -> Result<String, String> {
 
     tracing::debug!("Preprocessed image saved to: {:?}", temp_path);
 
-    Ok(temp_path.to_str().unwrap().to_string())
+    Ok(temp_path.to_string_lossy().into_owned())
 }
 
 /// Helper function to enhance image contrast
@@ -167,7 +167,11 @@ fn detect_languages(image_path: &str) -> Result<Vec<LanguageDetection>, String> 
     }
 
     // Sort by confidence (highest first)
-    detected_languages.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+    detected_languages.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     tracing::debug!("Detected {} languages", detected_languages.len());
 
@@ -216,7 +220,7 @@ pub async fn ocr_process_image(
     let ocr_id = Uuid::new_v4().to_string();
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64;
 
     // Save to database
@@ -307,7 +311,7 @@ pub async fn ocr_process_region(
     let mut tess = Tesseract::new(None, Some(&lang))
         .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
 
-    tess.set_image(temp_path.to_str().unwrap())
+    tess.set_image(temp_path.to_string_lossy().as_ref())
         .map_err(|e| format!("Failed to set image: {}", e))?;
 
     tess.set_page_seg_mode(PageSegMode::PsmAuto);

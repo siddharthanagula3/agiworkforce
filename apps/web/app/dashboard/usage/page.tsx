@@ -16,6 +16,20 @@ export default async function UsagePage() {
     redirect('/login');
   }
 
+  // Require active subscription
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('status')
+    .eq('user_id', session.user.id)
+    .maybeSingle();
+
+  const activeStatuses = ['active', 'trialing'];
+  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
+
+  if (!hasActiveSubscription) {
+    redirect('/pricing?reason=subscription_required');
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">

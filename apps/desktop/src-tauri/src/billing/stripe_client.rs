@@ -188,7 +188,7 @@ impl StripeService {
         plan_name: &str,
         billing_interval: &str,
     ) -> Result<SubscriptionInfo> {
-        let customer_id = CustomerId::from(customer_stripe_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
 
         let mut params = CreateSubscription::new(customer_id.clone());
         params.items = Some(vec![stripe::CreateSubscriptionItems {
@@ -227,7 +227,7 @@ impl StripeService {
             status: subscription.status.to_string(),
             current_period_start: subscription.current_period_start,
             current_period_end: subscription.current_period_end,
-            cancel_at_period_end: subscription.cancel_at_period_end.unwrap_or(false),
+            cancel_at_period_end: subscription.cancel_at_period_end,
             cancel_at: subscription.cancel_at,
             canceled_at: subscription.canceled_at,
             trial_start: subscription.trial_start,
@@ -279,7 +279,7 @@ impl StripeService {
 
     /// Get subscription by Stripe subscription ID
     pub async fn get_subscription(&self, stripe_subscription_id: &str) -> Result<SubscriptionInfo> {
-        let subscription_id = SubscriptionId::from(stripe_subscription_id);
+        let subscription_id = SubscriptionId::from(stripe_subscription_id.to_string());
         let subscription =
             stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
 
@@ -305,7 +305,7 @@ impl StripeService {
                 subscription.status.to_string(),
                 subscription.current_period_start,
                 subscription.current_period_end,
-                subscription.cancel_at_period_end.unwrap_or(false),
+                subscription.cancel_at_period_end,
                 subscription.cancel_at,
                 subscription.canceled_at,
                 now,
@@ -357,7 +357,7 @@ impl StripeService {
         new_price_id: &str,
         new_plan_name: &str,
     ) -> Result<SubscriptionInfo> {
-        let subscription_id = SubscriptionId::from(stripe_subscription_id);
+        let subscription_id = SubscriptionId::from(stripe_subscription_id.to_string());
         let mut subscription =
             stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
 
@@ -409,7 +409,7 @@ impl StripeService {
 
     /// Cancel subscription
     pub async fn cancel_subscription(&self, stripe_subscription_id: &str) -> Result<()> {
-        let subscription_id = SubscriptionId::from(stripe_subscription_id);
+        let subscription_id = SubscriptionId::from(stripe_subscription_id.to_string());
         stripe::Subscription::cancel(&self.client, &subscription_id, Default::default()).await?;
 
         // Update database
@@ -434,7 +434,7 @@ impl StripeService {
 
     /// Get customer's invoices
     pub async fn get_invoices(&self, customer_stripe_id: &str) -> Result<Vec<InvoiceInfo>> {
-        let customer_id = CustomerId::from(customer_stripe_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
 
         let mut list_params = ListInvoices::new();
         list_params.customer = Some(customer_id);
@@ -463,13 +463,19 @@ impl StripeService {
             let invoice_info = InvoiceInfo {
                 id: invoice_id.clone(),
                 customer_id: customer_db_id.clone(),
-                subscription_id: invoice.subscription.map(|s| s.to_string()),
+                subscription_id: invoice.subscription.as_ref().map(|s| match s {
+                    stripe::Expandable::Id(id) => id.to_string(),
+                    stripe::Expandable::Object(sub) => sub.id.to_string(),
+                }),
                 stripe_invoice_id: invoice.id.to_string(),
                 invoice_number: invoice.number,
                 amount_due: invoice.amount_due.unwrap_or(0),
                 amount_paid: invoice.amount_paid.unwrap_or(0),
                 amount_remaining: invoice.amount_remaining.unwrap_or(0),
-                currency: invoice.currency.unwrap_or_else(|| "usd".to_string()),
+                currency: invoice
+                    .currency
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "usd".to_string()),
                 status: invoice
                     .status
                     .map(|s| s.to_string())
@@ -479,11 +485,7 @@ impl StripeService {
                 period_start: invoice.period_start.unwrap_or(0),
                 period_end: invoice.period_end.unwrap_or(0),
                 due_date: invoice.due_date,
-                paid_at: if invoice.status_transitions.paid_at.is_some() {
-                    invoice.status_transitions.paid_at
-                } else {
-                    None
-                },
+                paid_at: invoice.status_transitions.as_ref().and_then(|t| t.paid_at),
                 created_at: now,
             };
 
@@ -615,7 +617,7 @@ impl StripeService {
         customer_stripe_id: &str,
         return_url: &str,
     ) -> Result<String> {
-        let customer_id = CustomerId::from(customer_stripe_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
 
         let mut params = stripe::CreateBillingPortalSession::new(customer_id);
         params.return_url = Some(return_url);
@@ -722,7 +724,7 @@ impl StripeService {
         &self,
         customer_stripe_id: &str,
     ) -> Result<Vec<PaymentMethodInfo>> {
-        let customer_id = CustomerId::from(customer_stripe_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
 
         let mut list_params = stripe::ListPaymentMethods::new();
         list_params.customer = Some(customer_id);
@@ -748,7 +750,10 @@ impl StripeService {
             .invoice_settings
             .as_ref()
             .and_then(|settings| settings.default_payment_method.as_ref())
-            .map(|pm| pm.to_string());
+            .map(|pm| match pm {
+                stripe::Expandable::Id(id) => id.to_string(),
+                stripe::Expandable::Object(obj) => obj.id.to_string(),
+            });
 
         let mut payment_method_infos = Vec::new();
         let now = Utc::now().timestamp();
@@ -764,10 +769,10 @@ impl StripeService {
             let (card_brand, card_last4, card_exp_month, card_exp_year) =
                 if let Some(card) = pm.card {
                     (
-                        card.brand.map(|b| b.to_string()),
-                        card.last4,
-                        card.exp_month,
-                        card.exp_year,
+                        Some(card.brand.to_string()),
+                        Some(card.last4),
+                        Some(card.exp_month as i32),
+                        Some(card.exp_year as i32),
                     )
                 } else {
                     (None, None, None, None)
@@ -777,7 +782,7 @@ impl StripeService {
                 id: pm_id.clone(),
                 customer_id: customer_db_id.clone(),
                 stripe_payment_method_id: pm.id.to_string(),
-                payment_type: pm.r#type.to_string(),
+                payment_type: pm.type_.to_string(),
                 card_brand,
                 card_last4,
                 card_exp_month,
@@ -820,11 +825,13 @@ impl StripeService {
         customer_stripe_id: &str,
         payment_method_id: &str,
     ) -> Result<PaymentMethodInfo> {
-        let customer_id = CustomerId::from(customer_stripe_id);
-        let pm_id = PaymentMethodId::from(payment_method_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
+        let pm_id = PaymentMethodId::from(payment_method_id.to_string());
 
         // Attach payment method to customer
-        let mut attach_params = stripe::AttachPaymentMethod::new(customer_id.clone());
+        let attach_params = stripe::AttachPaymentMethod {
+            customer: customer_id.clone(),
+        };
         let payment_method = PaymentMethod::attach(&self.client, &pm_id, attach_params).await?;
 
         // Get customer DB ID
@@ -846,10 +853,10 @@ impl StripeService {
         let (card_brand, card_last4, card_exp_month, card_exp_year) =
             if let Some(card) = payment_method.card {
                 (
-                    card.brand.map(|b| b.to_string()),
-                    card.last4,
-                    card.exp_month,
-                    card.exp_year,
+                    Some(card.brand.to_string()),
+                    Some(card.last4),
+                    Some(card.exp_month as i32),
+                    Some(card.exp_year as i32),
                 )
             } else {
                 (None, None, None, None)
@@ -859,7 +866,7 @@ impl StripeService {
             id: pm_db_id.clone(),
             customer_id: customer_db_id.clone(),
             stripe_payment_method_id: payment_method.id.to_string(),
-            payment_type: payment_method.r#type.to_string(),
+            payment_type: payment_method.type_.to_string(),
             card_brand,
             card_last4,
             card_exp_month,
@@ -899,13 +906,13 @@ impl StripeService {
         customer_stripe_id: &str,
         payment_method_id: &str,
     ) -> Result<()> {
-        let customer_id = CustomerId::from(customer_stripe_id);
-        let pm_id = PaymentMethodId::from(payment_method_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
+        let pm_id = PaymentMethodId::from(payment_method_id.to_string());
 
         // Update customer's default payment method in Stripe
         let mut update_params = stripe::UpdateCustomer::new();
-        update_params.invoice_settings = Some(stripe::InvoiceSettingsParams {
-            default_payment_method: Some(pm_id.clone()),
+        update_params.invoice_settings = Some(stripe::CustomerInvoiceSettings {
+            default_payment_method: Some(pm_id.to_string()),
             ..Default::default()
         });
 
@@ -943,12 +950,12 @@ impl StripeService {
 
     /// Create a Setup Intent for adding a new payment method
     pub async fn create_setup_intent(&self, customer_stripe_id: &str) -> Result<String> {
-        let customer_id = CustomerId::from(customer_stripe_id);
+        let customer_id = CustomerId::from(customer_stripe_id.to_string());
 
         let mut params = CreateSetupIntent::new();
         params.customer = Some(customer_id);
-        params.usage = Some(stripe::SetupIntentUsage::OffSession);
-        params.payment_method_types = Some(vec![stripe::PaymentMethodType::Card]);
+        // params.usage = Some(stripe::SetupIntentUsage::OffSession); // Usage is not available in CreateSetupIntent in this version or optional
+        params.payment_method_types = Some(vec!["card".to_string()]); // String based
 
         let setup_intent = SetupIntent::create(&self.client, params).await?;
 
@@ -957,10 +964,10 @@ impl StripeService {
 
     /// Detach (delete) a payment method
     pub async fn detach_payment_method(&self, payment_method_id: &str) -> Result<()> {
-        let pm_id = PaymentMethodId::from(payment_method_id);
+        let pm_id = PaymentMethodId::from(payment_method_id.to_string());
 
         // Detach payment method from customer in Stripe
-        PaymentMethod::detach(&self.client, &pm_id, Default::default()).await?;
+        PaymentMethod::detach(&self.client, &pm_id).await?;
 
         // Remove from database
         let db = self

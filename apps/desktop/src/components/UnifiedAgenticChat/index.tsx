@@ -30,14 +30,12 @@ export const UnifiedAgenticChat: React.FC<{
   defaultSidecarOpen?: boolean;
   onSendMessage?: (content: string, options: SendOptions) => Promise<void>;
   onOpenSettings?: () => void;
-  onOpenBilling?: () => void;
 }> = ({
   className = '',
   layout = 'default',
   defaultSidecarOpen = true,
   onSendMessage,
   onOpenSettings,
-  onOpenBilling,
 }) => {
   const setSidecarOpen = useUnifiedChatStore((state) => state.setSidecarOpen);
   const openSidecarStore = useUnifiedChatStore((state) => state.openSidecar);
@@ -461,7 +459,6 @@ export const UnifiedAgenticChat: React.FC<{
     >
       <AppLayout
         onOpenSettings={onOpenSettings}
-        onOpenBilling={onOpenBilling}
         onOpenWorkspace={() => setWorkspaceOpen(true)}
         onOpenMediaLab={() => setMediaLabOpen(true)}
       >
@@ -469,11 +466,7 @@ export const UnifiedAgenticChat: React.FC<{
           <>
             <BudgetAlertsPanel />
             <ChatStream onOpenSidecar={openSidecar} />
-            <ChatInputArea
-              onSend={handleSendMessage}
-              onStopGeneration={handleStopGeneration}
-              onOpenBilling={onOpenBilling}
-            />
+            <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
           </>
         ) : activeView === 'projects' ? (
           <ProjectsView />
