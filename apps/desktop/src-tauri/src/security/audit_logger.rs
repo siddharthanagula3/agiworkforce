@@ -189,6 +189,11 @@ impl AuditLogger {
             .lock()
             .map_err(|e| Error::Other(format!("Failed to acquire database lock: {}", e)))?;
 
+        self.verify_event_internal(&conn, event_id)
+    }
+
+    /// Internal method to verify an event using an existing connection
+    fn verify_event_internal(&self, conn: &Connection, event_id: &str) -> Result<bool> {
         let (
             id,
             timestamp,
@@ -373,7 +378,7 @@ impl AuditLogger {
         let mut tampered = Vec::new();
 
         for event_id in event_ids {
-            match self.verify_event(&event_id) {
+            match self.verify_event_internal(&conn, &event_id) {
                 Ok(true) => verified += 1,
                 Ok(false) => tampered.push(event_id),
                 Err(_) => tampered.push(event_id),
