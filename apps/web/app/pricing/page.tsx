@@ -94,39 +94,61 @@ export default function PricingPage() {
                 <span
                   className={`text-sm ${billingInterval === 'annual' ? 'text-white' : 'text-zinc-500'}`}
                 >
-                  Yearly <span className="text-emerald-400 font-medium">(Save 50%)</span>
+                  Yearly <span className="text-emerald-400 font-medium">(Save up to 50%)</span>
                 </span>
               </div>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3 max-w-6xl mx-auto">
               {/* Hobby Plan */}
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6 flex flex-col relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/5 to-transparent pointer-events-none" />
+              <div className="rounded-2xl border-2 border-emerald-500/50 bg-black/40 p-6 flex flex-col relative overflow-hidden shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)]">
+                <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
+
                 <div className="relative">
-                  {billingInterval === 'annual' && (
-                    <div className="inline-flex items-center rounded-full bg-emerald-600/20 px-3 py-1 text-xs font-medium text-emerald-200 mb-3">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400 mr-2" />
-                      Introductory Offer
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide">
+                      Limited Time Launch Offer
                     </div>
-                  )}
-                  <h2 className="text-xl font-semibold mb-2">Hobby</h2>
+                    {billingInterval === 'annual' && (
+                      <div className="inline-flex items-center text-xs font-medium text-emerald-400">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse" />
+                        Save 50%
+                      </div>
+                    )}
+                  </div>
+
+                  <h2 className="text-xl font-semibold mb-2 text-white">Hobby</h2>
                   <p className="text-zinc-400 mb-4 h-10">
-                    Perfect for getting started with AI automation.
+                    Perfect for getting started with AI automation during our public beta.
                   </p>
+
                   <div className="flex items-baseline gap-2 mb-1">
-                    <div className="text-3xl font-bold">$0</div>
-                    <div className="text-zinc-500 text-sm line-through">
+                    <div className="text-3xl font-bold text-emerald-100">
                       ${billingInterval === 'annual' ? '4.99' : '10'}
+                    </div>
+                    <div className="text-zinc-400 text-sm line-through">
+                      ${billingInterval === 'annual' ? '10' : '20'}
                     </div>
                     <div className="text-zinc-300 text-sm">/month</div>
                   </div>
-                  <div className="text-xs text-zinc-500 mb-6">
-                    First 3 months free, then $
-                    {billingInterval === 'annual' ? '59.88/year' : '10/month'}
+                  <div className="text-xs text-zinc-500 mb-6 font-medium">
+                    Billed $
+                    <span className="text-zinc-300">
+                      {billingInterval === 'annual' ? '59.88/year' : '10/month'}
+                    </span>
                   </div>
                 </div>
+
                 <ul className="space-y-3 text-sm text-zinc-300 flex-1 relative">
+                  <li className="flex gap-2 items-start">
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-emerald-100 font-medium">3 Months Free Trial</span> with
+                    code{' '}
+                    <code className="bg-emerald-500/10 px-1.5 py-0.5 rounded text-emerald-400 font-mono text-xs border border-emerald-500/20">
+                      BETATESTER
+                    </code>
+                  </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400" /> Free to use own APIs
                   </li>
@@ -136,19 +158,13 @@ export default function PricingPage() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400" /> Community support
                   </li>
-                  {billingInterval === 'annual' && (
-                    <li className="flex gap-2">
-                      <Check className="h-4 w-4 text-emerald-400" /> $10 worth of tokens
-                    </li>
-                  )}
                 </ul>
                 <Button
-                  variant="outline"
-                  className="mt-6 w-full border-emerald-600/50 text-emerald-300 hover:bg-emerald-600/10"
+                  className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20 border-0"
                   onClick={() => handleUpgrade('hobby')}
                   disabled={loadingPlan === 'hobby'}
                 >
-                  {loadingPlan === 'hobby' ? 'Redirecting...' : 'Start Free Trial'}
+                  {loadingPlan === 'hobby' ? 'Redirecting...' : 'Claim Offer'}
                 </Button>
               </div>
 

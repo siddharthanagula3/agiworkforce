@@ -5,13 +5,13 @@
  */
 
 export const STRIPE_PRICE_IDS = {
-  hobby_monthly: null, // Will be set from environment variable or Stripe
-  hobby_yearly: 'price_1SgeWY0atLU7AWGTjUudh7eA', // Annual Hobby Price ID
-  free: null, // Free tier has no Stripe price (deprecated, use hobby)
-  pro_monthly: 'price_pro_monthly', // Replace with actual Stripe Price ID
-  pro_yearly: 'price_pro_yearly', // Replace with actual Stripe Price ID
-  max_monthly: 'price_max_monthly', // Replace with actual Stripe Price ID
-  max_yearly: 'price_max_yearly', // Replace with actual Stripe Price ID
+  hobby_monthly: 'price_1Sgwx10zEfO6BZMh7thtFU77',
+  hobby_yearly: 'price_1Sgwx20zEfO6BZMhbgpxL8TI',
+  free: null,
+  pro_monthly: 'price_1Sgwx20zEfO6BZMh3ix7hivi',
+  pro_yearly: 'price_1Sgwx30zEfO6BZMhJXsduOyl',
+  max_monthly: 'price_1Sgwx30zEfO6BZMhJqItFYKF',
+  max_yearly: 'price_1Sgwx40zEfO6BZMhYS63EnfW',
 } as const;
 
 export interface PricingPlan {
@@ -45,12 +45,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       monthly: STRIPE_PRICE_IDS.hobby_monthly,
       yearly: STRIPE_PRICE_IDS.hobby_yearly,
     },
-    features: [
-      'Free to use own APIs',
-      'Core desktop agent',
-      'Community support',
-      '3-month free trial',
-    ],
+    features: ['Free to use own APIs', 'Core desktop agent', 'Community support'],
     limits: {
       automations: 10,
       apiCalls: 100,
@@ -68,12 +63,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       monthly: STRIPE_PRICE_IDS.pro_monthly,
       yearly: STRIPE_PRICE_IDS.pro_yearly,
     },
-    features: [
-      'Unlimited automations',
-      'Web & UI automation',
-      '$25/mo token credits',
-      'Email support',
-    ],
+    features: ['Unlimited automations', 'Web & UI automation', '$25/mo token credits'],
     limits: {
       automations: null,
       apiCalls: 10000,
@@ -92,7 +82,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       monthly: STRIPE_PRICE_IDS.max_monthly,
       yearly: STRIPE_PRICE_IDS.max_yearly,
     },
-    features: ['All Pro features', '$300/mo token credits', 'Priority support'],
+    features: ['All Pro features', '$300/mo token credits'],
     limits: {
       automations: null,
       apiCalls: null,
@@ -115,8 +105,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       'Unlimited team members',
       'On-premise deployment',
       'Custom integrations',
-      'Dedicated support',
-      'SLA guarantee',
     ],
     limits: {
       automations: null,

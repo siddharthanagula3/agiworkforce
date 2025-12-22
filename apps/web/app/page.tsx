@@ -134,6 +134,77 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Security Section */}
+        <section id="security" className="py-24 bg-black">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col md:flex-row items-center gap-16">
+              <div className="flex-1 space-y-8">
+                <h2 className="text-3xl font-bold tracking-tight">Enterprise-Grade Security</h2>
+                <div className="space-y-6">
+                  <div className="flex gap-4">
+                    <Shield className="h-6 w-6 text-blue-500 shrink-0" />
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">Local-First Execution</h3>
+                      <p className="text-zinc-400">
+                        Your data never leaves your device unless you explicitly allow it. We
+                        prioritize local LLMs and secure, direct connections.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <Shield className="h-6 w-6 text-blue-500 shrink-0" />
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">Sandboxed Environments</h3>
+                      <p className="text-zinc-400">
+                        Agents run in isolated environments with strict permission controls. You
+                        approve every file access and network request.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <Shield className="h-6 w-6 text-blue-500 shrink-0" />
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">End-to-End Encryption</h3>
+                      <p className="text-zinc-400">
+                        All sensitive data, including API keys and credentials, is encrypted at rest
+                        using industry-standard AES-256 encryption.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm">
+                  <div className="absolute inset-0 bg-blue-500/10 blur-3xl -z-10" />
+                  <div className="space-y-4 font-mono text-sm text-zinc-400">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <Shield className="h-4 w-4" />
+                      <span>Security Scan Complete</span>
+                    </div>
+                    <div className="h-px bg-white/10" />
+                    <div className="flex justify-between">
+                      <span>Encryption</span>
+                      <span className="text-white">AES-256-GCM</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Data Storage</span>
+                      <span className="text-white">Local Encrypted</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Network</span>
+                      <span className="text-white">TLS 1.3</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Agent Sandbox</span>
+                      <span className="text-white">Active</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* CTA Section */}
         <section className="py-24 relative overflow-hidden">
           <div className="absolute inset-0 bg-blue-600/10" />
