@@ -1,43 +1,13 @@
 import Link from 'next/link';
 import { ArrowRight, Bot, Cpu, Globe, Shield, Zap } from 'lucide-react';
+import { Header } from '../components/layout/Header';
 
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
       {/* Navigation */}
-      <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <span>AGI Workforce</span>
-          </div>
-          <nav className="hidden md:flex gap-6 text-sm font-medium text-zinc-400">
-            <Link href="#features" className="hover:text-white transition-colors">
-              Features
-            </Link>
-            <Link href="#security" className="hover:text-white transition-colors">
-              Security
-            </Link>
-            <Link href="/pricing" className="hover:text-white transition-colors">
-              Pricing
-            </Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/download"
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
-            >
-              Download Beta
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* Navigation */}
+      <Header />
 
       <main className="flex-1 pt-24">
         {/* Hero Section */}
