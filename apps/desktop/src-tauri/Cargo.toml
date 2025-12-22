@@ -153,7 +153,7 @@ calamine = "0.21"
 
 # Document creation
 docx-rs = "0.4"              # DOCX creation
-rust_xlsxwriter = "0.77"      # XLSX creation
+rust_xlsxwriter = "0.92"      # XLSX creation
 printpdf = "0.7"             # PDF creation
 
 # Temporary files
