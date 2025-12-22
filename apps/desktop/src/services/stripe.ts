@@ -111,11 +111,16 @@ export class StripeService {
    * use either the Tauri commands (via this service) or Stripe MCP tools directly.
    */
   static async initialize(stripeApiKey: string, webhookSecret: string): Promise<void> {
-    await invoke('billing_initialize', {
-      stripeApiKey,
-      webhookSecret,
-    });
-    this.initialized = true;
+    try {
+      await invoke('billing_initialize', {
+        stripeApiKey,
+        webhookSecret,
+      });
+      this.initialized = true;
+    } catch (error) {
+      console.warn('[StripeService] Failed to initialize:', error);
+      this.initialized = false;
+    }
   }
 
   /**
@@ -129,19 +134,29 @@ export class StripeService {
    * Create a new Stripe customer
    */
   static async createCustomer(email: string, name?: string): Promise<CustomerInfo> {
-    return await invoke<CustomerInfo>('stripe_create_customer', {
-      email,
-      name: name || null,
-    });
+    try {
+      return await invoke<CustomerInfo>('stripe_create_customer', {
+        email,
+        name: name || null,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error creating customer:', error);
+      throw error;
+    }
   }
 
   /**
    * Get customer by email
    */
   static async getCustomerByEmail(email: string): Promise<CustomerInfo | null> {
-    return await invoke<CustomerInfo | null>('stripe_get_customer_by_email', {
-      email,
-    });
+    try {
+      return await invoke<CustomerInfo | null>('stripe_get_customer_by_email', {
+        email,
+      });
+    } catch (error) {
+      console.warn('[StripeService] Error getting customer by email:', error);
+      return null;
+    }
   }
 
   /**
@@ -154,22 +169,32 @@ export class StripeService {
     billingInterval: 'monthly' | 'yearly',
     trialDays?: number,
   ): Promise<SubscriptionInfo> {
-    return await invoke<SubscriptionInfo>('stripe_create_subscription', {
-      customerStripeId,
-      priceId,
-      trialDays: trialDays || null,
-      planName,
-      billingInterval,
-    });
+    try {
+      return await invoke<SubscriptionInfo>('stripe_create_subscription', {
+        customerStripeId,
+        priceId,
+        trialDays: trialDays || null,
+        planName,
+        billingInterval,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error creating subscription:', error);
+      throw error;
+    }
   }
 
   /**
    * Get subscription details
    */
   static async getSubscription(stripeSubscriptionId: string): Promise<SubscriptionInfo> {
-    return await invoke<SubscriptionInfo>('stripe_get_subscription', {
-      stripeSubscriptionId,
-    });
+    try {
+      return await invoke<SubscriptionInfo>('stripe_get_subscription', {
+        stripeSubscriptionId,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error getting subscription:', error);
+      throw error;
+    }
   }
 
   /**
@@ -180,29 +205,44 @@ export class StripeService {
     newPriceId: string,
     newPlanName: string,
   ): Promise<SubscriptionInfo> {
-    return await invoke<SubscriptionInfo>('stripe_update_subscription', {
-      stripeSubscriptionId,
-      newPriceId,
-      newPlanName,
-    });
+    try {
+      return await invoke<SubscriptionInfo>('stripe_update_subscription', {
+        stripeSubscriptionId,
+        newPriceId,
+        newPlanName,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error updating subscription:', error);
+      throw error;
+    }
   }
 
   /**
    * Cancel subscription
    */
   static async cancelSubscription(stripeSubscriptionId: string): Promise<void> {
-    await invoke('stripe_cancel_subscription', {
-      stripeSubscriptionId,
-    });
+    try {
+      await invoke('stripe_cancel_subscription', {
+        stripeSubscriptionId,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error cancelling subscription:', error);
+      throw error;
+    }
   }
 
   /**
    * Get invoices for customer
    */
   static async getInvoices(customerStripeId: string): Promise<InvoiceInfo[]> {
-    return await invoke<InvoiceInfo[]>('stripe_get_invoices', {
-      customerStripeId,
-    });
+    try {
+      return await invoke<InvoiceInfo[]>('stripe_get_invoices', {
+        customerStripeId,
+      });
+    } catch (error) {
+      console.warn('[StripeService] Error getting invoices:', error);
+      return [];
+    }
   }
 
   /**
@@ -213,11 +253,25 @@ export class StripeService {
     periodStart: number,
     periodEnd: number,
   ): Promise<UsageStats> {
-    return await invoke<UsageStats>('stripe_get_usage', {
-      customerId,
-      periodStart,
-      periodEnd,
-    });
+    try {
+      return await invoke<UsageStats>('stripe_get_usage', {
+        customerId,
+        periodStart,
+        periodEnd,
+      });
+    } catch (error) {
+      console.warn('[StripeService] Error getting usage:', error);
+      return {
+        automations_executed: 0,
+        api_calls_made: 0,
+        storage_used_mb: 0,
+        llm_tokens_used: 0,
+        llm_input_tokens: 0,
+        llm_output_tokens: 0,
+        browser_sessions: 0,
+        mcp_tool_calls: 0,
+      };
+    }
   }
 
   /**
@@ -239,14 +293,18 @@ export class StripeService {
     periodEnd: number,
     metadata?: string,
   ): Promise<void> {
-    await invoke('stripe_track_usage', {
-      customerId,
-      usageType,
-      count,
-      periodStart,
-      periodEnd,
-      metadata: metadata || null,
-    });
+    try {
+      await invoke('stripe_track_usage', {
+        customerId,
+        usageType,
+        count,
+        periodStart,
+        periodEnd,
+        metadata: metadata || null,
+      });
+    } catch (error) {
+      console.warn('[StripeService] Error tracking usage:', error);
+    }
   }
 
   /**
@@ -302,28 +360,42 @@ export class StripeService {
    * Create Stripe billing portal session URL
    */
   static async createPortalSession(customerStripeId: string, returnUrl: string): Promise<string> {
-    return await invoke<string>('stripe_create_portal_session', {
-      customerStripeId,
-      returnUrl,
-    });
+    try {
+      return await invoke<string>('stripe_create_portal_session', {
+        customerStripeId,
+        returnUrl,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error creating portal session:', error);
+      throw error;
+    }
   }
 
   /**
    * Get active subscription for customer
    */
   static async getActiveSubscription(customerId: string): Promise<SubscriptionInfo | null> {
-    return await invoke<SubscriptionInfo | null>('stripe_get_active_subscription', {
-      customerId,
-    });
+    try {
+      return await invoke<SubscriptionInfo | null>('stripe_get_active_subscription', {
+        customerId,
+      });
+    } catch (error) {
+      console.warn('[StripeService] Error getting active subscription:', error);
+      return null;
+    }
   }
 
   /**
    * Process webhook event (called by backend)
    */
   static async processWebhook(payload: string, signature: string): Promise<void> {
-    await invoke('stripe_process_webhook', {
-      payload,
-      signature,
-    });
+    try {
+      await invoke('stripe_process_webhook', {
+        payload,
+        signature,
+      });
+    } catch (error) {
+      console.error('[StripeService] Error processing webhook:', error);
+    }
   }
 }

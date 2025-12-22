@@ -23,6 +23,14 @@ export default async function DashboardPage() {
     .eq('user_id', session.user.id)
     .single();
 
+  // Require active subscription
+  const activeStatuses = ['active', 'trialing'];
+  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
+
+  if (!hasActiveSubscription) {
+    redirect('/pricing?reason=subscription_required');
+  }
+
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between">

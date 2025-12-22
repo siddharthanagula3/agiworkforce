@@ -143,10 +143,11 @@ export const useAccountStore = create<AccountState>()(
       setAccount: (updates: Partial<DesktopAccount>) => {
         set((state) => {
           const updatedAccount = { ...state.account, ...updates };
+          const plan = updatedAccount.plan;
           return {
             account: updatedAccount,
-            isPro: updatedAccount.plan === 'pro' || updatedAccount.plan === 'enterprise',
-            isEnterprise: updatedAccount.plan === 'enterprise',
+            isPro: plan === 'pro' || plan === 'max' || plan === 'enterprise',
+            isEnterprise: plan === 'enterprise',
           };
         });
       },
@@ -165,9 +166,9 @@ export const useAccountStore = create<AccountState>()(
             ...state.account,
             plan,
             planDisplayName: planDisplayNames[plan],
-            subscriptionStatus: plan === 'free' ? 'none' : 'active',
+            subscriptionStatus: plan === 'free' || plan === ('none' as any) ? 'none' : 'active',
           },
-          isPro: plan === 'pro' || plan === 'enterprise',
+          isPro: plan === 'pro' || plan === 'max' || plan === 'enterprise',
           isEnterprise: plan === 'enterprise',
         }));
       },
@@ -270,7 +271,7 @@ export const useAccountStore = create<AccountState>()(
               lastSyncedAt: Date.now(),
             },
             isAuthenticated: true,
-            isPro: planTier === 'pro' || planTier === 'enterprise',
+            isPro: planTier === 'pro' || planTier === 'max' || planTier === 'enterprise',
             isEnterprise: planTier === 'enterprise',
           }));
         } catch (error) {

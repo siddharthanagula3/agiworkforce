@@ -26,7 +26,6 @@ import { ScrollArea } from '../ui/ScrollArea';
 interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
-  onOpenBilling?: () => void;
   onOpenFeedback?: () => void;
   onOpenWorkspace?: () => void;
   onOpenMediaLab?: () => void;
@@ -82,7 +81,6 @@ function getTemporalGroup(date: Date): TemporalGroup {
 export function Sidebar({
   className,
   onOpenSettings,
-  onOpenBilling,
   onOpenFeedback,
   onOpenWorkspace,
   onOpenMediaLab,
@@ -607,7 +605,6 @@ export function Sidebar({
         <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
           <UserProfile
             onSettingsClick={onOpenSettings}
-            onBillingClick={onOpenBilling}
             onFeedbackClick={onOpenFeedback}
             collapsed={collapsed}
           />

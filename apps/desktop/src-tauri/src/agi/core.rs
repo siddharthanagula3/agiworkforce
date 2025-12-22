@@ -489,7 +489,7 @@ impl AGICore {
         let mut context = self
             .execution_contexts
             .lock()
-            .unwrap()
+            .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
             .get(&goal_id)
             .ok_or_else(|| anyhow!("Goal {} not found", goal_id))?
             .clone();
@@ -630,7 +630,7 @@ impl AGICore {
             context.context_memory.push(ContextEntry {
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or(std::time::Duration::from_secs(0))
                     .as_secs(),
                 event: format!("step_{}_executed", index),
                 data: serde_json::to_value(&tool_result)?,
@@ -674,7 +674,7 @@ impl AGICore {
             // Update context
             self.execution_contexts
                 .lock()
-                .unwrap()
+                .map_err(|_| anyhow!("Failed to acquire execution contexts lock"))?
                 .insert(goal_id.clone(), context.clone());
         }
 

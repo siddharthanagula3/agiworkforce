@@ -481,3 +481,34 @@ export const useUsageStore = create<UsageStore>()(
     { name: 'UsageStore' },
   ),
 );
+
+/**
+ * Initialize usage store to sync with billing period
+ */
+export function initializeUsageStore(): () => void {
+  const unsubscribe = useBillingStore.subscribe((state) => {
+    const usageStore = useUsageStore.getState();
+    const { subscription, customer } = state;
+
+    if (subscription && subscription.current_period_start && subscription.current_period_end) {
+      // Check if period has changed
+      if (
+        subscription.current_period_start !== usageStore.periodStart ||
+        subscription.current_period_end !== usageStore.periodEnd
+      ) {
+        usageStore.setPeriod(subscription.current_period_start, subscription.current_period_end);
+
+        // Fetch usage for new period
+        if (customer) {
+          void usageStore.fetchUsage(
+            customer.id,
+            subscription.current_period_start,
+            subscription.current_period_end,
+          );
+        }
+      }
+    }
+  });
+
+  return unsubscribe;
+}
