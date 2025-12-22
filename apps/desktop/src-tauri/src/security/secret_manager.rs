@@ -380,7 +380,7 @@ mod tests {
         use rand::Rng;
         let random_suffix: u32 = rand::thread_rng().gen();
         let service_name = format!("AGI_Workforce_Test_{}", random_suffix);
-        
+
         SecretManager::new_with_service_name(Arc::new(Mutex::new(conn)), service_name)
     }
 
@@ -420,7 +420,7 @@ mod tests {
     #[test]
     fn test_get_or_create_jwt_secret() {
         let manager = create_test_manager();
-        
+
         // Ensure clean state from previous runs
         let _ = manager.delete_jwt_secret();
 
