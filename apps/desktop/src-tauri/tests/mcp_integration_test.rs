@@ -165,7 +165,7 @@ mod mcp_integration_tests {
         // In a real integration environment, this would call the actual tool.
         // let result = client.call_tool("filesystem", "read_file", args).await;
         // assert!(result.is_ok());
-        
+
         assert!(true);
     }
 
