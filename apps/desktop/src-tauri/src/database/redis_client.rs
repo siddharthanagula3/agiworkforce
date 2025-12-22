@@ -701,6 +701,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_disconnect() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(0));
@@ -715,6 +716,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_string_operations() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(15)); // Use DB 15 for tests
@@ -745,6 +747,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_list_operations() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(15));
@@ -771,6 +774,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_hash_operations() {
         let client = RedisClient::new();
         let config = ConnectionConfig::redis("localhost", 6379, None, Some(15));

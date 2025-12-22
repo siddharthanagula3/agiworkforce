@@ -388,13 +388,18 @@ impl ToolResultCache {
     fn invalidate_key(&self, cache_key: &str) {
         if let Some((_, entry)) = self.entries.remove(cache_key) {
             // Update size tracking
-            let mut current_size = self.current_size_bytes.write();
-            *current_size = current_size.saturating_sub(entry.size_bytes);
+            let new_size = {
+                let mut current_size = self.current_size_bytes.write();
+                *current_size = current_size.saturating_sub(entry.size_bytes);
+                *current_size
+            };
 
             // Update stats
-            let mut stats = self.stats.write();
-            stats.entry_count = self.entries.len();
-            stats.total_size_bytes = *self.current_size_bytes.read();
+            {
+                let mut stats = self.stats.write();
+                stats.entry_count = self.entries.len();
+                stats.total_size_bytes = new_size;
+            }
 
             tracing::debug!(
                 "[ToolCache] Invalidated cache entry (key: {})",
