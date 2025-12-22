@@ -23,6 +23,14 @@ export default async function BillingPage() {
     .eq('user_id', session.user.id)
     .single();
 
+  // Require active subscription
+  const activeStatuses = ['active', 'trialing'];
+  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
+
+  if (!hasActiveSubscription) {
+    redirect('/pricing?reason=subscription_required');
+  }
+
   const isSubscribed = subscription?.status === 'active' || subscription?.status === 'trialing';
 
   return (

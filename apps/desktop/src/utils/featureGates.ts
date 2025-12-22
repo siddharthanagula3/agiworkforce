@@ -40,8 +40,10 @@ export function checkFeatureAccess(
   feature: FeatureId,
   subscription?: SubscriptionInfo | null,
 ): FeatureCheckResult {
+  const planName = (subscription?.plan_name || 'free').toLowerCase();
+
   // Free tier or no subscription
-  if (!subscription || subscription.plan_name === 'free') {
+  if (planName === 'free' || planName === 'none') {
     const restrictedFeatures: FeatureId[] = [
       'unlimited_automations',
       'browser_automation',
@@ -59,16 +61,14 @@ export function checkFeatureAccess(
     if (restrictedFeatures.includes(feature)) {
       return {
         allowed: false,
-        reason: `This feature requires a Pro subscription or higher`,
+        reason: `This feature requires a Hobby subscription or higher`,
         upgradeRequired: true,
-        suggestedPlan: 'pro',
+        suggestedPlan: 'hobby',
       };
     }
 
     return { allowed: true };
   }
-
-  const planName = subscription.plan_name.toLowerCase();
 
   // Check feature availability based on plan
   switch (feature) {
@@ -77,19 +77,21 @@ export function checkFeatureAccess(
     case 'advanced_ui_automation':
     case 'email_support':
     case 'llm_cost_tracking':
-      return planName !== 'free'
+      // Hobby and above
+      return ['hobby', 'pro', 'max', 'team', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,
-            reason: 'Upgrade to Pro to access this feature',
+            reason: 'Upgrade to Hobby to access this feature',
             upgradeRequired: true,
-            suggestedPlan: 'pro',
+            suggestedPlan: 'hobby',
           };
 
     case 'priority_support':
     case 'custom_workflows':
     case 'webhook_integration':
     case 'analytics':
+      // Max and above
       return ['max', 'team', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
@@ -101,6 +103,7 @@ export function checkFeatureAccess(
 
     case 'team_features':
     case 'sso':
+      // Team and above
       return ['team', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
