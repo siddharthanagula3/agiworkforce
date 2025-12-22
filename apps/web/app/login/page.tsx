@@ -14,7 +14,8 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,12 +30,56 @@ function LoginForm() {
     });
 
     if (error) {
-      setMessage(error.message);
+      if (error.message.includes('Email not confirmed')) {
+        setMessage({
+          type: 'error',
+          text: 'Please confirm your email address before signing in. Check your inbox for the confirmation link.',
+        });
+      } else if (error.message.includes('Invalid login credentials')) {
+        setMessage({
+          type: 'error',
+          text: 'Invalid email or password. Please try again.',
+        });
+      } else {
+        setMessage({ type: 'error', text: error.message });
+      }
     } else {
       // Redirect to the original destination or home
       window.location.href = redirectTo;
     }
     setLoading(false);
+  };
+
+  const handleMagicLink = async () => {
+    if (!email) {
+      setMessage({
+        type: 'error',
+        text: 'Please enter your email address to receive a magic link.',
+      });
+      return;
+    }
+    setMagicLinkLoading(true);
+    setMessage(null);
+
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+          redirectTo,
+        )}`,
+      },
+    });
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+    } else {
+      setMessage({
+        type: 'success',
+        text: 'Magic link sent! Check your email to sign in.',
+      });
+    }
+    setMagicLinkLoading(false);
   };
 
   const handleOAuth = async (provider: 'github' | 'google') => {
@@ -98,11 +143,36 @@ function LoginForm() {
               />
             </div>
 
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-12 border-dashed border-zinc-700 hover:border-zinc-500"
+              onClick={handleMagicLink}
+              disabled={magicLinkLoading || loading}
+            >
+              {magicLinkLoading ? 'Sending...' : 'Sign in with Magic Link'}
+            </Button>
+
             {message && (
-              <p className="text-sm text-red-500 bg-red-500/10 border border-red-500/20 p-3 rounded">
-                {message}
+              <p
+                className={`text-sm p-3 rounded border ${
+                  message.type === 'error'
+                    ? 'text-red-500 bg-red-500/10 border-red-500/20'
+                    : 'text-green-500 bg-green-500/10 border-green-500/20'
+                }`}
+              >
+                {message.text}
               </p>
             )}
+
+            <div className="flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                Forgot your password?
+              </Link>
+            </div>
 
             <Button type="submit" className="w-full h-12" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
