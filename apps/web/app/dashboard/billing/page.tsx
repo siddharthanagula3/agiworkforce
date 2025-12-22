@@ -5,6 +5,8 @@ import { Card, CardContent, CardTitle, CardHeader, CardDescription, Button } fro
 import { CheckCircle2, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BillingPage() {
   const supabase = await createSupabaseServerClient();
   const {
