@@ -4,6 +4,8 @@ import { DashboardLayout } from '../../../components/dashboard/DashboardLayout';
 import { Card, CardContent } from '@/components/ui';
 import { AlertCircle } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default async function UsagePage() {
   const supabase = await createSupabaseServerClient();
   const {
