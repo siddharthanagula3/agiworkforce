@@ -175,7 +175,7 @@ mailparse = "0.15"
 rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
 
 # Git integration (Safe replacement for shell commands)
-git2 = { version = "0.18", features = ["vendored-openssl"] }
+git2 = { version = "0.20", features = ["vendored-openssl"] }
 async-stripe = { version = "0.31", features = ["runtime-tokio-hyper"] }
 
 # Windows-specific (UI Automation only)
