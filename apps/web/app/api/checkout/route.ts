@@ -113,13 +113,26 @@ export async function POST(request: Request) {
   const origin = getOrigin(request);
 
   try {
-    // Hobby plan gets a 3-month free trial (90 days)
+    // Hobby plan gets a 3-month free trial (90 days) and BETATESTER coupon
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         plan_tier: plan,
         supabase_user_id: user.id,
       },
+      // Apply 3-month trial for hobby plan
+      trial_period_days: plan === 'hobby' ? 90 : undefined,
     };
+
+    // Automatically apply BETATESTER coupon for hobby plan
+    const discounts: Stripe.Checkout.SessionCreateParams.Discount[] | undefined =
+      plan === 'hobby'
+        ? [
+            {
+              coupon: 'Oj7h7qgM', // BETATESTER - 3 Months Free coupon ID
+            },
+          ]
+        : undefined;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [
@@ -129,7 +142,8 @@ export async function POST(request: Request) {
         },
       ],
       subscription_data: subscriptionData,
-      allow_promotion_codes: true,
+      discounts: discounts,
+      allow_promotion_codes: true, // Still allow manual promo codes
       success_url: `${origin}/download?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       customer_email: user.email ?? undefined,

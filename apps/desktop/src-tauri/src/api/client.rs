@@ -371,7 +371,7 @@ impl ApiClient {
         })
     }
 
-    /// Download file from URL
+    /// Download file from URL with retry logic
     pub async fn download_file(
         &self,
         url: &str,
@@ -379,91 +379,134 @@ impl ApiClient {
         auth: AuthType,
     ) -> Result<ApiResponse> {
         let start = std::time::Instant::now();
+        let max_retries = 3;
+        let mut retry_count = 0;
+        #[allow(unused_assignments)]
+        let mut last_error = String::new();
 
         tracing::info!("Downloading file from {} to {}", url, save_path);
 
-        // Create a raw reqwest client for downloads
-        let raw_client = Client::builder()
-            .timeout(Duration::from_secs(300))
-            .build()
-            .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
+        loop {
+            // Create a raw reqwest client each time to ensure clean state
+            let raw_client = Client::builder()
+                .timeout(Duration::from_secs(300))
+                .build()
+                .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
 
-        // Build request
-        let mut req_builder = raw_client.get(url);
+            // Build request
+            let mut req_builder = raw_client.get(url);
 
-        // Add authentication manually for raw client
-        req_builder = match &auth {
-            AuthType::None => req_builder,
-            AuthType::Bearer { token } => req_builder.bearer_auth(token),
-            AuthType::ApiKey { key, header } => req_builder.header(header, key),
-            AuthType::Basic { username, password } => {
-                req_builder.basic_auth(username, Some(password))
+            // Add authentication
+            req_builder = match &auth {
+                AuthType::None => req_builder,
+                AuthType::Bearer { token } => req_builder.bearer_auth(token),
+                AuthType::ApiKey { key, header } => req_builder.header(header, key),
+                AuthType::Basic { username, password } => {
+                    req_builder.basic_auth(username, Some(password))
+                }
+                AuthType::OAuth2 { token } => req_builder.bearer_auth(token),
+            };
+
+            // Execute request
+            match req_builder.send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    let success = status.is_success();
+
+                    if !success {
+                        // If server returns error, don't blindly retry unless it's a 5xx
+                        if status.is_server_error() {
+                            if retry_count < max_retries {
+                                retry_count += 1;
+                                let backoff =
+                                    Duration::from_millis(500 * 2u64.pow(retry_count - 1));
+                                tracing::warn!(
+                                    "Download failed (status {}), retrying in {:?}...",
+                                    status,
+                                    backoff
+                                );
+                                tokio::time::sleep(backoff).await;
+                                continue;
+                            }
+                        }
+
+                        let headers = self.extract_headers(&response);
+                        let body = response.text().await.map_err(|e| {
+                            Error::Other(format!("Failed to read error response: {}", e))
+                        })?;
+
+                        return Ok(ApiResponse {
+                            status: status.as_u16(),
+                            headers,
+                            body,
+                            duration_ms: start.elapsed().as_millis(),
+                            success: false,
+                        });
+                    }
+
+                    // Success - write file
+                    // Note: response.bytes() consumes the response, so we can't extract headers afterwards easily from the same object
+                    // without cloning or extracting first. For simplicity in this retry loop, we'll extract headers if possible or just log size.
+                    // We'll extract headers from the success case before successful byte reading if we really need them,
+                    // but `reqwest::Response` is consumed.
+                    // Let's capture headers first.
+                    let headers = self.extract_headers(&response);
+
+                    let file_size = response.content_length().unwrap_or(0);
+                    match response.bytes().await {
+                        Ok(bytes) => match File::create(save_path).await {
+                            Ok(mut file) => {
+                                if let Err(e) = file.write_all(&bytes).await {
+                                    last_error = format!("Failed to write file: {}", e);
+                                } else if let Err(e) = file.flush().await {
+                                    last_error = format!("Failed to flush file: {}", e);
+                                } else {
+                                    let duration_ms = start.elapsed().as_millis();
+                                    tracing::info!(
+                                        "Download completed: size={} bytes, duration={}ms",
+                                        file_size,
+                                        duration_ms
+                                    );
+                                    return Ok(ApiResponse {
+                                        status: status.as_u16(),
+                                        headers,
+                                        body: format!(
+                                            "File downloaded successfully to {}",
+                                            save_path
+                                        ),
+                                        duration_ms,
+                                        success: true,
+                                    });
+                                }
+                            }
+                            Err(e) => last_error = format!("Failed to create file: {}", e),
+                        },
+                        Err(e) => last_error = format!("Failed to read response bytes: {}", e),
+                    }
+                }
+                Err(e) => {
+                    last_error = format!("Request failed: {}", e);
+                }
             }
-            AuthType::OAuth2 { token } => req_builder.bearer_auth(token),
-        };
 
-        // Execute request
-        let response = req_builder
-            .send()
-            .await
-            .map_err(|e| Error::Other(format!("Failed to download file: {}", e)))?;
-
-        let status = response.status();
-        let headers = self.extract_headers(&response);
-        let success = status.is_success();
-
-        if !success {
-            let body = response
-                .text()
-                .await
-                .map_err(|e| Error::Other(format!("Failed to read error response: {}", e)))?;
-
-            return Ok(ApiResponse {
-                status: status.as_u16(),
-                headers,
-                body,
-                duration_ms: start.elapsed().as_millis(),
-                success: false,
-            });
+            // Should we retry?
+            if retry_count < max_retries {
+                retry_count += 1;
+                let backoff = Duration::from_millis(500 * 2u64.pow(retry_count - 1));
+                tracing::warn!(
+                    "Download attempt {} failed: {}, retrying in {:?}...",
+                    retry_count,
+                    last_error,
+                    backoff
+                );
+                tokio::time::sleep(backoff).await;
+            } else {
+                return Err(Error::Other(format!(
+                    "Download failed after {} retries. Last error: {}",
+                    max_retries, last_error
+                )));
+            }
         }
-
-        // Get file size from headers if available
-        let file_size = response.content_length().unwrap_or(0);
-
-        // Read response body as bytes
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| Error::Other(format!("Failed to read response bytes: {}", e)))?;
-
-        // Write to file
-        let mut file = File::create(save_path)
-            .await
-            .map_err(|e| Error::Other(format!("Failed to create file: {}", e)))?;
-
-        file.write_all(&bytes)
-            .await
-            .map_err(|e| Error::Other(format!("Failed to write file: {}", e)))?;
-
-        file.flush()
-            .await
-            .map_err(|e| Error::Other(format!("Failed to flush file: {}", e)))?;
-
-        let duration_ms = start.elapsed().as_millis();
-
-        tracing::info!(
-            "Download completed: size={} bytes, duration={}ms",
-            file_size,
-            duration_ms
-        );
-
-        Ok(ApiResponse {
-            status: status.as_u16(),
-            headers,
-            body: format!("File downloaded successfully to {}", save_path),
-            duration_ms,
-            success: true,
-        })
     }
 
     /// Add authentication to request (using reqwest_middleware's RequestBuilder)
