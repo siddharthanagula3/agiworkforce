@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Bot, ArrowRight, Check } from 'lucide-react';
+
+import { ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui';
+import { Header } from '../../components/layout/Header';
 
 export default function PricingPage() {
-  const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('annual');
 
@@ -40,27 +39,7 @@ export default function PricingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight">
-            <Bot className="h-6 w-6 text-blue-500" />
-            <span>AGI Workforce</span>
-          </Link>
-          <nav className="flex items-center gap-4 text-sm text-zinc-400">
-            <Link href="/download" className="hover:text-white">
-              Download
-            </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push('/login')}
-              className="hidden sm:inline-flex"
-            >
-              Sign In
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       <main className="flex-1">
         <section className="py-16 md:py-24">
