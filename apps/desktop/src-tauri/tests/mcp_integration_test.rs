@@ -168,7 +168,6 @@ mod mcp_integration_tests {
         
         assert!(true);
     }
-    }
 
     /// Test tool search
     #[tokio::test]
