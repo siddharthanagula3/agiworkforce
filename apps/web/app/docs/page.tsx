@@ -81,7 +81,7 @@ export default function DocsPage() {
               ))}
             </div>
 
-            <section id="getting-started" className="mt-20">
+            <section id="getting-started" className="mt-20 pt-16 border-t border-white/10">
               <h2 className="text-3xl font-bold mb-6">Getting Started</h2>
               <div className="prose prose-invert max-w-none text-zinc-400">
                 <p className="mb-4">
@@ -93,6 +93,55 @@ export default function DocsPage() {
                   <li>Create an account or sign in to synchronize your workspace.</li>
                   <li>Configure your first LLM provider (OpenAI, Anthropic, or local Ollama).</li>
                 </ol>
+              </div>
+            </section>
+
+            <section id="agent-config" className="mt-20 pt-16 border-t border-white/10">
+              <h2 className="text-3xl font-bold mb-6">Agent Configuration</h2>
+              <div className="prose prose-invert max-w-none text-zinc-400">
+                <p className="mb-4">
+                  Configure your autonomous agents to match your specific needs. You can define:
+                </p>
+                <ul className="list-disc list-inside space-y-2 ml-4">
+                  <li>
+                    <strong>Tools:</strong> Enable or disable specific capabilities like file
+                    access, web browsing, or terminal execution.
+                  </li>
+                  <li>
+                    <strong>Models:</strong> Choose different LLMs for different tasks (e.g., GPT-4
+                    for reasoning, Haiku for speed).
+                  </li>
+                  <li>
+                    <strong>Permissions:</strong> Set strict boundaries on what your agent can and
+                    cannot do.
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            <section id="workflow" className="mt-20 pt-16 border-t border-white/10">
+              <h2 className="text-3xl font-bold mb-6">Workflow Automation</h2>
+              <div className="prose prose-invert max-w-none text-zinc-400">
+                <p className="mb-4">Chain multiple agents together to create complex workflows.</p>
+                <ul className="list-disc list-inside space-y-2 ml-4">
+                  <li>Use the visual builder to drag and drop steps.</li>
+                  <li>Define triggers (e.g., on file change, daily at 9am).</li>
+                  <li>Monitor execution in real-time with the built-in debugger.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section id="security" className="mt-20 pt-16 border-t border-white/10">
+              <h2 className="text-3xl font-bold mb-6">Security & Privacy</h2>
+              <div className="prose prose-invert max-w-none text-zinc-400">
+                <p className="mb-4">
+                  Security is our top priority. Here&apos;s how we keep your data safe:
+                </p>
+                <ul className="list-disc list-inside space-y-2 ml-4">
+                  <li>All credentials are encrypted at rest using AES-256-GCM.</li>
+                  <li>We never train on your data.</li>
+                  <li>Network requests are proxied securely or made directly from your machine.</li>
+                </ul>
               </div>
             </section>
           </div>
