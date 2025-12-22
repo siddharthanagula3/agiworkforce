@@ -169,7 +169,7 @@ llama-cpp-2 = { version = "0.1", optional = true }
 async-imap = "0.9"
 tokio-native-tls = "0.3"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
-mailparse = "0.15"
+mailparse = "0.16"
 
 # Model Context Protocol (MCP)
 rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
