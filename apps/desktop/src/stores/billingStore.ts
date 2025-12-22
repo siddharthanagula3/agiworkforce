@@ -1,11 +1,13 @@
 /**
- * Billing store - Manages subscription, customer, and invoice state
+ * Billing store - Manages minimal subscription state for feature gating
  */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { StripeService, type CustomerInfo, type SubscriptionInfo, type InvoiceInfo } from '../services/stripe';
+import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
+import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
+import { asPlanTier } from '../lib/supabase';
 
 interface BillingState {
   // Customer info
@@ -14,13 +16,6 @@ interface BillingState {
   // Subscription info
   subscription: SubscriptionInfo | null;
   subscriptionLoading: boolean;
-
-  // Invoices
-  invoices: InvoiceInfo[];
-  invoicesLoading: boolean;
-
-  // Billing portal
-  portalUrl: string | null;
 
   // Initialization
   initialized: boolean;
@@ -35,32 +30,11 @@ interface BillingActions {
 
   // Customer actions
   setCustomer: (customer: CustomerInfo | null) => void;
-  createCustomer: (email: string, name?: string) => Promise<CustomerInfo>;
-  getCustomerByEmail: (email: string) => Promise<CustomerInfo | null>;
+  fetchCustomerByEmail: (email: string) => Promise<CustomerInfo | null>;
 
   // Subscription actions
   setSubscription: (subscription: SubscriptionInfo | null) => void;
-  createSubscription: (
-    customerStripeId: string,
-    priceId: string,
-    planName: string,
-    billingInterval: 'monthly' | 'yearly',
-    trialDays?: number
-  ) => Promise<SubscriptionInfo>;
-  fetchSubscription: (stripeSubscriptionId: string) => Promise<void>;
   fetchActiveSubscription: (customerId: string) => Promise<void>;
-  updateSubscription: (
-    stripeSubscriptionId: string,
-    newPriceId: string,
-    newPlanName: string
-  ) => Promise<SubscriptionInfo>;
-  cancelSubscription: (stripeSubscriptionId: string) => Promise<void>;
-
-  // Invoice actions
-  fetchInvoices: (customerStripeId: string) => Promise<void>;
-
-  // Portal actions
-  createPortalSession: (customerStripeId: string, returnUrl: string) => Promise<string>;
 
   // Computed properties
   isActive: () => boolean;
@@ -82,9 +56,6 @@ export const useBillingStore = create<BillingStore>()(
         customer: null,
         subscription: null,
         subscriptionLoading: false,
-        invoices: [],
-        invoicesLoading: false,
-        portalUrl: null,
         initialized: false,
         error: null,
 
@@ -94,7 +65,8 @@ export const useBillingStore = create<BillingStore>()(
             await StripeService.initialize(stripeApiKey, webhookSecret);
             set({ initialized: true, error: null });
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to initialize billing';
+            const errorMessage =
+              error instanceof Error ? error.message : 'Failed to initialize billing';
             set({ error: errorMessage, initialized: false });
             throw error;
           }
@@ -103,20 +75,7 @@ export const useBillingStore = create<BillingStore>()(
         // Customer actions
         setCustomer: (customer) => set({ customer }),
 
-        createCustomer: async (email: string, name?: string) => {
-          try {
-            set({ error: null });
-            const customer = await StripeService.createCustomer(email, name);
-            set({ customer });
-            return customer;
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to create customer';
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
-        getCustomerByEmail: async (email: string) => {
+        fetchCustomerByEmail: async (email: string) => {
           try {
             set({ error: null });
             const customer = await StripeService.getCustomerByEmail(email);
@@ -134,123 +93,15 @@ export const useBillingStore = create<BillingStore>()(
         // Subscription actions
         setSubscription: (subscription) => set({ subscription }),
 
-        createSubscription: async (
-          customerStripeId: string,
-          priceId: string,
-          planName: string,
-          billingInterval: 'monthly' | 'yearly',
-          trialDays?: number
-        ) => {
-          try {
-            set({ subscriptionLoading: true, error: null });
-            const subscription = await StripeService.createSubscription(
-              customerStripeId,
-              priceId,
-              planName,
-              billingInterval,
-              trialDays
-            );
-            set({ subscription, subscriptionLoading: false });
-            return subscription;
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to create subscription';
-            set({ error: errorMessage, subscriptionLoading: false });
-            throw error;
-          }
-        },
-
-        fetchSubscription: async (stripeSubscriptionId: string) => {
-          try {
-            set({ subscriptionLoading: true, error: null });
-            const subscription = await StripeService.getSubscription(stripeSubscriptionId);
-            set({ subscription, subscriptionLoading: false });
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to fetch subscription';
-            set({ error: errorMessage, subscriptionLoading: false });
-            throw error;
-          }
-        },
-
         fetchActiveSubscription: async (customerId: string) => {
           try {
             set({ subscriptionLoading: true, error: null });
             const subscription = await StripeService.getActiveSubscription(customerId);
             set({ subscription, subscriptionLoading: false });
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to fetch active subscription';
+            const errorMessage =
+              error instanceof Error ? error.message : 'Failed to fetch active subscription';
             set({ error: errorMessage, subscriptionLoading: false });
-            throw error;
-          }
-        },
-
-        updateSubscription: async (
-          stripeSubscriptionId: string,
-          newPriceId: string,
-          newPlanName: string
-        ) => {
-          try {
-            set({ subscriptionLoading: true, error: null });
-            const subscription = await StripeService.updateSubscription(
-              stripeSubscriptionId,
-              newPriceId,
-              newPlanName
-            );
-            set({ subscription, subscriptionLoading: false });
-            return subscription;
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to update subscription';
-            set({ error: errorMessage, subscriptionLoading: false });
-            throw error;
-          }
-        },
-
-        cancelSubscription: async (stripeSubscriptionId: string) => {
-          try {
-            set({ subscriptionLoading: true, error: null });
-            await StripeService.cancelSubscription(stripeSubscriptionId);
-
-            // Update subscription status locally
-            const { subscription } = get();
-            if (subscription) {
-              set({
-                subscription: {
-                  ...subscription,
-                  status: 'canceled',
-                  canceled_at: Math.floor(Date.now() / 1000),
-                },
-                subscriptionLoading: false,
-              });
-            }
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to cancel subscription';
-            set({ error: errorMessage, subscriptionLoading: false });
-            throw error;
-          }
-        },
-
-        // Invoice actions
-        fetchInvoices: async (customerStripeId: string) => {
-          try {
-            set({ invoicesLoading: true, error: null });
-            const invoices = await StripeService.getInvoices(customerStripeId);
-            set({ invoices, invoicesLoading: false });
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to fetch invoices';
-            set({ error: errorMessage, invoicesLoading: false });
-            throw error;
-          }
-        },
-
-        // Portal actions
-        createPortalSession: async (customerStripeId: string, returnUrl: string) => {
-          try {
-            set({ error: null });
-            const portalUrl = await StripeService.createPortalSession(customerStripeId, returnUrl);
-            set({ portalUrl });
-            return portalUrl;
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to create portal session';
-            set({ error: errorMessage });
             throw error;
           }
         },
@@ -282,8 +133,71 @@ export const useBillingStore = create<BillingStore>()(
           subscription: state.subscription,
           initialized: state.initialized,
         }),
-      }
+      },
     ),
-    { name: 'BillingStore' }
-  )
+    { name: 'BillingStore' },
+  ),
 );
+
+/**
+ * Initialize billing store with Supabase Auth listener
+ * This ensures billing state is synced with authenticated user
+ */
+export function initializeBillingStore(): () => void {
+  const unsubscribe = supabaseAuth.onAuthStateChange((authState: AuthState) => {
+    const store = useBillingStore.getState();
+
+    if (authState.user && authState.session) {
+      // Sync customer info from profile/user
+      const customerInfo: CustomerInfo = {
+        id: authState.user.id,
+        stripe_customer_id: authState.subscription?.stripe_customer_id || '',
+        email: authState.user.email || '',
+        name: authState.profile?.display_name || undefined,
+        created_at: Math.floor(new Date(authState.user.created_at).getTime() / 1000),
+        updated_at: Date.now() / 1000,
+      };
+      store.setCustomer(customerInfo);
+
+      // Sync subscription info
+      if (authState.subscription) {
+        const sub = authState.subscription;
+        const planTier = asPlanTier(sub.plan_tier);
+
+        const subscriptionInfo: SubscriptionInfo = {
+          id: sub.stripe_subscription_id || `sub_${authState.user.id}`, // Fallback ID
+          customer_id: authState.user.id,
+          stripe_subscription_id: sub.stripe_subscription_id || '',
+          stripe_price_id: sub.stripe_price_id || '',
+          plan_name: planTier,
+          billing_interval: 'monthly', // Default or infer if available
+          status: sub.status || 'none',
+          current_period_start: sub.current_period_start
+            ? Math.floor(new Date(sub.current_period_start).getTime() / 1000)
+            : 0,
+          current_period_end: sub.current_period_end
+            ? Math.floor(new Date(sub.current_period_end).getTime() / 1000)
+            : 0,
+          cancel_at_period_end: sub.cancel_at_period_end || false,
+          cancel_at: undefined, // Supabase doesn't have a distinct future cancel date field usually different from period end
+          canceled_at: sub.canceled_at
+            ? Math.floor(new Date(sub.canceled_at).getTime() / 1000)
+            : undefined,
+          amount: 0, // Not stored in Supabase subscription table currently
+          currency: 'usd',
+          created_at: Math.floor(new Date(sub.created_at || new Date()).getTime() / 1000),
+          updated_at: Math.floor(new Date(sub.updated_at || new Date()).getTime() / 1000),
+        };
+        store.setSubscription(subscriptionInfo);
+      } else {
+        store.setSubscription(null);
+      }
+    } else if (!authState.user && !authState.isLoading) {
+      // User signed out
+      store.setCustomer(null);
+      store.setSubscription(null);
+    }
+  });
+
+  return unsubscribe;
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { AlertCircle, Bot, CheckCircle2, Mail } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle2, Github, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
@@ -10,6 +10,7 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signupComplete, setSignupComplete] = useState(false);
@@ -20,6 +21,12 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
     setExistingUser(false);
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
 
     const supabase = getSupabaseClient();
 
@@ -115,7 +122,36 @@ export default function SignupPage() {
           <p className="mt-2 text-zinc-400">Start building your AI workforce today</p>
         </div>
 
-        <form onSubmit={handleSignup} className="mt-8 space-y-4">
+        <div className="mt-8 space-y-4">
+          <Button
+            variant="outline"
+            className="w-full h-12"
+            onClick={async () => {
+              const supabase = getSupabaseClient();
+              await supabase.auth.signInWithOAuth({
+                provider: 'github',
+                options: {
+                  redirectTo: `${window.location.origin}/auth/callback`,
+                },
+              });
+            }}
+          >
+            <Github className="mr-2 h-5 w-5" />{' '}
+            {/* Using Bot as placeholder or import Github if available */}
+            Continue with GitHub
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-zinc-800" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-black px-2 text-zinc-500">Or sign up with email</span>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSignup} className="space-y-4">
           <div>
             <Input
               type="text"
@@ -140,6 +176,16 @@ export default function SignupPage() {
               placeholder="Password (min 6 characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
+              required
+            />
+          </div>
+          <div>
+            <Input
+              type="password"
+              placeholder="Confirm Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               minLength={6}
               required
             />
