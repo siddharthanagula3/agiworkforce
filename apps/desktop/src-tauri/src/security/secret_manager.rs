@@ -402,6 +402,9 @@ mod tests {
     #[test]
     fn test_get_or_create_jwt_secret() {
         let manager = create_test_manager();
+        
+        // Ensure clean state from previous runs
+        let _ = manager.delete_jwt_secret();
 
         // First call should create a new secret
         let secret1 = manager.get_or_create_jwt_secret().unwrap();
