@@ -20,12 +20,21 @@ import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
-  Attachment,
-  ContextItem,
   FocusMode,
   useUnifiedChatStore,
+  Attachment,
+  ContextItem,
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
+import { checkSubscriptionGate } from '../../utils/subscriptionGate';
+import { SubscriptionLockDialog } from '../SubscriptionLockDialog';
+import { useUsageStore } from '../../stores/usageStore';
+import { useBillingStore } from '../../stores/billingStore';
+
+const PLAN_CREDIT_LIMITS = {
+  pro: 25.0,
+  max: 300.0,
+};
 
 export interface SendOptions {
   attachments?: Attachment[];
@@ -80,6 +89,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showLockDialog, setShowLockDialog] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -270,6 +280,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     event?.preventDefault();
     if (!content.trim() || isDisabled) return;
 
+    // Check subscription gate before sending
+    const gateResult = checkSubscriptionGate();
+    if (!gateResult.hasAccess) {
+      setShowLockDialog(true);
+      return;
+    }
+
     setIsSending(true);
     setSubmitError(null);
     const messageContent = content;
@@ -354,6 +371,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     tokenUsage?.current != null && tokenUsage?.max != null && tokenUsage.max > 0
       ? Math.min((tokenUsage.current / tokenUsage.max) * 100, 100)
       : 0;
+
+  // Monthly Credit Calculation
+  const { getTokenCost } = useUsageStore();
+  const { subscription } = useBillingStore();
+  const monthlyCost = getTokenCost();
+
+  // Determine plan limits
+  // Robust matching: check if plan name contains 'pro' or 'max' case-insensitive
+  const planName = subscription?.plan_name?.toLowerCase() || '';
+  let monthlyLimit = 0;
+  if (planName.includes('pro')) monthlyLimit = PLAN_CREDIT_LIMITS.pro;
+  else if (planName.includes('max')) monthlyLimit = PLAN_CREDIT_LIMITS.max;
+
+  const showCreditUsage = monthlyLimit > 0;
+  const creditPercentage = showCreditUsage ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;
+
+  const isLowBalance = showCreditUsage && monthlyLimit - monthlyCost < monthlyLimit * 0.1; // < 10% remaining
 
   return (
     <>
@@ -709,30 +743,60 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               Enter to send / Shift+Enter for newline
             </span>
 
-            {tokenUsage && (
-              <div className="flex items-center gap-2">
+            {showCreditUsage ? (
+              <div
+                className="flex items-center gap-2"
+                title={`Monthly Usage: $${monthlyCost.toFixed(2)} / $${monthlyLimit.toFixed(2)}`}
+              >
                 <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
                   <div
                     className={cn(
                       'h-full rounded-full transition-all duration-300',
-                      tokenPercentage > 90
+                      creditPercentage > 90
                         ? 'bg-red-500'
-                        : tokenPercentage > 70
+                        : creditPercentage > 75
                           ? 'bg-amber-500'
-                          : 'bg-primary',
+                          : 'bg-green-500', // Green for money/good
                     )}
-                    style={{ width: `${tokenPercentage}%` }}
+                    style={{ width: `${creditPercentage}%` }}
                   />
                 </div>
-                <span className="text-xs text-gray-400 dark:text-gray-500">
-                  {(tokenUsage.current ?? 0).toLocaleString()} /{' '}
-                  {(tokenUsage.max ?? 0).toLocaleString()}
+                <span
+                  className={cn(
+                    'text-xs font-medium tabular-nums',
+                    isLowBalance ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500',
+                  )}
+                >
+                  ${monthlyCost.toFixed(2)} / ${monthlyLimit.toFixed(0)}
                 </span>
               </div>
+            ) : (
+              tokenUsage && (
+                <div className="flex items-center gap-2" title="Context Window Usage">
+                  <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-300',
+                        tokenPercentage > 90
+                          ? 'bg-red-500'
+                          : tokenPercentage > 70
+                            ? 'bg-amber-500'
+                            : 'bg-primary',
+                      )}
+                      style={{ width: `${tokenPercentage}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {(tokenUsage.current ?? 0).toLocaleString()} /{' '}
+                    {(tokenUsage.max ?? 0).toLocaleString()}
+                  </span>
+                </div>
+              )
             )}
           </div>
         </div>
       </motion.div>
+      <SubscriptionLockDialog open={showLockDialog} onOpenChange={setShowLockDialog} />
     </>
   );
 };

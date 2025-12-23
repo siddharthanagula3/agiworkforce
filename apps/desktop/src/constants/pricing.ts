@@ -5,8 +5,8 @@
  */
 
 export const STRIPE_PRICE_IDS = {
-  hobby_monthly: 'price_1Sgwx10zEfO6BZMh7thtFU77',
-  hobby_yearly: 'price_1Sgwx20zEfO6BZMhbgpxL8TI',
+  hobby_monthly: 'price_1Sgwrv0zEfO6BZMhe6hCXMhI',
+  hobby_yearly: 'price_1Sgwrv0zEfO6BZMhF5T4FqgN',
   free: null,
   pro_monthly: 'price_1Sgwx20zEfO6BZMh3ix7hivi',
   pro_yearly: 'price_1Sgwx30zEfO6BZMhJXsduOyl',
@@ -30,6 +30,7 @@ export interface PricingPlan {
     apiCalls: number | null;
     storage: number | null; // in MB
     teamMembers: number | null;
+    tokenCredits: number; // Monthly credit limit in USD
   };
   popular?: boolean;
 }
@@ -51,6 +52,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 50,
       storage: 512,
       teamMembers: 1,
+      tokenCredits: 0,
     },
   },
   {
@@ -69,6 +71,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 100,
       storage: 1024, // 1 GB
       teamMembers: 1,
+      tokenCredits: 10, // $10 worth of tokens
     },
   },
   {
@@ -87,6 +90,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 10000,
       storage: 10240, // 10 GB
       teamMembers: 1,
+      tokenCredits: 25,
     },
     popular: true,
   },
@@ -106,6 +110,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: null,
       storage: 51200, // 50 GB
       teamMembers: 1,
+      tokenCredits: 300,
     },
   },
   {
@@ -129,6 +134,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: null,
       storage: null,
       teamMembers: null,
+      tokenCredits: 0,
     },
   },
 ];
