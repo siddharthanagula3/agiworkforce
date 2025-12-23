@@ -254,51 +254,43 @@ const DesktopShell = () => {
   }
 
   // Check subscription gate - require hobby+ tier subscription
-  const SubscriptionGate = lazy(() =>
-    import('./components/SubscriptionGate').then((m) => ({
-      default: m.SubscriptionGate,
-    })),
-  );
 
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <SubscriptionGate>
-        <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
-          {!isTauri && (
-            <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
-              <strong>Web Development Mode</strong> - Running without Tauri. Some features are
-              mocked.
-            </div>
-          )}
-          <TitleBar
-            state={{ focused: state.focused, maximized: state.maximized }}
-            actions={actions}
-            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            commandShortcutHint={commandShortcutHint}
-          />
-          <main className="flex flex-1 min-h-0 min-w-0 bg-zinc-950">
-            <div className="flex-1 overflow-hidden">
-              <Suspense fallback={<LoadingFallback />}>
-                <UnifiedAgenticChat
-                  className="h-full w-full"
-                  layout="default"
-                  defaultSidecarOpen={false}
-                  onOpenSettings={() => setSettingsPanelOpen(true)}
-                />
-              </Suspense>
-            </div>
-          </main>
-          <CommandPalette
-            open={commandPaletteOpen}
-            onOpenChange={setCommandPaletteOpen}
-            options={commandOptions}
-          />
-          <Suspense fallback={null}>
-            <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
-          </Suspense>
-          <ErrorToastContainer position="top-right" />
-        </div>
-      </SubscriptionGate>
+      <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
+        {!isTauri && (
+          <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
+            <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
+          </div>
+        )}
+        <TitleBar
+          state={{ focused: state.focused, maximized: state.maximized }}
+          actions={actions}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          commandShortcutHint={commandShortcutHint}
+        />
+        <main className="flex flex-1 min-h-0 min-w-0 bg-zinc-950">
+          <div className="flex-1 overflow-hidden">
+            <Suspense fallback={<LoadingFallback />}>
+              <UnifiedAgenticChat
+                className="h-full w-full"
+                layout="default"
+                defaultSidecarOpen={false}
+                onOpenSettings={() => setSettingsPanelOpen(true)}
+              />
+            </Suspense>
+          </div>
+        </main>
+        <CommandPalette
+          open={commandPaletteOpen}
+          onOpenChange={setCommandPaletteOpen}
+          options={commandOptions}
+        />
+        <Suspense fallback={null}>
+          <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
+        </Suspense>
+        <ErrorToastContainer position="top-right" />
+      </div>
     </Suspense>
   );
 };

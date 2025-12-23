@@ -71,10 +71,23 @@ impl Stream for SseStreamParser {
 
                 self.buffer.push_str(&text);
 
-                // Process complete SSE events (ending with \n\n)
-                while let Some(event_end) = self.buffer.find("\n\n") {
+                // Determine delimiter based on provider
+                // Ollama uses NDJSON (\n), others use SSE (\n\n)
+                let delimiter = match self.provider {
+                    crate::router::Provider::Ollama => "\n",
+                    _ => "\n\n",
+                };
+
+                // Process complete Events
+                while let Some(event_end) = self.buffer.find(delimiter) {
                     let event = self.buffer[..event_end].to_string();
-                    self.buffer = self.buffer[event_end + 2..].to_string();
+                    let delimiter_len = delimiter.len();
+                    self.buffer = self.buffer[event_end + delimiter_len..].to_string();
+
+                    // For Ollama with empty lines (sometimes happens), skip parsing
+                    if event.trim().is_empty() {
+                        continue;
+                    }
 
                     match parse_sse_event(&event, self.provider) {
                         Ok(chunk) => {
@@ -88,7 +101,7 @@ impl Stream for SseStreamParser {
                         }
                         Err(e) => {
                             // Skip malformed events, but log them
-                            tracing::warn!("Failed to parse SSE event: {}", e);
+                            tracing::warn!("Failed to parse stream event: {}", e);
                         }
                     }
                 }
