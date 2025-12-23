@@ -1,13 +1,19 @@
+/**
+ * Unified Chat Store
+ *
+ * This store manages the central state for the agentic chat interface, including:
+ * - Conversation history and messages
+ * - Active agent status and background tasks
+ * - Tool executions, file operations, and terminal commands
+ * - Sidecar state (terminal, browser, code editor)
+ * - Approval workflows and trusted operations
+ */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, isTauri } from '../lib/tauri-mock';
 import type { Artifact } from '../types/chat';
 import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
-
-
-
-
 
 export interface MessageMetadata {
   tokenCount?: number;
@@ -22,7 +28,7 @@ export interface MessageMetadata {
   streaming?: boolean;
   artifacts?: Artifact[];
   type?: 'reasoning' | 'response';
-  
+
   tool?: string;
   tool_call?: string;
   name?: string;
@@ -52,7 +58,7 @@ export interface Attachment {
   path?: string;
   size?: number;
   mimeType?: string;
-  content?: string; 
+  content?: string;
 }
 
 export interface Operation {
@@ -72,8 +78,8 @@ export interface EnhancedMessage {
   artifacts?: Artifact[];
   operations?: Operation[];
   streaming?: boolean;
-  pending?: boolean; 
-  error?: string; 
+  pending?: boolean;
+  error?: string;
 }
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
@@ -288,34 +294,28 @@ export type SidecarSection =
 
 export type ConversationMode = 'safe' | 'full_control';
 
-
 export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-research' | null;
-
 
 export type ActiveView = 'chat' | 'projects' | 'artifacts';
 
-
 export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas' | 'data';
-
 
 export interface SidecarState {
   isOpen: boolean;
   activeMode: SidecarMode;
-  contextId: string | null; 
-  context?: any; 
+  contextId: string | null;
+  context?: any;
   autoTrigger: boolean;
 }
-
 
 export interface ActionTrailEntry {
   id: string;
   type: 'thinking' | 'searching' | 'coding' | 'running' | 'completed' | 'error';
   message: string;
   timestamp: Date;
-  fadeAfter?: number; 
+  fadeAfter?: number;
   metadata?: Record<string, unknown>;
 }
-
 
 export interface TokenUsage {
   current: number;
@@ -325,7 +325,6 @@ export interface TokenUsage {
   percentage: number;
   estimatedCost: number;
 }
-
 
 export interface Citation {
   id: string;
@@ -337,17 +336,12 @@ export interface Citation {
   timestamp: Date;
 }
 
-
-
-
-
 interface IdMapping {
   dbIdToUuid: Record<number, string>;
   uuidToDbId: Record<string, number>;
 }
 
 let idMappings: IdMapping = { dbIdToUuid: {}, uuidToDbId: {} };
-
 
 if (typeof window !== 'undefined') {
   idMappings = safeGetJSON<IdMapping>('id-mappings', { dbIdToUuid: {}, uuidToDbId: {} });
@@ -376,49 +370,36 @@ export function uuidToDbId(uuid: string): number | undefined {
   return idMappings.uuidToDbId[uuid];
 }
 
-
-
-
-
 export interface UnifiedChatState {
-  
   conversations: ConversationSummary[];
   activeConversationId: string | null;
   messagesByConversation: Record<string, EnhancedMessage[]>;
 
-  
   messages: EnhancedMessage[];
   isLoading: boolean;
   isStreaming: boolean;
   currentStreamingMessageId: string | null;
 
-  
   fileOperations: FileOperation[];
   terminalCommands: TerminalCommand[];
   toolExecutions: ToolExecution[];
   screenshots: Screenshot[];
   actionLog: ActionLogEntry[];
 
-  
   agents: AgentStatus[];
   agentStatus: AgentStatus | null;
 
-  
   backgroundTasks: BackgroundTask[];
 
-  
   pendingApprovals: ApprovalRequest[];
   trustedWorkflows: Record<string, TrustedWorkflow>;
 
-  
   activeContext: ContextItem[];
   workflowContext: WorkflowContext | null;
   plan: PlanData | null;
 
-  
   conversationMode: ConversationMode;
 
-  
   sidecarOpen: boolean;
   sidecarSection: SidecarSection;
   sidecarWidth: number;
@@ -429,10 +410,8 @@ export interface UnifiedChatState {
   missionControlOpen: boolean;
   selectedMessage: string | null;
 
-  
   activeView: ActiveView;
 
-  
   focusMode: FocusMode;
   sidecar: SidecarState;
   actionTrail: ActionTrailEntry[];
@@ -440,18 +419,15 @@ export interface UnifiedChatState {
   tokenUsage: TokenUsage;
   citations: Citation[];
 
-  
   filters: {
     fileOperations: FileOperationType[];
     terminalStatus: ('success' | 'error')[];
     toolNames: string[];
   };
 
-  
   draftContent: string;
   editingMessageId: string | null;
 
-  
   ensureActiveConversation: () => void;
   createConversation: (title?: string) => string;
   selectConversation: (id: string) => void;
@@ -459,9 +435,8 @@ export interface UnifiedChatState {
   deleteConversation: (id: string) => void;
   togglePinnedConversation: (id: string) => void;
 
-  
   addMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'> & { id?: string }) => string;
-  addOptimisticMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => string; 
+  addOptimisticMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => string;
   confirmOptimisticMessage: (tempId: string, confirmedId?: string) => void;
   failOptimisticMessage: (tempId: string, error: string) => void;
   retryFailedMessage: (id: string) => void;
@@ -471,7 +446,6 @@ export interface UnifiedChatState {
   setStreamingMessage: (id: string | null) => void;
   appendToStreamingMessage: (content: string) => void;
 
-  
   addFileOperation: (op: Omit<FileOperation, 'timestamp'>) => void;
   addTerminalCommand: (cmd: Omit<TerminalCommand, 'timestamp'>) => void;
   updateTerminalOutput: (payload: {
@@ -487,7 +461,6 @@ export interface UnifiedChatState {
   updateActionLogEntry: (id: string, updates: Partial<ActionLogEntry>) => void;
   clearActionLog: () => void;
 
-  
   updateAgentStatus: (id: string, status: Partial<AgentStatus>) => void;
   setAgentStatus: (status: AgentStatus | null) => void;
   addAgent: (agent: AgentStatus) => void;
@@ -497,16 +470,13 @@ export interface UnifiedChatState {
   updateBackgroundTask: (id: string, updates: Partial<BackgroundTask>) => void;
   clearBackgroundTasks: () => void;
 
-  
   setWorkflowContext: (context: WorkflowContext | null) => void;
   setPlan: (plan: PlanData | null) => void;
   updatePlanStep: (stepId: string, updates: Partial<PlanStep>) => void;
   clearPlan: () => void;
 
-  
   setConversationMode: (mode: ConversationMode) => void;
 
-  
   addApprovalRequest: (request: Omit<ApprovalRequest, 'createdAt' | 'status'>) => void;
   approveOperation: (id: string) => void;
   rejectOperation: (id: string, reason?: string) => void;
@@ -516,12 +486,10 @@ export interface UnifiedChatState {
   recordTrustedAction: (hash: string, signature: string) => void;
   isActionTrusted: (hash: string | undefined, signature: string | undefined) => boolean;
 
-  
   addContextItem: (item: ContextItem) => void;
   removeContextItem: (id: string) => void;
   clearContext: () => void;
 
-  
   setSidecarOpen: (open: boolean) => void;
   setSidecarSection: (section: SidecarSection) => void;
   setSidecarSectionFromEvent: (event: string) => void;
@@ -532,20 +500,16 @@ export interface UnifiedChatState {
   setSelectedMessage: (id: string | null) => void;
   setAutonomousMode: (value: boolean) => void;
 
-  
   setActiveView: (view: ActiveView) => void;
 
-  
   setFileOperationFilter: (types: FileOperationType[]) => void;
   setTerminalStatusFilter: (statuses: ('success' | 'error')[]) => void;
   setToolNameFilter: (names: string[]) => void;
 
-  
   setDraftContent: (value: string) => void;
   startEditingMessage: (id: string, content: string) => void;
   cancelEditing: () => void;
 
-  
   setFocusMode: (mode: FocusMode) => void;
   setSidecar: (state: Partial<SidecarState>) => void;
   openSidecar: (mode: SidecarMode, contextId?: string, context?: any) => void;
@@ -558,24 +522,17 @@ export interface UnifiedChatState {
   getCitationByIndex: (index: number) => Citation | undefined;
   clearCitations: () => void;
 
-  
   getTokenPercentage: () => number;
   getActiveActionTrail: (messageId?: string) => ActionTrailEntry[];
   getSuggestedSidecarMode: (message: EnhancedMessage) => SidecarMode | null;
 
-  
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
 }
 
-
-
-
-
 export const useUnifiedChatStore = create<UnifiedChatState>()(
   persist(
     immer((set, get) => ({
-      
       conversations: [],
       activeConversationId: null,
       messagesByConversation: {},
@@ -614,7 +571,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       activeView: 'chat',
 
-      
       focusMode: null,
       sidecar: {
         isOpen: false,
@@ -628,7 +584,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         current: 0,
         inputTokens: 0,
         outputTokens: 0,
-        max: 128000, 
+        max: 128000,
         percentage: 0,
         estimatedCost: 0,
       },
@@ -642,7 +598,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       draftContent: '',
       editingMessageId: null,
 
-      
       ensureActiveConversation: () =>
         set((state) => {
           if (state.activeConversationId) {
@@ -724,11 +679,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           }
         }),
 
-      
       addMessage: (message) => {
         const assignedId = message.id ?? crypto.randomUUID();
         set((state) => {
-          
           if (!state.activeConversationId) {
             const id = crypto.randomUUID();
             const convo: ConversationSummary = {
@@ -762,11 +715,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         return assignedId;
       },
 
-      
       addOptimisticMessage: (message) => {
         const tempId = crypto.randomUUID();
         set((state) => {
-          
           if (!state.activeConversationId) {
             const id = crypto.randomUUID();
             const convo: ConversationSummary = {
@@ -803,7 +754,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       confirmOptimisticMessage: (tempId, confirmedId) =>
         set((state) => {
-          
           const convoId = state.activeConversationId;
           const applyConfirmation = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === tempId);
@@ -816,7 +766,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             }
           };
           applyConfirmation(state.messages);
-          
+
           if (
             convoId &&
             convoId === state.activeConversationId &&
@@ -899,14 +849,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const { currentStreamingMessageId } = state;
           if (currentStreamingMessageId) {
-            
             state.messages = state.messages.map((m) =>
               m.id === currentStreamingMessageId ? { ...m, content: m.content + content } : m,
             );
           }
         }),
 
-      
       addFileOperation: (op) =>
         set((state) => {
           state.fileOperations.push({ ...op, timestamp: new Date() });
@@ -968,7 +916,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.actionLog = [];
         }),
 
-      
       updateAgentStatus: (id, status) =>
         set((state) => {
           const index = state.agents.findIndex((a) => a.id === id);
@@ -1002,7 +949,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       addBackgroundTask: (task) =>
         set((state) => {
-          
           if (state.backgroundTasks.some((t) => t.id === task.id)) {
             return;
           }
@@ -1075,13 +1021,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.plan = null;
         }),
 
-      
       setConversationMode: (mode) =>
         set((state) => {
           state.conversationMode = mode;
         }),
 
-      
       addApprovalRequest: (request) =>
         set((state) => {
           const normalized = {
@@ -1164,7 +1108,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         return Boolean(workflow?.actionSignatures.includes(signature));
       },
 
-      
       addContextItem: (item) =>
         set((state) => {
           state.activeContext.push(item);
@@ -1180,7 +1123,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.activeContext = [];
         }),
 
-      
       setSidecarOpen: (open) =>
         set((state) => {
           state.sidecarOpen = open;
@@ -1252,7 +1194,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       setAutonomousMode: (value) =>
         set((state) => {
           state.isAutonomousMode = value;
-          
+
           if (value) {
             state.sidecarOpen = true;
           }
@@ -1263,7 +1205,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.activeView = view;
         }),
 
-      
       setFileOperationFilter: (types) =>
         set((state) => {
           state.filters.fileOperations = types;
@@ -1279,7 +1220,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.filters.toolNames = names;
         }),
 
-      
       setDraftContent: (value) =>
         set((state) => {
           state.draftContent = value;
@@ -1295,7 +1235,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.draftContent = '';
         }),
 
-      
       setFocusMode: (mode) =>
         set((state) => {
           state.focusMode = mode;
@@ -1312,7 +1251,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.sidecar.activeMode = mode;
           state.sidecar.contextId = contextId ?? null;
           state.sidecar.context = context;
-          
+
           state.sidecarOpen = true;
         }),
 
@@ -1331,13 +1270,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           };
           state.actionTrail.push(newEntry);
 
-          
           if (entry.fadeAfter) {
             const timerId = setTimeout(() => {
-              
               try {
                 const current = get();
-                
+
                 if (current.actionTrail.some((e) => e.id === newEntry.id)) {
                   current.fadeTimers.delete(newEntry.id);
                   current.removeActionTrailEntry(newEntry.id);
@@ -1352,7 +1289,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       removeActionTrailEntry: (id) =>
         set((state) => {
-          
           const timerId = state.fadeTimers.get(id);
           if (timerId !== undefined) {
             clearTimeout(timerId);
@@ -1363,7 +1299,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       clearActionTrail: () =>
         set((state) => {
-          
           state.fadeTimers.forEach((timerId) => clearTimeout(timerId));
           state.fadeTimers.clear();
           state.actionTrail = [];
@@ -1372,7 +1307,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       updateTokenUsage: (usage) =>
         set((state) => {
           state.tokenUsage = { ...state.tokenUsage, ...usage };
-          
+
           if (state.tokenUsage.max > 0) {
             state.tokenUsage.percentage = (state.tokenUsage.current / state.tokenUsage.max) * 100;
           }
@@ -1398,7 +1333,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.citations = [];
         }),
 
-      
       getTokenPercentage: () => {
         const state = get();
         return state.tokenUsage.percentage;
@@ -1409,15 +1343,13 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         if (!messageId) {
           return state.actionTrail;
         }
-        
+
         return state.actionTrail.filter((entry) => entry.metadata?.['messageId'] === messageId);
       },
 
       getSuggestedSidecarMode: (message) => {
-        
         const content = message.content.toLowerCase();
 
-        
         const codeBlockMatches = message.content.match(/```[\s\S]+?```/g);
         if (
           codeBlockMatches &&
@@ -1429,7 +1361,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           return 'code';
         }
 
-        
         if (
           content.includes('.csv') ||
           content.includes('id,name,value') ||
@@ -1438,7 +1369,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           return 'data';
         }
 
-        
         if (
           content.includes('http://') ||
           content.includes('https://') ||
@@ -1454,17 +1384,14 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           return 'browser';
         }
 
-        
         if (message.operations?.some((op) => op.type === 'terminal')) {
           return 'terminal';
         }
 
-        
         if (content.includes('diff') || (content.includes('---') && content.includes('+++'))) {
           return 'diff';
         }
 
-        
         if (codeBlockMatches || content.includes('```')) {
           return 'preview';
         }
@@ -1472,7 +1399,6 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         return null;
       },
 
-      
       clearHistory: () =>
         set((state) => {
           const newId = crypto.randomUUID();
@@ -1495,7 +1421,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.plan = null;
           state.isStreaming = false;
           state.currentStreamingMessageId = null;
-          
+
           state.actionTrail = [];
           state.citations = [];
           state.focusMode = null;
@@ -1526,14 +1452,13 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         sidebarWidth: state.sidebarWidth,
         sidebarCollapsed: state.sidebarCollapsed,
         filters: state.filters,
-        
+
         focusMode: state.focusMode,
         sidecar: state.sidecar,
       }),
     },
   ),
 );
-
 
 export type AgentStatusPayload = Partial<AgentStatus> & {
   id: string;

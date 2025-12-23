@@ -1,4 +1,15 @@
-﻿import { invoke } from '@tauri-apps/api/core';
+﻿/**
+ * Unified Agentic Chat
+ *
+ * The main container component for the AGI chat interface.
+ * Orchestrates:
+ * - Message stream and history
+ * - Sidecars (Terminal, Browser, etc.)
+ * - Input area and command palette
+ * - Approval workflows
+ * - Layout management (sidebar, main content, sidecar)
+ */
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Layers, Square } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
