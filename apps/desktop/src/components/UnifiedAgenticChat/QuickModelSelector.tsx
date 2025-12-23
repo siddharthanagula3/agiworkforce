@@ -88,14 +88,31 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       const group = groups[model.provider];
       if (group) {
         // We need full metadata for the group, try to find it
-        const metadata = getModelMetadata(model.id);
+        let metadata = getModelMetadata(model.id);
+
+        // Fallback for dynamic Ollama models that aren't in the static constant list
+        if (!metadata && model.provider === 'ollama') {
+          metadata = {
+            id: model.id,
+            name: model.name,
+            provider: 'ollama',
+            contextWindow: 4096, // Default fallback
+            inputCost: 0,
+            outputCost: 0,
+            capabilities: {
+              streaming: true,
+              tools: false, // Assume false for unknown local models to be safe
+              vision: false,
+              json: true,
+            },
+            speed: 'medium',
+            quality: 'good',
+            bestFor: ['Local Inference', 'Privacy'],
+          };
+        }
+
         if (metadata) {
           group.push(metadata);
-        } else {
-          // Fallback if metadata not found (shouldn't happen for known models)
-          // We can't push 'model' (ModelInfo) into group (ModelMetadata[])
-          // So we skip or need to construct a partial one.
-          // For now, let's skip to be safe type-wise.
         }
       }
     });

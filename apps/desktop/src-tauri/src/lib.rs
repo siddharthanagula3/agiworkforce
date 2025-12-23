@@ -432,6 +432,7 @@ pub fn run() {
             crate::commands::agi_get_goal_status,
             crate::commands::agi_list_goals,
             crate::commands::agi_stop,
+            crate::commands::agi_cancel_goal,
 
             // Orchestrator
             crate::commands::orchestrator_init,
