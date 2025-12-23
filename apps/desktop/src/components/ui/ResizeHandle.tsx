@@ -1,0 +1,89 @@
+import React, { useCallback, useState } from 'react';
+import { cn } from '../../lib/utils';
+
+interface ResizeHandleProps {
+  onResize: (newWidth: number) => void;
+  width: number;
+  minWidth?: number;
+  maxWidth?: number;
+  direction?: 'left' | 'right';
+  className?: string;
+  isResizing?: (resizing: boolean) => void;
+}
+
+export const ResizeHandle: React.FC<ResizeHandleProps> = ({
+  onResize,
+  width,
+  minWidth = 200,
+  maxWidth = 800,
+  direction = 'right',
+  className,
+  isResizing,
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+      isResizing?.(true);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const startX = e.clientX;
+      const startWidth = width;
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+
+        const change = direction === 'right' ? deltaX : -deltaX;
+
+        const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + change));
+        onResize(newWidth);
+      };
+
+      const handleMouseUp = () => {
+        setIsDragging(false);
+        isResizing?.(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [width, minWidth, maxWidth, direction, onResize, isResizing],
+  );
+
+  return (
+    <div
+      className={cn(
+        'absolute top-0 bottom-0 z-50 w-1 hover:bg-primary/50 cursor-col-resize transition-colors select-none touch-none',
+        isDragging && 'bg-primary',
+        direction === 'right' ? '-right-0.5' : '-left-0.5',
+        className,
+      )}
+      onMouseDown={handleMouseDown}
+      onClick={(e) => e.stopPropagation()}
+      role="separator"
+      aria-orientation="vertical"
+      aria-valuenow={width}
+      aria-valuemin={minWidth}
+      aria-valuemax={maxWidth}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const change = direction === 'right' ? -10 : 10;
+          onResize(Math.max(minWidth, Math.min(maxWidth, width + change)));
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const change = direction === 'right' ? 10 : -10;
+          onResize(Math.max(minWidth, Math.min(maxWidth, width + change)));
+        }
+      }}
+    />
+  );
+};

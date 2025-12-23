@@ -1,0 +1,399 @@
+use futures_util::Stream;
+use serde_json::Value;
+use std::error::Error;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StreamChunk {
+    pub content: String,
+    pub done: bool,
+    pub finish_reason: Option<String>,
+    pub model: Option<String>,
+    pub usage: Option<TokenUsage>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TokenUsage {
+    pub prompt_tokens: Option<u32>,
+    pub completion_tokens: Option<u32>,
+    pub total_tokens: Option<u32>,
+}
+
+const MAX_BUFFER_SIZE: usize = 1024 * 1024;
+
+struct SseStreamParser {
+    inner: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send>>,
+    buffer: Vec<u8>,
+    provider: crate::core::router::Provider,
+    pending_chunks: Vec<Result<StreamChunk, Box<dyn Error + Send + Sync>>>,
+}
+
+impl Unpin for SseStreamParser {}
+
+impl SseStreamParser {
+    fn new(response: reqwest::Response, provider: crate::core::router::Provider) -> Self {
+        Self {
+            inner: Box::pin(response.bytes_stream()),
+            buffer: Vec::new(),
+            provider,
+            pending_chunks: Vec::new(),
+        }
+    }
+
+    fn process_buffer(&mut self) {
+        let delimiter: &[u8] = match self.provider {
+            crate::core::router::Provider::Ollama => b"\n",
+            _ => b"\n\n",
+        };
+
+        while let Some(event_end) = self
+            .buffer
+            .windows(delimiter.len())
+            .position(|window| window == delimiter)
+        {
+            let event_bytes = self.buffer[..event_end].to_vec();
+            let delimiter_len = delimiter.len();
+            self.buffer.drain(..event_end + delimiter_len);
+
+            let event = String::from_utf8_lossy(&event_bytes).to_string();
+            if event.trim().is_empty() {
+                continue;
+            }
+
+            match parse_sse_event(&event, self.provider) {
+                Ok(chunk) => {
+                    self.pending_chunks.insert(0, Ok(chunk));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to parse stream event: {}", e);
+                }
+            }
+        }
+    }
+}
+
+impl Stream for SseStreamParser {
+    type Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if !self.pending_chunks.is_empty() {
+            return Poll::Ready(self.pending_chunks.pop());
+        }
+
+        match self.inner.as_mut().poll_next(cx) {
+            Poll::Ready(Some(Ok(bytes))) => {
+                if self.buffer.len() + bytes.len() > MAX_BUFFER_SIZE {
+                    tracing::error!(
+                        "SSE buffer exceeded max size of {}MB",
+                        MAX_BUFFER_SIZE / 1024 / 1024
+                    );
+                    return Poll::Ready(Some(Err("SSE buffer size exceeded maximum limit".into())));
+                }
+
+                self.buffer.extend_from_slice(&bytes);
+
+                self.process_buffer();
+
+                if !self.pending_chunks.is_empty() {
+                    return Poll::Ready(self.pending_chunks.pop());
+                }
+
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Box::new(e)))),
+            Poll::Ready(None) => {
+                let buffer_str = String::from_utf8_lossy(&self.buffer);
+                if !buffer_str.trim().is_empty() {
+                    match parse_sse_event(&buffer_str, self.provider) {
+                        Ok(chunk) => {
+                            self.buffer.clear();
+                            Poll::Ready(Some(Ok(chunk)))
+                        }
+                        Err(e) => {
+                            self.buffer.clear();
+                            Poll::Ready(Some(Err(e)))
+                        }
+                    }
+                } else {
+                    self.buffer.clear();
+                    Poll::Ready(None)
+                }
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+pub fn parse_sse_stream(
+    response: reqwest::Response,
+    provider: crate::core::router::Provider,
+) -> impl Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send {
+    SseStreamParser::new(response, provider)
+}
+
+fn parse_sse_event(
+    event: &str,
+    provider: crate::core::router::Provider,
+) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
+    match provider {
+        crate::core::router::Provider::OpenAI => parse_openai_sse(event),
+        crate::core::router::Provider::Anthropic => parse_anthropic_sse(event),
+        crate::core::router::Provider::Google => parse_google_sse(event),
+        crate::core::router::Provider::Ollama => parse_ollama_sse(event),
+        crate::core::router::Provider::XAI => parse_openai_sse(event),
+        crate::core::router::Provider::DeepSeek => parse_openai_sse(event),
+        crate::core::router::Provider::Qwen => parse_openai_sse(event),
+        crate::core::router::Provider::Mistral => parse_openai_sse(event),
+        crate::core::router::Provider::Moonshot => parse_openai_sse(event),
+    }
+}
+
+fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
+    let mut content = String::new();
+    let mut done = false;
+    let mut finish_reason = None;
+    let mut model = None;
+    let mut usage = None;
+
+    for line in event.lines() {
+        if let Some(data) = line.strip_prefix("data: ") {
+            if data == "[DONE]" {
+                done = true;
+                break;
+            }
+
+            let json: Value = serde_json::from_str(data)?;
+
+            if let Some(choices) = json.get("choices").and_then(|c| c.as_array()) {
+                if let Some(choice) = choices.first() {
+                    if let Some(delta) = choice.get("delta") {
+                        if let Some(text) = delta.get("content").and_then(|c| c.as_str()) {
+                            content.push_str(text);
+                        }
+                    }
+                    if let Some(finish) = choice.get("finish_reason").and_then(|f| f.as_str()) {
+                        finish_reason = Some(finish.to_string());
+                        done = true;
+                    }
+                }
+            }
+
+            if let Some(m) = json.get("model").and_then(|m| m.as_str()) {
+                model = Some(m.to_string());
+            }
+
+            if let Some(u) = json.get("usage") {
+                usage = Some(TokenUsage {
+                    prompt_tokens: u
+                        .get("prompt_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    completion_tokens: u
+                        .get("completion_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    total_tokens: u
+                        .get("total_tokens")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                });
+            }
+        }
+    }
+
+    Ok(StreamChunk {
+        content,
+        done,
+        finish_reason,
+        model,
+        usage,
+    })
+}
+
+fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
+    let mut content = String::new();
+    let mut done = false;
+    let mut finish_reason = None;
+    let mut model = None;
+    let mut usage = None;
+
+    let mut event_type = None;
+    let mut data_str = None;
+
+    for line in event.lines() {
+        if let Some(evt) = line.strip_prefix("event: ") {
+            event_type = Some(evt.to_string());
+        } else if let Some(data) = line.strip_prefix("data: ") {
+            data_str = Some(data.to_string());
+        }
+    }
+
+    if let Some(data) = data_str {
+        let json: Value = serde_json::from_str(&data)?;
+
+        match event_type.as_deref() {
+            Some("content_block_delta") => {
+                if let Some(delta) = json.get("delta") {
+                    if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
+                        content.push_str(text);
+                    }
+                }
+            }
+            Some("message_delta") => {
+                if let Some(delta) = json.get("delta") {
+                    if let Some(stop_reason) = delta.get("stop_reason").and_then(|r| r.as_str()) {
+                        finish_reason = Some(stop_reason.to_string());
+                        done = true;
+                    }
+                }
+                if let Some(usage_data) = json.get("usage") {
+                    usage = Some(TokenUsage {
+                        prompt_tokens: usage_data
+                            .get("input_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        completion_tokens: usage_data
+                            .get("output_tokens")
+                            .and_then(|t| t.as_u64())
+                            .map(|t| t as u32),
+                        total_tokens: None,
+                    });
+                }
+            }
+            Some("message_stop") => {
+                done = true;
+            }
+            Some("message_start") => {
+                if let Some(m) = json
+                    .get("message")
+                    .and_then(|m| m.get("model"))
+                    .and_then(|m| m.as_str())
+                {
+                    model = Some(m.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(StreamChunk {
+        content,
+        done,
+        finish_reason,
+        model,
+        usage,
+    })
+}
+
+fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
+    let mut content = String::new();
+    let mut done = false;
+    let mut finish_reason = None;
+    let model = None;
+
+    for line in event.lines() {
+        if let Some(data) = line.strip_prefix("data: ") {
+            let json: Value = serde_json::from_str(data)?;
+
+            if let Some(candidates) = json.get("candidates").and_then(|c| c.as_array()) {
+                if let Some(candidate) = candidates.first() {
+                    if let Some(content_block) = candidate.get("content") {
+                        if let Some(parts) = content_block.get("parts").and_then(|p| p.as_array()) {
+                            for part in parts {
+                                if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                                    content.push_str(text);
+                                }
+                            }
+                        }
+                    }
+                    if let Some(finish) = candidate.get("finishReason").and_then(|f| f.as_str()) {
+                        finish_reason = Some(finish.to_string());
+                        done = true;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(StreamChunk {
+        content,
+        done,
+        finish_reason,
+        model,
+        usage: None,
+    })
+}
+
+fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + Sync>> {
+    let json: Value = serde_json::from_str(event.trim())?;
+
+    let mut content = String::new();
+    let mut done = false;
+    let mut model = None;
+
+    if let Some(message) = json.get("message") {
+        if let Some(text) = message.get("content").and_then(|c| c.as_str()) {
+            content.push_str(text);
+        }
+    }
+
+    if let Some(d) = json.get("done").and_then(|d| d.as_bool()) {
+        done = d;
+    }
+
+    if let Some(m) = json.get("model").and_then(|m| m.as_str()) {
+        model = Some(m.to_string());
+    }
+
+    Ok(StreamChunk {
+        content,
+        done,
+        finish_reason: None,
+        model,
+        usage: None,
+    })
+}
+
+#[cfg(test)]
+mod stream_tests {
+    use super::*;
+    use futures_util::StreamExt;
+    use tokio_stream::iter;
+
+    #[tokio::test]
+    async fn test_sse_utf8_boundary_handling() {
+        let chunk1 = b"data: {\"choices\":[{\"delta\":{\"content\":\"\xf0".to_vec();
+        let chunk2 = b"\x9f\x9a\x80\"}}]}\n\n".to_vec();
+
+        let stream = iter(vec![
+            Ok(bytes::Bytes::from(chunk1)),
+            Ok(bytes::Bytes::from(chunk2)),
+        ]);
+
+        let mut parser = SseStreamParser {
+            inner: Box::pin(stream.map(|res| {
+                res.map_err(|_e: std::convert::Infallible| -> reqwest::Error { unreachable!() })
+            })),
+            buffer: Vec::new(),
+            provider: crate::core::router::Provider::OpenAI,
+            pending_chunks: Vec::new(),
+        };
+
+        let mut full_content = String::new();
+        while let Some(res) = parser.next().await {
+            match res {
+                Ok(chunk) => {
+                    full_content.push_str(&chunk.content);
+                    if chunk.done {
+                        break;
+                    }
+                }
+                Err(e) => panic!("Error in parser: {}", e),
+            }
+        }
+
+        assert_eq!(full_content, "🚀");
+    }
+}

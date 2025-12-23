@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AGI Workforce",
+  "version": "5.0.0",
+  "identifier": "com.agiworkforce.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm run dev:vite",
+    "beforeBuildCommand": "cd ../.. && pnpm --filter @agiworkforce/desktop run build:web",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "AGI Workforce",
+        "width": 1400,
+        "height": 850,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "shadow": true,
+        "visible": true,
+        "center": true,
+        "dragDropEnabled": true,
+        "fullscreen": false,
+        "skipTaskbar": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.agiworkforce.com; media-src 'self' data: blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com https://api.github.com https://github.com https://*.slack.com https://releases.agiworkforce.com https://*.agiworkforce.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'",
+      "dangerousDisableAssetCspModification": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "wix": {
+        "language": "en-US"
+      }
+    },
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    }
+  },
+  "plugins": {}
+}

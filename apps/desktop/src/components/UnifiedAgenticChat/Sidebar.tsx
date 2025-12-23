@@ -1,0 +1,608 @@
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Code2,
+  Image,
+  Layers,
+  Pin,
+  PinOff,
+  Plus,
+  Search,
+  TerminalSquare,
+  Trash2,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { cn } from '../../lib/utils';
+import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import { UserProfile } from '../Layout/UserProfile';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { ResizeHandle } from '../ui/ResizeHandle';
+import { ScrollArea } from '../ui/ScrollArea';
+
+interface SidebarProps {
+  className?: string;
+  onOpenSettings?: () => void;
+  onOpenFeedback?: () => void;
+  onOpenWorkspace?: () => void;
+  onOpenMediaLab?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  isMobile?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
+  width?: number;
+  onResize?: (width: number) => void;
+}
+
+type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
+
+const TEMPORAL_LABELS: Record<TemporalGroup, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  thisWeek: 'This Week',
+  last7Days: 'Last 7 Days',
+  last30Days: 'Last 30 Days',
+  older: 'Older',
+};
+
+function getTemporalGroup(date: Date): TemporalGroup {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const thisWeekStart = new Date(today);
+  thisWeekStart.setDate(thisWeekStart.getDate() - today.getDay());
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const conversationDate = new Date(date);
+
+  if (conversationDate >= today) {
+    return 'today';
+  } else if (conversationDate >= yesterday && conversationDate < today) {
+    return 'yesterday';
+  } else if (conversationDate >= thisWeekStart && conversationDate < yesterday) {
+    return 'thisWeek';
+  } else if (conversationDate >= sevenDaysAgo) {
+    return 'last7Days';
+  } else if (conversationDate >= thirtyDaysAgo) {
+    return 'last30Days';
+  } else {
+    return 'older';
+  }
+}
+
+export function Sidebar({
+  className,
+  onOpenSettings,
+  onOpenFeedback,
+  onOpenWorkspace,
+  onOpenMediaLab,
+  collapsed = false,
+  onToggleCollapse,
+  isMobile = false,
+  onCollapsedChange = () => {},
+  width = 260,
+  onResize,
+}: SidebarProps) {
+  const conversations = useUnifiedChatStore((state) => state.conversations);
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
+  const activeView = useUnifiedChatStore((state) => state.activeView);
+  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+  const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
+  const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
+  const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
+  const createConversation = useUnifiedChatStore((state) => state.createConversation);
+  const setActiveView = useUnifiedChatStore((state) => state.setActiveView);
+  const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<TemporalGroup>>(
+    new Set(['today', 'yesterday', 'thisWeek']),
+  );
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+
+  useEffect(() => {
+    ensureActiveConversation();
+  }, [ensureActiveConversation]);
+
+  const filtered = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return conversations;
+    return conversations.filter((conv) => {
+      const haystack = `${conv.title ?? ''} ${conv.lastMessage ?? ''}`.toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [conversations, searchQuery]);
+
+  const pinnedConversations = useMemo(
+    () =>
+      filtered
+        .filter((c) => c.pinned)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    [filtered],
+  );
+
+  const unpinnedConversations = useMemo(() => filtered.filter((c) => !c.pinned), [filtered]);
+
+  const groupedConversations = useMemo(() => {
+    const groups = new Map<TemporalGroup, ConversationSummary[]>();
+
+    unpinnedConversations.forEach((conv) => {
+      const group = getTemporalGroup(new Date(conv.updatedAt));
+      if (!groups.has(group)) {
+        groups.set(group, []);
+      }
+      groups.get(group)?.push(conv);
+    });
+
+    groups.forEach((convs) => {
+      convs.sort((a, b) => {
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+    });
+
+    return groups;
+  }, [unpinnedConversations]);
+
+  const visibleConversations = useMemo(() => {
+    const visible: ConversationSummary[] = [...pinnedConversations];
+    Array.from(groupedConversations.entries()).forEach(([group, convs]) => {
+      if (expandedGroups.has(group)) {
+        visible.push(...convs);
+      }
+    });
+    return visible;
+  }, [groupedConversations, expandedGroups, pinnedConversations]);
+
+  const handleNewChat = useCallback(() => {
+    createConversation('New chat');
+    setActiveView('chat');
+    if (isMobile && onCollapsedChange) {
+      onCollapsedChange(true);
+    }
+  }, [createConversation, setActiveView, isMobile, onCollapsedChange]);
+
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      selectConversation(id);
+      setActiveView('chat');
+      if (isMobile && onCollapsedChange) {
+        onCollapsedChange(true);
+      }
+    },
+    [selectConversation, setActiveView, isMobile, onCollapsedChange],
+  );
+
+  const handleRename = useCallback(
+    (id: string) => {
+      if (editingTitle.trim() && editingId === id) {
+        renameConversation(id, editingTitle);
+        setEditingId(null);
+        setEditingTitle('');
+      }
+    },
+    [editingId, editingTitle, renameConversation],
+  );
+
+  const startEditing = useCallback((conv: ConversationSummary) => {
+    setEditingId(conv.id);
+    setEditingTitle(conv.title);
+  }, []);
+
+  const toggleGroup = useCallback((group: TemporalGroup) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) {
+        next.delete(group);
+      } else {
+        next.add(group);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+      if (e.key === 'Escape') {
+        setShowSearch(false);
+        setSearchQuery('');
+        setFocusedIndex(-1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (editingId || showSearch) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = prev + 1;
+          return next >= visibleConversations.length ? 0 : next;
+        });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = prev - 1;
+          return next < 0 ? visibleConversations.length - 1 : next;
+        });
+      } else if (e.key === 'Enter' && focusedIndex >= 0) {
+        e.preventDefault();
+        const conversation = visibleConversations[focusedIndex];
+        if (conversation) {
+          handleSelectConversation(conversation.id);
+          setFocusedIndex(-1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingId, showSearch, focusedIndex, visibleConversations, handleSelectConversation]);
+
+  const renderConversationItem = (conv: ConversationSummary, isKeyboardFocused: boolean) => (
+    <div
+      key={conv.id}
+      className={cn(
+        'group relative rounded-lg transition-all mb-1',
+        conv.id === activeConversationId
+          ? 'bg-teal-100 dark:bg-teal-900/30'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+        isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
+      )}
+    >
+      {editingId === conv.id ? (
+        <Input
+          autoFocus
+          value={editingTitle}
+          onChange={(e) => setEditingTitle(e.target.value)}
+          onBlur={() => handleRename(conv.id)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRename(conv.id);
+            if (e.key === 'Escape') {
+              setEditingId(null);
+              setEditingTitle('');
+            }
+          }}
+          className="w-full px-3 py-2 text-sm"
+        />
+      ) : (
+        <div className="flex items-center">
+          <button
+            onClick={() => selectConversation(conv.id)}
+            onDoubleClick={() => startEditing(conv)}
+            className="flex-1 text-left px-3 py-2 overflow-hidden"
+          >
+            <div className="font-medium text-sm truncate">{conv.title || 'Untitled'}</div>
+            {conv.lastMessage && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {conv.lastMessage}
+              </div>
+            )}
+          </button>
+
+          {}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePinnedConversation(conv.id);
+              }}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-teal-500"
+              title={conv.pinned ? 'Unpin' : 'Pin'}
+            >
+              {conv.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+            </Button>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteConversation(conv.id);
+              }}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-red-500"
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="w-16 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out">
+        <div className="p-3 flex flex-col items-center gap-4">
+          <Button
+            onClick={onToggleCollapse}
+            variant="ghost"
+            size="icon"
+            className="text-gray-600 dark:text-gray-400"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={handleNewChat}
+            variant="ghost"
+            size="icon"
+            className="text-gray-600 dark:text-gray-400"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => setShowSearch(!showSearch)}
+            variant="ghost"
+            size="icon"
+            className="text-gray-600 dark:text-gray-400"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowSearch(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-white dark:bg-charcoal-800 rounded-xl shadow-2xl overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                  <Search className="h-5 w-5 text-gray-500" />
+                  <Input
+                    autoFocus
+                    placeholder="Search conversations..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1 border-0 bg-transparent focus:ring-0"
+                  />
+                  <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded">ESC</kbd>
+                </div>
+                <ScrollArea className="max-h-96">
+                  <div className="p-2">
+                    {filtered.slice(0, 10).map((conv) => (
+                      <button
+                        key={conv.id}
+                        onClick={() => {
+                          selectConversation(conv.id);
+                          setShowSearch(false);
+                          setSearchQuery('');
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 rounded-lg transition-colors',
+                          conv.id === activeConversationId
+                            ? 'bg-primary/10 dark:bg-primary/20'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                        )}
+                      >
+                        <div className="font-medium text-sm">{conv.title}</div>
+                        {conv.lastMessage && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">
+                            {conv.lastMessage}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div
+        className={cn(
+          'flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out relative',
+          className,
+        )}
+        style={{ width: width }}
+      >
+        {onResize && !collapsed && (
+          <ResizeHandle
+            width={width}
+            onResize={onResize}
+            direction="right"
+            minWidth={200}
+            maxWidth={400}
+          />
+        )}
+        {}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-3">
+            <Button
+              onClick={onToggleCollapse}
+              variant="ghost"
+              size="icon"
+              className="text-gray-600 dark:text-gray-400"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={handleNewChat}
+              className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              New Chat
+            </Button>
+          </div>
+          <button
+            onClick={() => setShowSearch(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Search className="h-4 w-4" />
+            <span>Search</span>
+            <div className="ml-auto flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">⌘</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-gray-900 rounded">K</kbd>
+            </div>
+          </button>
+        </div>
+
+        {}
+        {!collapsed && (
+          <div className="px-3 py-2 space-y-1">
+            <button
+              onClick={() => setActiveView('projects')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'projects'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                <Layers className="w-3.5 h-3.5" />
+              </span>
+              Projects
+              <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
+                Pro
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveView('artifacts')}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                activeView === 'artifacts'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                <Code2 className="w-3.5 h-3.5" />
+              </span>
+              Artifacts
+            </button>
+            {onOpenWorkspace && (
+              <button
+                onClick={onOpenWorkspace}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <span className="w-5 h-5 flex items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                  <TerminalSquare className="w-3.5 h-3.5" />
+                </span>
+                Workspace
+              </button>
+            )}
+            {onOpenMediaLab && (
+              <button
+                onClick={onOpenMediaLab}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                  <Image className="w-3.5 h-3.5" />
+                </span>
+                Media Lab
+              </button>
+            )}
+          </div>
+        )}
+
+        {}
+        <ScrollArea className="flex-1">
+          <div className="p-2">
+            {}
+            {pinnedConversations.length > 0 && (
+              <div className="mb-6">
+                <div className="px-3 mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  <Pin className="w-3 h-3" /> Pinned
+                </div>
+                {pinnedConversations.map((conv) => {
+                  const globalIndex = visibleConversations.findIndex((c) => c.id === conv.id);
+                  return renderConversationItem(conv, globalIndex === focusedIndex);
+                })}
+              </div>
+            )}
+
+            {}
+            {Array.from(groupedConversations.entries()).map(([group, convs]) => (
+              <div key={group} className="mb-4">
+                <button
+                  onClick={() => toggleGroup(group)}
+                  className="w-full flex items-center gap-2 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  <ChevronRight
+                    className={cn(
+                      'h-3 w-3 transition-transform',
+                      expandedGroups.has(group) && 'rotate-90',
+                    )}
+                  />
+                  <span className="flex items-center gap-1">
+                    {group === 'today' && <Calendar className="h-3 w-3" />}
+                    {group === 'yesterday' && <Clock className="h-3 w-3" />}
+                    {TEMPORAL_LABELS[group]}
+                  </span>
+                  <span className="ml-auto text-gray-400">({convs.length})</span>
+                </button>
+
+                <AnimatePresence>
+                  {expandedGroups.has(group) && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="mt-1 space-y-1"
+                    >
+                      {convs.map((conv) => {
+                        const globalIndex = visibleConversations.findIndex((c) => c.id === conv.id);
+                        return renderConversationItem(conv, globalIndex === focusedIndex);
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {}
+        <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">
+          <UserProfile
+            onSettingsClick={onOpenSettings}
+            onFeedbackClick={onOpenFeedback}
+            collapsed={collapsed}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+export default Sidebar;

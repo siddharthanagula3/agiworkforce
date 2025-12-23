@@ -1,0 +1,173 @@
+[test]
+
+timeout_seconds = 30
+
+
+parallel_tests = true
+
+
+verbose = true
+
+
+fail_fast = false
+
+[llm]
+
+use_mock = true
+
+
+mock_responses = "fixtures/mock_responses.json"
+
+
+default_response = "Mock LLM response for testing"
+
+[database]
+
+use_in_memory = true
+
+
+run_migrations = true
+
+
+reset_between_tests = true
+
+[security]
+
+skip_approval_workflows = false
+
+
+enable_all_validations = true
+
+
+allow_dangerous_operations_in_tests = true
+
+[filesystem]
+
+use_temp_directory = true
+
+
+cleanup_after_tests = true
+
+
+max_file_size_mb = 100
+
+[browser]
+
+headless = true
+
+
+timeout_seconds = 30
+
+
+enabled = true
+
+[network]
+
+use_mock = true
+
+
+allow_real_requests = false
+
+
+timeout_seconds = 10
+
+[performance]
+
+enable_profiling = false
+
+
+track_memory = true
+
+
+max_memory_mb = 512
+
+
+max_cpu_percent = 80
+
+[coverage]
+
+enabled = true
+
+
+min_threshold = 70
+
+
+generate_html = true
+
+
+output_dir = "target/coverage"
+
+[fixtures]
+
+fixtures_dir = "tests/fixtures"
+
+
+auto_load = true
+
+[logging]
+
+level = "debug"
+
+
+output = "stdout"
+
+
+file_path = "target/test-logs/test.log"
+
+[agi]
+
+enabled = true
+
+
+fast_execution = true
+
+
+max_planning_depth = 10
+
+
+enable_learning = false
+
+
+max_concurrent_tools = 5
+
+[integration]
+
+enabled = true
+
+
+use_real_services = false
+
+
+test_api_endpoint = "http://localhost:8080"
+
+
+test_db_url = "sqlite::memory:"
+
+[e2e]
+
+enabled = true
+
+
+app_url = "http://localhost:1420"
+
+
+screenshot_on_failure = true
+
+
+record_video = false
+
+
+retry_failed_tests = 1
+
+[benchmarks]
+
+enabled = true
+
+
+iterations = 100
+
+
+warmup_iterations = 10
+
+
+measurement_time = 5

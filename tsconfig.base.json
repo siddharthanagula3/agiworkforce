@@ -1,0 +1,71 @@
+{
+  "compilerOptions": {
+    /* Language and Environment */
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+
+    /* Modules */
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+
+    /* Emit */
+    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    /* Type Checking - STRICT MODE */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false, // Relaxed for Zustand store compatibility
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "useUnknownInCatchVariables": false,
+    "allowJs": false,
+    "downlevelIteration": true, // Required for MapIterator and spread operations on ES2020
+
+    /* Completeness */
+    "skipLibCheck": true,
+
+    /* Interop Constraints */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Advanced */
+    "incremental": true,
+    "composite": true,
+
+    /* Path Mappings */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/desktop/src/*"],
+      "@types/*": ["packages/types/src/*"],
+      "@utils/*": ["packages/utils/src/*"],
+      "@agiworkforce/utils": ["packages/utils/src/index.ts"],
+      "@desktop/*": ["apps/desktop/src/*"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/dist",
+    "**/node_modules",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/build",
+    "**/target",
+    "services/**"
+  ]
+}
