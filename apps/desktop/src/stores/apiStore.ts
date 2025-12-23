@@ -1,0 +1,541 @@
+import { create } from 'zustand';
+import { invoke } from '../lib/tauri-mock';
+
+export interface ApiRequest {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
+  url: string;
+  headers?: Record<string, string>;
+  body?: string;
+  query_params?: Record<string, string>;
+  timeout_seconds?: number;
+  follow_redirects?: boolean;
+}
+
+export interface ApiResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+  duration_ms: number;
+}
+
+export interface OAuth2Config {
+  client_id: string;
+  client_secret?: string;
+  auth_url: string;
+  token_url: string;
+  redirect_uri: string;
+  scopes: string[];
+  use_pkce: boolean;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+}
+
+export interface RequestTemplate {
+  name: string;
+  description: string;
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  variables: string[];
+}
+
+export interface SavedRequest {
+  id: string;
+  name: string;
+  request: ApiRequest;
+  createdAt: number;
+}
+
+export interface ApiHistoryItem {
+  request: ApiRequest;
+  response: ApiResponse;
+  timestamp: number;
+}
+
+interface ApiState {
+  
+  currentRequest: ApiRequest;
+  response: ApiResponse | null;
+  loading: boolean;
+  error: string | null;
+
+  
+  savedRequests: SavedRequest[];
+  templates: RequestTemplate[];
+
+  
+  oauthClients: Map<string, OAuth2Config>;
+  tokens: Map<string, TokenResponse>;
+
+  
+  history: ApiHistoryItem[];
+
+  
+  executeRequest: (request: ApiRequest) => Promise<ApiResponse>;
+  get: (url: string) => Promise<ApiResponse>;
+  post: (url: string, body: string) => Promise<ApiResponse>;
+  put: (url: string, body: string) => Promise<ApiResponse>;
+  delete: (url: string) => Promise<ApiResponse>;
+
+  
+  setCurrentRequest: (request: Partial<ApiRequest>) => void;
+  saveRequest: (name: string, request: ApiRequest) => void;
+  loadRequest: (id: string) => void;
+  deleteRequest: (id: string) => void;
+
+  
+  createOAuthClient: (clientId: string, config: OAuth2Config) => Promise<void>;
+  getAuthUrl: (clientId: string, state: string, usePkce: boolean) => Promise<string>;
+  exchangeCode: (clientId: string, code: string) => Promise<TokenResponse>;
+  refreshToken: (clientId: string, refreshToken: string) => Promise<TokenResponse>;
+  clientCredentials: (clientId: string) => Promise<TokenResponse>;
+
+  
+  renderTemplate: (
+    template: RequestTemplate,
+    variables: Record<string, string>,
+  ) => Promise<ApiRequest>;
+  extractVariables: (templateStr: string) => Promise<string[]>;
+  validateTemplate: (templateStr: string) => Promise<boolean>;
+
+  
+  parseResponse: (body: string, contentType?: string) => Promise<any>;
+  extractJsonPath: (body: string, path: string) => Promise<any>;
+
+  
+  clearResponse: () => void;
+  clearError: () => void;
+}
+
+export const useApiStore = create<ApiState>((set, get) => {
+  
+  const SENSITIVE_HEADERS = [
+    'authorization',
+    'x-api-key',
+    'api-key',
+    'x-auth-token',
+    'cookie',
+    'set-cookie',
+    'x-access-token',
+    'x-refresh-token',
+  ];
+
+  const redactSensitiveHeaders = (
+    headers: Record<string, string> | undefined,
+  ): Record<string, string> | undefined => {
+    if (!headers) return headers;
+    const redacted: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (SENSITIVE_HEADERS.includes(key.toLowerCase())) {
+        redacted[key] = '[REDACTED]';
+      } else {
+        redacted[key] = value;
+      }
+    }
+    return redacted;
+  };
+
+  const redactRequest = (request: ApiRequest): ApiRequest => ({
+    ...request,
+    headers: redactSensitiveHeaders(request.headers),
+  });
+
+  const redactResponse = (response: ApiResponse): ApiResponse => ({
+    ...response,
+    headers: redactSensitiveHeaders(response.headers) || {},
+  });
+
+  return {
+    
+    currentRequest: {
+      method: 'GET',
+      url: 'https://api.agiworkforce.com',
+      headers: { 'Content-Type': 'application/json' },
+    },
+    response: null,
+    loading: false,
+    error: null,
+    savedRequests: [],
+    templates: [],
+    oauthClients: new Map(),
+    tokens: new Map(),
+    history: [],
+
+    
+    executeRequest: async (request: ApiRequest) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_request', { request });
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] executeRequest failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    get: async (url: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_get', { url });
+        const request: ApiRequest = { method: 'GET', url };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] GET request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    post: async (url: string, body: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_post_json', { url, body });
+        const request: ApiRequest = {
+          method: 'POST',
+          url,
+          body,
+          headers: { 'Content-Type': 'application/json' },
+        };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] POST request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    put: async (url: string, body: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_put_json', { url, body });
+        const request: ApiRequest = {
+          method: 'PUT',
+          url,
+          body,
+          headers: { 'Content-Type': 'application/json' },
+        };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] PUT request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    delete: async (url: string) => {
+      set({ loading: true, error: null });
+      try {
+        const response = await invoke<ApiResponse>('api_delete', { url });
+        const request: ApiRequest = { method: 'DELETE', url };
+        set((state) => ({
+          response,
+          loading: false,
+          error: null,
+          history: [
+            ...state.history.slice(-99),
+            {
+              request: redactRequest(request),
+              response: redactResponse(response),
+              timestamp: Date.now(),
+            },
+          ],
+        }));
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] DELETE request failed:', errorMessage);
+        set({ loading: false, error: errorMessage, response: null });
+        throw error;
+      }
+    },
+
+    
+    setCurrentRequest: (request: Partial<ApiRequest>) => {
+      set((state) => ({
+        currentRequest: { ...state.currentRequest, ...request },
+      }));
+    },
+
+    saveRequest: (name: string, request: ApiRequest) => {
+      const savedRequest: SavedRequest = {
+        id: `req_${Date.now()}`,
+        name,
+        request,
+        createdAt: Date.now(),
+      };
+
+      set((state) => ({
+        savedRequests: [...state.savedRequests, savedRequest],
+      }));
+    },
+
+    loadRequest: (id: string) => {
+      const saved = get().savedRequests.find((r) => r.id === id);
+      if (saved) {
+        set({ currentRequest: saved.request });
+      }
+    },
+
+    deleteRequest: (id: string) => {
+      set((state) => ({
+        savedRequests: state.savedRequests.filter((r) => r.id !== id),
+      }));
+    },
+
+    
+    createOAuthClient: async (clientId: string, config: OAuth2Config) => {
+      try {
+        await invoke('api_oauth_create_client', { clientId, config });
+        set((state) => {
+          const newClients = new Map(state.oauthClients);
+          newClients.set(clientId, config);
+          return { oauthClients: newClients, error: null };
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] createOAuthClient failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    getAuthUrl: async (clientId: string, state: string, usePkce: boolean) => {
+      try {
+        const url = await invoke<string>('api_oauth_get_auth_url', {
+          clientId,
+          stateParam: state,
+          usePkce,
+        });
+        set({ error: null });
+        return url;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] getAuthUrl failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    exchangeCode: async (clientId: string, code: string) => {
+      try {
+        const token = await invoke<TokenResponse>('api_oauth_exchange_code', {
+          clientId,
+          code,
+        });
+
+        set((state) => {
+          const newTokens = new Map(state.tokens);
+          newTokens.set(clientId, token);
+          return { tokens: newTokens, error: null };
+        });
+
+        return token;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] exchangeCode failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    refreshToken: async (clientId: string, refreshToken: string) => {
+      try {
+        const token = await invoke<TokenResponse>('api_oauth_refresh_token', {
+          clientId,
+          refreshToken,
+        });
+
+        set((state) => {
+          const newTokens = new Map(state.tokens);
+          newTokens.set(clientId, token);
+          return { tokens: newTokens, error: null };
+        });
+
+        return token;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] refreshToken failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    clientCredentials: async (clientId: string) => {
+      try {
+        const token = await invoke<TokenResponse>('api_oauth_client_credentials', {
+          clientId,
+        });
+
+        set((state) => {
+          const newTokens = new Map(state.tokens);
+          newTokens.set(clientId, token);
+          return { tokens: newTokens, error: null };
+        });
+
+        return token;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] clientCredentials failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    
+    renderTemplate: async (template: RequestTemplate, variables: Record<string, string>) => {
+      try {
+        const rendered = await invoke<any>('api_render_template', {
+          template,
+          variables,
+        });
+
+        set({ error: null });
+        return {
+          method: rendered.method,
+          url: rendered.url,
+          headers: rendered.headers || {},
+          body: rendered.body,
+        } as ApiRequest;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] renderTemplate failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    extractVariables: async (templateStr: string) => {
+      try {
+        const variables = await invoke<string[]>('api_extract_template_variables', {
+          templateStr,
+        });
+        set({ error: null });
+        return variables;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] extractVariables failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    validateTemplate: async (templateStr: string) => {
+      try {
+        await invoke('api_validate_template', { templateStr });
+        set({ error: null });
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] validateTemplate failed:', errorMessage);
+        set({ error: errorMessage });
+        return false;
+      }
+    },
+
+    
+    parseResponse: async (body: string, contentType?: string) => {
+      try {
+        const parsed = await invoke<any>('api_parse_response', {
+          body,
+          contentType,
+        });
+        set({ error: null });
+        return parsed;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] parseResponse failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    extractJsonPath: async (body: string, path: string) => {
+      try {
+        const result = await invoke<any>('api_extract_json_path', {
+          body,
+          path,
+        });
+        set({ error: null });
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[apiStore] extractJsonPath failed:', errorMessage);
+        set({ error: errorMessage });
+        throw error;
+      }
+    },
+
+    
+    clearResponse: () => {
+      set({ response: null });
+    },
+
+    clearError: () => {
+      set({ error: null });
+    },
+  };
+});

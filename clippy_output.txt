@@ -1,0 +1,203 @@
+   Compiling agiworkforce-desktop v5.0.0 (/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri)
+warning: this `else` branch is empty
+   --> apps/desktop/src-tauri/src/automation/browser/dom_operations.rs:150:11
+    |
+150 |           } else {
+    |  ___________^
+151 | |         }
+    | |_________^ help: you can remove it
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_else
+    = note: `#[warn(clippy::needless_else)]` on by default
+
+warning: empty line after outer attribute
+  --> apps/desktop/src-tauri/src/sys/billing/mod.rs:41:1
+   |
+41 | / #[cfg(not(feature = "billing"))]
+42 | |
+   | |_^
+43 |   pub struct BillingState {
+   |   ----------------------- the attribute applies to this struct
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#empty_line_after_outer_attr
+   = note: `#[warn(clippy::empty_line_after_outer_attr)]` on by default
+   = help: if the empty line is unintentional, remove it
+
+warning: this `else { if .. }` block can be collapsed
+   --> apps/desktop/src-tauri/src/automation/executor.rs:351:20
+    |
+351 |               } else {
+    |  ____________________^
+352 | |                 if let Some(mod_key) = KeyboardSimulator::modifier_key(p) {
+353 | |                     modifiers.push(mod_key);
+354 | |                 }
+355 | |             }
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_else_if
+    = note: `#[warn(clippy::collapsible_else_if)]` on by default
+help: collapse nested if block
+    |
+351 ~             } else if let Some(mod_key) = KeyboardSimulator::modifier_key(p) {
+352 +                 modifiers.push(mod_key);
+353 +             }
+    |
+
+warning: you should consider adding a `Default` implementation for `WordHandler`
+  --> apps/desktop/src-tauri/src/features/document/word.rs:22:5
+   |
+22 | /     pub fn new() -> Self {
+23 | |         Self
+24 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+   = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+   |
+21 + impl Default for WordHandler {
+22 +     fn default() -> Self {
+23 +         Self::new()
+24 +     }
+25 + }
+   |
+
+warning: this `if` statement can be collapsed
+   --> apps/desktop/src-tauri/src/sys/api/client.rs:376:25
+    |
+376 | /                         if status.is_server_error() {
+377 | |                             if retry_count < max_retries {
+378 | |                                 retry_count += 1;
+379 | |                                 let backoff =
+...   |
+389 | |                         }
+    | |_________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+    = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+    |
+376 ~                         if status.is_server_error()
+377 ~                             && retry_count < max_retries {
+378 |                                 retry_count += 1;
+...
+387 |                                 continue;
+388 ~                             }
+    |
+
+warning: unnecessary `if let` since only the `Ok` variant of the iterator element is used
+  --> apps/desktop/src-tauri/src/sys/commands/ai_native.rs:23:5
+   |
+23 | /     for entry in walker.filter_entry(|e| {
+24 | |         let name = e.file_name().to_string_lossy();
+25 | |
+26 | |         !name.starts_with('.') && name != "node_modules" && name != "target" && name != "dist"
+...  |
+39 | |     }
+   | |_____^
+   |
+help: try `.flatten()` and remove the `if let` statement in the for loop
+  --> apps/desktop/src-tauri/src/sys/commands/ai_native.rs:28:9
+   |
+28 | /         if let Ok(entry) = entry {
+29 | |             let depth = entry.depth();
+30 | |             let indent = "  ".repeat(depth);
+31 | |             let name = entry.file_name().to_string_lossy();
+...  |
+38 | |         }
+   | |_________^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_flatten
+   = note: `#[warn(clippy::manual_flatten)]` on by default
+help: try
+   |
+23 |     for entry in walker.filter_entry(|e| {
+...
+26 |         !name.starts_with('.') && name != "node_modules" && name != "target" && name != "dist"
+27 ~     }).flatten() {
+28 +         let depth = entry.depth();
+29 +         let indent = "  ".repeat(depth);
+30 +         let name = entry.file_name().to_string_lossy();
+31 +         structure.push_str(&format!("{}{}\n", indent, name));
+32 +         file_count += 1;
+33 +         if file_count > 200 {
+34 +             structure.push_str("... (truncated)\n");
+35 +             break;
+36 +         }
+37 +     }
+   |
+
+warning: this `else { if .. }` block can be collapsed
+   --> apps/desktop/src-tauri/src/sys/commands/design.rs:452:12
+    |
+452 |       } else {
+    |  ____________^
+453 | |         if let Some(start) = response.find("```") {
+454 | |             let content_start = response[start..]
+455 | |                 .find('\n')
+...   |
+468 | |     };
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_else_if
+help: collapse nested if block
+    |
+452 ~     } else if let Some(start) = response.find("```") {
+453 +         let content_start = response[start..]
+454 +             .find('\n')
+455 +             .map(|n| start + n + 1)
+456 +             .unwrap_or(start + 3);
+457 +         if let Some(end) = response[content_start..].find("```") {
+458 +             response[content_start..content_start + end]
+459 +                 .trim()
+460 +                 .to_string()
+461 +         } else {
+462 +             return Err("Malformed code block".to_string());
+463 +         }
+464 +     } else {
+465 +         return Err("No CSS code found in response".to_string());
+466 ~     };
+    |
+
+warning: this `else { if .. }` block can be collapsed
+   --> apps/desktop/src-tauri/src/sys/commands/file_ops.rs:127:12
+    |
+127 |       } else {
+    |  ____________^
+128 | |         if let Some(parent) = Path::new(path).parent() {
+129 | |             if parent.exists() {
+130 | |                 match std::fs::canonicalize(parent) {
+...   |
+143 | |     };
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_else_if
+help: collapse nested if block
+    |
+127 ~     } else if let Some(parent) = Path::new(path).parent() {
+128 +         if parent.exists() {
+129 +             match std::fs::canonicalize(parent) {
+130 +                 Ok(p) => p
+131 +                     .join(Path::new(path).file_name().unwrap_or_default())
+132 +                     .to_string_lossy()
+133 +                     .to_string(),
+134 +                 Err(_) => path.to_string(),
+135 +             }
+136 +         } else {
+137 +             path.to_string()
+138 +         }
+139 +     } else {
+140 +         path.to_string()
+141 ~     };
+    |
+
+warning: use of `or_insert_with` to construct default value
+   --> apps/desktop/src-tauri/src/sys/test_utils/mocks.rs:178:14
+    |
+178 |             .or_insert_with(Vec::new)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `or_default()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unwrap_or_default
+    = note: `#[warn(clippy::unwrap_or_default)]` on by default
+
+warning: `agiworkforce-desktop` (lib) generated 9 warnings (run `cargo clippy --fix --lib -p agiworkforce-desktop` to apply 8 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 30.46s

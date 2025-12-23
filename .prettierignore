@@ -1,0 +1,8 @@
+dist
+build
+out
+node_modules
+coverage
+apps/desktop/src-tauri
+
+exhaustive_inventory.md
