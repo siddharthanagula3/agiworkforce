@@ -103,6 +103,22 @@ pub async fn agi_init(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn agi_cancel_goal(goal_id: String) -> Result<(), String> {
+    let agi_opt = {
+        let guard = AGI_CORE.lock();
+        guard.clone()
+    };
+
+    if let Some(agi) = agi_opt {
+        let agi = agi.lock().await;
+        agi.cancel_goal(&goal_id).await.map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("AGI not initialized".to_string())
+    }
+}
+
 /// Submit a goal to the AGI
 #[tauri::command]
 pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalResponse, String> {

@@ -12,6 +12,7 @@ import { useSettingsStore, type Provider } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
 import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
+import { useUsageStore } from '../../stores/usageStore';
 import { Button } from '../ui/Button';
 import { CloudStoragePanel } from '../Cloud/CloudStoragePanel';
 import { AppLayout } from './AppLayout';
@@ -393,6 +394,26 @@ export const UnifiedAgenticChat: React.FC<{
               artifacts: response.assistant_message.artifacts,
             },
           });
+
+          // Track usage for billing
+          const usageStore = useUsageStore.getState();
+          const modelId = response.assistant_message.model;
+          const provider = response.assistant_message.provider;
+
+          // "Proper" tracking using backend-verified counts:
+          // 1. Backend now counts and persists both Input (user_message) and Output (assistant_message) tokens.
+          // 2. We prioritize these verified counts over client-side estimates.
+          const inputTokens = response.user_message?.tokens || Math.ceil(content.length / 4);
+          const outputTokens = response.assistant_message?.tokens || 0;
+
+          void usageStore
+            .trackLLMUsageDetailed({
+              modelId,
+              provider,
+              inputTokens,
+              outputTokens,
+            })
+            .catch((err) => console.error('[UnifiedAgenticChat] Failed to track usage:', err));
         }
         // If streaming, the events will handle the content updates
       }

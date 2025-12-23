@@ -229,6 +229,9 @@ pub struct ChatAttachment {
     /// Base64-encoded content (for images: data URL or raw base64)
     #[serde(default)]
     pub content: Option<String>,
+    /// File path for local files (PDFs, DOCX, etc.)
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -600,7 +603,12 @@ pub async fn chat_send_message(
             }),
         );
 
-        match orchestrator.process_instruction(&request.content).await {
+        // Zero cost for AGI tasks for now, or implement specific AGI pricing
+
+        match orchestrator
+            .process_instruction(&request.content, request.attachments.clone())
+            .await
+        {
             Ok(result) => {
                 let _ = app_handle.emit(
                     "agent:finished",
@@ -631,10 +639,49 @@ pub async fn chat_send_message(
 
     // 2. Standard LLM routing (Non-AGI)
     use crate::router::{
+        cost_calculator::CostCalculator,
         llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
+        token_counter::TokenCounter,
         ChatMessage, LLMRequest, Provider,
     };
     use futures_util::StreamExt;
+
+    // Parse provider preference early for cost estimation
+    let provider_enum = request
+        .provider_override
+        .as_deref()
+        .or(request.provider.as_deref())
+        .and_then(|p| match p {
+            "openai" => Some(Provider::OpenAI),
+            "anthropic" => Some(Provider::Anthropic),
+            "google" => Some(Provider::Google),
+            "ollama" => Some(Provider::Ollama),
+            "xai" | "grok" => Some(Provider::XAI),
+            "deepseek" => Some(Provider::DeepSeek),
+            "qwen" | "alibaba" => Some(Provider::Qwen),
+            "mistral" | "mistralai" => Some(Provider::Mistral),
+            _ => None,
+        });
+
+    let model = request
+        .model_override
+        .or(request.model.clone())
+        .unwrap_or_else(|| "gpt-4o-mini".to_string());
+
+    // Build router context from task metadata
+    let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
+        intents: meta.intents.clone(),
+        requires_vision: meta.requires_vision,
+        token_estimate: meta.token_estimate.unwrap_or(0),
+        cost_priority: Default::default(),
+    });
+
+    let preferences = RouterPreferences {
+        provider: provider_enum,
+        model: Some(model.clone()),
+        strategy: RoutingStrategy::Auto,
+        context: router_context,
+    };
 
     // Get or create conversation
     let db = _db;
@@ -653,6 +700,21 @@ pub async fn chat_send_message(
         }
     };
 
+    // Calculate prompt tokens and cost
+    let temp_chat_msg = ChatMessage {
+        role: "user".to_string(),
+        content: request.content.clone(),
+        tool_calls: None,
+        tool_call_id: None,
+        multimodal_content: None,
+    };
+    let input_tokens = TokenCounter::estimate_prompt_tokens(&[temp_chat_msg]);
+    let input_cost = if let Some(p) = provider_enum {
+        CostCalculator::new().calculate(p, &model, input_tokens, 0)
+    } else {
+        0.0
+    };
+
     // Save user message
     let user_message = {
         let conn = db.connection()?;
@@ -661,10 +723,10 @@ pub async fn chat_send_message(
             conversation_id: conversation.id,
             role: MessageRole::User,
             content: request.content.clone(),
-            tokens: None,
-            cost: None,
-            provider: None,
-            model: None,
+            tokens: Some(input_tokens as i32),
+            cost: Some(input_cost),
+            provider: provider_enum.map(|p| p.as_string().to_string()),
+            model: Some(model.clone()),
             created_at: Utc::now(),
         };
         let id = repository::create_message(&conn, &msg)
@@ -695,43 +757,6 @@ pub async fn chat_send_message(
             multimodal_content: None,
         })
         .collect();
-
-    // Parse provider preference
-    let provider = request
-        .provider_override
-        .as_deref()
-        .or(request.provider.as_deref())
-        .and_then(|p| match p {
-            "openai" => Some(Provider::OpenAI),
-            "anthropic" => Some(Provider::Anthropic),
-            "google" => Some(Provider::Google),
-            "ollama" => Some(Provider::Ollama),
-            "xai" | "grok" => Some(Provider::XAI),
-            "deepseek" => Some(Provider::DeepSeek),
-            "qwen" | "alibaba" => Some(Provider::Qwen),
-            "mistral" | "mistralai" => Some(Provider::Mistral),
-            _ => None,
-        });
-
-    let model = request
-        .model_override
-        .or(request.model.clone())
-        .unwrap_or_else(|| "gpt-4o-mini".to_string());
-
-    // Build router context from task metadata
-    let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
-        intents: meta.intents.clone(),
-        requires_vision: meta.requires_vision,
-        token_estimate: meta.token_estimate.unwrap_or(0),
-        cost_priority: Default::default(),
-    });
-
-    let preferences = RouterPreferences {
-        provider,
-        model: Some(model.clone()),
-        strategy: RoutingStrategy::Auto,
-        context: router_context,
-    };
 
     let llm_request = LLMRequest {
         messages: llm_messages,
@@ -811,14 +836,21 @@ pub async fn chat_send_message(
                 // Save assistant message after streaming completes
                 let assistant_message = {
                     let conn = db.connection()?;
+
+                    let output_cost = if let Some(p) = provider_enum {
+                        CostCalculator::new().calculate(p, &model, 0, token_count)
+                    } else {
+                        0.0
+                    };
+
                     let msg = Message {
                         id: 0,
                         conversation_id: conversation.id,
                         role: MessageRole::Assistant,
                         content: full_content.clone(),
                         tokens: Some(token_count as i32),
-                        cost: None, // TODO: Calculate from provider
-                        provider: provider.map(|p| p.as_string().to_string()),
+                        cost: Some(output_cost),
+                        provider: provider_enum.map(|p| p.as_string().to_string()),
                         model: Some(model.clone()),
                         created_at: Utc::now(),
                     };
