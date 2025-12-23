@@ -23,6 +23,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAnalyticsStore } from '../../stores/analyticsStore';
+import { useUsageStore } from '../../stores/usageStore';
+import { useBillingStore } from '../../stores/billingStore';
 import {
   queryTimeSeriesData,
   queryCategoryData,
@@ -37,19 +39,20 @@ export const UsageDashboard: React.FC = () => {
   const {
     systemMetrics,
     appMetrics,
-    usageStats,
+    usageStats: analyticsUsageStats,
     isLoadingMetrics,
     loadSystemMetrics,
     loadAppMetrics,
-    loadUsageStats,
+    loadUsageStats: loadAnalyticsUsageStats,
     refreshAllMetrics,
   } = useAnalyticsStore();
 
+  const { stats: billingUsageStats, getTokenCost } = useUsageStore();
+  const { subscription } = useBillingStore();
+
   const [dauData, setDauData] = useState<TimeSeriesData[]>([]);
   const [featureData, setFeatureData] = useState<CategoryData[]>([]);
-  const [topEvents, setTopEvents] = useState<{ event_name: string; count: number }[]>(
-    []
-  );
+  const [topEvents, setTopEvents] = useState<{ event_name: string; count: number }[]>([]);
   const [dateRange] = useState({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
     end: new Date(),
@@ -75,7 +78,7 @@ export const UsageDashboard: React.FC = () => {
     // Load initial data
     loadSystemMetrics();
     loadAppMetrics();
-    loadUsageStats();
+    loadAnalyticsUsageStats();
     loadChartData();
 
     // Set up auto-refresh
@@ -88,7 +91,7 @@ export const UsageDashboard: React.FC = () => {
   }, [
     loadSystemMetrics,
     loadAppMetrics,
-    loadUsageStats,
+    loadAnalyticsUsageStats,
     loadChartData,
     refreshAllMetrics,
   ]);
@@ -108,9 +111,7 @@ export const UsageDashboard: React.FC = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Analytics Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Analytics Dashboard</h1>
           <button
             onClick={refreshAllMetrics}
             disabled={isLoadingMetrics}
@@ -120,17 +121,59 @@ export const UsageDashboard: React.FC = () => {
           </button>
         </div>
 
+        {/* Billing & Credits Section */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {subscription?.plan_name && (
+            <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Current Plan</h3>
+              <p className="text-2xl font-bold mt-2 text-primary capitalize">
+                {subscription.plan_name}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Renews:{' '}
+                {new Date((subscription.current_period_end || 0) * 1000).toLocaleDateString()}
+              </p>
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Month-to-Date Cost
+            </h3>
+            <p className="text-2xl font-bold mt-2 text-amber-500">${getTokenCost().toFixed(2)}</p>
+            <p className="text-xs text-gray-400 mt-1">Estimated token spend</p>
+          </div>
+
+          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">LLM Tokens</h3>
+            <p className="text-2xl font-bold mt-2 text-blue-500">
+              {billingUsageStats?.llm_tokens_used.toLocaleString() ?? '0'}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Total tokens processing</p>
+          </div>
+
+          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Automations Run
+            </h3>
+            <p className="text-2xl font-bold mt-2 text-green-500">
+              {analyticsUsageStats?.total_events?.toLocaleString() ?? '0'}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Lifetime total</p>
+          </div>
+        </div>
+
         {/* Key Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Daily Active Users"
-            value={usageStats?.dau || 0}
+            value={analyticsUsageStats?.dau || 0}
             trend="+12%"
             trendUp={true}
           />
           <MetricCard
             title="Monthly Active Users"
-            value={usageStats?.mau || 0}
+            value={analyticsUsageStats?.mau || 0}
             trend="+8%"
             trendUp={true}
           />
@@ -188,13 +231,7 @@ export const UsageDashboard: React.FC = () => {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#0088FE"
-                  fill="#0088FE"
-                  name="DAU"
-                />
+                <Area type="monotone" dataKey="value" stroke="#0088FE" fill="#0088FE" name="DAU" />
               </AreaChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -214,10 +251,7 @@ export const UsageDashboard: React.FC = () => {
                   dataKey="value"
                 >
                   {featureData.map((_entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -251,12 +285,7 @@ export const UsageDashboard: React.FC = () => {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#FF8042"
-                  name="Duration (ms)"
-                />
+                <Line type="monotone" dataKey="value" stroke="#FF8042" name="Duration (ms)" />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -314,34 +343,18 @@ interface MetricCardProps {
   trendUp?: boolean;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({
-  title,
-  value,
-  subtitle,
-  trend,
-  trendUp,
-}) => {
+const MetricCard: React.FC<MetricCardProps> = ({ title, value, subtitle, trend, trendUp }) => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-        {title}
-      </div>
+      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</div>
       <div className="mt-2 flex items-baseline">
-        <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-          {value}
-        </div>
+        <div className="text-2xl font-semibold text-gray-900 dark:text-white">{value}</div>
         {subtitle && (
-          <div className="ml-2 text-sm text-gray-500 dark:text-gray-400">
-            {subtitle}
-          </div>
+          <div className="ml-2 text-sm text-gray-500 dark:text-gray-400">{subtitle}</div>
         )}
       </div>
       {trend && (
-        <div
-          className={`mt-2 text-sm ${
-            trendUp ? 'text-green-600' : 'text-red-600'
-          }`}
-        >
+        <div className={`mt-2 text-sm ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
           {trendUp ? '↑' : '↓'} {trend}
         </div>
       )}
@@ -358,9 +371,7 @@ interface ChartCardProps {
 const ChartCard: React.FC<ChartCardProps> = ({ title, children }) => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-        {title}
-      </h3>
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">{title}</h3>
       {children}
     </div>
   );
