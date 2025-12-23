@@ -1,5 +1,7 @@
 use super::*;
 use crate::automation::AutomationService;
+use crate::commands::chat::ChatAttachment;
+use crate::document::pdf::PdfHandler;
 use crate::router::LLMRouter;
 use anyhow::{anyhow, Result};
 use parking_lot::RwLock;
@@ -558,12 +560,55 @@ impl AgentOrchestrator {
     }
 
     /// Process a natural language instruction
-    pub async fn process_instruction(&self, instruction: &str) -> Result<OrchestratorResult> {
+    pub async fn process_instruction(
+        &self,
+        instruction: &str,
+        attachments: Option<Vec<ChatAttachment>>,
+    ) -> Result<OrchestratorResult> {
         tracing::info!("[Orchestrator] Processing instruction: {}", instruction);
+
+        let mut enriched_instruction = instruction.to_string();
+
+        // Process attachments (extract text from PDFs)
+        if let Some(atts) = attachments {
+            for attachment in atts {
+                // If it looks like a PDF and has a path
+                if let Some(path) = &attachment.path {
+                    let path_lower = path.to_lowercase();
+                    if path_lower.ends_with(".pdf") {
+                        tracing::info!(
+                            "[Orchestrator] Extracting text from PDF attachment: {}",
+                            path
+                        );
+                        let pdf_handler = PdfHandler::new();
+                        match pdf_handler.extract_text(path).await {
+                            Ok(text) => {
+                                let truncated_text = if text.len() > 10000 {
+                                    format!("{}... (truncated)", &text[..10000])
+                                } else {
+                                    text
+                                };
+                                enriched_instruction.push_str(&format!(
+                                    "\n\n[Attachment Content: {}]\n{}\n[End Attachment]\n",
+                                    attachment.name, truncated_text
+                                ));
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to extract PDF text: {}", e);
+                                enriched_instruction.push_str(&format!(
+                                    "\n\n[System Note: Failed to extract text from attachment: {} - {}]\n",
+                                    attachment.name, e
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         let goal = Goal {
             id: format!("goal_{}", &Uuid::new_v4().to_string()[..8]),
-            description: instruction.to_string(),
+            description: enriched_instruction,
             priority: Priority::Medium,
             deadline: None,
             constraints: vec![],

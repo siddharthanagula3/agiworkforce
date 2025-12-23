@@ -71,3 +71,20 @@
 - `apps/web/app/`: Next.js App Router structure.
 - `packages/`: Workspace packages shared across apps and services.
 - `dev-scripts/`: Utility scripts for environment setup and resets.
+
+## Recent Progress (December 2025)
+
+### Key Milestones
+
+- **Browser Automation**: Implemented full-stack browser automation capabilities, including backend proxy/profile management and frontend control APIs.
+- **Backend Stability**: Resolved critical issues with mutex panics in automation, removed unsafe unwraps in git modules, and fixed AGI orchestrator result extraction.
+- **AI Enhancements**: Integrated RAG support for PDF/DOCX extraction and implemented `WalkDir`-based project analysis for better AI context.
+- **Security**: Hardened file operations with permission checks and size limits for shell helper commands.
+- **Desktop UI/UX**: Enhanced authentication flows, added privacy/legal pages, and improved desktop stability with randomized test environments.
+- **Subscription & Billing**: Integrated subscription-related components and navigation logic for the desktop app.
+
+### Current Focus
+
+- Refactoring `chat.rs` commands and enhancing the Ollama provider implementation.
+- Finalizing the subscription lock mechanism and usage dashboard analytics.
+- Improving SSE parsing for more robust agent communication.
