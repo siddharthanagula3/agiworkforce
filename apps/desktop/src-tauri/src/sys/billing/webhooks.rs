@@ -143,7 +143,7 @@ impl WebhookHandler {
 
         db.execute(
             "INSERT OR IGNORE INTO billing_webhook_events (
-                id, stripe_event_id, event_type, payload, processed, retry_count, created_a
+                id, stripe_event_id, event_type, payload, processed, retry_count, created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 id,
@@ -323,7 +323,7 @@ impl WebhookHandler {
                         id, customer_id, subscription_id, stripe_invoice_id, invoice_number,
                         amount_due, amount_paid, amount_remaining, currency, status,
                         invoice_pdf, hosted_invoice_url, period_start, period_end,
-                        due_date, paid_at, created_a
+                        due_date, paid_at, created_at
                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
                     rusqlite::params![
                         invoice_id,
@@ -510,7 +510,7 @@ impl WebhookHandler {
              LIMIT 10",
         )?;
 
-        let events: Vec<(String, String)> = stm
+        let events: Vec<(String, String)> = stmt
             .query_map(rusqlite::params![max_retries], |row| {
                 Ok((row.get(0)?, row.get(1)?))
             })?

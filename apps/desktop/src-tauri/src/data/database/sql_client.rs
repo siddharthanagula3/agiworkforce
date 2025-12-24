@@ -42,7 +42,10 @@ impl SqlClient {
         config.validate()?;
 
         if config.db_type == DatabaseType::PostgreSQL {
-            return self.postgres_client.create_pool(connection_id, config).await;
+            return self
+                .postgres_client
+                .create_pool(connection_id, config)
+                .await;
         }
 
         if config.db_type == DatabaseType::MySQL {
@@ -76,7 +79,7 @@ impl SqlClient {
 
         if db_type.as_ref() == Some(&DatabaseType::PostgreSQL)
             || self
-                .postgres_clien
+                .postgres_client
                 .list_pools()
                 .await
                 .contains(&connection_id.to_string())
@@ -86,7 +89,7 @@ impl SqlClient {
 
         if db_type.as_ref() == Some(&DatabaseType::MySQL)
             || self
-                .mysql_clien
+                .mysql_client
                 .list_pools()
                 .await
                 .contains(&connection_id.to_string())
@@ -137,16 +140,16 @@ impl SqlClient {
         let is_postgres = if let Some(pool) = pools.get(connection_id) {
             pool.get_config().db_type == DatabaseType::PostgreSQL
         } else {
-            self.postgres_clien
+            self.postgres_client
                 .list_pools()
-                .awai
+                .await
                 .contains(&connection_id.to_string())
         };
         drop(pools);
 
         if is_postgres {
             return self
-                .postgres_clien
+                .postgres_client
                 .execute_prepared(connection_id, sql, params)
                 .await;
         }
@@ -187,16 +190,16 @@ impl SqlClient {
         let is_postgres = if let Some(pool) = pools.get(connection_id) {
             pool.get_config().db_type == DatabaseType::PostgreSQL
         } else {
-            self.postgres_clien
+            self.postgres_client
                 .list_pools()
-                .awai
+                .await
                 .contains(&connection_id.to_string())
         };
         drop(pools);
 
         if is_postgres {
             return self
-                .postgres_clien
+                .postgres_client
                 .execute_batch(connection_id, queries)
                 .await;
         }
@@ -220,9 +223,9 @@ impl SqlClient {
         tracing::info!("Closing connection pool: {}", connection_id);
 
         if self
-            .postgres_clien
+            .postgres_client
             .list_pools()
-            .awai
+            .await
             .contains(&connection_id.to_string())
         {
             return self.postgres_client.close_pool(connection_id).await;
@@ -259,11 +262,11 @@ impl SqlClient {
     }
 
     pub async fn mysql_test_connection(&self, connection_id: &str) -> Result<bool> {
-        self.mysql_client.test_connection(connection_id).awai
+        self.mysql_client.test_connection(connection_id).await
     }
 
     pub async fn mysql_list_tables(&self, connection_id: &str) -> Result<Vec<String>> {
-        self.mysql_client.list_tables(connection_id).awai
+        self.mysql_client.list_tables(connection_id).await
     }
 
     pub async fn mysql_describe_table(
@@ -271,9 +274,9 @@ impl SqlClient {
         connection_id: &str,
         table_name: &str,
     ) -> Result<Vec<HashMap<String, JsonValue>>> {
-        self.mysql_clien
+        self.mysql_client
             .describe_table(connection_id, table_name)
-            .awai
+            .await
     }
 
     pub async fn mysql_list_indexes(
@@ -281,9 +284,9 @@ impl SqlClient {
         connection_id: &str,
         table_name: &str,
     ) -> Result<Vec<HashMap<String, JsonValue>>> {
-        self.mysql_clien
+        self.mysql_client
             .list_indexes(connection_id, table_name)
-            .awai
+            .await
     }
 
     pub async fn mysql_call_procedure(
@@ -292,9 +295,9 @@ impl SqlClient {
         procedure_name: &str,
         params: &[JsonValue],
     ) -> Result<Vec<QueryResult>> {
-        self.mysql_clien
+        self.mysql_client
             .call_procedure(connection_id, procedure_name, params)
-            .awai
+            .await
     }
 
     pub async fn mysql_bulk_insert(
@@ -304,9 +307,9 @@ impl SqlClient {
         columns: &[&str],
         rows: &[Vec<JsonValue>],
     ) -> Result<u64> {
-        self.mysql_clien
+        self.mysql_client
             .bulk_insert(connection_id, table_name, columns, rows)
-            .awai
+            .await
     }
 
     pub async fn mysql_stream_query(
@@ -315,9 +318,9 @@ impl SqlClient {
         sql: &str,
         batch_size: usize,
     ) -> Result<Vec<QueryResult>> {
-        self.mysql_clien
+        self.mysql_client
             .stream_query(connection_id, sql, batch_size)
-            .awai
+            .await
     }
 
     async fn execute_mysql_query(&self, _sql: &str) -> Result<QueryResult> {
@@ -403,9 +406,9 @@ mod tests {
         let config = ConnectionConfig::sqlite(":memory:");
         let pool_config = PoolConfig::default();
 
-        clien
+        client
             .create_pool("test_pool", config, pool_config)
-            .awai
+            .await
             .unwrap();
         client.close_pool("test_pool").await.unwrap();
 

@@ -84,7 +84,7 @@ pub async fn voice_transcribe_blob(
     tracing::info!(
         "Transcribing audio blob ({} bytes, format: {})",
         audio_data.len(),
-        forma
+        format
     );
 
     let temp_dir = std::env::temp_dir();
@@ -97,7 +97,7 @@ pub async fn voice_transcribe_blob(
 
     let _ = std::fs::remove_file(temp_file);
 
-    resul
+    result
 }
 
 #[tauri::command]
@@ -187,25 +187,25 @@ async fn transcribe_with_openai(
         form = form.text("language", lang.clone());
     }
 
-    let response = clien
+    let response = client
         .post("https://api.openai.com/v1/audio/transcriptions")
         .header("Authorization", format!("Bearer {}", api_key))
         .multipart(form)
         .send()
-        .awai
+        .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
 
     if !response.status().is_success() {
         let error_text = response
             .text()
-            .awai
+            .await
             .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(format!("Whisper API error: {}", error_text));
     }
 
     let whisper_response: WhisperResponse = response
         .json()
-        .awai
+        .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     Ok(VoiceTranscription {

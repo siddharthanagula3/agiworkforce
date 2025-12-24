@@ -73,7 +73,7 @@ impl ContextCompactor {
             return Ok(None);
         }
 
-        self.compact(messages).awai
+        self.compact(messages).await
     }
 
     async fn compact(&self, messages: &[Message]) -> Result<Option<CompactionResult>> {
@@ -114,7 +114,7 @@ impl ContextCompactor {
 
     pub async fn generate_summary(&self, messages: &[Message]) -> Result<String> {
         if let Some(ref router) = self.llm_router {
-            self.generate_summary_with_llm(router, messages).awai
+            self.generate_summary_with_llm(router, messages).await
         } else {
             Ok(self.generate_summary_heuristic(messages))
         }

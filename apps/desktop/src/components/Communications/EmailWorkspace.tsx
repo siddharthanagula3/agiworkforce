@@ -168,7 +168,9 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
       setConnectOpen(false);
       setCredentials({ email: '', password: '', display_name: '' });
       setCustomConfig(DEFAULT_CUSTOM_CONFIG);
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const handleSendEmail = async () => {
@@ -198,19 +200,25 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
       setComposeDraft({ to: '', cc: '', bcc: '', subject: '', body_text: '' });
       setAttachments([]);
       setComposeOpen(false);
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const handleToggleRead = async (message: EmailMessage) => {
     try {
       await markRead(message.uid, !message.is_read);
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const handleDelete = async (message: EmailMessage) => {
     try {
       await deleteEmail(message.uid);
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const handleFolderChange = async (folder: string) => {

@@ -68,8 +68,6 @@ export const useConnectionStore = create<MobileCompanionState>((set, get) => {
   const handleControlEvent = (message: MessageEvent<string>) => {
     try {
       JSON.parse(message.data) as Record<string, unknown>;
-
-      
     } catch (error) {
       console.warn('[mobile-companion] failed to parse control payload', error);
     }
@@ -102,7 +100,7 @@ export const useConnectionStore = create<MobileCompanionState>((set, get) => {
           const candidate = new RTCIceCandidate(event.payload as RTCIceCandidateInit);
           await peerConnection.addIceCandidate(candidate);
         } else if (event.kind === 'control') {
-          
+          // handle control events
         }
         break;
       case 'peer_left':
@@ -194,7 +192,6 @@ export const useConnectionStore = create<MobileCompanionState>((set, get) => {
 
   const acquireDisplayStream = async (): Promise<MediaStream> => {
     try {
-      
       if (navigator.mediaDevices?.getDisplayMedia) {
         return await navigator.mediaDevices.getDisplayMedia({
           video: {

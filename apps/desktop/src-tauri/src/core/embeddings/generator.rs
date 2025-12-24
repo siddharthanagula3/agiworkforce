@@ -106,7 +106,7 @@ impl EmbeddingGenerator {
         }
 
         if self.config.enable_fallback {
-            self.generate_fastembed(text).awai
+            self.generate_fastembed(text).await
         } else {
             Err(anyhow!("Ollama unavailable and fallback disabled"))
         }
@@ -121,11 +121,11 @@ impl EmbeddingGenerator {
         };
 
         let response = self
-            .clien
+            .client
             .post(&url)
             .json(&request)
             .send()
-            .awai
+            .await
             .context("Failed to send Ollama request")?;
 
         if !response.status().is_success() {
@@ -136,7 +136,7 @@ impl EmbeddingGenerator {
 
         let result: OllamaEmbedResponse = response
             .json()
-            .awai
+            .await
             .context("Failed to parse Ollama response")?;
 
         result

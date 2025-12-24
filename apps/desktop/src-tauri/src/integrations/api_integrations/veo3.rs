@@ -102,7 +102,10 @@ impl Veo3Client {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            Err(APIError::APIError(format!("Veo3 API error: {}", error_text)))
+            Err(APIError::APIError(format!(
+                "Veo3 API error: {}",
+                error_text
+            )))
         }
     }
 

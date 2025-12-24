@@ -540,7 +540,7 @@ fn extract_imports(content: &str, language: &str) -> Vec<String> {
             "TypeScript" | "JavaScript" => {
                 if trimmed.starts_with("import ") {
                     if let Some(from_part) = trimmed.split("from").nth(1) {
-                        let module = from_par
+                        let module = from_part
                             .trim()
                             .trim_matches(|c| c == '\'' || c == '"' || c == ';');
                         imports.push(module.to_string());

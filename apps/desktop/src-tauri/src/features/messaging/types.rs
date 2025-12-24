@@ -158,7 +158,7 @@ impl MessagingRouter {
                     platform: MessagingPlatform::Slack,
                 })?;
 
-                let result = clien
+                let result = client
                     .send_message(&request.channel_id, &request.text)
                     .await
                     .map_err(|e| MessagingError {
@@ -180,7 +180,7 @@ impl MessagingRouter {
                     platform: MessagingPlatform::WhatsApp,
                 })?;
 
-                let message_id = clien
+                let message_id = client
                     .send_text(&request.channel_id, &request.text)
                     .await
                     .map_err(|e| MessagingError {
@@ -202,7 +202,7 @@ impl MessagingRouter {
                     platform: MessagingPlatform::Teams,
                 })?;
 
-                let result = clien
+                let result = client
                     .send_message(&request.channel_id, &request.text)
                     .await
                     .map_err(|e| MessagingError {
@@ -234,7 +234,7 @@ impl MessagingRouter {
                     platform: MessagingPlatform::Slack,
                 })?;
 
-                let messages = clien
+                let messages = client
                     .get_conversation_history(channel_id, limit)
                     .await
                     .map_err(|e| MessagingError {
@@ -270,7 +270,7 @@ impl MessagingRouter {
                     platform: MessagingPlatform::Teams,
                 })?;
 
-                let messages = clien
+                let messages = client
                     .get_channel_messages(channel_id, limit)
                     .await
                     .map_err(|e| MessagingError {

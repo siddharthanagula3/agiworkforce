@@ -1,0 +1,2187 @@
+    Checking agiworkforce-desktop v5.0.0 (/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri)
+error[E0425]: cannot find value `fon` in this scope
+   --> apps/desktop/src-tauri/src/features/document/create_pdf.rs:121:26
+    |
+121 |                         &fon
+    |                          ^^^ help: a local variable with a similar name exists: `font`
+
+error[E0425]: cannot find value `limi` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/slack.rs:114:22
+    |
+114 |             channel, limi
+    |                      ^^^^ help: a local variable with a similar name exists: `limit`
+
+error[E0425]: cannot find value `limi` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/teams.rs:274:31
+    |
+274 |             team_id, chan_id, limi
+    |                               ^^^^ help: a local variable with a similar name exists: `limit`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/types.rs:161:30
+    |
+161 |                 let result = clien
+    |                              ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/types.rs:183:34
+    |
+183 |                 let message_id = clien
+    |                                  ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/types.rs:205:30
+    |
+205 |                 let result = clien
+    |                              ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/types.rs:237:32
+    |
+237 |                 let messages = clien
+    |                                ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/types.rs:273:32
+    |
+273 |                 let messages = clien
+    |                                ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `resul` in this scope
+  --> apps/desktop/src-tauri/src/features/messaging/whatsapp.rs:70:26
+   |
+70 |         let message_id = resul
+   |                          ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `resul` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/whatsapp.rs:116:26
+    |
+116 |         let message_id = resul
+    |                          ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `resul` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/whatsapp.rs:157:26
+    |
+157 |         let message_id = resul
+    |                          ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `resul` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/whatsapp.rs:207:26
+    |
+207 |         let message_id = resul
+    |                          ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `resul` in this scope
+   --> apps/desktop/src-tauri/src/features/messaging/whatsapp.rs:262:26
+    |
+262 |         let message_id = resul
+    |                          ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `error_tex` in this scope
+  --> apps/desktop/src-tauri/src/features/productivity/trello_client.rs:95:25
+   |
+95 |                 status, error_tex
+   |                         ^^^^^^^^^ help: a local variable with a similar name exists: `error_text`
+
+error[E0425]: cannot find value `error_tex` in this scope
+   --> apps/desktop/src-tauri/src/features/productivity/trello_client.rs:196:25
+    |
+196 |                 status, error_tex
+    |                         ^^^^^^^^^ help: a local variable with a similar name exists: `error_text`
+
+error[E0425]: cannot find value `commen` in this scope
+   --> apps/desktop/src-tauri/src/features/productivity/trello_client.rs:225:30
+    |
+225 |             let comment_id = commen
+    |                              ^^^^^^ help: a local variable with a similar name exists: `comment`
+
+error[E0425]: cannot find value `conten` in this scope
+  --> apps/desktop/src-tauri/src/features/projects/rag.rs:60:36
+   |
+60 |         let sentences: Vec<&str> = conten
+   |                                    ^^^^^^ help: a local variable with a similar name exists: `content`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/features/projects/rag.rs:189:28
+    |
+189 |             let response = clien
+    |                            ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `tex` in this scope
+   --> apps/desktop/src-tauri/src/features/projects/rag.rs:195:30
+    |
+195 |                     "input": tex
+    |                              ^^^ help: a local variable with a similar name exists: `text`
+
+error[E0425]: cannot find value `stm` in this scope
+  --> apps/desktop/src-tauri/src/features/tasks/persistence.rs:67:20
+   |
+67 |         let task = stm
+   |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/tasks/persistence.rs:134:21
+    |
+134 |         let tasks = stm
+    |                     ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/tasks/persistence.rs:218:21
+    |
+218 |         let stats = stm
+    |                     ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_billing.rs:212:23
+    |
+212 |         let billing = stm
+    |                       ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `member_coun` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_billing.rs:362:40
+    |
+362 |                 count, new_seat_count, member_coun
+    |                                        ^^^^^^^^^^^ help: a local variable with a similar name exists: `member_count`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_manager.rs:171:20
+    |
+171 |         let team = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_manager.rs:258:21
+    |
+258 |         let teams = stm
+    |                     ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_manager.rs:432:23
+    |
+432 |         let members = stm
+    |                       ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_manager.rs:470:22
+    |
+470 |         let member = stm
+    |                      ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_manager.rs:540:26
+    |
+540 |         let invitation = stm
+    |                          ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_manager.rs:601:27
+    |
+601 |         let invitations = stm
+    |                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_resources.rs:160:25
+    |
+160 |         let resources = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_resources.rs:205:25
+    |
+205 |         let resources = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_resources.rs:272:24
+    |
+272 |         let resource = stm
+    |                        ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_resources.rs:398:25
+    |
+398 |         let resources = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_resources.rs:444:25
+    |
+444 |         let resources = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_resources.rs:490:25
+    |
+490 |         let resources = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+  --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:80:25
+   |
+80 |         let workflows = stm
+   |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:114:25
+    |
+114 |         let workflows = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:186:25
+    |
+186 |         let workflows = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:261:25
+    |
+261 |         let workflows = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:297:25
+    |
+297 |         let workflows = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:321:22
+    |
+321 |         let counts = stm
+    |                      ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/marketplace.rs:347:20
+    |
+347 |         let rows = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/publishing.rs:341:25
+    |
+341 |         let workflows = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/social.rs:165:24
+    |
+165 |         let comments = stm
+    |                        ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/features/workflows/social.rs:283:28
+    |
+283 |         let workflow_ids = stm
+    |                            ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `offse` in this scope
+   --> apps/desktop/src-tauri/src/integrations/cloud/dropbox.rs:268:35
+    |
+268 |                         "offset": offse
+    |                                   ^^^^^ help: a local variable with a similar name exists: `offset`
+
+error[E0425]: cannot find value `repor` in this scope
+   --> apps/desktop/src-tauri/src/integrations/sync/conflict.rs:136:9
+    |
+136 |         repor
+    |         ^^^^^ help: a local variable with a similar name exists: `report`
+
+error[E0425]: cannot find value `resul` in this scope
+  --> apps/desktop/src-tauri/src/sys/api/request_template.rs:36:41
+   |
+36 |             let unresolved: Vec<&str> = resul
+   |                                         ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `close_coun` in this scope
+   --> apps/desktop/src-tauri/src/sys/api/request_template.rs:102:29
+    |
+102 |                 open_count, close_coun
+    |                             ^^^^^^^^^^ help: a local variable with a similar name exists: `close_count`
+
+error[E0425]: cannot find value `oauth_clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/api.rs:203:5
+    |
+203 |     oauth_clien
+    |     ^^^^^^^^^^^ help: a local variable with a similar name exists: `oauth_client`
+
+error[E0425]: cannot find value `oauth_clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/api.rs:222:5
+    |
+222 |     oauth_clien
+    |     ^^^^^^^^^^^ help: a local variable with a similar name exists: `oauth_client`
+
+error[E0425]: cannot find value `oauth_clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/api.rs:240:5
+    |
+240 |     oauth_clien
+    |     ^^^^^^^^^^^ help: a local variable with a similar name exists: `oauth_client`
+
+error[E0425]: cannot find value `even` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/automation.rs:818:14
+    |
+818 |         _ => even
+    |              ^^^^ help: a local variable with a similar name exists: `event`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/cache.rs:226:43
+    |
+226 |     let entries: Vec<serde_json::Value> = stm
+    |                                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/cache.rs:270:45
+    |
+270 |     let most_cached: Vec<CachedQueryInfo> = stm
+    |                                             ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/cache.rs:295:59
+    |
+295 |     let provider_breakdown: Vec<ProviderCacheBreakdown> = stm
+    |                                                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `created_a` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/calendar.rs:367:13
+    |
+367 |             created_a
+    |             ^^^^^^^^^ help: a local variable with a similar name exists: `created_at`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/calendar.rs:446:20
+    |
+446 |     let accounts = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/capture.rs:235:20
+    |
+235 |         let rows = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/capture.rs:263:20
+    |
+263 |         let rows = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/checkpoints.rs:193:23
+    |
+193 |     let checkpoints = stm
+    |                       ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/checkpoints.rs:244:20
+    |
+244 |     let messages = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `blacklis` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/file_ops.rs:112:5
+    |
+112 |     blacklis
+    |     ^^^^^^^^ help: a local variable with a similar name exists: `blacklist`
+
+error[E0425]: cannot find value `des` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/file_ops.rs:476:13
+    |
+476 |             des
+    |             ^^^ help: a local variable with a similar name exists: `dest`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/llm.rs:501:15
+    |
+501 |         match clien
+    |               ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/llm.rs:576:25
+    |
+576 |     let provider_rows = stm
+    |                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/llm.rs:607:22
+    |
+607 |     let model_rows = stm
+    |                      ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/llm.rs:655:20
+    |
+655 |     let response = clien
+    |                    ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/marketplace.rs:374:18
+    |
+374 |     let clones = stm
+    |                  ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/media.rs:123:20
+    |
+123 |     let response = clien
+    |                    ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/media.rs:175:19
+    |
+175 |     let initial = clien
+    |                   ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/media.rs:185:26
+    |
+185 |         final_response = clien
+    |                          ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/productivity.rs:241:23
+    |
+241 |         let card_id = clien
+    |                       ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/productivity.rs:359:23
+    |
+359 |         let task_id = clien
+    |                       ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `forma` in this scope
+  --> apps/desktop/src-tauri/src/sys/commands/voice.rs:87:9
+   |
+87 |         forma
+   |         ^^^^^ help: a local variable with a similar name exists: `format`
+
+error[E0425]: cannot find value `resul` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/voice.rs:100:5
+    |
+100 |     resul
+    |     ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/voice.rs:190:20
+    |
+190 |     let response = clien
+    |                    ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `from_par` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/workspace.rs:543:38
+    |
+543 |                         let module = from_par
+    |                                      ^^^^^^^^ help: a local variable with a similar name exists: `from_part`
+
+error[E0425]: cannot find value `resul` in this scope
+   --> apps/desktop/src-tauri/src/sys/error/integration.rs:148:9
+    |
+148 |         resul
+    |         ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `timeou` in this scope
+   --> apps/desktop/src-tauri/src/sys/error/retry.rs:214:13
+    |
+214 |             timeou
+    |             ^^^^^^ help: a local variable with a similar name exists: `timeout`
+
+error[E0425]: cannot find value `promp` in this scope
+  --> apps/desktop/src-tauri/src/sys/prompt_enhancement/prompt_enhancer.rs:53:13
+   |
+53 |             promp
+   |             ^^^^^ help: a local variable with a similar name exists: `prompt`
+
+error[E0425]: cannot find value `promp` in this scope
+  --> apps/desktop/src-tauri/src/sys/prompt_enhancement/prompt_enhancer.rs:65:13
+   |
+65 |             promp
+   |             ^^^^^ help: a local variable with a similar name exists: `prompt`
+
+error[E0425]: cannot find value `promp` in this scope
+  --> apps/desktop/src-tauri/src/sys/prompt_enhancement/prompt_enhancer.rs:77:13
+   |
+77 |             promp
+   |             ^^^^^ help: a local variable with a similar name exists: `prompt`
+
+error[E0425]: cannot find value `promp` in this scope
+  --> apps/desktop/src-tauri/src/sys/prompt_enhancement/prompt_enhancer.rs:89:13
+   |
+89 |             promp
+   |             ^^^^^ help: a local variable with a similar name exists: `prompt`
+
+error[E0425]: cannot find value `promp` in this scope
+   --> apps/desktop/src-tauri/src/sys/prompt_enhancement/prompt_enhancer.rs:101:13
+    |
+101 |             promp
+    |             ^^^^^ help: a local variable with a similar name exists: `prompt`
+
+error[E0425]: cannot find value `promp` in this scope
+   --> apps/desktop/src-tauri/src/sys/prompt_enhancement/prompt_enhancer.rs:113:13
+    |
+113 |             promp
+    |             ^^^^^ help: a local variable with a similar name exists: `prompt`
+
+error[E0425]: cannot find value `expires_a` in this scope
+  --> apps/desktop/src-tauri/src/sys/security/api.rs:51:26
+   |
+51 |             Utc::now() > expires_a
+   |                          ^^^^^^^^^ help: a local variable with a similar name exists: `expires_at`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/approval_workflow.rs:270:24
+    |
+270 |         let requests = stm
+    |                        ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/audit.rs:152:23
+    |
+152 |         let entries = stm
+    |                       ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/audit.rs:205:34
+    |
+205 |         let operations_by_type = stm
+    |                                  ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/auth_db.rs:432:20
+    |
+432 |         let logs = stm
+    |                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/oauth.rs:147:32
+    |
+147 |         let mut auth_request = clien
+    |                                ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/oauth.rs:200:28
+    |
+200 |         let token_result = clien
+    |                            ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/oauth.rs:239:28
+    |
+239 |         let token_result = clien
+    |                            ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/oauth.rs:271:24
+    |
+271 |         let response = clien
+    |                        ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/oauth.rs:299:42
+    |
+299 |                     let email_response = clien
+    |                                          ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/permissions.rs:112:27
+    |
+112 |         let permissions = stm
+    |                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `blacklis` in this scope
+  --> apps/desktop/src-tauri/src/sys/security/policy/scope.rs:48:9
+   |
+48 |         blacklis
+   |         ^^^^^^^^ help: a local variable with a similar name exists: `blacklist`
+
+error[E0425]: cannot find value `inpu` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/prompt_injection.rs:194:29
+    |
+194 |         let special_chars = inpu
+    |                             ^^^^ help: a local variable with a similar name exists: `input`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/rbac.rs:215:27
+    |
+215 |         let permissions = stm
+    |                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/rbac.rs:237:27
+    |
+237 |         let permissions = stm
+    |                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `sal` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/storage.rs:193:5
+    |
+193 |     sal
+    |     ^^^ help: a local variable with a similar name exists: `salt`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/security/updater.rs:209:20
+    |
+209 |     let response = clien
+    |                    ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/telemetry/collector.rs:128:24
+    |
+128 |         let response = clien
+    |                        ^^^^^ help: a local variable with a similar name exists: `client`
+
+error[E0425]: cannot find value `resul` in this scope
+  --> apps/desktop/src-tauri/src/sys/telemetry/redaction.rs:36:9
+   |
+36 |         resul
+   |         ^^^^^ help: a local variable with a similar name exists: `result`
+
+error[E0425]: cannot find value `started_a` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/first_run.rs:323:13
+    |
+323 |             started_a
+    |             ^^^^^^^^^ help: a local variable with a similar name exists: `started_at`
+
+error[E0425]: cannot find value `urgent_coun` in this scope
+  --> apps/desktop/src-tauri/src/ui/onboarding/instant_demo.rs:89:94
+   |
+89 |                 urgent_count, important_count, spam_count, newsletter_count, response_count, urgent_coun
+   |                                                                                              ^^^^^^^^^^^ help: a local variable with a similar name exists: `urgent_count`
+
+error[E0425]: cannot find value `total_amoun` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/instant_demo.rs:125:54
+    |
+125 |                 sample_invoices.len(), vendor_count, total_amoun
+    |                                                      ^^^^^^^^^^^ help: a local variable with a similar name exists: `total_amount`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/progress_tracker.rs:176:57
+    |
+176 |         let completed_tutorials: HashMap<String, i64> = stm
+    |                                                         ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/progress_tracker.rs:187:52
+    |
+187 |         let in_progress: Vec<OnboardingProgress> = stm
+    |                                                    ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/progress_tracker.rs:213:43
+    |
+213 |         let earned_rewards: Vec<String> = stm
+    |                                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `stm` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/rewards.rs:108:43
+    |
+108 |             let reward_ids: Vec<String> = stm
+    |                                           ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `amoun` in this scope
+   --> apps/desktop/src-tauri/src/ui/onboarding/rewards.rs:149:23
+    |
+149 |                 acc + amoun
+    |                       ^^^^^ help: a local variable with a similar name exists: `amount`
+
+error[E0425]: cannot find value `stm` in this scope
+  --> apps/desktop/src-tauri/src/ui/onboarding/tutorial_manager.rs:86:38
+   |
+86 |         let completed: Vec<String> = stm
+   |                                      ^^^ help: a local variable with a similar name exists: `stmt`
+
+error[E0425]: cannot find value `even` in this scope
+  --> apps/desktop/src-tauri/src/ui/tray.rs:68:9
+   |
+68 |     } = even
+   |         ^^^^ help: a local variable with a similar name exists: `event`
+
+error[E0609]: no field `awai` on type `Timeout<impl Future<Output = Result<Value, AGIError>>>`
+   --> apps/desktop/src-tauri/src/automation/browser/advanced.rs:301:14
+    |
+301 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-16617986218607656649.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, AGIError>>`
+   --> apps/desktop/src-tauri/src/automation/browser/advanced.rs:395:31
+    |
+395 |         cdp.evaluate(&script).awai
+    |                               ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<(WebSocketStream<...>, ...), ...>>`
+  --> apps/desktop/src-tauri/src/automation/browser/cdp_client.rs:59:14
+   |
+59 |             .awai
+   |              ^^^^ unknown field
+   |
+   = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-12952587616469172636.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = tokio::sync::MutexGuard<'_, bool>>`
+  --> apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs:85:32
+   |
+85 |         *self.connected.lock().awai
+   |                                ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+  --> apps/desktop/src-tauri/src/automation/input/keyboard.rs:44:63
+   |
+44 |         self.send_text_with_delay(text, self.typing_delay_ms).awai
+   |                                                               ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+  --> apps/desktop/src-tauri/src/automation/vision_planner.rs:33:14
+   |
+33 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<RouteOutcome, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/automation/vision_planner.rs:165:14
+    |
+165 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+  --> apps/desktop/src-tauri/src/core/agent/autonomous.rs:51:36
+   |
+51 |         self.run_autonomous_loop().awai
+   |                                    ^^^^ unknown field
+
+error[E0609]: no field `cpu_limit_percen` on type `core::agent::AgentConfig`
+   --> apps/desktop/src-tauri/src/core/agent/autonomous.rs:297:29
+    |
+297 |                 self.config.cpu_limit_percen
+    |                             ^^^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+297 |                 self.config.cpu_limit_percent
+    |                                             +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::option::Option<std::string::String>>`
+   --> apps/desktop/src-tauri/src/core/agent/change_tracker.rs:197:14
+    |
+197 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<PathBuf>, std::string::String>>`
+   --> apps/desktop/src-tauri/src/core/agent/change_tracker.rs:202:14
+    |
+202 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `tauri::async_runtime::JoinHandle<std::option::Option<std::string::String>>`
+   --> apps/desktop/src-tauri/src/core/agent/change_tracker.rs:264:10
+    |
+264 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `tauri::async_runtime::JoinHandle<std::result::Result<std::string::String, _>>`
+   --> apps/desktop/src-tauri/src/core/agent/change_tracker.rs:277:10
+    |
+277 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `tauri::async_runtime::JoinHandle<std::result::Result<Vec<PathBuf>, _>>`
+   --> apps/desktop/src-tauri/src/core/agent/change_tracker.rs:303:10
+    |
+303 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<FileAccessResult, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/code_generator.rs:116:18
+    |
+116 |                 .awai
+    |                  ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/code_generator.rs:213:14
+    |
+213 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<CodeGenResult, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/code_generator.rs:389:37
+    |
+389 |         self.generate_code(request).awai
+    |                                     ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Option<CompactionResult>, Error>>`
+  --> apps/desktop/src-tauri/src/core/agent/context_compactor.rs:76:32
+   |
+76 |         self.compact(messages).awai
+   |                                ^^^^ unknown field
+   |
+   = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17798127679698840365.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/context_compactor.rs:117:62
+    |
+117 |             self.generate_summary_with_llm(router, messages).awai
+    |                                                              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, std::io::Error>>`
+  --> apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs:93:14
+   |
+93 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs:125:46
+    |
+125 |         self.vision.capture_screenshot(None).awai
+    |                                              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs:158:18
+    |
+158 |                 .awai
+    |                  ^^^^ unknown field
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs:160:20
+    |
+160 |                 Ok(analysis_text) => {
+    |                    ^^^^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `str`
+    = note: all local variables must have a statically known size
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs:160:17
+    |
+160 |                 Ok(analysis_text) => {
+    |                 ^^^^^^^^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `str`
+note: required by a bound in `std::prelude::v1::Ok`
+   --> /rustc/1159e78c4747b02ef996e55082b704c09b970588/library/core/src/result.rs:552:5
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::option::Option<std::string::String>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:299:97
+    |
+299 |                 if let Some(correction) = self.analyze_error_and_suggest_fix(&task, &error_msg).awai
+    |                                                                                                 ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:308:50
+    |
+308 |                 self.execute_via_agi(agi, &task).awai
+    |                                                  ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:310:48
+    |
+310 |                 self.execute_standalone(&task).awai
+    |                                                ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:468:14
+    |
+468 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:600:43
+    |
+600 |         self.execute_with_mcp_tools(task).awai
+    |                                           ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::string::String>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:838:26
+    |
+838 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::io::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:865:26
+    |
+865 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::io::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:873:26
+    |
+873 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::io::Error>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:884:26
+    |
+884 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = Vec<Change>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:907:55
+    |
+907 |         self.change_tracker.get_task_changes(task_id).awai
+    |                                                       ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = Vec<Change>>`
+   --> apps/desktop/src-tauri/src/core/agent/runtime.rs:911:47
+    |
+911 |         self.change_tracker.get_all_changes().awai
+    |                                               ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<ApiResponse, std::string::String>>`
+  --> apps/desktop/src-tauri/src/core/agi/api_tools_impl.rs:81:10
+   |
+81 |         .awai
+   |          ^^^^ unknown field
+
+error[E0609]: no field `clien` on type `tauri::State<'_, sys::commands::api::ApiState>`
+   --> apps/desktop/src-tauri/src/core/agi/api_tools_impl.rs:136:10
+    |
+136 |         .clien
+    |          ^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+136 |         .client
+    |               +
+
+error[E0609]: no field `clien` on type `tauri::State<'_, sys::commands::api::ApiState>`
+   --> apps/desktop/src-tauri/src/core/agi/api_tools_impl.rs:176:10
+    |
+176 |         .clien
+    |          ^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+176 |         .client
+    |               +
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<LLMResponse, Box<...>>> + Send>>`
+   --> apps/desktop/src-tauri/src/core/router/llm_router.rs:446:14
+    |
+446 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-7210115569317210948.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/planner.rs:238:63
+    |
+238 |         self.generate_basic_plan(goal, tools, best_practices).awai
+    |                                                               ^^^^ unknown field
+
+error[E0609]: no field `cpu_percen` on type `core::agi::ResourceLimits`
+  --> apps/desktop/src-tauri/src/core/agi/resources.rs:65:28
+   |
+65 |             <= self.limits.cpu_percen
+   |                            ^^^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+65 |             <= self.limits.cpu_percent
+   |                                      +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), SecurityError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:259:14
+    |
+259 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<TabInfo>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:467:26
+    |
+467 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:472:30
+    |
+472 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:481:26
+    |
+481 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<TabInfo>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:509:30
+    |
+509 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Arc<CdpClient>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:520:26
+    |
+520 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:525:26
+    |
+525 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<TabInfo>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:562:30
+    |
+562 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:573:34
+    |
+573 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Option<String>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:592:30
+    |
+592 | ...                   .awai
+    |                        ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-2972150807528008941.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<ElementInfo>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:610:34
+    |
+610 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:626:34
+    |
+626 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:673:30
+    |
+673 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `sql_clien` on type `tokio::sync::MutexGuard<'_, sys::commands::database::DatabaseState>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:741:26
+    |
+741 |                         .sql_clien
+    |                          ^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+741 |                         .sql_client
+    |                                   +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:763:71
+    |
+763 |                     api_tools_impl::execute_api_call(app, parameters).awai
+    |                                                                       ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:770:73
+    |
+770 |                     api_tools_impl::execute_api_upload(app, parameters).awai
+    |                                                                         ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<serde_json::Value, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:777:75
+    |
+777 |                     api_tools_impl::execute_api_download(app, parameters).awai
+    |                                                                           ^^^^ unknown field
+
+error[E0609]: no field `cos` on type `LLMResponse`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:860:58
+    |
+860 | ...                   "cost": outcome.response.cos
+    |                                                ^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+860 |                                 "cost": outcome.response.cost
+    |                                                             +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<EmailAccount>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:892:69
+    |
+892 |                     let accounts = email_list_accounts(app.clone()).awai
+    |                                                                     ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:920:26
+    |
+920 |                         .awai
+    |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<communications::Email>, AGIError>>`
+   --> apps/desktop/src-tauri/src/core/agi/executor.rs:958:30
+    |
+958 | ...                   .awai
+    |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<event_types::CalendarEvent, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1049:26
+     |
+1049 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<event_types::EventListResponse, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1119:26
+     |
+1119 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1168:26
+     |
+1168 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1213:26
+     |
+1213 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1318:26
+     |
+1318 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<DocumentContent, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1356:26
+     |
+1356 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Vec<SearchResult>, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1386:26
+     |
+1386 |                         .awai
+     |                          ^^^^ unknown field
+     |
+     = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-7787983911062259375.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<sql_client::QueryResult, AGIError>>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1425:79
+     |
+1425 |                         db_guard.sql_client.execute_query(connection_id, sql).awai
+     |                                                                               ^^^^ unknown field
+
+error[E0609]: no field `sql_clien` on type `tokio::sync::MutexGuard<'_, sys::commands::database::DatabaseState>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1428:30
+     |
+1428 | ...                   .sql_clien
+     |                        ^^^^^^^^^ unknown field
+     |
+help: a field with a similar name exists
+     |
+1428 |                             .sql_client
+     |                                       +
+
+error[E0609]: no field `sql_clien` on type `tokio::sync::MutexGuard<'_, sys::commands::database::DatabaseState>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1459:26
+     |
+1459 |                         .sql_clien
+     |                          ^^^^^^^^^ unknown field
+     |
+help: a field with a similar name exists
+     |
+1459 |                         .sql_client
+     |                                   +
+
+error[E0609]: no field `sql_clien` on type `tokio::sync::MutexGuard<'_, sys::commands::database::DatabaseState>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1494:26
+     |
+1494 |                         .sql_clien
+     |                          ^^^^^^^^^ unknown field
+     |
+help: a field with a similar name exists
+     |
+1494 |                         .sql_client
+     |                                   +
+
+error[E0609]: no field `sql_clien` on type `tokio::sync::MutexGuard<'_, sys::commands::database::DatabaseState>`
+    --> apps/desktop/src-tauri/src/core/agi/executor.rs:1529:26
+     |
+1529 |                         .sql_clien
+     |                          ^^^^^^^^^ unknown field
+     |
+help: a field with a similar name exists
+     |
+1529 |                         .sql_client
+     |                                   +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/knowledge.rs:130:31
+    |
+130 |         self.add_entry(entry).awai
+    |                               ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/knowledge.rs:106:31
+    |
+106 |         self.add_entry(entry).awai
+    |                               ^^^^ unknown field
+
+error[E0277]: `rusqlite::Connection` doesn't implement `std::fmt::Display`
+   --> apps/desktop/src-tauri/src/core/agi/knowledge.rs:284:25
+    |
+282 |                         "[Knowledge] Keeping top {} entries (out of {})",
+    |                                                                     -- required by this formatting parameter
+283 |                         keep_count,
+284 |                         conn
+    |                         ^^^^ `rusqlite::Connection` cannot be formatted with the default formatter
+    |
+    = help: the trait `std::fmt::Display` is not implemented for `rusqlite::Connection`
+    = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+    = help: the trait `std::fmt::Display` is implemented for `parking_lot::lock_api::MutexGuard<'_, R, T>`
+    = note: required for `parking_lot::lock_api::MutexGuard<'_, parking_lot::RawMutex, rusqlite::Connection>` to implement `std::fmt::Display`
+    = note: this error originates in the macro `$crate::__macro_support::format_args` which comes from the expansion of the macro `tracing::info` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/planner.rs:777:52
+    |
+777 |         self.generate_basic_plan(goal, tools, &[]).awai
+    |                                                    ^^^^ unknown field
+
+error[E0609]: no field `cpu_percen` on type `core::agi::ResourceLimits`
+  --> apps/desktop/src-tauri/src/core/agi/resources.rs:51:50
+   |
+51 |         Ok(usage.cpu_usage_percent < self.limits.cpu_percen
+   |                                                  ^^^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+51 |         Ok(usage.cpu_usage_percent < self.limits.cpu_percent
+   |                                                            +
+
+error[E0609]: no field `awai` on type `tauri::async_runtime::JoinHandle<std::result::Result<(), anyhow::Error>>`
+  --> apps/desktop/src-tauri/src/core/agi/sandbox.rs:78:10
+   |
+78 |         .awai
+   |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `tauri::async_runtime::JoinHandle<bool>`
+  --> apps/desktop/src-tauri/src/core/agi/sandbox.rs:92:14
+   |
+92 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `tauri::async_runtime::JoinHandle<std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/agi/sandbox.rs:136:10
+    |
+136 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, std::io::Error>>`
+  --> apps/desktop/src-tauri/src/core/codebase/indexer.rs:92:14
+   |
+92 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Vec<Symbol>, Error>>`
+  --> apps/desktop/src-tauri/src/core/codebase/mod.rs:39:10
+   |
+39 |         .awai
+   |          ^^^^ unknown field
+   |
+   = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-5299396131502532882.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<f32>, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/generator.rs:109:43
+    |
+109 |             self.generate_fastembed(text).awai
+    |                                           ^^^^ unknown field
+
+error[E0609]: no field `clien` on type `&EmbeddingGenerator`
+   --> apps/desktop/src-tauri/src/core/embeddings/generator.rs:124:14
+    |
+124 |             .clien
+    |              ^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+124 |             .client
+    |                   +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, std::io::Error>>`
+  --> apps/desktop/src-tauri/src/core/embeddings/indexer.rs:84:14
+   |
+84 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/indexer.rs:124:36
+    |
+124 |         self.index_file(file_path).awai
+    |                                    ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<f32>, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/mod.rs:133:14
+    |
+133 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<f32>, anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/mod.rs:170:10
+    |
+170 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/mod.rs:232:10
+    |
+232 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/mod.rs:250:10
+    |
+250 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/mod.rs:281:10
+    |
+281 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), anyhow::Error>>`
+   --> apps/desktop/src-tauri/src/core/embeddings/mod.rs:299:10
+    |
+299 |         .awai
+    |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), McpError>>`
+   --> apps/desktop/src-tauri/src/core/mcp/manager.rs:179:33
+    |
+179 |         self.start_server(name).awai
+    |                                 ^^^^ unknown field
+
+error[E0609]: no field `mcp_clien` on type `&McpToolRegistry`
+   --> apps/desktop/src-tauri/src/core/mcp/registry.rs:120:14
+    |
+120 |         self.mcp_clien
+    |              ^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+120 |         self.mcp_client
+    |                       +
+
+error[E0609]: no field `transpor` on type `&mut McpSession`
+  --> apps/desktop/src-tauri/src/core/mcp/session.rs:54:14
+   |
+54 |             .transpor
+   |              ^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+54 |             .transport
+   |                      +
+
+error[E0609]: no field `transpor` on type `&mut McpSession`
+  --> apps/desktop/src-tauri/src/core/mcp/session.rs:72:14
+   |
+72 |         self.transpor
+   |              ^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+72 |         self.transport
+   |                      +
+
+error[E0609]: no field `transpor` on type `&McpSession`
+  --> apps/desktop/src-tauri/src/core/mcp/session.rs:82:14
+   |
+82 |             .transpor
+   |              ^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+82 |             .transport
+   |                      +
+
+error[E0609]: no field `transpor` on type `&McpSession`
+   --> apps/desktop/src-tauri/src/core/mcp/session.rs:119:14
+    |
+119 |             .transpor
+    |              ^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+119 |             .transport
+    |                      +
+
+error[E0609]: no field `transpor` on type `&McpSession`
+   --> apps/desktop/src-tauri/src/core/mcp/session.rs:144:14
+    |
+144 |             .transpor
+    |              ^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+144 |             .transport
+    |                      +
+
+error[E0609]: no field `transpor` on type `&McpSession`
+   --> apps/desktop/src-tauri/src/core/mcp/session.rs:168:14
+    |
+168 |             .transpor
+    |              ^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+168 |             .transport
+    |                      +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), McpError>>`
+   --> apps/desktop/src-tauri/src/core/mcp/session.rs:198:35
+    |
+198 |         self.transport.shutdown().awai
+    |                                   ^^^^ unknown field
+
+error[E0609]: no field `clien` on type `&McpToolExecutor`
+  --> apps/desktop/src-tauri/src/core/mcp/tool_executor.rs:67:14
+   |
+67 |             .clien
+   |              ^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+67 |             .client
+   |                   +
+
+error[E0609]: no field `awai` on type `JoinAll<{async block@apps/desktop/src-tauri/src/core/mcp/tool_executor.rs:130:36: 130:46}>`
+   --> apps/desktop/src-tauri/src/core/mcp/tool_executor.rs:133:44
+    |
+133 |         futures::future::join_all(futures).awai
+    |                                            ^^^^ unknown field
+
+error[E0609]: no field `stdou` on type `tokio::process::Child`
+  --> apps/desktop/src-tauri/src/core/mcp/transport.rs:48:14
+   |
+48 |             .stdou
+   |              ^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+48 |             .stdout
+   |                   +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, std::string::String>>`
+  --> apps/desktop/src-tauri/src/core/orchestration/workflow_scheduler.rs:75:14
+   |
+75 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, std::string::String>>`
+  --> apps/desktop/src-tauri/src/core/orchestration/workflow_scheduler.rs:90:14
+   |
+90 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<ToolResult, anyhow::Error>>`
+  --> apps/desktop/src-tauri/src/core/router/function_executor.rs:36:14
+   |
+36 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<Pin<Box<...>>, ...>> + Send>>`
+   --> apps/desktop/src-tauri/src/core/router/llm_router.rs:791:14
+    |
+791 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-4768287960004858777.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::string::String, reqwest::Error>>`
+   --> apps/desktop/src-tauri/src/core/router/providers/google.rs:257:14
+    |
+257 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<reqwest::Response, reqwest::Error>>`
+  --> apps/desktop/src-tauri/src/core/router/providers/managed_cloud.rs:19:10
+   |
+19 |         .awai
+   |          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `TokioJoinHandle<std::result::Result<Vec<u8>, std::io::Error>>`
+   --> apps/desktop/src-tauri/src/core/router/tool_executor.rs:500:14
+    |
+500 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `TokioJoinHandle<std::result::Result<Vec<u8>, std::io::Error>>`
+   --> apps/desktop/src-tauri/src/core/router/tool_executor.rs:504:14
+    |
+504 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<std::fs::Metadata, std::io::Error>>`
+   --> apps/desktop/src-tauri/src/core/router/tool_executor.rs:755:22
+    |
+755 |                     .awai
+    |                      ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), AGIError>>`
+    --> apps/desktop/src-tauri/src/core/router/tool_executor.rs:1166:34
+     |
+1166 | ...                   .awai
+     |                        ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), AGIError>>`
+    --> apps/desktop/src-tauri/src/core/router/tool_executor.rs:1235:26
+     |
+1235 |                         .awai
+     |                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<VisionResponse, std::string::String>>`
+    --> apps/desktop/src-tauri/src/core/router/tool_executor.rs:1769:22
+     |
+1769 |                     .awai
+     |                      ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+  --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:38:14
+   |
+38 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+  --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:69:14
+   |
+69 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:101:14
+    |
+101 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:132:14
+    |
+132 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `DisconnectPool`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:171:18
+    |
+171 |                 .awai
+    |                  ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:200:14
+    |
+200 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:226:14
+    |
+226 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:298:14
+    |
+298 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:320:14
+    |
+320 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:353:14
+    |
+353 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `GetConn`
+   --> apps/desktop/src-tauri/src/data/database/mysql_client.rs:396:14
+    |
+396 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Vec<String>, Error>>`
+  --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:65:14
+   |
+65 |             .awai
+   |              ^^^^ unknown field
+   |
+   = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-1607946119863104568.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Cursor<Document>, Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:109:14
+    |
+109 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-4037371793433988275.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Option<Document>, Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:152:14
+    |
+152 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-2173456691536674390.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<InsertOneResult, mongodb::error::Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:180:14
+    |
+180 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<InsertManyResult, mongodb::error::Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:217:14
+    |
+217 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<UpdateResult, mongodb::error::Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:256:14
+    |
+256 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<DeleteResult, mongodb::error::Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:286:14
+    |
+286 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Cursor<Document>, Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:319:14
+    |
+319 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-1877740341210893051.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Vec<String>, Error>>`
+   --> apps/desktop/src-tauri/src/data/database/nosql_client.rs:354:14
+    |
+354 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-976726384359328843.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Object<Manager>, PoolError<...>>>`
+  --> apps/desktop/src-tauri/src/data/database/postgres_client.rs:55:14
+   |
+55 |             .awai
+   |              ^^^^ unknown field
+   |
+   = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15630244040170623118.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Object<Manager>, PoolError<...>>>`
+  --> apps/desktop/src-tauri/src/data/database/postgres_client.rs:87:14
+   |
+87 |             .awai
+   |              ^^^^ unknown field
+   |
+   = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-2282532514703789496.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Object<Manager>, PoolError<...>>>`
+   --> apps/desktop/src-tauri/src/data/database/postgres_client.rs:119:14
+    |
+119 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-4629981376999881163.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl Future<Output = Result<Object<Manager>, PoolError<...>>>`
+   --> apps/desktop/src-tauri/src/data/database/postgres_client.rs:154:14
+    |
+154 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-2282532514703789496.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<(), RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:121:18
+    |
+121 |                 .awai
+    |                  ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-3771658207784623062.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<(), RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:126:18
+    |
+126 |                 .awai
+    |                  ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-12627771874630564670.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:145:14
+    |
+145 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:163:14
+    |
+163 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:181:14
+    |
+181 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-14042036425495018286.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:199:14
+    |
+199 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:217:14
+    |
+217 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-13271527962723322197.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:235:14
+    |
+235 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-13271527962723322197.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:253:14
+    |
+253 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<(), RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:273:14
+    |
+273 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-10165906674764956909.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:291:14
+    |
+291 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-1052228679082336119.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:309:14
+    |
+309 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-1052228679082336119.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:327:14
+    |
+327 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:345:14
+    |
+345 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:363:14
+    |
+363 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:387:14
+    |
+387 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-16096200762059590543.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:411:14
+    |
+411 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-4907717531276279591.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:434:14
+    |
+434 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15981540697374821153.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:452:14
+    |
+452 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15981540697374821153.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:470:14
+    |
+470 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:488:14
+    |
+488 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15981540697374821153.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:506:14
+    |
+506 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15981540697374821153.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:524:14
+    |
+524 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15981540697374821153.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:542:14
+    |
+542 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-15981540697374821153.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:560:14
+    |
+560 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `Pin<Box<dyn Future<Output = Result<_, RedisError>> + Send>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:578:14
+    |
+578 |             .awai
+    |              ^^^^ unknown field
+    |
+    = note: the full name for the type has been written to '/Users/siddhartha/Desktop/agiworkforce/target/debug/deps/agiworkforce_desktop-4ae231bb968bd49b.long-type-17898528787359712963.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), RedisError>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:596:14
+    |
+596 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<_, RedisError>>`
+   --> apps/desktop/src-tauri/src/data/database/redis_client.rs:614:14
+    |
+614 |             .awai
+    |              ^^^^ unknown field
+
+error[E0609]: no field `postgres_clien` on type `&SqlClient`
+  --> apps/desktop/src-tauri/src/data/database/sql_client.rs:79:18
+   |
+79 |                 .postgres_clien
+   |                  ^^^^^^^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+79 |                 .postgres_client
+   |                                +
+
+error[E0609]: no field `mysql_clien` on type `&SqlClient`
+  --> apps/desktop/src-tauri/src/data/database/sql_client.rs:89:18
+   |
+89 |                 .mysql_clien
+   |                  ^^^^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+89 |                 .mysql_client
+   |                             +
+
+error[E0609]: no field `postgres_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:140:18
+    |
+140 |             self.postgres_clien
+    |                  ^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+140 |             self.postgres_client
+    |                                +
+
+error[E0609]: no field `postgres_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:149:18
+    |
+149 |                 .postgres_clien
+    |                  ^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+149 |                 .postgres_client
+    |                                +
+
+error[E0609]: no field `postgres_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:190:18
+    |
+190 |             self.postgres_clien
+    |                  ^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+190 |             self.postgres_client
+    |                                +
+
+error[E0609]: no field `postgres_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:199:18
+    |
+199 |                 .postgres_clien
+    |                  ^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+199 |                 .postgres_client
+    |                                +
+
+error[E0609]: no field `postgres_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:223:14
+    |
+223 |             .postgres_clien
+    |              ^^^^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+223 |             .postgres_client
+    |                            +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<bool, AGIError>>`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:262:58
+    |
+262 |         self.mysql_client.test_connection(connection_id).awai
+    |                                                          ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<Vec<std::string::String>, AGIError>>`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:266:54
+    |
+266 |         self.mysql_client.list_tables(connection_id).awai
+    |                                                      ^^^^ unknown field
+
+error[E0609]: no field `mysql_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:274:14
+    |
+274 |         self.mysql_clien
+    |              ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+274 |         self.mysql_client
+    |                         +
+
+error[E0609]: no field `mysql_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:284:14
+    |
+284 |         self.mysql_clien
+    |              ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+284 |         self.mysql_client
+    |                         +
+
+error[E0609]: no field `mysql_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:295:14
+    |
+295 |         self.mysql_clien
+    |              ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+295 |         self.mysql_client
+    |                         +
+
+error[E0609]: no field `mysql_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:307:14
+    |
+307 |         self.mysql_clien
+    |              ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+307 |         self.mysql_client
+    |                         +
+
+error[E0609]: no field `mysql_clien` on type `&SqlClient`
+   --> apps/desktop/src-tauri/src/data/database/sql_client.rs:318:14
+    |
+318 |         self.mysql_clien
+    |              ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+318 |         self.mysql_client
+    |                         +
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::string::String>>`
+  --> apps/desktop/src-tauri/src/data/metrics/live_stream.rs:45:14
+   |
+45 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::string::String>>`
+  --> apps/desktop/src-tauri/src/data/metrics/live_stream.rs:64:43
+   |
+64 |         self.emit_update(user_id, update).awai
+   |                                           ^^^^ unknown field
+
+error[E0609]: no field `awai` on type `impl futures::Future<Output = std::result::Result<(), std::string::String>>`
+  --> apps/desktop/src-tauri/src/data/metrics/live_stream.rs:84:14
+   |
+84 |             .awai
+   |              ^^^^ unknown field
+
+error[E0609]: no field `oauth_clien` on type `&mut GoogleCalendarClient`
+  --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:69:14
+   |
+69 |             .oauth_clien
+   |              ^^^^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+69 |             .oauth_client
+   |                         +
+
+error[E0609]: no field `oauth_clien` on type `&mut GoogleCalendarClient`
+   --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:102:26
+    |
+102 |                         .oauth_clien
+    |                          ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+102 |                         .oauth_client
+    |                                     +
+
+error[E0609]: no field `clien` on type `&mut GoogleCalendarClient`
+   --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:186:14
+    |
+186 |             .clien
+    |              ^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+186 |             .client
+    |                   +
+
+error[E0609]: no field `clien` on type `&mut GoogleCalendarClient`
+   --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:232:14
+    |
+232 |             .clien
+    |              ^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+232 |             .client
+    |                   +
+
+error[E0609]: no field `clien` on type `&mut GoogleCalendarClient`
+   --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:296:14
+    |
+296 |             .clien
+    |              ^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+296 |             .client
+    |                   +
+
+Some errors have detailed explanations: E0277, E0425, E0609.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `agiworkforce-desktop` (lib) due to 308 previous errors

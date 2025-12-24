@@ -57,7 +57,7 @@ pub async fn checkpoint_create(
         "INSERT INTO conversation_checkpoints (
             id, conversation_id, checkpoint_name, description,
             message_count, messages_snapshot, context_snapshot,
-            metadata, parent_checkpoint_id, branch_name, created_a
+            metadata, parent_checkpoint_id, branch_name, created_at
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             checkpoint_id,
@@ -123,7 +123,7 @@ pub async fn checkpoint_restore(
         conn.execute(
             "INSERT INTO messages (
                 id, conversation_id, role, content, provider, model, tokens, cost,
-                context_items, images, tool_calls, created_a
+                context_items, images, tool_calls, created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 msg.get("id").and_then(|v| v.as_i64()),
@@ -183,14 +183,14 @@ pub async fn checkpoint_list(
         .prepare(
             "SELECT id, conversation_id, checkpoint_name, description,
              message_count, messages_snapshot, context_snapshot, metadata,
-             parent_checkpoint_id, branch_name, created_a
+             parent_checkpoint_id, branch_name, created_at
              FROM conversation_checkpoints
              WHERE conversation_id = ?1
              ORDER BY created_at DESC",
         )
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-    let checkpoints = stm
+    let checkpoints = stmt
         .query_map(params![conversation_id], |row| {
             Ok(Checkpoint {
                 id: row.get(0)?,
@@ -235,13 +235,13 @@ fn get_conversation_messages(
 ) -> Result<Vec<serde_json::Value>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT id, conversation_id, role, content, provider, model,
-         tokens, cost, context_items, images, tool_calls, created_a
+         tokens, cost, context_items, images, tool_calls, created_at
          FROM messages
          WHERE conversation_id = ?1
          ORDER BY created_at ASC",
     )?;
 
-    let messages = stm
+    let messages = stmt
         .query_map(params![conversation_id], |row| {
             Ok(serde_json::json!({
                 "id": row.get::<_, i64>(0)?,
@@ -267,7 +267,7 @@ fn get_checkpoint(conn: &Connection, checkpoint_id: &str) -> Result<Checkpoint, 
     conn.query_row(
         "SELECT id, conversation_id, checkpoint_name, description,
          message_count, messages_snapshot, context_snapshot, metadata,
-         parent_checkpoint_id, branch_name, created_a
+         parent_checkpoint_id, branch_name, created_at
          FROM conversation_checkpoints
          WHERE id = ?1",
         params![checkpoint_id],

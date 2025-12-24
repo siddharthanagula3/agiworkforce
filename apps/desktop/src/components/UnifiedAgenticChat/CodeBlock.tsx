@@ -84,7 +84,7 @@ export function CodeBlock({
         style={shouldCollapse && isCollapsed ? { maxHeight: maxCollapsedHeight } : undefined}
       >
         {}
-        {/* @ts-expect-error */}
+        {/* @ts-expect-error SyntaxHighlighter types are incomplete */}
         <SyntaxHighlighter
           language={language}
           style={oneDark}

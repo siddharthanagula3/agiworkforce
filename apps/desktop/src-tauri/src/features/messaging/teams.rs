@@ -271,7 +271,7 @@ impl TeamsClient {
 
         let url = format!(
             "https://api.agiworkforce.com/{}/{}/{}",
-            team_id, chan_id, limi
+            team_id, chan_id, limit
         );
 
         let response = self

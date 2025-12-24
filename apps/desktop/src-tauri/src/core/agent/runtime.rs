@@ -296,7 +296,8 @@ impl AgentRuntime {
                     None,
                 );
 
-                if let Some(correction) = self.analyze_error_and_suggest_fix(&task, &error_msg).awai
+                if let Some(correction) =
+                    self.analyze_error_and_suggest_fix(&task, &error_msg).await
                 {
                     self.emit_reasoning(&task_id, format!("Correction plan: {}", correction), None);
 
@@ -305,9 +306,9 @@ impl AgentRuntime {
             }
 
             let result = if let Some(ref agi) = self.agi_core {
-                self.execute_via_agi(agi, &task).awai
+                self.execute_via_agi(agi, &task).await
             } else {
-                self.execute_standalone(&task).awai
+                self.execute_standalone(&task).await
             };
 
             match result {
@@ -465,7 +466,7 @@ Do not repeat the error message."#,
 
         let goal_id = agi
             .submit_goal(goal)
-            .awai
+            .await
             .map_err(|e| anyhow!("Failed to submit goal to AGI Core: {}", e))?;
 
         tracing::info!(
@@ -597,7 +598,7 @@ Do not repeat the error message."#,
             return self.execute_code_task(task).await;
         }
 
-        self.execute_with_mcp_tools(task).awai
+        self.execute_with_mcp_tools(task).await
     }
 
     async fn execute_code_task(&self, task: &Task) -> Result<serde_json::Value> {
@@ -835,7 +836,7 @@ Do not repeat the error message."#,
                     reverted_ids.push(id.clone());
                     self.change_tracker
                         .mark_reverted(&change.id)
-                        .awai
+                        .await
                         .map_err(|e| e.to_string())?;
                 }
                 Err(e) => {
@@ -862,7 +863,7 @@ Do not repeat the error message."#,
             ChangeType::FileCreated => {
                 if let Some(path) = &change.path {
                     tokio::fs::remove_file(path)
-                        .awai
+                        .await
                         .map_err(|e| format!("Failed to delete file: {}", e))?;
                     tracing::info!("[AgentRuntime] Reverted file creation: {:?}", path);
                 }
@@ -870,7 +871,7 @@ Do not repeat the error message."#,
             ChangeType::FileModified => {
                 if let (Some(path), Some(before_content)) = (&change.path, &change.before_content) {
                     tokio::fs::write(path, before_content)
-                        .awai
+                        .await
                         .map_err(|e| format!("Failed to restore file: {}", e))?;
                     tracing::info!("[AgentRuntime] Reverted file modification: {:?}", path);
                 }
@@ -881,7 +882,7 @@ Do not repeat the error message."#,
                         tokio::fs::create_dir_all(parent).await.ok();
                     }
                     tokio::fs::write(path, content)
-                        .awai
+                        .await
                         .map_err(|e| format!("Failed to restore deleted file: {}", e))?;
                     tracing::info!("[AgentRuntime] Reverted file deletion: {:?}", path);
                 }
@@ -904,11 +905,11 @@ Do not repeat the error message."#,
     }
 
     pub async fn get_task_change_history(&self, task_id: &str) -> Vec<Change> {
-        self.change_tracker.get_task_changes(task_id).awai
+        self.change_tracker.get_task_changes(task_id).await
     }
 
     pub async fn get_all_change_history(&self) -> Vec<Change> {
-        self.change_tracker.get_all_changes().awai
+        self.change_tracker.get_all_changes().await
     }
 
     pub fn emit_todo_update(&self, task_id: &str, todos: Vec<(String, String, String)>) {

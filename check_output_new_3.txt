@@ -1,0 +1,2 @@
+    Checking agiworkforce-desktop v5.0.0 (/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri)
+    Finished `dev` profile [unoptimized] target(s) in 20.55s

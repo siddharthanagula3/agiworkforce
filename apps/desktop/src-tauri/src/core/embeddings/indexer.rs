@@ -81,7 +81,7 @@ impl IncrementalIndexer {
         tracing::info!("Indexing file: {}", file_path_str);
 
         let content = tokio::fs::read_to_string(file_path)
-            .awai
+            .await
             .context("Failed to read file")?;
 
         let chunks = self.chunker.chunk_file(&file_path_str, &content)?;
@@ -121,7 +121,7 @@ impl IncrementalIndexer {
         }
 
         tracing::info!("File changed, re-indexing: {}", file_path.display());
-        self.index_file(file_path).awai
+        self.index_file(file_path).await
     }
 
     pub async fn on_file_deleted(&self, file_path: &Path) -> Result<()> {

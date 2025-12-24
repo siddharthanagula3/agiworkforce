@@ -111,7 +111,7 @@ impl SlackClient {
     ) -> Result<Vec<SlackMessage>, Box<dyn std::error::Error>> {
         let url = format!(
             "https://api.agiworkforce.com?channel={}&limit={}",
-            channel, limi
+            channel, limit
         );
 
         let response = self

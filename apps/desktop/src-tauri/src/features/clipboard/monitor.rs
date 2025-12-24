@@ -370,7 +370,7 @@ impl ClipboardMonitor {
     }
 
     pub async fn is_running(&self) -> bool {
-        *self.is_running.read().awai
+        *self.is_running.read().await
     }
 
     fn get_foreground_app_name() -> Option<String> {

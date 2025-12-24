@@ -188,7 +188,7 @@ impl KnowledgeBase {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_a
+            "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_at
              FROM knowledge_documents WHERE id = ?1",
         )?;
 
@@ -218,7 +218,7 @@ impl KnowledgeBase {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_a
+            "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_at
              FROM knowledge_documents WHERE project_id = ?1 ORDER BY created_at DESC",
         )?;
 
@@ -249,7 +249,7 @@ impl KnowledgeBase {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_a
+            "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_at
              FROM knowledge_chunks WHERE document_id = ?1 ORDER BY chunk_index ASC",
         )?;
 

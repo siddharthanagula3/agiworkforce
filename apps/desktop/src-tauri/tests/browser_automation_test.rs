@@ -1,4 +1,4 @@
-use agiworkforce_desktop::browser::{BrowserOptions, PlaywrightBridge};
+use agiworkforce_desktop::automation::browser::{BrowserOptions, PlaywrightBridge};
 
 #[tokio::test]
 async fn test_browser_bridge_lifecycle() {

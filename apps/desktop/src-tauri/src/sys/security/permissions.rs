@@ -109,7 +109,7 @@ impl PermissionManager {
              ORDER BY permission_type",
         )?;
 
-        let permissions = stm
+        let permissions = stmt
             .query_map([], |row| {
                 let perm_type_str: String = row.get(1)?;
                 let state_str: String = row.get(2)?;

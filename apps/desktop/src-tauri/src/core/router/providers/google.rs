@@ -254,7 +254,7 @@ impl GoogleProvider {
         let status = response.status();
         let error_text = response
             .text()
-            .awai
+            .await
             .unwrap_or_else(|_| "Unknown error".to_string());
 
         if let Ok(json_error) = serde_json::from_str::<GoogleErrorResponse>(&error_text) {

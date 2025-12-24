@@ -89,7 +89,7 @@ impl CodebaseIndexer {
 
     pub async fn index_file(&self, file_path: &Path) -> Result<Vec<Symbol>> {
         let content = fs::read_to_string(file_path)
-            .awai
+            .await
             .context("Failed to read file")?;
 
         let symbols = self.extract_symbols(file_path, &content)?;

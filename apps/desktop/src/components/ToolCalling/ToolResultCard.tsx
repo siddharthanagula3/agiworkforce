@@ -115,7 +115,7 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
 
         return (
           <div className="relative group">
-            {/* @ts-expect-error */}
+            {/* @ts-expect-error SyntaxHighlighter types are incomplete */}
             <SyntaxHighlighter
               style={oneDark as SyntaxHighlighterProps['style']}
               language={language}

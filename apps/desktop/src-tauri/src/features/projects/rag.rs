@@ -57,7 +57,7 @@ impl RAGEngine {
         content: &str,
         document: &KnowledgeDocument,
     ) -> Result<Vec<KnowledgeChunk>> {
-        let sentences: Vec<&str> = conten
+        let sentences: Vec<&str> = content
             .split(&['.', '!', '?'][..])
             .filter(|s| !s.trim().is_empty())
             .collect();
@@ -186,13 +186,13 @@ impl RAGEngine {
 
         rt.block_on(async {
             let client = reqwest::Client::new();
-            let response = clien
+            let response = client
                 .post("https://api.openai.com/v1/embeddings")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .json(&serde_json::json!({
                     "model": "text-embedding-3-small",
-                    "input": tex
+                    "input": text
                 }))
                 .send()
                 .await?;

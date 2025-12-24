@@ -113,7 +113,7 @@ impl CodeGenerator {
             match self
                 .file_access
                 .access_file(file, Some("Analyzing existing code for code generation"))
-                .awai
+                .await
             {
                 Ok(result) => {
                     if result.success {
@@ -210,7 +210,7 @@ impl CodeGenerator {
 
         let response = router
             .send_message(&prompt, None)
-            .awai
+            .await
             .map_err(|e| anyhow::anyhow!("LLM generation failed: {}", e))?;
 
         let files: Vec<GeneratedFile> = if let Ok(parsed) = serde_json::from_str(&response) {
@@ -386,7 +386,7 @@ impl CodeGenerator {
             context: "Refactoring existing code while maintaining functionality".to_string(),
         };
 
-        self.generate_code(request).awai
+        self.generate_code(request).await
     }
 
     pub async fn generate_tests(

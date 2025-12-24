@@ -212,7 +212,7 @@ impl RBACManager {
             "SELECT id, name, description, category FROM permissions ORDER BY category, name",
         )?;
 
-        let permissions = stm
+        let permissions = stmt
             .query_map([], |row| {
                 Ok(Permission {
                     id: row.get(0)?,
@@ -234,7 +234,7 @@ impl RBACManager {
              WHERE category = ?1 ORDER BY name",
         )?;
 
-        let permissions = stm
+        let permissions = stmt
             .query_map([category], |row| {
                 Ok(Permission {
                     id: row.get(0)?,

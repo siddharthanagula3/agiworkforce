@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 const Stripe = require('stripe');
 
 const { createClient } = require('@supabase/supabase-js');

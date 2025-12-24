@@ -498,11 +498,11 @@ pub async fn llm_check_provider_status(
     let mut ollama_running = None;
     if provider == "ollama" {
         let client = reqwest::Client::new();
-        match clien
+        match client
             .get("http://localhost:11434/api/tags")
             .timeout(std::time::Duration::from_secs(2))
             .send()
-            .awai
+            .await
         {
             Ok(_) => {
                 ollama_running = Some(true);
@@ -573,7 +573,7 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
         )
         .map_err(|e| format!("Failed to prepare provider stats query: {}", e))?;
 
-    let provider_rows = stm
+    let provider_rows = stmt
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -604,7 +604,7 @@ pub async fn llm_get_usage_stats(db: State<'_, AppDatabase>) -> Result<UsageStat
         )
         .map_err(|e| format!("Failed to prepare model stats query: {}", e))?;
 
-    let model_rows = stm
+    let model_rows = stmt
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -652,11 +652,11 @@ pub struct OllamaTagsResponse {
 #[tauri::command]
 pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
     let client = reqwest::Client::new();
-    let response = clien
+    let response = client
         .get("http://localhost:11434/api/tags")
         .timeout(Duration::from_secs(5))
         .send()
-        .awai
+        .await
         .map_err(|e| format!("Failed to connect to Ollama: {}", e))?;
 
     if !response.status().is_success() {
@@ -665,7 +665,7 @@ pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
 
     let tags_response: OllamaTagsResponse = response
         .json()
-        .awai
+        .await
         .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
 
     let models = tags_response

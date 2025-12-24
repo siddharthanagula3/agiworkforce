@@ -475,7 +475,7 @@ impl StripeService {
                     id, customer_id, subscription_id, stripe_invoice_id, invoice_number,
                     amount_due, amount_paid, amount_remaining, currency, status,
                     invoice_pdf, hosted_invoice_url, period_start, period_end,
-                    due_date, paid_at, created_a
+                    due_date, paid_at, created_at
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
                 rusqlite::params![
                     &invoice_info.id,
@@ -573,7 +573,7 @@ impl StripeService {
         db.execute(
             "INSERT INTO billing_usage (
                 customer_id, usage_type, usage_count, metadata,
-                billing_period_start, billing_period_end, created_a
+                billing_period_start, billing_period_end, created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 customer_id,

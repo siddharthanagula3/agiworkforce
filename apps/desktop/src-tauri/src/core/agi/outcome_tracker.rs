@@ -111,7 +111,7 @@ impl OutcomeTracker {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_a
+            "SELECT id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_at
              FROM outcome_tracking
              WHERE goal_id = ?1
              ORDER BY tracked_at DESC"
@@ -349,7 +349,7 @@ impl OutcomeTracker {
         let conn = Connection::open(&self.db_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_a
+            "SELECT id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_at
              FROM outcome_tracking
              ORDER BY tracked_at DESC
              LIMIT 100"
@@ -438,7 +438,7 @@ impl OutcomeTracker {
                     COUNT(*) as total,
                     SUM(CASE WHEN achieved = 1 THEN 1 ELSE 0 END) as achieved,
                     AVG(actual_value) as avg_value,
-                    AVG(target_value) as avg_targe
+                    AVG(target_value) as avg_target
              FROM outcome_tracking
              WHERE process_type = ?1 AND tracked_at >= ?2
              GROUP BY metric_name

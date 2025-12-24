@@ -291,7 +291,8 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut content = String::new();
     let mut done = false;
     let mut finish_reason = None;
-    let model = None;
+    let mut model = None;
+    let mut usage = None;
 
     for line in event.lines() {
         if let Some(data) = line.strip_prefix("data: ") {
@@ -314,6 +315,27 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                     }
                 }
             }
+
+            if let Some(u) = json.get("usageMetadata") {
+                usage = Some(TokenUsage {
+                    prompt_tokens: u
+                        .get("promptTokenCount")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    completion_tokens: u
+                        .get("candidatesTokenCount")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                    total_tokens: u
+                        .get("totalTokenCount")
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32),
+                });
+            }
+
+            if let Some(m) = json.get("model").and_then(|m| m.as_str()) {
+                model = Some(m.to_string());
+            }
         }
     }
 
@@ -322,7 +344,7 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         done,
         finish_reason,
         model,
-        usage: None,
+        usage,
     })
 }
 
@@ -332,6 +354,7 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut content = String::new();
     let mut done = false;
     let mut model = None;
+    let mut usage = None;
 
     if let Some(message) = json.get("message") {
         if let Some(text) = message.get("content").and_then(|c| c.as_str()) {
@@ -347,12 +370,37 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         model = Some(m.to_string());
     }
 
+    if done {
+        let prompt_tokens = json
+            .get("prompt_eval_count")
+            .and_then(|t| t.as_u64())
+            .map(|t| t as u32);
+        let completion_tokens = json
+            .get("eval_count")
+            .and_then(|t| t.as_u64())
+            .map(|t| t as u32);
+        let total_tokens = match (prompt_tokens, completion_tokens) {
+            (Some(p), Some(c)) => Some(p + c),
+            (Some(p), None) => Some(p),
+            (None, Some(c)) => Some(c),
+            (None, None) => None,
+        };
+
+        if prompt_tokens.is_some() || completion_tokens.is_some() {
+            usage = Some(TokenUsage {
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            });
+        }
+    }
+
     Ok(StreamChunk {
         content,
         done,
         finish_reason: None,
         model,
-        usage: None,
+        usage,
     })
 }
 

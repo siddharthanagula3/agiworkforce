@@ -217,13 +217,13 @@ pub async fn cache_export(db: State<'_, AppDatabase>) -> Result<String, String> 
     let mut stmt = conn
         .prepare(
             "SELECT cache_key, provider, model, prompt_hash, response, tokens, cost,
-                    created_at, last_used_at, expires_a
+                    created_at, last_used_at, expires_at
              FROM cache_entries
              ORDER BY last_used_at DESC",
         )
         .map_err(|e| format!("Failed to prepare export query: {}", e))?;
 
-    let entries: Vec<serde_json::Value> = stm
+    let entries: Vec<serde_json::Value> = stmt
         .query_map([], |row| {
             Ok(serde_json::json!({
                 "cache_key": row.get::<_, String>(0)?,
@@ -267,7 +267,7 @@ pub async fn cache_get_analytics(db: State<'_, AppDatabase>) -> Result<CacheAnal
         )
         .map_err(|e| format!("Failed to prepare analytics query: {}", e))?;
 
-    let most_cached: Vec<CachedQueryInfo> = stm
+    let most_cached: Vec<CachedQueryInfo> = stmt
         .query_map([], |row| {
             Ok(CachedQueryInfo {
                 prompt_hash: row.get(0)?,
@@ -292,7 +292,7 @@ pub async fn cache_get_analytics(db: State<'_, AppDatabase>) -> Result<CacheAnal
         )
         .map_err(|e| format!("Failed to prepare provider breakdown query: {}", e))?;
 
-    let provider_breakdown: Vec<ProviderCacheBreakdown> = stm
+    let provider_breakdown: Vec<ProviderCacheBreakdown> = stmt
         .query_map([], |row| {
             Ok(ProviderCacheBreakdown {
                 provider: row.get(0)?,

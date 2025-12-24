@@ -127,7 +127,10 @@ pub async fn vision_send_message(
         tool_call_id: None,
     }];
 
-    let selected_model = request.model.clone().unwrap_or_else(|| "gpt-4o".to_string());
+    let selected_model = request
+        .model
+        .clone()
+        .unwrap_or_else(|| "gpt-4o".to_string());
 
     let llm_request = LLMRequest {
         messages,

@@ -265,7 +265,7 @@ impl DropboxClient {
                 let cursor_payload = serde_json::json!({
                     "cursor": {
                         "session_id": current_session_id,
-                        "offset": offse
+                        "offset": offset
                     },
                     "close": false
                 });

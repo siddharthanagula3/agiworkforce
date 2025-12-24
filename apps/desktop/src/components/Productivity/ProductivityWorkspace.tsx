@@ -148,7 +148,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
       await connect(connectProvider, credentials);
       setConnectOpen(false);
       setCredentialsForm({ token: '', apiKey: '', workspaceId: '' });
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const handleRefresh = async () => {
@@ -181,7 +183,9 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
       await createTask(taskForm);
       setCreateTaskOpen(false);
       setTaskForm({ title: '', description: '', project_id: '' });
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const handleBoardSelect = async (boardId: string) => {

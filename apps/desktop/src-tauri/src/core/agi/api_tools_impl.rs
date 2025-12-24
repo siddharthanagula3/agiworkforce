@@ -78,7 +78,7 @@ pub async fn execute_api_call(
     let api_state = app_handle.state::<crate::sys::commands::ApiState>();
     let response = api_state
         .execute_request(request)
-        .awai
+        .await
         .map_err(|e| anyhow!("API call failed: {}", e))?;
 
     let parsed_body = if !response.body.is_empty() {
@@ -133,9 +133,9 @@ pub async fn execute_api_upload(
 
     let api_state = app_handle.state::<crate::sys::commands::ApiState>();
     let response = api_state
-        .clien
+        .client
         .upload_file(url, file_path, field_name, additional_fields, auth)
-        .awai
+        .await
         .map_err(|e| anyhow!("File upload failed: {}", e))?;
 
     let parsed_body = if !response.body.is_empty() {
@@ -173,9 +173,9 @@ pub async fn execute_api_download(
 
     let api_state = app_handle.state::<crate::sys::commands::ApiState>();
     let response = api_state
-        .clien
+        .client
         .download_file(url, save_path, auth)
-        .awai
+        .await
         .map_err(|e| anyhow!("File download failed: {}", e))?;
 
     Ok(json!({

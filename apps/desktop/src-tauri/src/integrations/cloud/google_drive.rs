@@ -99,10 +99,11 @@ impl GoogleDriveClient {
                 Error::Other("Missing refresh token; re-authentication required".to_string())
             })?;
 
-        let refreshed =
-            self.oauth_client.refresh_token(&refresh).await.map_err(|e| {
-                Error::Other(format!("Failed to refresh Google Drive token: {}", e))
-            })?;
+        let refreshed = self
+            .oauth_client
+            .refresh_token(&refresh)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to refresh Google Drive token: {}", e)))?;
         self.token = Some(refreshed.clone());
         Ok(refreshed.access_token)
     }

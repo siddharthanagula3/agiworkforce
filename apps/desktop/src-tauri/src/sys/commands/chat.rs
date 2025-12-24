@@ -411,11 +411,14 @@ pub async fn chat_send_message(
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
-    info!("[Chat] Received message for processing: {}", request.content);
+    info!(
+        "[Chat] Received message for processing: {}",
+        request.content
+    );
 
     #[cfg(feature = "billing")]
     {
-        let billing = _billing_state.0.lock().map_err(|e| e.to_string())?;
+        let billing = _billing_state.0.lock().await;
         if !billing.check_cloud_access() {
             return Err(
                 "Subscription required. Please upgrade to the Hobby plan to use the AGI agent."

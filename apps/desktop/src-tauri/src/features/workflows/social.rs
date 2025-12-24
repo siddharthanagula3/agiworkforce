@@ -96,7 +96,7 @@ impl WorkflowSocial {
             .map_err(|e| format!("Failed to lock database: {}", e))?;
 
         let result = conn.query_row(
-            "SELECT workflow_id, user_id, rating, comment, created_a
+            "SELECT workflow_id, user_id, rating, comment, created_at
              FROM workflow_ratings WHERE workflow_id = ?1 AND user_id = ?2",
             rusqlite::params![workflow_id, user_id],
             |row| {
@@ -154,7 +154,7 @@ impl WorkflowSocial {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, workflow_id, user_id, user_name, comment, created_a
+                "SELECT id, workflow_id, user_id, user_name, comment, created_at
              FROM workflow_comments
              WHERE workflow_id = ?1
              ORDER BY created_at DESC
@@ -162,7 +162,7 @@ impl WorkflowSocial {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let comments = stm
+        let comments = stmt
             .query_map(
                 rusqlite::params![workflow_id, limit as i64, offset as i64],
                 |row| {
@@ -280,7 +280,7 @@ impl WorkflowSocial {
             "SELECT workflow_id FROM workflow_favorites WHERE user_id = ?1 ORDER BY favorited_at DESC"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflow_ids = stm
+        let workflow_ids = stmt
             .query_map(rusqlite::params![user_id], |row| row.get(0))
             .map_err(|e| format!("Failed to query favorites: {}", e))?
             .collect::<Result<Vec<_>, _>>()

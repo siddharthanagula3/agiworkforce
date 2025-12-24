@@ -24,7 +24,7 @@ pub fn get_conversation(conn: &Connection, id: i64) -> Result<Conversation> {
 
 pub fn list_conversations(conn: &Connection, limit: i64, offset: i64) -> Result<Vec<Conversation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_a
+        "SELECT id, title, created_at, updated_at
          FROM conversations
          ORDER BY updated_at DESC
          LIMIT ?1 OFFSET ?2",
@@ -83,7 +83,7 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
 
 pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
     conn.query_row(
-        "SELECT id, conversation_id, role, content, tokens, cost, provider, model, created_a
+        "SELECT id, conversation_id, role, content, tokens, cost, provider, model, created_at
          FROM messages
          WHERE id = ?1",
         params![id],
@@ -93,7 +93,7 @@ pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
 
 pub fn list_messages(conn: &Connection, conversation_id: i64) -> Result<Vec<Message>> {
     let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, role, content, tokens, cost, provider, model, created_a
+        "SELECT id, conversation_id, role, content, tokens, cost, provider, model, created_at
          FROM messages
          WHERE conversation_id = ?1
          ORDER BY created_at ASC",
@@ -160,7 +160,7 @@ pub fn list_cost_timeseries(
 
     let mut sql = String::from(
         "SELECT DATE(created_at) AS bucket,
-                COALESCE(SUM(cost), 0.0) AS total_cos
+                COALESCE(SUM(cost), 0.0) AS total_cost
          FROM messages
          WHERE role = 'assistant'
            AND cost IS NOT NULL
@@ -203,7 +203,7 @@ pub fn list_cost_by_provider(
 ) -> Result<Vec<ProviderCostBreakdown>> {
     let mut sql = String::from(
         "SELECT COALESCE(provider, 'unknown') AS provider,
-                       COALESCE(SUM(cost), 0.0) AS total_cos
+                       COALESCE(SUM(cost), 0.0) AS total_cost
                 FROM messages
                 WHERE role = 'assistant'
                   AND cost IS NOT NULL",
@@ -268,7 +268,7 @@ pub fn list_top_conversations_by_cost_filtered(
 ) -> Result<Vec<ConversationCostBreakdown>> {
     let base = "SELECT m.conversation_id,
                        c.title,
-                       COALESCE(SUM(m.cost), 0.0) AS total_cos
+                       COALESCE(SUM(m.cost), 0.0) AS total_cost
                 FROM messages m
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE m.role = 'assistant'
@@ -373,7 +373,7 @@ pub fn create_automation_history(conn: &Connection, history: &AutomationHistory)
 
 pub fn get_automation_history(conn: &Connection, id: i64) -> Result<AutomationHistory> {
     conn.query_row(
-        "SELECT id, task_type, success, error, duration_ms, cost, created_a
+        "SELECT id, task_type, success, error, duration_ms, cost, created_at
          FROM automation_history
          WHERE id = ?1",
         params![id],
@@ -387,7 +387,7 @@ pub fn list_automation_history(
     offset: i64,
 ) -> Result<Vec<AutomationHistory>> {
     let mut stmt = conn.prepare(
-        "SELECT id, task_type, success, error, duration_ms, cost, created_a
+        "SELECT id, task_type, success, error, duration_ms, cost, created_at
          FROM automation_history
          ORDER BY created_at DESC
          LIMIT ?1 OFFSET ?2",
@@ -406,7 +406,7 @@ pub fn get_automation_stats(conn: &Connection) -> Result<(i64, i64, f64, f64)> {
             COUNT(*) as total,
             SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
             AVG(duration_ms) as avg_duration,
-            SUM(COALESCE(cost, 0)) as total_cos
+            SUM(COALESCE(cost, 0)) as total_cost
          FROM automation_history",
         [],
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),

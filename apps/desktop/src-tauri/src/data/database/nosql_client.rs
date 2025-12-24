@@ -49,9 +49,11 @@ impl MongoClient {
 
         let connection_string = config.build_connection_string()?;
 
-        let mut client_options = ClientOptions::parse(&connection_string).await.map_err(|e| {
-            Error::Other(format!("Failed to parse MongoDB connection string: {}", e))
-        })?;
+        let mut client_options = ClientOptions::parse(&connection_string)
+            .await
+            .map_err(|e| {
+                Error::Other(format!("Failed to parse MongoDB connection string: {}", e))
+            })?;
 
         client_options.app_name = Some("AGI Workforce".to_string());
 
@@ -62,7 +64,7 @@ impl MongoClient {
 
         database
             .list_collection_names(None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to connect to MongoDB: {}", e)))?;
 
         let connection = MongoConnection {
@@ -106,7 +108,7 @@ impl MongoClient {
 
         let mut cursor = collection
             .find(bson_filter, options)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB find error: {}", e)))?;
 
         let mut documents = Vec::new();
@@ -114,7 +116,7 @@ impl MongoClient {
 
         while let Some(doc) = cursor
             .try_next()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB cursor error: {}", e)))?
         {
             documents.push(bson_document_to_json(doc)?);
@@ -149,7 +151,7 @@ impl MongoClient {
 
         let result = collection
             .find_one(bson_filter, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB findOne error: {}", e)))?;
 
         match result {
@@ -177,7 +179,7 @@ impl MongoClient {
 
         let result = collection
             .insert_one(bson_doc, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB insertOne error: {}", e)))?;
 
         let id_string = match result.inserted_id {
@@ -214,7 +216,7 @@ impl MongoClient {
 
         let result = collection
             .insert_many(bson_docs, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB insertMany error: {}", e)))?;
 
         let ids: Vec<String> = result
@@ -253,7 +255,7 @@ impl MongoClient {
 
         let result = collection
             .update_many(bson_filter, bson_update, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB updateMany error: {}", e)))?;
 
         Ok(MongoQueryResult {
@@ -283,7 +285,7 @@ impl MongoClient {
 
         let result = collection
             .delete_many(bson_filter, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB deleteMany error: {}", e)))?;
 
         Ok(result.deleted_count)
@@ -316,7 +318,7 @@ impl MongoClient {
 
         let mut cursor = collection
             .aggregate(bson_pipeline, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB aggregate error: {}", e)))?;
 
         let mut documents = Vec::new();
@@ -324,7 +326,7 @@ impl MongoClient {
 
         while let Some(doc) = cursor
             .try_next()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB aggregate cursor error: {}", e)))?
         {
             documents.push(bson_document_to_json(doc)?);
@@ -351,7 +353,7 @@ impl MongoClient {
         let collection_names = conn
             .database
             .list_collection_names(None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MongoDB list collections error: {}", e)))?;
 
         Ok(collection_names)

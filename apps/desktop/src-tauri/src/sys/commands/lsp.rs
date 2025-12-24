@@ -796,7 +796,9 @@ pub async fn lsp_did_change(
     let client_arc = clients.get(&language).ok_or("LSP server not started")?;
     let mut client = client_arc.lock().await;
 
-    client.text_document_did_change(&uri, version, &content).await
+    client
+        .text_document_did_change(&uri, version, &content)
+        .await
 }
 
 #[tauri::command]

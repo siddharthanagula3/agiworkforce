@@ -17,8 +17,8 @@ import { Input } from '../ui/Input';
 import { Dialog } from '../ui/Dialog';
 import { Badge } from '../ui/Badge';
 import { ScrollArea } from '../ui/ScrollArea';
-import * as api from '../../api/automation-enhanced';
-import type { RecordedAction, Recording } from '../../types/automation-enhanced';
+import * as api from '../../api/automationEnhanced';
+import type { RecordedAction, Recording } from '../../types/automationEnhanced';
 
 interface ActionRecorderProps {
   onSaveScript?: (scriptId: string) => void;

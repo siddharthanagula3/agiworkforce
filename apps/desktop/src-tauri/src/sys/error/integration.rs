@@ -145,7 +145,7 @@ impl EnhancedExecutionContext {
             }
         }
 
-        resul
+        result
     }
 }
 

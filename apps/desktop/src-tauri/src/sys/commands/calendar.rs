@@ -364,7 +364,7 @@ fn insert_calendar_account(
             info.display_name,
             token_json,
             config_json,
-            created_a
+            created_at
         ],
     )
     .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
@@ -377,7 +377,7 @@ fn fetch_calendar_account(
     account_id: &str,
 ) -> Result<(CalendarAccountInfo, DateTime<Utc>)> {
     conn.query_row(
-        "SELECT provider, account_email, display_name, token_json, config_json, created_a
+        "SELECT provider, account_email, display_name, token_json, config_json, created_at
          FROM calendar_accounts WHERE id = ?1",
         params![account_id],
         |row| {
@@ -437,13 +437,13 @@ fn list_calendar_accounts(
 ) -> Result<Vec<(String, CalendarAccountInfo, DateTime<Utc>)>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, provider, account_email, display_name, token_json, config_json, created_a
+            "SELECT id, provider, account_email, display_name, token_json, config_json, created_at
              FROM calendar_accounts
              ORDER BY created_at DESC",
         )
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
-    let accounts = stm
+    let accounts = stmt
         .query_map([], |row| {
             let id: String = row.get(0)?;
             let provider = match row.get::<_, String>(1)?.as_str() {

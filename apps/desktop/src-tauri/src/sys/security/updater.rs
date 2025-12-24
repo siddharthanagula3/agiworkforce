@@ -206,10 +206,10 @@ pub async fn download_update(
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let response = clien
+    let response = client
         .get(url)
         .send()
-        .awai
+        .await
         .map_err(|e| format!("Failed to download update: {}", e))?;
 
     if !response.status().is_success() {
@@ -284,7 +284,7 @@ mod tests {
         let manager = UpdateSecurityManager::new(None);
 
         assert!(manager
-            .validate_download_url("https://api.agiworkforce.com/update")
+            .validate_download_url("https://releases.agiworkforce.com/update")
             .is_ok());
 
         assert!(manager

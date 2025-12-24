@@ -95,7 +95,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       {}
       <div className={`overflow-auto ${isExpanded ? 'max-h-[80vh]' : 'max-h-96'}`}>
         {}
-        {/* @ts-expect-error */}
+        {/* @ts-expect-error SyntaxHighlighter types issue */}
         <SyntaxHighlighter
           language={language}
           style={codeStyle}

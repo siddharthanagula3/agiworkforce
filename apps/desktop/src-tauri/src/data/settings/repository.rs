@@ -58,7 +58,7 @@ pub fn upsert_settings_batch(
 
 pub fn get_setting(conn: &Connection, key: &str) -> Result<Setting> {
     conn.query_row(
-        "SELECT key, value, category, encrypted, created_at, updated_a
+        "SELECT key, value, category, encrypted, created_at, updated_at
          FROM settings_v2
          WHERE key = ?1",
         [key],
@@ -71,7 +71,7 @@ pub fn get_settings_by_category(
     category: SettingCategory,
 ) -> Result<Vec<Setting>> {
     let mut stmt = conn.prepare(
-        "SELECT key, value, category, encrypted, created_at, updated_a
+        "SELECT key, value, category, encrypted, created_at, updated_at
          FROM settings_v2
          WHERE category = ?1
          ORDER BY key",
@@ -86,7 +86,7 @@ pub fn get_settings_by_category(
 
 pub fn list_all_settings(conn: &Connection) -> Result<Vec<Setting>> {
     let mut stmt = conn.prepare(
-        "SELECT key, value, category, encrypted, created_at, updated_a
+        "SELECT key, value, category, encrypted, created_at, updated_at
          FROM settings_v2
          ORDER BY category, key",
     )?;
@@ -100,7 +100,7 @@ pub fn list_all_settings(conn: &Connection) -> Result<Vec<Setting>> {
 
 pub fn get_settings_by_prefix(conn: &Connection, prefix: &str) -> Result<Vec<Setting>> {
     let mut stmt = conn.prepare(
-        "SELECT key, value, category, encrypted, created_at, updated_a
+        "SELECT key, value, category, encrypted, created_at, updated_at
          FROM settings_v2
          WHERE key LIKE ?1
          ORDER BY key",

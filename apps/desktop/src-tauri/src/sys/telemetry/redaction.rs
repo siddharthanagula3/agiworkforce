@@ -33,7 +33,7 @@ impl<W: Write> RedactingWriter<W> {
         result = GITHUB_TOKEN_REGEX
             .replace_all(&result, "[REDACTED_GITHUB_TOKEN]")
             .to_string();
-        resul
+        result
     }
 }
 

@@ -16,7 +16,7 @@ pub async fn send_managed_request(
         .bearer_auth(token)
         .json(&req)
         .send()
-        .awai
+        .await
         .map_err(|e| e.to_string())?;
 
     match res.status().as_u16() {

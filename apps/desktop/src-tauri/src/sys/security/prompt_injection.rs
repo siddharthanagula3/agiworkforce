@@ -191,7 +191,7 @@ impl PromptInjectionDetector {
     fn check_structure(&self, input: &str) -> f64 {
         let mut risk: f64 = 0.0;
 
-        let special_chars = inpu
+        let special_chars = input
             .chars()
             .filter(|c| !c.is_alphanumeric() && !c.is_whitespace())
             .count();

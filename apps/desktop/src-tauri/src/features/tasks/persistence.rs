@@ -64,7 +64,7 @@ impl TaskPersistence {
             )
             .context("Failed to prepare query")?;
 
-        let task = stm
+        let task = stmt
             .query_row(params![task_id], |row| {
                 let result_str: Option<String> = row.get(9)?;
                 let result: Option<TaskResult> = result_str
@@ -131,7 +131,7 @@ impl TaskPersistence {
 
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let tasks = stm
+        let tasks = stmt
             .query_map(param_refs.as_slice(), |row| {
                 let result_str: Option<String> = row.get(9)?;
                 let result: Option<TaskResult> = result_str
@@ -215,7 +215,7 @@ impl TaskPersistence {
             )
             .context("Failed to prepare stats query")?;
 
-        let stats = stm
+        let stats = stmt
             .query_row([], |row| {
                 Ok(TaskStats {
                     total: row.get(0)?,

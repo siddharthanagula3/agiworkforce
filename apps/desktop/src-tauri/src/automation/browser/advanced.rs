@@ -298,7 +298,7 @@ impl AdvancedBrowserOps {
         "#;
 
         let result = tokio::time::timeout(Duration::from_millis(timeout_ms), cdp.evaluate(script))
-            .awai
+            .await
             .map_err(|_| {
                 Error::CommandTimeout(format!("Navigation timeout after {}ms", timeout_ms))
             })?
@@ -392,7 +392,7 @@ impl AdvancedBrowserOps {
             args_json
         );
 
-        cdp.evaluate(&script).awai
+        cdp.evaluate(&script).await
     }
 
     pub async fn get_cookies(cdp: Arc<CdpClient>) -> Result<Vec<Cookie>> {

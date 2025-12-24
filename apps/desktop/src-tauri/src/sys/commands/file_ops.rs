@@ -109,7 +109,7 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
         "/etc/shadow",
     ];
 
-    blacklis
+    blacklist
         .iter()
         .any(|blocked| path_lower.contains(&blocked.to_lowercase()))
 }
@@ -473,7 +473,7 @@ pub async fn file_copy(
     if Path::new(&dest).exists() {
         return Err(format!(
             "Destination already exists: {}. Cannot overwrite",
-            des
+            dest
         ));
     }
 
@@ -993,13 +993,13 @@ mod tests {
         let file_path = dir.path().join("test.txt");
 
         assert!(!file_exists(file_path.to_str().unwrap().to_string())
-            .awai
+            .await
             .unwrap());
 
         fs::write(&file_path, "test").unwrap();
 
         assert!(file_exists(file_path.to_str().unwrap().to_string())
-            .awai
+            .await
             .unwrap());
     }
 
@@ -1011,7 +1011,7 @@ mod tests {
         fs::write(&file_path, "test content").unwrap();
 
         let metadata = file_metadata(file_path.to_str().unwrap().to_string())
-            .awai
+            .await
             .unwrap();
 
         assert!(metadata.is_file);

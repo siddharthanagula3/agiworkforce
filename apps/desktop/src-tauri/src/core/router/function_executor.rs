@@ -33,7 +33,7 @@ impl FunctionExecutor {
         let tool_result = self
             .tool_executor
             .execute_tool_call(tool_call)
-            .awai
+            .await
             .context(format!("Failed to execute tool: {}", tool_call.name))?;
 
         Ok(FunctionResult {

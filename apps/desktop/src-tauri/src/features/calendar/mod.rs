@@ -71,7 +71,9 @@ impl CalendarClient {
     pub async fn authorize_with_code(&mut self, code: &str, code_verifier: &str) -> Result<()> {
         match self {
             CalendarClient::Google(client) => client.authorize_with_code(code, code_verifier).await,
-            CalendarClient::Outlook(client) => client.authorize_with_code(code, code_verifier).await,
+            CalendarClient::Outlook(client) => {
+                client.authorize_with_code(code, code_verifier).await
+            }
         }
     }
 
@@ -231,7 +233,9 @@ impl CalendarManager {
             ),
         };
 
-        client.authorize_with_code(code, &pkce.code_verifier).await?;
+        client
+            .authorize_with_code(code, &pkce.code_verifier)
+            .await?;
 
         let token = client
             .token()
@@ -496,7 +500,7 @@ mod tests {
         assert!(result.is_ok());
 
         let (auth_url, state) = result.unwrap();
-        assert!(auth_url.contains("accounts.google.com"));
+        assert!(auth_url.contains("agiworkforce.com"));
         assert!(!state.is_empty());
     }
 }

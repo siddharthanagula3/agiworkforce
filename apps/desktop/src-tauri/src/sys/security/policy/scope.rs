@@ -45,7 +45,7 @@ impl ScopeManager {
             blacklist.push(PathBuf::from("/root"));
         }
 
-        blacklis
+        blacklist
     }
 
     pub fn add_workspace(&mut self, workspace: Workspace) -> Result<()> {

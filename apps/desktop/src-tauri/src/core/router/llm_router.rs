@@ -443,7 +443,7 @@ impl LLMRouter {
 
         let mut response = provider
             .send_message(&routed_request)
-            .awai
+            .await
             .map_err(|e| anyhow!(e.to_string()))?;
         if response.model.is_empty() {
             response.model = candidate.model.clone();
@@ -788,7 +788,7 @@ impl LLMRouter {
 
         provider
             .send_message_streaming(&routed_request)
-            .awai
+            .await
             .map_err(|e| anyhow!(e.to_string()))
     }
 }

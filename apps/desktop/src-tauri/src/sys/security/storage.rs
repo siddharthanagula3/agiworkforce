@@ -190,7 +190,7 @@ fn generate_salt() -> Vec<u8> {
     use aes_gcm::aead::rand_core::RngCore;
     let mut salt = vec![0u8; SALT_SIZE];
     OsRng.fill_bytes(&mut salt);
-    sal
+    salt
 }
 
 #[allow(deprecated)]

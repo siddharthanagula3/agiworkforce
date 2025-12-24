@@ -422,14 +422,14 @@ impl AuthDatabaseManager {
 
         let mut stmt = db.prepare(
             "SELECT id, user_id, event_type, event_data, ip_address, user_agent,
-             success, error_message, created_a
+             success, error_message, created_at
              FROM auth_audit_log
              WHERE user_id = ?1
              ORDER BY created_at DESC
              LIMIT ?2",
         )?;
 
-        let logs = stm
+        let logs = stmt
             .query_map(params![user_id, limit], |row| {
                 Ok(AuthAuditLog {
                     id: row.get(0)?,

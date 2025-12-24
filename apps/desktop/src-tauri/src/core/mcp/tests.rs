@@ -233,7 +233,7 @@ mod tests {
         };
 
         let mut session = McpSession::connect("filesystem".to_string(), config)
-            .awai
+            .await
             .unwrap();
 
         let init_result = session.initialize().await.unwrap();
@@ -268,9 +268,9 @@ mod tests {
             enabled: true,
         };
 
-        clien
+        client
             .connect_server("filesystem".to_string(), fs_config)
-            .awai
+            .await
             .unwrap();
 
         let servers = client.list_servers();

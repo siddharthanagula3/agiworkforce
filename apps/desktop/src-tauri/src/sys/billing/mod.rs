@@ -29,7 +29,8 @@ pub struct UsageStats;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentMethodInfo;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[cfg(feature = "billing")]
 
@@ -56,7 +57,7 @@ impl BillingState {
         &mut self,
         stripe_api_key: String,
         webhook_secret: String,
-        db: Arc<Mutex<Connection>>,
+        db: Arc<std::sync::Mutex<Connection>>,
     ) {
         self.stripe_service = Some(StripeService::new(stripe_api_key.clone(), db.clone()));
         self.webhook_handler = Some(WebhookHandler::new(webhook_secret, db));
@@ -123,10 +124,7 @@ pub async fn billing_initialize(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<(), String> {
-    let mut billing = state
-        .inner()
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let mut billing = state.inner().lock().await;
 
     let db = Arc::new(db_state.inner().clone());
     billing.initialize(stripe_api_key, webhook_secret, db);
@@ -141,10 +139,7 @@ pub async fn stripe_create_customer(
     name: Option<String>,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<CustomerInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -158,14 +153,11 @@ pub async fn stripe_create_customer(
 
 #[cfg(feature = "billing")]
 #[tauri::command]
-pub fn stripe_get_customer_by_email(
+pub async fn stripe_get_customer_by_email(
     email: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<Option<CustomerInfo>, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -186,10 +178,7 @@ pub async fn stripe_create_subscription(
     billing_interval: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -213,10 +202,7 @@ pub async fn stripe_get_subscription(
     stripe_subscription_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -236,10 +222,7 @@ pub async fn stripe_update_subscription(
     new_plan_name: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -257,10 +240,7 @@ pub async fn stripe_cancel_subscription(
     stripe_subscription_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -278,10 +258,7 @@ pub async fn stripe_get_invoices(
     customer_stripe_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<Vec<InvoiceInfo>, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -295,16 +272,13 @@ pub async fn stripe_get_invoices(
 
 #[cfg(feature = "billing")]
 #[tauri::command]
-pub fn stripe_get_usage(
+pub async fn stripe_get_usage(
     customer_id: String,
     period_start: i64,
     period_end: i64,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<UsageStats, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -317,7 +291,7 @@ pub fn stripe_get_usage(
 
 #[cfg(feature = "billing")]
 #[tauri::command]
-pub fn stripe_track_usage(
+pub async fn stripe_track_usage(
     customer_id: String,
     usage_type: String,
     count: u64,
@@ -326,10 +300,7 @@ pub fn stripe_track_usage(
     metadata: Option<String>,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -354,10 +325,7 @@ pub async fn stripe_create_portal_session(
     return_url: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<String, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -371,14 +339,11 @@ pub async fn stripe_create_portal_session(
 
 #[cfg(feature = "billing")]
 #[tauri::command]
-pub fn stripe_get_active_subscription(
+pub async fn stripe_get_active_subscription(
     customer_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<Option<SubscriptionInfo>, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -396,10 +361,7 @@ pub async fn stripe_process_webhook(
     signature: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let handler = billing
         .webhook_handler()
@@ -417,10 +379,7 @@ pub async fn stripe_get_payment_methods(
     customer_stripe_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<Vec<PaymentMethodInfo>, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -439,10 +398,7 @@ pub async fn stripe_attach_payment_method(
     payment_method_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<PaymentMethodInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -461,10 +417,7 @@ pub async fn stripe_set_default_payment_method(
     payment_method_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -482,10 +435,7 @@ pub async fn stripe_create_setup_intent(
     customer_stripe_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<String, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -503,10 +453,7 @@ pub async fn stripe_delete_payment_method(
     payment_method_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()

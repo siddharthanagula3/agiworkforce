@@ -1,7 +1,7 @@
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useRef } from 'react';
 import { useAutomationStore } from '../stores/automationStore';
-import type { RecordedAction, Recording } from '../types/automation-enhanced';
+import type { RecordedAction, Recording } from '../types/automationEnhanced';
 
 export interface RecordingStartedEvent {
   sessionId: string;

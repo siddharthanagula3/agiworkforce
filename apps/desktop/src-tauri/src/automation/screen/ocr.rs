@@ -19,6 +19,6 @@ pub async fn perform_ocr(path: &str) -> Result<OcrResult> {
         let confidence = instance.mean_text_confidence().unwrap_or(0) as f32 / 100.0;
         Ok(OcrResult { text, confidence })
     })
-    .awai
+    .await
     .context("OCR task panicked")?
 }

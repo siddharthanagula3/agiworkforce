@@ -92,7 +92,7 @@ impl TrelloClient {
             let error_text = response.text().await.unwrap_or_default();
             Err(Error::Provider(format!(
                 "Trello API error ({}): {}",
-                status, error_tex
+                status, error_text
             )))
         }
     }
@@ -193,7 +193,7 @@ impl TrelloClient {
             let error_text = response.text().await.unwrap_or_default();
             Err(Error::Provider(format!(
                 "Failed to create Trello card ({}): {}",
-                status, error_tex
+                status, error_text
             )))
         }
     }
@@ -222,7 +222,7 @@ impl TrelloClient {
 
         if response.status().is_success() {
             let comment: serde_json::Value = response.json().await.map_err(Error::from)?;
-            let comment_id = commen
+            let comment_id = comment
                 .get("id")
                 .and_then(|id| id.as_str())
                 .unwrap_or("")

@@ -105,7 +105,7 @@ impl RewardSystem {
             .ok();
 
         if let Some(mut stmt) = stmt {
-            let reward_ids: Vec<String> = stm
+            let reward_ids: Vec<String> = stmt
                 .query_map([user_id], |row| row.get(0))
                 .ok()
                 .into_iter()
@@ -146,7 +146,7 @@ impl RewardSystem {
 
         rewards.iter().fold(0, |acc, r| {
             if let RewardValue::Credits { amount } = r.value {
-                acc + amoun
+                acc + amount
             } else {
                 acc
             }

@@ -96,7 +96,8 @@ impl ReportGenerator {
         let mut result = String::from(
             "| Process Type | Executions | Success Rate | Time Saved | Cost Savings |\n",
         );
-        result.push_str("|--------------|------------|--------------|------------|-------------|\n");
+        result
+            .push_str("|--------------|------------|--------------|------------|-------------|\n");
 
         for (i, metric) in metrics.iter().take(5).enumerate() {
             result.push_str(&format!(

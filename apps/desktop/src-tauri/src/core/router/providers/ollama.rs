@@ -79,9 +79,14 @@ impl OllamaProvider {
     }
 
     fn model_supports_vision(model: &str) -> bool {
-        model.to_lowercase().contains("llava")
-            || model.to_lowercase().contains("bakllava")
-            || model.to_lowercase().contains("vision")
+        let m = model.to_lowercase();
+        m.contains("llava")
+            || m.contains("bakllava")
+            || m.contains("vision")
+            || m.contains("moondream")
+            || m.contains("minicpm")
+            || m.contains("llama3-v")
+            || m.contains("qwen-vl")
     }
 }
 
@@ -111,20 +116,6 @@ impl LLMProvider for OllamaProvider {
             None
         };
 
-        if self
-            .client
-            .get(format!("{}/api/tags", self.base_url))
-            .timeout(std::time::Duration::from_secs(1))
-            .send()
-            .await
-            .is_err()
-        {
-            return Err(
-                "Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal."
-                    .into(),
-            );
-        }
-
         let ollama_request = OllamaRequest {
             model: request.model.clone(),
             messages: request
@@ -149,7 +140,14 @@ impl LLMProvider for OllamaProvider {
             .header("Content-Type", "application/json")
             .json(&ollama_request)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                if e.is_connect() {
+                    "Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal.".to_string()
+                } else {
+                    format!("Ollama request failed: {}", e)
+                }
+            })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -254,7 +252,14 @@ impl LLMProvider for OllamaProvider {
             .header("Content-Type", "application/json")
             .json(&ollama_request)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                if e.is_connect() {
+                    "Ollama is unreachable. Please ensure 'ollama serve' is running in your terminal.".to_string()
+                } else {
+                    format!("Ollama streaming request failed: {}", e)
+                }
+            })?;
 
         if !response.status().is_success() {
             let status = response.status();
