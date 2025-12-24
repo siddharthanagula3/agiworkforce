@@ -22,6 +22,11 @@ function PricingContent() {
         body: JSON.stringify({ plan, billingInterval }),
       });
 
+      if (res.status === 401) {
+        window.location.href = '/signup?next=/pricing';
+        return;
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
