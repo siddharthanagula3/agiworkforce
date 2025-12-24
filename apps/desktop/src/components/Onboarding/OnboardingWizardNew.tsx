@@ -47,7 +47,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
       initializedRef.current = true;
       initialize();
     }
-  }, []);
+  }, [initialize]);
 
   useEffect(() => {
     if (selectedDemo) {

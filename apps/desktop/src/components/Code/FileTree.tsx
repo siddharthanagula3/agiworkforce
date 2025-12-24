@@ -199,7 +199,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
       setExpandedPaths(new Set([normalizedRoot]));
       void loadDirectory(normalizedRoot);
     }
-  }, [normalizedRoot]);
+  }, [normalizedRoot, loadDirectory]);
 
   useEffect(() => {
     let unlistenRef: UnlistenFn | null = null;
