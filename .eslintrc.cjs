@@ -7,6 +7,7 @@ module.exports = {
     ecmaVersion: 'latest',
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
+    noWarnOnMultipleProjects: true,
   },
   settings: {
     react: { version: '18.2' },
