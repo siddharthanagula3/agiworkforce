@@ -75,7 +75,17 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
     }
 
     setCurrentRequest({ headers: newHeaders });
-  }, [authType, authToken, authUsername, authPassword, authKey, authValue, authPlacement]);
+  }, [
+    authType,
+    authToken,
+    authUsername,
+    authPassword,
+    authKey,
+    authValue,
+    authPlacement,
+    currentRequest.headers,
+    setCurrentRequest,
+  ]);
 
   const handleMethodChange = (method: ApiRequest['method']) => {
     setCurrentRequest({ method });

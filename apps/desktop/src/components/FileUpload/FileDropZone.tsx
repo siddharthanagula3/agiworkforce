@@ -33,32 +33,35 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
     setIsDragging(false);
   }, []);
 
-  const validateFile = (file: File): boolean => {
-    if (file.size > maxSize * 1024 * 1024) {
-      alert(`File ${file.name} is too large. Max size is ${maxSize}MB.`);
-      return false;
-    }
-
-    if (accept !== '*') {
-      const acceptedTypes = accept.split(',').map((t) => t.trim());
-      const fileType = file.type;
-      const fileExt = `.${file.name.split('.').pop()}`;
-
-      const isAccepted = acceptedTypes.some(
-        (type) =>
-          type === fileType ||
-          type === fileExt ||
-          (type.endsWith('/*') && fileType.startsWith(type.replace('/*', ''))),
-      );
-
-      if (!isAccepted) {
-        alert(`File ${file.name} has an invalid type.`);
+  const validateFile = useCallback(
+    (file: File): boolean => {
+      if (file.size > maxSize * 1024 * 1024) {
+        alert(`File ${file.name} is too large. Max size is ${maxSize}MB.`);
         return false;
       }
-    }
 
-    return true;
-  };
+      if (accept !== '*') {
+        const acceptedTypes = accept.split(',').map((t) => t.trim());
+        const fileType = file.type;
+        const fileExt = `.${file.name.split('.').pop()}`;
+
+        const isAccepted = acceptedTypes.some(
+          (type) =>
+            type === fileType ||
+            type === fileExt ||
+            (type.endsWith('/*') && fileType.startsWith(type.replace('/*', ''))),
+        );
+
+        if (!isAccepted) {
+          alert(`File ${file.name} has an invalid type.`);
+          return false;
+        }
+      }
+
+      return true;
+    },
+    [maxSize, accept],
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -78,7 +81,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       setUploadedFiles((prev) => [...prev, ...validFiles]);
       onFilesSelected(validFiles);
     },
-    [disabled, maxSize, maxFiles, uploadedFiles.length, accept, onFilesSelected],
+    [disabled, maxFiles, uploadedFiles.length, onFilesSelected, validateFile],
   );
 
   const handleFileInput = useCallback(
@@ -97,7 +100,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       onFilesSelected(validFiles);
       e.target.value = ''; // Reset input
     },
-    [disabled, maxSize, maxFiles, uploadedFiles.length, accept, onFilesSelected],
+    [disabled, maxFiles, uploadedFiles.length, onFilesSelected, validateFile],
   );
 
   const handleRemoveFile = (index: number) => {

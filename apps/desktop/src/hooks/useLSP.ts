@@ -385,7 +385,7 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
       }
     };
-  }, [autoStart]);
+  }, [autoStart, language, startServer]);
 
   return {
     server,
