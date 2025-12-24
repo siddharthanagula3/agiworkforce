@@ -21,6 +21,20 @@ impl QwenProvider {
         }
     }
 
+    fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
+        let (input_cost, output_cost) = match model {
+            "qwen3-max" => (2.5, 10.0),
+            "qwen-max" | "qwen-max-latest" | "qwen-max-2025-01-25" => (2.5, 10.0), // Assuming Qwen Max pricing
+            "qwen-plus" => (0.8, 2.4),
+            "qwen-turbo" => (0.1, 0.3),
+            _ => (2.5, 10.0),
+        };
+
+        let input = (input_tokens as f64 / 1_000_000.0) * input_cost;
+        let output = (output_tokens as f64 / 1_000_000.0) * output_cost;
+        input + output
+    }
+
     fn get_api_key(&self) -> Result<&str, Box<dyn Error + Send + Sync>> {
         self.api_key
             .as_deref()
@@ -253,8 +267,11 @@ impl LLMProvider for QwenProvider {
             .as_ref()
             .map(|calls| Self::convert_tool_calls(calls));
 
-        let cost = (qwen_response.usage.prompt_tokens as f64 * 0.0000004)
-            + (qwen_response.usage.completion_tokens as f64 * 0.0000012);
+        let cost = Self::calculate_cost(
+            &qwen_response.model,
+            qwen_response.usage.prompt_tokens,
+            qwen_response.usage.completion_tokens,
+        );
 
         Ok(LLMResponse {
             content,

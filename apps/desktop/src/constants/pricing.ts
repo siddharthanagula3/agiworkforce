@@ -1,6 +1,6 @@
 export const STRIPE_PRICE_IDS = {
-  hobby_monthly: 'price_1Sgwrv0zEfO6BZMhe6hCXMhI',
-  hobby_yearly: 'price_1Sgwrv0zEfO6BZMhF5T4FqgN',
+  hobby_monthly: 'price_1Sgwx10zEfO6BZMh7thtFU77',
+  hobby_yearly: 'price_1Sgwx20zEfO6BZMhbgpxL8TI',
   free: null,
   pro_monthly: 'price_1Sgwx20zEfO6BZMh3ix7hivi',
   pro_yearly: 'price_1Sgwx30zEfO6BZMhJXsduOyl',

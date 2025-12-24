@@ -102,6 +102,8 @@ class SupabaseAuthService {
     }
   }
 
+  private subscriptionChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
+
   private async handleSignedIn(session: Session): Promise<void> {
     const user = session.user;
     this.updateState({ user, session, isLoading: true, error: null });
@@ -119,6 +121,8 @@ class SupabaseAuthService {
         featureFlags,
         isLoading: false,
       });
+
+      this.subscribeToSubscriptionChanges(user.id);
     } catch (error) {
       console.error('[Auth] Error fetching user data:', error);
       this.updateState({ isLoading: false });
@@ -126,6 +130,11 @@ class SupabaseAuthService {
   }
 
   private handleSignedOut(): void {
+    if (this.subscriptionChannel) {
+      this.subscriptionChannel.unsubscribe();
+      this.subscriptionChannel = null;
+    }
+
     this.updateState({
       user: null,
       session: null,
@@ -135,6 +144,34 @@ class SupabaseAuthService {
       isLoading: false,
       error: null,
     });
+  }
+
+  private subscribeToSubscriptionChanges(userId: string): void {
+    // Clean up existing channel if any
+    if (this.subscriptionChannel) {
+      this.subscriptionChannel.unsubscribe();
+    }
+
+    const supabase = getSupabase();
+    console.log('[Auth] Subscribing to subscription changes for user:', userId);
+
+    this.subscriptionChannel = supabase
+      .channel(`subscription-changes-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subscriptions',
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          console.log('[Auth] Subscription change detected:', payload);
+          const newSubscription = await this.fetchSubscription(userId);
+          this.updateState({ subscription: newSubscription });
+        },
+      )
+      .subscribe();
   }
 
   private async fetchProfile(userId: string): Promise<Profile | null> {

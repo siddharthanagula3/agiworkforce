@@ -10,6 +10,7 @@ import {
   Send,
   Square,
   X,
+  Brain,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -55,7 +56,6 @@ export interface ChatInputAreaProps {
 }
 
 const MAX_ROWS = 10;
-
 
 const FOCUS_MODES: { value: FocusMode; label: string; placeholder: string }[] = [
   { value: 'web', label: 'Web', placeholder: 'Search the web for information...' },
@@ -109,7 +109,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const setDraftContent = useUnifiedChatStore((state) => state.setDraftContent);
   const cancelEditing = useUnifiedChatStore((state) => state.cancelEditing);
 
-  
   const sidecarOpen = useUnifiedChatStore((state) => state.sidecar.isOpen);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
   const sidebarWidth = useUnifiedChatStore((state) => state.sidebarWidth);
@@ -117,6 +116,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const selectedModel = useModelStore((state) => state.selectedModel);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
+  const thinkingModeEnabled = useModelStore((state) => state.thinkingModeEnabled);
   const { account: _account, isPro: _isPro } = useAccountStore();
   const prefersReducedMotion = useReducedMotion();
 
@@ -144,9 +144,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     ),
   });
 
-  const modelDisplayName = selectedModel
-    ? (getModelMetadata(selectedModel)?.name ?? 'GPT-5.1 Instant')
-    : 'GPT-5.1 Instant';
+  const modelDisplayName =
+    selectedModel === 'auto'
+      ? 'Auto'
+      : selectedModel
+        ? (getModelMetadata(selectedModel)?.name ?? 'GPT-5.1 Instant')
+        : 'GPT-5.1 Instant';
 
   const isDisabled = disabled || isLoading || isSending || isStreaming;
   const isEmptyState = messages.length === 0;
@@ -158,10 +161,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [draftContent, content]);
 
-  
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      
       if (e.altKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setShowModelSelector((prev) => !prev);
@@ -175,7 +176,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     setShowModelSelector(false);
   }, [selectedModel]);
 
-  
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (modelSelectorRef.current && !modelSelectorRef.current.contains(event.target as Node)) {
@@ -186,7 +186,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -200,7 +199,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const placeholder =
     FOCUS_MODES.find((m) => m.value === focusMode)?.placeholder || defaultPlaceholder;
 
-  
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -212,7 +210,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [content]);
 
-  
   useEffect(() => {
     return () => {
       fileReadersRef.current.forEach((reader) => {
@@ -229,7 +226,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     };
   }, [attachments]);
 
-  
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
@@ -265,6 +261,31 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   const handleFilesAdded = (files: File[]) => {
+    // Check for image files
+    const hasImages = files.some((f) => f.type.startsWith('image/'));
+    const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
+
+    // If we have images and the model explicitly doesn't support vision
+    if (hasImages && metadata && metadata.capabilities.vision === false) {
+      setSubmitError(
+        `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+      );
+      // Filter out images, but allow other files if any
+      const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
+      if (nonImageFiles.length === 0) return;
+
+      const newAttachments: Attachment[] = nonImageFiles.map((file) => ({
+        id: crypto.randomUUID(),
+        type: 'file', // Treat as generic file
+        name: file.name,
+        size: file.size,
+        mimeType: file.type,
+        path: URL.createObjectURL(file), // Still create object URL for generic file preview if needed
+      }));
+      setAttachments((prev) => [...prev, ...newAttachments]);
+      return;
+    }
+
     const newAttachments: Attachment[] = files.map((file) => ({
       id: crypto.randomUUID(),
       type: file.type.startsWith('image/') ? 'image' : 'file',
@@ -274,13 +295,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       path: URL.createObjectURL(file),
     }));
     setAttachments((prev) => [...prev, ...newAttachments]);
+    setSubmitError(null); // Clear error on success
   };
 
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (!content.trim() || isDisabled) return;
 
-    
     const gateResult = checkSubscriptionGate();
     if (!gateResult.hasAccess) {
       setShowLockDialog(true);
@@ -343,7 +364,19 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     );
     if (items.length === 0) return;
 
+    // Check vision capability for pasted images
+    const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
+    if (metadata && metadata.capabilities.vision === false) {
+      event.preventDefault();
+      setSubmitError(
+        `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+      );
+      return;
+    }
+
     event.preventDefault();
+    setSubmitError(null); // Clear error
+
     items.forEach((item) => {
       const file = item.getAsFile();
       if (!file) return;
@@ -366,19 +399,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     });
   };
 
-  
   const tokenPercentage =
     tokenUsage?.current != null && tokenUsage?.max != null && tokenUsage.max > 0
       ? Math.min((tokenUsage.current / tokenUsage.max) * 100, 100)
       : 0;
 
-  
   const { getTokenCost } = useUsageStore();
   const { subscription } = useBillingStore();
   const monthlyCost = getTokenCost();
 
-  
-  
   const planName = subscription?.plan_name?.toLowerCase() || '';
   let monthlyLimit = 0;
   if (planName.includes('pro')) monthlyLimit = PLAN_CREDIT_LIMITS.pro;
@@ -387,7 +416,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const showCreditUsage = monthlyLimit > 0;
   const creditPercentage = showCreditUsage ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;
 
-  const isLowBalance = showCreditUsage && monthlyLimit - monthlyCost < monthlyLimit * 0.1; 
+  const isLowBalance = showCreditUsage && monthlyLimit - monthlyCost < monthlyLimit * 0.1;
 
   return (
     <>
@@ -580,8 +609,15 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
                     'hover:bg-gray-100 dark:hover:bg-charcoal-700',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
+                    selectedModel &&
+                      getModelMetadata(selectedModel)?.capabilities.vision === false &&
+                      'opacity-50 cursor-not-allowed text-gray-300 dark:text-gray-600',
                   )}
-                  title="Attach files"
+                  title={
+                    selectedModel && getModelMetadata(selectedModel)?.capabilities.vision === false
+                      ? 'Current model does not support attachments'
+                      : 'Attach files'
+                  }
                 >
                   <Paperclip size={18} />
                 </button>
@@ -639,6 +675,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   )}
                 >
                   <span className="truncate max-w-[100px]">{modelDisplayName}</span>
+                  {thinkingModeEnabled && <Brain size={12} className="text-purple-500" />}
                   <ChevronDown
                     size={12}
                     className={cn('transition-transform', showModelSelector && 'rotate-180')}
@@ -754,7 +791,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                         ? 'bg-red-500'
                         : creditPercentage > 75
                           ? 'bg-amber-500'
-                          : 'bg-green-500', 
+                          : 'bg-green-500',
                     )}
                     style={{ width: `${creditPercentage}%` }}
                   />

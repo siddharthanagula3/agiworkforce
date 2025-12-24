@@ -13,8 +13,8 @@ These environment variables **MUST** be set in Vercel for billing to work:
 
 ### Price IDs (Optional - have defaults but should be set)
 
-- `STRIPE_PRICE_HOBBY_MONTHLY` - Default: `price_1Sgwrv0zEfO6BZMhe6hCXMhI`
-- `STRIPE_PRICE_HOBBY_YEARLY` - Default: `price_1Sgwrv0zEfO6BZMhF5T4FqgN`
+- `STRIPE_PRICE_HOBBY_MONTHLY` - Default: `price_1Sgwx10zEfO6BZMh7thtFU77`
+- `STRIPE_PRICE_HOBBY_YEARLY` - Default: `price_1Sgwx20zEfO6BZMhbgpxL8TI`
 - `STRIPE_PRICE_PRO_MONTHLY` - Default: `price_1Sgwx20zEfO6BZMh3ix7hivi`
 - `STRIPE_PRICE_PRO_YEARLY` - Default: `price_1Sgwx30zEfO6BZMhJXsduOyl`
 - `STRIPE_PRICE_MAX_MONTHLY` - Default: `price_1Sgwx30zEfO6BZMhJqItFYKF`

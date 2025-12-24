@@ -162,8 +162,8 @@ impl AnthropicProvider {
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
         let (input_cost, output_cost) = match model {
             "claude-sonnet-4-5" | "claude-4.5-sonnet" => (3.0, 15.0),
-            "claude-haiku-4-5" | "claude-4.5-haiku" => (0.5, 2.5),
-            "claude-opus-4-5" | "claude-4.5-opus" => (12.0, 36.0),
+            "claude-haiku-4-5" | "claude-4.5-haiku" => (1.0, 5.0),
+            "claude-opus-4-5" | "claude-4.5-opus" => (15.0, 75.0),
 
             "claude-opus-4" | "claude-4-opus" => (15.0, 75.0),
 

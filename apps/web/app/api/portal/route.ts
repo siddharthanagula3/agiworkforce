@@ -43,7 +43,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  
   const { data: subscription, error } = await supabase
     .from('subscriptions')
     .select('stripe_customer_id, status')
@@ -54,17 +53,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No subscription found.' }, { status: 404 });
   }
 
-  
-  const activeStatuses = ['active', 'trialing'];
-  if (!activeStatuses.includes(subscription.status)) {
+  // Allow users to access portal even if canceled, to view invoices etc.
+  // The only strict requirement is having a customer ID.
+  const allowedStatuses = ['active', 'trialing', 'past_due', 'canceled', 'unpaid'];
+
+  if (!subscription.stripe_customer_id) {
+    console.error('[billing] Subscription found but no stripe_customer_id:', subscription);
     return NextResponse.json(
-      { error: 'Active subscription required to manage billing.' },
-      { status: 403 },
+      { error: 'No billing account linked to this subscription.' },
+      { status: 404 },
     );
   }
 
-  if (!subscription.stripe_customer_id) {
-    return NextResponse.json({ error: 'No active subscription found to manage.' }, { status: 404 });
+  // Optional: Warn if status is weird, but usually Portal handles it.
+  if (!allowedStatuses.includes(subscription.status)) {
+    console.warn(`[billing] Accessing portal with status: ${subscription.status}`);
   }
 
   const origin = getOrigin(request);

@@ -1,7 +1,13 @@
 import { invoke } from '@/lib/tauri-mock';
 import { Brain, Check, Sparkles, Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { getModelMetadata, PROVIDER_LABELS, type ModelMetadata } from '../../constants/llm';
+import {
+  getModelMetadata,
+  PROVIDER_LABELS,
+  PROVIDERS_IN_ORDER,
+  THINKING_MODEL_VARIANTS,
+  type ModelMetadata,
+} from '../../constants/llm';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { cn } from '../../lib/utils';
 import { useModelStore } from '../../stores/modelStore';
@@ -66,17 +72,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
   const modelGroups = useMemo(() => {
     const groups: Record<string, ModelMetadata[]> = {};
-    const allProviders: Provider[] = [
-      'openai',
-      'anthropic',
-      'google',
-      'ollama',
-      'xai',
-      'deepseek',
-      'qwen',
-      'mistral',
-      'moonshot',
-    ];
+    const allProviders: Provider[] = PROVIDERS_IN_ORDER;
 
     allProviders.forEach((p) => {
       groups[p] = [];
@@ -100,6 +96,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               tools: false,
               vision: false,
               json: true,
+              thinking: false,
             },
             speed: 'medium',
             quality: 'good',
@@ -300,33 +297,68 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       </div>
 
       <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-        <button
-          onClick={toggleThinkingMode}
-          className={cn(
-            'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs transition-colors',
-            thinkingModeEnabled
-              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
-              : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-charcoal-800',
-          )}
-        >
-          <div className="flex items-center gap-2 font-medium">
-            <Brain size={14} />
-            <span>Thinking Mode</span>
-          </div>
-          <div
-            className={cn(
-              'h-4 w-7 rounded-full p-0.5 transition-colors',
-              thinkingModeEnabled ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600',
-            )}
-          >
-            <div
+        {(() => {
+          const currentMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
+          const supportsThinking = currentMetadata?.capabilities.thinking ?? false;
+          const smartVariantId = selectedModel ? THINKING_MODEL_VARIANTS[selectedModel] : undefined;
+          const smartVariantName = smartVariantId ? getModelMetadata(smartVariantId)?.name : null;
+
+          const isDisabled = !supportsThinking && !smartVariantId;
+          const tooltip = isDisabled
+            ? 'This model does not support Thinking Mode'
+            : !supportsThinking && smartVariantName
+              ? `Switch to ${smartVariantName} to enable Thinking Mode`
+              : 'Enable Thinking Mode';
+
+          return (
+            <button
+              onClick={() => {
+                if (isDisabled) return;
+
+                if (!supportsThinking && smartVariantId) {
+                  // Smart Switch
+                  const variantMetadata = getModelMetadata(smartVariantId);
+                  if (variantMetadata) {
+                    void selectModel(smartVariantId, variantMetadata.provider);
+                    if (!thinkingModeEnabled) {
+                      toggleThinkingMode();
+                    }
+                  }
+                } else {
+                  // Standard Toggle
+                  toggleThinkingMode();
+                }
+              }}
+              disabled={isDisabled}
+              title={tooltip}
               className={cn(
-                'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
-                thinkingModeEnabled ? 'translate-x-3' : 'translate-x-0',
+                'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs transition-colors',
+                thinkingModeEnabled
+                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                  : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-charcoal-800',
+                isDisabled && 'opacity-50 cursor-not-allowed',
               )}
-            />
-          </div>
-        </button>
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <Brain size={14} />
+                <span>Thinking Mode</span>
+              </div>
+              <div
+                className={cn(
+                  'h-4 w-7 rounded-full p-0.5 transition-colors',
+                  thinkingModeEnabled ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600',
+                )}
+              >
+                <div
+                  className={cn(
+                    'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
+                    thinkingModeEnabled ? 'translate-x-3' : 'translate-x-0',
+                  )}
+                />
+              </div>
+            </button>
+          );
+        })()}
       </div>
     </div>
   );

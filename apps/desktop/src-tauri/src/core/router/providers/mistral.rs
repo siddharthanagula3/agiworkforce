@@ -70,6 +70,7 @@ impl MistralProvider {
             "pixtral-large-latest" | "pixtral-2411" => (2.0, 6.0),
             "mistral-small-latest" | "mistral-small-2409" => (0.2, 0.6),
             "codestral-latest" | "codestral-2405" => (1.0, 3.0),
+            "kimi-k2-thinking" => (1.5, 6.0),
             _ => (2.0, 6.0),
         };
 

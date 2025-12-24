@@ -24,6 +24,18 @@ impl XAIProvider {
         }
     }
 
+    fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
+        let (input_cost, output_cost) = match model {
+            "grok-4.1" => (5.5, 16.5),
+            "grok-4.1-fast" => (4.0, 12.0),
+            _ => (3.0, 15.0), // Default to Grok Beta pricing or similar
+        };
+
+        let input = (input_tokens as f64 / 1_000_000.0) * input_cost;
+        let output = (output_tokens as f64 / 1_000_000.0) * output_cost;
+        input + output
+    }
+
     fn get_api_key(&self) -> Result<&str, Box<dyn Error + Send + Sync>> {
         self.api_key
             .as_deref()
@@ -256,8 +268,11 @@ impl LLMProvider for XAIProvider {
             .as_ref()
             .map(|calls| Self::convert_tool_calls(calls));
 
-        let cost = (xai_response.usage.prompt_tokens as f64 * 0.000003)
-            + (xai_response.usage.completion_tokens as f64 * 0.000015);
+        let cost = Self::calculate_cost(
+            &xai_response.model,
+            xai_response.usage.prompt_tokens,
+            xai_response.usage.completion_tokens,
+        );
 
         Ok(LLMResponse {
             content,
