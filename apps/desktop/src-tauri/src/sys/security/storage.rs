@@ -3,6 +3,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose, Engine as _};
+#[cfg(not(test))]
 use keyring::Entry;
 use pbkdf2::pbkdf2_hmac_array;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,7 @@ pub struct SecureKeyMaterial {
 }
 
 pub struct SecureStorage {
+    #[allow(dead_code)]
     service_name: String,
     master_key: RwLock<Option<Vec<u8>>>,
 }
@@ -126,57 +128,99 @@ impl SecureStorage {
     }
 
     pub fn store_api_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
-        let entry = Entry::new(&self.service_name, provider)
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        #[cfg(test)]
+        {
+            let _ = (provider, api_key);
+            return Ok(());
+        }
 
-        entry
-            .set_password(api_key)
-            .map_err(|e| format!("Failed to store API key: {}", e))?;
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, provider)
+                .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
 
-        Ok(())
+            entry
+                .set_password(api_key)
+                .map_err(|e| format!("Failed to store API key: {}", e))?;
+
+            Ok(())
+        }
     }
 
     pub fn retrieve_api_key(&self, provider: &str) -> Result<String, String> {
-        let entry = Entry::new(&self.service_name, provider)
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        #[cfg(test)]
+        {
+            let _ = provider;
+            return Ok("dummy_api_key".to_string());
+        }
 
-        entry
-            .get_password()
-            .map_err(|e| format!("Failed to retrieve API key: {}", e))
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, provider)
+                .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+
+            entry
+                .get_password()
+                .map_err(|e| format!("Failed to retrieve API key: {}", e))
+        }
     }
 
     pub fn delete_api_key(&self, provider: &str) -> Result<(), String> {
-        let entry = Entry::new(&self.service_name, provider)
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        #[cfg(test)]
+        {
+            let _ = provider;
+            return Ok(());
+        }
 
-        entry
-            .delete_password()
-            .map_err(|e| format!("Failed to delete API key: {}", e))
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, provider)
+                .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+
+            entry
+                .delete_password()
+                .map_err(|e| format!("Failed to delete API key: {}", e))
+        }
     }
 
     fn store_salt_in_keyring(&self, salt: &[u8]) -> Result<(), String> {
-        let entry = Entry::new(&self.service_name, "master_salt")
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        #[cfg(test)]
+        {
+            let _ = salt;
+            return Ok(());
+        }
 
-        let salt_b64 = general_purpose::STANDARD.encode(salt);
-        entry
-            .set_password(&salt_b64)
-            .map_err(|e| format!("Failed to store salt: {}", e))?;
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, "master_salt")
+                .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
 
-        Ok(())
+            let salt_b64 = general_purpose::STANDARD.encode(salt);
+            entry
+                .set_password(&salt_b64)
+                .map_err(|e| format!("Failed to store salt: {}", e))?;
+
+            Ok(())
+        }
     }
 
     fn retrieve_salt_from_keyring(&self) -> Result<Vec<u8>, String> {
-        let entry = Entry::new(&self.service_name, "master_salt")
-            .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
+        #[cfg(test)]
+        return Ok(vec![0u8; SALT_SIZE]);
 
-        let salt_b64 = entry
-            .get_password()
-            .map_err(|e| format!("Failed to retrieve salt: {}", e))?;
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, "master_salt")
+                .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
 
-        general_purpose::STANDARD
-            .decode(salt_b64)
-            .map_err(|e| format!("Failed to decode salt: {}", e))
+            let salt_b64 = entry
+                .get_password()
+                .map_err(|e| format!("Failed to retrieve salt: {}", e))?;
+
+            general_purpose::STANDARD
+                .decode(salt_b64)
+                .map_err(|e| format!("Failed to decode salt: {}", e))
+        }
     }
 }
 

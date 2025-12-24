@@ -15,7 +15,9 @@ use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+#[allow(dead_code)]
 const SERVICE_NAME: &str = "AGIWorkforce";
+#[allow(dead_code)]
 const ENCRYPTION_KEY_NAME: &str = "encryption_master_key";
 
 #[derive(Debug, Error)]
@@ -66,25 +68,31 @@ impl SettingsService {
     }
 
     fn get_or_create_master_key() -> Result<Vec<u8>, SettingsServiceError> {
-        let entry = Entry::new(SERVICE_NAME, ENCRYPTION_KEY_NAME).map_err(|e| {
-            SettingsServiceError::Keyring(format!("Failed to access keyring: {}", e))
-        })?;
+        #[cfg(test)]
+        return Ok(vec![1u8; 32]);
 
-        match entry.get_password() {
-            Ok(key_b64) => general_purpose::STANDARD.decode(key_b64).map_err(|e| {
-                SettingsServiceError::Encryption(format!("Invalid key format: {}", e))
-            }),
-            Err(_) => {
-                let mut key = vec![0u8; 32];
-                use rand::RngCore;
-                OsRng.fill_bytes(&mut key);
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(SERVICE_NAME, ENCRYPTION_KEY_NAME).map_err(|e| {
+                SettingsServiceError::Keyring(format!("Failed to access keyring: {}", e))
+            })?;
 
-                let key_b64 = general_purpose::STANDARD.encode(&key);
-                entry.set_password(&key_b64).map_err(|e| {
-                    SettingsServiceError::Keyring(format!("Failed to store key: {}", e))
-                })?;
+            match entry.get_password() {
+                Ok(key_b64) => general_purpose::STANDARD.decode(key_b64).map_err(|e| {
+                    SettingsServiceError::Encryption(format!("Invalid key format: {}", e))
+                }),
+                Err(_) => {
+                    let mut key = vec![0u8; 32];
+                    use rand::RngCore;
+                    OsRng.fill_bytes(&mut key);
 
-                Ok(key)
+                    let key_b64 = general_purpose::STANDARD.encode(&key);
+                    entry.set_password(&key_b64).map_err(|e| {
+                        SettingsServiceError::Keyring(format!("Failed to store key: {}", e))
+                    })?;
+
+                    Ok(key)
+                }
             }
         }
     }
