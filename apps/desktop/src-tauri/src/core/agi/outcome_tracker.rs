@@ -492,7 +492,5 @@ pub struct TrendingMetric {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_outcome_tracker_creation() {
-        assert!(true);
-    }
+    fn test_outcome_tracker_creation() {}
 }

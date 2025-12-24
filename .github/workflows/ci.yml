@@ -11,9 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v3
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -22,8 +24,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Lint, test, and build (JS/TS workspace)
+        run: |
+          pnpm lint
+          pnpm test
+          pnpm build
 
-      - name: Lint
-        run: pnpm lint
+      - name: Test (Rust workspace, default features)
+        run: cargo test --workspace
+
+      - name: Clippy (Rust workspace, default features)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  clippy-all-features:
+    name: Clippy (all features, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Clippy (all features, includes optional OCR/vision)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings

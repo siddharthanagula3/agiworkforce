@@ -3257,54 +3257,6 @@ fn apply_migration_v39(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rusqlite::Connection;
-
-    #[test]
-    fn test_migrations() {
-        let conn = Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
-
-        let tables: Vec<String> = conn
-            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-            .unwrap()
-            .query_map([], |row| row.get(0))
-            .unwrap()
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
-
-        assert!(tables.contains(&"conversations".to_string()));
-        assert!(tables.contains(&"messages".to_string()));
-        assert!(tables.contains(&"settings".to_string()));
-        assert!(tables.contains(&"settings_v2".to_string()));
-        assert!(tables.contains(&"automation_history".to_string()));
-        assert!(tables.contains(&"overlay_events".to_string()));
-        assert!(tables.contains(&"captures".to_string()));
-        assert!(tables.contains(&"ocr_results".to_string()));
-        assert!(tables.contains(&"permissions".to_string()));
-        assert!(tables.contains(&"audit_log".to_string()));
-        assert!(tables.contains(&"command_history".to_string()));
-        assert!(tables.contains(&"clipboard_history".to_string()));
-        assert!(tables.contains(&"schema_version".to_string()));
-        assert!(tables.contains(&"cache_entries".to_string()));
-        assert!(tables.contains(&"calendar_accounts".to_string()));
-    }
-
-    #[test]
-    fn test_foreign_keys_enabled() {
-        let conn = Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
-
-        let fk_enabled: i32 = conn
-            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
-            .unwrap();
-
-        assert_eq!(fk_enabled, 1);
-    }
-}
-
 fn apply_migration_v40(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS users (
@@ -3621,4 +3573,52 @@ fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool
     let mut stmt =
         conn.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE lower(name) = lower(?2)")?;
     stmt.exists([table, column])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn test_migrations() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert!(tables.contains(&"conversations".to_string()));
+        assert!(tables.contains(&"messages".to_string()));
+        assert!(tables.contains(&"settings".to_string()));
+        assert!(tables.contains(&"settings_v2".to_string()));
+        assert!(tables.contains(&"automation_history".to_string()));
+        assert!(tables.contains(&"overlay_events".to_string()));
+        assert!(tables.contains(&"captures".to_string()));
+        assert!(tables.contains(&"ocr_results".to_string()));
+        assert!(tables.contains(&"permissions".to_string()));
+        assert!(tables.contains(&"audit_log".to_string()));
+        assert!(tables.contains(&"command_history".to_string()));
+        assert!(tables.contains(&"clipboard_history".to_string()));
+        assert!(tables.contains(&"schema_version".to_string()));
+        assert!(tables.contains(&"cache_entries".to_string()));
+        assert!(tables.contains(&"calendar_accounts".to_string()));
+    }
+
+    #[test]
+    fn test_foreign_keys_enabled() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let fk_enabled: i32 = conn
+            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(fk_enabled, 1);
+    }
 }

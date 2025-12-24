@@ -52,7 +52,7 @@ pub fn init_sentry(dsn: &str, environment: &str) -> Result<sentry::ClientInitGua
         dsn,
         sentry::ClientOptions {
             release: Some(env!("CARGO_PKG_VERSION").into()),
-            environment: Some(environment.into()),
+            environment: Some(environment.to_string().into()),
             attach_stacktrace: true,
             send_default_pii: false,
             ..Default::default()
@@ -77,7 +77,7 @@ macro_rules! trace_operation {
 #[cfg(feature = "sentry")]
 pub fn capture_error(error: &anyhow::Error) {
     tracing::error!("Error: {:?}", error);
-    sentry::capture_error(error);
+    sentry::capture_error(&**error);
 }
 
 #[cfg(not(feature = "sentry"))]

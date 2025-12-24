@@ -6,7 +6,7 @@ mod tests {
 
     #[test]
     fn test_provider_enum_values() {
-        let providers = vec![
+        let providers = [
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::Google,
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn test_routing_strategy_variants() {
-        let strategies = vec![
+        let strategies = [
             RoutingStrategy::Auto,
             RoutingStrategy::CostOptimized,
             RoutingStrategy::LatencyOptimized,

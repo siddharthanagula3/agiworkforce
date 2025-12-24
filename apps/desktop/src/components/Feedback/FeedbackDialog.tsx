@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import { getSupabase } from '../../lib/supabase';
+import { invoke } from '@tauri-apps/api/core';
 import { supabaseAuth } from '../../services/supabaseAuth';
 
 interface FeedbackDialogProps {
@@ -25,27 +25,21 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     setIsSending(true);
 
     try {
-      const user = supabaseAuth.getUser();
-      const supabase = getSupabase();
+      const user = await supabaseAuth.getUser();
 
-      const { error } = await supabase.from('feedback').insert({
-        user_id: user?.id,
+      await invoke('submit_feedback', {
         subject,
         message,
+        userId: user?.id,
         metadata: {
           platform: 'desktop',
           version: '5.0.0',
           user_agent: navigator.userAgent,
         },
       });
-
-      if (error) {
-        console.warn('Failed to save feedback to database, falling back to log:', error);
-
-        console.log('Feedback payload:', { subject, message, userId: user?.id });
-      }
     } catch (err) {
       console.error('Error submitting feedback:', err);
+      // Optionally show error state here
     }
 
     await new Promise((resolve) => setTimeout(resolve, 500));

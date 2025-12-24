@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod security_tests {
+mod implementation {
 
     struct SecurityValidator;
 

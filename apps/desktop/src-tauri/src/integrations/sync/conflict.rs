@@ -177,7 +177,7 @@ mod tests {
         let resolved = resolver.auto_resolve(&conflict_data).unwrap();
 
         match resolved.resolution {
-            ConflictResolution::UseRemote => assert!(true),
+            ConflictResolution::UseRemote => {}
             _ => panic!("Expected UseRemote resolution"),
         }
     }

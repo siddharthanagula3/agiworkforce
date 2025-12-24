@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use crate::core::mcp::{
         client::McpClient, config::McpServerConfig, protocol::*, session::McpSession,
     };

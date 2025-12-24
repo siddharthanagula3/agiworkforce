@@ -315,7 +315,7 @@ mod tests {
         );
 
         assert!(analysis.risk_score > 0.5);
-        assert!(analysis.detected_patterns.len() > 0);
+        assert!(!analysis.detected_patterns.is_empty());
     }
 
     #[test]

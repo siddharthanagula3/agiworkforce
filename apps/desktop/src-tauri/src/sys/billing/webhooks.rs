@@ -1,5 +1,3 @@
-#![cfg(feature = "billing")]
-
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};

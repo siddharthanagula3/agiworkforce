@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_default_filters() {
         let filters = WorkflowFilters::default();
-        assert_eq!(filters.verified_only, false);
+        assert!(!filters.verified_only);
         assert!(filters.tags.is_empty());
     }
 }

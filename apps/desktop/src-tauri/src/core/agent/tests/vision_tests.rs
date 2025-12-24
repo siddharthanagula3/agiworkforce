@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn test_element_detection() {
-        let elements_found = vec!["button", "input", "link"];
+        let elements_found = ["button", "input", "link"];
         assert_eq!(elements_found.len(), 3);
     }
 
@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn test_text_region_extraction() {
-        let regions = vec![(0, 0, 100, 50), (100, 0, 200, 50)];
+        let regions = [(0, 0, 100, 50), (100, 0, 200, 50)];
 
         assert_eq!(regions.len(), 2);
     }

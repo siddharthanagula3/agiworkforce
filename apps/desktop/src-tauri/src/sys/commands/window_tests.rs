@@ -79,7 +79,7 @@ mod tests {
         assert!(result.is_ok());
 
         let payload = result.unwrap();
-        assert_eq!(payload.fullscreen, true);
+        assert!(payload.fullscreen);
         assert_eq!(payload.dock, Some(DockPosition::Left));
     }
 
@@ -88,7 +88,7 @@ mod tests {
         let state = create_test_state();
 
         let initial = state.snapshot();
-        assert_eq!(initial.fullscreen, false);
+        assert!(!initial.fullscreen);
 
         let result = state.update(|s| {
             s.fullscreen = true;
@@ -98,7 +98,7 @@ mod tests {
         assert!(result.is_ok());
 
         let updated = state.snapshot();
-        assert_eq!(updated.fullscreen, true);
+        assert!(updated.fullscreen);
     }
 
     #[test]
@@ -112,7 +112,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(state.snapshot().fullscreen, true);
+        assert!(state.snapshot().fullscreen);
 
         state
             .update(|s| {
@@ -121,7 +121,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(state.snapshot().fullscreen, false);
+        assert!(!state.snapshot().fullscreen);
     }
 
     #[test]
@@ -146,11 +146,11 @@ mod tests {
             .unwrap();
 
         let snapshot = state.snapshot();
-        assert_eq!(snapshot.pinned, true);
-        assert_eq!(snapshot.always_on_top, true);
+        assert!(snapshot.pinned);
+        assert!(snapshot.always_on_top);
         assert_eq!(snapshot.dock, Some(DockPosition::Left));
-        assert_eq!(snapshot.maximized, false);
-        assert_eq!(snapshot.fullscreen, true);
+        assert!(!snapshot.maximized);
+        assert!(snapshot.fullscreen);
     }
 
     #[test]
@@ -166,8 +166,8 @@ mod tests {
             .unwrap();
 
         let snapshot = state.snapshot();
-        assert_eq!(snapshot.fullscreen, true);
-        assert_eq!(snapshot.maximized, true);
+        assert!(snapshot.fullscreen);
+        assert!(snapshot.maximized);
 
         state
             .update(|s| {
@@ -177,8 +177,8 @@ mod tests {
             .unwrap();
 
         let snapshot = state.snapshot();
-        assert_eq!(snapshot.fullscreen, false);
-        assert_eq!(snapshot.maximized, true);
+        assert!(!snapshot.fullscreen);
+        assert!(snapshot.maximized);
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         let state = create_test_state();
 
         let snapshot1 = state.snapshot();
-        assert_eq!(snapshot1.fullscreen, false);
+        assert!(!snapshot1.fullscreen);
 
         state
             .update(|s| {
@@ -195,10 +195,10 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(snapshot1.fullscreen, false);
+        assert!(!snapshot1.fullscreen);
 
         let snapshot2 = state.snapshot();
-        assert_eq!(snapshot2.fullscreen, true);
+        assert!(snapshot2.fullscreen);
     }
 
     #[test]
@@ -236,11 +236,11 @@ mod tests {
     fn test_persistent_window_state_default() {
         let state = PersistentWindowState::default();
 
-        assert_eq!(state.pinned, true);
-        assert_eq!(state.always_on_top, false);
+        assert!(state.pinned);
+        assert!(!state.always_on_top);
         assert_eq!(state.dock, None);
-        assert_eq!(state.maximized, false);
-        assert_eq!(state.fullscreen, false);
+        assert!(!state.maximized);
+        assert!(!state.fullscreen);
         assert!(state.geometry.is_some());
         assert!(state.previous_geometry.is_none());
     }
@@ -257,26 +257,26 @@ mod tests {
             .unwrap();
 
         let fullscreen_value = state.with_state(|s| s.fullscreen);
-        assert_eq!(fullscreen_value, true);
+        assert!(fullscreen_value);
 
         let maximized_value = state.with_state(|s| s.maximized);
-        assert_eq!(maximized_value, false);
+        assert!(!maximized_value);
     }
 
     #[test]
     fn test_suppress_events_flag() {
         let state = create_test_state();
 
-        assert_eq!(state.is_events_suppressed(), false);
+        assert!(!state.is_events_suppressed());
 
         let result = state.suppress_events(|| {
-            assert_eq!(state.is_events_suppressed(), true);
+            assert!(state.is_events_suppressed());
             Ok::<_, tauri::Error>(42)
         });
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
-        assert_eq!(state.is_events_suppressed(), false);
+        assert!(!state.is_events_suppressed());
     }
 
     #[test]
@@ -288,7 +288,7 @@ mod tests {
 
         assert!(result.is_err());
 
-        assert_eq!(state.is_events_suppressed(), false);
+        assert!(!state.is_events_suppressed());
     }
 
     #[test]
@@ -303,7 +303,7 @@ mod tests {
         assert!(result.is_ok());
 
         let snapshot = state.snapshot();
-        assert_eq!(snapshot.fullscreen, true);
+        assert!(snapshot.fullscreen);
     }
 
     #[test]
@@ -326,7 +326,7 @@ mod tests {
                 let state_clone = state.clone();
                 thread::spawn(move || {
                     let snapshot = state_clone.snapshot();
-                    assert_eq!(snapshot.fullscreen, false);
+                    assert!(!snapshot.fullscreen);
                 })
             })
             .collect();
@@ -356,6 +356,6 @@ mod tests {
 
         let snapshot = state.snapshot();
         assert_eq!(snapshot.dock, Some(DockPosition::Left));
-        assert_eq!(snapshot.fullscreen, true);
+        assert!(snapshot.fullscreen);
     }
 }

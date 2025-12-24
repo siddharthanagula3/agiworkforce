@@ -145,6 +145,9 @@ mod tests {
         let manager = initialize_template_manager(db);
 
         let templates = manager.get_all_templates().unwrap();
-        assert!(templates.len() > 0, "Should have loaded builtin templates");
+        assert!(
+            !templates.is_empty(),
+            "Should have loaded builtin templates"
+        );
     }
 }
