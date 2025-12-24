@@ -226,6 +226,47 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     };
   }, [attachments]);
 
+  const handleFilesAdded = useCallback(
+    (files: File[]) => {
+      // Check for image files
+      const hasImages = files.some((f) => f.type.startsWith('image/'));
+      const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
+
+      // If we have images and the model explicitly doesn't support vision
+      if (hasImages && metadata && metadata.capabilities.vision === false) {
+        setSubmitError(
+          `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+        );
+        // Filter out images, but allow other files if any
+        const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
+        if (nonImageFiles.length === 0) return;
+
+        const newAttachments: Attachment[] = nonImageFiles.map((file) => ({
+          id: crypto.randomUUID(),
+          type: 'file', // Treat as generic file
+          name: file.name,
+          size: file.size,
+          mimeType: file.type,
+          path: URL.createObjectURL(file), // Still create object URL for generic file preview if needed
+        }));
+        setAttachments((prev) => [...prev, ...newAttachments]);
+        return;
+      }
+
+      const newAttachments: Attachment[] = files.map((file) => ({
+        id: crypto.randomUUID(),
+        type: file.type.startsWith('image/') ? 'image' : 'file',
+        name: file.name,
+        size: file.size,
+        mimeType: file.type,
+        path: URL.createObjectURL(file),
+      }));
+      setAttachments((prev) => [...prev, ...newAttachments]);
+      setSubmitError(null); // Clear error on success
+    },
+    [selectedModel],
+  );
+
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
@@ -250,7 +291,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       document.removeEventListener('dragleave', handleDragLeave);
       document.removeEventListener('drop', handleDrop);
     };
-  }, []);
+  }, [handleFilesAdded]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -258,44 +299,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       setContent(value);
       setDraftContent(value);
     }
-  };
-
-  const handleFilesAdded = (files: File[]) => {
-    // Check for image files
-    const hasImages = files.some((f) => f.type.startsWith('image/'));
-    const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
-
-    // If we have images and the model explicitly doesn't support vision
-    if (hasImages && metadata && metadata.capabilities.vision === false) {
-      setSubmitError(
-        `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
-      );
-      // Filter out images, but allow other files if any
-      const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
-      if (nonImageFiles.length === 0) return;
-
-      const newAttachments: Attachment[] = nonImageFiles.map((file) => ({
-        id: crypto.randomUUID(),
-        type: 'file', // Treat as generic file
-        name: file.name,
-        size: file.size,
-        mimeType: file.type,
-        path: URL.createObjectURL(file), // Still create object URL for generic file preview if needed
-      }));
-      setAttachments((prev) => [...prev, ...newAttachments]);
-      return;
-    }
-
-    const newAttachments: Attachment[] = files.map((file) => ({
-      id: crypto.randomUUID(),
-      type: file.type.startsWith('image/') ? 'image' : 'file',
-      name: file.name,
-      size: file.size,
-      mimeType: file.type,
-      path: URL.createObjectURL(file),
-    }));
-    setAttachments((prev) => [...prev, ...newAttachments]);
-    setSubmitError(null); // Clear error on success
   };
 
   const handleSubmit = async (event?: React.FormEvent) => {

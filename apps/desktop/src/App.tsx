@@ -37,6 +37,7 @@ const UnifiedAgenticChat = lazy(() =>
     default: m.UnifiedAgenticChat,
   })),
 );
+import { UpdateNotifier } from './components/Settings/UpdateNotifier';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full">
@@ -274,6 +275,7 @@ const DesktopShell = () => {
         <Suspense fallback={null}>
           <SettingsPanel open={settingsPanelOpen} onOpenChange={setSettingsPanelOpen} />
         </Suspense>
+        <UpdateNotifier onOpenSettings={openSettings} />
         <ErrorToastContainer position="top-right" />
       </div>
     </Suspense>

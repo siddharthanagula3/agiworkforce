@@ -104,6 +104,12 @@ export const useUsageStore = create<UsageStore>()(
               stats.storage_used_mb,
               subscription,
             ),
+            showTokenWarning: shouldShowUsageWarning(
+              'tokenCredits',
+              // Calculate total cost from model usage
+              stats.model_usage?.reduce((acc, m) => acc + m.cost_usd, 0) || 0,
+              subscription,
+            ),
           });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to fetch usage';
