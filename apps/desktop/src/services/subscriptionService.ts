@@ -99,6 +99,7 @@ export interface SubscriptionState {
 class SubscriptionService {
   private static instance: SubscriptionService;
   private listeners: Set<(state: SubscriptionState) => void> = new Set();
+  private realtimeChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
   private state: SubscriptionState = {
     isLoading: false,
     error: null,
@@ -111,11 +112,13 @@ class SubscriptionService {
       if (authState.subscription) {
         this.updateState({ subscription: authState.subscription });
         this.refreshCurrentPlan();
+        this.subscribeToRealtimeForUser(authState.subscription.user_id);
       } else if (!authState.user) {
         this.updateState({
           subscription: null,
           currentPlan: null,
         });
+        this.unsubscribeRealtime();
       }
     });
   }
@@ -125,6 +128,46 @@ class SubscriptionService {
       SubscriptionService.instance = new SubscriptionService();
     }
     return SubscriptionService.instance;
+  }
+
+  private subscribeToRealtimeForUser(userId: string) {
+    // Clean up any existing channel first
+    this.unsubscribeRealtime();
+
+    const supabase = getSupabase();
+    console.log('[Subscription] Subscribing to realtime updates for user:', userId);
+
+    this.realtimeChannel = supabase
+      .channel(`subscription-updates-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subscriptions',
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          console.log('[Subscription] Realtime update received:', payload);
+          // When we get an update, fetch the latest fresh data to be safe
+          // and triggers logic that relies on `getSubscription()`
+          await this.getSubscription();
+          await this.refreshCurrentPlan();
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Subscription] Realtime subscription established');
+        }
+      });
+  }
+
+  private unsubscribeRealtime() {
+    if (this.realtimeChannel) {
+      console.log('[Subscription] Unsubscribing from realtime updates');
+      getSupabase().removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
   }
 
   private async refreshCurrentPlan(): Promise<void> {

@@ -8,6 +8,7 @@ use super::types::ElementSelector;
 use super::InspectorService;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 use crate::automation::inspector::UIInspector;
+use crate::automation::screen::{capture_primary_screen, capture_region};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScriptAction {
@@ -150,7 +151,7 @@ impl ExecutorService {
             let mut attempt = 0;
             while attempt <= self.config.retry_count {
                 match self.execute_action(action, app_handle).await {
-                    Ok(_) => {
+                    Ok(artifact_path) => {
                         actions_completed += 1;
                         self.log(
                             &mut logs,
@@ -158,6 +159,10 @@ impl ExecutorService {
                             &format!("Action completed: {}", action.action_type),
                             Some(&action.id),
                         );
+
+                        if let Some(path) = artifact_path {
+                            screenshots.push(path);
+                        }
                         break;
                     }
                     Err(err) => {
@@ -254,15 +259,33 @@ impl ExecutorService {
         &self,
         action: &ScriptAction,
         app_handle: Option<&AppHandle>,
-    ) -> Result<()> {
+    ) -> Result<Option<String>> {
         match action.action_type.as_str() {
-            "click" => self.execute_click(action).await,
-            "type" => self.execute_type(action).await,
-            "wait" => self.execute_wait(action).await,
+            "click" => {
+                self.execute_click(action).await?;
+                Ok(None)
+            }
+            "type" => {
+                self.execute_type(action).await?;
+                Ok(None)
+            }
+            "wait" => {
+                self.execute_wait(action).await?;
+                Ok(None)
+            }
             "screenshot" => self.execute_screenshot(action, app_handle).await,
-            "hotkey" => self.execute_hotkey(action).await,
-            "drag" => self.execute_drag(action).await,
-            "scroll" => self.execute_scroll(action).await,
+            "hotkey" => {
+                self.execute_hotkey(action).await?;
+                Ok(None)
+            }
+            "drag" => {
+                self.execute_drag(action).await?;
+                Ok(None)
+            }
+            "scroll" => {
+                self.execute_scroll(action).await?;
+                Ok(None)
+            }
             _ => Err(anyhow!("Unknown action type: {}", action.action_type)),
         }
     }
@@ -307,14 +330,57 @@ impl ExecutorService {
         &self,
         action: &ScriptAction,
         app_handle: Option<&AppHandle>,
-    ) -> Result<()> {
+    ) -> Result<Option<String>> {
+        // Emit event for UI feedback if app handle exists
         if let Some(app) = app_handle {
-            app.emit("automation:request_screenshot", serde_json::json!({
+            let _ = app.emit("automation:request_screenshot", serde_json::json!({
                  "action_id": action.id,
                  "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
-             }))?;
+             }));
         }
-        Ok(())
+
+        // Perform actual capture
+        let image = if let Some(ref selector) = action.selector {
+            // Capture element
+            if let Some(element) = self.inspector.find_element_by_selector(selector)? {
+                let info = self.inspector.inspect_element_by_id(&element)?;
+                if let Some(rect) = info.bounding_rect {
+                    capture_region(
+                        rect.left as i32,
+                        rect.top as i32,
+                        rect.width as u32,
+                        rect.height as u32,
+                    )?
+                    .pixels
+                } else {
+                    return Err(anyhow!("Element has no bounding rect"));
+                }
+            } else {
+                return Err(anyhow!("Element not found for screenshot"));
+            }
+        } else if let Some(ref _coords) = action.coordinates {
+            // Capture region around coords, default 100x100 if not specified otherwise
+            // This is a bit arbitrary, but coordinates usually imply a point.
+            // If we had width/height in script action for region, we'd use that.
+            // For now, let's capture the full screen if just coords are given is unexpected,
+            // or maybe we just capture the primary screen.
+            // Re-reading automation.rs, it supports width/height.
+            // But ScriptAction doesn't seem to have direct width/height fields, only value.
+            // Let's default to full screen if no selector.
+            capture_primary_screen()?.pixels
+        } else {
+            capture_primary_screen()?.pixels
+        };
+
+        let filename = format!(
+            "screenshot_{}_{}.png",
+            action.id,
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
+        );
+        let path = std::env::temp_dir().join(&filename);
+        image.save(&path)?;
+
+        Ok(Some(path.to_string_lossy().to_string()))
     }
 
     async fn execute_hotkey(&self, action: &ScriptAction) -> Result<()> {
@@ -431,7 +497,14 @@ impl ExecutorService {
     }
 
     async fn take_error_screenshot(&self) -> Result<String> {
-        Ok("error_screenshot.png".to_string())
+        let image = capture_primary_screen()?.pixels;
+        let filename = format!(
+            "error_screenshot_{}.png",
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
+        );
+        let path = std::env::temp_dir().join(&filename);
+        image.save(&path)?;
+        Ok(path.to_string_lossy().to_string())
     }
 
     fn log(

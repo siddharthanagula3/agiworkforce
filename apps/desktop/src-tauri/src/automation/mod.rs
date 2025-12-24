@@ -22,6 +22,7 @@ use uia::inspector_impl as platform_impl;
 #[cfg(target_os = "macos")]
 use mac::inspector_impl as platform_impl;
 
+#[cfg(any(windows, target_os = "macos"))]
 pub use platform_impl::InspectorService;
 
 use once_cell::sync::Lazy;
@@ -150,15 +151,24 @@ impl InspectorService {
     pub fn find_element_by_selector(
         &self,
         _selector: &types::ElementSelector,
-    ) -> anyhow::Result<Option<types::BasicElementInfo>> {
+    ) -> anyhow::Result<Option<String>> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 
-    pub fn get_element_tree(&self) -> anyhow::Result<types::DetailedElementInfo> {
+    pub fn get_element_tree(
+        &self,
+        _element_id: &str,
+    ) -> anyhow::Result<(
+        Option<types::BasicElementInfo>,
+        Vec<types::BasicElementInfo>,
+    )> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 
-    pub fn generate_selector(&self, _element_id: &str) -> anyhow::Result<types::ElementSelector> {
+    pub fn generate_selector(
+        &self,
+        _element_id: &str,
+    ) -> anyhow::Result<Vec<types::ElementSelector>> {
         Err(anyhow::anyhow!("Inspector not available on this platform"))
     }
 }
@@ -168,6 +178,9 @@ pub type PlatformDriver = uia::UIAutomationService;
 
 #[cfg(target_os = "macos")]
 pub type PlatformDriver = mac::service::MacAutomationService;
+
+#[cfg(not(any(windows, target_os = "macos")))]
+pub type PlatformDriver = uia::UIAutomationService;
 
 pub struct AutomationService {
     pub native: PlatformDriver,

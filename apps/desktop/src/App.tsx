@@ -6,6 +6,7 @@ import TitleBar from './components/Layout/TitleBar';
 import { useTheme } from './hooks/useTheme';
 import { useWindowManager } from './hooks/useWindowManager';
 import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
+import { useDeepLink } from './hooks/useDeepLink';
 
 import { CircleUserRound, Maximize2, Minimize2, Moon, Plus, RefreshCcw, Sun } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -303,6 +304,8 @@ const App = () => {
       }
     };
   }, []);
+
+  useDeepLink();
 
   const isOverlayMode = (() => {
     if (typeof window === 'undefined') return false;

@@ -179,6 +179,7 @@ rmcp = { version = "0.8", features = ["server", "client", "transport-io"] }
 
 git2 = { version = "0.18", features = ["vendored-openssl"] }
 async-stripe = { version = "0.31", features = ["runtime-tokio-hyper"] }
+tauri-plugin-deep-link = "2.4.5"
 
 
 [target.'cfg(windows)'.dependencies]

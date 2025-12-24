@@ -133,6 +133,7 @@ export async function POST(request: Request) {
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       customer_email: user.email ?? undefined,
+      client_reference_id: user.id,
       metadata: {
         supabase_user_id: user.id,
         plan_tier: plan,

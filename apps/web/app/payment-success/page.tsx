@@ -27,7 +27,7 @@ export default function PaymentSuccessPage({
 
         <div className="flex flex-col gap-4 w-full pt-4">
           <Link
-            href="agiworkforce://"
+            href="agiworkforce://open"
             className="inline-flex h-11 items-center justify-center rounded-md bg-white px-8 text-sm font-medium text-black transition-colors hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-700 disabled:pointer-events-none disabled:opacity-50"
           >
             Open Desktop App
