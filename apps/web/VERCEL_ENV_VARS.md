@@ -30,12 +30,17 @@ These environment variables **MUST** be set in Vercel for billing to work:
 ### Server-side (Required for webhooks and admin operations)
 
 - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key (keep secret!)
+  - **Required for**: Production and Preview environments only
+  - **Not required for**: Development (webhooks don't fire to dev environments)
+  - The code handles missing key gracefully in Development
 - `SUPABASE_URL` - Alternative to NEXT_PUBLIC_SUPABASE_URL (fallback)
 
 ## How to Set in Vercel
 
 1. Go to: https://vercel.com/siddharthanagula4/web/settings/environment-variables
-2. Add each variable for **Production**, **Preview**, and **Development** environments
+2. Add each variable for the appropriate environments:
+   - **All environments** (Production, Preview, Development): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, all Stripe variables
+   - **Production and Preview only**: `SUPABASE_SERVICE_ROLE_KEY` (sensitive - not needed in Development)
 3. For sensitive keys (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_SERVICE_ROLE_KEY), ensure they're marked as sensitive
 
 ## Verification
