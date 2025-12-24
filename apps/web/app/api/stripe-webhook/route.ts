@@ -34,6 +34,29 @@ const supabaseAdmin =
       })
     : null;
 
+// Price IDs (Should ideally be shared/ENV driven but hardcoded here for fallback robustness matching checkout/route.ts)
+const STRIPE_PRICE_HOBBY_MONTHLY =
+  process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwx10zEfO6BZMh7thtFU77';
+const STRIPE_PRICE_HOBBY_YEARLY =
+  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwx20zEfO6BZMhbgpxL8TI';
+const STRIPE_PRICE_PRO_MONTHLY =
+  process.env.STRIPE_PRICE_PRO_MONTHLY ?? 'price_1Sgwx20zEfO6BZMh3ix7hivi';
+const STRIPE_PRICE_PRO_YEARLY =
+  process.env.STRIPE_PRICE_PRO_YEARLY ?? 'price_1Sgwx30zEfO6BZMhJXsduOyl';
+const STRIPE_PRICE_MAX_MONTHLY =
+  process.env.STRIPE_PRICE_MAX_MONTHLY ?? 'price_1Sgwx30zEfO6BZMhJqItFYKF';
+const STRIPE_PRICE_MAX_YEARLY =
+  process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW';
+
+function getPlanFromPriceId(priceId: string | null | undefined): string | null {
+  if (!priceId) return null;
+  if (priceId === STRIPE_PRICE_HOBBY_MONTHLY || priceId === STRIPE_PRICE_HOBBY_YEARLY)
+    return 'hobby';
+  if (priceId === STRIPE_PRICE_PRO_MONTHLY || priceId === STRIPE_PRICE_PRO_YEARLY) return 'pro';
+  if (priceId === STRIPE_PRICE_MAX_MONTHLY || priceId === STRIPE_PRICE_MAX_YEARLY) return 'max';
+  return null;
+}
+
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   if (!supabaseAdmin || !stripe) {
     console.error('[billing] upsertSubscriptionFromSession: missing dependencies');
@@ -50,9 +73,13 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     return;
   }
 
-  const planTier = (session.metadata?.['plan_tier'] as string | undefined) ?? 'pro';
+  let planTier = (session.metadata?.['plan_tier'] as string | undefined) ?? 'pro';
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
+
+  // Try to infer plan tier from Price ID if metadata is weird, or just to double check
+  // Note: We need to get stripePriceId first before we can use it.
+  // Re-ordering logic below to get line items first.
 
   console.log('[billing] upsertSubscriptionFromSession: details', {
     supabaseUserId,
@@ -74,6 +101,15 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       }
     } catch (error) {
       console.error('[billing] Failed to retrieve expanded session:', error);
+    }
+  }
+
+  // Refine Plan Tier inference
+  if (!session.metadata?.['plan_tier'] && stripePriceId) {
+    const inferredPlan = getPlanFromPriceId(stripePriceId);
+    if (inferredPlan) {
+      console.log(`[billing] Inferred plan ${inferredPlan} from price ${stripePriceId}`);
+      planTier = inferredPlan;
     }
   }
 
@@ -171,8 +207,18 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   let planTier: string = 'pro';
   if (subscription.metadata?.plan_tier) {
     planTier = subscription.metadata.plan_tier;
+  } else if (stripePriceId) {
+    const inferred = getPlanFromPriceId(stripePriceId);
+    if (inferred) {
+      planTier = inferred;
+    } else {
+      console.log(
+        '[billing] No plan_tier in subscription metadata and unknown price ID, keeping pro default',
+      );
+    }
   }
 
+  // Force update plan tier if we found one
   const updateData: {
     status: string;
     stripe_price_id: string | null;
@@ -181,7 +227,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     cancel_at_period_end: boolean;
     canceled_at: string | null;
     stripe_coupon_id?: string | null;
-    plan_tier?: string;
+    plan_tier?: string; // Always include plan_tier to fix "Free" issue
   } = {
     status: subscription.status,
     stripe_price_id: stripePriceId,
@@ -192,11 +238,8 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
       ? new Date(subscription.canceled_at * 1000).toISOString()
       : null,
     stripe_coupon_id: subscription.discount?.coupon?.id || null,
+    plan_tier: planTier,
   };
-
-  if (subscription.metadata?.plan_tier) {
-    updateData.plan_tier = planTier;
-  }
 
   console.log('[billing] Updating subscription:', { stripeSubId, stripeCustomerId, updateData });
 
@@ -256,6 +299,7 @@ export async function POST(request: Request) {
         await upsertSubscriptionFromSession(session);
         break;
       }
+      case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         await updateSubscriptionFromStripeSubscription(subscription);
