@@ -10,14 +10,14 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
-  console.warn(
-    '[billing] Stripe webhook is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.',
+  console.error(
+    '[billing] FATAL: Stripe webhook is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.',
   );
 }
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn(
-    '[billing] Supabase service role env vars are missing. Webhook cannot update subscriptions.',
+  console.error(
+    '[billing] FATAL: Supabase service role env vars are missing. Webhook cannot update subscriptions.',
   );
 }
 
@@ -35,16 +35,31 @@ const supabaseAdmin =
     : null;
 
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
-  if (!supabaseAdmin || !stripe) return;
+  if (!supabaseAdmin || !stripe) {
+    console.error('[billing] upsertSubscriptionFromSession: missing dependencies');
+    throw new Error('Missing dependencies');
+  }
 
-  const supabaseUserId = session.metadata?.['supabase_user_id'];
+  console.log('[billing] upsertSubscriptionFromSession: Processing session', session.id);
+
+  const supabaseUserId = session.metadata?.['supabase_user_id'] || session.client_reference_id;
   if (!supabaseUserId) {
+    console.warn(
+      '[billing] upsertSubscriptionFromSession: No supabase_user_id in metadata or client_reference_id',
+    );
     return;
   }
 
   const planTier = (session.metadata?.['plan_tier'] as string | undefined) ?? 'pro';
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
+
+  console.log('[billing] upsertSubscriptionFromSession: details', {
+    supabaseUserId,
+    planTier,
+    stripeCustomerId,
+    stripeSubId,
+  });
 
   let stripePriceId: string | null = null;
   if (session.line_items?.data && session.line_items.data.length > 0) {
@@ -108,26 +123,42 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     }
   }
 
-  await supabaseAdmin.from('subscriptions').upsert(
-    {
-      user_id: supabaseUserId,
-      status: status,
-      plan_tier: planTier,
-      stripe_customer_id: stripeCustomerId,
-      stripe_subscription_id: stripeSubId,
-      stripe_price_id: stripePriceId,
-      stripe_coupon_id: stripeCouponId,
-      current_period_start: currentPeriodStart?.toISOString() || null,
-      current_period_end: currentPeriodEnd?.toISOString() || null,
-      cancel_at_period_end: cancelAtPeriodEnd,
-      canceled_at: canceledAt?.toISOString() || null,
-    },
-    { onConflict: 'user_id' },
-  );
+  const subData = {
+    user_id: supabaseUserId,
+    status: status,
+    plan_tier: planTier,
+    stripe_customer_id: stripeCustomerId,
+    stripe_subscription_id: stripeSubId,
+    stripe_price_id: stripePriceId,
+    stripe_coupon_id: stripeCouponId,
+    current_period_start: currentPeriodStart?.toISOString() || null,
+    current_period_end: currentPeriodEnd?.toISOString() || null,
+    cancel_at_period_end: cancelAtPeriodEnd,
+    canceled_at: canceledAt?.toISOString() || null,
+  };
+
+  console.log('[billing] Upserting subscription:', subData);
+
+  const { error } = await supabaseAdmin.from('subscriptions').upsert(subData, {
+    onConflict: 'user_id',
+  });
+
+  if (error) {
+    console.error('[billing] Failed to upsert subscription:', error);
+    throw error;
+  }
 }
 
 async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Subscription) {
-  if (!supabaseAdmin) return;
+  if (!supabaseAdmin) {
+    console.error('[billing] updateSubscriptionFromStripeSubscription: missing supabaseAdmin');
+    throw new Error('Missing dependencies');
+  }
+
+  console.log(
+    '[billing] updateSubscriptionFromStripeSubscription: Processing sub',
+    subscription.id,
+  );
 
   const stripeSubId = subscription.id;
   const stripeCustomerId = subscription.customer as string | null;
@@ -160,41 +191,59 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     canceled_at: subscription.canceled_at
       ? new Date(subscription.canceled_at * 1000).toISOString()
       : null,
-    stripe_coupon_id: subscription.discount?.coupon.id || null,
+    stripe_coupon_id: subscription.discount?.coupon?.id || null,
   };
 
   if (subscription.metadata?.plan_tier) {
     updateData.plan_tier = planTier;
   }
 
+  console.log('[billing] Updating subscription:', { stripeSubId, stripeCustomerId, updateData });
+
+  let error;
   if (stripeSubId) {
-    await supabaseAdmin
+    const res = await supabaseAdmin
       .from('subscriptions')
       .update(updateData)
       .eq('stripe_subscription_id', stripeSubId);
+    error = res.error;
   } else if (stripeCustomerId) {
-    await supabaseAdmin
+    const res = await supabaseAdmin
       .from('subscriptions')
       .update(updateData)
       .eq('stripe_customer_id', stripeCustomerId);
+    error = res.error;
+  }
+
+  if (error) {
+    console.error('[billing] Failed to update subscription:', error);
+    throw error;
   }
 }
 
 export async function POST(request: Request) {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) {
+    console.error('[billing] Stripe not configured');
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
+  }
+
+  if (!supabaseAdmin) {
+    console.error('[billing] Supabase admin not configured');
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
 
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
 
   if (!signature) {
+    console.error('[billing] Missing Stripe signature');
     return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
   }
 
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET);
+    console.log('[billing] Webhook verified, event type:', event.type);
   } catch (err) {
     console.error('[billing] Stripe webhook signature verification failed', err);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
@@ -216,6 +265,8 @@ export async function POST(request: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string | null;
         const stripeSubId = invoice.subscription as string | null;
+
+        console.log('[billing] Payment succeeded for invoice:', invoice.id);
 
         if (supabaseAdmin && stripe) {
           const updateData: {
@@ -256,6 +307,7 @@ export async function POST(request: Request) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         const stripeSubId = subscription.id;
+        console.log('[billing] Subscription deleted:', stripeSubId);
         if (supabaseAdmin) {
           await supabaseAdmin
             .from('subscriptions')
@@ -271,6 +323,7 @@ export async function POST(request: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string | null;
         const stripeSubId = invoice.subscription as string | null;
+        console.log('[billing] Payment failed for invoice:', invoice.id);
 
         if (supabaseAdmin) {
           if (stripeSubId) {

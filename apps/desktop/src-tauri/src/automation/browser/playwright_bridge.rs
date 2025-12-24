@@ -82,6 +82,7 @@ pub struct PlaywrightBridge {
     config: PlaywrightConfig,
     process: Arc<Mutex<Option<Child>>>,
     browsers: Arc<Mutex<HashMap<String, BrowserHandle>>>,
+    browser_processes: Arc<Mutex<HashMap<String, Child>>>,
 }
 
 impl PlaywrightBridge {
@@ -90,6 +91,7 @@ impl PlaywrightBridge {
             config: PlaywrightConfig::default(),
             process: Arc::new(Mutex::new(None)),
             browsers: Arc::new(Mutex::new(HashMap::new())),
+            browser_processes: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -97,7 +99,9 @@ impl PlaywrightBridge {
         Ok(Self {
             config,
             process: Arc::new(Mutex::new(None)),
+
             browsers: Arc::new(Mutex::new(HashMap::new())),
+            browser_processes: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -156,7 +160,7 @@ impl PlaywrightBridge {
 
         let (exe, args) = self.build_browser_command(&browser_type, &options)?;
 
-        let _child = Command::new(&exe)
+        let child = Command::new(&exe)
             .args(&args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -175,18 +179,37 @@ impl PlaywrightBridge {
 
         let mut browsers = self.browsers.lock().await;
         browsers.insert(browser_id.clone(), handle.clone());
+        drop(browsers);
+
+        let mut processes = self.browser_processes.lock().await;
+        processes.insert(browser_id.clone(), child);
 
         tracing::info!("Browser launched with ID: {}", browser_id);
         Ok(handle)
     }
 
     pub async fn close_browser(&self, handle: BrowserHandle) -> Result<()> {
-        tracing::info!("Closing browser: {}", handle.id);
+        self.close_browser_by_id(&handle.id).await
+    }
+
+    pub async fn close_browser_by_id(&self, id: &str) -> Result<()> {
+        tracing::info!("Closing browser: {}", id);
 
         let mut browsers = self.browsers.lock().await;
-        browsers.remove(&handle.id);
+        if let Some(_handle) = browsers.remove(id) {
+            let mut processes = self.browser_processes.lock().await;
+            if let Some(mut child) = processes.remove(id) {
+                tracing::info!("Killing browser process for {}", id);
+                let _ = child.kill();
+                let _ = child.wait();
+            } else {
+                tracing::warn!("Browser process not found for {}", id);
+            }
+        } else {
+            // It might be already closed or doesn't exist
+            tracing::warn!("Browser {} not found to close", id);
+        }
 
-        tracing::info!("Browser {} closed", handle.id);
         Ok(())
     }
 

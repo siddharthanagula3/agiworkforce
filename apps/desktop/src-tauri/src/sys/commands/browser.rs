@@ -1,6 +1,7 @@
 use serde_json::Value;
 use tauri::{command, State};
 
+use crate::automation::browser::playwright_bridge::{BrowserOptions, BrowserType};
 use crate::automation::browser::BrowserState;
 
 pub struct BrowserStateWrapper(pub BrowserState);
@@ -20,10 +21,27 @@ pub async fn browser_init(_state: State<'_, BrowserStateWrapper>) -> Result<(), 
 
 #[command]
 pub async fn browser_launch(
-    _state: State<'_, BrowserStateWrapper>,
-    _options: Option<Value>,
+    state: State<'_, BrowserStateWrapper>,
+    options: Option<Value>,
 ) -> Result<String, String> {
-    Ok("browser_id".to_string())
+    let mut browser_options = BrowserOptions::default();
+
+    if let Some(opts) = options {
+        if let Some(headless) = opts.get("headless").and_then(|v| v.as_bool()) {
+            browser_options.headless = headless;
+        }
+    }
+
+    let handle = state
+        .0
+        .playwright
+        .lock()
+        .await
+        .launch_browser(BrowserType::Chromium, browser_options)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(handle.id)
 }
 
 #[command]
@@ -36,10 +54,55 @@ pub async fn browser_open_tab(
 
 #[command]
 pub async fn browser_close_tab(
-    _state: State<'_, BrowserStateWrapper>,
-    _tab_id: Option<String>,
+    state: State<'_, BrowserStateWrapper>,
+    tab_id: Option<String>,
 ) -> Result<(), String> {
-    Ok(())
+    // For now, if no tab_id is provided or if we treat this as "close browser" context
+    // we can close the browser. But the name is close_tab.
+    // The previous plan mentioned implementing browser_quit or similar.
+    // Let's implement a specific browser_quit command if it doesn't exist, or overload this?
+    // The previous stub was close_tab.
+    // Let's implement a simpler "close browser" if tab_id matches a browser ID or if we just want to close "the" browser.
+
+    // Actually, looking at the plan: "Implement browser_close_tab or browser_quit for cleanup".
+    // I will implement a proper browser_quit command and expose it if needed, but for now
+    // let's try to infer from tab_id if it's a browser ID (since we don't have real tabs yet in this bridge).
+    // The PlaywrightBridge has close_browser(handle).
+
+    // Let's check tab_manager.rs later for tab logic.
+    // For now, let's assume tab_id might be the browser_id in this simplified context
+    // OR we just leave close_tab as a stub for actual tabs and implement a new browser_quit associated with browser_launch.
+
+    // Wait, the user wants "browser launch" implementation.
+    // Let's stick to implementing browser_launch correctly first.
+    // And maybe browser_close specifically for the browser handle.
+    // But since I can't add new commands easily without updating lib.rs invoke handler (which is huge),
+    // I should check if there is a browser_quit or similar.
+    // List of commands in lib.rs includes: browser_init, browser_launch, browser_open_tab...
+    // No explicit browser_quit or browser_close.
+    // So browser_close_tab might be misused or I need to add one.
+    // Or I can use `browser_close_tab` to close the browser if the ID matches.
+
+    // Let's implement a `browser_close` command in this file and assume I'll add it to lib.rs,
+    // OR just use `browser_close_tab` to close the browser for now if it matches a browser handle.
+
+    // BETTER: Just implement `browser_launch` for now as requested.
+    // I will leave `browser_close_tab` alone or implement it if I see `tab_manager` logic.
+    // Let's look at `tab_manager`.
+
+    // Re-reading task: "Implement browser_close_tab or browser_quit for cleanup"
+    // I'll implementation logic to close the browser if the id exists in the bridge.
+
+    if let Some(id) = tab_id {
+        let playwright = state.0.playwright.lock().await;
+        playwright
+            .close_browser_by_id(&id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Ok(())
+    }
 }
 
 #[command]
