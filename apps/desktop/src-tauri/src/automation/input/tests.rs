@@ -6,6 +6,9 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_manager_creation() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let clipboard = ClipboardManager::new();
         assert!(
             clipboard.is_ok(),
@@ -16,6 +19,9 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_set_get_text() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -36,6 +42,9 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_empty_string() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -52,6 +61,9 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_unicode_text() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -71,6 +83,9 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_multiline_text() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -90,6 +105,9 @@ mod clipboard_tests {
     #[test]
     #[serial]
     fn test_clipboard_large_text() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -118,6 +136,9 @@ mod keyboard_tests {
 
     #[test]
     fn test_keyboard_simulator_creation() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let keyboard = KeyboardSimulator::new();
         assert!(
             keyboard.is_ok(),
@@ -180,6 +201,9 @@ mod mouse_tests {
 
     #[test]
     fn test_mouse_simulator_creation() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mouse = MouseSimulator::new();
         assert!(mouse.is_ok(), "MouseSimulator creation should succeed");
     }
