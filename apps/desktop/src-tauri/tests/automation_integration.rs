@@ -9,9 +9,15 @@ fn test_complete_notepad_automation_workflow() {
         .spawn()
         .expect("Failed to launch Notepad");
 
-    thread::sleep(Duration::from_secs(2));
+    // Give it a moment to start
+    thread::sleep(Duration::from_secs(1));
 
+    // Verify it's running
+    assert!(notepad.id() > 0);
+
+    // Clean up
     notepad.kill().expect("Failed to close Notepad");
+    notepad.wait().ok();
 }
 
 #[test]

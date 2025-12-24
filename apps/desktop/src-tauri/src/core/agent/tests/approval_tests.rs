@@ -24,7 +24,7 @@ mod tests {
 
     #[test]
     fn test_auto_approval_rules() {
-        let whitelisted_actions = vec!["read_file", "list_directory", "get_info"];
+        let whitelisted_actions = ["read_file", "list_directory", "get_info"];
         let action = "read_file";
 
         assert!(whitelisted_actions.contains(&action));
@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_approval_required() {
-        let dangerous_actions = vec!["delete", "modify_system", "network_access"];
+        let dangerous_actions = ["delete", "modify_system", "network_access"];
         let action = "delete";
 
         assert!(dangerous_actions.contains(&action));
@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_batch_approval() {
-        let actions = vec!["action1", "action2", "action3"];
+        let actions = ["action1", "action2", "action3"];
         let approved_count = 3;
 
         assert_eq!(actions.len(), approved_count);

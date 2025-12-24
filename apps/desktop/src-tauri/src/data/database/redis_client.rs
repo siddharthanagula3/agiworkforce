@@ -683,7 +683,7 @@ mod tests {
             assert_eq!(exists, Some(true));
 
             let deleted = client
-                .del("test_conn", &vec!["test_key".to_string()])
+                .del("test_conn", &["test_key".to_string()])
                 .await
                 .ok();
             assert_eq!(deleted, Some(1));
@@ -709,7 +709,7 @@ mod tests {
             assert_eq!(length, Some(2));
 
             client
-                .del("test_conn", &vec!["test_list".to_string()])
+                .del("test_conn", &["test_list".to_string()])
                 .await
                 .ok();
             client.disconnect("test_conn").await.ok();
@@ -742,7 +742,7 @@ mod tests {
             }
 
             client
-                .del("test_conn", &vec!["test_hash".to_string()])
+                .del("test_conn", &["test_hash".to_string()])
                 .await
                 .ok();
             client.disconnect("test_conn").await.ok();

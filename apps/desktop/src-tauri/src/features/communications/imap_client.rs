@@ -446,8 +446,10 @@ mod tests {
             size: 1234,
         };
 
-        let mut filter = EmailFilter::default();
-        filter.subject_contains = Some("world".to_string());
+        let mut filter = EmailFilter {
+            subject_contains: Some("world".to_string()),
+            ..Default::default()
+        };
         assert!(matches_filter(&email, &filter));
 
         filter.subject_contains = Some("missing".to_string());

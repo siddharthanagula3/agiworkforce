@@ -135,8 +135,6 @@ mod mcp_integration_tests {
         let _args = json!({
             "path": "/test/path"
         });
-
-        assert!(true);
     }
 
     #[tokio::test]

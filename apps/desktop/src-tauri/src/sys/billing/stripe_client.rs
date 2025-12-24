@@ -1,5 +1,3 @@
-#![cfg(feature = "billing")]
-
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use rusqlite::Connection;
@@ -7,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use stripe::{
     Client, CreateCustomer, CreateSetupIntent, CreateSubscription, Customer, CustomerId, Invoice,
-    InvoiceId, ListInvoices, PaymentIntent, PaymentMethod, PaymentMethodId, SetupIntent,
-    SetupIntentId, SubscriptionId, UpdateCustomer,
+    ListInvoices, PaymentMethod, PaymentMethodId, SetupIntent, SubscriptionId,
 };
 use uuid::Uuid;
 

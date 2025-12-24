@@ -172,11 +172,7 @@ mod tests {
         if let Error::Generic(message) = err {
             assert!(message.contains(".doc"));
         } else {
-            assert!(
-                false,
-                "Expected generic error for legacy doc, got: {:?}",
-                err
-            );
+            panic!("Expected generic error for legacy doc, got: {:?}", err);
         }
     }
 
@@ -186,8 +182,7 @@ mod tests {
         if let Error::Generic(message) = err {
             assert!(message.contains("Unsupported"));
         } else {
-            assert!(
-                false,
+            panic!(
                 "Expected generic error for unsupported extension, got: {:?}",
                 err
             );

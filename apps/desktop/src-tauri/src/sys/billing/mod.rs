@@ -11,6 +11,8 @@ pub use stripe_client::{
     CustomerInfo, InvoiceInfo, PaymentMethodInfo, StripeService, SubscriptionInfo, UsageStats,
 };
 #[cfg(feature = "billing")]
+use tauri::State;
+#[cfg(feature = "billing")]
 pub use webhooks::{WebhookEvent, WebhookHandler};
 
 #[cfg(not(feature = "billing"))]

@@ -30,6 +30,7 @@
     "test": "pnpm -r test",
     "clean": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "clean:build": "pnpm -r exec rm -rf dist",
+    "build": "pnpm build:all",
     "build:all": "pnpm -r --filter='!@agiworkforce/desktop' build",
     "build:desktop": "pnpm --filter @agiworkforce/desktop build",
     "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",

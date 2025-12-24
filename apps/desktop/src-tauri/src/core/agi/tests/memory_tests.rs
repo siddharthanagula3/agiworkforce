@@ -2,9 +2,7 @@
 mod tests {
 
     #[test]
-    fn test_memory_creation() {
-        assert!(true);
-    }
+    fn test_memory_creation() {}
 
     #[test]
     fn test_working_memory_storage() {

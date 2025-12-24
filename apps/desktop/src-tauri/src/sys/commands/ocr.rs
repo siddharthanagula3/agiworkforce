@@ -4,6 +4,8 @@ use tauri::State;
 use crate::sys::commands::AppDatabase;
 
 #[cfg(feature = "ocr")]
+use image::{ImageBuffer, Luma};
+#[cfg(feature = "ocr")]
 use rusqlite::OptionalExtension;
 #[cfg(feature = "ocr")]
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -59,7 +61,6 @@ pub struct MultiLanguageResult {
 
 #[cfg(feature = "ocr")]
 fn preprocess_image(image_path: &str) -> Result<String, String> {
-    use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
     use imageproc::contrast::adaptive_threshold;
     use imageproc::filter::gaussian_blur_f32;
 
@@ -253,7 +254,7 @@ pub async fn ocr_process_region(
         x,
         y,
         width,
-        heigh
+        height
     );
     let start = Instant::now();
 

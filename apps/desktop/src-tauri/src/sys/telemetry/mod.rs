@@ -73,7 +73,7 @@ fn initialize_sentry_if_configured(log_config: &LogConfig) -> Result<Option<Tele
             let guard = init_with_sentry(log_config.clone(), &dsn, &environment)?;
             ::tracing::info!(
                 "Sentry crash reporting enabled (environment: {})",
-                environmen
+                environment
             );
             return Ok(Some(guard));
         } else {

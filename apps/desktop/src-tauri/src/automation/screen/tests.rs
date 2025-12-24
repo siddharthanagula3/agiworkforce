@@ -176,7 +176,7 @@ mod dxgi_tests {
         assert!(result.is_ok(), "list_displays should succeed");
 
         let displays = result.unwrap();
-        assert!(displays.len() > 0, "Should detect at least one display");
+        assert!(!displays.is_empty(), "Should detect at least one display");
     }
 
     #[test]
@@ -305,7 +305,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_complete_screenshot_workflow() {
         let displays = list_displays().expect("Failed to list displays");
-        assert!(displays.len() > 0, "Should have at least one display");
+        assert!(!displays.is_empty(), "Should have at least one display");
 
         let capture = capture_primary_screen().expect("Failed to capture primary screen");
         assert!(capture.pixels.width() > 0);

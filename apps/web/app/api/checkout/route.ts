@@ -8,9 +8,9 @@ type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PRICE_HOBBY_MONTHLY =
-  process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwrv0zEfO6BZMhe6hCXMhI';
+  process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwx10zEfO6BZMh7thtFU77';
 const STRIPE_PRICE_HOBBY_YEARLY =
-  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwrv0zEfO6BZMhF5T4FqgN';
+  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwx20zEfO6BZMhbgpxL8TI';
 const STRIPE_PRICE_PRO_MONTHLY =
   process.env.STRIPE_PRICE_PRO_MONTHLY ?? 'price_1Sgwx20zEfO6BZMh3ix7hivi';
 const STRIPE_PRICE_PRO_YEARLY =

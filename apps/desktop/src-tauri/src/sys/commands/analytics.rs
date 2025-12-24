@@ -642,11 +642,11 @@ mod tests {
     async fn test_feature_flag_get() {
         let result = feature_flag_get("parallel_execution".to_string()).await;
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         let result = feature_flag_get("unknown_flag".to_string()).await;
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[tokio::test]
@@ -655,7 +655,7 @@ mod tests {
         assert!(result.is_ok());
 
         let flags = result.unwrap();
-        assert!(flags.len() > 0);
+        assert!(!flags.is_empty());
         assert_eq!(flags.get("parallel_execution"), Some(&true));
     }
 }

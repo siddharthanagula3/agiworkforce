@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_provider_model_combinations() {
-        let combinations = vec![
+        let combinations = [
             (Provider::OpenAI, "gpt-4"),
             (Provider::OpenAI, "gpt-3.5-turbo"),
             (Provider::Anthropic, "claude-3-opus-20240229"),

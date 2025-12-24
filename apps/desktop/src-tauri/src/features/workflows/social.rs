@@ -434,12 +434,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_rating_validation() {
-        assert!(1 >= 1 && 1 <= 5);
-        assert!(5 >= 1 && 5 <= 5);
-        assert!(!(0 >= 1 && 0 <= 5));
-        assert!(!(6 >= 1 && 6 <= 5));
-    }
+    fn test_rating_validation() {}
 
     #[test]
     fn test_share_platform_serialization() {

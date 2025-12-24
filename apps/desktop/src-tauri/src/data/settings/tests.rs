@@ -225,8 +225,10 @@ mod integration_tests {
     fn test_app_settings_roundtrip() {
         let service = setup_test_service();
 
-        let mut settings = AppSettings::default();
-        settings.default_provider = "anthropic".to_string();
+        let mut settings = AppSettings {
+            default_provider: "anthropic".to_string(),
+            ..Default::default()
+        };
         settings.default_model = "claude-3-5-sonnet".to_string();
         settings.ui_preferences.theme = "dark".to_string();
         settings.ui_preferences.font_size = 16;

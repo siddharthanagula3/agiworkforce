@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod vision_tests {
+mod unit_tests {
     use crate::core::router::{
         ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
     };

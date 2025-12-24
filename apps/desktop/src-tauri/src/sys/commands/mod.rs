@@ -23,6 +23,7 @@ pub mod document;
 pub mod email;
 pub mod embeddings;
 pub mod error_reporting;
+pub mod feedback;
 pub mod file_ops;
 pub mod file_watcher;
 pub mod git;
