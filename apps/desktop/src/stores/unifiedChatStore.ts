@@ -363,7 +363,7 @@ export function dbIdToUuid(dbId: number): string {
     idMappings.uuidToDbId[uuid] = dbId;
     persistIdMappings();
   }
-  return idMappings.dbIdToUuid[dbId];
+  return idMappings.dbIdToUuid[dbId]!;
 }
 
 export function uuidToDbId(uuid: string): number | undefined {
@@ -705,7 +705,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (!state.messagesByConversation[convoId]) {
             state.messagesByConversation[convoId] = [];
           }
-          state.messagesByConversation[convoId].push(newMessage);
+          state.messagesByConversation[convoId]!.push(newMessage);
           const convo = state.conversations.find((c) => c.id === convoId);
           if (convo) {
             convo.lastMessage = newMessage.content;
@@ -742,7 +742,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (!state.messagesByConversation[convoId]) {
             state.messagesByConversation[convoId] = [];
           }
-          state.messagesByConversation[convoId].push(optimisticMessage);
+          state.messagesByConversation[convoId]!.push(optimisticMessage);
           const convo = state.conversations.find((c) => c.id === convoId);
           if (convo) {
             convo.lastMessage = optimisticMessage.content;
@@ -758,10 +758,10 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const applyConfirmation = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === tempId);
             if (idx !== -1 && list[idx]) {
-              delete list[idx].pending;
-              delete list[idx].error;
+              delete list[idx]!.pending;
+              delete list[idx]!.error;
               if (confirmedId) {
-                list[idx].id = confirmedId;
+                list[idx]!.id = confirmedId;
               }
             }
           };
@@ -772,7 +772,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             convoId === state.activeConversationId &&
             state.messagesByConversation[convoId]
           ) {
-            applyConfirmation(state.messagesByConversation[convoId]);
+            applyConfirmation(state.messagesByConversation[convoId]!);
           }
         }),
 
@@ -781,14 +781,14 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const applyFailure = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === tempId);
             if (idx !== -1 && list[idx]) {
-              delete list[idx].pending;
-              list[idx].error = error;
+              delete list[idx]!.pending;
+              list[idx]!.error = error;
             }
           };
           applyFailure(state.messages);
           const convoId = state.activeConversationId;
           if (convoId && state.messagesByConversation[convoId]) {
-            applyFailure(state.messagesByConversation[convoId]);
+            applyFailure(state.messagesByConversation[convoId]!);
           }
         }),
 
@@ -797,14 +797,14 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const applyRetry = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === id);
             if (idx !== -1 && list[idx]) {
-              delete list[idx].error;
-              list[idx].pending = true;
+              delete list[idx]!.error;
+              list[idx]!.pending = true;
             }
           };
           applyRetry(state.messages);
           const convoId = state.activeConversationId;
           if (convoId && state.messagesByConversation[convoId]) {
-            applyRetry(state.messagesByConversation[convoId]);
+            applyRetry(state.messagesByConversation[convoId]!);
           }
         }),
 
@@ -813,13 +813,13 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const applyUpdate = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === id);
             if (idx !== -1 && list[idx]) {
-              Object.assign(list[idx], updates);
+              Object.assign(list[idx]!, updates);
             }
           };
           applyUpdate(state.messages);
           const convoId = state.activeConversationId;
           if (convoId && state.messagesByConversation[convoId]) {
-            applyUpdate(state.messagesByConversation[convoId]);
+            applyUpdate(state.messagesByConversation[convoId]!);
           }
         }),
 
@@ -828,7 +828,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.messages = state.messages.filter((m) => m.id !== id);
           const convoId = state.activeConversationId;
           if (convoId && state.messagesByConversation[convoId]) {
-            state.messagesByConversation[convoId] = state.messagesByConversation[convoId].filter(
+            state.messagesByConversation[convoId] = state.messagesByConversation[convoId]!.filter(
               (m) => m.id !== id,
             );
           }
@@ -869,10 +869,10 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const index = state.terminalCommands.findIndex((cmd) => cmd.id === payload.command_id);
           if (index !== -1 && state.terminalCommands[index]) {
-            state.terminalCommands[index].stdout = payload.stdout;
-            state.terminalCommands[index].stderr = payload.stderr;
-            state.terminalCommands[index].exitCode = payload.exit_code;
-            state.terminalCommands[index].duration = payload.duration_ms;
+            state.terminalCommands[index]!.stdout = payload.stdout;
+            state.terminalCommands[index]!.stderr = payload.stderr;
+            state.terminalCommands[index]!.exitCode = payload.exit_code;
+            state.terminalCommands[index]!.duration = payload.duration_ms;
           }
         }),
 
@@ -904,7 +904,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const index = state.actionLog.findIndex((item) => item.id === id || item.actionId === id);
           if (index !== -1 && state.actionLog[index]) {
             state.actionLog[index] = {
-              ...state.actionLog[index],
+              ...state.actionLog[index]!,
               ...updates,
               updatedAt: new Date(),
             };
@@ -920,7 +920,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const index = state.agents.findIndex((a) => a.id === id);
           if (index !== -1 && state.agents[index]) {
-            Object.assign(state.agents[index], status);
+            Object.assign(state.agents[index]!, status);
           }
         }),
 
@@ -943,7 +943,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const index = state.backgroundTasks.findIndex((t) => t.id === id);
           if (index !== -1 && state.backgroundTasks[index]) {
-            state.backgroundTasks[index].progress = progress;
+            state.backgroundTasks[index]!.progress = progress;
           }
         }),
 
@@ -959,7 +959,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const index = state.backgroundTasks.findIndex((t) => t.id === id);
           if (index !== -1 && state.backgroundTasks[index]) {
-            Object.assign(state.backgroundTasks[index], updates);
+            Object.assign(state.backgroundTasks[index]!, updates);
           }
         }),
 
@@ -1009,7 +1009,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const index = state.plan.steps.findIndex((step) => step.id === stepId);
           if (index !== -1 && state.plan.steps[index]) {
             state.plan.steps[index] = {
-              ...state.plan.steps[index],
+              ...state.plan.steps[index]!,
               ...updates,
             };
             state.plan.updatedAt = new Date();
@@ -1046,8 +1046,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const index = state.pendingApprovals.findIndex((a) => a.id === id);
           if (index !== -1 && state.pendingApprovals[index]) {
-            state.pendingApprovals[index].status = 'approved';
-            state.pendingApprovals[index].approvedAt = new Date();
+            state.pendingApprovals[index]!.status = 'approved';
+            state.pendingApprovals[index]!.approvedAt = new Date();
             state.pendingApprovals.splice(index, 1);
           }
         }),
@@ -1056,9 +1056,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         set((state) => {
           const index = state.pendingApprovals.findIndex((a) => a.id === id);
           if (index !== -1 && state.pendingApprovals[index]) {
-            state.pendingApprovals[index].status = 'rejected';
-            state.pendingApprovals[index].rejectedAt = new Date();
-            state.pendingApprovals[index].rejectionReason = reason;
+            state.pendingApprovals[index]!.status = 'rejected';
+            state.pendingApprovals[index]!.rejectedAt = new Date();
+            state.pendingApprovals[index]!.rejectionReason = reason;
             state.pendingApprovals.splice(index, 1);
           }
         }),

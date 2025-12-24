@@ -1,4 +1,3 @@
-
 import { format as formatDate } from 'date-fns';
 import {
   Calendar,
@@ -50,7 +49,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
     selectedAccountId,
     selectedCalendarId,
     loading,
-    
+
     pendingAuth,
     refreshAccounts,
     beginConnect,
@@ -77,10 +76,8 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
-  
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  
   const eventsByDay = useMemo(() => {
     const grouped: Record<string, CalendarEvent[]> = {};
     events.forEach((event) => {
@@ -92,12 +89,11 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
       }
-      grouped[dateKey].push(event);
+      grouped[dateKey]!.push(event);
     });
     return grouped;
   }, [events]);
 
-  
   const dayEvents = useMemo(() => {
     const dateKey = formatDate(viewDate, 'yyyy-MM-dd');
     return eventsByDay[dateKey] || [];
@@ -111,7 +107,6 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
 
     try {
       await beginConnect(connectConfig);
-      
     } catch (err) {
       toast.error('Failed to start connection flow');
     }
@@ -191,19 +186,16 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
     setEventDialogOpen(true);
   };
 
-  
   useEffect(() => {
     refreshAccounts();
   }, [refreshAccounts]);
 
-  
   useEffect(() => {
     if (selectedCalendarId) {
-      
       const start = new Date(viewDate);
       start.setMonth(start.getMonth() - 1);
       const end = new Date(viewDate);
-      end.setMonth(end.getMonth() + 2); 
+      end.setMonth(end.getMonth() + 2);
 
       refreshEvents({
         start_time: start.toISOString(),

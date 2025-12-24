@@ -278,7 +278,7 @@ export function hasFeature(featureKey: string): boolean {
   const { account, isPro, isEnterprise } = useAccountStore.getState();
 
   if (account.featureFlags[featureKey] !== undefined) {
-    return account.featureFlags[featureKey];
+    return account.featureFlags[featureKey]!;
   }
 
   const featureMap: Record<string, keyof PlanFeatures> = {

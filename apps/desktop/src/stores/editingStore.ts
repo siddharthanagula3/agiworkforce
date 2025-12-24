@@ -220,8 +220,8 @@ export const useEditingStore = create<EditingState>()(
       set((state) => {
         const change = state.pendingChanges.get(filePath);
         if (change && change.hunks[hunkIndex]) {
-          change.hunks[hunkIndex].accepted = true;
-          change.hunks[hunkIndex].rejected = false;
+          change.hunks[hunkIndex]!.accepted = true;
+          change.hunks[hunkIndex]!.rejected = false;
           change.status = 'partial';
         }
       });
@@ -231,8 +231,8 @@ export const useEditingStore = create<EditingState>()(
       set((state) => {
         const change = state.pendingChanges.get(filePath);
         if (change && change.hunks[hunkIndex]) {
-          change.hunks[hunkIndex].accepted = false;
-          change.hunks[hunkIndex].rejected = true;
+          change.hunks[hunkIndex]!.accepted = false;
+          change.hunks[hunkIndex]!.rejected = true;
           change.status = 'partial';
         }
       });
@@ -485,7 +485,7 @@ export const useEditingStore = create<EditingState>()(
       const conflicts = get().conflicts.get(filePath);
       if (!conflicts || !conflicts[conflictIndex]) return;
 
-      const conflict = conflicts[conflictIndex];
+      const conflict = conflicts[conflictIndex]!;
       const lines = change.modifiedContent.split('\n');
 
       let resolvedContent = '';
