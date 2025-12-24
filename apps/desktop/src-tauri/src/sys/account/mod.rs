@@ -5,6 +5,7 @@ use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceLinkRequest {
+    pub device_id: String,
     pub device_name: Option<String>,
     pub device_type: Option<String>,
 }
