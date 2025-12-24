@@ -317,7 +317,7 @@ class FeatureFlagsService {
 
       Object.entries(remoteFlags).forEach(([name, enabled]) => {
         if (this.config.flags[name]) {
-          this.config.flags[name].enabled = enabled;
+          this.config.flags[name]!.enabled = enabled;
         } else {
           this.config.flags[name] = {
             name,

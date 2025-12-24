@@ -204,7 +204,7 @@ export const useExecutionStore = create<ExecutionState>()(
     updateResearchTask: (id, updates) =>
       set((state) => {
         if (state.researchTasks[id]) {
-          Object.assign(state.researchTasks[id], updates);
+          Object.assign(state.researchTasks[id]!, updates);
         }
       }),
 
