@@ -49,8 +49,9 @@ const VALID_PLAN_TIERS: readonly PlanTier[] = [
 ] as const;
 
 export function asPlanTier(value: string | null | undefined): PlanTier {
-  if (value && VALID_PLAN_TIERS.includes(value as PlanTier)) {
-    return value as PlanTier;
+  const normalized = value?.toLowerCase();
+  if (normalized && VALID_PLAN_TIERS.includes(normalized as PlanTier)) {
+    return normalized as PlanTier;
   }
   return 'hobby';
 }

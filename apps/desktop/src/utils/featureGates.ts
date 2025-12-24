@@ -107,7 +107,7 @@ export function checkFeatureAccess(
 }
 
 export function checkUsageLimit(
-  usageType: 'automations' | 'apiCalls' | 'storage',
+  usageType: 'automations' | 'apiCalls' | 'storage' | 'tokenCredits',
   currentUsage: number,
   subscription?: SubscriptionInfo | null,
 ): UsageLimitCheckResult {
@@ -136,6 +136,14 @@ export function checkUsageLimit(
     case 'storage':
       limit = plan.limits.storage;
       break;
+    case 'tokenCredits':
+      limit = plan.limits.tokenCredits;
+      // If limit is 0 (Free plan), it effectively means no credits.
+      if (limit === 0 && plan.id === 'free') {
+        // Free plan might imply "Local only", so strictly no cloud tokens.
+        // But strict limit of 0.
+      }
+      break;
   }
 
   if (limit === null) {
@@ -148,7 +156,9 @@ export function checkUsageLimit(
   }
 
   const withinLimit = currentUsage < limit;
-  const percentageUsed = Math.min(100, (currentUsage / limit) * 100);
+  // Handle edge case where limit is 0 to avoid division by zero if needed, though JS handles it as Infinity
+  const percentageUsed =
+    limit === 0 ? (currentUsage > 0 ? 100 : 0) : Math.min(100, (currentUsage / limit) * 100);
 
   return {
     withinLimit,
@@ -157,7 +167,7 @@ export function checkUsageLimit(
     percentageUsed,
     reason: withinLimit
       ? undefined
-      : `You've reached your ${usageType} limit. Upgrade to increase your limits.`,
+      : `You've reached your ${usageType === 'tokenCredits' ? 'token credit' : usageType} limit. Upgrade to increase your limits.`,
   };
 }
 
@@ -215,7 +225,7 @@ export function getDaysUntilRenewal(subscription: SubscriptionInfo | null): numb
 }
 
 export function shouldShowUsageWarning(
-  usageType: 'automations' | 'apiCalls' | 'storage',
+  usageType: 'automations' | 'apiCalls' | 'storage' | 'tokenCredits',
   currentUsage: number,
   subscription?: SubscriptionInfo | null,
 ): boolean {

@@ -35,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
+import { UpdateSettings } from './UpdateSettings';
 import { canUseAPIKeys } from '../../utils/subscriptionGate';
 import { openPricingPage } from '../../utils/navigation';
 
@@ -625,6 +626,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     Monitor your system performance and resource usage
                   </p>
                   <ResourceMonitor showTools={true} />
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <UpdateSettings />
                 </div>
               </TabsContent>
             </Tabs>

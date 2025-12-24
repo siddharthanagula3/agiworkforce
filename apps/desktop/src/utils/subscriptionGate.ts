@@ -1,4 +1,4 @@
-import type { PlanTier } from '../lib/supabase';
+import { asPlanTier, type PlanTier } from '../lib/supabase';
 import { supabaseAuth } from '../services/supabaseAuth';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
@@ -35,7 +35,7 @@ export function checkSubscriptionGate(): SubscriptionGateResult {
   }
 
   const subscription = authState.subscription;
-  const planTier = subscription.plan_tier as PlanTier;
+  const planTier = asPlanTier(subscription.plan_tier);
   const status = subscription.status as SubscriptionStatus;
 
   const activeStatuses: SubscriptionStatus[] = ['active', 'trialing'];
