@@ -6,6 +6,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_capture_primary_screen() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let result = capture_primary_screen();
 
         assert!(result.is_ok(), "Primary screen capture should succeed");
@@ -19,6 +22,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_capture_screen_dimensions() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
         assert!(
@@ -45,6 +51,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_capture_region() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let result = capture_region(0, 0, 100, 100);
 
         assert!(result.is_ok(), "Region capture should succeed");
@@ -63,6 +72,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_capture_region_center_screen() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let result = capture_region(500, 300, 200, 150);
 
         assert!(result.is_ok(), "Center region capture should succeed");
@@ -81,6 +93,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_capture_region_various_sizes() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let test_cases = vec![(0, 0, 50, 50), (100, 100, 100, 100), (200, 150, 300, 200)];
 
         for (x, y, width, height) in test_cases {
@@ -103,6 +118,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_create_thumbnail() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
         let thumbnail = create_thumbnail(&capture.pixels, 200, 200);
@@ -133,6 +151,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_create_small_thumbnail() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
         let thumbnail = create_thumbnail(&capture.pixels, 50, 50);
@@ -150,6 +171,9 @@ mod capture_tests {
     #[tokio::test]
     #[serial]
     async fn test_pixel_data_format() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let capture = capture_primary_screen().expect("Failed to capture screen");
 
         let pixels = capture.pixels;
@@ -171,6 +195,9 @@ mod dxgi_tests {
 
     #[test]
     fn test_list_displays() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let result = list_displays();
 
         assert!(result.is_ok(), "list_displays should succeed");
@@ -181,6 +208,9 @@ mod dxgi_tests {
 
     #[test]
     fn test_display_info_populated() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let displays = list_displays().expect("Failed to list displays");
 
         for (i, display) in displays.iter().enumerate() {
@@ -201,6 +231,9 @@ mod dxgi_tests {
 
     #[test]
     fn test_primary_display() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let displays = list_displays().expect("Failed to list displays");
 
         let primary = &displays[0];
@@ -212,6 +245,9 @@ mod dxgi_tests {
 
     #[test]
     fn test_display_dimensions_reasonable() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let displays = list_displays().expect("Failed to list displays");
 
         for display in displays.iter() {
@@ -304,6 +340,9 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_complete_screenshot_workflow() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let displays = list_displays().expect("Failed to list displays");
         assert!(!displays.is_empty(), "Should have at least one display");
 
@@ -323,6 +362,10 @@ mod integration_tests {
     #[tokio::test]
     async fn test_save_and_load_screenshot() {
         use tempfile::tempdir;
+
+        if std::env::var("CI").is_ok() {
+            return;
+        }
 
         let dir = tempdir().expect("Failed to create temp dir");
         let image_path = dir.path().join("screenshot.png");

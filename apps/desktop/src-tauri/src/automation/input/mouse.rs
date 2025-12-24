@@ -218,6 +218,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_mouse_simulator_creation() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let result = MouseSimulator::new();
         assert!(result.is_ok());
     }

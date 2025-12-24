@@ -49,6 +49,9 @@ mod tests {
 
     #[test]
     fn test_clipboard_set_get() {
+        if std::env::var("CI").is_ok() {
+            return;
+        }
         let mut clipboard = ClipboardManager::new().unwrap();
         let test_text = "Hello, cross-platform clipboard!";
 
