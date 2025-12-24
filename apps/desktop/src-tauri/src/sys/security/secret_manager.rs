@@ -1,13 +1,16 @@
 use super::encryption::{decrypt_secret, encrypt_secret, EncryptedSecret};
 use base64::{engine::general_purpose, Engine as _};
+#[cfg(not(test))]
 use keyring::Entry;
 use rand::RngCore;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, warn};
 
+#[allow(dead_code)]
 const JWT_SECRET_KEY: &str = "agiworkforce.jwt_secret";
 const JWT_SECRET_DB_KEY: &str = "jwt_secret";
+#[allow(dead_code)]
 const DB_ENCRYPTION_KEY_NAME: &str = "agiworkforce.db_encryption_key";
 const SERVICE_NAME: &str = "AGI Workforce";
 const SECRET_LENGTH: usize = 64;
@@ -42,6 +45,7 @@ pub enum SecretError {
 
 pub struct SecretManager {
     db_conn: Arc<Mutex<Connection>>,
+    #[allow(dead_code)]
     service_name: String,
 }
 
@@ -169,23 +173,38 @@ impl SecretManager {
     }
 
     fn store_secret_in_keyring(&self, secret: &str) -> Result<(), SecretError> {
-        let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
-            .map_err(SecretError::KeyringStoreError)?;
+        #[cfg(test)]
+        {
+            let _ = secret;
+            return Ok(());
+        }
 
-        entry
-            .set_password(secret)
-            .map_err(SecretError::KeyringStoreError)?;
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
+                .map_err(SecretError::KeyringStoreError)?;
 
-        Ok(())
+            entry
+                .set_password(secret)
+                .map_err(SecretError::KeyringStoreError)?;
+
+            Ok(())
+        }
     }
 
     fn get_secret_from_keyring(&self) -> Result<String, SecretError> {
-        let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
-            .map_err(SecretError::KeyringRetrieveError)?;
+        #[cfg(test)]
+        return Err(SecretError::SecretNotFound);
 
-        entry
-            .get_password()
-            .map_err(SecretError::KeyringRetrieveError)
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, JWT_SECRET_KEY)
+                .map_err(SecretError::KeyringRetrieveError)?;
+
+            entry
+                .get_password()
+                .map_err(SecretError::KeyringRetrieveError)
+        }
     }
 
     fn store_secret_in_database(&self, secret: &str) -> Result<(), SecretError> {
@@ -234,45 +253,58 @@ impl SecretManager {
     }
 
     fn get_or_create_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
-        if let Ok(key) = self.get_db_encryption_key() {
-            return Ok(key);
+        #[cfg(test)]
+        return Ok(vec![1u8; ENCRYPTION_KEY_LENGTH]);
+
+        #[cfg(not(test))]
+        {
+            if let Ok(key) = self.get_db_encryption_key() {
+                return Ok(key);
+            }
+
+            let mut key_bytes = vec![0u8; ENCRYPTION_KEY_LENGTH];
+            rand::thread_rng()
+                .try_fill_bytes(&mut key_bytes)
+                .map_err(|_| SecretError::GenerationError)?;
+
+            let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
+                .map_err(SecretError::KeyringStoreError)?;
+
+            let key_base64 = general_purpose::STANDARD.encode(&key_bytes);
+            entry
+                .set_password(&key_base64)
+                .map_err(SecretError::KeyringStoreError)?;
+
+            info!("Generated new database encryption key");
+            Ok(key_bytes)
         }
-
-        let mut key_bytes = vec![0u8; ENCRYPTION_KEY_LENGTH];
-        rand::thread_rng()
-            .try_fill_bytes(&mut key_bytes)
-            .map_err(|_| SecretError::GenerationError)?;
-
-        let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
-            .map_err(SecretError::KeyringStoreError)?;
-
-        let key_base64 = general_purpose::STANDARD.encode(&key_bytes);
-        entry
-            .set_password(&key_base64)
-            .map_err(SecretError::KeyringStoreError)?;
-
-        info!("Generated new database encryption key");
-        Ok(key_bytes)
     }
 
     fn get_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
-        let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
-            .map_err(SecretError::KeyringRetrieveError)?;
+        #[cfg(test)]
+        return Ok(vec![1u8; ENCRYPTION_KEY_LENGTH]);
 
-        let key_base64 = entry
-            .get_password()
-            .map_err(SecretError::KeyringRetrieveError)?;
+        #[cfg(not(test))]
+        {
+            let entry = Entry::new(&self.service_name, DB_ENCRYPTION_KEY_NAME)
+                .map_err(SecretError::KeyringRetrieveError)?;
 
-        general_purpose::STANDARD
-            .decode(&key_base64)
-            .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)))
+            let key_base64 = entry
+                .get_password()
+                .map_err(SecretError::KeyringRetrieveError)?;
+
+            general_purpose::STANDARD
+                .decode(&key_base64)
+                .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)))
+        }
     }
 
     #[cfg(test)]
     pub fn delete_jwt_secret(&self) -> Result<(), SecretError> {
-        if let Ok(entry) = Entry::new(&self.service_name, JWT_SECRET_KEY) {
-            let _ = entry.delete_password();
-        }
+        // In tests, we don't actually touch the keyring
+        // if let Ok(entry) = Entry::new(&self.service_name, JWT_SECRET_KEY) {
+        //     let _ = entry.delete_password();
+        // }
 
         let conn = self.db_conn.lock().unwrap();
         let _ = conn.execute(
