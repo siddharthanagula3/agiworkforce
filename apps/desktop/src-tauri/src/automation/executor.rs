@@ -7,6 +7,7 @@ use tokio::time::sleep;
 use super::types::ElementSelector;
 use super::InspectorService;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
+#[allow(unused_imports)]
 use crate::automation::inspector::UIInspector;
 use crate::automation::screen::{capture_primary_screen, capture_region};
 
