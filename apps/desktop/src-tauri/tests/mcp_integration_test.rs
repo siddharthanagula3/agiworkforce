@@ -7,7 +7,7 @@ mod mcp_integration_tests {
 
     #[test]
     fn test_mcp_client_creation() {
-        use agiworkforce_desktop::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
 
         let client = McpClient::new();
         assert_eq!(client.list_servers().len(), 0);
@@ -15,7 +15,7 @@ mod mcp_integration_tests {
 
     #[test]
     fn test_mcp_server_configuration() {
-        use agiworkforce_desktop::mcp::config::{McpServerConfig, McpServersConfig};
+        use agiworkforce_desktop::core::mcp::config::{McpServerConfig, McpServersConfig};
 
         let mut servers = HashMap::new();
         servers.insert(
@@ -43,8 +43,8 @@ mod mcp_integration_tests {
 
     #[test]
     fn test_tool_registry_creation() {
-        use agiworkforce_desktop::mcp::client::McpClient;
-        use agiworkforce_desktop::mcp::registry::McpToolRegistry;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::registry::McpToolRegistry;
         use std::sync::Arc;
 
         let client = Arc::new(McpClient::new());
@@ -53,8 +53,8 @@ mod mcp_integration_tests {
 
     #[tokio::test]
     async fn test_server_connection() {
-        use agiworkforce_desktop::mcp::client::McpClient;
-        use agiworkforce_desktop::mcp::config::McpServerConfig;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::config::McpServerConfig;
         use std::collections::HashMap;
 
         let client = McpClient::new();
@@ -80,8 +80,8 @@ mod mcp_integration_tests {
 
     #[tokio::test]
     async fn test_tool_listing() {
-        use agiworkforce_desktop::mcp::client::McpClient;
-        use agiworkforce_desktop::mcp::config::McpServerConfig;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::config::McpServerConfig;
         use std::collections::HashMap;
 
         let client = McpClient::new();
@@ -111,8 +111,8 @@ mod mcp_integration_tests {
 
     #[tokio::test]
     async fn test_tool_execution() {
-        use agiworkforce_desktop::mcp::client::McpClient;
-        use agiworkforce_desktop::mcp::config::McpServerConfig;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::config::McpServerConfig;
         use std::collections::HashMap;
 
         let client = McpClient::new();
@@ -141,8 +141,8 @@ mod mcp_integration_tests {
 
     #[tokio::test]
     async fn test_tool_search() {
-        use agiworkforce_desktop::mcp::client::McpClient;
-        use agiworkforce_desktop::mcp::config::McpServerConfig;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::config::McpServerConfig;
         use std::collections::HashMap;
 
         let client = McpClient::new();
@@ -171,8 +171,8 @@ mod mcp_integration_tests {
 
     #[tokio::test]
     async fn test_server_disconnection() {
-        use agiworkforce_desktop::mcp::client::McpClient;
-        use agiworkforce_desktop::mcp::config::McpServerConfig;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::config::McpServerConfig;
         use std::collections::HashMap;
 
         let client = McpClient::new();
@@ -201,8 +201,8 @@ mod mcp_integration_tests {
 
     #[test]
     fn test_mcp_to_agi_tool_conversion() {
-        use agiworkforce_desktop::mcp::client::{McpClient, McpTool};
-        use agiworkforce_desktop::mcp::registry::McpToolRegistry;
+        use agiworkforce_desktop::core::mcp::client::{McpClient, McpTool};
+        use agiworkforce_desktop::core::mcp::registry::McpToolRegistry;
         use std::sync::Arc;
 
         let client = Arc::new(McpClient::new());
@@ -234,7 +234,7 @@ mod mcp_integration_tests {
 
     #[tokio::test]
     async fn test_nonexistent_server_error() {
-        use agiworkforce_desktop::mcp::client::McpClient;
+        use agiworkforce_desktop::core::mcp::client::McpClient;
 
         let client = McpClient::new();
 
@@ -244,7 +244,7 @@ mod mcp_integration_tests {
 
     #[test]
     fn test_config_serialization() {
-        use agiworkforce_desktop::mcp::config::{McpServerConfig, McpServersConfig};
+        use agiworkforce_desktop::core::mcp::config::{McpServerConfig, McpServersConfig};
 
         let mut servers = HashMap::new();
         servers.insert(

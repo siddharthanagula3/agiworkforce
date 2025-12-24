@@ -48,7 +48,11 @@ impl VisionAutomation {
 
             let mut matches = Vec::new();
             if fuzzy {
-                if ocr_result.text.to_lowercase().contains(&query.to_lowercase()) {
+                if ocr_result
+                    .text
+                    .to_lowercase()
+                    .contains(&query.to_lowercase())
+                {
                     matches.push((960, 540, ocr_result.text.clone()));
                 }
             } else {

@@ -338,7 +338,7 @@ impl WorkflowPublisher {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stm
+        let workflows = stmt
             .query_map(rusqlite::params![user_id], Self::row_to_published_workflow)
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()

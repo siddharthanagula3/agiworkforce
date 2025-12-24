@@ -396,7 +396,9 @@ describe('AGI Store', () => {
 
       try {
         await store.executeGoal('invalid-id');
-      } catch (error) {}
+      } catch (error) {
+        // ignore error
+      }
 
       expect(store.goals).toHaveLength(initialGoalsCount);
       expect(store.getGoal(goalId)).toBeDefined();

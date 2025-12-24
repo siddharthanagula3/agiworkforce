@@ -63,6 +63,7 @@ export async function uploadFiles(
 
 export const deleteFile = async (_fileId: string): Promise<void> => {
   try {
+    // TODO: Implement file deletion
   } catch (error) {
     throw new Error(`Failed to delete file: ${error}`);
   }

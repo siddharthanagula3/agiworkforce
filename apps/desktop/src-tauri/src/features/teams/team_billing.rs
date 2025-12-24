@@ -209,7 +209,7 @@ impl TeamBillingManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let billing = stm
+        let billing = stmt
             .query_row(params![team_id], |row| {
                 let plan_str: String = row.get(1)?;
                 let plan_tier = BillingPlan::from_str(&plan_str).unwrap_or(BillingPlan::Team);
@@ -359,7 +359,7 @@ impl TeamBillingManager {
         if (new_seat_count as i64) < member_count {
             return Err(format!(
                 "Cannot remove {} seats. New total ({}) would be less than current members ({})",
-                count, new_seat_count, member_coun
+                count, new_seat_count, member_count
             ));
         }
 

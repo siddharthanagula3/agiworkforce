@@ -164,7 +164,10 @@ impl ContextManager {
         for pattern in source_patterns {
             let path = root.join(pattern);
             if path.exists() && path.is_dir() {
-                self.project_context.project_structure.source_dirs.push(path);
+                self.project_context
+                    .project_structure
+                    .source_dirs
+                    .push(path);
             }
         }
 
@@ -207,13 +210,17 @@ impl ContextManager {
                             if content.contains("export const")
                                 || content.contains("export function")
                             {
-                                self.project_context.patterns.push("ES6 modules".to_string());
+                                self.project_context
+                                    .patterns
+                                    .push("ES6 modules".to_string());
                             }
                             if content.contains("class ") {
                                 self.project_context.patterns.push("Classes".to_string());
                             }
                             if content.contains("async ") || content.contains(".then(") {
-                                self.project_context.patterns.push("Async/await".to_string());
+                                self.project_context
+                                    .patterns
+                                    .push("Async/await".to_string());
                             }
                         }
                     }

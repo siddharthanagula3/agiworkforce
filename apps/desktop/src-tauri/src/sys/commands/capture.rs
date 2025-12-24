@@ -224,7 +224,7 @@ pub async fn capture_get_history(
     let captures: Result<Vec<CaptureRecord>, String> = if let Some(conv_id) = conversation_id {
         let mut stmt = conn
             .prepare(
-                "SELECT id, conversation_id, capture_type, file_path, thumbnail_path, ocr_text, ocr_confidence, metadata, created_a
+                "SELECT id, conversation_id, capture_type, file_path, thumbnail_path, ocr_text, ocr_confidence, metadata, created_at
                  FROM captures
                  WHERE conversation_id = ?1
                  ORDER BY created_at DESC
@@ -232,7 +232,7 @@ pub async fn capture_get_history(
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let rows = stm
+        let rows = stmt
             .query_map(rusqlite::params![conv_id, limit], |row| {
                 Ok(CaptureRecord {
                     id: row.get(0)?,
@@ -253,14 +253,14 @@ pub async fn capture_get_history(
     } else {
         let mut stmt = conn
             .prepare(
-                "SELECT id, conversation_id, capture_type, file_path, thumbnail_path, ocr_text, ocr_confidence, metadata, created_a
+                "SELECT id, conversation_id, capture_type, file_path, thumbnail_path, ocr_text, ocr_confidence, metadata, created_at
                  FROM captures
                  ORDER BY created_at DESC
                  LIMIT ?1",
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let rows = stm
+        let rows = stmt
             .query_map(rusqlite::params![limit], |row| {
                 Ok(CaptureRecord {
                     id: row.get(0)?,

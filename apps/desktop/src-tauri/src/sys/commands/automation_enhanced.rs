@@ -234,12 +234,13 @@ pub async fn automation_save_recording_as_script(
         .actions
         .into_iter()
         .map(|action| {
-            let coordinates = action
-                .target
-                .map(|target| crate::automation::executor::Coordinates {
-                    x: target.x,
-                    y: target.y,
-                });
+            let coordinates =
+                action
+                    .target
+                    .map(|target| crate::automation::executor::Coordinates {
+                        x: target.x,
+                        y: target.y,
+                    });
 
             crate::automation::executor::ScriptAction {
                 id: action.id,

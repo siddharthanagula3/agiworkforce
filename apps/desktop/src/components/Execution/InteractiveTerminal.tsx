@@ -291,6 +291,7 @@ export function InteractiveTerminal({
       } else if (data === '\x1b[B') {
         navigateHistory(1);
       } else if (data === '\x1b[C' || data === '\x1b[D') {
+        // ignore arrows for now
       } else if (data === '\x03') {
         terminal.writeln('^C');
         setCurrentCommand('');
@@ -322,7 +323,7 @@ export function InteractiveTerminal({
         className,
       )}
     >
-      {}
+      {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2 bg-gradient-to-r from-gray-900 to-gray-950">
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-4 w-4 text-emerald-400" />
@@ -336,7 +337,7 @@ export function InteractiveTerminal({
         </div>
 
         <div className="flex items-center gap-1">
-          {}
+          {/* Suggestion Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -352,7 +353,7 @@ export function InteractiveTerminal({
             )}
           </Button>
 
-          {}
+          {/* Search Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -363,7 +364,7 @@ export function InteractiveTerminal({
             <Search className="h-4 w-4" />
           </Button>
 
-          {}
+          {/* Copy Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -374,7 +375,7 @@ export function InteractiveTerminal({
             <Copy className="h-4 w-4" />
           </Button>
 
-          {}
+          {/* Scroll Lock Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -385,7 +386,7 @@ export function InteractiveTerminal({
             {scrollLock ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           </Button>
 
-          {}
+          {/* Clear Button */}
           <Button
             size="sm"
             variant="ghost"
@@ -398,7 +399,7 @@ export function InteractiveTerminal({
         </div>
       </div>
 
-      {}
+      {/* AI Suggestion Banner */}
       {aiSuggestion && (
         <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-emerald-400" />
@@ -414,7 +415,7 @@ export function InteractiveTerminal({
         </div>
       )}
 
-      {}
+      {/* Search Filter */}
       {searchVisible && (
         <div className="border-b border-gray-800 px-4 py-2 bg-gray-900/50">
           <div className="flex items-center gap-2">
@@ -441,12 +442,12 @@ export function InteractiveTerminal({
         </div>
       )}
 
-      {}
+      {/* Terminal Viewport */}
       <div className="flex-1 overflow-hidden p-2">
         <div ref={terminalRef} className="h-full w-full" />
       </div>
 
-      {}
+      {/* Footer Status */}
       <div className="px-4 py-1.5 bg-gray-900/50 border-t border-gray-800 text-[10px] text-gray-500 flex items-center gap-4">
         <span>↑↓ History</span>
         <span>Ctrl+C Cancel</span>

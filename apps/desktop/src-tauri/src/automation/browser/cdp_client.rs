@@ -56,7 +56,7 @@ impl CdpClient {
         tracing::info!("Connecting to CDP endpoint: {}", self.ws_url);
 
         let (socket, response) = connect_async(url)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to connect to CDP: {}", e)))?;
 
         tracing::info!("CDP connection established: {:?}", response.status());

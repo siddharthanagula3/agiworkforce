@@ -157,7 +157,7 @@ impl TeamResourceManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let resources = stm
+        let resources = stmt
             .query_map(params![team_id], |row| {
                 let resource_type_str: String = row.get(1)?;
                 let resource_type =
@@ -202,7 +202,7 @@ impl TeamResourceManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let resources = stm
+        let resources = stmt
             .query_map(params![team_id, resource_type.as_str()], |row| {
                 let resource_type_str: String = row.get(1)?;
                 let resource_type =
@@ -269,7 +269,7 @@ impl TeamResourceManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let resource = stm
+        let resource = stmt
             .query_row(
                 params![team_id, resource_type.as_str(), resource_id],
                 |row| {
@@ -395,7 +395,7 @@ impl TeamResourceManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let resources = stm
+        let resources = stmt
             .query_map(params![team_id, search_pattern], |row| {
                 let resource_type_str: String = row.get(1)?;
                 let resource_type =
@@ -441,7 +441,7 @@ impl TeamResourceManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let resources = stm
+        let resources = stmt
             .query_map(params![team_id, limit as i64], |row| {
                 let resource_type_str: String = row.get(1)?;
                 let resource_type =
@@ -487,7 +487,7 @@ impl TeamResourceManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let resources = stm
+        let resources = stmt
             .query_map(params![team_id, limit as i64], |row| {
                 let resource_type_str: String = row.get(1)?;
                 let resource_type =

@@ -77,7 +77,7 @@ impl WorkflowMarketplace {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stm
+        let workflows = stmt
             .query_map(
                 rusqlite::params![limit as i64],
                 Self::row_to_published_workflow,
@@ -111,7 +111,7 @@ impl WorkflowMarketplace {
              LIMIT ?2"
         ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stm
+        let workflows = stmt
             .query_map(rusqlite::params![seven_days_ago, limit as i64], |row| {
                 Self::row_to_published_workflow(row)
             })
@@ -183,7 +183,7 @@ impl WorkflowMarketplace {
 
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let workflows = stm
+        let workflows = stmt
             .query_map(&*param_refs, Self::row_to_published_workflow)
             .map_err(|e| format!("Failed to query workflows: {}", e))?
             .collect::<Result<Vec<_>, _>>()
@@ -258,7 +258,7 @@ impl WorkflowMarketplace {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stm
+        let workflows = stmt
             .query_map(
                 rusqlite::params![creator_id],
                 Self::row_to_published_workflow,
@@ -294,7 +294,7 @@ impl WorkflowMarketplace {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let workflows = stm
+        let workflows = stmt
             .query_map(
                 rusqlite::params![category.to_string(), limit as i64],
                 Self::row_to_published_workflow,
@@ -318,7 +318,7 @@ impl WorkflowMarketplace {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let counts = stm
+        let counts = stmt
             .query_map([], |row| {
                 let category_str: String = row.get(0)?;
                 let count: i64 = row.get(1)?;
@@ -344,7 +344,7 @@ impl WorkflowMarketplace {
         let mut tag_counts: std::collections::HashMap<String, u64> =
             std::collections::HashMap::new();
 
-        let rows = stm
+        let rows = stmt
             .query_map([], |row| {
                 let tags_json: String = row.get(0)?;
                 Ok(tags_json)

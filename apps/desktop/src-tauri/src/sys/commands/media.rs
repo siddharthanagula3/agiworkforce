@@ -120,9 +120,9 @@ pub async fn media_generate_image(
     };
 
     let started = Instant::now();
-    let response = clien
+    let response = client
         .generate_image(&build_request)
-        .awai
+        .await
         .map_err(|e| format!("Image generation failed: {}", e))?;
     let latency_ms = started.elapsed().as_millis() as u64;
 
@@ -172,9 +172,9 @@ pub async fn media_generate_video(
     };
 
     let started = Instant::now();
-    let initial = clien
+    let initial = client
         .generate_video(&build_request)
-        .awai
+        .await
         .map_err(|e| format!("Video generation failed: {}", e))?;
 
     let mut final_response = initial.clone();
@@ -182,9 +182,9 @@ pub async fn media_generate_video(
         initial.status,
         VideoStatus::Processing | VideoStatus::Queued
     ) {
-        final_response = clien
+        final_response = client
             .wait_for_completion(&initial.id, 240)
-            .awai
+            .await
             .map_err(|e| format!("Video generation polling failed: {}", e))?;
     }
 

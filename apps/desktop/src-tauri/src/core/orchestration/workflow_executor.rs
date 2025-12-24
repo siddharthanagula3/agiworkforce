@@ -157,7 +157,9 @@ impl WorkflowExecutor {
             )?;
 
             let result = match node {
-                WorkflowNode::AgentNode { data, .. } => self.execute_agent_node(data, context).await,
+                WorkflowNode::AgentNode { data, .. } => {
+                    self.execute_agent_node(data, context).await
+                }
                 WorkflowNode::DecisionNode { data, .. } => {
                     self.execute_decision_node(workflow, data, context).await
                 }

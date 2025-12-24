@@ -130,7 +130,7 @@ pub async fn generate_code_embeddings(
     for chunk in chunks {
         let embedding = generator_guard
             .generate(&chunk.content)
-            .awai
+            .await
             .map_err(|e| format!("Failed to generate embedding: {}", e))?;
 
         let metadata = EmbeddingMetadata::new(
@@ -167,7 +167,7 @@ pub async fn semantic_search_codebase(
 
     let query_embedding = generator_guard
         .generate(&query)
-        .awai
+        .await
         .map_err(|e| format!("Failed to generate query embedding: {}", e))?;
 
     drop(generator_guard);
@@ -229,7 +229,7 @@ pub async fn index_workspace(
 
     indexer_guard
         .index_workspace()
-        .awai
+        .await
         .map_err(|e| format!("Failed to index workspace: {}", e))
 }
 
@@ -247,7 +247,7 @@ pub async fn index_file(
     let path = PathBuf::from(file_path);
     indexer_guard
         .index_file(&path)
-        .awai
+        .await
         .map_err(|e| format!("Failed to index file: {}", e))
 }
 
@@ -278,7 +278,7 @@ pub async fn on_file_changed(
     let path = PathBuf::from(file_path);
     indexer_guard
         .on_file_changed(&path)
-        .awai
+        .await
         .map_err(|e| format!("Failed to handle file change: {}", e))
 }
 
@@ -296,6 +296,6 @@ pub async fn on_file_deleted(
     let path = PathBuf::from(file_path);
     indexer_guard
         .on_file_deleted(&path)
-        .awai
+        .await
         .map_err(|e| format!("Failed to handle file deletion: {}", e))
 }

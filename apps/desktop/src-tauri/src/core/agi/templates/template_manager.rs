@@ -193,7 +193,7 @@ impl TemplateManager {
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
                     default_prompts, success_criteria, estimated_duration_ms,
-                    difficulty_level, install_count, created_a
+                    difficulty_level, install_count, created_at
              FROM agent_templates
              ORDER BY install_count DESC, name ASC",
         )?;
@@ -240,7 +240,7 @@ impl TemplateManager {
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
                     default_prompts, success_criteria, estimated_duration_ms,
-                    difficulty_level, install_count, created_a
+                    difficulty_level, install_count, created_at
              FROM agent_templates
              WHERE id = ?1",
         )?;
@@ -301,7 +301,7 @@ impl TemplateManager {
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
                     default_prompts, success_criteria, estimated_duration_ms,
-                    difficulty_level, install_count, created_a
+                    difficulty_level, install_count, created_at
              FROM agent_templates
              WHERE category = ?1
              ORDER BY install_count DESC, name ASC",
@@ -370,7 +370,7 @@ impl TemplateManager {
         let mut stmt = conn.prepare(
             "SELECT t.id, t.name, t.category, t.description, t.icon, t.tools, t.workflow,
                     t.default_prompts, t.success_criteria, t.estimated_duration_ms,
-                    t.difficulty_level, t.install_count, t.created_a
+                    t.difficulty_level, t.install_count, t.created_at
              FROM agent_templates
              INNER JOIN template_installs i ON t.id = i.template_id
              WHERE i.user_id = ?1
@@ -421,7 +421,7 @@ impl TemplateManager {
         let mut stmt = conn.prepare(
             "SELECT id, name, category, description, icon, tools, workflow,
                     default_prompts, success_criteria, estimated_duration_ms,
-                    difficulty_level, install_count, created_a
+                    difficulty_level, install_count, created_at
              FROM agent_templates
              WHERE LOWER(name) LIKE ?1 OR LOWER(description) LIKE ?1
              ORDER BY install_count DESC, name ASC",

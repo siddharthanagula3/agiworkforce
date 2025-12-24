@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result};
 fn setup_test_db() -> Result<Connection> {
     let conn = Connection::open_in_memory()?;
 
-    agiworkforce_desktop::db::migrations::run_migrations(&conn)?;
+    agiworkforce_desktop::data::db::migrations::run_migrations(&conn)?;
 
     Ok(conn)
 }

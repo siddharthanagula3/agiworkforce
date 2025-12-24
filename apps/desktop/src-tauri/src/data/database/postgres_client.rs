@@ -52,12 +52,12 @@ impl PostgresClient {
 
         let client = pool
             .get()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get connection: {}", e)))?;
 
         client
             .query("SELECT 1", &[])
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Connection test failed: {}", e)))?;
 
         tracing::info!("PostgreSQL connection test successful");
@@ -84,12 +84,12 @@ impl PostgresClient {
         let pool = self.get_pool(connection_id).await?;
         let client = pool
             .get()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get connection: {}", e)))?;
 
         let rows = client
             .query(sql, &[])
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Query failed: {}", e)))?;
 
         let result = Self::rows_to_query_result(rows, start.elapsed().as_millis())?;
@@ -116,7 +116,7 @@ impl PostgresClient {
         let pool = self.get_pool(connection_id).await?;
         let client = pool
             .get()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get connection: {}", e)))?;
 
         let pg_params = Self::json_params_to_sql(params)?;
@@ -127,7 +127,7 @@ impl PostgresClient {
 
         let rows = client
             .query(sql, &param_refs)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Prepared statement failed: {}", e)))?;
 
         let result = Self::rows_to_query_result(rows, start.elapsed().as_millis())?;
@@ -151,12 +151,12 @@ impl PostgresClient {
         let pool = self.get_pool(connection_id).await?;
         let mut client = pool
             .get()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get connection: {}", e)))?;
 
         let transaction = client
             .transaction()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to start transaction: {}", e)))?;
 
         let mut results = Vec::new();
@@ -166,7 +166,7 @@ impl PostgresClient {
 
             let rows = transaction
                 .query(query, &[])
-                .awai
+                .await
                 .map_err(|e| Error::Other(format!("Query failed in transaction: {}", e)))?;
 
             let result = Self::rows_to_query_result(rows, start.elapsed().as_millis())?;
@@ -175,7 +175,7 @@ impl PostgresClient {
 
         transaction
             .commit()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to commit transaction: {}", e)))?;
 
         tracing::info!("Batch execution completed successfully");
@@ -367,7 +367,7 @@ mod tests {
 
         client.create_pool("test", config).await.unwrap();
 
-        let result = clien
+        let result = client
             .execute_query("test", "SELECT 1 as num, 'hello' as text")
             .await;
         assert!(result.is_ok());

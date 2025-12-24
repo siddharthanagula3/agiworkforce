@@ -318,12 +318,12 @@ mod tests {
         let manager = TabManager::new();
         manager
             .open_tab("https://api.agiworkforce.com")
-            .awai
+            .await
             .unwrap();
 
         manager
             .open_tab("https://api.agiworkforce.com")
-            .awai
+            .await
             .unwrap();
 
         let tabs = manager.list_tabs().await.unwrap();
@@ -335,7 +335,7 @@ mod tests {
         let manager = TabManager::new();
         let tab_id = manager
             .open_tab("https://api.agiworkforce.com")
-            .awai
+            .await
             .unwrap();
 
         let result = manager.close_tab(&tab_id).await;

@@ -30,7 +30,7 @@ impl ActionPlanner {
 
         let response = self
             .call_vision_llm(&prompt, &base64_image)
-            .awai
+            .await
             .context("Failed to call vision LLM")?;
 
         self.parse_action_plan(&response)
@@ -162,7 +162,7 @@ impl ActionPlanner {
 
         let outcome = router
             .invoke_candidate(&candidates[0], &request)
-            .awai
+            .await
             .context("Vision LLM request failed")?;
 
         Ok(outcome.response.content)

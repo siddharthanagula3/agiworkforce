@@ -50,7 +50,7 @@ impl PromptEnhancer {
         format!(
             "Task: Desktop/Web Automation\n\n{}\n\nPlease provide step-by-step instructions for this automation task.
             Consider edge cases, error handling, and timing issues. If applicable, suggest selectors or UI elements to target.",
-            promp
+            prompt
         )
     }
 
@@ -62,7 +62,7 @@ impl PromptEnhancer {
             - Comments explaining complex logic\n
             - Best practices for the language/framework\n
             - Consideration for edge cases",
-            promp
+            prompt
         )
     }
 
@@ -74,7 +74,7 @@ impl PromptEnhancer {
             - Proper grammar and spelling\n
             - Appropriate length and detail\n
             - Relevant sections and headings",
-            promp
+            prompt
         )
     }
 
@@ -86,7 +86,7 @@ impl PromptEnhancer {
             - Citations or references\n
             - Factual accuracy\n
             - Different perspectives if applicable",
-            promp
+            prompt
         )
     }
 
@@ -98,7 +98,7 @@ impl PromptEnhancer {
             - Correct proportions and perspective\n
             - Vibrant or appropriate colors\n
             - Professional finish",
-            promp
+            prompt
         )
     }
 
@@ -110,7 +110,7 @@ impl PromptEnhancer {
             - High resolution\n
             - Coherent scene progression\n
             - Suitable pacing",
-            promp
+            prompt
         )
     }
 

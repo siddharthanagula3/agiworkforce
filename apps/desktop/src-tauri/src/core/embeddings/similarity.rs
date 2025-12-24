@@ -92,7 +92,7 @@ impl SimilaritySearch {
     pub fn search(&self, query_embedding: Vector, limit: usize) -> Result<Vec<SearchResult>> {
         let mut stmt = self.db.prepare(
             "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                    start_line, end_line, embedding, created_a
+                    start_line, end_line, embedding, created_at
              FROM embeddings",
         )?;
 
@@ -172,7 +172,7 @@ impl SimilaritySearch {
     ) -> Result<Vec<SearchResult>> {
         let mut stmt = self.db.prepare(
             "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                    start_line, end_line, embedding, created_a
+                    start_line, end_line, embedding, created_at
              FROM embeddings
              WHERE file_path = ?1",
         )?;
@@ -265,7 +265,7 @@ impl SimilaritySearch {
     pub fn get_file_embeddings(&self, file_path: &str) -> Result<Vec<EmbeddingMetadata>> {
         let mut stmt = self.db.prepare(
             "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                    start_line, end_line, created_a
+                    start_line, end_line, created_at
              FROM embeddings
              WHERE file_path = ?1
              ORDER BY chunk_index",

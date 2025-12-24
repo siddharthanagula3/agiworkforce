@@ -118,7 +118,7 @@ impl PdfDocumentCreator {
                     let selected_font = if bold.unwrap_or(false) {
                         &font_bold
                     } else {
-                        &fon
+                        &font
                     };
 
                     current_layer.use_text(

@@ -320,7 +320,7 @@ impl FirstRunExperience {
                 [session_id],
                 |row| row.get(0),
             )?;
-            started_a
+            started_at
         };
 
         let time_to_value = (Utc::now().timestamp() - started_at) as u64;
@@ -363,7 +363,7 @@ impl FirstRunExperience {
 
         let (id, user_id, step_json, recommended_json, demo_json, time_to_value, selected_demo_id, started_at):
             (String, String, String, String, Option<String>, i64, Option<String>, i64) = conn.query_row(
-            "SELECT id, user_id, step, recommended_employees, demo_results, time_to_value_seconds, selected_employee_id, started_a
+            "SELECT id, user_id, step, recommended_employees, demo_results, time_to_value_seconds, selected_employee_id, started_at
              FROM first_run_sessions WHERE id = ?1",
             [session_id],
             |row| Ok((

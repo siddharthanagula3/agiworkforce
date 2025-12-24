@@ -118,12 +118,12 @@ impl RedisClient {
         if let Some(seconds) = expiration_seconds {
             manager
                 .set_ex::<_, _, ()>(key, value, seconds)
-                .awai
+                .await
                 .map_err(|e| Error::Other(format!("Redis SET error: {}", e)))?;
         } else {
             manager
                 .set::<_, _, ()>(key, value)
-                .awai
+                .await
                 .map_err(|e| Error::Other(format!("Redis SET error: {}", e)))?;
         }
 
@@ -142,7 +142,7 @@ impl RedisClient {
 
         let deleted: u64 = manager
             .del(keys)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis DEL error: {}", e)))?;
 
         Ok(deleted)
@@ -160,7 +160,7 @@ impl RedisClient {
 
         let exists: bool = manager
             .exists(key)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis EXISTS error: {}", e)))?;
 
         Ok(exists)
@@ -178,7 +178,7 @@ impl RedisClient {
 
         let set: bool = manager
             .expire(key, seconds as i64)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis EXPIRE error: {}", e)))?;
 
         Ok(set)
@@ -196,7 +196,7 @@ impl RedisClient {
 
         let ttl: i64 = manager
             .ttl(key)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis TTL error: {}", e)))?;
 
         Ok(ttl)
@@ -214,7 +214,7 @@ impl RedisClient {
 
         let value: i64 = manager
             .incr(key, 1)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis INCR error: {}", e)))?;
 
         Ok(value)
@@ -232,7 +232,7 @@ impl RedisClient {
 
         let value: i64 = manager
             .decr(key, 1)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis DECR error: {}", e)))?;
 
         Ok(value)
@@ -250,7 +250,7 @@ impl RedisClient {
 
         let values: Vec<Option<String>> = manager
             .get(keys)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis MGET error: {}", e)))?;
 
         Ok(values)
@@ -270,7 +270,7 @@ impl RedisClient {
 
         manager
             .mset::<_, _, ()>(&items)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis MSET error: {}", e)))?;
 
         Ok(())
@@ -288,7 +288,7 @@ impl RedisClient {
 
         let length: u64 = manager
             .lpush(key, value)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis LPUSH error: {}", e)))?;
 
         Ok(length)
@@ -306,7 +306,7 @@ impl RedisClient {
 
         let length: u64 = manager
             .rpush(key, value)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis RPUSH error: {}", e)))?;
 
         Ok(length)
@@ -324,7 +324,7 @@ impl RedisClient {
 
         let value: Option<String> = manager
             .lpop(key, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis LPOP error: {}", e)))?;
 
         Ok(value)
@@ -342,7 +342,7 @@ impl RedisClient {
 
         let value: Option<String> = manager
             .rpop(key, None)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis RPOP error: {}", e)))?;
 
         Ok(value)
@@ -360,7 +360,7 @@ impl RedisClient {
 
         let length: u64 = manager
             .llen(key)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis LLEN error: {}", e)))?;
 
         Ok(length)
@@ -384,7 +384,7 @@ impl RedisClient {
 
         let values: Vec<String> = manager
             .lrange(key, start as isize, stop as isize)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis LRANGE error: {}", e)))?;
 
         Ok(values)
@@ -408,7 +408,7 @@ impl RedisClient {
 
         let created: bool = manager
             .hset(key, field, value)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis HSET error: {}", e)))?;
 
         Ok(created)
@@ -431,7 +431,7 @@ impl RedisClient {
 
         let value: Option<String> = manager
             .hget(key, field)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis HGET error: {}", e)))?;
 
         Ok(value)
@@ -449,7 +449,7 @@ impl RedisClient {
 
         let deleted: bool = manager
             .hdel(key, field)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis HDEL error: {}", e)))?;
 
         Ok(deleted)
@@ -467,7 +467,7 @@ impl RedisClient {
 
         let hash: HashMap<String, String> = manager
             .hgetall(key)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis HGETALL error: {}", e)))?;
 
         Ok(hash)
@@ -485,7 +485,7 @@ impl RedisClient {
 
         let exists: bool = manager
             .hexists(key, field)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis HEXISTS error: {}", e)))?;
 
         Ok(exists)
@@ -503,7 +503,7 @@ impl RedisClient {
 
         let added: bool = manager
             .sadd(key, member)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis SADD error: {}", e)))?;
 
         Ok(added)
@@ -521,7 +521,7 @@ impl RedisClient {
 
         let removed: bool = manager
             .srem(key, member)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis SREM error: {}", e)))?;
 
         Ok(removed)
@@ -539,7 +539,7 @@ impl RedisClient {
 
         let is_member: bool = manager
             .sismember(key, member)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis SISMEMBER error: {}", e)))?;
 
         Ok(is_member)
@@ -557,7 +557,7 @@ impl RedisClient {
 
         let members: Vec<String> = manager
             .smembers(key)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis SMEMBERS error: {}", e)))?;
 
         Ok(members)
@@ -575,7 +575,7 @@ impl RedisClient {
 
         let count: u64 = manager
             .scard(key)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis SCARD error: {}", e)))?;
 
         Ok(count)
@@ -593,7 +593,7 @@ impl RedisClient {
 
         redis::cmd("FLUSHDB")
             .query_async::<()>(&mut manager)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis FLUSHDB error: {}", e)))?;
 
         Ok(())
@@ -611,7 +611,7 @@ impl RedisClient {
 
         let size: u64 = redis::cmd("DBSIZE")
             .query_async(&mut manager)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Redis DBSIZE error: {}", e)))?;
 
         Ok(size)

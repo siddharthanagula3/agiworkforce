@@ -64,7 +64,8 @@ impl SessionManager {
                     let app_handle = self.app_handle.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = log_command_to_db(&app_handle, &session_id, &command).await {
+                        if let Err(e) = log_command_to_db(&app_handle, &session_id, &command).await
+                        {
                             tracing::error!("Failed to log command: {}", e);
                         }
                     });

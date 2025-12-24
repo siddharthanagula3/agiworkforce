@@ -194,12 +194,12 @@ impl ChangeTracker {
     ) -> Result<GitSnapshot, String> {
         let branch = self
             .get_git_branch(&working_dir)
-            .awai
+            .await
             .unwrap_or_else(|| "unknown".to_string());
         let commit_hash = self.get_git_head(&working_dir).await.ok();
         let changed_files = self
             .get_git_changed_files(&working_dir)
-            .awai
+            .await
             .unwrap_or_default();
 
         let snapshot = GitSnapshot {
@@ -261,7 +261,7 @@ impl ChangeTracker {
             let head = repo.head().ok()?;
             head.shorthand().map(|s| s.to_string())
         })
-        .awai
+        .await
         .ok()
         .flatten()
     }
@@ -274,7 +274,7 @@ impl ChangeTracker {
             let commit = head.peel_to_commit().map_err(|e| e.message().to_string())?;
             Ok(commit.id().to_string())
         })
-        .awai
+        .await
         .map_err(|e| e.to_string())?
     }
 
@@ -300,7 +300,7 @@ impl ChangeTracker {
             }
             Ok(files)
         })
-        .awai
+        .await
         .map_err(|e| e.to_string())?
     }
 

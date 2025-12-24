@@ -37,6 +37,7 @@ function validateFilePath(filePath: string): void {
     throw new Error('File path cannot be empty');
   }
 
+  // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1f]/.test(filePath)) {
     throw new Error('File path contains invalid characters');
   }

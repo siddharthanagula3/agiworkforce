@@ -133,7 +133,7 @@ impl ConflictResolver {
             report.push('\n');
         }
 
-        repor
+        report
     }
 }
 

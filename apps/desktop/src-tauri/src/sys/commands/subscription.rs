@@ -15,10 +15,7 @@ pub async fn subscribe_to_plan(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -54,18 +51,6 @@ pub async fn subscribe_to_plan(
         interval = i;
     }
 
-    drop(db);
-    drop(billing);
-
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
-
     service
         .create_subscription(
             &customer_stripe_id,
@@ -74,7 +59,7 @@ pub async fn subscribe_to_plan(
             &plan_name,
             &interval,
         )
-        .awai
+        .await
         .map_err(|e| format!("Failed to create subscription: {}", e))
 }
 
@@ -85,10 +70,7 @@ pub async fn upgrade_plan(
     new_plan_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -107,7 +89,7 @@ pub async fn upgrade_plan(
             &new_plan_id,
             &new_plan_name,
         )
-        .awai
+        .await
         .map_err(|e| format!("Failed to upgrade plan: {}", e))
 }
 
@@ -119,10 +101,7 @@ pub async fn cancel_subscription(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<(), String> {
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
+    let billing = state.0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -145,21 +124,9 @@ pub async fn cancel_subscription(
         return Err("Subscription does not belong to this user".to_string());
     }
 
-    drop(db);
-    drop(billing);
-
-    let billing = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock billing state: {}", e))?;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
-
     service
         .cancel_subscription(&subscription_id)
-        .awai
+        .await
         .map_err(|e| format!("Failed to cancel subscription: {}", e))
 }
 

@@ -77,7 +77,7 @@ impl AuditLogger {
                 success,
                 error_message,
                 duration_ms,
-                created_a
+                created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 operation_type,
@@ -109,7 +109,7 @@ impl AuditLogger {
 
         let mut query = String::from(
             "SELECT id, operation_type, operation_details, permission_type,
-                    approved, success, error_message, duration_ms, created_a
+                    approved, success, error_message, duration_ms, created_at
              FROM audit_log WHERE 1=1",
         );
 
@@ -149,7 +149,7 @@ impl AuditLogger {
 
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let entries = stm
+        let entries = stmt
             .query_map(param_refs.as_slice(), |row| {
                 let created_str: String = row.get(8)?;
 
@@ -196,13 +196,13 @@ impl AuditLogger {
         };
 
         let mut stmt = conn.prepare(
-            "SELECT operation_type, COUNT(*) as coun
+            "SELECT operation_type, COUNT(*) as count
              FROM audit_log
              GROUP BY operation_type
              ORDER BY count DESC",
         )?;
 
-        let operations_by_type = stm
+        let operations_by_type = stmt
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
             })?

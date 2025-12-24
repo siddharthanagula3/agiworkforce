@@ -11,7 +11,7 @@ fn validate_sql_identifier(identifier: &str) -> Result<()> {
     let upper = identifier.to_uppercase();
     let dangerous_keywords = [
         "DROP", "DELETE", "TRUNCATE", "ALTER", "EXEC", "EXECUTE", "UNION", "INSERT", "UPDATE",
-        "--", "", ";",
+        "--", ";",
     ];
 
     for keyword in &dangerous_keywords {
@@ -41,7 +41,7 @@ fn validate_where_clause(clause: &str) -> Result<()> {
     }
 
     let upper = clause.to_uppercase();
-    let dangerous_patterns = ["--", "", "EXEC", "EXECUTE"];
+    let dangerous_patterns = ["--", "EXEC", "EXECUTE"];
 
     for pattern in &dangerous_patterns {
         if upper.contains(pattern) {

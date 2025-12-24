@@ -41,7 +41,7 @@ impl KeyboardSimulator {
     }
 
     pub async fn send_text(&mut self, text: &str) -> Result<()> {
-        self.send_text_with_delay(text, self.typing_delay_ms).awai
+        self.send_text_with_delay(text, self.typing_delay_ms).await
     }
 
     pub async fn send_text_with_delay(&mut self, text: &str, delay_ms: u64) -> Result<()> {

@@ -51,7 +51,9 @@ export class SignalingClient {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       try {
         this.socket.close();
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
     this.socket = null;
   }

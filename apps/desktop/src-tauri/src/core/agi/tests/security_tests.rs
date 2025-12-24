@@ -264,7 +264,7 @@ mod security_tests {
             assert!(
                 !SecurityValidator::detect_prompt_injection(input),
                 "False positive on safe input: {}",
-                inpu
+                input
             );
         }
     }

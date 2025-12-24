@@ -153,7 +153,9 @@ function tryCleanupOldData(): void {
     for (const key of keysToClean) {
       try {
         storage.removeItem(key);
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
   } catch (error) {
     console.error('[localStorage] Failed to cleanup old data:', error);

@@ -256,7 +256,7 @@ impl AGIExecutor {
         if let Err(e) = self
             .security_guard
             .validate_tool_call(tool_name, &params_json)
-            .awai
+            .await
         {
             tracing::error!(
                 "[Executor] Security validation failed for tool '{}': {}",
@@ -464,12 +464,12 @@ impl AGIExecutor {
 
                     let tabs = tab_manager
                         .list_tabs()
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                     let tab_id = if tabs.is_empty() {
                         tab_manager
                             .open_tab(url)
-                            .awai
+                            .await
                             .map_err(|e| anyhow!("Failed to open tab: {}", e))?
                     } else {
                         tabs[0].id.clone()
@@ -478,7 +478,7 @@ impl AGIExecutor {
                     use crate::automation::browser::NavigationOptions;
                     tab_manager
                         .navigate(&tab_id, url, NavigationOptions::default())
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to navigate: {}", e))?;
 
                     Ok(json!({ "success": true, "url": url, "tab_id": tab_id }))
@@ -506,7 +506,7 @@ impl AGIExecutor {
                     } else {
                         let tabs = tab_manager
                             .list_tabs()
-                            .awai
+                            .await
                             .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                         if tabs.is_empty() {
                             return Err(anyhow!("No browser tabs available. Please navigate to a URL first using browser_navigate."));
@@ -517,12 +517,12 @@ impl AGIExecutor {
                     let cdp_client = browser_state
                         .0
                         .get_cdp_client(&target_tab_id)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to get CDP client: {}", e))?;
 
                     let options = ClickOptions::default();
                     DomOperations::click_with_cdp(cdp_client, selector, options)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to click element '{}': {}", selector, e))?;
 
                     Ok(json!({
@@ -559,7 +559,7 @@ impl AGIExecutor {
                     } else {
                         let tabs = tab_manager
                             .list_tabs()
-                            .awai
+                            .await
                             .map_err(|e| anyhow!("Failed to list tabs: {}", e))?;
                         if tabs.is_empty() {
                             return Err(anyhow!("No browser tabs available. Please navigate to a URL first using browser_navigate."));
@@ -570,7 +570,7 @@ impl AGIExecutor {
                     let result = match extract_type {
                         "text" => {
                             let text = DomOperations::get_text(&target_tab_id, selector)
-                                .awai
+                                .await
                                 .map_err(|e| {
                                     anyhow!("Failed to extract text from '{}': {}", selector, e)
                                 })?;
@@ -589,7 +589,7 @@ impl AGIExecutor {
                                 selector,
                                 attribute_name,
                             )
-                            .awai
+                            .await
                             .map_err(|e| {
                                 anyhow!(
                                     "Failed to get attribute '{}' from '{}': {}",
@@ -607,7 +607,7 @@ impl AGIExecutor {
                         }
                         "all" => {
                             let elements = DomOperations::query_all(&target_tab_id, selector)
-                                .awai
+                                .await
                                 .map_err(|e| {
                                     anyhow!("Failed to query elements '{}': {}", selector, e)
                                 })?;
@@ -623,7 +623,7 @@ impl AGIExecutor {
                         }
                         _ => {
                             let text = DomOperations::get_text(&target_tab_id, selector)
-                                .awai
+                                .await
                                 .map_err(|e| {
                                     anyhow!("Failed to extract text from '{}': {}", selector, e)
                                 })?;
@@ -670,7 +670,7 @@ impl AGIExecutor {
                     let session_id_result = if sessions.is_empty() {
                         session_manager
                             .create_session(shell_type, None)
-                            .awai
+                            .await
                             .map_err(|e| anyhow!("Failed to create session: {}", e))?
                     } else {
                         sessions[0].clone()
@@ -738,9 +738,9 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     let result = db_guard
-                        .sql_clien
+                        .sql_client
                         .execute_query(database_id, query)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Database query failed: {}", e))?;
 
                     let result_json = serde_json::to_value(&result)
@@ -760,21 +760,21 @@ impl AGIExecutor {
             }
             "api_call" => {
                 if let Some(ref app) = self.app_handle {
-                    api_tools_impl::execute_api_call(app, parameters).awai
+                    api_tools_impl::execute_api_call(app, parameters).await
                 } else {
                     Err(anyhow!("App handle not available for API call"))
                 }
             }
             "api_upload" => {
                 if let Some(ref app) = self.app_handle {
-                    api_tools_impl::execute_api_upload(app, parameters).awai
+                    api_tools_impl::execute_api_upload(app, parameters).await
                 } else {
                     Err(anyhow!("App handle not available for API upload"))
                 }
             }
             "api_download" => {
                 if let Some(ref app) = self.app_handle {
-                    api_tools_impl::execute_api_download(app, parameters).awai
+                    api_tools_impl::execute_api_download(app, parameters).await
                 } else {
                     Err(anyhow!("App handle not available for API download"))
                 }
@@ -857,7 +857,7 @@ impl AGIExecutor {
                                 "success": true,
                                 "reasoning": outcome.response.content,
                                 "model": outcome.response.model,
-                                "cost": outcome.response.cos
+                                "cost": outcome.response.cost
                             }))
                         }
                         Err(e) => {
@@ -889,7 +889,7 @@ impl AGIExecutor {
                     use crate::sys::commands::email::email_list_accounts;
                     use crate::sys::commands::email::SendEmailRequest;
 
-                    let accounts = email_list_accounts(app.clone()).awai
+                    let accounts = email_list_accounts(app.clone()).await
                         .map_err(|e| anyhow!("Failed to list email accounts: {}. Please connect an email account first using email_connect.", e))?;
 
                     if accounts.is_empty() {
@@ -917,7 +917,7 @@ impl AGIExecutor {
 
                     use crate::sys::commands::email::email_send;
                     let message_id = email_send(app.clone(), send_request)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Email send failed: {}", e))?;
 
                     tracing::info!(
@@ -955,7 +955,7 @@ impl AGIExecutor {
 
                     let emails =
                         email_fetch_inbox(app.clone(), account_id, None, Some(limit), None)
-                            .awai
+                            .await
                             .map_err(|e| {
                                 anyhow!(
                                     "Failed to fetch emails: {}. Ensure the account is connected.",
@@ -1046,7 +1046,7 @@ impl AGIExecutor {
 
                     let event = calendar_state.manager
                         .create_event(account_id, &request)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to create calendar event: {}. Ensure the calendar account is connected via calendar_connect.", e))?;
 
                     tracing::info!(
@@ -1116,7 +1116,7 @@ impl AGIExecutor {
 
                     let response = calendar_state.manager
                         .list_events(account_id, &request)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to list calendar events: {}. Ensure the calendar account is connected via calendar_connect.", e))?;
 
                     tracing::info!(
@@ -1165,7 +1165,7 @@ impl AGIExecutor {
                             let local = local_path_clone.clone();
                             Box::pin(async move { client.upload(&local, &remote).await })
                         })
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Cloud upload failed: {}. Ensure the cloud account is connected via cloud_connect.", e))?;
 
                     tracing::info!("[Executor] Cloud upload successful: file_id={}, local_path={}, remote_path={}", file_id, local_path, remote_path);
@@ -1210,7 +1210,7 @@ impl AGIExecutor {
                             let local = local_path_clone.clone();
                             Box::pin(async move { client.download(&remote, &local).await })
                         })
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Cloud download failed: {}. Ensure the cloud account is connected via cloud_connect.", e))?;
 
                     tracing::info!(
@@ -1315,7 +1315,7 @@ impl AGIExecutor {
                     let manager = manager_arc.lock().await;
                     let task_id = manager
                         .create_task(provider, task)
-                        .awai
+                        .await
                         .map_err(|e| {
                             anyhow!("Failed to create productivity task: {}. Ensure the provider account is connected via productivity_connect.", e)
                         })?;
@@ -1353,7 +1353,7 @@ impl AGIExecutor {
                     let content = doc_state
                         .manager
                         .read_document(file_path)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Document read failed: {}", e))?;
 
                     Ok(json!({
@@ -1383,7 +1383,7 @@ impl AGIExecutor {
                     let results = doc_state
                         .manager
                         .search(file_path, query)
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Document search failed: {}", e))?;
 
                     Ok(json!({
@@ -1422,12 +1422,12 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     let result = if params.is_empty() {
-                        db_guard.sql_client.execute_query(connection_id, sql).awai
+                        db_guard.sql_client.execute_query(connection_id, sql).await
                     } else {
                         db_guard
-                            .sql_clien
+                            .sql_client
                             .execute_prepared(connection_id, sql, &params)
-                            .awai
+                            .await
                     }
                     .map_err(|e| anyhow!("Database execute failed: {}", e))?;
 
@@ -1456,9 +1456,9 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     let result = db_guard
-                        .sql_clien
+                        .sql_client
                         .execute_query(connection_id, "BEGIN TRANSACTION")
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to begin transaction: {}", e))?;
 
                     tracing::info!(
@@ -1491,9 +1491,9 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     let result = db_guard
-                        .sql_clien
+                        .sql_client
                         .execute_query(connection_id, "COMMIT")
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to commit transaction: {}", e))?;
 
                     tracing::info!(
@@ -1526,9 +1526,9 @@ impl AGIExecutor {
                     let db_guard = db_state.lock().await;
 
                     let result = db_guard
-                        .sql_clien
+                        .sql_client
                         .execute_query(connection_id, "ROLLBACK")
-                        .awai
+                        .await
                         .map_err(|e| anyhow!("Failed to rollback transaction: {}", e))?;
 
                     tracing::info!(

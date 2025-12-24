@@ -35,11 +35,11 @@ impl MySqlClient {
 
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         conn.query_drop("SELECT 1")
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MySQL connection test failed: {}", e)))?;
 
         tracing::info!("MySQL connection test successful");
@@ -66,12 +66,12 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let rows: Vec<Row> = conn
             .query(sql)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MySQL query failed: {}", e)))?;
 
         let result = Self::rows_to_query_result(rows, start.elapsed().as_millis())?;
@@ -98,14 +98,14 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let mysql_params = Self::json_params_to_mysql(params)?;
 
         let rows: Vec<Row> = conn
             .exec(sql, mysql_params)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MySQL prepared statement failed: {}", e)))?;
 
         let result = Self::rows_to_query_result(rows, start.elapsed().as_millis())?;
@@ -129,12 +129,12 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let mut transaction = conn
             .start_transaction(Default::default())
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to start MySQL transaction: {}", e)))?;
 
         let mut results = Vec::new();
@@ -144,7 +144,7 @@ impl MySqlClient {
 
             let rows: Vec<Row> = transaction
                 .query(query)
-                .awai
+                .await
                 .map_err(|e| Error::Other(format!("Query failed in MySQL transaction: {}", e)))?;
 
             let result = Self::rows_to_query_result(rows, start.elapsed().as_millis())?;
@@ -153,7 +153,7 @@ impl MySqlClient {
 
         transaction
             .commit()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to commit MySQL transaction: {}", e)))?;
 
         tracing::info!("Batch execution completed successfully");
@@ -168,7 +168,7 @@ impl MySqlClient {
 
         if let Some(pool) = pools.remove(connection_id) {
             pool.disconnect()
-                .awai
+                .await
                 .map_err(|e| Error::Other(format!("Failed to disconnect MySQL pool: {}", e)))?;
             Ok(())
         } else {
@@ -197,12 +197,12 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let rows: Vec<Row> = conn
             .query("SHOW TABLES")
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to list tables: {}", e)))?;
 
         let mut tables = Vec::new();
@@ -223,13 +223,13 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let query = format!("DESCRIBE `{}`", table_name.replace('`', "``"));
         let rows: Vec<Row> = conn
             .query(&query)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to describe table: {}", e)))?;
 
         let mut columns = Vec::new();
@@ -295,13 +295,13 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let query = format!("SHOW INDEX FROM `{}`", table_name.replace('`', "``"));
         let rows: Vec<Row> = conn
             .query(&query)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to list indexes: {}", e)))?;
 
         let result = Self::rows_to_query_result(rows, 0)?;
@@ -317,7 +317,7 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let mysql_params = Self::json_params_to_mysql(params)?;
@@ -329,7 +329,7 @@ impl MySqlClient {
 
         let query_rows: Vec<Row> = conn
             .exec(&call_sql, mysql_params)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to call procedure: {}", e)))?;
 
         let result = Self::rows_to_query_result(query_rows, 0)?;
@@ -350,7 +350,7 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         let column_list = columns.join("`, `");
@@ -378,7 +378,7 @@ impl MySqlClient {
         tracing::debug!("Bulk insert: {} rows into {}", rows.len(), table_name);
 
         conn.exec_drop(&sql, all_params)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Bulk insert failed: {}", e)))?;
 
         Ok(conn.affected_rows())
@@ -393,14 +393,14 @@ impl MySqlClient {
         let pool = self.get_pool(connection_id).await?;
         let mut conn = pool
             .get_conn()
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("Failed to get MySQL connection: {}", e)))?;
 
         tracing::debug!("Streaming query with batch size {}: {}", batch_size, sql);
 
         let rows: Vec<Row> = conn
             .query(sql)
-            .awai
+            .await
             .map_err(|e| Error::Other(format!("MySQL query failed: {}", e)))?;
 
         let mut results = Vec::new();
@@ -653,7 +653,7 @@ mod tests {
 
         client.create_pool("test", config).await.unwrap();
 
-        let result = clien
+        let result = client
             .execute_query("test", "SELECT 1 as num, 'hello' as text")
             .await;
         assert!(result.is_ok());

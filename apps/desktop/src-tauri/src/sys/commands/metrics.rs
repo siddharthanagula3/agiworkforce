@@ -79,7 +79,10 @@ pub async fn compare_to_previous_period(
     days: i64,
     comparison: State<'_, MetricsComparisonState>,
 ) -> Result<PeriodComparison, String> {
-    comparison.0.compare_to_previous_period(&user_id, days).await
+    comparison
+        .0
+        .compare_to_previous_period(&user_id, days)
+        .await
 }
 
 #[tauri::command]

@@ -101,7 +101,9 @@ impl ImageGenerationClient {
             ImageProvider::StableDiffusion => self.generate_with_stable_diffusion(request).await,
             ImageProvider::Midjourney => self.generate_with_midjourney(request).await,
             ImageProvider::GoogleImagen => self.generate_with_google_imagen(request, false).await,
-            ImageProvider::GoogleImagenLite => self.generate_with_google_imagen(request, true).await,
+            ImageProvider::GoogleImagenLite => {
+                self.generate_with_google_imagen(request, true).await
+            }
         }
     }
 
@@ -354,7 +356,11 @@ impl ImageGenerationClient {
             "imagen-3.1-pro"
         };
 
-        let model = request.model.as_deref().unwrap_or(default_model).to_string();
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(default_model)
+            .to_string();
 
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:predict?key={}",

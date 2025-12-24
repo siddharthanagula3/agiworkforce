@@ -33,7 +33,7 @@ impl TemplateEngine {
         }
 
         if result.contains("{{") && result.contains("}}") {
-            let unresolved: Vec<&str> = resul
+            let unresolved: Vec<&str> = result
                 .split("{{")
                 .skip(1)
                 .filter_map(|s| s.split("}}").next())
@@ -99,7 +99,7 @@ impl TemplateEngine {
         if open_count != close_count {
             return Err(Error::Other(format!(
                 "Template syntax error: {} opening braces, {} closing braces",
-                open_count, close_coun
+                open_count, close_count
             )));
         }
 
@@ -187,7 +187,7 @@ mod tests {
         variables.insert("path".to_string(), "users/123".to_string());
 
         let result = TemplateEngine::render(template, &variables).unwrap();
-        assert_eq!(result, "https://api.agiworkforce.com".to_string());
+        assert_eq!(result, "https://api.example.com/users/123".to_string());
     }
 
     #[test]

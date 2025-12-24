@@ -220,7 +220,7 @@ mod notepad_tests {
 
         keyboard
             .send_text("Testing keyboard input simulation")
-            .awai
+            .await
             .expect("Failed to send text");
 
         thread::sleep(Duration::from_millis(500));
@@ -674,7 +674,7 @@ mod pattern_integration_tests {
 
         keyboard
             .send_text("Multi-line\ntext\npattern\ntest")
-            .awai
+            .await
             .expect("Failed to type text");
 
         thread::sleep(Duration::from_millis(500));
@@ -789,7 +789,7 @@ mod mouse_integration_tests {
 
         keyboard
             .send_text("Clicked and typed")
-            .awai
+            .await
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
@@ -821,7 +821,7 @@ mod mouse_integration_tests {
 
         keyboard
             .send_text("doubleclick")
-            .awai
+            .await
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));
@@ -915,7 +915,7 @@ mod screen_capture_integration_tests {
 
         keyboard
             .send_text("Screenshot Test")
-            .awai
+            .await
             .expect("Failed to type");
 
         thread::sleep(Duration::from_millis(300));

@@ -130,6 +130,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
           };
 
           try {
+            // TODO: Persist results
           } catch (e) {
             console.warn('Failed to persist demo results', e);
           }

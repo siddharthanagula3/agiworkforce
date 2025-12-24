@@ -223,11 +223,26 @@ pub async fn analytics_get_usage_stats(
         )
         .unwrap_or(0);
 
+    let mau: i64 = conn
+        .query_row(
+            "SELECT COUNT(DISTINCT date(started_at, 'unixepoch')) FROM user_sessions WHERE started_at >= ?1",
+            [chrono::Utc::now().timestamp() - 30 * 24 * 3600],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let new_users_today: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM user_sessions WHERE started_at >= ?1 AND id NOT IN (SELECT id FROM user_sessions WHERE started_at < ?1)",
+            [today_start],
+            |row| row.get(0),
+        ).unwrap_or(0);
+
     Ok(serde_json::json!({
-        "dau": 1,
-        "mau": 1,
+        "dau": if events_today > 0 { 1 } else { 0 },
+        "mau": mau,
         "total_users": 1,
-        "new_users_today": 0,
+        "new_users_today": new_users_today,
         "new_users_this_week": 0,
         "new_users_this_month": 0,
         "avg_session_duration_ms": avg_session_duration_ms,

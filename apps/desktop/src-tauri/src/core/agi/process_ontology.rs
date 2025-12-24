@@ -474,7 +474,7 @@ impl ProcessOntology {
 
         let mut stmt = conn.prepare(
             "SELECT id, process_type, name, description, typical_steps, success_criteria,
-                    required_tools, expected_duration_ms, risk_factors, best_practices, created_a
+                    required_tools, expected_duration_ms, risk_factors, best_practices, created_at
              FROM process_templates",
         )?;
 

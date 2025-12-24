@@ -83,7 +83,7 @@ impl TutorialManager {
             .prepare("SELECT tutorial_id FROM tutorial_progress WHERE user_id = ?1 AND completed_at IS NOT NULL")
             .ok()?;
 
-        let completed: Vec<String> = stm
+        let completed: Vec<String> = stmt
             .query_map([user_id], |row| row.get(0))
             .ok()?
             .filter_map(Result::ok)

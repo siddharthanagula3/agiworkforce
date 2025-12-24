@@ -173,7 +173,7 @@ impl ProgressTracker {
              WHERE user_id = ?1 AND completed_at IS NOT NULL",
         )?;
 
-        let completed_tutorials: HashMap<String, i64> = stm
+        let completed_tutorials: HashMap<String, i64> = stmt
             .query_map([user_id], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(Result::ok)
             .collect();
@@ -184,7 +184,7 @@ impl ProgressTracker {
              WHERE user_id = ?1 AND completed_at IS NULL"
         )?;
 
-        let in_progress: Vec<OnboardingProgress> = stm
+        let in_progress: Vec<OnboardingProgress> = stmt
             .query_map([user_id], |row| {
                 let completed_steps_json: String = row.get(3)?;
                 let completed_steps: Vec<String> =
@@ -210,7 +210,7 @@ impl ProgressTracker {
 
         let mut stmt = conn.prepare("SELECT reward_id FROM user_rewards WHERE user_id = ?1")?;
 
-        let earned_rewards: Vec<String> = stm
+        let earned_rewards: Vec<String> = stmt
             .query_map([user_id], |row| row.get(0))?
             .filter_map(Result::ok)
             .collect();

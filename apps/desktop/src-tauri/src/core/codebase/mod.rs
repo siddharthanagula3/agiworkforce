@@ -36,7 +36,7 @@ pub async fn index_workspace_file(
     let path = PathBuf::from(&file_path);
     indexer_guard
         .index_file(&path)
-        .awai
+        .await
         .map_err(|e| format!("Failed to index file: {}", e))
 }
 

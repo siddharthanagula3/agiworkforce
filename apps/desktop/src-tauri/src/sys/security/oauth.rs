@@ -144,7 +144,7 @@ impl OAuthManager {
                 .collect()
         });
 
-        let mut auth_request = clien
+        let mut auth_request = client
             .authorize_url(CsrfToken::new_random)
             .set_pkce_challenge(pkce_challenge);
 
@@ -197,11 +197,11 @@ impl OAuthManager {
         )
         .set_redirect_uri(RedirectUrl::new(config.redirect_uri.clone())?);
 
-        let token_result = clien
+        let token_result = client
             .exchange_code(AuthorizationCode::new(code))
             .set_pkce_verifier(PkceCodeVerifier::new(verifier))
             .request_async(oauth2::reqwest::async_http_client)
-            .awai
+            .await
             .map_err(|e| anyhow!("Token exchange failed: {}", e))?;
 
         Ok(OAuthTokenResult {
@@ -236,10 +236,10 @@ impl OAuthManager {
         )
         .set_redirect_uri(RedirectUrl::new(config.redirect_uri.clone())?);
 
-        let token_result = clien
+        let token_result = client
             .exchange_refresh_token(&oauth2::RefreshToken::new(refresh_token))
             .request_async(oauth2::reqwest::async_http_client)
-            .awai
+            .await
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
 
         Ok(OAuthTokenResult {
@@ -268,11 +268,11 @@ impl OAuthManager {
         };
 
         let client = reqwest::Client::new();
-        let response = clien
+        let response = client
             .get(url)
             .bearer_auth(access_token)
             .send()
-            .awai
+            .await
             .map_err(|e| anyhow!("Failed to get user info: {}", e))?;
 
         if !response.status().is_success() {
@@ -281,7 +281,7 @@ impl OAuthManager {
 
         let user_data: serde_json::Value = response
             .json()
-            .awai
+            .await
             .map_err(|e| anyhow!("Failed to parse user info: {}", e))?;
 
         let user_info = match provider {
@@ -296,7 +296,7 @@ impl OAuthManager {
             },
             OAuthProvider::GitHub => {
                 let email = if user_data["email"].is_null() {
-                    let email_response = clien
+                    let email_response = client
                         .get("https://api.github.com/user/emails")
                         .bearer_auth(access_token)
                         .send()

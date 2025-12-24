@@ -52,14 +52,14 @@ mod tests {
         let file_path = dir.path().join("test.txt");
 
         let exists = file_exists(file_path.to_str().unwrap().to_string())
-            .awai
+            .await
             .unwrap();
         assert!(!exists);
 
         fs::write(&file_path, "test").unwrap();
 
         let exists = file_exists(file_path.to_str().unwrap().to_string())
-            .awai
+            .await
             .unwrap();
         assert!(exists);
     }
@@ -72,7 +72,7 @@ mod tests {
         fs::write(&file_path, "test content").unwrap();
 
         let metadata = file_metadata(file_path.to_str().unwrap().to_string())
-            .awai
+            .await
             .unwrap();
 
         assert!(metadata.is_file);

@@ -306,7 +306,7 @@ mod tests {
 
         let result = executor
             .execute_tool("file_read", json!({"path": "/test"}))
-            .awai
+            .await
             .unwrap();
 
         assert_eq!(result["content"], "test");
@@ -318,12 +318,12 @@ mod tests {
 
         browser
             .navigate("https://api.agiworkforce.com")
-            .awai
+            .await
             .unwrap();
 
         browser
             .navigate("https://api.agiworkforce.com")
-            .awai
+            .await
             .unwrap();
 
         let history = browser.get_history();
@@ -372,9 +372,9 @@ mod tests {
             serde_json::json!({"status": "ok"}),
         );
 
-        let response = clien
+        let response = client
             .request("GET", "https://api.agiworkforce.com")
-            .awai
+            .await
             .unwrap();
         assert_eq!(response["status"], "ok");
 

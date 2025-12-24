@@ -75,7 +75,7 @@ impl SandboxManager {
 
             Ok::<(), anyhow::Error>(())
         })
-        .awai
+        .await
         .map_err(|e| anyhow!("Task join error: {}", e))??;
 
         tracing::info!(
@@ -89,7 +89,7 @@ impl SandboxManager {
     async fn is_git_repo(&self, path: &Path) -> Result<bool> {
         let path = path.to_path_buf();
         tauri::async_runtime::spawn_blocking(move || git2::Repository::discover(&path).is_ok())
-            .awai
+            .await
             .map_err(|e| anyhow!("Task join error: {}", e))
     }
 
@@ -133,7 +133,7 @@ impl SandboxManager {
 
             Ok::<(), anyhow::Error>(())
         })
-        .awai
+        .await
         .map_err(|e| anyhow!("Task join error: {}", e))??;
 
         Ok(())

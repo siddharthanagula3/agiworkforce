@@ -67,7 +67,7 @@ impl WhatsAppClient {
             return Err(format!("WhatsApp API error: {}", error.message).into());
         }
 
-        let message_id = resul
+        let message_id = result
             .messages
             .and_then(|msgs| msgs.first().map(|m| m.id.clone()))
             .ok_or("No message ID returned")?;
@@ -113,7 +113,7 @@ impl WhatsAppClient {
             return Err(format!("WhatsApp API error: {}", error.message).into());
         }
 
-        let message_id = resul
+        let message_id = result
             .messages
             .and_then(|msgs| msgs.first().map(|m| m.id.clone()))
             .ok_or("No message ID returned")?;
@@ -154,7 +154,7 @@ impl WhatsAppClient {
             return Err(format!("WhatsApp API error: {}", error.message).into());
         }
 
-        let message_id = resul
+        let message_id = result
             .messages
             .and_then(|msgs| msgs.first().map(|m| m.id.clone()))
             .ok_or("No message ID returned")?;
@@ -204,7 +204,7 @@ impl WhatsAppClient {
             return Err(format!("WhatsApp API error: {}", error.message).into());
         }
 
-        let message_id = resul
+        let message_id = result
             .messages
             .and_then(|msgs| msgs.first().map(|m| m.id.clone()))
             .ok_or("No message ID returned")?;
@@ -259,7 +259,7 @@ impl WhatsAppClient {
             return Err(format!("WhatsApp API error: {}", error.message).into());
         }
 
-        let message_id = resul
+        let message_id = result
             .messages
             .and_then(|msgs| msgs.first().map(|m| m.id.clone()))
             .ok_or("No message ID returned")?;

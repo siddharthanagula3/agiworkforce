@@ -65,7 +65,7 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: TrayIconEvent) {
         button: MouseButton::Left,
         button_state: MouseButtonState::Up,
         ..
-    } = even
+    } = event
     {
         let app = tray.app_handle();
         if let Some(window) = app.get_webview_window("main") {

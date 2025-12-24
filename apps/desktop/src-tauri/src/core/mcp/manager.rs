@@ -176,7 +176,7 @@ impl McpServerManager {
             }
         }
 
-        self.start_server(name).awai
+        self.start_server(name).await
     }
 
     pub fn is_running(&self, name: &str) -> bool {

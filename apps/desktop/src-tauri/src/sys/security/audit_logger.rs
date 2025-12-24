@@ -156,7 +156,8 @@ impl AuditLogger {
                 event.resource_id,
                 event.action,
                 event.status.as_str(),
-                event.metadata
+                event
+                    .metadata
                     .map(|m| serde_json::to_string(&m).unwrap_or_default()),
                 signature,
             ],

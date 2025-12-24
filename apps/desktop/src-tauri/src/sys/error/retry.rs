@@ -211,7 +211,7 @@ where
         Ok(result) => result,
         Err(_) => Err(AGIError::TimeoutError(format!(
             "Operation timed out after {:?}",
-            timeou
+            timeout
         ))),
     }
 }

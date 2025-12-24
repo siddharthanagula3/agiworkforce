@@ -371,7 +371,7 @@ pub async fn get_user_clones(
         )
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-    let clones = stm
+    let clones = stmt
         .query_map(rusqlite::params![&user_id], |row| {
             Ok(serde_json::json!({
                 "clone_id": row.get::<_, String>(0)?,

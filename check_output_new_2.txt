@@ -1,0 +1,71 @@
+    Checking agiworkforce-desktop v5.0.0 (/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri)
+error[E0425]: cannot find value `member_coun` in this scope
+   --> apps/desktop/src-tauri/src/features/teams/team_billing.rs:362:40
+    |
+362 |                 count, new_seat_count, member_coun
+    |                                        ^^^^^^^^^^^ help: a local variable with a similar name exists: `member_count`
+
+error[E0425]: cannot find value `oauth_clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/api.rs:203:5
+    |
+203 |     oauth_clien
+    |     ^^^^^^^^^^^ help: a local variable with a similar name exists: `oauth_client`
+
+error[E0425]: cannot find value `oauth_clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/api.rs:222:5
+    |
+222 |     oauth_clien
+    |     ^^^^^^^^^^^ help: a local variable with a similar name exists: `oauth_client`
+
+error[E0425]: cannot find value `oauth_clien` in this scope
+   --> apps/desktop/src-tauri/src/sys/commands/api.rs:240:5
+    |
+240 |     oauth_clien
+    |     ^^^^^^^^^^^ help: a local variable with a similar name exists: `oauth_client`
+
+error[E0425]: cannot find value `forma` in this scope
+  --> apps/desktop/src-tauri/src/sys/commands/voice.rs:87:9
+   |
+87 |         forma
+   |         ^^^^^ help: a local variable with a similar name exists: `format`
+
+error[E0609]: no field `oauth_clien` on type `&mut GoogleCalendarClient`
+   --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:102:26
+    |
+102 |                         .oauth_clien
+    |                          ^^^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+102 |                         .oauth_client
+    |                                     +
+
+error[E0277]: `rusqlite::Connection` doesn't implement `std::fmt::Display`
+   --> apps/desktop/src-tauri/src/core/agi/knowledge.rs:284:25
+    |
+282 |                         "[Knowledge] Keeping top {} entries (out of {})",
+    |                                                                     -- required by this formatting parameter
+283 |                         keep_count,
+284 |                         conn
+    |                         ^^^^ `rusqlite::Connection` cannot be formatted with the default formatter
+    |
+    = help: the trait `std::fmt::Display` is not implemented for `rusqlite::Connection`
+    = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+    = help: the trait `std::fmt::Display` is implemented for `parking_lot::lock_api::MutexGuard<'_, R, T>`
+    = note: required for `parking_lot::lock_api::MutexGuard<'_, parking_lot::RawMutex, rusqlite::Connection>` to implement `std::fmt::Display`
+    = note: this error originates in the macro `$crate::__macro_support::format_args` which comes from the expansion of the macro `tracing::info` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0609]: no field `oauth_clien` on type `&mut GoogleCalendarClient`
+  --> apps/desktop/src-tauri/src/features/calendar/google_calendar.rs:69:14
+   |
+69 |             .oauth_clien
+   |              ^^^^^^^^^^^ unknown field
+   |
+help: a field with a similar name exists
+   |
+69 |             .oauth_client
+   |                         +
+
+Some errors have detailed explanations: E0277, E0425, E0609.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `agiworkforce-desktop` (lib) due to 8 previous errors

@@ -123,15 +123,17 @@ mod tests {
         let resolution1 = ApprovalResolution::Approved { trust: false };
         let resolution2 = ApprovalResolution::Approved { trust: true };
 
-        let resolve_task1 =
-            task::spawn(
-                async move { controller_clone1.resolve("test_action_1", resolution1).await },
-            );
+        let resolve_task1 = task::spawn(async move {
+            controller_clone1
+                .resolve("test_action_1", resolution1)
+                .await
+        });
 
-        let resolve_task2 =
-            task::spawn(
-                async move { controller_clone2.resolve("test_action_1", resolution2).await },
-            );
+        let resolve_task2 = task::spawn(async move {
+            controller_clone2
+                .resolve("test_action_1", resolution2)
+                .await
+        });
 
         let result1 = resolve_task1.await.unwrap();
         let result2 = resolve_task2.await.unwrap();

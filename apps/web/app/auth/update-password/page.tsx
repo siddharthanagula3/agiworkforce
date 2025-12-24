@@ -20,6 +20,7 @@ export default function UpdatePasswordPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
+        // no session
       }
     };
     checkSession();

@@ -107,7 +107,7 @@ export function ReasoningAccordion({
             <div className="border-t border-zinc-800">
               <div className="max-h-96 overflow-y-auto custom-scrollbar">
                 {}
-                {/* @ts-expect-error */}
+                {/* @ts-expect-error SyntaxHighlighter types issue */}
                 <SyntaxHighlighter
                   language="markdown"
                   style={vscDarkPlus}

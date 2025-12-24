@@ -66,7 +66,7 @@ impl GoogleCalendarClient {
         tracing::info!("Authorizing with Google Calendar");
 
         let token = self
-            .oauth_clien
+            .oauth_client
             .exchange_code(code, Some(code_verifier))
             .await?
             .with_expiration();
@@ -99,7 +99,7 @@ impl GoogleCalendarClient {
 
                 if let Some(ref refresh_token) = token.refresh_token {
                     let new_token = self
-                        .oauth_clien
+                        .oauth_client
                         .refresh_token(refresh_token)
                         .await?
                         .with_expiration();
@@ -183,7 +183,7 @@ impl GoogleCalendarClient {
         tracing::debug!("Fetching events for calendar: {}", request.calendar_id);
 
         let response = self
-            .clien
+            .client
             .get(&url)
             .bearer_auth(token)
             .query(&params)
@@ -229,7 +229,7 @@ impl GoogleCalendarClient {
         tracing::debug!("Creating event: {}", request.title);
 
         let response = self
-            .clien
+            .client
             .post(&url)
             .bearer_auth(token)
             .json(&google_event)
@@ -293,7 +293,7 @@ impl GoogleCalendarClient {
         tracing::debug!("Updating event: {}", event_id);
 
         let response = self
-            .clien
+            .client
             .put(&url)
             .bearer_auth(token)
             .json(&google_event)

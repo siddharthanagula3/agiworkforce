@@ -102,10 +102,10 @@ mod tests {
             context_memory: vec![],
         };
 
-        contex
+        context
             .current_state
             .insert("step_1".to_string(), json!({"status": "completed"}));
-        contex
+        context
             .current_state
             .insert("step_2".to_string(), json!({"status": "in_progress"}));
 

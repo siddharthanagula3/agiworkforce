@@ -48,7 +48,7 @@ impl AutonomousAgent {
     }
 
     pub async fn start(&self) -> Result<()> {
-        self.run_autonomous_loop().awai
+        self.run_autonomous_loop().await
     }
 
     pub async fn run_autonomous_loop(&self) -> Result<()> {
@@ -294,7 +294,7 @@ impl AutonomousAgent {
             tracing::warn!(
                 "[Agent] CPU usage ({:.1}%) exceeds limit ({:.1}%)",
                 cpu_usage,
-                self.config.cpu_limit_percen
+                self.config.cpu_limit_percent
             );
             return Ok(false);
         }

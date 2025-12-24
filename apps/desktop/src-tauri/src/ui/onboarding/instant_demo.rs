@@ -86,7 +86,7 @@ impl InstantDemo {
             input_summary: "50 unread emails in inbox".to_string(),
             output_summary: format!(
                 "Categorized: {} urgent, {} important, {} spam, {} newsletters. {} responses drafted, {} escalated",
-                urgent_count, important_count, spam_count, newsletter_count, response_count, urgent_coun
+                urgent_count, important_count, spam_count, newsletter_count, response_count, urgent_count
             ),
             actions_taken: vec![
                 format!("Categorized 50 emails by priority and type"),
@@ -122,7 +122,7 @@ impl InstantDemo {
             input_summary: "20 PDF invoices (mix of formats and vendors)".to_string(),
             output_summary: format!(
                 "Processed {} invoices from {} vendors, total value ${:.2}. All data validated and entered",
-                sample_invoices.len(), vendor_count, total_amoun
+                sample_invoices.len(), vendor_count, total_amount
             ),
             actions_taken: vec![
                 "Extracted text from all 20 invoice PDFs using OCR".to_string(),

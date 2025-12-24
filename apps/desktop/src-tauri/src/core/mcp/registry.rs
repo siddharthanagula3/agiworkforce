@@ -117,9 +117,9 @@ impl McpToolRegistry {
 
         let args_value = serde_json::to_value(arguments)?;
 
-        self.mcp_clien
+        self.mcp_client
             .call_tool(server_name, &tool_name, args_value)
-            .awai
+            .await
     }
 
     pub fn search_tools(&self, query: &str) -> Vec<Tool> {

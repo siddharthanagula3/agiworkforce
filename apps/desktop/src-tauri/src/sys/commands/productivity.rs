@@ -238,7 +238,7 @@ pub async fn productivity_trello_create_card(
 
     if let Some(trello_client) = manager.trello_client() {
         let client = trello_client.lock().await;
-        let card_id = clien
+        let card_id = client
             .create_card(&list_id, &name, description.as_deref(), None)
             .await?;
         Ok(card_id)
@@ -356,7 +356,7 @@ pub async fn productivity_asana_create_task(
 
     if let Some(asana_client) = manager.asana_client() {
         let client = asana_client.lock().await;
-        let task_id = clien
+        let task_id = client
             .create_task_raw(
                 &name,
                 notes.as_deref(),

@@ -125,7 +125,7 @@ impl TelemetryCollector {
             .timeout(std::time::Duration::from_secs(10))
             .build()?;
 
-        let response = clien
+        let response = client
             .post(endpoint)
             .header("Content-Type", "application/json")
             .json(batch)

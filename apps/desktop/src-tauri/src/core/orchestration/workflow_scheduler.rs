@@ -72,7 +72,7 @@ impl WorkflowScheduler {
 
         self.executor
             .execute_workflow(workflow_id.to_string(), event_data)
-            .awai
+            .await
     }
 
     pub async fn trigger_via_webhook(
@@ -87,7 +87,7 @@ impl WorkflowScheduler {
 
         self.executor
             .execute_workflow(workflow_id.to_string(), payload)
-            .awai
+            .await
     }
 
     pub fn register_file_watcher_trigger(

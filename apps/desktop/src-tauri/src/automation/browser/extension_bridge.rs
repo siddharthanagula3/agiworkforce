@@ -82,7 +82,7 @@ impl ExtensionBridge {
     }
 
     pub async fn is_connected(&self) -> bool {
-        *self.connected.lock().awai
+        *self.connected.lock().await
     }
 
     pub async fn connect(&self) -> Result<()> {

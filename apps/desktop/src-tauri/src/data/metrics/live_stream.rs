@@ -42,7 +42,7 @@ impl LiveMetricsStream {
 
         self.realtime_server
             .broadcast_to_user(user_id, event)
-            .awai
+            .await
             .map_err(|e| format!("Failed to broadcast update: {}", e))?;
 
         Ok(())
@@ -61,7 +61,7 @@ impl LiveMetricsStream {
             new_totals,
         };
 
-        self.emit_update(user_id, update).awai
+        self.emit_update(user_id, update).await
     }
 
     pub async fn emit_milestone(
@@ -81,7 +81,7 @@ impl LiveMetricsStream {
 
         self.realtime_server
             .broadcast_to_user(user_id, event)
-            .awai
+            .await
             .map_err(|e| format!("Failed to broadcast milestone: {}", e))?;
 
         Ok(())

@@ -45,7 +45,7 @@ impl StdioTransport {
             .take()
             .ok_or_else(|| McpError::ConnectionError("Failed to get stdin handle".to_string()))?;
         let stdout = child
-            .stdou
+            .stdout
             .take()
             .ok_or_else(|| McpError::ConnectionError("Failed to get stdout handle".to_string()))?;
         let stderr = child

@@ -497,11 +497,11 @@ impl ToolExecutor {
         };
 
         let stdout = stdout_task
-            .awai
+            .await
             .map_err(|e| anyhow!("Failed to join stdout reader: {}", e))?
             .map_err(|e| anyhow!("Failed to read stdout: {}", e))?;
         let stderr = stderr_task
-            .awai
+            .await
             .map_err(|e| anyhow!("Failed to join stderr reader: {}", e))?
             .map_err(|e| anyhow!("Failed to read stderr: {}", e))?;
         let output = std::process::Output {
@@ -752,7 +752,7 @@ impl ToolExecutor {
                 }
 
                 let size_bytes = fs::metadata(&path)
-                    .awai
+                    .await
                     .ok()
                     .map(|meta| meta.len() as usize);
                 let delete_result = fs::remove_file(&path).await;
@@ -1163,7 +1163,7 @@ impl ToolExecutor {
 
                             match tab_manager
                                 .navigate(&tab_id, url, NavigationOptions::default())
-                                .awai
+                                .await
                             {
                                 Ok(_) => Ok(ToolResult {
                                     success: true,
@@ -1232,7 +1232,7 @@ impl ToolExecutor {
 
                     match session_manager
                         .send_input(&session_id, &format!("{}\n", code))
-                        .awai
+                        .await
                     {
                         Ok(_) => {
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -1766,7 +1766,7 @@ impl ToolExecutor {
                         llm_state,
                         db_state,
                     )
-                    .awai
+                    .await
                     {
                         Ok(response) => Ok(ToolResult {
                             success: true,
@@ -2110,7 +2110,10 @@ impl ToolExecutor {
         } else {
             format!(
                 "Error: {}",
-                result.error.as_ref().unwrap_or(&"Unknown error".to_string())
+                result
+                    .error
+                    .as_ref()
+                    .unwrap_or(&"Unknown error".to_string())
             )
         }
     }

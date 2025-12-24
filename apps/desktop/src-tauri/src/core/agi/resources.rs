@@ -48,7 +48,7 @@ impl ResourceManager {
             .lock()
             .map_err(|e| anyhow::anyhow!("Resource state lock poisoned: {}", e))?;
 
-        Ok(usage.cpu_usage_percent < self.limits.cpu_percen
+        Ok(usage.cpu_usage_percent < self.limits.cpu_percent
             && usage.memory_usage_mb < self.limits.memory_mb
             && usage.network_usage_mbps < self.limits.network_mbps
             && usage.storage_usage_mb < self.limits.storage_mb)
@@ -62,7 +62,7 @@ impl ResourceManager {
         self.update_usage_internal(&mut usage)?;
 
         let can_reserve = (usage.cpu_usage_percent + resources.cpu_percent)
-            <= self.limits.cpu_percen
+            <= self.limits.cpu_percent
             && (usage.memory_usage_mb + resources.memory_mb) <= self.limits.memory_mb
             && (usage.network_usage_mbps + resources.network_mb) <= self.limits.network_mbps;
 

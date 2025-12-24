@@ -91,7 +91,7 @@ mod capture_tests {
                 x,
                 y,
                 width,
-                heigh
+                height
             );
 
             let capture = result.unwrap();
@@ -194,7 +194,7 @@ mod dxgi_tests {
                 display.height > 0,
                 "Display {} height should be > 0, got {}",
                 i,
-                display.heigh
+                display.height
             );
         }
     }
@@ -223,7 +223,7 @@ mod dxgi_tests {
             assert!(
                 display.height >= 480,
                 "Display height should be at least 480, got {}",
-                display.heigh
+                display.height
             );
 
             assert!(
@@ -234,7 +234,7 @@ mod dxgi_tests {
             assert!(
                 display.height <= 4320,
                 "Display height should be at most 4320, got {}",
-                display.heigh
+                display.height
             );
         }
     }

@@ -90,7 +90,7 @@ impl IntelligentFileAccess {
         }
 
         tokio::fs::read_to_string(file_path)
-            .awai
+            .await
             .map_err(|e| anyhow!("Failed to read file: {}", e))
     }
 
@@ -122,7 +122,7 @@ impl IntelligentFileAccess {
     }
 
     async fn capture_relevant_area(&self, _file_path: &Path, _error: &str) -> Result<String> {
-        self.vision.capture_screenshot(None).awai
+        self.vision.capture_screenshot(None).await
     }
 
     async fn perform_ocr_on_screenshot(&self, screenshot_path: &str) -> Result<ScreenOcrResult> {
@@ -155,7 +155,7 @@ impl IntelligentFileAccess {
         if let Some(ref router) = self.llm_router {
             match self
                 .analyze_with_llm(router.as_ref(), &prompt, &ocr_result.text)
-                .awai
+                .await
             {
                 Ok(analysis_text) => {
                     return Ok(self.parse_analysis(&analysis_text, ocr_result));

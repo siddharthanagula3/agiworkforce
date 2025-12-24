@@ -51,7 +51,7 @@ impl McpSession {
         };
 
         let response = self
-            .transpor
+            .transport
             .send_request(
                 "initialize".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -69,7 +69,7 @@ impl McpSession {
             result.server_info.version
         );
 
-        self.transpor
+        self.transport
             .send_notification("notifications/initialized".to_string(), None);
 
         Ok(result)
@@ -79,7 +79,7 @@ impl McpSession {
         tracing::debug!("[MCP Session] Listing tools for '{}'", self.name);
 
         let response = self
-            .transpor
+            .transport
             .send_request("tools/list".to_string(), None)
             .await?;
 
@@ -116,7 +116,7 @@ impl McpSession {
         };
 
         let response = self
-            .transpor
+            .transport
             .send_request(
                 "tools/call".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -141,7 +141,7 @@ impl McpSession {
         let params = ResourcesListParams { cursor: None };
 
         let response = self
-            .transpor
+            .transport
             .send_request(
                 "resources/list".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -165,7 +165,7 @@ impl McpSession {
         };
 
         let response = self
-            .transpor
+            .transport
             .send_request(
                 "resources/read".to_string(),
                 Some(serde_json::to_value(params)?),
@@ -195,7 +195,7 @@ impl McpSession {
 
     pub async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Session] Shutting down session for '{}'", self.name);
-        self.transport.shutdown().awai
+        self.transport.shutdown().await
     }
 }
 

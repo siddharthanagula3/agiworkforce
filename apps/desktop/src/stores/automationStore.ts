@@ -30,7 +30,7 @@ import type {
   RecordedAction,
   Recording,
   RecordingSession,
-} from '../types/automation-enhanced';
+} from '../types/automationEnhanced';
 import type { CaptureResult } from '../types/capture';
 
 interface Shortcut {

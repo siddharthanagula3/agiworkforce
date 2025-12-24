@@ -48,7 +48,7 @@ impl ApiKey {
 
     pub fn is_expired(&self) -> bool {
         if let Some(expires_at) = self.expires_at {
-            Utc::now() > expires_a
+            Utc::now() > expires_at
         } else {
             false
         }

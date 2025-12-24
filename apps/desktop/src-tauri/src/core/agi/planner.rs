@@ -235,7 +235,7 @@ Return ONLY the JSON array."#,
             }
         }
 
-        self.generate_basic_plan(goal, tools, best_practices).awai
+        self.generate_basic_plan(goal, tools, best_practices).await
     }
 
     async fn generate_basic_plan(
@@ -774,6 +774,6 @@ Return ONLY a JSON array of steps with this structure:
             }
         }
 
-        self.generate_basic_plan(goal, tools, &[]).awai
+        self.generate_basic_plan(goal, tools, &[]).await
     }
 }

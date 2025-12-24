@@ -103,7 +103,7 @@ impl KnowledgeBase {
             },
         };
 
-        self.add_entry(entry).awai
+        self.add_entry(entry).await
     }
 
     pub async fn add_experience(&self, goal: &Goal, result: &ToolExecutionResult) -> Result<()> {
@@ -127,7 +127,7 @@ impl KnowledgeBase {
             importance: if result.success { 0.7 } else { 0.9 },
         };
 
-        self.add_entry(entry).awai
+        self.add_entry(entry).await
     }
 
     pub async fn add_entry(&self, entry: KnowledgeEntry) -> Result<()> {
@@ -281,7 +281,7 @@ impl KnowledgeBase {
                     tracing::info!(
                         "[Knowledge] Keeping top {} entries (out of {})",
                         keep_count,
-                        conn
+                        count
                     );
 
                     conn.execute(

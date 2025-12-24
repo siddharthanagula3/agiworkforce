@@ -127,7 +127,7 @@ impl ApprovalWorkflow {
             "INSERT INTO approval_requests (
                 id, requester_id, team_id, action_type,
                 resource_type, resource_id, risk_level,
-                justification, status, created_at, expires_a
+                justification, status, created_at, expires_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 id,
@@ -213,7 +213,7 @@ impl ApprovalWorkflow {
         let request = conn.query_row(
             "SELECT id, requester_id, team_id, action_type, resource_type,
                     resource_id, risk_level, justification, status,
-                    created_at, reviewed_by, reviewed_at, decision_reason, expires_a
+                    created_at, reviewed_by, reviewed_at, decision_reason, expires_at
              FROM approval_requests WHERE id = ?1",
             [request_id],
             |row| {
@@ -251,7 +251,7 @@ impl ApprovalWorkflow {
         let mut query = String::from(
             "SELECT id, requester_id, team_id, action_type, resource_type,
                     resource_id, risk_level, justification, status,
-                    created_at, reviewed_by, reviewed_at, decision_reason, expires_a
+                    created_at, reviewed_by, reviewed_at, decision_reason, expires_at
              FROM approval_requests WHERE status = 'pending'",
         );
 
@@ -267,7 +267,7 @@ impl ApprovalWorkflow {
         let mut stmt = conn.prepare(&query)?;
         let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        let requests = stm
+        let requests = stmt
             .query_map(param_refs.as_slice(), |row| {
                 Ok(ApprovalRequest {
                     id: row.get(0)?,

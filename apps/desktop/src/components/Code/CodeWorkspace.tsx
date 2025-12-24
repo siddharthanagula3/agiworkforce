@@ -285,6 +285,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
       closeFile(pendingCloseFile.path);
       setPendingCloseFile(null);
     } catch {
+      // ignore
     } finally {
       setPendingCloseSaving(false);
     }
@@ -339,7 +340,9 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
     const saveTab = async () => {
       try {
         await persistFile(tabMenu.path);
-      } catch {}
+      } catch {
+        // ignore
+      }
       setTabMenu(null);
     };
 
@@ -432,7 +435,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         className,
       )}
     >
-      {}
+      {/* Sidebar */}
       <div
         className={cn(
           'flex shrink-0 flex-col border-r border-border bg-muted/10 transition-all duration-200',
@@ -450,9 +453,9 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         ) : null}
       </div>
 
-      {}
+      {/* Main Content */}
       <div className="flex flex-1 flex-col">
-        {}
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-2">
           <div className="flex items-center gap-2">
             <button
@@ -505,7 +508,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           </div>
         </div>
 
-        {}
+        {/* Tabs */}
         {openFiles.length > 0 && (
           <div className="flex items-center gap-1 px-2 py-1 border-b border-border bg-muted/5 overflow-x-auto">
             {openFiles.map((file, index) => {
@@ -556,7 +559,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           </div>
         )}
 
-        {}
+        {/* Editor Area */}
         <div className="flex-1 overflow-hidden">
           {activeFile ? (
             <CodeEditor

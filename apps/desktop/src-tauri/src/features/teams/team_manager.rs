@@ -168,7 +168,7 @@ impl TeamManager {
             .prepare("SELECT id, name, description, owner_id, settings, created_at, updated_at FROM teams WHERE id = ?1")
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let team = stm
+        let team = stmt
             .query_row(params![team_id], |row| {
                 let settings_json: String = row.get(4)?;
                 let settings: TeamSettings =
@@ -255,7 +255,7 @@ impl TeamManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let teams = stm
+        let teams = stmt
             .query_map(params![user_id], |row| {
                 let settings_json: String = row.get(4)?;
                 let settings: TeamSettings =
@@ -429,7 +429,7 @@ impl TeamManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let members = stm
+        let members = stmt
             .query_map(params![team_id], |row| {
                 let role_str: String = row.get(2)?;
                 let role = TeamRole::from_str(&role_str).unwrap_or(TeamRole::Viewer);
@@ -467,7 +467,7 @@ impl TeamManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let member = stm
+        let member = stmt
             .query_row(params![team_id, user_id], |row| {
                 let role_str: String = row.get(2)?;
                 let role = TeamRole::from_str(&role_str).unwrap_or(TeamRole::Viewer);
@@ -537,7 +537,7 @@ impl TeamManager {
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let invitation = stm
+        let invitation = stmt
             .query_row(params![token], |row| {
                 let role_str: String = row.get(3)?;
                 let role = TeamRole::from_str(&role_str).unwrap_or(TeamRole::Viewer);
@@ -591,14 +591,14 @@ impl TeamManager {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, team_id, email, role, invited_by, token, expires_at, accepted, created_a
+                "SELECT id, team_id, email, role, invited_by, token, expires_at, accepted, created_at
                  FROM team_invitations
                  WHERE team_id = ?1 AND accepted = 0
                  ORDER BY created_at DESC"
             )
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let invitations = stm
+        let invitations = stmt
             .query_map(params![team_id], |row| {
                 let role_str: String = row.get(3)?;
                 let role = TeamRole::from_str(&role_str).unwrap_or(TeamRole::Viewer);

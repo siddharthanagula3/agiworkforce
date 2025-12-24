@@ -162,7 +162,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         if (continuous && !isManualStop.current && recognitionRef.current) {
           try {
             recognitionRef.current.start();
-          } catch {}
+          } catch {
+            // ignore
+          }
         }
 
         onEnd?.();
@@ -175,7 +177,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
-        } catch {}
+        } catch {
+          // ignore
+        }
       }
     };
   }, [continuous, interimResults, language, onResult, onError, onEnd]);
@@ -207,7 +211,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     isManualStop.current = true;
     try {
       recognitionRef.current.stop();
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, [state.isListening]);
 
   const toggleListening = useCallback(() => {

@@ -64,7 +64,7 @@ impl McpToolExecutor {
         let args_value = serde_json::to_value(arguments)?;
 
         let result_value = self
-            .clien
+            .client
             .call_tool(server_name, &tool_name, args_value)
             .await;
 
@@ -130,7 +130,7 @@ impl McpToolExecutor {
             .map(|(tool_id, args)| async move { self.execute_tool(&tool_id, args).await })
             .collect();
 
-        futures::future::join_all(futures).awai
+        futures::future::join_all(futures).await
     }
 
     fn record_execution(&self, result: &ToolExecutionResult) {

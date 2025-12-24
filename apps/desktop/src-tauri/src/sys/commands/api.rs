@@ -200,9 +200,9 @@ pub async fn api_oauth_exchange_code(
         challenges.remove(&client_id).map(|c| c.code_verifier)
     };
 
-    oauth_clien
+    oauth_client
         .exchange_code(&code, code_verifier.as_deref())
-        .awai
+        .await
         .map_err(|e| format!("Failed to exchange code: {}", e))
 }
 
@@ -219,9 +219,9 @@ pub async fn api_oauth_refresh_token(
         .get(&client_id)
         .ok_or_else(|| format!("OAuth client not found: {}", client_id))?;
 
-    oauth_clien
+    oauth_client
         .refresh_token(&refresh_token)
-        .awai
+        .await
         .map_err(|e| format!("Failed to refresh token: {}", e))
 }
 
@@ -237,9 +237,9 @@ pub async fn api_oauth_client_credentials(
         .get(&client_id)
         .ok_or_else(|| format!("OAuth client not found: {}", client_id))?;
 
-    oauth_clien
+    oauth_client
         .client_credentials()
-        .awai
+        .await
         .map_err(|e| format!("Client credentials flow failed: {}", e))
 }
 
@@ -311,7 +311,7 @@ mod tests {
         state
             .oauth_clients
             .lock()
-            .awai
+            .await
             .insert("test".to_string(), oauth_client);
 
         assert!(state.oauth_clients.lock().await.contains_key("test"));
