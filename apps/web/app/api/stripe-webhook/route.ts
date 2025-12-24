@@ -245,11 +245,57 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
 
   let error;
   if (stripeSubId) {
-    const res = await supabaseAdmin
+    const { data: existingSub, error: fetchError } = await supabaseAdmin
       .from('subscriptions')
-      .update(updateData)
-      .eq('stripe_subscription_id', stripeSubId);
-    error = res.error;
+      .select('id')
+      .eq('stripe_subscription_id', stripeSubId)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('[billing] Failed to check existing subscription:', fetchError);
+    }
+
+    if (existingSub) {
+      // Normal path: update by stripe_subscription_id
+      const res = await supabaseAdmin
+        .from('subscriptions')
+        .update(updateData)
+        .eq('stripe_subscription_id', stripeSubId);
+      error = res.error;
+    } else {
+      // Fallback: Code did not find by stripe_subscription_id.
+      // Check if we have a user_id in metadata to link it.
+      const metadataUserId = subscription.metadata?.supabase_user_id;
+      if (metadataUserId) {
+        console.log(
+          `[billing] Subscription ${stripeSubId} not found by ID. Linking via metadata user_id: ${metadataUserId}`,
+        );
+        // We merge the IDs into updateData to ensure they are saved
+        const linkData = {
+          ...updateData,
+          stripe_subscription_id: stripeSubId,
+          stripe_customer_id: stripeCustomerId,
+        };
+
+        const res = await supabaseAdmin
+          .from('subscriptions')
+          .update(linkData)
+          .eq('user_id', metadataUserId);
+        error = res.error;
+      } else {
+        // Fallback 2: Try by customer ID as a last resort if user has no other subs?
+        // Actually, existing logic tried by customer ID if stripeSubId wasn't passed, but here stripeSubId IS passed.
+        // We'll stick to the original "else if (stripeCustomerId)" logic below only if we really didn't find anything.
+        console.warn(
+          `[billing] Subscription ${stripeSubId} not found and no metadata user_id. Falling back to customer ID lookup.`,
+        );
+        const res = await supabaseAdmin
+          .from('subscriptions')
+          .update(updateData)
+          .eq('stripe_customer_id', stripeCustomerId);
+        error = res.error;
+      }
+    }
   } else if (stripeCustomerId) {
     const res = await supabaseAdmin
       .from('subscriptions')
