@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { ArrowRight, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { Header } from '../../components/layout/Header';
+import { getSupabaseClient } from '../../services/supabase';
 
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
@@ -43,6 +44,59 @@ function PricingContent() {
       const errorMessage =
         err instanceof Error ? err.message : 'An error occurred during checkout. Please try again.';
       alert(errorMessage);
+      setLoadingPlan(null);
+    }
+  };
+
+  const [subscription, setSubscription] = useState<{ status: string; price_id: string } | null>(
+    null,
+  );
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data } = await supabase
+            .from('subscriptions')
+            .select('status, price_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          setSubscription(data);
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      } finally {
+        setLoadingSubscription(false);
+      }
+    };
+
+    fetchSubscription();
+  }, []);
+
+  const isSubscribed =
+    subscription && ['active', 'trialing', 'past_due'].includes(subscription.status);
+
+  const handleManage = async () => {
+    setLoadingPlan('manage');
+    try {
+      const res = await fetch('/api/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to open portal');
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      console.error('Portal error:', err);
+      alert('Failed to load billing portal');
+    } finally {
       setLoadingPlan(null);
     }
   };
@@ -166,10 +220,18 @@ function PricingContent() {
                 </ul>
                 <Button
                   className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20 border-0"
-                  onClick={() => handleUpgrade('hobby')}
-                  disabled={loadingPlan === 'hobby'}
+                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('hobby'))}
+                  disabled={
+                    loadingPlan === 'hobby' || loadingPlan === 'manage' || loadingSubscription
+                  }
                 >
-                  {loadingPlan === 'hobby' ? 'Redirecting...' : 'Claim Offer'}
+                  {loadingSubscription
+                    ? 'Loading...'
+                    : isSubscribed
+                      ? 'Manage Subscription'
+                      : loadingPlan === 'hobby'
+                        ? 'Redirecting...'
+                        : 'Claim Offer'}
                 </Button>
               </div>
 
@@ -210,11 +272,19 @@ function PricingContent() {
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2"
-                  onClick={() => handleUpgrade('pro')}
-                  disabled={loadingPlan === 'pro'}
+                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('pro'))}
+                  disabled={
+                    loadingPlan === 'pro' || loadingPlan === 'manage' || loadingSubscription
+                  }
                 >
-                  {loadingPlan === 'pro' ? 'Redirecting...' : 'Upgrade to Pro'}
-                  <ArrowRight className="h-4 w-4" />
+                  {loadingSubscription
+                    ? 'Loading...'
+                    : isSubscribed
+                      ? 'Manage Subscription'
+                      : loadingPlan === 'pro'
+                        ? 'Redirecting...'
+                        : 'Upgrade to Pro'}
+                  {!isSubscribed && <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>
 
@@ -252,11 +322,19 @@ function PricingContent() {
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
-                  onClick={() => handleUpgrade('max')}
-                  disabled={loadingPlan === 'max'}
+                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('max'))}
+                  disabled={
+                    loadingPlan === 'max' || loadingPlan === 'manage' || loadingSubscription
+                  }
                 >
-                  {loadingPlan === 'max' ? 'Redirecting...' : 'Upgrade to Max'}
-                  <ArrowRight className="h-4 w-4" />
+                  {loadingSubscription
+                    ? 'Loading...'
+                    : isSubscribed
+                      ? 'Manage Subscription'
+                      : loadingPlan === 'max'
+                        ? 'Redirecting...'
+                        : 'Upgrade to Max'}
+                  {!isSubscribed && <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>
             </div>

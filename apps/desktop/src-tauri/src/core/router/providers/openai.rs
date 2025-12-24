@@ -207,9 +207,14 @@ impl OpenAIProvider {
 
     fn calculate_cost(model: &str, prompt_tokens: u32, completion_tokens: u32) -> f64 {
         let (input_cost, output_cost) = match model {
-            "gpt-5.2" => (6.0, 18.0),
-            "gpt-5.2-turbo" => (2.0, 6.0),
-            "gpt-5.2-reasoner" => (10.0, 30.0),
+        "gpt-5.2" => (6.0, 18.0),
+        "gpt-5.2-pro" => (10.0, 30.0),
+        "gpt-5.2-chat-latest" => (4.0, 12.0),
+        "gpt-5.2-codex" => (8.0, 24.0),
+        "gpt-5.1" => (5.5, 16.5),
+        "gpt-5.1-chat-latest" => (4.0, 12.0),
+        "gpt-5.1-thinking" => (7.0, 21.0),
+        "gpt-5.1-codex-max" => (8.0, 24.0),
 
             "gpt-5" => (15.0, 45.0),
             "gpt-5-codex" => (10.0, 30.0),

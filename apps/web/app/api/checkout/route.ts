@@ -129,8 +129,8 @@ export async function POST(request: Request) {
         },
       ],
       subscription_data: subscriptionData,
-      allow_promotion_codes: true,
-      success_url: `${origin}/download?session_id={CHECKOUT_SESSION_ID}`,
+      allow_promotion_codes: plan === 'hobby',
+      success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       customer_email: user.email ?? undefined,
       metadata: {

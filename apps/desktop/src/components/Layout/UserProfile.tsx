@@ -18,10 +18,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onFeedbackClick,
   collapsed = false,
 }) => {
-  const { displayName, email, avatar } = useAccountStore((state) => state.account);
+  const { displayName, email, avatar, planDisplayName } = useAccountStore((state) => state.account);
 
   const name = displayName || email?.split('@')[0] || 'Account';
-  const userEmail = email || '';
 
   const initials = name
     .split(/[\s._-]+/)
@@ -54,7 +53,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm font-medium text-zinc-100">{name}</div>
-              <div className="truncate text-xs text-zinc-400">{userEmail}</div>
+              <div className="mt-0.5 inline-flex items-center rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-300">
+                {planDisplayName}
+              </div>
             </div>
           )}
         </button>
@@ -83,7 +84,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="truncate text-sm font-semibold text-zinc-100">{name}</div>
-                <div className="truncate text-xs text-zinc-400">{userEmail}</div>
+                <div className="mt-1 inline-flex items-center rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-300">
+                  {planDisplayName}
+                </div>
               </div>
             </div>
           </div>

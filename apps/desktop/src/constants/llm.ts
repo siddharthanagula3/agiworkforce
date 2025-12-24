@@ -12,12 +12,25 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   moonshot: 'Moonshot AI',
 };
 
+export const THINKING_MODEL_VARIANTS: Record<string, string> = {
+  'gpt-5.1': 'gpt-5.1-thinking',
+  'gpt-5.1-chat-latest': 'gpt-5.1-thinking',
+  'claude-sonnet-4-5': 'claude-opus-4-5',
+  'gemini-3-pro': 'gemini-3-deep-think',
+  'gemini-3-flash': 'gemini-3-deep-think',
+  'qwen3-turbo': 'qwen3-max',
+};
+
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
   openai: [
-    { value: 'gpt-5.1', label: 'GPT-5.1 ⭐ (Nov 24, 2025 - Latest)' },
-    { value: 'gpt-5.1-instant', label: 'GPT-5.1 Instant (Quick Responses)' },
-    { value: 'gpt-5.1-thinking', label: 'GPT-5.1 Thinking 🧠 (Complex Tasks)' },
-    { value: 'gpt-5.1-codex-max', label: 'GPT-5.1-Codex-Max (Agentic Coding, 24h+ Tasks)' },
+    { value: 'gpt-5.2', label: 'GPT-5.2 ⭐ (Dec 2025 - New Flagship)' },
+    { value: 'gpt-5.2-pro', label: 'GPT-5.2 Pro (High Performance)' },
+    { value: 'gpt-5.2-chat-latest', label: 'GPT-5.2 Chat (Efficient)' },
+    { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex (Agentic Coding)' },
+    { value: 'gpt-5.1', label: 'GPT-5.1 (Nov 24, 2025)' },
+    { value: 'gpt-5.1-chat-latest', label: 'GPT-5.1 Instant (Quick Responses)' }, // Renamed from instant
+    { value: 'gpt-5.1-thinking', label: 'GPT-5.1 Thinking 🧠' },
+    { value: 'gpt-5.1-codex-max', label: 'GPT-5.1-Codex-Max' },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 ⭐ (Best Coding - 77.2% SWE-bench)' },
@@ -61,8 +74,13 @@ export const PROVIDERS_IN_ORDER: Provider[] = [
 ];
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  'gpt-5.2': 128_000,
+  'gpt-5.2-pro': 128_000,
+  'gpt-5.2-chat-latest': 128_000,
+  'gpt-5.2-codex': 256_000,
+
   'gpt-5.1': 128_000,
-  'gpt-5.1-instant': 128_000,
+  'gpt-5.1-chat-latest': 128_000,
   'gpt-5.1-thinking': 128_000,
   'gpt-5.1-codex-max': 256_000,
 
@@ -100,6 +118,7 @@ export interface ModelMetadata {
     tools: boolean;
     vision: boolean;
     json: boolean;
+    thinking: boolean;
   };
   benchmarks?: {
     swebench?: number;
@@ -125,6 +144,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 68.0,
@@ -136,8 +156,62 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     bestFor: ['General Intelligence', 'Reduced Hallucinations', 'Better Prompt Adherence'],
     released: 'November 24, 2025',
   },
-  'gpt-5.1-instant': {
-    id: 'gpt-5.1-instant',
+  'gpt-5.2': {
+    id: 'gpt-5.2',
+    name: 'GPT-5.2',
+    provider: 'openai',
+    contextWindow: 128_000,
+    inputCost: 6.0,
+    outputCost: 18.0,
+    capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: false },
+    benchmarks: { swebench: 78.5, humaneval: 96.0, mmlu: 93.0 },
+    speed: 'medium',
+    quality: 'excellent',
+    bestFor: ['Flagship Tasks', 'Complex Reasoning'],
+    released: 'December 2025',
+  },
+  'gpt-5.2-pro': {
+    id: 'gpt-5.2-pro',
+    name: 'GPT-5.2 Pro',
+    provider: 'openai',
+    contextWindow: 128_000,
+    inputCost: 10.0,
+    outputCost: 30.0,
+    capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: false },
+    benchmarks: { swebench: 82.0, humaneval: 97.5, mmlu: 95.0 },
+    speed: 'medium',
+    quality: 'excellent',
+    bestFor: ['Deep Analysis', 'Hardest Problems'],
+    released: 'December 2025',
+  },
+  'gpt-5.2-chat-latest': {
+    id: 'gpt-5.2-chat-latest',
+    name: 'GPT-5.2 Chat',
+    provider: 'openai',
+    contextWindow: 128_000,
+    inputCost: 4.0,
+    outputCost: 12.0,
+    capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: false },
+    speed: 'fast',
+    quality: 'excellent',
+    bestFor: ['Chat', 'Quick Responses'],
+    released: 'December 2025',
+  },
+  'gpt-5.2-codex': {
+    id: 'gpt-5.2-codex',
+    name: 'GPT-5.2 Codex',
+    provider: 'openai',
+    contextWindow: 256_000,
+    inputCost: 8.0,
+    outputCost: 24.0,
+    capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: false },
+    speed: 'medium',
+    quality: 'excellent',
+    bestFor: ['Coding', 'Agentic Workflows'],
+    released: 'December 2025',
+  },
+  'gpt-5.1-chat-latest': {
+    id: 'gpt-5.1-chat-latest',
     name: 'GPT-5.1 Instant',
     provider: 'openai',
     contextWindow: 128_000,
@@ -148,6 +222,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 65.0,
@@ -171,6 +246,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: true,
     },
     benchmarks: {
       swebench: 72.0,
@@ -194,6 +270,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: true,
     },
     benchmarks: {
       swebench: 75.0,
@@ -218,6 +295,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 62.0,
@@ -241,6 +319,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 55.0,
@@ -264,6 +343,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: true,
     },
     benchmarks: {
       swebench: 68.0,
@@ -288,6 +368,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 77.2,
@@ -311,6 +392,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 65.0,
@@ -334,6 +416,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: true,
     },
     benchmarks: {
       swebench: 74.0,
@@ -358,6 +441,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: false,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 52.0,
@@ -382,6 +466,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 62.0,
@@ -410,6 +495,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: true,
       json: true,
+      thinking: false,
     },
     benchmarks: {
       swebench: 58.0,
@@ -432,8 +518,9 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     capabilities: {
       streaming: true,
       tools: true,
-      vision: true,
+      vision: false,
       json: true,
+      thinking: true,
     },
     benchmarks: {
       swebench: 70.0,
@@ -458,6 +545,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
       tools: true,
       vision: false,
       json: true,
+      thinking: true,
     },
     benchmarks: {
       swebench: 71.3,

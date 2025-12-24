@@ -381,6 +381,7 @@ pub async fn llm_get_available_models(
     let router = state.router.lock().await;
 
     let all_models = vec![
+        // OpenAI
         ModelInfo {
             id: "gpt-5.2".to_string(),
             name: "GPT-5.2".to_string(),
@@ -388,35 +389,69 @@ pub async fn llm_get_available_models(
             available: false,
         },
         ModelInfo {
-            id: "gpt-5.2-turbo".to_string(),
-            name: "GPT-5.2 Turbo".to_string(),
+            id: "gpt-5.2-pro".to_string(),
+            name: "GPT-5.2 Pro".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
         ModelInfo {
-            id: "gpt-5.2-reasoner".to_string(),
-            name: "GPT-5.2 Reasoner".to_string(),
+            id: "gpt-5.2-chat-latest".to_string(),
+            name: "GPT-5.2 Chat".to_string(),
             provider: "openai".to_string(),
             available: false,
         },
+        ModelInfo {
+            id: "gpt-5.2-codex".to_string(),
+            name: "GPT-5.2 Codex".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.1".to_string(),
+            name: "GPT-5.1".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.1-chat-latest".to_string(),
+            name: "GPT-5.1 Instant".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.1-thinking".to_string(),
+            name: "GPT-5.1 Thinking".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "gpt-5.1-codex-max".to_string(),
+            name: "GPT-5.1-Codex-Max".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+
+        // Anthropic
         ModelInfo {
             id: "claude-sonnet-4-5".to_string(),
-            name: "Claude 4.5 Sonnet".to_string(),
+            name: "Claude Sonnet 4.5".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
         ModelInfo {
             id: "claude-haiku-4-5".to_string(),
-            name: "Claude 4.5 Haiku".to_string(),
+            name: "Claude Haiku 4.5".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
         ModelInfo {
             id: "claude-opus-4-5".to_string(),
-            name: "Claude 4.5 Opus".to_string(),
+            name: "Claude Opus 4.5".to_string(),
             provider: "anthropic".to_string(),
             available: false,
         },
+
+        // Google
         ModelInfo {
             id: "gemini-3-pro".to_string(),
             name: "Gemini 3 Pro".to_string(),
@@ -430,9 +465,39 @@ pub async fn llm_get_available_models(
             available: false,
         },
         ModelInfo {
-            id: "gemini-3-ultra".to_string(),
-            name: "Gemini 3 Ultra".to_string(),
+            id: "gemini-3-deep-think".to_string(),
+            name: "Gemini 3 Deep Think".to_string(),
             provider: "google".to_string(),
+            available: false,
+        },
+
+        // xAI
+        ModelInfo {
+            id: "grok-4.1".to_string(),
+            name: "Grok 4.1".to_string(),
+            provider: "xai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "grok-4.1-fast".to_string(),
+            name: "Grok 4.1 Fast".to_string(),
+            provider: "xai".to_string(),
+            available: false,
+        },
+
+        // Qwen
+        ModelInfo {
+            id: "qwen3-max".to_string(),
+            name: "Qwen3-Max".to_string(),
+            provider: "qwen".to_string(),
+            available: false,
+        },
+
+        // Moonshot
+        ModelInfo {
+            id: "kimi-k2-thinking".to_string(),
+            name: "Kimi K2 Thinking".to_string(),
+            provider: "moonshot".to_string(),
             available: false,
         },
     ];
@@ -444,7 +509,9 @@ pub async fn llm_get_available_models(
             "openai" => Provider::OpenAI,
             "anthropic" => Provider::Anthropic,
             "google" => Provider::Google,
-
+            "xai" => Provider::XAI,
+            "qwen" => Provider::Qwen,
+            "moonshot" | "mistral" => Provider::Mistral, // Mapping moonshot to Mistral provider for now or generic if available
             _ => continue,
         };
 
