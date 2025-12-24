@@ -430,7 +430,6 @@ pub async fn llm_get_available_models(
             provider: "openai".to_string(),
             available: false,
         },
-
         // Anthropic
         ModelInfo {
             id: "claude-sonnet-4-5".to_string(),
@@ -450,7 +449,6 @@ pub async fn llm_get_available_models(
             provider: "anthropic".to_string(),
             available: false,
         },
-
         // Google
         ModelInfo {
             id: "gemini-3-pro".to_string(),
@@ -470,7 +468,6 @@ pub async fn llm_get_available_models(
             provider: "google".to_string(),
             available: false,
         },
-
         // xAI
         ModelInfo {
             id: "grok-4.1".to_string(),
@@ -484,7 +481,6 @@ pub async fn llm_get_available_models(
             provider: "xai".to_string(),
             available: false,
         },
-
         // Qwen
         ModelInfo {
             id: "qwen3-max".to_string(),
@@ -492,7 +488,6 @@ pub async fn llm_get_available_models(
             provider: "qwen".to_string(),
             available: false,
         },
-
         // Moonshot
         ModelInfo {
             id: "kimi-k2-thinking".to_string(),
