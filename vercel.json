@@ -1,7 +1,13 @@
 {
-  "buildCommand": "cd apps/web && pnpm build",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm --filter web build",
   "devCommand": "cd apps/web && pnpm dev",
-  "installCommand": "pnpm install",
+  "installCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install",
   "outputDirectory": "apps/web/.next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  }
 }
