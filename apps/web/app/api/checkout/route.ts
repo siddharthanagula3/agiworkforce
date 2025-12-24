@@ -41,7 +41,6 @@ function getOrigin(request: Request) {
 }
 
 function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'): string | null {
-  
   if (plan === 'enterprise') {
     return null;
   }
@@ -94,7 +93,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  
   if (plan === 'enterprise') {
     return NextResponse.json(
       {
@@ -113,25 +111,14 @@ export async function POST(request: Request) {
   const origin = getOrigin(request);
 
   try {
-    
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         plan_tier: plan,
         supabase_user_id: user.id,
       },
-      
+
       trial_period_days: plan === 'hobby' ? 90 : undefined,
     };
-
-    
-    const discounts: Stripe.Checkout.SessionCreateParams.Discount[] | undefined =
-      plan === 'hobby'
-        ? [
-            {
-              coupon: 'Oj7h7qgM', 
-            },
-          ]
-        : undefined;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -142,8 +129,7 @@ export async function POST(request: Request) {
         },
       ],
       subscription_data: subscriptionData,
-      discounts: discounts,
-      allow_promotion_codes: true, 
+      allow_promotion_codes: true,
       success_url: `${origin}/download?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       customer_email: user.email ?? undefined,
