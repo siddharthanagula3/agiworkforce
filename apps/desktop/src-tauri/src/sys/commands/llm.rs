@@ -1,7 +1,7 @@
 use crate::core::router::providers::{
     anthropic::AnthropicProvider, deepseek::DeepSeekProvider, google::GoogleProvider,
-    managed_cloud_provider::ManagedCloudProvider, mistral::MistralProvider,
-    ollama::OllamaProvider, openai::OpenAIProvider, qwen::QwenProvider, xai::XAIProvider,
+    managed_cloud_provider::ManagedCloudProvider, mistral::MistralProvider, ollama::OllamaProvider,
+    openai::OpenAIProvider, qwen::QwenProvider, xai::XAIProvider,
 };
 use crate::core::router::{
     cache_manager::CacheManager,
@@ -352,11 +352,9 @@ pub async fn llm_set_default_provider(
 /// Auto-initialize ManagedCloud provider if user is authenticated
 /// This ensures ManagedCloud is available for Pro/Max users who prefer cloud credits
 #[tauri::command]
-pub async fn llm_ensure_managed_cloud(
-    state: State<'_, LLMState>,
-) -> Result<bool, String> {
+pub async fn llm_ensure_managed_cloud(state: State<'_, LLMState>) -> Result<bool, String> {
     use crate::sys::account::get_access_token;
-    
+
     // Check if user has access token (is authenticated)
     match get_access_token() {
         Ok(_) => {
