@@ -25,3 +25,6 @@ vi.mock('next/headers', () => ({
     delete: vi.fn(),
   })),
 }));
+
+// Mock server-only module
+vi.mock('server-only', () => ({}));
