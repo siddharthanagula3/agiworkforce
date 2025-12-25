@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
   const { data: subscription, error } = await supabase
     .from('subscriptions')
-    .select('stripe_customer_id, status')
+    .select('stripe_customer_id, stripe_subscription_id, status')
     .eq('user_id', user.id)
     .single();
 
@@ -57,10 +57,37 @@ export async function POST(request: Request) {
   // The only strict requirement is having a customer ID.
   const allowedStatuses = ['active', 'trialing', 'past_due', 'canceled', 'unpaid'];
 
-  if (!subscription.stripe_customer_id) {
+  let stripeCustomerId = subscription.stripe_customer_id;
+
+  // If no customer_id but we have subscription_id, try to retrieve it from Stripe
+  if (!stripeCustomerId && subscription.stripe_subscription_id && stripe) {
+    try {
+      console.log(
+        '[billing] No customer_id found, retrieving from subscription:',
+        subscription.stripe_subscription_id,
+      );
+      const stripeSubscription = await stripe.subscriptions.retrieve(
+        subscription.stripe_subscription_id,
+      );
+      stripeCustomerId = stripeSubscription.customer as string;
+
+      // Update Supabase with the customer_id for future requests
+      if (stripeCustomerId) {
+        await supabase
+          .from('subscriptions')
+          .update({ stripe_customer_id: stripeCustomerId })
+          .eq('user_id', user.id);
+        console.log('[billing] Updated subscription with customer_id:', stripeCustomerId);
+      }
+    } catch (stripeError) {
+      console.error('[billing] Failed to retrieve customer from Stripe subscription:', stripeError);
+    }
+  }
+
+  if (!stripeCustomerId) {
     console.error('[billing] Subscription found but no stripe_customer_id:', subscription);
     return NextResponse.json(
-      { error: 'No billing account linked to this subscription.' },
+      { error: 'No billing account linked to this subscription. Please contact support.' },
       { status: 404 },
     );
   }
@@ -74,13 +101,17 @@ export async function POST(request: Request) {
 
   try {
     const session = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripe_customer_id,
+      customer: stripeCustomerId,
       return_url: `${origin}/pricing`,
     });
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (error) {
     console.error('[billing] Failed to create Stripe portal session', error);
-    return NextResponse.json({ error: 'Failed to create portal session' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create portal session';
+    return NextResponse.json(
+      { error: `Failed to create portal session: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
