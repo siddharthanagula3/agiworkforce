@@ -10,6 +10,14 @@ export interface SubscriptionStatus {
   } | null;
 }
 
+export interface ClientSubscription {
+  id: string;
+  plan_tier: string;
+  status: string;
+  current_period_end: string | null;
+}
+
+// Server-side functions
 export async function checkSubscriptionStatus(): Promise<SubscriptionStatus> {
   const supabase = await createSupabaseServerClient();
   const {

@@ -130,8 +130,12 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       cancelAtPeriodEnd = subscription.cancel_at_period_end;
       canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
 
+      // Ensure we always get price_id from subscription if not already set
       if (!stripePriceId && subscription.items.data.length > 0) {
         stripePriceId = subscription.items.data[0].price.id;
+        console.log(
+          `[billing] Retrieved price_id ${stripePriceId} from subscription ${stripeSubId}`,
+        );
       }
 
       if (subscription.discount?.coupon?.id) {
@@ -140,6 +144,33 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     } catch (error) {
       console.error('[billing] Failed to retrieve subscription details:', error);
     }
+  }
+
+  // Final fallback: if we still don't have price_id but have subscription_id, try one more time
+  if (!stripePriceId && stripeSubId && stripe) {
+    try {
+      console.warn(
+        `[billing] stripe_price_id still null after initial attempts, retrying for subscription ${stripeSubId}`,
+      );
+      const subscription = await stripe.subscriptions.retrieve(stripeSubId, {
+        expand: ['items.data.price'],
+      });
+      if (subscription.items.data.length > 0) {
+        stripePriceId = subscription.items.data[0].price.id;
+        console.log(
+          `[billing] Successfully retrieved price_id ${stripePriceId} from subscription on retry`,
+        );
+      }
+    } catch (error) {
+      console.error('[billing] Failed to retrieve price_id on retry:', error);
+    }
+  }
+
+  // Log warning if price_id is still missing
+  if (!stripePriceId) {
+    console.warn(
+      `[billing] WARNING: stripe_price_id is null for session ${session.id}, subscription ${stripeSubId}, user ${supabaseUserId}`,
+    );
   }
 
   if (!stripeCouponId && stripe && session.id) {
@@ -380,16 +411,32 @@ export async function POST(request: Request) {
             }
           }
 
-          if (stripeSubId) {
-            await supabaseAdmin
-              .from('subscriptions')
-              .update(updateData)
-              .eq('stripe_subscription_id', stripeSubId);
-          } else if (stripeCustomerId) {
-            await supabaseAdmin
-              .from('subscriptions')
-              .update(updateData)
-              .eq('stripe_customer_id', stripeCustomerId);
+          try {
+            if (stripeSubId) {
+              const { error: updateError } = await supabaseAdmin
+                .from('subscriptions')
+                .update(updateData)
+                .eq('stripe_subscription_id', stripeSubId);
+              if (updateError) {
+                console.error(
+                  '[billing] Failed to update subscription for payment succeeded:',
+                  updateError,
+                );
+              }
+            } else if (stripeCustomerId) {
+              const { error: updateError } = await supabaseAdmin
+                .from('subscriptions')
+                .update(updateData)
+                .eq('stripe_customer_id', stripeCustomerId);
+              if (updateError) {
+                console.error(
+                  '[billing] Failed to update subscription by customer ID for payment succeeded:',
+                  updateError,
+                );
+              }
+            }
+          } catch (error) {
+            console.error('[billing] Error updating subscription for payment succeeded:', error);
           }
         }
         break;
@@ -399,13 +446,23 @@ export async function POST(request: Request) {
         const stripeSubId = subscription.id;
         console.log('[billing] Subscription deleted:', stripeSubId);
         if (supabaseAdmin) {
-          await supabaseAdmin
-            .from('subscriptions')
-            .update({
-              status: 'canceled',
-              canceled_at: new Date().toISOString(),
-            })
-            .eq('stripe_subscription_id', stripeSubId);
+          try {
+            const { error: updateError } = await supabaseAdmin
+              .from('subscriptions')
+              .update({
+                status: 'canceled',
+                canceled_at: new Date().toISOString(),
+              })
+              .eq('stripe_subscription_id', stripeSubId);
+            if (updateError) {
+              console.error(
+                '[billing] Failed to update subscription for deleted event:',
+                updateError,
+              );
+            }
+          } catch (error) {
+            console.error('[billing] Error updating subscription for deleted event:', error);
+          }
         }
         break;
       }
@@ -416,16 +473,32 @@ export async function POST(request: Request) {
         console.log('[billing] Payment failed for invoice:', invoice.id);
 
         if (supabaseAdmin) {
-          if (stripeSubId) {
-            await supabaseAdmin
-              .from('subscriptions')
-              .update({ status: 'past_due' })
-              .eq('stripe_subscription_id', stripeSubId);
-          } else if (stripeCustomerId) {
-            await supabaseAdmin
-              .from('subscriptions')
-              .update({ status: 'past_due' })
-              .eq('stripe_customer_id', stripeCustomerId);
+          try {
+            if (stripeSubId) {
+              const { error: updateError } = await supabaseAdmin
+                .from('subscriptions')
+                .update({ status: 'past_due' })
+                .eq('stripe_subscription_id', stripeSubId);
+              if (updateError) {
+                console.error(
+                  '[billing] Failed to update subscription for payment failed:',
+                  updateError,
+                );
+              }
+            } else if (stripeCustomerId) {
+              const { error: updateError } = await supabaseAdmin
+                .from('subscriptions')
+                .update({ status: 'past_due' })
+                .eq('stripe_customer_id', stripeCustomerId);
+              if (updateError) {
+                console.error(
+                  '[billing] Failed to update subscription by customer ID for payment failed:',
+                  updateError,
+                );
+              }
+            }
+          } catch (error) {
+            console.error('[billing] Error updating subscription for payment failed:', error);
           }
         }
         break;

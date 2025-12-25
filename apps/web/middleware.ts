@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { getEnv } from './utils/env';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -33,51 +34,60 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isProtectedRoute || isProtectedApiRoute) {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return request.cookies.get(name)?.value;
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            request.cookies.set({
-              name,
-              value,
-              ...options,
-            });
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            });
-            response.cookies.set({
-              name,
-              value,
-              ...options,
-            });
-          },
-          remove(name: string, options: CookieOptions) {
-            request.cookies.set({
-              name,
-              value: '',
-              ...options,
-            });
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            });
-            response.cookies.set({
-              name,
-              value: '',
-              ...options,
-            });
-          },
+    // Safe environment variable access with fallbacks
+    const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    const supabaseAnonKey = getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
+
+    // If required env vars are missing, allow request through but log error
+    // This prevents middleware from breaking the entire app
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error(
+        '[middleware] Missing Supabase environment variables. Authentication check skipped.',
+      );
+      return response;
+    }
+
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: '',
+            ...options,
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({
+            name,
+            value: '',
+            ...options,
+          });
         },
       },
-    );
+    });
 
     const {
       data: { session },
