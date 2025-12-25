@@ -65,7 +65,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 100,
       storage: 1024,
       teamMembers: 1,
-      tokenCredits: 10,
+      tokenCredits: 1,
     },
   },
   {
@@ -78,7 +78,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       monthly: STRIPE_PRICE_IDS.pro_monthly,
       yearly: STRIPE_PRICE_IDS.pro_yearly,
     },
-    features: ['Unlimited automations', 'Web & UI automation', '$25/mo token credits'],
+    features: ['Unlimited automations', 'Web & UI automation', '$20/mo token credits'],
     limits: {
       automations: null,
       apiCalls: 10000,
@@ -98,13 +98,13 @@ export const PRICING_PLANS: PricingPlan[] = [
       monthly: STRIPE_PRICE_IDS.max_monthly,
       yearly: STRIPE_PRICE_IDS.max_yearly,
     },
-    features: ['All Pro features', '$300/mo token credits'],
+    features: ['All Pro features', '$250/mo token credits'],
     limits: {
       automations: null,
       apiCalls: null,
       storage: 51200,
       teamMembers: 1,
-      tokenCredits: 300,
+      tokenCredits: 250,
     },
   },
   {

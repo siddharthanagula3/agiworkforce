@@ -28,6 +28,7 @@ pub struct RouterPreferences {
     pub model: Option<String>,
     pub strategy: RoutingStrategy,
     pub context: Option<RouterContext>,
+    pub prefer_cloud_credits: bool, // When true, prioritize ManagedCloud for Pro/Max users
 }
 
 #[derive(Debug, Clone)]
@@ -284,6 +285,10 @@ impl LLMRouter {
         self.set_provider(Provider::Moonshot, provider);
     }
 
+    pub fn set_managed_cloud(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::ManagedCloud, provider);
+    }
+
     pub fn has_provider(&self, provider: Provider) -> bool {
         self.providers
             .get(&provider)
@@ -314,8 +319,19 @@ impl LLMRouter {
             return order;
         }
 
+        // If user prefers cloud credits and ManagedCloud is available, prioritize it
+        if preferences.prefer_cloud_credits && self.has_provider(Provider::ManagedCloud) {
+            let task_type = classify_request(request);
+            order.push(RouteCandidate {
+                provider: Provider::ManagedCloud,
+                model: self.default_model(Provider::ManagedCloud, task_type),
+                reason: "cloud-credits-preference",
+            });
+        }
+
         if let Some(context) = &preferences.context {
             let suggestion = self.suggest_for_context(context);
+            // Don't override ManagedCloud if it was already added
             if !order
                 .iter()
                 .any(|existing| existing.provider == suggestion.provider)
@@ -363,6 +379,7 @@ impl LLMRouter {
             Provider::Qwen,
             Provider::Mistral,
             Provider::Moonshot,
+            Provider::ManagedCloud,
         ] {
             if order.iter().any(|c| c.provider == provider) {
                 continue;
@@ -679,6 +696,11 @@ impl LLMRouter {
                 TaskCategory::Simple => "kimi-k2-thinking".to_string(),
                 TaskCategory::Complex => "kimi-k2-thinking".to_string(),
                 TaskCategory::Creative => "kimi-k2-thinking".to_string(),
+            },
+            Provider::ManagedCloud => match task {
+                TaskCategory::Simple => "gpt-5-mini".to_string(),
+                TaskCategory::Complex => "gpt-5".to_string(),
+                TaskCategory::Creative => "gpt-5".to_string(),
             },
         }
     }

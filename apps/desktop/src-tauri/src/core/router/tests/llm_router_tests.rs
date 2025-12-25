@@ -118,6 +118,7 @@ mod tests {
             model: Some("llama3".to_string()),
             strategy: RoutingStrategy::LocalFirst,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         assert_eq!(prefs.provider, Some(Provider::Ollama));

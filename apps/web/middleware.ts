@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getEnv } from './utils/env';
+import { logger } from './lib/logger';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -41,9 +42,7 @@ export async function middleware(request: NextRequest) {
     // If required env vars are missing, allow request through but log error
     // This prevents middleware from breaking the entire app
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error(
-        '[middleware] Missing Supabase environment variables. Authentication check skipped.',
-      );
+      logger.error('Missing Supabase environment variables. Authentication check skipped.');
       return response;
     }
 

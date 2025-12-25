@@ -35,13 +35,41 @@ These environment variables **MUST** be set in Vercel for billing to work:
   - The code handles missing key gracefully in Development
 - `SUPABASE_URL` - Alternative to NEXT_PUBLIC_SUPABASE_URL (fallback)
 
+## Required for LLM API (Cloud Credits)
+
+These environment variables are needed for the LLM API endpoint that handles cloud credits:
+
+### LLM Provider API Keys (Optional - for cloud credits)
+
+- `OPENAI_API_KEY` - OpenAI API key for cloud credits (optional, can use user's own keys)
+- `ANTHROPIC_API_KEY` - Anthropic API key for cloud credits (optional)
+- `GOOGLE_API_KEY` - Google API key for cloud credits (optional)
+- `XAI_API_KEY` - XAI API key for cloud credits (optional)
+- `QWEN_API_KEY` - Qwen API key for cloud credits (optional)
+- `MISTRAL_API_KEY` - Mistral API key for cloud credits (optional)
+- `MOONSHOT_API_KEY` - Moonshot API key for cloud credits (optional)
+- `DEEPSEEK_API_KEY` - DeepSeek API key for cloud credits (optional)
+
+**Note**: These are only needed if you want to provide cloud credits. Users can also use their own API keys.
+
+### Cron Job Security
+
+- `CRON_SECRET` - Secret token for protecting cron endpoints (recommended for production)
+
+## Required for Rate Limiting (Optional)
+
+- `UPSTASH_REDIS_REST_URL` - Upstash Redis REST URL (optional, falls back to in-memory)
+- `UPSTASH_REDIS_REST_TOKEN` - Upstash Redis REST token (optional)
+
 ## How to Set in Vercel
 
 1. Go to: https://vercel.com/siddharthanagula4/web/settings/environment-variables
 2. Add each variable for the appropriate environments:
    - **All environments** (Production, Preview, Development): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, all Stripe variables
    - **Production and Preview only**: `SUPABASE_SERVICE_ROLE_KEY` (sensitive - not needed in Development)
-3. For sensitive keys (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_SERVICE_ROLE_KEY), ensure they're marked as sensitive
+   - **Production only**: `CRON_SECRET` (for cron job security)
+   - **Optional**: LLM provider API keys if providing cloud credits
+3. For sensitive keys (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET, LLM provider keys), ensure they're marked as sensitive
 
 ## Verification
 

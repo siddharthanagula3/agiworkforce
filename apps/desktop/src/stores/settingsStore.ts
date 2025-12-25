@@ -30,7 +30,7 @@ interface APIKeys {
   openai: string;
   anthropic: string;
   google: string;
-  ollama: string; 
+  ollama: string;
   xai: string;
   deepseek: string;
   qwen: string;
@@ -54,7 +54,8 @@ interface LLMConfig {
     moonshot: string;
   };
   taskRouting: TaskRouting;
-  favoriteModels: string[]; 
+  favoriteModels: string[];
+  useCloudCredits: boolean; // Prefer cloud credits over own API keys for Pro/Max users
 }
 
 interface WindowPreferences {
@@ -71,12 +72,10 @@ interface SettingsState {
   loading: boolean;
   error: string | null;
 
-  
   setAPIKey: (provider: Provider, key: string) => Promise<void>;
   getAPIKey: (provider: Provider) => Promise<string>;
   testAPIKey: (provider: Provider) => Promise<boolean>;
 
-  
   setDefaultProvider: (provider: Provider) => Promise<void>;
   setTemperature: (temperature: number) => void;
   setMaxTokens: (maxTokens: number) => void;
@@ -85,18 +84,16 @@ interface SettingsState {
   setFavoriteModels: (models: string[]) => void;
   addFavoriteModel: (model: string) => void;
   removeFavoriteModel: (model: string) => void;
+  setUseCloudCredits: (useCloudCredits: boolean) => void;
 
-  
   setTheme: (theme: Theme) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
-  
   addAllowedDirectory: (path: string) => void;
   removeAllowedDirectory: (path: string) => void;
   setAllowedDirectories: (paths: string[]) => void;
 
-  
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 }
@@ -117,20 +114,20 @@ const defaultSettings: Pick<
     moonshot: '',
   },
   llmConfig: {
-    defaultProvider: 'anthropic', 
+    defaultProvider: 'anthropic',
     temperature: 0.7,
     maxTokens: 4096,
+    useCloudCredits: true, // Default to using cloud credits for Pro/Max users
     defaultModels: {
-      
-      openai: 'gpt-5.1', 
-      anthropic: 'claude-sonnet-4-5', 
-      google: 'gemini-3-pro', 
-      ollama: 'llama4-maverick', 
-      xai: 'grok-4.1', 
-      deepseek: '', 
-      qwen: 'qwen3-max', 
-      mistral: '', 
-      moonshot: 'kimi-k2-thinking', 
+      openai: 'gpt-5.1',
+      anthropic: 'claude-sonnet-4-5',
+      google: 'gemini-3-pro',
+      ollama: 'llama4-maverick',
+      xai: 'grok-4.1',
+      deepseek: '',
+      qwen: 'qwen3-max',
+      mistral: '',
+      moonshot: 'kimi-k2-thinking',
     },
     favoriteModels: [
       'openai/gpt-5.1',
@@ -153,7 +150,7 @@ const defaultSettings: Pick<
       search: { provider: 'openai', model: 'gpt-5.1' },
       code: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
       docs: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
-      
+
       chat: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
       vision: { provider: 'google', model: 'gemini-3-pro' },
       image: { provider: 'google', model: 'imagen-3' },
@@ -201,17 +198,13 @@ export const useSettingsStore = create<SettingsState>()(
       loading: false,
       error: null,
 
-      
       setAPIKey: async (provider: Provider, key: string) => {
         set({ loading: true, error: null });
         try {
-          
           const trimmedKey = key.trim();
 
-          
           await invoke('settings_save_api_key', { provider, key: trimmedKey });
 
-          
           if (provider === 'ollama') {
             await invoke('llm_configure_provider', {
               provider,
@@ -247,17 +240,14 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
 
-      
       testAPIKey: async (provider: Provider) => {
         set({ loading: true, error: null });
         try {
-          
           const key = await get().getAPIKey(provider);
           if (!key || !key.trim()) {
             throw new Error(`No API key found for ${provider}. Please save your API key first.`);
           }
 
-          
           if (provider !== 'ollama') {
             await invoke('llm_configure_provider', {
               provider,
@@ -266,7 +256,6 @@ export const useSettingsStore = create<SettingsState>()(
             });
           }
 
-          
           const defaultModel = get().llmConfig.defaultModels[provider];
           if (!defaultModel || !defaultModel.trim()) {
             throw new Error(
@@ -281,6 +270,7 @@ export const useSettingsStore = create<SettingsState>()(
               provider,
               temperature: null,
               max_tokens: 10,
+              preferCloudCredits: false, // When testing API keys, don't use cloud credits
             },
           });
           set({ loading: false, error: null });
@@ -315,6 +305,12 @@ export const useSettingsStore = create<SettingsState>()(
       setMaxTokens: (maxTokens: number) => {
         set((state) => ({
           llmConfig: { ...state.llmConfig, maxTokens },
+        }));
+      },
+
+      setUseCloudCredits: (useCloudCredits: boolean) => {
+        set((state) => ({
+          llmConfig: { ...state.llmConfig, useCloudCredits },
         }));
       },
 
@@ -370,7 +366,7 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({
           windowPreferences: { ...state.windowPreferences, theme },
         }));
-        
+
         if (typeof window !== 'undefined' && typeof document !== 'undefined') {
           if (
             theme === 'dark' ||
@@ -412,19 +408,16 @@ export const useSettingsStore = create<SettingsState>()(
         set({ allowedDirectories: paths });
       },
 
-      
       loadSettings: async () => {
         set({ loading: true, error: null });
 
         try {
-          
           const settings = await invoke<{
             llmConfig: LLMConfig;
             windowPreferences: WindowPreferences;
             allowedDirectories: string[];
           }>('settings_load');
 
-          
           if (get().loading === false) {
             console.warn('[settingsStore] Load cancelled - another operation started');
             return;
@@ -446,7 +439,6 @@ export const useSettingsStore = create<SettingsState>()(
             ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
           };
 
-          
           const providers: Provider[] = [
             'openai',
             'anthropic',
@@ -459,7 +451,6 @@ export const useSettingsStore = create<SettingsState>()(
             'moonshot',
           ];
 
-          
           const apiKeyResults = await Promise.allSettled(
             providers.map(async (provider) => {
               try {
@@ -484,20 +475,17 @@ export const useSettingsStore = create<SettingsState>()(
             moonshot: '',
           };
 
-          
           for (const result of apiKeyResults) {
             if (result.status === 'fulfilled') {
               apiKeys[result.value.provider] = result.value.key;
             }
           }
 
-          
           if (get().loading === false) {
             console.warn('[settingsStore] Load cancelled before setting state');
             return;
           }
 
-          
           const configPromises = providers.map(async (provider) => {
             try {
               if (provider === 'ollama') {
@@ -520,7 +508,6 @@ export const useSettingsStore = create<SettingsState>()(
 
           await Promise.allSettled(configPromises);
 
-          
           if (get().loading === false) {
             console.warn('[settingsStore] Load cancelled before final update');
             return;
@@ -534,10 +521,8 @@ export const useSettingsStore = create<SettingsState>()(
             loading: false,
           });
 
-          
           get().setTheme(mergedWindowPreferences.theme);
 
-          
           try {
             await invoke('llm_set_default_provider', {
               provider: mergedLLMConfig.defaultProvider,
@@ -547,7 +532,7 @@ export const useSettingsStore = create<SettingsState>()(
           }
         } catch (error) {
           console.error('Failed to load settings:', error);
-          
+
           if (get().loading) {
             set({ error: String(error), loading: false });
           }

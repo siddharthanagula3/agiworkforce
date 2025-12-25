@@ -3,6 +3,8 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -10,15 +12,13 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
-  console.error(
-    '[billing] FATAL: Stripe webhook is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.',
+  logger.error(
+    'Stripe webhook is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.',
   );
 }
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error(
-    '[billing] FATAL: Supabase service role env vars are missing. Webhook cannot update subscriptions.',
-  );
+  logger.error('Supabase service role env vars are missing. Webhook cannot update subscriptions.');
 }
 
 const stripe = STRIPE_SECRET_KEY
@@ -59,16 +59,17 @@ function getPlanFromPriceId(priceId: string | null | undefined): string | null {
 
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   if (!supabaseAdmin || !stripe) {
-    console.error('[billing] upsertSubscriptionFromSession: missing dependencies');
+    logger.error('upsertSubscriptionFromSession: missing dependencies');
     throw new Error('Missing dependencies');
   }
 
-  console.log('[billing] upsertSubscriptionFromSession: Processing session', session.id);
+  logger.info({ sessionId: session.id }, 'Processing checkout session');
 
   const supabaseUserId = session.metadata?.['supabase_user_id'] || session.client_reference_id;
   if (!supabaseUserId) {
-    console.warn(
-      '[billing] upsertSubscriptionFromSession: No supabase_user_id in metadata or client_reference_id',
+    logger.warn(
+      { sessionId: session.id },
+      'No supabase_user_id in metadata or client_reference_id',
     );
     return;
   }
@@ -81,12 +82,16 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   // Note: We need to get stripePriceId first before we can use it.
   // Re-ordering logic below to get line items first.
 
-  console.log('[billing] upsertSubscriptionFromSession: details', {
-    supabaseUserId,
-    planTier,
-    stripeCustomerId,
-    stripeSubId,
-  });
+  logger.debug(
+    {
+      sessionId: session.id,
+      supabaseUserId,
+      planTier,
+      stripeCustomerId,
+      stripeSubId,
+    },
+    'Session details',
+  );
 
   let stripePriceId: string | null = null;
   if (session.line_items?.data && session.line_items.data.length > 0) {
@@ -249,13 +254,48 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   console.log('[billing] Upserting subscription:', subData);
 
-  const { error } = await supabaseAdmin.from('subscriptions').upsert(subData, {
-    onConflict: 'user_id',
-  });
+  const { error, data } = await supabaseAdmin
+    .from('subscriptions')
+    .upsert(subData, {
+      onConflict: 'user_id',
+    })
+    .select()
+    .single();
 
   if (error) {
     console.error('[billing] Failed to upsert subscription:', error);
     throw error;
+  }
+
+  // Allocate credits for the subscription period
+  if (data && currentPeriodStart && currentPeriodEnd) {
+    try {
+      await SubscriptionService.allocateCreditsForPeriod(
+        supabaseUserId,
+        data.id,
+        planTier,
+        new Date(currentPeriodStart),
+        new Date(currentPeriodEnd),
+      );
+      logger.info(
+        {
+          userId: supabaseUserId,
+          subscriptionId: data.id,
+          planTier,
+        },
+        'Credits allocated for new subscription',
+      );
+    } catch (creditError) {
+      // Log but don't fail the webhook if credit allocation fails
+      logger.error(
+        {
+          error: creditError,
+          userId: supabaseUserId,
+          subscriptionId: data.id,
+        },
+        'Failed to allocate credits for subscription',
+      );
+    }
   }
 }
 
@@ -334,11 +374,83 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     if (existingSub) {
       // Normal path: update by stripe_subscription_id
       supabaseUserId = existingSub.user_id;
+
+      // Fetch current subscription to check period
+      const { data: currentSub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('current_period_start')
+        .eq('stripe_subscription_id', stripeSubId)
+        .single();
+
+      // Check if this is a new billing period (period_start changed)
+      const isNewPeriod = currentSub?.current_period_start !== updateData.current_period_start;
+
       const res = await supabaseAdmin
         .from('subscriptions')
         .update(updateData)
-        .eq('stripe_subscription_id', stripeSubId);
+        .eq('stripe_subscription_id', stripeSubId)
+        .select()
+        .single();
       error = res.error;
+
+      // Allocate or reset credits if subscription updated successfully
+      if (
+        !error &&
+        res.data &&
+        updateData.current_period_start &&
+        updateData.current_period_end &&
+        supabaseUserId
+      ) {
+        const periodStart = updateData.current_period_start;
+        const periodEnd = updateData.current_period_end;
+        try {
+          if (isNewPeriod) {
+            // New billing period - reset credits
+            await SubscriptionService.resetCreditsForNewPeriod(
+              supabaseUserId,
+              res.data.id,
+              planTier,
+              new Date(periodStart),
+              new Date(periodEnd),
+            );
+            logger.info(
+              {
+                userId: supabaseUserId,
+                subscriptionId: res.data.id,
+                planTier,
+              },
+              'Credits reset for new billing period',
+            );
+          } else {
+            // Same period - ensure credits are allocated
+            await SubscriptionService.allocateCreditsForPeriod(
+              supabaseUserId,
+              res.data.id,
+              planTier,
+              new Date(periodStart),
+              new Date(periodEnd),
+            );
+            logger.info(
+              {
+                userId: supabaseUserId,
+                subscriptionId: res.data.id,
+                planTier,
+              },
+              'Credits allocated for subscription update',
+            );
+          }
+        } catch (creditError) {
+          // Log but don't fail the webhook if credit allocation fails
+          logger.error(
+            {
+              error: creditError,
+              userId: supabaseUserId,
+              subscriptionId: res.data.id,
+            },
+            'Failed to allocate/reset credits for subscription',
+          );
+        }
+      }
     } else {
       // Subscription doesn't exist - try to find user and create it
       // First, try metadata
@@ -352,17 +464,18 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
         // Fallback: Try to find user by customer email
         try {
           const customer = await stripe.customers.retrieve(stripeCustomerId);
-          if (typeof customer !== 'string' && customer.email) {
-            console.log(`[billing] Attempting to find user by customer email: ${customer.email}`);
+          if (typeof customer !== 'string' && !customer.deleted && customer.email) {
+            const customerEmail = customer.email;
+            console.log(`[billing] Attempting to find user by customer email: ${customerEmail}`);
             // Use Supabase Admin API to find user by email
             const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
             if (!userError && users?.users) {
-              const matchingUser = users.users.find((u) => u.email === customer.email);
+              const matchingUser = users.users.find((u) => u.email === customerEmail);
               if (matchingUser) {
-                console.log(`[billing] Found user ${matchingUser.id} by email ${customer.email}`);
+                console.log(`[billing] Found user ${matchingUser.id} by email ${customerEmail}`);
                 supabaseUserId = matchingUser.id;
               } else {
-                console.warn(`[billing] No Supabase user found with email ${customer.email}`);
+                console.warn(`[billing] No Supabase user found with email ${customerEmail}`);
               }
             } else {
               console.error('[billing] Failed to list users:', userError);
@@ -384,10 +497,52 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           stripe_customer_id: stripeCustomerId,
         };
         console.log('[billing] Creating new subscription:', createData);
-        const res = await supabaseAdmin.from('subscriptions').upsert(createData, {
-          onConflict: 'user_id',
-        });
+        const res = await supabaseAdmin
+          .from('subscriptions')
+          .upsert(createData, {
+            onConflict: 'user_id',
+          })
+          .select()
+          .single();
         error = res.error;
+
+        // Allocate credits for new subscription
+        if (
+          !error &&
+          res.data &&
+          updateData.current_period_start &&
+          updateData.current_period_end &&
+          supabaseUserId
+        ) {
+          const periodStart = updateData.current_period_start;
+          const periodEnd = updateData.current_period_end;
+          try {
+            await SubscriptionService.allocateCreditsForPeriod(
+              supabaseUserId,
+              res.data.id,
+              planTier,
+              new Date(periodStart),
+              new Date(periodEnd),
+            );
+            logger.info(
+              {
+                userId: supabaseUserId,
+                subscriptionId: res.data.id,
+                planTier,
+              },
+              'Credits allocated for new subscription',
+            );
+          } catch (creditError) {
+            logger.error(
+              {
+                error: creditError,
+                userId: supabaseUserId,
+                subscriptionId: res.data.id,
+              },
+              'Failed to allocate credits for new subscription',
+            );
+          }
+        }
       } else {
         // Last resort: try to update by customer ID (might work if subscription exists)
         console.warn(
@@ -421,12 +576,12 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
 
 export async function POST(request: Request) {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) {
-    console.error('[billing] Stripe not configured');
+    logger.error('Stripe not configured');
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
   }
 
   if (!supabaseAdmin) {
-    console.error('[billing] Supabase admin not configured');
+    logger.error('Supabase admin not configured');
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
 
@@ -434,16 +589,19 @@ export async function POST(request: Request) {
   const signature = request.headers.get('stripe-signature');
 
   if (!signature) {
-    console.error('[billing] Missing Stripe signature');
+    logger.error('Missing Stripe signature');
     return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
   }
 
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET);
-    console.log('[billing] Webhook verified, event type:', event.type);
+    logger.info({ eventType: event.type, eventId: event.id }, 'Webhook verified');
   } catch (err) {
-    console.error('[billing] Stripe webhook signature verification failed', err);
+    logger.error(
+      { error: err instanceof Error ? err.message : String(err) },
+      'Stripe webhook signature verification failed',
+    );
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -628,7 +786,15 @@ export async function POST(request: Request) {
         console.log(`[billing] Unhandled Stripe event type: ${event.type}`);
     }
   } catch (err) {
-    console.error('[billing] Error handling Stripe webhook event', err);
+    logger.error(
+      {
+        error: err instanceof Error ? err.message : String(err),
+        eventType: event.type,
+        eventId: event.id,
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'Error handling Stripe webhook event',
+    );
     // Still return 200 to prevent Stripe from retrying
     // Log the error for debugging
     return NextResponse.json(
@@ -641,5 +807,6 @@ export async function POST(request: Request) {
     );
   }
 
+  logger.info({ eventType: event.type, eventId: event.id }, 'Webhook processed successfully');
   return NextResponse.json({ received: true, eventType: event.type }, { status: 200 });
 }

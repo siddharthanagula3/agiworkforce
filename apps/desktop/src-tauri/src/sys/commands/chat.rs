@@ -122,6 +122,8 @@ pub struct ChatSendMessageRequest {
 
     #[serde(default, alias = "enableAgentMode")]
     pub enable_agent_mode: Option<bool>,
+    #[serde(default, alias = "preferCloudCredits")]
+    pub prefer_cloud_credits: bool, // Prefer cloud credits over own API keys
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -555,6 +557,7 @@ pub async fn chat_send_message(
         model: Some(model.clone()),
         strategy: RoutingStrategy::Auto,
         context: router_context,
+        prefer_cloud_credits: request.prefer_cloud_credits,
     };
 
     let db = _db;

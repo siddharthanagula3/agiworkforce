@@ -294,6 +294,7 @@ export const CostDashboard = memo(function CostDashboard() {
                         tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                       />
                       <RechartsTooltip
+                        // @ts-expect-error - recharts v3 type definition mismatch
                         formatter={(value: number) => formatCurrency(value)}
                         contentStyle={{
                           backgroundColor: 'hsl(var(--background))',
@@ -334,7 +335,7 @@ export const CostDashboard = memo(function CostDashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={analytics.providers}
+                        data={analytics.providers as any}
                         dataKey="total_cost"
                         nameKey="provider"
                         cx="50%"
@@ -349,6 +350,7 @@ export const CostDashboard = memo(function CostDashboard() {
                       </Pie>
                       <Legend />
                       <RechartsTooltip
+                        // @ts-expect-error - recharts v3 type definition mismatch
                         formatter={(value: number) => formatCurrency(value)}
                         contentStyle={{
                           backgroundColor: 'hsl(var(--background))',

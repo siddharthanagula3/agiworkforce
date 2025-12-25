@@ -7,7 +7,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  type TooltipProps,
 } from 'recharts';
 import {
   Card,
@@ -23,7 +22,7 @@ interface TimeSavedChartProps {
   loading?: boolean;
 }
 
-function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
+function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }

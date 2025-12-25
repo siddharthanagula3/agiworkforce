@@ -3,6 +3,9 @@ import { persist } from 'zustand/middleware';
 import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
+import { accountApi } from '../api/accountApi';
+
+const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
 export type { PlanTier } from '../lib/supabase';
 
@@ -15,6 +18,16 @@ export type SubscriptionStatus =
   | 'incomplete'
   | 'incomplete_expired'
   | 'unpaid';
+
+export interface CreditBalance {
+  account_id?: string;
+  period_start?: string;
+  period_end?: string;
+  allocated_cents?: number;
+  used_cents?: number;
+  remaining_cents?: number;
+  percentage_used?: number;
+}
 
 export interface DesktopAccount {
   id: string | null;
@@ -29,6 +42,7 @@ export interface DesktopAccount {
   stripeCustomerId?: string | null;
 
   featureFlags: Record<string, boolean>;
+  credits?: CreditBalance | null;
 
   accessToken?: string | null;
   refreshToken?: string | null;
@@ -210,6 +224,18 @@ export const useAccountStore = create<AccountState>()(
         try {
           const planTier = asPlanTier(authState.subscription?.plan_tier);
 
+          // Fetch credits from API if we have a session
+          let credits: CreditBalance | null = null;
+          if (authState.session) {
+            try {
+              const profile = await accountApi.fetchUserProfile(authState.session.access_token);
+              credits = profile.credits || null;
+            } catch (error) {
+              console.warn('[Account] Failed to fetch credits:', error);
+              // Continue without credits - not critical
+            }
+          }
+
           set((state) => ({
             account: {
               ...state.account,
@@ -225,6 +251,7 @@ export const useAccountStore = create<AccountState>()(
                 : null,
               stripeCustomerId: authState.subscription?.stripe_customer_id || null,
               featureFlags: authState.featureFlags,
+              credits,
               lastSyncedAt: Date.now(),
             },
             isAuthenticated: true,
@@ -330,10 +357,11 @@ export function hasFeature(featureKey: string): boolean {
 
 export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
-    hobby: 'Perfect for getting started; 3-month free trial; $10/month',
+    hobby:
+      'Perfect for getting started; 3-month free trial with BETATESTER code; $1/mo cloud credits; $10/month',
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; Priority support',
-    max: 'Maximum performance; $300/mo credits; Dedicated support',
+    max: 'Maximum performance; $250/mo credits; Dedicated support',
     enterprise: 'Custom solutions; Dedicated support; SSO',
   };
 
@@ -341,11 +369,22 @@ export function getPlanDescription(plan: PlanTier): string {
 }
 
 export function initializeAccountStore(): () => void {
-  const unsubscribe = supabaseAuth.onAuthStateChange((authState: AuthState) => {
+  const unsubscribe = supabaseAuth.onAuthStateChange(async (authState: AuthState) => {
     const store = useAccountStore.getState();
 
     if (authState.user && authState.session) {
       const planTier = asPlanTier(authState.subscription?.plan_tier);
+
+      // Fetch credits from API if we have a session
+      let credits: CreditBalance | null = null;
+      if (authState.session) {
+        try {
+          const profile = await accountApi.fetchUserProfile(authState.session.access_token);
+          credits = profile.credits || null;
+        } catch (error) {
+          console.warn('[Account] Failed to fetch credits on auth change:', error);
+        }
+      }
 
       store.setAccount({
         id: authState.user.id,
@@ -366,10 +405,25 @@ export function initializeAccountStore(): () => void {
           : null,
         stripeCustomerId: authState.subscription?.stripe_customer_id || null,
         featureFlags: authState.featureFlags,
+        credits,
         accessToken: authState.session.access_token,
         refreshToken: authState.session.refresh_token,
         lastSyncedAt: Date.now(),
       });
+
+      // Auto-initialize ManagedCloud provider if user is authenticated
+      // This ensures it's available for Pro/Max users who prefer cloud credits
+      if (isTauri) {
+        (async () => {
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('llm_ensure_managed_cloud');
+          } catch (error) {
+            console.warn('[Account] Failed to ensure ManagedCloud provider:', error);
+            // Non-critical - provider will be checked when needed
+          }
+        })();
+      }
     } else if (!authState.user && !authState.isLoading) {
       store.reset();
     }

@@ -33,6 +33,7 @@ impl TokenCounter {
             Provider::Qwen => (1.0, 1.0),
             Provider::Mistral => (1.0, 1.0),
             Provider::Moonshot => (1.0, 1.0),
+            Provider::ManagedCloud => (1.0, 1.0), // ManagedCloud uses OpenAI-compatible format
         };
 
         let prompt =

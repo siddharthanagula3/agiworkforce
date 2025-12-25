@@ -1,9 +1,14 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { CreditService } from '@/lib/services/credit-service';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,9 +31,15 @@ const supabaseAdmin =
  * Manual sync endpoint to fix subscriptions with missing stripe_price_id
  * This can be called to sync a subscription from Stripe to Supabase
  */
-export async function POST(_request: Request) {
+async function handleSyncSubscription(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'sync-subscription');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   if (!stripe || !supabaseAdmin) {
-    return NextResponse.json({ error: 'Stripe or Supabase not configured' }, { status: 500 });
+    throw createError.serviceUnavailable('Stripe or Supabase not configured');
   }
 
   const supabase = await createSupabaseServerClient();
@@ -37,7 +48,7 @@ export async function POST(_request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    throw createError.unauthorized();
   }
 
   try {
@@ -49,14 +60,11 @@ export async function POST(_request: Request) {
       .single();
 
     if (subError || !subscription) {
-      return NextResponse.json({ error: 'No subscription found' }, { status: 404 });
+      throw createError.notFound('No subscription found');
     }
 
     if (!subscription.stripe_subscription_id) {
-      return NextResponse.json(
-        { error: 'Subscription has no Stripe subscription ID' },
-        { status: 400 },
-      );
+      throw createError.validation('Subscription has no Stripe subscription ID');
     }
 
     // Retrieve subscription from Stripe
@@ -74,10 +82,7 @@ export async function POST(_request: Request) {
     }
 
     if (!stripePriceId) {
-      return NextResponse.json(
-        { error: 'Could not retrieve price ID from Stripe subscription' },
-        { status: 500 },
-      );
+      throw createError.internal('Could not retrieve price ID from Stripe subscription');
     }
 
     // Update Supabase subscription with price_id
@@ -99,17 +104,57 @@ export async function POST(_request: Request) {
       .eq('user_id', user.id);
 
     if (updateError) {
-      console.error('[sync-subscription] Error updating subscription:', updateError);
-      return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+      logger.error(
+        {
+          userId: user.id,
+          subscriptionId: subscription.stripe_subscription_id,
+          error: updateError,
+        },
+        'Error updating subscription',
+      );
+      throw createError.internal('Failed to update subscription');
     }
+
+    // Get credit balance
+    let creditBalance = null;
+    try {
+      creditBalance = await CreditService.getBalance(user.id);
+    } catch (creditError) {
+      logger.warn(
+        {
+          error: creditError,
+          userId: user.id,
+        },
+        'Failed to get credit balance during sync',
+      );
+      // Don't fail the sync if credit balance fetch fails
+    }
+
+    logger.info(
+      {
+        userId: user.id,
+        subscriptionId: subscription.stripe_subscription_id,
+        priceId: stripePriceId,
+      },
+      'Subscription synced successfully',
+    );
 
     return NextResponse.json({
       success: true,
       message: 'Subscription synced successfully',
       stripe_price_id: stripePriceId,
+      credits: creditBalance,
     });
   } catch (error) {
-    console.error('[sync-subscription] Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+      },
+      'Error in sync-subscription',
+    );
+    throw error;
   }
 }
+
+export const POST = withErrorHandler(handleSyncSubscription);

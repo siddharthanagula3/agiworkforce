@@ -156,6 +156,7 @@ pub async fn vision_send_message(
         model: request.model.clone(),
         strategy: crate::core::router::llm_router::RoutingStrategy::Auto,
         context: None,
+        prefer_cloud_credits: false,
     };
 
     let candidates = {

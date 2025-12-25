@@ -1,7 +1,7 @@
 use crate::core::router::providers::{
     anthropic::AnthropicProvider, deepseek::DeepSeekProvider, google::GoogleProvider,
-    mistral::MistralProvider, ollama::OllamaProvider, openai::OpenAIProvider, qwen::QwenProvider,
-    xai::XAIProvider,
+    managed_cloud_provider::ManagedCloudProvider, mistral::MistralProvider,
+    ollama::OllamaProvider, openai::OpenAIProvider, qwen::QwenProvider, xai::XAIProvider,
 };
 use crate::core::router::{
     cache_manager::CacheManager,
@@ -22,6 +22,8 @@ pub struct LLMSendMessageRequest {
     pub provider: Option<String>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
+    #[serde(default)]
+    pub prefer_cloud_credits: bool, // Prefer cloud credits over own API keys
 }
 
 pub struct LLMState {
@@ -97,6 +99,7 @@ pub async fn llm_send_message(
         "deepseek" => Some(Provider::DeepSeek),
         "qwen" | "alibaba" => Some(Provider::Qwen),
         "mistral" | "mistralai" => Some(Provider::Mistral),
+        "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
         _ => None,
     });
 
@@ -121,6 +124,7 @@ pub async fn llm_send_message(
         model: request.model.clone(),
         strategy: RoutingStrategy::Auto,
         context: None,
+        prefer_cloud_credits: request.prefer_cloud_credits,
     };
 
     let candidates = {
@@ -308,6 +312,11 @@ pub async fn llm_configure_provider(
                 Err("Mistral requires an API key".to_string())
             }
         }
+        "managed_cloud" | "managedcloud" | "cloud" => {
+            // ManagedCloud doesn't need an API key - it uses the access token from keyring
+            router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
+            Ok(())
+        }
         _ => Err(format!("Unknown provider: {}", provider)),
     }
 }
@@ -332,11 +341,35 @@ pub async fn llm_set_default_provider(
         "deepseek" => Provider::DeepSeek,
         "qwen" | "alibaba" => Provider::Qwen,
         "mistral" | "mistralai" => Provider::Mistral,
+        "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
     router.set_default_provider(provider_enum);
     Ok(())
+}
+
+/// Auto-initialize ManagedCloud provider if user is authenticated
+/// This ensures ManagedCloud is available for Pro/Max users who prefer cloud credits
+#[tauri::command]
+pub async fn llm_ensure_managed_cloud(
+    state: State<'_, LLMState>,
+) -> Result<bool, String> {
+    use crate::sys::account::get_access_token;
+    
+    // Check if user has access token (is authenticated)
+    match get_access_token() {
+        Ok(_) => {
+            // User is authenticated, register ManagedCloud provider
+            let mut router = state.router.lock().await;
+            router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
+            Ok(true)
+        }
+        Err(_) => {
+            // User not authenticated, ManagedCloud won't be available
+            Ok(false)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -553,6 +586,7 @@ pub async fn llm_check_provider_status(
         "deepseek" => Provider::DeepSeek,
         "qwen" | "alibaba" => Provider::Qwen,
         "mistral" | "mistralai" => Provider::Mistral,
+        "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
     let configured = router.has_provider(provider_enum);

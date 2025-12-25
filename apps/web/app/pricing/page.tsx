@@ -300,6 +300,9 @@ function PricingContent() {
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400" /> Community support
                   </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-emerald-400" /> $1/mo token credits
+                  </li>
                 </ul>
                 <Button
                   className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20 border-0"
@@ -347,7 +350,7 @@ function PricingContent() {
                     <Check className="h-4 w-4 text-blue-400" /> Web & UI automation
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> $25/mo token credits
+                    <Check className="h-4 w-4 text-blue-400" /> $20/mo token credits
                   </li>
                 </ul>
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
@@ -389,7 +392,7 @@ function PricingContent() {
                     <Check className="h-4 w-4 text-purple-400" /> All Pro features
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> $300/mo token credits
+                    <Check className="h-4 w-4 text-purple-400" /> $250/mo token credits
                   </li>
                 </ul>
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>

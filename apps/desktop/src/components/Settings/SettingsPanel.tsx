@@ -38,6 +38,8 @@ import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { UpdateSettings } from './UpdateSettings';
 import { canUseAPIKeys } from '../../utils/subscriptionGate';
 import { openPricingPage } from '../../utils/navigation';
+import { useAccountStore } from '../../stores/accountStore';
+import { Switch } from '../ui/Switch';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -224,11 +226,13 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     setTheme,
     setStartupPosition,
     setDockOnStartup,
+    setUseCloudCredits,
     loadSettings,
     saveSettings,
     loading,
     error,
   } = useSettingsStore();
+  const { plan } = useAccountStore((state) => state.account);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
@@ -308,6 +312,28 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                     Configure your API keys for different LLM providers. Keys are stored securely in
                     your system keyring.
                   </p>
+
+                  {/* Cloud Credits Toggle for Pro/Max users */}
+                  {(plan === 'pro' || plan === 'max') && (
+                    <div className="mb-6 rounded-lg border border-border bg-muted/50 p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <Label htmlFor="use-cloud-credits" className="text-sm font-medium">
+                            Use Cloud Credits
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            When enabled, Pro/Max subscription credits will be used instead of your
+                            own API keys for LLM requests.
+                          </p>
+                        </div>
+                        <Switch
+                          id="use-cloud-credits"
+                          checked={llmConfig?.useCloudCredits ?? true}
+                          onCheckedChange={setUseCloudCredits}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-6">
                     <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />

@@ -183,6 +183,7 @@ impl ContextManager {
                     model: Some("gpt-4o-mini".to_string()),
                     strategy: crate::core::router::RoutingStrategy::Auto,
                     context: None,
+                    prefer_cloud_credits: false,
                 }),
             )
             .await?;

@@ -8,5 +8,11 @@
     "deploymentEnabled": {
       "main": true
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/reset-credits",
+      "schedule": "0 0 * * *"
+    }
+  ]
 }
