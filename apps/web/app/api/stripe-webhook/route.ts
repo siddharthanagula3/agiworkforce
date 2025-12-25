@@ -260,8 +260,8 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 }
 
 async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Subscription) {
-  if (!supabaseAdmin) {
-    console.error('[billing] updateSubscriptionFromStripeSubscription: missing supabaseAdmin');
+  if (!supabaseAdmin || !stripe) {
+    console.error('[billing] updateSubscriptionFromStripeSubscription: missing dependencies');
     throw new Error('Missing dependencies');
   }
 
@@ -318,10 +318,12 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   console.log('[billing] Updating subscription:', { stripeSubId, stripeCustomerId, updateData });
 
   let error;
+  let supabaseUserId: string | null = null;
+
   if (stripeSubId) {
     const { data: existingSub, error: fetchError } = await supabaseAdmin
       .from('subscriptions')
-      .select('id')
+      .select('id, user_id')
       .eq('stripe_subscription_id', stripeSubId)
       .maybeSingle();
 
@@ -331,43 +333,76 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
 
     if (existingSub) {
       // Normal path: update by stripe_subscription_id
+      supabaseUserId = existingSub.user_id;
       const res = await supabaseAdmin
         .from('subscriptions')
         .update(updateData)
         .eq('stripe_subscription_id', stripeSubId);
       error = res.error;
     } else {
-      // Fallback: Code did not find by stripe_subscription_id.
-      // Check if we have a user_id in metadata to link it.
+      // Subscription doesn't exist - try to find user and create it
+      // First, try metadata
       const metadataUserId = subscription.metadata?.supabase_user_id;
       if (metadataUserId) {
         console.log(
-          `[billing] Subscription ${stripeSubId} not found by ID. Linking via metadata user_id: ${metadataUserId}`,
+          `[billing] Subscription ${stripeSubId} not found. Creating via metadata user_id: ${metadataUserId}`,
         );
-        // We merge the IDs into updateData to ensure they are saved
-        const linkData = {
+        supabaseUserId = metadataUserId;
+      } else if (stripeCustomerId) {
+        // Fallback: Try to find user by customer email
+        try {
+          const customer = await stripe.customers.retrieve(stripeCustomerId);
+          if (typeof customer !== 'string' && customer.email) {
+            console.log(`[billing] Attempting to find user by customer email: ${customer.email}`);
+            // Use Supabase Admin API to find user by email
+            const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
+            if (!userError && users?.users) {
+              const matchingUser = users.users.find((u) => u.email === customer.email);
+              if (matchingUser) {
+                console.log(`[billing] Found user ${matchingUser.id} by email ${customer.email}`);
+                supabaseUserId = matchingUser.id;
+              } else {
+                console.warn(`[billing] No Supabase user found with email ${customer.email}`);
+              }
+            } else {
+              console.error('[billing] Failed to list users:', userError);
+            }
+          } else {
+            console.warn(`[billing] Customer ${stripeCustomerId} has no email address`);
+          }
+        } catch (customerError) {
+          console.error('[billing] Failed to retrieve customer:', customerError);
+        }
+      }
+
+      if (supabaseUserId) {
+        // Create new subscription
+        const createData = {
+          user_id: supabaseUserId,
           ...updateData,
           stripe_subscription_id: stripeSubId,
           stripe_customer_id: stripeCustomerId,
         };
-
-        const res = await supabaseAdmin
-          .from('subscriptions')
-          .update(linkData)
-          .eq('user_id', metadataUserId);
+        console.log('[billing] Creating new subscription:', createData);
+        const res = await supabaseAdmin.from('subscriptions').upsert(createData, {
+          onConflict: 'user_id',
+        });
         error = res.error;
       } else {
-        // Fallback 2: Try by customer ID as a last resort if user has no other subs?
-        // Actually, existing logic tried by customer ID if stripeSubId wasn't passed, but here stripeSubId IS passed.
-        // We'll stick to the original "else if (stripeCustomerId)" logic below only if we really didn't find anything.
+        // Last resort: try to update by customer ID (might work if subscription exists)
         console.warn(
-          `[billing] Subscription ${stripeSubId} not found and no metadata user_id. Falling back to customer ID lookup.`,
+          `[billing] Subscription ${stripeSubId} not found and cannot determine user_id. Attempting customer ID update.`,
         );
         const res = await supabaseAdmin
           .from('subscriptions')
           .update(updateData)
           .eq('stripe_customer_id', stripeCustomerId);
         error = res.error;
+        if (error) {
+          console.error(
+            `[billing] Cannot create or update subscription ${stripeSubId}: No user_id found and customer ID update failed.`,
+          );
+        }
       }
     }
   } else if (stripeCustomerId) {
