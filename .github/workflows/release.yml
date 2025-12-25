@@ -99,7 +99,14 @@ jobs:
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            pkg-config \
+            libleptonica-dev \
+            libpng-dev \
+            libjpeg-dev \
+            libtiff-dev \
+            zlib1g-dev \
+            libwebp-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
