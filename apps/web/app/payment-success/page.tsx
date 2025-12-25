@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle, LayoutDashboard, Loader2 } from 'lucide-react';
@@ -14,6 +14,7 @@ function PaymentSuccessContent() {
   const [subscription, setSubscription] = useState<ClientSubscription | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const [desktopAppError, setDesktopAppError] = useState(false);
+  const attemptsRef = useRef(0);
 
   const MAX_POLL_ATTEMPTS = 10; // Poll for up to 30 seconds (10 attempts * 3 seconds)
   const POLL_INTERVAL = 3000; // 3 seconds
@@ -35,17 +36,13 @@ function PaymentSuccessContent() {
         }
       }
 
-      // Track attempts internally to stop polling after max attempts
-      let attempts = 0;
-      const checkAttempts = () => {
-        attempts++;
-        if (attempts >= MAX_POLL_ATTEMPTS) {
-          setIsPolling(false);
-          if (pollInterval) clearInterval(pollInterval);
-          if (timeout) clearTimeout(timeout);
-        }
-      };
-      checkAttempts();
+      // Track attempts using ref to persist across poll calls
+      attemptsRef.current += 1;
+      if (attemptsRef.current >= MAX_POLL_ATTEMPTS) {
+        setIsPolling(false);
+        if (pollInterval) clearInterval(pollInterval);
+        if (timeout) clearTimeout(timeout);
+      }
     };
 
     // Start polling immediately
