@@ -52,6 +52,9 @@ export default function SignupPage() {
       } else {
         setError(signUpError.message);
       }
+    } else if (data?.session) {
+      // User is auto-confirmed or email confirmation is disabled
+      window.location.href = '/dashboard';
     } else if (data?.user) {
       if (data.user.identities && data.user.identities.length === 0) {
         setExistingUser(true);
