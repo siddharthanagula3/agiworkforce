@@ -104,12 +104,19 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     }
   }
 
-  // Refine Plan Tier inference
-  if (!session.metadata?.['plan_tier'] && stripePriceId) {
+  // Refine Plan Tier inference - always infer from price_id if available (more reliable than metadata)
+  if (stripePriceId) {
     const inferredPlan = getPlanFromPriceId(stripePriceId);
     if (inferredPlan) {
-      console.log(`[billing] Inferred plan ${inferredPlan} from price ${stripePriceId}`);
+      console.log(
+        `[billing] Inferred plan ${inferredPlan} from price ${stripePriceId} (overriding metadata: ${session.metadata?.['plan_tier']})`,
+      );
       planTier = inferredPlan;
+    } else if (!session.metadata?.['plan_tier']) {
+      // Only use default 'pro' if we can't infer from price_id AND no metadata
+      console.warn(
+        `[billing] Could not infer plan from price_id ${stripePriceId}, using default 'pro'`,
+      );
     }
   }
 
@@ -136,6 +143,17 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
         console.log(
           `[billing] Retrieved price_id ${stripePriceId} from subscription ${stripeSubId}`,
         );
+      }
+
+      // Also update plan_tier from price_id if we have it (more reliable than metadata)
+      if (stripePriceId) {
+        const inferredPlan = getPlanFromPriceId(stripePriceId);
+        if (inferredPlan) {
+          console.log(
+            `[billing] Updating plan_tier to ${inferredPlan} from price_id ${stripePriceId}`,
+          );
+          planTier = inferredPlan;
+        }
       }
 
       if (subscription.discount?.coupon?.id) {
