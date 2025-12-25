@@ -166,10 +166,35 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     }
   }
 
-  // Log warning if price_id is still missing
-  if (!stripePriceId) {
+  // Log warning if price_id is still missing and attempt one final retrieval
+  if (!stripePriceId && stripeSubId && stripe) {
     console.warn(
-      `[billing] WARNING: stripe_price_id is null for session ${session.id}, subscription ${stripeSubId}, user ${supabaseUserId}`,
+      `[billing] WARNING: stripe_price_id is null for session ${session.id}, subscription ${stripeSubId}, user ${supabaseUserId}. Attempting final retrieval...`,
+    );
+    try {
+      // Final attempt: retrieve subscription with full expansion
+      const finalSubscription = await stripe.subscriptions.retrieve(stripeSubId, {
+        expand: ['items.data.price', 'items.data.plan'],
+      });
+      if (finalSubscription.items.data.length > 0) {
+        stripePriceId =
+          finalSubscription.items.data[0].price?.id ||
+          finalSubscription.items.data[0].plan?.id ||
+          null;
+        if (stripePriceId) {
+          console.log(
+            `[billing] Successfully retrieved price_id ${stripePriceId} in final attempt`,
+          );
+        }
+      }
+    } catch (error) {
+      console.error('[billing] Final attempt to retrieve price_id failed:', error);
+    }
+  }
+
+  if (!stripePriceId) {
+    console.error(
+      `[billing] CRITICAL: stripe_price_id is still null after all attempts for session ${session.id}, subscription ${stripeSubId}, user ${supabaseUserId}`,
     );
   }
 
@@ -374,6 +399,49 @@ export async function POST(request: Request) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         await upsertSubscriptionFromSession(session);
+        break;
+      }
+      case 'checkout.session.async_payment_succeeded': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        console.log('[billing] Async payment succeeded for session:', session.id);
+        await upsertSubscriptionFromSession(session);
+        break;
+      }
+      case 'checkout.session.async_payment_failed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const stripeSubId = session.subscription as string | null;
+        const stripeCustomerId = session.customer as string | null;
+        console.log('[billing] Async payment failed for session:', session.id);
+
+        if (supabaseAdmin) {
+          try {
+            if (stripeSubId) {
+              const { error: updateError } = await supabaseAdmin
+                .from('subscriptions')
+                .update({ status: 'past_due' })
+                .eq('stripe_subscription_id', stripeSubId);
+              if (updateError) {
+                console.error(
+                  '[billing] Failed to update subscription for async payment failed:',
+                  updateError,
+                );
+              }
+            } else if (stripeCustomerId) {
+              const { error: updateError } = await supabaseAdmin
+                .from('subscriptions')
+                .update({ status: 'past_due' })
+                .eq('stripe_customer_id', stripeCustomerId);
+              if (updateError) {
+                console.error(
+                  '[billing] Failed to update subscription by customer ID for async payment failed:',
+                  updateError,
+                );
+              }
+            }
+          } catch (error) {
+            console.error('[billing] Error updating subscription for async payment failed:', error);
+          }
+        }
         break;
       }
       case 'customer.subscription.created':
