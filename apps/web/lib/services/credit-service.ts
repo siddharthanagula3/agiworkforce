@@ -4,12 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 
-const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
+function getSupabaseClient() {
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  });
+}
 
 export interface CreditBalance {
   account_id: string;
@@ -51,6 +52,7 @@ export class CreditService {
    */
   static async getBalance(userId: string): Promise<CreditBalance | null> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('get_credit_balance', {
         p_user_id: userId,
       });
@@ -76,6 +78,7 @@ export class CreditService {
    */
   static async checkAvailable(userId: string, amountCents: number): Promise<boolean> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('check_credits_available', {
         p_user_id: userId,
         p_amount_cents: amountCents,
@@ -103,6 +106,7 @@ export class CreditService {
     metadata?: Record<string, unknown>,
   ): Promise<DeductCreditsResult> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('deduct_credits', {
         p_user_id: userId,
         p_amount_cents: amountCents,
@@ -136,6 +140,7 @@ export class CreditService {
     creditsAllocatedCents: number,
   ): Promise<string> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('get_or_create_credit_account', {
         p_user_id: userId,
         p_subscription_id: subscriptionId,
@@ -167,6 +172,7 @@ export class CreditService {
     creditsAllocatedCents: number,
   ): Promise<string> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('reset_credits_for_period', {
         p_user_id: userId,
         p_subscription_id: subscriptionId,

@@ -80,7 +80,7 @@ export async function GET() {
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, {
-        apiVersion: '2023-10-16',
+        apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
       });
 
       // Simple API call to check connectivity

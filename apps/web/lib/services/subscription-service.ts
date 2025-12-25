@@ -5,12 +5,13 @@ import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
 
-const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
+function getSupabaseClient() {
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  });
+}
 
 // Credit allocation in cents per month (dollar amount * 100)
 const PLAN_CREDITS: Record<string, number> = {
@@ -37,6 +38,7 @@ export class SubscriptionService {
    */
   static async getSubscription(userId: string): Promise<SubscriptionInfo | null> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -35,143 +35,8 @@ interface ServerPackage {
   installed: boolean;
 }
 
-const MOCK_SERVERS: ServerPackage[] = [
-  {
-    id: 'playwright-mcp',
-    name: 'Playwright Browser Automation',
-    version: '1.0.0',
-    category: 'automation',
-    github: 'https://github.com/modelcontextprotocol/servers',//github.com/modelcontextprotocol/server-playwright',
-    description:
-      'Browser automation with Playwright. Navigate, click, type, screenshot, and interact with web pages.',
-    author: 'Anthropic',
-    tools: [
-      'playwright_navigate',
-      'playwright_click',
-      'playwright_screenshot',
-      'playwright_fill',
-      'playwright_evaluate',
-    ],
-    rating: 4.8,
-    downloads: 12543,
-    installed: false,
-  },
-  {
-    id: 'github-mcp',
-    name: 'GitHub Integration',
-    version: '1.0.0',
-    category: 'development',
-    npm_package: '@modelcontextprotocol/server-github',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description:
-      'Access GitHub repositories, create issues, search code, manage pull requests, and interact with GitHub API.',
-    author: 'Anthropic',
-    tools: [
-      'github_create_issue',
-      'github_search_code',
-      'github_get_file',
-      'github_create_pr',
-      'github_list_repos',
-    ],
-    rating: 4.9,
-    downloads: 23456,
-    installed: false,
-  },
-  {
-    id: 'google-drive-mcp',
-    name: 'Google Drive',
-    version: '1.0.0',
-    category: 'data',
-    npm_package: '@modelcontextprotocol/server-gdrive',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description:
-      'Access Google Drive files and folders. Read, write, search, and manage documents.',
-    author: 'Anthropic',
-    tools: [
-      'gdrive_list_files',
-      'gdrive_read_file',
-      'gdrive_create_file',
-      'gdrive_update_file',
-      'gdrive_search',
-    ],
-    rating: 4.7,
-    downloads: 18234,
-    installed: false,
-  },
-  {
-    id: 'brave-search-mcp',
-    name: 'Brave Search',
-    version: '1.0.0',
-    category: 'search',
-    npm_package: '@modelcontextprotocol/server-brave-search',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description: 'Web search using Brave Search API. Get up-to-date information from the web.',
-    author: 'Anthropic',
-    tools: ['brave_web_search', 'brave_local_search'],
-    rating: 4.6,
-    downloads: 9876,
-    installed: false,
-  },
-  {
-    id: 'postgres-mcp',
-    name: 'PostgreSQL Database',
-    version: '1.0.0',
-    category: 'data',
-    npm_package: '@modelcontextprotocol/server-postgres',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description:
-      'Query PostgreSQL databases. Execute SQL queries, manage schemas, and access database metadata.',
-    author: 'Anthropic',
-    tools: ['postgres_query', 'postgres_schema', 'postgres_execute'],
-    rating: 4.5,
-    downloads: 7654,
-    installed: false,
-  },
-  {
-    id: 'slack-mcp',
-    name: 'Slack Integration',
-    version: '1.0.0',
-    category: 'productivity',
-    npm_package: '@modelcontextprotocol/server-slack',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description: 'Post messages to Slack channels, read conversations, and manage Slack workspace.',
-    author: 'Anthropic',
-    tools: ['slack_post_message', 'slack_list_channels', 'slack_read_messages'],
-    rating: 4.4,
-    downloads: 11234,
-    installed: false,
-  },
-  {
-    id: 'notion-mcp',
-    name: 'Notion Integration',
-    version: '1.0.0',
-    category: 'productivity',
-    npm_package: '@modelcontextprotocol/server-notion',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description:
-      'Access Notion pages and databases. Read, create, and update notes and structured data.',
-    author: 'Anthropic',
-    tools: ['notion_search', 'notion_get_page', 'notion_create_page', 'notion_query_database'],
-    rating: 4.7,
-    downloads: 15432,
-    installed: false,
-  },
-  {
-    id: 'filesystem-mcp',
-    name: 'Filesystem Access',
-    version: '1.0.0',
-    category: 'development',
-    npm_package: '@modelcontextprotocol/server-filesystem',
-    github: 'https://github.com/modelcontextprotocol/servers',
-    description:
-      'Read and write files on the local filesystem. List directories and manage file operations.',
-    author: 'Anthropic',
-    tools: ['read_file', 'write_file', 'list_directory', 'create_directory'],
-    rating: 4.9,
-    downloads: 34567,
-    installed: true,
-  },
-];
+// MCP server registry will be fetched from API
+// TODO: Implement API endpoint to fetch MCP server registry
 
 const CATEGORIES = [
   { id: 'all', name: 'All Servers', icon: Package },
@@ -338,8 +203,32 @@ export function MCPServerBrowser() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedServer, setSelectedServer] = useState<ServerPackage | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [servers, setServers] = useState<ServerPackage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredServers = MOCK_SERVERS.filter((server) => {
+  // Fetch MCP servers from API
+  useEffect(() => {
+    const fetchServers = async () => {
+      try {
+        setIsLoading(true);
+        // TODO: Replace with actual API call
+        // const response = await fetch('/api/mcp-servers');
+        // const data = await response.json();
+        // setServers(data);
+        setServers([]); // Empty for now until API is implemented
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load MCP servers');
+        console.error('Failed to fetch MCP servers:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchServers();
+  }, []);
+
+  const filteredServers = servers.filter((server) => {
     const matchesSearch =
       searchQuery === '' ||
       server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -358,7 +247,7 @@ export function MCPServerBrowser() {
 
   const handleInstall = async (server: ServerPackage) => {
     console.log('Installing server:', server.id);
-    
+
     alert(`Installing ${server.name}...`);
     setDetailsOpen(false);
   };
@@ -391,8 +280,8 @@ export function MCPServerBrowser() {
             const Icon = category.icon;
             const count =
               category.id === 'all'
-                ? MOCK_SERVERS.length
-                : MOCK_SERVERS.filter((s) => s.category === category.id).length;
+                ? servers.length
+                : servers.filter((s) => s.category === category.id).length;
 
             return (
               <TabsTrigger key={category.id} value={category.id}>
@@ -405,12 +294,25 @@ export function MCPServerBrowser() {
 
         {CATEGORIES.map((category) => (
           <TabsContent key={category.id} value={category.id}>
-            {filteredServers.length === 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-pulse" />
+                <p className="text-gray-600">Loading MCP servers...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <Package className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2 text-red-600">Error loading servers</h3>
+                <p className="text-gray-600">{error}</p>
+              </div>
+            ) : filteredServers.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No servers found</h3>
                 <p className="text-gray-600">
-                  Try adjusting your search or browse other categories
+                  {servers.length === 0
+                    ? 'No MCP servers available. Check back later or contact support.'
+                    : 'Try adjusting your search or browse other categories'}
                 </p>
               </div>
             ) : (
