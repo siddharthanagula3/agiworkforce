@@ -25,9 +25,11 @@ function PaymentSuccessContent() {
 
     const pollSubscription = async () => {
       const sub = await refreshSubscriptionStatus();
+      const activeStatuses = ['active', 'trialing'];
+
       if (sub) {
-        const activeStatuses = ['active', 'trialing'];
-        if (activeStatuses.includes(sub.status)) {
+        // Ignore 'free' plan as valid success state since this page follows a payment/subscription
+        if (activeStatuses.includes(sub.status) && sub.plan_tier !== 'free') {
           setSubscription(sub);
           setIsPolling(false);
           if (pollInterval) clearInterval(pollInterval);
@@ -39,6 +41,11 @@ function PaymentSuccessContent() {
       // Track attempts using ref to persist across poll calls
       attemptsRef.current += 1;
       if (attemptsRef.current >= MAX_POLL_ATTEMPTS) {
+        // If we timeout, we might show the last fetched sub (even if free) or just stop polling
+        // If we have a sub but it was free, we can set it here as a fallback
+        if (sub && activeStatuses.includes(sub.status)) {
+          setSubscription(sub);
+        }
         setIsPolling(false);
         if (pollInterval) clearInterval(pollInterval);
         if (timeout) clearTimeout(timeout);
