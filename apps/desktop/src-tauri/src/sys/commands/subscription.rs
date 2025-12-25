@@ -182,7 +182,8 @@ pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
                 "Free to use own APIs".to_string(),
                 "Core desktop agent".to_string(),
                 "Community support".to_string(),
-                "3-month free trial".to_string(),
+                "3-month free trial with BETATESTER code".to_string(),
+                "$1/mo Cloud Credits".to_string(),
             ],
             limits: serde_json::json!({
                 "automations": 10,
@@ -205,7 +206,7 @@ pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
                 "Unlimited local automations".to_string(),
                 "Advanced AI models (GPT-4, Claude)".to_string(),
                 "Priority support".to_string(),
-                "$25/mo Token Credits included".to_string(),
+                "$20/mo Token Credits included".to_string(),
                 "Multi-step workflows".to_string(),
             ],
             limits: serde_json::json!({
@@ -227,7 +228,7 @@ pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
             price_annual_usd: 2999.88,
             features: vec![
                 "Everything in Pro".to_string(),
-                "$300/mo Cloud Credits".to_string(),
+                "$250/mo Cloud Credits".to_string(),
                 "Dedicated Support Channel".to_string(),
                 "Early Access to New Features".to_string(),
                 "Higher Rate Limits".to_string(),

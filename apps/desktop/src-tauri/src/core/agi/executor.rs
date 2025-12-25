@@ -827,6 +827,7 @@ impl AGIExecutor {
                     model: Some("claude-haiku-4-5".to_string()),
                     strategy: RoutingStrategy::Auto,
                     context: None,
+                    prefer_cloud_credits: false,
                 };
 
                 let request = LLMRequest {

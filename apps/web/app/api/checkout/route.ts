@@ -1,10 +1,13 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
-
-type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
+import { CheckoutRequestSchema } from '@/lib/validations/checkout';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PRICE_HOBBY_MONTHLY =
@@ -21,7 +24,7 @@ const STRIPE_PRICE_MAX_YEARLY =
   process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW';
 
 if (!STRIPE_SECRET_KEY) {
-  console.warn(
+  logger.warn(
     '[billing] STRIPE_SECRET_KEY is not set. Checkout endpoint will return 500 until configured.',
   );
 }
@@ -40,7 +43,10 @@ function getOrigin(request: Request) {
   return `${url.protocol}//${url.host}`;
 }
 
-function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'): string | null {
+function getPriceIdForPlan(
+  plan: 'hobby' | 'free' | 'pro' | 'max' | 'enterprise',
+  billingInterval: 'monthly' | 'annual',
+): string | null {
   if (plan === 'enterprise') {
     return null;
   }
@@ -72,17 +78,31 @@ function getPriceIdForPlan(plan: PlanTier, billingInterval: 'monthly' | 'annual'
   return null;
 }
 
-export async function POST(request: Request) {
-  if (!stripe) {
-    return NextResponse.json(
-      { error: 'Stripe is not configured. Please set STRIPE_SECRET_KEY.' },
-      { status: 500 },
-    );
+async function handleCheckout(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'checkout');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
-  const body = await request.json().catch(() => null);
-  const plan: PlanTier = body?.plan ?? 'pro';
-  const billingInterval: 'monthly' | 'annual' = body?.billingInterval ?? 'monthly';
+  if (!stripe) {
+    throw createError.serviceUnavailable('Stripe is not configured. Please set STRIPE_SECRET_KEY.');
+  }
+
+  // Parse and validate request body
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON in request body');
+  }
+
+  const validationResult = CheckoutRequestSchema.safeParse(body);
+  if (!validationResult.success) {
+    throw createError.validation('Invalid request body', validationResult.error);
+  }
+
+  const { plan, billingInterval } = validationResult.data;
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -90,22 +110,18 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    throw createError.unauthorized();
   }
 
   if (plan === 'enterprise') {
-    return NextResponse.json(
-      {
-        error:
-          'Enterprise plans require custom pricing. Please contact sales for more information.',
-      },
-      { status: 400 },
+    throw createError.validation(
+      'Enterprise plans require custom pricing. Please contact sales for more information.',
     );
   }
 
   const priceId = getPriceIdForPlan(plan, billingInterval);
   if (!priceId) {
-    return NextResponse.json({ error: 'Unsupported plan or billing interval' }, { status: 400 });
+    throw createError.validation('Unsupported plan or billing interval');
   }
 
   const origin = getOrigin(request);
@@ -116,7 +132,6 @@ export async function POST(request: Request) {
         plan_tier: plan,
         supabase_user_id: user.id,
       },
-
       trial_period_days: plan === 'hobby' ? 90 : undefined,
     };
 
@@ -141,9 +156,37 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.info(
+      {
+        userId: user.id,
+        plan,
+        billingInterval,
+        sessionId: session.id,
+      },
+      'Checkout session created',
+    );
+
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (error) {
-    console.error('[billing] Failed to create Stripe checkout session', error);
-    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+        plan,
+        billingInterval,
+      },
+      'Failed to create Stripe checkout session',
+    );
+
+    if (error instanceof Stripe.errors.StripeError) {
+      throw createError.stripe('Failed to create checkout session', {
+        type: error.type,
+        code: error.code,
+      });
+    }
+
+    throw createError.internal('Failed to create checkout session');
   }
 }
+
+export const POST = withErrorHandler(handleCheckout);

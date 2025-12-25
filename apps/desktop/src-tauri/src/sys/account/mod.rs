@@ -33,6 +33,24 @@ pub struct DevicePollResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreditBalance {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub period_start: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub period_end: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allocated_cents: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub used_cents: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_cents: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percentage_used: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
     pub id: String,
     pub email: String,
@@ -42,6 +60,8 @@ pub struct UserProfile {
     pub updated_at: u64,
     pub plan: PlanInfo,
     pub feature_flags: std::collections::HashMap<String, bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credits: Option<CreditBalance>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

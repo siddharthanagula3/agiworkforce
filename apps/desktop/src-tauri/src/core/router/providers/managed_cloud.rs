@@ -1,19 +1,24 @@
 use crate::core::router::{LLMRequest, LLMResponse};
+use crate::sys::account::get_access_token;
 use reqwest::Client;
 use serde_json::Value;
 
 pub async fn send_managed_request(
     req: &LLMRequest,
-    token: &str,
     _provider: &str,
 ) -> Result<LLMResponse, String> {
+    // Get access token from keyring
+    let token = get_access_token().map_err(|e| {
+        format!("Failed to get access token: {}. Please sign in again.", e)
+    })?;
+
     let client = Client::new();
 
-    let url = "https://api.agiworkforce.com".to_string();
+    let url = "https://api.agiworkforce.com/api/llm/completion".to_string();
 
     let res = client
         .post(url)
-        .bearer_auth(token)
+        .bearer_auth(&token)
         .json(&req)
         .send()
         .await

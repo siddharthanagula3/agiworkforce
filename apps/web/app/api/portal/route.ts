@@ -1,13 +1,16 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { withErrorHandler } from '@/lib/error-handler';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
 if (!STRIPE_SECRET_KEY) {
-  console.warn(
+  logger.warn(
     '[billing] STRIPE_SECRET_KEY is not set. Portal endpoint will return 500 until configured.',
   );
 }
@@ -26,12 +29,9 @@ function getOrigin(request: Request) {
   return `${url.protocol}//${url.host}`;
 }
 
-export async function POST(request: Request) {
+async function handlePortal(request: NextRequest) {
   if (!stripe) {
-    return NextResponse.json(
-      { error: 'Stripe is not configured. Please set STRIPE_SECRET_KEY.' },
-      { status: 500 },
-    );
+    throw createError.serviceUnavailable('Stripe is not configured. Please set STRIPE_SECRET_KEY.');
   }
 
   const supabase = await createSupabaseServerClient();
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    throw createError.unauthorized();
   }
 
   const { data: subscription, error } = await supabase
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !subscription) {
-    return NextResponse.json({ error: 'No subscription found.' }, { status: 404 });
+    throw createError.notFound('No subscription found.');
   }
 
   // Allow users to access portal even if canceled, to view invoices etc.
@@ -62,9 +62,12 @@ export async function POST(request: Request) {
   // If no customer_id but we have subscription_id, try to retrieve it from Stripe
   if (!stripeCustomerId && subscription.stripe_subscription_id && stripe) {
     try {
-      console.log(
-        '[billing] No customer_id found, retrieving from subscription:',
-        subscription.stripe_subscription_id,
+      logger.info(
+        {
+          userId: user.id,
+          subscriptionId: subscription.stripe_subscription_id,
+        },
+        'No customer_id found, retrieving from subscription',
       );
       const stripeSubscription = await stripe.subscriptions.retrieve(
         subscription.stripe_subscription_id,
@@ -77,24 +80,48 @@ export async function POST(request: Request) {
           .from('subscriptions')
           .update({ stripe_customer_id: stripeCustomerId })
           .eq('user_id', user.id);
-        console.log('[billing] Updated subscription with customer_id:', stripeCustomerId);
+        logger.info(
+          {
+            userId: user.id,
+            customerId: stripeCustomerId,
+          },
+          'Updated subscription with customer_id',
+        );
       }
     } catch (stripeError) {
-      console.error('[billing] Failed to retrieve customer from Stripe subscription:', stripeError);
+      logger.error(
+        {
+          userId: user.id,
+          subscriptionId: subscription.stripe_subscription_id,
+          error: stripeError,
+        },
+        'Failed to retrieve customer from Stripe subscription',
+      );
     }
   }
 
   if (!stripeCustomerId) {
-    console.error('[billing] Subscription found but no stripe_customer_id:', subscription);
-    return NextResponse.json(
-      { error: 'No billing account linked to this subscription. Please contact support.' },
-      { status: 404 },
+    logger.error(
+      {
+        userId: user.id,
+        subscription,
+      },
+      'Subscription found but no stripe_customer_id',
+    );
+    throw createError.notFound(
+      'No billing account linked to this subscription. Please contact support.',
     );
   }
 
   // Optional: Warn if status is weird, but usually Portal handles it.
   if (!allowedStatuses.includes(subscription.status)) {
-    console.warn(`[billing] Accessing portal with status: ${subscription.status}`);
+    logger.warn(
+      {
+        userId: user.id,
+        status: subscription.status,
+      },
+      'Accessing portal with unusual status',
+    );
   }
 
   const origin = getOrigin(request);
@@ -105,13 +132,35 @@ export async function POST(request: Request) {
       return_url: `${origin}/pricing`,
     });
 
+    logger.info(
+      {
+        userId: user.id,
+        customerId: stripeCustomerId,
+        sessionId: session.id,
+      },
+      'Portal session created',
+    );
+
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (error) {
-    console.error('[billing] Failed to create Stripe portal session', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to create portal session';
-    return NextResponse.json(
-      { error: `Failed to create portal session: ${errorMessage}` },
-      { status: 500 },
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+        customerId: stripeCustomerId,
+      },
+      'Failed to create Stripe portal session',
     );
+
+    if (error instanceof Stripe.errors.StripeError) {
+      throw createError.stripe('Failed to create portal session', {
+        type: error.type,
+        code: error.code,
+      });
+    }
+
+    throw createError.internal('Failed to create portal session');
   }
 }
+
+export const POST = withErrorHandler(handlePortal);

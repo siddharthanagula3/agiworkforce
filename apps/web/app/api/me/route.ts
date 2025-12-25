@@ -1,9 +1,20 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { CreditService } from '@/lib/services/credit-service';
 
-export async function GET() {
+async function handleGetMe(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'me');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const cookieStore = await cookies();
 
@@ -39,7 +50,7 @@ export async function GET() {
     } = await supabase.auth.getSession();
 
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw createError.unauthorized();
     }
 
     const user = session.user;
@@ -53,7 +64,13 @@ export async function GET() {
     // Log subscription fetch errors but don't fail the request
     if (subscriptionError && subscriptionError.code !== 'PGRST116') {
       // PGRST116 is "not found" which is acceptable
-      console.error('[api/me] Error fetching subscription:', subscriptionError);
+      logger.warn(
+        {
+          userId: user.id,
+          error: subscriptionError,
+        },
+        'Error fetching subscription',
+      );
     }
 
     const feature_flags = {
@@ -73,6 +90,21 @@ export async function GET() {
         : null,
     };
 
+    // Get credit balance
+    let credits = null;
+    try {
+      credits = await CreditService.getBalance(user.id);
+    } catch (creditError) {
+      logger.warn(
+        {
+          error: creditError,
+          userId: user.id,
+        },
+        'Failed to get credit balance',
+      );
+      // Don't fail the request if credit balance fetch fails
+    }
+
     return NextResponse.json({
       id: user.id,
       email: user.email,
@@ -82,10 +114,17 @@ export async function GET() {
       updated_at: user.updated_at ? new Date(user.updated_at).getTime() / 1000 : Date.now() / 1000,
       plan,
       feature_flags,
+      credits,
     });
   } catch (error) {
-    console.error('[api/me] Error:', error);
-    // Don't expose internal error details to client
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Error in /api/me',
+    );
+    throw error;
   }
 }
+
+export const GET = withErrorHandler(handleGetMe);

@@ -335,6 +335,7 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             model: Some("claude-3-haiku-20240307".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         let request = LLMRequest {

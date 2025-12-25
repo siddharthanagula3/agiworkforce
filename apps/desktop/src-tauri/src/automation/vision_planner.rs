@@ -151,6 +151,7 @@ impl ActionPlanner {
             model: None,
             strategy: crate::core::router::llm_router::RoutingStrategy::Auto,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         let candidates = router.candidates(&request, &preferences);

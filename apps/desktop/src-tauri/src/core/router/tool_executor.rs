@@ -1615,6 +1615,7 @@ impl ToolExecutor {
                         model: Some(model_str.to_string()),
                         strategy: crate::core::router::RoutingStrategy::Auto,
                         context: None,
+                        prefer_cloud_credits: false,
                     });
 
                     let router = llm_state.router.lock().await;

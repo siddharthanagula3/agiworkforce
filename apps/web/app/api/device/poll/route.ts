@@ -1,46 +1,47 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getEnv, requireEnv } from '@/utils/env';
+import { DevicePollRequestSchema } from '@/lib/validations/device';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
-/**
- * Validate device_id format and length
- */
-function validateDeviceId(deviceId: string): { valid: boolean; error?: string } {
-  if (!deviceId || typeof deviceId !== 'string') {
-    return { valid: false, error: 'device_id must be a non-empty string' };
-  }
-
-  if (deviceId.length > 255) {
-    return { valid: false, error: 'device_id must be 255 characters or less' };
-  }
-
-  // Allow alphanumeric, dashes, underscores, and dots
-  if (!/^[a-zA-Z0-9._-]+$/.test(deviceId)) {
-    return {
-      valid: false,
-      error:
-        'device_id contains invalid characters. Only alphanumeric, dashes, underscores, and dots are allowed.',
-    };
-  }
-
-  return { valid: true };
-}
-
-export async function POST(request: Request) {
+async function handleDevicePoll(request: NextRequest) {
+  // Rate limiting - use device_id as identifier
+  let deviceId: string | undefined;
   try {
     const body = await request.json().catch(() => ({}));
-    const { device_id } = body;
+    deviceId = body?.device_id;
+  } catch {
+    // Will be caught by validation below
+  }
 
-    if (!device_id) {
-      return NextResponse.json({ error: 'Missing device_id' }, { status: 400 });
+  const rateLimitResponse = await withRateLimit(
+    request,
+    'device-poll',
+    deviceId ? `device:${deviceId}` : undefined,
+  );
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
+  try {
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw createError.validation('Invalid JSON in request body');
     }
 
-    // Validate device_id format and length
-    const validation = validateDeviceId(device_id);
-    if (!validation.valid) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+    const validationResult = DevicePollRequestSchema.safeParse(body);
+    if (!validationResult.success) {
+      throw createError.validation('Invalid request body', validationResult.error);
     }
+
+    const { device_id } = validationResult.data;
 
     const cookieStore = await cookies();
 
@@ -87,8 +88,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ status: 'pending' });
   } catch (error) {
-    console.error('[device/poll] Error:', error);
-    // Don't expose internal error details to client
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        deviceId,
+      },
+      'Error in device/poll',
+    );
+    throw error;
   }
 }
+
+export const POST = withErrorHandler(handleDevicePoll);

@@ -33,8 +33,9 @@ import { useUsageStore } from '../../stores/usageStore';
 import { useBillingStore } from '../../stores/billingStore';
 
 const PLAN_CREDIT_LIMITS = {
-  pro: 25.0,
-  max: 300.0,
+  hobby: { monthly: 1.0, daily: 0.3 },
+  pro: { monthly: 20.0, daily: 6.0 },
+  max: { monthly: 250.0, daily: 75.0 },
 };
 
 export interface SendOptions {
@@ -413,8 +414,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const planName = subscription?.plan_name?.toLowerCase() || '';
   let monthlyLimit = 0;
-  if (planName.includes('pro')) monthlyLimit = PLAN_CREDIT_LIMITS.pro;
-  else if (planName.includes('max')) monthlyLimit = PLAN_CREDIT_LIMITS.max;
+  if (planName.includes('hobby')) monthlyLimit = PLAN_CREDIT_LIMITS.hobby.monthly;
+  else if (planName.includes('pro')) monthlyLimit = PLAN_CREDIT_LIMITS.pro.monthly;
+  else if (planName.includes('max')) monthlyLimit = PLAN_CREDIT_LIMITS.max.monthly;
 
   const showCreditUsage = monthlyLimit > 0;
   const creditPercentage = showCreditUsage ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;

@@ -205,6 +205,7 @@ Return ONLY the JSON array."#,
             model: Some("claude-sonnet-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         let request = LLMRequest {
@@ -573,6 +574,7 @@ Your response:"#,
             model: None,
             strategy: RoutingStrategy::Auto,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         let request = LLMRequest {
@@ -744,6 +746,7 @@ Return ONLY a JSON array of steps with this structure:
             model: Some("claude-sonnet-4-5".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         let request = LLMRequest {

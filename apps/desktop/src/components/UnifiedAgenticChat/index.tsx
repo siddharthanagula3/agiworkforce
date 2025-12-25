@@ -20,6 +20,7 @@ import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { useCostStore } from '../../stores/costStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore, type Provider } from '../../stores/settingsStore';
+import { useAccountStore } from '../../stores/accountStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
 import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
@@ -60,6 +61,7 @@ export const UnifiedAgenticChat: React.FC<{
   const activeView = useUnifiedChatStore((state) => state.activeView);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
+  const { plan } = useAccountStore((state) => state.account);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const selectedModel = useModelStore((state) => state.selectedModel);
   const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
@@ -344,6 +346,11 @@ export const UnifiedAgenticChat: React.FC<{
       if (onSendMessage) {
         await onSendMessage(content, enrichedOptions);
       } else {
+        // Determine if we should prefer cloud credits
+        // Only for Pro/Max users who have the preference enabled
+        const preferCloudCredits =
+          (plan === 'pro' || plan === 'max') && (llmConfig?.useCloudCredits ?? true);
+
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
@@ -362,6 +369,7 @@ export const UnifiedAgenticChat: React.FC<{
             conversationMode,
             taskMetadata,
             thinkingMode: useModelStore.getState().thinkingModeEnabled,
+            preferCloudCredits,
           },
         });
 

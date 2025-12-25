@@ -709,6 +709,7 @@ pub fn run() {
             crate::sys::commands::llm_send_message,
             crate::sys::commands::llm_configure_provider,
             crate::sys::commands::llm_set_default_provider,
+            crate::sys::commands::llm_ensure_managed_cloud,
             crate::sys::commands::llm_get_available_models,
             crate::sys::commands::llm_check_provider_status,
             crate::sys::commands::llm_get_usage_stats,

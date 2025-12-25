@@ -1,13 +1,4 @@
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipProps,
-} from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   Card,
   CardContent,
@@ -22,7 +13,7 @@ interface CostSavedChartProps {
   loading?: boolean;
 }
 
-function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
+function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }

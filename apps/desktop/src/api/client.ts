@@ -63,6 +63,20 @@ export interface OAuthTokenResponse {
   scope?: string;
 }
 
+export interface CreditBalance {
+  account_id?: string;
+  period_start?: string;
+  period_end?: string;
+  allocated_cents?: number;
+  used_cents?: number;
+  remaining_cents?: number;
+  percentage_used?: number;
+  daily_limit_cents?: number;
+  daily_used_cents?: number;
+  daily_remaining_cents?: number;
+  daily_reset_at?: string; // ISO timestamp
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -77,6 +91,7 @@ export interface UserProfile {
     current_period_end: number | null;
   };
   feature_flags: Record<string, boolean>;
+  credits?: CreditBalance | null;
 }
 
 export interface UpdateProfileRequest {

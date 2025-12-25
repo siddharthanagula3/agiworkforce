@@ -56,6 +56,7 @@ describe('settingsStore', () => {
         defaultProvider: 'openai',
         temperature: 0.7,
         maxTokens: 4096,
+        useCloudCredits: true,
         defaultModels,
         taskRouting: buildTaskRouting(defaultModels),
         favoriteModels: [],
@@ -431,6 +432,7 @@ describe('settingsStore', () => {
           defaultProvider: 'anthropic',
           temperature: 0.8,
           maxTokens: 8192,
+          useCloudCredits: true,
           defaultModels: {
             openai: 'gpt-5.1',
             anthropic: 'claude-opus-4-5',

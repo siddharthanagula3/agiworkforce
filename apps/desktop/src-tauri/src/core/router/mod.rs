@@ -176,6 +176,7 @@ pub enum Provider {
     Qwen,
     Mistral,
     Moonshot,
+    ManagedCloud,
 }
 
 impl Provider {
@@ -191,6 +192,7 @@ impl Provider {
             Provider::Qwen => "qwen",
             Provider::Mistral => "mistral",
             Provider::Moonshot => "moonshot",
+            Provider::ManagedCloud => "managed_cloud",
         }
     }
 
@@ -206,6 +208,7 @@ impl Provider {
             "qwen" | "alibaba" => Some(Provider::Qwen),
             "mistral" | "mistralai" => Some(Provider::Mistral),
             "moonshot" | "kimi" => Some(Provider::Moonshot),
+            "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
             _ => None,
         }
     }
@@ -221,6 +224,7 @@ impl Provider {
             Provider::Qwen => "qwen-max-2025-01-25",
             Provider::Mistral => "mistral-large-2",
             Provider::Moonshot => "kimi-k2-thinking",
+            Provider::ManagedCloud => "gpt-5", // Default to OpenAI via cloud
         }
     }
 
@@ -262,6 +266,13 @@ impl Provider {
 
             (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2-thinking",
             (Provider::Moonshot, _) => "kimi-k2-thinking",
+
+            (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-mini",
+            (Provider::ManagedCloud, TaskType::CodeGeneration) => "gpt-5-codex",
+            (Provider::ManagedCloud, TaskType::ComplexReasoning) => "gpt-5",
+            (Provider::ManagedCloud, TaskType::Chat) => "gpt-5",
+            (Provider::ManagedCloud, TaskType::Vision) => "gpt-5-vision",
+            (Provider::ManagedCloud, TaskType::LongContext) => "gpt-5",
         }
     }
 }

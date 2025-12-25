@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { CreditCard, MessageSquare, Settings } from 'lucide-react';
+import { CreditCard, MessageSquare, Settings, Coins } from 'lucide-react';
 import React from 'react';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
@@ -18,7 +18,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onFeedbackClick,
   collapsed = false,
 }) => {
-  const { displayName, email, avatar, planDisplayName } = useAccountStore((state) => state.account);
+  const { displayName, email, avatar, planDisplayName, plan, credits } = useAccountStore(
+    (state) => state.account,
+  );
 
   const name = displayName || email?.split('@')[0] || 'Account';
 
@@ -89,6 +91,95 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </div>
               </div>
             </div>
+            {/* Credit Balance Display */}
+            {(plan === 'hobby' || plan === 'pro' || plan === 'max') && credits && (
+              <div className="mt-3 space-y-2">
+                {/* Daily Credits */}
+                {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Coins className="h-3.5 w-3.5 text-blue-400" />
+                      <span className="text-xs font-medium text-zinc-300">Daily Credits</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Remaining</span>
+                        <span className="text-sm font-semibold text-zinc-100">
+                          ${((credits.daily_remaining_cents || 0) / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Used</span>
+                        <span className="text-xs text-zinc-400">
+                          ${((credits.daily_used_cents || 0) / 100).toFixed(2)} / $
+                          {((credits.daily_limit_cents || 0) / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all"
+                          style={{
+                            width: `${Math.min(
+                              ((credits.daily_used_cents || 0) / (credits.daily_limit_cents || 1)) *
+                                100,
+                              100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      {credits.daily_reset_at && (
+                        <div className="text-[10px] text-zinc-500 mt-1">
+                          Resets in{' '}
+                          {Math.ceil(
+                            (new Date(credits.daily_reset_at).getTime() - Date.now()) /
+                              (1000 * 60 * 60),
+                          )}{' '}
+                          hours
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Monthly Credits */}
+                {credits.allocated_cents && credits.allocated_cents > 0 && (
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Coins className="h-3.5 w-3.5 text-amber-400" />
+                      <span className="text-xs font-medium text-zinc-300">Monthly Credits</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Remaining</span>
+                        <span className="text-sm font-semibold text-zinc-100">
+                          ${((credits.remaining_cents || 0) / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Used</span>
+                        <span className="text-xs text-zinc-400">
+                          ${((credits.used_cents || 0) / 100).toFixed(2)} / $
+                          {((credits.allocated_cents || 0) / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all"
+                          style={{
+                            width: `${Math.min(credits.percentage_used || 0, 100)}%`,
+                          }}
+                        />
+                      </div>
+                      {credits.period_end && (
+                        <div className="text-[10px] text-zinc-500 mt-1">
+                          Resets {new Date(credits.period_end).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {}

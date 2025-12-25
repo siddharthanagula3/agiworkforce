@@ -19,6 +19,7 @@ import {
 import { useAnalyticsStore } from '../../stores/analyticsStore';
 import { useUsageStore } from '../../stores/usageStore';
 import { useBillingStore } from '../../stores/billingStore';
+import { useAccountStore } from '../../stores/accountStore';
 import {
   queryTimeSeriesData,
   queryCategoryData,
@@ -42,6 +43,7 @@ export const UsageDashboard: React.FC = () => {
 
   const { stats: billingUsageStats, getTokenCost } = useUsageStore();
   const { subscription } = useBillingStore();
+  const { credits, plan } = useAccountStore((state) => state.account);
 
   const [dauData, setDauData] = useState<TimeSeriesData[]>([]);
   const [featureData, setFeatureData] = useState<CategoryData[]>([]);
@@ -125,6 +127,75 @@ export const UsageDashboard: React.FC = () => {
                 {new Date((subscription.current_period_end || 0) * 1000).toLocaleDateString()}
               </p>
             </div>
+          )}
+
+          {(plan === 'hobby' || plan === 'pro' || plan === 'max') && credits && (
+            <>
+              {/* Daily Credits Card */}
+              {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (
+                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Daily Credits
+                  </h3>
+                  <p className="text-2xl font-bold mt-2 text-blue-500">
+                    ${((credits.daily_remaining_cents || 0) / 100).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {credits.daily_limit_cents
+                      ? `${((credits.daily_used_cents || 0) / 100).toFixed(2)} / ${((credits.daily_limit_cents || 0) / 100).toFixed(2)} used`
+                      : 'No daily limit'}
+                  </p>
+                  {credits.daily_limit_cents && credits.daily_limit_cents > 0 && (
+                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 transition-all"
+                        style={{
+                          width: `${Math.min(
+                            ((credits.daily_used_cents || 0) / credits.daily_limit_cents) * 100,
+                            100,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                  {credits.daily_reset_at && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Resets in{' '}
+                      {Math.ceil(
+                        (new Date(credits.daily_reset_at).getTime() - Date.now()) /
+                          (1000 * 60 * 60),
+                      )}{' '}
+                      hours
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Monthly Credits Card */}
+              {credits.allocated_cents && credits.allocated_cents > 0 && (
+                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Monthly Credits
+                  </h3>
+                  <p className="text-2xl font-bold mt-2 text-amber-500">
+                    ${((credits.remaining_cents || 0) / 100).toFixed(2)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {credits.allocated_cents
+                      ? `${((credits.used_cents || 0) / 100).toFixed(2)} / ${((credits.allocated_cents || 0) / 100).toFixed(2)} used`
+                      : 'No credits allocated'}
+                  </p>
+                  {credits.percentage_used !== undefined && (
+                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 transition-all"
+                        style={{ width: `${Math.min(credits.percentage_used, 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
@@ -232,11 +303,13 @@ export const UsageDashboard: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={featureData}
+                  data={featureData as any}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(entry) => `${entry.category}: ${entry.percentage}%`}
+                  label={(entry: any) =>
+                    `${entry.name || entry.category || 'Unknown'}: ${(entry.percent * 100).toFixed(1)}%`
+                  }
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"

@@ -1,33 +1,44 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { ClaimOfferRequestSchema } from '@/lib/validations/claim-offer';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 
-export async function POST(request: Request) {
+async function handleClaimOffer(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'claim-offer');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    throw createError.unauthorized();
   }
 
-  const body = await request.json().catch(() => null);
-  const code: string | undefined = body?.code;
-
-  if (!code || !code.trim()) {
-    return NextResponse.json({ error: 'Invite code is required' }, { status: 400 });
+  // Parse and validate request body
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON in request body');
   }
 
-  const trimmedCode = code.trim().toUpperCase();
-
-  if (trimmedCode.length > 50 || !/^[A-Z0-9]+$/.test(trimmedCode)) {
-    return NextResponse.json(
-      { error: 'Invalid invite code format. Codes must be alphanumeric and up to 50 characters.' },
-      { status: 400 },
-    );
+  const validationResult = ClaimOfferRequestSchema.safeParse(body);
+  if (!validationResult.success) {
+    throw createError.validation('Invalid request body', validationResult.error);
   }
+
+  const { code: trimmedCode } = validationResult.data;
 
   try {
     const { data: invite, error: inviteError } = await supabase
@@ -38,18 +49,23 @@ export async function POST(request: Request) {
       .single();
 
     if (inviteError || !invite) {
-      return NextResponse.json({ error: 'Invalid invite code' }, { status: 400 });
+      logger.warn(
+        {
+          userId: user.id,
+          code: trimmedCode,
+          error: inviteError,
+        },
+        'Invalid invite code',
+      );
+      throw createError.validation('Invalid invite code');
     }
 
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      return NextResponse.json({ error: 'This invite code has expired' }, { status: 400 });
+      throw createError.validation('This invite code has expired');
     }
 
     if ((invite.current_uses ?? 0) >= (invite.max_uses ?? 1)) {
-      return NextResponse.json(
-        { error: 'This invite code has reached its usage limit' },
-        { status: 400 },
-      );
+      throw createError.validation('This invite code has reached its usage limit');
     }
 
     // Check if user has already redeemed THIS specific invite code
@@ -61,10 +77,7 @@ export async function POST(request: Request) {
       .single();
 
     if (existingRedemption) {
-      return NextResponse.json(
-        { error: 'You have already used this invite code' },
-        { status: 400 },
-      );
+      throw createError.conflict('You have already used this invite code');
     }
 
     // Check if user has already claimed ANY offer (prevent multiple claims)
@@ -79,11 +92,8 @@ export async function POST(request: Request) {
       existingSubscription.plan_tier !== 'free' &&
       ['active', 'trialing', 'past_due'].includes(existingSubscription.status)
     ) {
-      return NextResponse.json(
-        {
-          error: `You already have an active ${existingSubscription.plan_tier} plan. Please manage your existing subscription instead.`,
-        },
-        { status: 400 },
+      throw createError.conflict(
+        `You already have an active ${existingSubscription.plan_tier} plan. Please manage your existing subscription instead.`,
       );
     }
 
@@ -96,11 +106,8 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (anyRedemption) {
-      return NextResponse.json(
-        {
-          error: 'You have already claimed an offer. Each user can only claim one offer.',
-        },
-        { status: 400 },
+      throw createError.conflict(
+        'You have already claimed an offer. Each user can only claim one offer.',
       );
     }
 
@@ -110,8 +117,15 @@ export async function POST(request: Request) {
     });
 
     if (redemptionError) {
-      console.error('[claim-offer] Error recording redemption:', redemptionError);
-      return NextResponse.json({ error: 'Failed to redeem invite code' }, { status: 500 });
+      logger.error(
+        {
+          userId: user.id,
+          inviteId: invite.id,
+          error: redemptionError,
+        },
+        'Error recording redemption',
+      );
+      throw createError.internal('Failed to redeem invite code');
     }
 
     // Update invite code usage count
@@ -121,7 +135,14 @@ export async function POST(request: Request) {
       .eq('id', invite.id);
 
     if (updateInviteError) {
-      console.error('[claim-offer] Error updating invite usage count:', updateInviteError);
+      logger.warn(
+        {
+          userId: user.id,
+          inviteId: invite.id,
+          error: updateInviteError,
+        },
+        'Error updating invite usage count',
+      );
       // Don't fail the request, but log the error
     }
 
@@ -142,8 +163,14 @@ export async function POST(request: Request) {
     );
 
     if (subscriptionError) {
-      console.error('[claim-offer] Error updating subscription:', subscriptionError);
-      return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+      logger.error(
+        {
+          userId: user.id,
+          error: subscriptionError,
+        },
+        'Error updating subscription',
+      );
+      throw createError.internal('Failed to update subscription');
     }
 
     // Fetch the updated subscription to return to client
@@ -154,8 +181,60 @@ export async function POST(request: Request) {
       .single();
 
     if (fetchError) {
-      console.error('[claim-offer] Error fetching updated subscription:', fetchError);
+      logger.warn(
+        {
+          userId: user.id,
+          error: fetchError,
+        },
+        'Error fetching updated subscription',
+      );
     }
+
+    // Allocate credits for the trial period
+    if (
+      updatedSubscription &&
+      updatedSubscription.current_period_start &&
+      updatedSubscription.current_period_end
+    ) {
+      try {
+        await SubscriptionService.allocateCreditsForPeriod(
+          user.id,
+          updatedSubscription.id,
+          invite.plan_tier,
+          new Date(updatedSubscription.current_period_start),
+          new Date(updatedSubscription.current_period_end),
+        );
+        logger.info(
+          {
+            userId: user.id,
+            subscriptionId: updatedSubscription.id,
+            planTier: invite.plan_tier,
+            trialDays: invite.trial_days,
+          },
+          'Credits allocated for trial subscription',
+        );
+      } catch (creditError) {
+        // Log but don't fail the request if credit allocation fails
+        logger.error(
+          {
+            error: creditError,
+            userId: user.id,
+            subscriptionId: updatedSubscription.id,
+            planTier: invite.plan_tier,
+          },
+          'Failed to allocate credits for trial subscription',
+        );
+      }
+    }
+
+    logger.info(
+      {
+        userId: user.id,
+        inviteId: invite.id,
+        planTier: invite.plan_tier,
+      },
+      'Invite code redeemed successfully',
+    );
 
     return NextResponse.json(
       {
@@ -176,7 +255,15 @@ export async function POST(request: Request) {
       { status: 200 },
     );
   } catch (error) {
-    console.error('[claim-offer] Error:', error);
-    return NextResponse.json({ error: 'Failed to process invite code' }, { status: 500 });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+      },
+      'Error in claim-offer',
+    );
+    throw error;
   }
 }
+
+export const POST = withErrorHandler(handleClaimOffer);

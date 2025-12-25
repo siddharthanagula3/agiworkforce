@@ -1,113 +1,29 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { getEnv, requireEnv } from '@/utils/env';
+import { DeviceLinkRequestSchema } from '@/lib/validations/device';
+import { withErrorHandler } from '@/lib/error-handler';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
-/**
- * Validate device_id format and length
- */
-function validateDeviceId(deviceId: string): { valid: boolean; error?: string } {
-  if (!deviceId || typeof deviceId !== 'string') {
-    return { valid: false, error: 'device_id must be a non-empty string' };
-  }
-
-  if (deviceId.length > 255) {
-    return { valid: false, error: 'device_id must be 255 characters or less' };
-  }
-
-  // Allow alphanumeric, dashes, underscores, and dots
-  if (!/^[a-zA-Z0-9._-]+$/.test(deviceId)) {
-    return {
-      valid: false,
-      error:
-        'device_id contains invalid characters. Only alphanumeric, dashes, underscores, and dots are allowed.',
-    };
-  }
-
-  return { valid: true };
-}
-
-/**
- * Validate device_name format and length
- */
-function validateDeviceName(deviceName: string | undefined): { valid: boolean; error?: string } {
-  if (deviceName === undefined || deviceName === null) {
-    return { valid: true }; // Optional field
-  }
-
-  if (typeof deviceName !== 'string') {
-    return { valid: false, error: 'device_name must be a string' };
-  }
-
-  if (deviceName.length > 200) {
-    return { valid: false, error: 'device_name must be 200 characters or less' };
-  }
-
-  // Allow most printable characters except control characters
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x1F\x7F]/.test(deviceName)) {
-    return {
-      valid: false,
-      error: 'device_name contains invalid control characters',
-    };
-  }
-
-  return { valid: true };
-}
-
-/**
- * Validate device_type format
- */
-function validateDeviceType(deviceType: string | undefined): { valid: boolean; error?: string } {
-  if (deviceType === undefined || deviceType === null) {
-    return { valid: true }; // Optional field
-  }
-
-  if (typeof deviceType !== 'string') {
-    return { valid: false, error: 'device_type must be a string' };
-  }
-
-  if (deviceType.length > 50) {
-    return { valid: false, error: 'device_type must be 50 characters or less' };
-  }
-
-  // Allow alphanumeric, dashes, underscores
-  if (!/^[a-zA-Z0-9_-]+$/.test(deviceType)) {
-    return {
-      valid: false,
-      error:
-        'device_type contains invalid characters. Only alphanumeric, dashes, and underscores are allowed.',
-    };
-  }
-
-  return { valid: true };
-}
-
-export async function POST(request: Request) {
+async function handleDeviceLink(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { device_id, device_name, device_type } = body;
-
-    if (!device_id) {
-      return NextResponse.json({ error: 'Missing device_id' }, { status: 400 });
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw createError.validation('Invalid JSON in request body');
     }
 
-    // Validate all inputs
-    const deviceIdValidation = validateDeviceId(device_id);
-    if (!deviceIdValidation.valid) {
-      return NextResponse.json({ error: deviceIdValidation.error }, { status: 400 });
+    const validationResult = DeviceLinkRequestSchema.safeParse(body);
+    if (!validationResult.success) {
+      throw createError.validation('Invalid request body', validationResult.error);
     }
 
-    const deviceNameValidation = validateDeviceName(device_name);
-    if (!deviceNameValidation.valid) {
-      return NextResponse.json({ error: deviceNameValidation.error }, { status: 400 });
-    }
-
-    const deviceTypeValidation = validateDeviceType(device_type);
-    if (!deviceTypeValidation.valid) {
-      return NextResponse.json({ error: deviceTypeValidation.error }, { status: 400 });
-    }
+    const { device_id, device_name, device_type } = validationResult.data;
 
     const cookieStore = await cookies();
 
@@ -141,20 +57,43 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      console.error('[device/link] Failed to create device code:', error);
-      return NextResponse.json({ error: 'Failed to initiate device linking' }, { status: 500 });
+      logger.error(
+        {
+          error,
+          device_id,
+        },
+        'Failed to create device code',
+      );
+      throw createError.internal('Failed to create device authorization code');
     }
 
-    return NextResponse.json({
-      link_code: user_code,
-      device_id,
-      expires_at: Math.floor((Date.now() + 15 * 60 * 1000) / 1000),
-      verify_url,
-      qr_code_url: null,
-    });
+    logger.info(
+      {
+        device_id,
+        device_name,
+        device_type,
+        user_code,
+      },
+      'Device authorization code created',
+    );
+
+    return NextResponse.json(
+      {
+        user_code,
+        verify_url,
+        expires_in: 900, // 15 minutes in seconds
+      },
+      { status: 200 },
+    );
   } catch (error) {
-    console.error('[device/link] Error:', error);
-    // Don't expose internal error details to client
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Error in device/link',
+    );
+    throw error;
   }
 }
+
+export const POST = withErrorHandler(handleDeviceLink);

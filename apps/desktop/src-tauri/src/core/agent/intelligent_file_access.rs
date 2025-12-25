@@ -211,6 +211,7 @@ Provide a detailed analysis in a structured format."#
             model: None,
             strategy: crate::core::router::RoutingStrategy::Auto,
             context: None,
+            prefer_cloud_credits: false,
         };
 
         let candidates = router.candidates(&llm_request, &preferences);
