@@ -30,6 +30,11 @@ fn test_screenshot_and_ocr_workflow() {}
 
 #[test]
 fn test_automation_service_singleton() {
+    // efficient checkout often runs in headless/CI environments where automation is not possible
+    if std::env::var("CI").is_ok() {
+        return;
+    }
+
     use agiworkforce_desktop::automation::AutomationService;
 
     let service1 = AutomationService::new();
