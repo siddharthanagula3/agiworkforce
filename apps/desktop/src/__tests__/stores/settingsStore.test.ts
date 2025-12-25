@@ -209,6 +209,7 @@ describe('settingsStore', () => {
           provider: 'openai',
           temperature: null,
           max_tokens: 10,
+          preferCloudCredits: false,
         },
       });
       expect(isValid).toBe(true);
