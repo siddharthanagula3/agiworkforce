@@ -27,6 +27,10 @@ export interface CreditBalance {
   used_cents?: number;
   remaining_cents?: number;
   percentage_used?: number;
+  daily_limit_cents?: number;
+  daily_used_cents?: number;
+  daily_remaining_cents?: number;
+  daily_reset_at?: string; // ISO timestamp
 }
 
 export interface DesktopAccount {
