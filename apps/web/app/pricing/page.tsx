@@ -230,15 +230,6 @@ function PricingContent() {
                 </div>
 
                 <ul className="space-y-3 text-sm text-zinc-300 flex-1 relative">
-                  <li className="flex gap-2 items-start">
-                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span className="text-emerald-100 font-medium">3 Months Free Trial</span> with
-                    code{' '}
-                    <code className="bg-emerald-500/10 px-1.5 py-0.5 rounded text-emerald-400 font-mono text-xs border border-emerald-500/20">
-                      BETATESTER
-                    </code>{' '}
-                    at checkout
-                  </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400" /> Free to use own APIs
                   </li>
