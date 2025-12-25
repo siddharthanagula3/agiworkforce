@@ -8,9 +8,8 @@ pub async fn send_managed_request(
     _provider: &str,
 ) -> Result<LLMResponse, String> {
     // Get access token from keyring
-    let token = get_access_token().map_err(|e| {
-        format!("Failed to get access token: {}. Please sign in again.", e)
-    })?;
+    let token = get_access_token()
+        .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
     let client = Client::new();
 

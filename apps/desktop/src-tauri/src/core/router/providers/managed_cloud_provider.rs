@@ -27,9 +27,8 @@ impl LLMProvider for ManagedCloudProvider {
         request: &LLMRequest,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
         // Get access token from keyring
-        let token = get_access_token().map_err(|e| {
-            format!("Failed to get access token: {}. Please sign in again.", e)
-        })?;
+        let token = get_access_token()
+            .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
         let url = "https://api.agiworkforce.com/api/llm/completion";
 
@@ -44,22 +43,21 @@ impl LLMProvider for ManagedCloudProvider {
 
         match res.status().as_u16() {
             200 => {
-                let body: Value = res.json().await.map_err(|e| format!("Parse error: {}", e))?;
+                let body: Value = res
+                    .json()
+                    .await
+                    .map_err(|e| format!("Parse error: {}", e))?;
 
                 let content = body["choices"][0]["message"]["content"]
                     .as_str()
                     .unwrap_or("")
                     .to_string();
 
-                let prompt_tokens = body["usage"]["prompt_tokens"]
-                    .as_u64()
-                    .map(|v| v as u32);
+                let prompt_tokens = body["usage"]["prompt_tokens"].as_u64().map(|v| v as u32);
                 let completion_tokens = body["usage"]["completion_tokens"]
                     .as_u64()
                     .map(|v| v as u32);
-                let total_tokens = body["usage"]["total_tokens"]
-                    .as_u64()
-                    .map(|v| v as u32);
+                let total_tokens = body["usage"]["total_tokens"].as_u64().map(|v| v as u32);
 
                 // Extract credit information if available
                 let credits_info = body.get("credits").and_then(|c| c.as_object());
@@ -74,22 +72,21 @@ impl LLMProvider for ManagedCloudProvider {
                     prompt_tokens,
                     completion_tokens,
                     cost,
-                    model: body["model"]
-                        .as_str()
-                        .unwrap_or(&request.model)
-                        .to_string(),
+                    model: body["model"].as_str().unwrap_or(&request.model).to_string(),
                     ..LLMResponse::default()
                 })
             }
             402 => {
                 // Try to parse error response for detailed information
                 let error_body: Value = res.json().await.unwrap_or(Value::Null);
-                let error_code = error_body.get("code")
+                let error_code = error_body
+                    .get("code")
                     .and_then(|c| c.as_str())
                     .unwrap_or("CREDIT_LIMIT_REACHED");
-                
+
                 let error_message = if error_code == "DAILY_CREDIT_LIMIT_REACHED" {
-                    let reset_hours = error_body.get("reset_in_hours")
+                    let reset_hours = error_body
+                        .get("reset_in_hours")
                         .and_then(|h| h.as_f64())
                         .map(|h| h.ceil() as u64)
                         .unwrap_or(24);
@@ -100,12 +97,12 @@ impl LLMProvider for ManagedCloudProvider {
                 } else {
                     "Monthly credit limit reached. Please upgrade your plan (Pro/Max) to continue using Cloud models.".to_string()
                 };
-                
+
                 Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::PermissionDenied,
                     error_message,
                 )))
-            },
+            }
             401 => Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
                 "Authentication failed. Please sign in again.",
