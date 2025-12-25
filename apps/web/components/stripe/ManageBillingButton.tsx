@@ -15,7 +15,12 @@ export function ManageBillingButton() {
         headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to open portal');
+      if (!res.ok) {
+        const errorMessage =
+          data.error?.message ||
+          (typeof data.error === 'string' ? data.error : 'Failed to open portal');
+        throw new Error(errorMessage);
+      }
       if (data.url) window.location.href = data.url;
     } catch (err) {
       console.error('Portal error:', err);
