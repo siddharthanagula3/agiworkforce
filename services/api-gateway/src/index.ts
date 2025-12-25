@@ -1,5 +1,3 @@
-import 'dotenv/config';
-
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -14,7 +12,9 @@ import { mobileRouter } from './routes/mobile';
 
 if (!process.env['JWT_SECRET']) {
   console.error('FATAL: JWT_SECRET environment variable is required but not set.');
-  console.error('Please set JWT_SECRET in your .env file with a secure random value.');
+  console.error(
+    'Please set JWT_SECRET in your deployment environment (e.g., Vercel, Railway, etc.)',
+  );
   console.error('Example: JWT_SECRET=your-randomly-generated-secret-key-here');
   process.exit(1);
 }

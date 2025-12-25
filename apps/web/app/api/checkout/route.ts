@@ -24,14 +24,14 @@ const STRIPE_PRICE_MAX_YEARLY =
   process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW';
 
 if (!STRIPE_SECRET_KEY) {
-  logger.warn(
-    '[billing] STRIPE_SECRET_KEY is not set. Checkout endpoint will return 500 until configured.',
+  logger.error(
+    '[billing] STRIPE_SECRET_KEY is not set in Vercel environment variables. Checkout endpoint will fail. Please configure STRIPE_SECRET_KEY in Vercel project settings.',
   );
 }
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2023-10-16',
+      apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
     })
   : null;
 

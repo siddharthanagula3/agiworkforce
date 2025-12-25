@@ -6,12 +6,13 @@ import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
+function getSupabaseClient() {
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  });
+}
 
 // Verify cron secret to prevent unauthorized access
 function verifyCronSecret(request: NextRequest): boolean {
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     logger.info('Starting monthly credit reset cron job');
 
     // Get all active subscriptions
+    const supabase = getSupabaseClient();
     const { data: subscriptions, error: fetchError } = await supabase
       .from('subscriptions')
       .select('id, user_id, plan_tier, current_period_start, current_period_end, status')
