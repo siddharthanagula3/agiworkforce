@@ -54,6 +54,10 @@ function PricingContent() {
     plan_tier?: string;
   } | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
+  const [claimingOffer, setClaimingOffer] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -100,6 +104,63 @@ function PricingContent() {
       alert('Failed to load billing portal');
     } finally {
       setLoadingPlan(null);
+    }
+  };
+
+  const handleClaimOffer = async () => {
+    if (!inviteCode.trim()) {
+      setClaimError('Please enter an invite code');
+      return;
+    }
+
+    setClaimingOffer(true);
+    setClaimError(null);
+
+    try {
+      const res = await fetch('/api/claim-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to claim offer');
+      }
+
+      // Refresh subscription state
+      const supabase = getSupabaseClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: updatedSub } = await supabase
+          .from('subscriptions')
+          .select('status, price_id, plan_tier')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        setSubscription(updatedSub);
+      }
+
+      // Close modal and show success
+      setShowClaimModal(false);
+      setInviteCode('');
+      alert(`Successfully claimed offer! Your plan has been upgraded to ${data.planTier}.`);
+
+      // Refresh the page to show updated plan
+      window.location.reload();
+    } catch (err: unknown) {
+      console.error('Claim offer error:', err);
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : 'An error occurred while claiming the offer. Please try again.';
+      setClaimError(errorMessage);
+    } finally {
+      setClaimingOffer(false);
     }
   };
 
@@ -242,10 +303,16 @@ function PricingContent() {
                 </ul>
                 <Button
                   className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20 border-0"
-                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('hobby'))}
-                  disabled={isButtonDisabled('hobby')}
+                  onClick={() => {
+                    if (isSubscribed) {
+                      handleManage();
+                    } else {
+                      setShowClaimModal(true);
+                    }
+                  }}
+                  disabled={isButtonDisabled('hobby') || claimingOffer}
                 >
-                  {getButtonText('hobby', 'Claim Offer')}
+                  {claimingOffer ? 'Claiming...' : getButtonText('hobby', 'Claim Offer')}
                 </Button>
               </div>
 
@@ -339,6 +406,64 @@ function PricingContent() {
           </div>
         </section>
       </main>
+
+      {/* Claim Offer Modal */}
+      {showClaimModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Claim Your Offer</h3>
+            <p className="text-zinc-400 text-sm mb-4">
+              Enter your invite code to claim your free trial and upgrade to the Hobby plan.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Invite Code</label>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => {
+                  setInviteCode(e.target.value);
+                  setClaimError(null);
+                }}
+                placeholder="e.g., BETATESTER"
+                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !claimingOffer) {
+                    handleClaimOffer();
+                  }
+                }}
+              />
+              {claimError && (
+                <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  {claimError}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleClaimOffer}
+                disabled={claimingOffer || !inviteCode.trim()}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500"
+              >
+                {claimingOffer ? 'Claiming...' : 'Claim Offer'}
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowClaimModal(false);
+                  setInviteCode('');
+                  setClaimError(null);
+                }}
+                disabled={claimingOffer}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

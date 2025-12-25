@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if user has already redeemed THIS specific invite code
     const { data: existingRedemption } = await supabase
       .from('beta_redemptions')
       .select('id')
@@ -66,6 +67,43 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if user has already claimed ANY offer (prevent multiple claims)
+    const { data: existingSubscription } = await supabase
+      .from('subscriptions')
+      .select('plan_tier, status')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (
+      existingSubscription &&
+      existingSubscription.plan_tier !== 'free' &&
+      ['active', 'trialing', 'past_due'].includes(existingSubscription.status)
+    ) {
+      return NextResponse.json(
+        {
+          error: `You already have an active ${existingSubscription.plan_tier} plan. Please manage your existing subscription instead.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    // Also check if user has redeemed ANY other invite code
+    const { data: anyRedemption } = await supabase
+      .from('beta_redemptions')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (anyRedemption) {
+      return NextResponse.json(
+        {
+          error: 'You have already claimed an offer. Each user can only claim one offer.',
+        },
+        { status: 400 },
+      );
+    }
+
     const { error: redemptionError } = await supabase.from('beta_redemptions').insert({
       invite_id: invite.id,
       user_id: user.id,
@@ -74,6 +112,17 @@ export async function POST(request: Request) {
     if (redemptionError) {
       console.error('[claim-offer] Error recording redemption:', redemptionError);
       return NextResponse.json({ error: 'Failed to redeem invite code' }, { status: 500 });
+    }
+
+    // Update invite code usage count
+    const { error: updateInviteError } = await supabase
+      .from('beta_invites')
+      .update({ current_uses: (invite.current_uses ?? 0) + 1 })
+      .eq('id', invite.id);
+
+    if (updateInviteError) {
+      console.error('[claim-offer] Error updating invite usage count:', updateInviteError);
+      // Don't fail the request, but log the error
     }
 
     const trialEndDate = new Date(
