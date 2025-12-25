@@ -55,7 +55,9 @@ export default async function DashboardPage() {
               {subscription?.plan_tier || 'Free'}
             </div>
             <p className="text-xs text-zinc-500">
-              {subscription?.status === 'active' ? 'Active subscription' : 'No active subscription'}
+              {['active', 'trialing'].includes(subscription?.status || '')
+                ? 'Active subscription'
+                : 'No active subscription'}
             </p>
           </CardContent>
         </Card>

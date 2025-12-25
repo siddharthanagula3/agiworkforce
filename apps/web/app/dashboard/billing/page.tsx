@@ -2,8 +2,9 @@ import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { redirect } from 'next/navigation';
 import { DashboardLayout } from '../../../components/dashboard/DashboardLayout';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription, Button } from '@/components/ui';
-import { CheckCircle2, CreditCard } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { ManageBillingButton } from '../../../components/stripe/ManageBillingButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,12 +81,7 @@ export default async function BillingPage() {
 
             {isSubscribed && (
               <div className="flex gap-4">
-                <form action="/api/portal" method="POST">
-                  <Button variant="outline" className="gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    Manage Billing in Stripe
-                  </Button>
-                </form>
+                <ManageBillingButton />
               </div>
             )}
           </CardContent>
