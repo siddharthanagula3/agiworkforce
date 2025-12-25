@@ -132,7 +132,6 @@ async function handleCheckout(request: NextRequest) {
         plan_tier: plan,
         supabase_user_id: user.id,
       },
-      trial_period_days: plan === 'hobby' ? 90 : undefined,
     };
 
     const session = await stripe.checkout.sessions.create({
