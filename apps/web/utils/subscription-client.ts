@@ -1,0 +1,43 @@
+'use client';
+
+import { getSupabaseClient } from '../services/supabase';
+
+export interface ClientSubscription {
+  id: string;
+  plan_tier: string;
+  status: string;
+  current_period_end: string | null;
+}
+
+/**
+ * Client-side function to refresh subscription status from Supabase
+ * Use this in client components to poll for subscription updates
+ */
+export async function refreshSubscriptionStatus(): Promise<ClientSubscription | null> {
+  try {
+    const supabase = getSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return null;
+    }
+
+    const { data: subscription, error } = await supabase
+      .from('subscriptions')
+      .select('id, plan_tier, status, current_period_end')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[subscription] Error refreshing subscription:', error);
+      return null;
+    }
+
+    return subscription;
+  } catch (error) {
+    console.error('[subscription] Error refreshing subscription:', error);
+    return null;
+  }
+}

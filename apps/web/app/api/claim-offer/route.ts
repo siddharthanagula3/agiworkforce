@@ -94,6 +94,18 @@ export async function POST(request: Request) {
 
     if (subscriptionError) {
       console.error('[claim-offer] Error updating subscription:', subscriptionError);
+      return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+    }
+
+    // Fetch the updated subscription to return to client
+    const { data: updatedSubscription, error: fetchError } = await supabase
+      .from('subscriptions')
+      .select('id, plan_tier, status, current_period_start, current_period_end')
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchError) {
+      console.error('[claim-offer] Error fetching updated subscription:', fetchError);
     }
 
     return NextResponse.json(
@@ -102,6 +114,15 @@ export async function POST(request: Request) {
         planTier: invite.plan_tier,
         trialDays: invite.trial_days ?? 0,
         discountPercent: invite.discount_percent ?? 0,
+        subscription: updatedSubscription
+          ? {
+              id: updatedSubscription.id,
+              plan_tier: updatedSubscription.plan_tier,
+              status: updatedSubscription.status,
+              current_period_start: updatedSubscription.current_period_start,
+              current_period_end: updatedSubscription.current_period_end,
+            }
+          : null,
       },
       { status: 200 },
     );
