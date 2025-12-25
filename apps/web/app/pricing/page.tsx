@@ -48,9 +48,11 @@ function PricingContent() {
     }
   };
 
-  const [subscription, setSubscription] = useState<{ status: string; price_id: string } | null>(
-    null,
-  );
+  const [subscription, setSubscription] = useState<{
+    status: string;
+    price_id: string;
+    plan_tier?: string;
+  } | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   useEffect(() => {
@@ -64,7 +66,7 @@ function PricingContent() {
         if (user) {
           const { data } = await supabase
             .from('subscriptions')
-            .select('status, price_id')
+            .select('status, price_id, plan_tier')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -99,6 +101,26 @@ function PricingContent() {
     } finally {
       setLoadingPlan(null);
     }
+  };
+
+  const getButtonText = (plan: string, label: string) => {
+    if (loadingSubscription) return 'Loading...';
+    if (isSubscribed) {
+      // If we have a matching plan tier, show that.
+      if (subscription?.plan_tier === plan) return 'Current Plan';
+      // Otherwise, generic manage/switch message
+      return 'Manage Subscription';
+    }
+    if (loadingPlan === plan) return 'Redirecting...';
+    if (loadingPlan === 'manage') return 'Loading...';
+    return label;
+  };
+
+  const isButtonDisabled = (plan: string) => {
+    if (loadingSubscription || loadingPlan === plan || loadingPlan === 'manage') return true;
+    // Disable if this IS the current plan
+    if (isSubscribed && subscription?.plan_tier === plan) return true;
+    return false;
   };
 
   return (
@@ -221,17 +243,9 @@ function PricingContent() {
                 <Button
                   className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20 border-0"
                   onClick={() => (isSubscribed ? handleManage() : handleUpgrade('hobby'))}
-                  disabled={
-                    loadingPlan === 'hobby' || loadingPlan === 'manage' || loadingSubscription
-                  }
+                  disabled={isButtonDisabled('hobby')}
                 >
-                  {loadingSubscription
-                    ? 'Loading...'
-                    : isSubscribed
-                      ? 'Manage Subscription'
-                      : loadingPlan === 'hobby'
-                        ? 'Redirecting...'
-                        : 'Claim Offer'}
+                  {getButtonText('hobby', 'Claim Offer')}
                 </Button>
               </div>
 
@@ -273,17 +287,9 @@ function PricingContent() {
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2"
                   onClick={() => (isSubscribed ? handleManage() : handleUpgrade('pro'))}
-                  disabled={
-                    loadingPlan === 'pro' || loadingPlan === 'manage' || loadingSubscription
-                  }
+                  disabled={isButtonDisabled('pro')}
                 >
-                  {loadingSubscription
-                    ? 'Loading...'
-                    : isSubscribed
-                      ? 'Manage Subscription'
-                      : loadingPlan === 'pro'
-                        ? 'Redirecting...'
-                        : 'Upgrade to Pro'}
+                  {getButtonText('pro', 'Upgrade to Pro')}
                   {!isSubscribed && <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>
@@ -323,17 +329,9 @@ function PricingContent() {
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
                   onClick={() => (isSubscribed ? handleManage() : handleUpgrade('max'))}
-                  disabled={
-                    loadingPlan === 'max' || loadingPlan === 'manage' || loadingSubscription
-                  }
+                  disabled={isButtonDisabled('max')}
                 >
-                  {loadingSubscription
-                    ? 'Loading...'
-                    : isSubscribed
-                      ? 'Manage Subscription'
-                      : loadingPlan === 'max'
-                        ? 'Redirecting...'
-                        : 'Upgrade to Max'}
+                  {getButtonText('max', 'Upgrade to Max')}
                   {!isSubscribed && <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>
