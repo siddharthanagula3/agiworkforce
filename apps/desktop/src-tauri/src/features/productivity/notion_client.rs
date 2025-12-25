@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
-const NOTION_API_VERSION: &str = "2022-06-28";
+const NOTION_API_VERSION: &str = "2025-12-01";
 const NOTION_BASE_URL: &str = "https://api.agiworkforce.com";
 
 const MAX_REQUESTS_PER_SECOND: usize = 3;

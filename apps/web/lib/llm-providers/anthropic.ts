@@ -12,7 +12,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
-      'anthropic-version': '2024-11-01',
+      'anthropic-version': '2025-12-01',
     };
   }
 
