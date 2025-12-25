@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   const downloadUrls: Record<string, string | undefined> = {
-    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agi-workforce-mac.dmg',
+    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agiworkforce.dmg',
     windows: process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS || '/downloads/agi-workforce-win.exe',
     linux: process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX || '/downloads/agi-workforce-linux.AppImage',
   };

@@ -22,7 +22,7 @@ const DOWNLOAD_INFO: Record<string, { filename: string; contentType: string; env
 };
 
 const FILE_PATHS: Record<string, string> = {
-  mac: 'agi-workforce-mac.dmg',
+  mac: 'agiworkforce.dmg',
   windows: 'agi-workforce-win.exe',
   linux: 'agi-workforce-linux.AppImage',
 };
