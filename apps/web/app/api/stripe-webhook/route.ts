@@ -594,8 +594,17 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     console.error('[billing] Error handling Stripe webhook event', err);
-    return NextResponse.json({ error: 'Webhook handler error' }, { status: 500 });
+    // Still return 200 to prevent Stripe from retrying
+    // Log the error for debugging
+    return NextResponse.json(
+      {
+        received: true,
+        error: err instanceof Error ? err.message : 'Unknown error',
+        eventType: event.type,
+      },
+      { status: 200 },
+    );
   }
 
-  return NextResponse.json({ received: true }, { status: 200 });
+  return NextResponse.json({ received: true, eventType: event.type }, { status: 200 });
 }
