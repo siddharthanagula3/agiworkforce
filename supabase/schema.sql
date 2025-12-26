@@ -31,6 +31,23 @@ for select
 to authenticated
 using (auth.uid() = user_id);
 
+-- Table for Stripe Webhook Idempotency
+create table "public"."processed_stripe_events" (
+    "event_id" text not null primary key,
+    "processed_at" timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS for Processed Stripe Events Table
+alter table "public"."processed_stripe_events" enable row level security;
+
+-- Only service role can access this table
+create policy "Service role manages processed events"
+on "public"."processed_stripe_events"
+for all
+to service_role
+using (true)
+with check (true);
+
 -- Only service role can insert/update/delete (handled via webhooks)
 create policy "Service role can manage all subscriptions"
 on "public"."subscriptions"
