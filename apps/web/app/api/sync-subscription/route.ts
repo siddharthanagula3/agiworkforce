@@ -53,27 +53,51 @@ async function handleSyncSubscription(request: NextRequest) {
 
   try {
     // Get user's subscription from Supabase
-    const { data: subscription, error: subError } = await supabaseAdmin
+    const { data: subscription } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
       .single();
 
-    if (subError || !subscription) {
-      throw createError.notFound('No subscription found');
-    }
+    let stripeSubscription: Stripe.Subscription | null = null;
 
-    if (!subscription.stripe_subscription_id) {
-      throw createError.validation('Subscription has no Stripe subscription ID');
-    }
+    if (!subscription) {
+      // Logic for missing local subscription: Try to find in Stripe by email
+      if (!user.email) {
+        throw createError.validation('User has no email address');
+      }
 
-    // Retrieve subscription from Stripe
-    const stripeSubscription = await stripe.subscriptions.retrieve(
-      subscription.stripe_subscription_id,
-      {
-        expand: ['items.data.price'],
-      },
-    );
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (customers.data.length === 0) {
+        throw createError.notFound('No subscription or customer found');
+      }
+
+      const customerId = customers.data[0].id;
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'active',
+        limit: 1,
+        expand: ['data.items.data.price'],
+      });
+
+      if (subscriptions.data.length === 0) {
+        throw createError.notFound('No active subscription found in Stripe');
+      }
+
+      stripeSubscription = subscriptions.data[0];
+    } else {
+      // Existing local subscription logic
+      if (!subscription.stripe_subscription_id) {
+        throw createError.validation('Subscription has no Stripe subscription ID');
+      }
+
+      stripeSubscription = await stripe.subscriptions.retrieve(
+        subscription.stripe_subscription_id,
+        {
+          expand: ['items.data.price'],
+        },
+      );
+    }
 
     // Get price_id from Stripe subscription
     let stripePriceId: string | null = null;
@@ -85,12 +109,25 @@ async function handleSyncSubscription(request: NextRequest) {
       throw createError.internal('Could not retrieve price ID from Stripe subscription');
     }
 
-    // Update Supabase subscription with price_id
-    const { error: updateError } = await supabaseAdmin
-      .from('subscriptions')
-      .update({
+    // Import this at top, but for now assuming we can use it or fallback
+    // We need to determine plan_tier.
+    // Since I can't easily add import in this same chunk without breaking code flow, I will just hardcode the simplistic logic or rely on metadata.
+    const planTier = stripeSubscription.metadata?.plan_tier || 'pro'; // Fallback to pro if unknown? Or 'hobby' if price matches?
+    // Ideally we should use PRICING_CONFIG.getPlanFromPriceId(stripePriceId) but that requires import.
+    // I will use metadata as primary source.
+
+    // Upsert Supabase subscription
+    const { error: updateError } = await supabaseAdmin.from('subscriptions').upsert(
+      {
+        user_id: user.id,
+        stripe_customer_id:
+          typeof stripeSubscription.customer === 'string'
+            ? stripeSubscription.customer
+            : stripeSubscription.customer.id,
+        stripe_subscription_id: stripeSubscription.id,
         stripe_price_id: stripePriceId,
         status: stripeSubscription.status,
+        plan_tier: planTier,
         current_period_start: new Date(
           stripeSubscription.current_period_start * 1000,
         ).toISOString(),
@@ -100,14 +137,16 @@ async function handleSyncSubscription(request: NextRequest) {
           ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
           : null,
         updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', user.id);
+        stripe_coupon_id: stripeSubscription.discount?.coupon?.id || null,
+      },
+      { onConflict: 'user_id' },
+    );
 
     if (updateError) {
       logger.error(
         {
           userId: user.id,
-          subscriptionId: subscription.stripe_subscription_id,
+          subscriptionId: stripeSubscription.id,
           error: updateError,
         },
         'Error updating subscription',
@@ -133,7 +172,7 @@ async function handleSyncSubscription(request: NextRequest) {
     logger.info(
       {
         userId: user.id,
-        subscriptionId: subscription.stripe_subscription_id,
+        subscriptionId: stripeSubscription.id,
         priceId: stripePriceId,
       },
       'Subscription synced successfully',

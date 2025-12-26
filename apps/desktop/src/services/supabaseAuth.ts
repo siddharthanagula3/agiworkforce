@@ -1,4 +1,10 @@
-import type { AuthError, AuthResponse, OAuthResponse, User, Session } from '@supabase/supabase-js';
+import {
+  AuthError,
+  type AuthResponse,
+  type OAuthResponse,
+  type User,
+  type Session,
+} from '@supabase/supabase-js';
 import {
   getSupabase,
   type Profile,
@@ -80,12 +86,23 @@ class SupabaseAuthService {
 
     try {
       this.updateState({ isLoading: true });
+
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<{ data: { session: null }; error: { message: string } }>(
+        (resolve) =>
+          setTimeout(
+            () =>
+              resolve({ data: { session: null }, error: { message: 'Session check timed out' } }),
+            5000,
+          ),
+      );
+
       const {
         data: { session },
         error,
-      } = await supabase.auth.getSession();
+      } = await Promise.race([sessionPromise, timeoutPromise]);
 
-      if (error) {
+      if (error && error.message !== 'Session check timed out') {
         console.error('[Auth] Session check error:', error);
         this.updateState({ isLoading: false, error: error.message });
         return;
@@ -249,16 +266,43 @@ class SupabaseAuthService {
     const supabase = getSupabase();
     this.updateState({ isLoading: true, error: null });
 
-    const response = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const signInPromise = supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      const timeoutPromise = new Promise<{
+        data: { user: null; session: null };
+        error: { message: string };
+      }>((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              data: { user: null, session: null },
+              error: { message: 'Sign in timed out' },
+            }),
+          10000,
+        ),
+      );
 
-    if (response.error) {
-      this.updateState({ isLoading: false, error: response.error.message });
+      // We need to cast the race result because the types might not perfectly align
+      // between the official response and our timeout object, but they are compatible for our usage.
+      const response = (await Promise.race([signInPromise, timeoutPromise])) as AuthResponse;
+
+      if (response.error) {
+        this.updateState({ isLoading: false, error: response.error.message });
+      }
+
+      return response;
+    } catch (error) {
+      console.error('[Auth] Sign in exception:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.updateState({ isLoading: false, error: message });
+      return {
+        data: { user: null, session: null },
+        error: new AuthError(message, 500, 'AuthError'),
+      };
     }
-
-    return response;
   }
 
   async signInWithMagicLink(email: string): Promise<{ error: AuthError | null }> {
@@ -320,11 +364,25 @@ class SupabaseAuthService {
     const supabase = getSupabase();
     this.updateState({ isLoading: true });
 
-    const { error } = await supabase.auth.signOut();
+    try {
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise<{ error: { message: string } | null }>((resolve) =>
+        setTimeout(() => resolve({ error: { message: 'Sign out timed out' } }), 2000),
+      );
 
-    if (error) {
-      console.error('[Auth] Sign out error:', error);
-      this.updateState({ error: error.message });
+      const { error } = await Promise.race([signOutPromise, timeoutPromise]);
+
+      if (error && error.message !== 'Sign out timed out') {
+        console.error('[Auth] Sign out error:', error);
+        this.updateState({ error: error.message });
+      }
+    } catch (error) {
+      console.error('[Auth] Sign out exception:', error);
+      this.updateState({ error: String(error) });
+    } finally {
+      // Ensure we clean up state even if the SIGNED_OUT event doesn't fire appropriately
+      // or if there was an error.
+      this.handleSignedOut();
     }
   }
 
@@ -403,6 +461,32 @@ class SupabaseAuthService {
 
   isAuthenticated(): boolean {
     return !!this.currentState.user && !!this.currentState.session;
+  }
+
+  async setSession(tokens: {
+    access_token: string;
+    refresh_token: string;
+  }): Promise<{ error: AuthError | null }> {
+    const supabase = getSupabase();
+    console.log('[Auth] Manually setting session');
+
+    // Explicitly set session
+    const { data, error } = await supabase.auth.setSession({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+    });
+
+    if (error) {
+      console.error('[Auth] Failed to set session:', error);
+      this.updateState({ error: error.message });
+      return { error };
+    }
+
+    if (data.session) {
+      await this.handleSignedIn(data.session);
+    }
+
+    return { error: null };
   }
 
   hasPlan(tier: PlanTier): boolean {

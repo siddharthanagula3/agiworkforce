@@ -1,8 +1,9 @@
 import * as Popover from '@radix-ui/react-popover';
-import { CreditCard, MessageSquare, Settings, Coins } from 'lucide-react';
+import { CreditCard, MessageSquare, Settings, Coins, LogOut } from 'lucide-react';
 import React from 'react';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
+import { useAuthStore } from '../../stores/authStore';
 import { openPricingPage } from '../../utils/navigation';
 
 interface UserProfileProps {
@@ -216,6 +217,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             >
               <MessageSquare className="h-4 w-4 text-zinc-400" />
               <span>Send Feedback</span>
+            </button>
+
+            <div className="my-1 border-t border-white/10" />
+
+            <button
+              type="button"
+              onClick={() => {
+                void useAuthStore.getState().signOut();
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-400 transition-colors hover:bg-white/5"
+            >
+              <LogOut className="h-4 w-4 text-red-400" />
+              <span>Log Out</span>
             </button>
           </div>
         </Popover.Content>

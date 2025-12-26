@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import {
   Camera,
   ChevronDown,
@@ -27,7 +28,7 @@ import {
   ContextItem,
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
-import { checkSubscriptionGate } from '../../utils/subscriptionGate';
+import { checkAutoModeAccess, SubscriptionGateResult } from '../../utils/subscriptionGate';
 import { SubscriptionLockDialog } from '../SubscriptionLockDialog';
 import { useUsageStore } from '../../stores/usageStore';
 import { useBillingStore } from '../../stores/billingStore';
@@ -91,6 +92,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showLockDialog, setShowLockDialog] = useState(false);
+  const [lockGateResult, setLockGateResult] = useState<SubscriptionGateResult | undefined>(
+    undefined,
+  );
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -306,10 +310,24 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     event?.preventDefault();
     if (!content.trim() || isDisabled) return;
 
-    const gateResult = checkSubscriptionGate();
-    if (!gateResult.hasAccess) {
-      setShowLockDialog(true);
-      return;
+    // Check for Auto Mode restrictions
+    if (selectedModel === 'auto') {
+      const autoModeGate = checkAutoModeAccess();
+      if (!autoModeGate.hasAccess) {
+        setLockGateResult(autoModeGate);
+        setShowLockDialog(true);
+        return;
+      }
+
+      // Start token check (optional, but good practice for Auto Mode)
+      if (monthlyLimit > 0 && monthlyCost >= monthlyLimit * 0.99) {
+        setSubmitError('Insufficient token credits for Auto Mode. Please upgrade plan.');
+        return;
+      }
+    } else {
+      // Clear any specific gate result if not auto mode, fall back to global check if needed
+      // but currently we unblocked everyone except for Auto Mode.
+      setLockGateResult(undefined);
     }
 
     setIsSending(true);
@@ -670,35 +688,34 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             <div className="flex items-center gap-2">
               {}
               <div className="relative" ref={modelSelectorRef}>
-                <button
-                  type="button"
-                  onClick={() => setShowModelSelector(!showModelSelector)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium',
-                    'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
-                    'transition-colors duration-150',
-                  )}
-                >
-                  <span className="truncate max-w-[100px]">{modelDisplayName}</span>
-                  {thinkingModeEnabled && <Brain size={12} className="text-purple-500" />}
-                  <ChevronDown
-                    size={12}
-                    className={cn('transition-transform', showModelSelector && 'rotate-180')}
-                  />
-                </button>
-                <AnimatePresence>
-                  {showModelSelector && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute bottom-full right-0 z-50 mb-3 w-80"
+                <Popover open={showModelSelector} onOpenChange={setShowModelSelector}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium',
+                        'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
+                        'transition-colors duration-150',
+                      )}
                     >
-                      <QuickModelSelector onClose={() => setShowModelSelector(false)} />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <span className="truncate max-w-[100px]">{modelDisplayName}</span>
+                      {thinkingModeEnabled && <Brain size={12} className="text-purple-500" />}
+                      <ChevronDown
+                        size={12}
+                        className={cn('transition-transform', showModelSelector && 'rotate-180')}
+                      />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    side="top"
+                    sideOffset={12}
+                    collisionPadding={16}
+                    className="w-72 border-none bg-transparent p-0 shadow-none z-[100]"
+                  >
+                    <QuickModelSelector onClose={() => setShowModelSelector(false)} />
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {}
@@ -836,7 +853,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           </div>
         </div>
       </motion.div>
-      <SubscriptionLockDialog open={showLockDialog} onOpenChange={setShowLockDialog} />
+      <SubscriptionLockDialog
+        open={showLockDialog}
+        onOpenChange={setShowLockDialog}
+        gateResult={lockGateResult}
+      />
     </>
   );
 };

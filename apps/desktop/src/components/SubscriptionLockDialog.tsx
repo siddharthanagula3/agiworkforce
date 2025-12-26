@@ -2,19 +2,35 @@ import { ArrowRight, Sparkles, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from './ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/Dialog';
-import { checkSubscriptionGate, getUpgradeMessage } from '../utils/subscriptionGate';
+import {
+  SubscriptionGateResult,
+  checkSubscriptionGate,
+  getUpgradeMessage,
+} from '../utils/subscriptionGate';
 import { openPricingPage } from '../utils/navigation';
 import { supabaseAuth } from '../services/supabaseAuth';
 
 interface SubscriptionLockDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  gateResult?: SubscriptionGateResult;
 }
 
-export function SubscriptionLockDialog({ open, onOpenChange }: SubscriptionLockDialogProps) {
-  const [gateResult, setGateResult] = useState(() => checkSubscriptionGate());
+export function SubscriptionLockDialog({
+  open,
+  onOpenChange,
+  gateResult: propGateResult,
+}: SubscriptionLockDialogProps) {
+  const [gateResult, setGateResult] = useState<SubscriptionGateResult>(
+    () => propGateResult || checkSubscriptionGate(),
+  );
 
   useEffect(() => {
+    if (propGateResult) {
+      setGateResult(propGateResult);
+      return;
+    }
+
     if (open) {
       setGateResult(checkSubscriptionGate());
     }
@@ -24,7 +40,7 @@ export function SubscriptionLockDialog({ open, onOpenChange }: SubscriptionLockD
     });
 
     return unsubscribe;
-  }, [open]);
+  }, [open, propGateResult]);
 
   useEffect(() => {
     if (open && gateResult.hasAccess) {
