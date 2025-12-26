@@ -332,7 +332,7 @@ impl WebhookHandler {
                         invoice.amount_due.unwrap_or(0),
                         invoice.amount_paid.unwrap_or(0),
                         invoice.amount_remaining.unwrap_or(0),
-                        invoice.currency.as_ref().unwrap_or(&"usd".to_string()),
+                        invoice.currency.as_ref().map(|c| c.to_string()).unwrap_or_else(|| "usd".to_string()),
                         invoice.status.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string()),
                         invoice.invoice_pdf.as_ref(),
                         invoice.hosted_invoice_url.as_ref(),
@@ -381,7 +381,7 @@ impl WebhookHandler {
                 )?;
 
                 tracing::info!(
-                    "Subscription {} set to past_due with grace period until {}",
+                    "Subscription {:?} set to past_due with grace period until {}",
                     subscription_id,
                     grace_period_end
                 );
@@ -401,7 +401,11 @@ impl WebhookHandler {
                     customer_id_str,
                     invoice.id.to_string(),
                     amount_due,
-                    invoice.currency.as_ref().unwrap_or(&"usd".to_string()),
+                    invoice
+                        .currency
+                        .as_ref()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "usd".to_string()),
                     "Payment method declined or insufficient funds",
                     now,
                     false

@@ -126,7 +126,7 @@ pub async fn billing_initialize(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<(), String> {
-    let mut billing = state.inner().lock().await;
+    let mut billing = state.inner().0.lock().await;
 
     let db = Arc::new(db_state.inner().clone());
     billing.initialize(stripe_api_key, webhook_secret, db);

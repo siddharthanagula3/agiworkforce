@@ -15,14 +15,14 @@ pub async fn subscribe_to_plan(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.0.lock().await;
+    let billing = state.inner().0.lock().await;
 
     let service = billing
         .stripe_service()
         .map_err(|e| format!("Stripe service not initialized: {}", e))?;
 
     let db = db_state
-        .0
+        .conn
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
@@ -70,7 +70,7 @@ pub async fn upgrade_plan(
     new_plan_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.0.lock().await;
+    let billing = state.inner().0.lock().await;
 
     let service = billing
         .stripe_service()
@@ -101,14 +101,14 @@ pub async fn cancel_subscription(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<(), String> {
-    let billing = state.0.lock().await;
+    let billing = state.inner().0.lock().await;
 
     let service = billing
         .stripe_service()
         .map_err(|e| format!("Stripe service not initialized: {}", e))?;
 
     let db = db_state
-        .0
+        .conn
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
