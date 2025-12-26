@@ -12,6 +12,12 @@ pub struct ManagedCloudProvider {
     client: Client,
 }
 
+impl Default for ManagedCloudProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ManagedCloudProvider {
     pub fn new() -> Self {
         Self {
@@ -107,10 +113,10 @@ impl LLMProvider for ManagedCloudProvider {
                 std::io::ErrorKind::PermissionDenied,
                 "Authentication failed. Please sign in again.",
             ))),
-            _ => Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Cloud provider error: {}", res.status()),
-            ))),
+            _ => Err(Box::new(std::io::Error::other(format!(
+                "Cloud provider error: {}",
+                res.status()
+            )))),
         }
     }
 
