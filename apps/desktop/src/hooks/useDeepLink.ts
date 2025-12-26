@@ -39,18 +39,36 @@ function handleDeepLink(url: string) {
     const parsed = new URL(url);
     console.log('[DeepLink] Parsing URL:', parsed.href);
 
-    // Example: agiworkforce://open?token=xyz
-    // Example: agiworkforce://auth/callback?code=xyz
+    // Extract params from query string
+    const queryParams = Object.fromEntries(parsed.searchParams.entries());
 
-    // We can dispatch a custom event or use a store to handle this.
-    // For now, let's just log it and potentially emit a window event that the Auth store listens to.
+    // Extract params from hash fragment (Supabase often puts them here for implicit flow)
+    // format: #access_token=...&refresh_token=...
+    let hashParams: Record<string, string> = {};
+    if (parsed.hash) {
+      const hashStr = parsed.hash.substring(1); // remove #
+      const hashSearchParams = new URLSearchParams(hashStr);
+      hashParams = Object.fromEntries(hashSearchParams.entries());
+    }
 
-    const token = parsed.searchParams.get('token');
-    const code = parsed.searchParams.get('code');
+    const allParams = { ...queryParams, ...hashParams };
 
-    if (token || code) {
-      // Dispatch event for AuthStore or other consumers
-      window.dispatchEvent(new CustomEvent('agi-deep-link', { detail: { url, token, code } }));
+    // Check for common auth tokens
+    const access_token = allParams['access_token'];
+    const refresh_token = allParams['refresh_token'];
+    const type = allParams['type'];
+    const code = allParams['code'];
+
+    if (access_token || code || type || refresh_token) {
+      console.log('[DeepLink] Dispatched agi-deep-link event');
+      window.dispatchEvent(
+        new CustomEvent('agi-deep-link', {
+          detail: {
+            url,
+            ...allParams,
+          },
+        }),
+      );
     }
   } catch (e) {
     console.error('[DeepLink] Invalid URL:', url, e);

@@ -171,101 +171,98 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   return (
     <div
       className={cn(
-        'w-80 rounded-xl border border-gray-200/70 bg-white/95 p-4 text-left shadow-2xl backdrop-blur-xl',
+        'w-72 rounded-xl border border-gray-200/70 bg-white/95 p-3 text-left shadow-2xl backdrop-blur-xl',
         'dark:border-gray-700 dark:bg-charcoal-900/95',
         className,
       )}
     >
-      <div className="flex items-center justify-between pb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-between pb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           Models
         </p>
-        <span className="text-[11px] text-gray-400 dark:text-gray-500">Choose a provider</span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">Choose a provider</span>
       </div>
 
       {}
-      <div className="mb-3 space-y-1.5">
-        <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <div className="mb-2 space-y-1">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           Smart Routing
         </div>
         <button
           onClick={() => handleModelChange(AUTO_MODEL_ID)}
           className={cn(
-            'flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors',
+            'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
             isAutoMode
               ? 'border-primary bg-gradient-to-r from-primary/10 to-purple-500/10 text-primary shadow-sm dark:border-primary/50 dark:from-primary/20 dark:to-purple-500/20 dark:text-primary-foreground'
               : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
           )}
         >
           <div className="flex items-center gap-2">
-            <Wand2 size={16} className={isAutoMode ? 'text-primary' : 'text-gray-500'} />
+            <Wand2 size={14} className={isAutoMode ? 'text-primary' : 'text-gray-500'} />
             <div className="text-left">
               <div className="font-medium">Auto</div>
-              <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                Routes to best model for your task
+              <div className="text-[9px] text-gray-500 dark:text-gray-400">
+                Routes to best model
               </div>
             </div>
           </div>
-          {isAutoMode && <Check size={16} className="text-primary" />}
+          {isAutoMode && <Check size={14} className="text-primary" />}
         </button>
 
         {}
         {isAutoMode && suggestion && suggestedMetadata && (
-          <div className="ml-6 mt-1 rounded-md bg-gray-50 px-3 py-2 text-xs dark:bg-charcoal-800">
+          <div className="ml-6 mt-1 rounded-md bg-gray-50 px-3 py-1.5 text-[10px] dark:bg-charcoal-800">
             <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-              <Sparkles size={12} />
+              <Sparkles size={10} />
               <span>
-                Currently routing to{' '}
+                Routing to{' '}
                 <span className="font-medium text-gray-900 dark:text-gray-100">
                   {suggestedMetadata.name}
                 </span>
               </span>
             </div>
-            <div className="mt-1 text-[10px] text-gray-500">{suggestion.reason}</div>
           </div>
         )}
       </div>
 
-      <hr className="my-3 border-gray-200 dark:border-gray-700" />
+      <hr className="my-2 border-gray-200 dark:border-gray-700" />
 
       {}
       {!isAutoMode && suggestion && suggestedMetadata && (
-        <div className="mb-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 text-sm text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary-foreground">
+        <div className="mb-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-2 text-xs text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary-foreground">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
-              <Sparkles size={14} />
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              <Sparkles size={12} />
               Recommended
             </div>
             <Button
               size="xs"
               variant="outline"
+              className="h-6 text-[10px]"
               disabled={suggestionLoading || selectedModel === suggestion.model}
               onClick={() => handleModelChange(suggestion.model)}
             >
               Use
             </Button>
           </div>
-          <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {suggestedMetadata.name}{' '}
-            <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
-              ({PROVIDER_LABELS[suggestion.provider]})
-            </span>
+          <p className="mt-1.5 font-semibold text-gray-900 dark:text-gray-100">
+            {suggestedMetadata.name}
           </p>
-          <p className="mt-1 text-xs leading-snug text-gray-600 dark:text-gray-400">
+          <p className="mt-0.5 text-[10px] leading-snug text-gray-600 dark:text-gray-400">
             {suggestion.reason}
           </p>
         </div>
       )}
 
-      <div className="max-h-[300px] space-y-3 overflow-y-auto pr-1">
+      <div className="max-h-[200px] space-y-2 overflow-y-auto pr-1">
         {Object.entries(modelGroups).map(([provider, models]) => {
           if (models.length === 0) return null;
           return (
-            <div key={provider} className="space-y-1.5">
-              <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <div key={provider} className="space-y-1">
+              <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 {PROVIDER_LABELS[provider as Provider]}
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1">
                 {models.map((model) => {
                   const isActive = model.id === selectedModel;
                   return (
@@ -273,7 +270,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                       key={model.id}
                       onClick={() => handleModelChange(model.id)}
                       className={cn(
-                        'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors',
+                        'flex w-full items-center justify-between rounded-lg border px-3 py-1.5 text-xs transition-colors',
                         isActive
                           ? 'border-primary bg-primary/10 text-primary shadow-sm dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
                           : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
@@ -281,9 +278,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                     >
                       <span className="truncate">{model.name}</span>
                       {isActive ? (
-                        <Check size={16} className="text-primary" />
+                        <Check size={14} className="text-primary" />
                       ) : (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">
                           {PROVIDER_LABELS[model.provider]}
                         </span>
                       )}
@@ -296,7 +293,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         })}
       </div>
 
-      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
         {(() => {
           const currentMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
           const supportsThinking = currentMetadata?.capabilities.thinking ?? false;
@@ -332,7 +329,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               disabled={isDisabled}
               title={tooltip}
               className={cn(
-                'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs transition-colors',
+                'flex w-full items-center justify-between rounded-lg px-2 py-1 text-[10px] transition-colors',
                 thinkingModeEnabled
                   ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
                   : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-charcoal-800',
@@ -340,19 +337,19 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               )}
             >
               <div className="flex items-center gap-2 font-medium">
-                <Brain size={14} />
+                <Brain size={12} />
                 <span>Thinking Mode</span>
               </div>
               <div
                 className={cn(
-                  'h-4 w-7 rounded-full p-0.5 transition-colors',
+                  'h-3.5 w-6 rounded-full p-0.5 transition-colors',
                   thinkingModeEnabled ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600',
                 )}
               >
                 <div
                   className={cn(
-                    'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
-                    thinkingModeEnabled ? 'translate-x-3' : 'translate-x-0',
+                    'h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-transform',
+                    thinkingModeEnabled ? 'translate-x-2.5' : 'translate-x-0',
                   )}
                 />
               </div>

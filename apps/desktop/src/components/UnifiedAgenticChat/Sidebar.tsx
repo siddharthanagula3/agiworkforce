@@ -508,6 +508,9 @@ export function Sidebar({
                 <Code2 className="w-3.5 h-3.5" />
               </span>
               Artifacts
+              <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
+                Alpha
+              </span>
             </button>
             {onOpenWorkspace && (
               <button
@@ -518,6 +521,9 @@ export function Sidebar({
                   <TerminalSquare className="w-3.5 h-3.5" />
                 </span>
                 Workspace
+                <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
+                  Alpha
+                </span>
               </button>
             )}
             {onOpenMediaLab && (
@@ -529,6 +535,9 @@ export function Sidebar({
                   <Image className="w-3.5 h-3.5" />
                 </span>
                 Media Lab
+                <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
+                  Alpha
+                </span>
               </button>
             )}
           </div>

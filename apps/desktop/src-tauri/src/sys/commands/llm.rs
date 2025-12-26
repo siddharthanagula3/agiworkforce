@@ -530,6 +530,8 @@ pub async fn llm_get_available_models(
 
     let mut available_models = Vec::new();
 
+    let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
+
     for mut model in all_models {
         let provider_enum = match model.provider.as_str() {
             "openai" => Provider::OpenAI,
@@ -537,11 +539,11 @@ pub async fn llm_get_available_models(
             "google" => Provider::Google,
             "xai" => Provider::XAI,
             "qwen" => Provider::Qwen,
-            "moonshot" | "mistral" => Provider::Mistral, // Mapping moonshot to Mistral provider for now or generic if available
+            "moonshot" | "mistral" => Provider::Mistral,
             _ => continue,
         };
 
-        if router.has_provider(provider_enum) {
+        if router.has_provider(provider_enum) || managed_cloud_available {
             model.available = true;
             available_models.push(model);
         }
