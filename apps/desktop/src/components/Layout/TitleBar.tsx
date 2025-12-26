@@ -15,6 +15,7 @@ interface TitleBarProps {
   commandShortcutHint?: string;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  hideWindowControls?: boolean;
 }
 
 const TitleBar = ({
@@ -24,6 +25,7 @@ const TitleBar = ({
   commandShortcutHint,
   sidebarCollapsed: _sidebarCollapsed,
   onToggleSidebar,
+  hideWindowControls,
 }: TitleBarProps) => {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -93,57 +95,65 @@ const TitleBar = ({
           </TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 hover:bg-accent"
-              onClick={() => void actions.minimize()}
-              aria-label="Minimize window"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Minimize</p>
-          </TooltipContent>
-        </Tooltip>
+        {!hideWindowControls && (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 hover:bg-accent"
+                  onClick={() => void actions.minimize()}
+                  aria-label="Minimize window"
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Minimize</p>
+              </TooltipContent>
+            </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 hover:bg-accent"
-              onClick={() => void actions.toggleMaximize()}
-              aria-label={state.maximized ? 'Restore window' : 'Maximize window'}
-              aria-pressed={state.maximized}
-            >
-              {state.maximized ? <Minimize2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{state.maximized ? 'Restore' : 'Maximize'}</p>
-          </TooltipContent>
-        </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 hover:bg-accent"
+                  onClick={() => void actions.toggleMaximize()}
+                  aria-label={state.maximized ? 'Restore window' : 'Maximize window'}
+                  aria-pressed={state.maximized}
+                >
+                  {state.maximized ? (
+                    <Minimize2 className="h-4 w-4" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{state.maximized ? 'Restore' : 'Maximize'}</p>
+              </TooltipContent>
+            </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() => void actions.close()}
-              aria-label="Close window"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Close</p>
-          </TooltipContent>
-        </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground"
+                  onClick={() => void actions.close()}
+                  aria-label="Close window"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Close</p>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
       </div>
     </header>
   );

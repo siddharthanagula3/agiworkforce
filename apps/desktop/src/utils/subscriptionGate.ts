@@ -61,23 +61,46 @@ export function checkSubscriptionGate(): SubscriptionGateResult {
     };
   }
 
+  // Free users are now allowed access to the app generally
+  return {
+    hasAccess: true,
+    currentTier: planTier,
+    currentStatus: status,
+  };
+}
+
+export function checkAutoModeAccess(): SubscriptionGateResult {
+  const authState = supabaseAuth.getState();
+
+  if (!authState.subscription) {
+    return {
+      hasAccess: false,
+      reason: 'Auto Mode requires a Hobby plan or higher.',
+      requiresUpgrade: true,
+      currentTier: 'free',
+      currentStatus: 'none',
+    };
+  }
+
+  const subscription = authState.subscription;
+  const planTier = asPlanTier(subscription.plan_tier);
   const currentTierIndex = PLAN_TIER_HIERARCHY.indexOf(planTier);
   const hobbyTierIndex = PLAN_TIER_HIERARCHY.indexOf('hobby');
 
   if (currentTierIndex < hobbyTierIndex) {
     return {
       hasAccess: false,
-      reason: 'A Hobby plan or higher subscription is required to use AGI Workforce',
+      reason: 'Auto Mode requires a Hobby plan or higher.',
       requiresUpgrade: true,
       currentTier: planTier,
-      currentStatus: status,
+      currentStatus: subscription.status as SubscriptionStatus,
     };
   }
 
   return {
     hasAccess: true,
     currentTier: planTier,
-    currentStatus: status,
+    currentStatus: subscription.status as SubscriptionStatus,
   };
 }
 

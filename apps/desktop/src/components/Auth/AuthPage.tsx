@@ -34,14 +34,11 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      const hash = window.location.hash;
-      if (!hash) return;
-
-      const params = new URLSearchParams(hash.substring(1));
-      const type = params.get('type');
-      const accessToken = params.get('access_token');
-      const errorDescription = params.get('error_description');
+    const processAuthParams = (params: Record<string, string>) => {
+      const type = params['type'];
+      const accessToken = params['access_token'];
+      const refreshToken = params['refresh_token'];
+      const errorDescription = params['error_description'];
 
       if (errorDescription) {
         setErrorMessage(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
@@ -49,42 +46,84 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
         return;
       }
 
-      if (type === 'signup' && accessToken) {
+      if (accessToken && refreshToken) {
+        // Manually set session if tokens are present
+        supabaseAuth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      }
+
+      if (
+        (type === 'signup' || type === 'magiclink' || type === 'invite' || type === 'recovery') &&
+        accessToken
+      ) {
         setPageState('verifying');
 
         setTimeout(() => {
           const isAuth = supabaseAuth.isAuthenticated();
           if (isAuth) {
             setPageState('verified');
-
+            // Clear URL hash
             window.history.replaceState(null, '', window.location.pathname);
 
             setTimeout(() => {
               onAuthSuccess?.();
             }, 2000);
           } else {
-            setPageState('auth');
+            // Retry session check just in case
+            supabaseAuth.checkSession().then(() => {
+              if (supabaseAuth.isAuthenticated()) {
+                setPageState('verified');
+                onAuthSuccess?.();
+              } else {
+                setPageState('auth');
+              }
+            });
           }
         }, 1000);
         return;
       }
 
-      if (type === 'magiclink' && accessToken) {
+      // Default case if just access token without specific type (e.g. OAuth implicit)
+      if (accessToken) {
         setPageState('verifying');
         setTimeout(() => {
-          const isAuth = supabaseAuth.isAuthenticated();
-          if (isAuth) {
-            window.history.replaceState(null, '', window.location.pathname);
+          if (supabaseAuth.isAuthenticated()) {
+            setPageState('verified');
             onAuthSuccess?.();
           } else {
-            setPageState('auth');
+            supabaseAuth.checkSession().then(() => {
+              if (supabaseAuth.isAuthenticated()) {
+                setPageState('verified');
+                onAuthSuccess?.();
+              } else {
+                setPageState('auth');
+              }
+            });
           }
         }, 1000);
-        return;
       }
     };
 
-    handleAuthCallback();
+    // 1. Check window hash on mount (for web or if opened directly)
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      processAuthParams(Object.fromEntries(params.entries()));
+    }
+
+    // 2. Listen for deep link events (for desktop app)
+    const handleDeepLink = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail) {
+        console.log('[AuthPage] Received deep link event', customEvent.detail);
+        processAuthParams(customEvent.detail);
+      }
+    };
+
+    window.addEventListener('agi-deep-link', handleDeepLink);
+
+    return () => {
+      window.removeEventListener('agi-deep-link', handleDeepLink);
+    };
   }, [onAuthSuccess]);
 
   if (pageState === 'verified') {

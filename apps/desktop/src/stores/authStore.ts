@@ -51,6 +51,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           isAuthenticated: false,
+          isLoading: false,
           error: null,
         });
       },
@@ -58,58 +59,87 @@ export const useAuthStore = create<AuthState>()(
       signIn: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
 
-        const response = await supabaseAuth.signIn({ email, password });
+        try {
+          const response = await supabaseAuth.signIn({ email, password });
 
-        if (response.error) {
-          set({ isLoading: false, error: response.error.message });
-          return { error: response.error.message };
+          if (response.error) {
+            set({ error: response.error.message });
+            return { error: response.error.message };
+          }
+
+          return { error: null };
+        } catch (error) {
+          console.error('[AuthStore] Sign in exception:', error);
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message });
+          return { error: message };
+        } finally {
+          set({ isLoading: false });
         }
-
-        set({ isLoading: false });
-        return { error: null };
       },
 
       signUp: async (email: string, password: string, name?: string) => {
         set({ isLoading: true, error: null });
 
-        const response = await supabaseAuth.signUp({
-          email,
-          password,
-          displayName: name,
-        });
+        try {
+          const response = await supabaseAuth.signUp({
+            email,
+            password,
+            displayName: name,
+          });
 
-        if (response.error) {
-          set({ isLoading: false, error: response.error.message });
-          return { error: response.error.message };
+          if (response.error) {
+            set({ error: response.error.message });
+            return { error: response.error.message };
+          }
+
+          return { error: null };
+        } catch (error) {
+          console.error('[AuthStore] Sign up exception:', error);
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message });
+          return { error: message };
+        } finally {
+          set({ isLoading: false });
         }
-
-        set({ isLoading: false });
-        return { error: null };
       },
 
       signOut: async () => {
         set({ isLoading: true });
-        await supabaseAuth.signOut();
-        set({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: null,
-        });
+        try {
+          await supabaseAuth.signOut();
+        } catch (error) {
+          console.error('[AuthStore] Sign out error:', error);
+        } finally {
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null,
+          });
+        }
       },
 
       signInWithMagicLink: async (email: string) => {
         set({ isLoading: true, error: null });
 
-        const { error } = await supabaseAuth.signInWithMagicLink(email);
+        try {
+          const { error } = await supabaseAuth.signInWithMagicLink(email);
 
-        if (error) {
-          set({ isLoading: false, error: error.message });
-          return { error: error.message };
+          if (error) {
+            set({ error: error.message });
+            return { error: error.message };
+          }
+
+          return { error: null };
+        } catch (error) {
+          console.error('[AuthStore] Magic link sign in exception:', error);
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message });
+          return { error: message };
+        } finally {
+          set({ isLoading: false });
         }
-
-        set({ isLoading: false });
-        return { error: null };
       },
 
       resetPassword: async (email: string) => {

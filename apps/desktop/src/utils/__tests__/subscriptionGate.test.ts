@@ -158,7 +158,7 @@ describe('subscriptionGate', () => {
       expect(result.currentStatus).toBe('past_due');
     });
 
-    it('should deny access when user has free tier', () => {
+    it('should allow access when user has free tier', () => {
       vi.mocked(supabaseAuth.getState).mockReturnValue({
         user: { id: 'user-1', email: 'test@example.com' },
         session: { access_token: 'token', refresh_token: 'refresh' },
@@ -185,9 +185,8 @@ describe('subscriptionGate', () => {
 
       const result = checkSubscriptionGate();
 
-      expect(result.hasAccess).toBe(false);
-      expect(result.reason).toContain('Hobby plan or higher');
-      expect(result.requiresUpgrade).toBe(true);
+      expect(result.hasAccess).toBe(true);
+      expect(result.requiresUpgrade).toBeFalsy();
       expect(result.currentTier).toBe('free');
       expect(result.currentStatus).toBe('active');
     });

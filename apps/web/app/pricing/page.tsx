@@ -73,7 +73,25 @@ function PricingContent() {
             .eq('user_id', user.id)
             .maybeSingle();
 
-          setSubscription(data);
+          if (data) {
+            setSubscription(data);
+          } else {
+            // Self-healing: If no local subscription, try to sync from Stripe
+            try {
+              const syncRes = await fetch('/api/sync-subscription', { method: 'POST' });
+              if (syncRes.ok) {
+                // Retry fetch
+                const { data: retryData } = await supabase
+                  .from('subscriptions')
+                  .select('status, price_id, plan_tier')
+                  .eq('user_id', user.id)
+                  .maybeSingle();
+                setSubscription(retryData);
+              }
+            } catch (syncError) {
+              console.warn('Sync attempt failed:', syncError);
+            }
+          }
         }
       } catch (error) {
         console.error('Error fetching subscription:', error);
@@ -147,7 +165,7 @@ function PricingContent() {
                 desktop and web.
               </p>
 
-              {showSubscriptionRequired && (
+              {showSubscriptionRequired && !isSubscribed && (
                 <div className="max-w-2xl mx-auto mb-8 p-4 bg-amber-900/20 border border-amber-900/40 rounded-lg flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
                   <div className="text-left">
@@ -195,9 +213,11 @@ function PricingContent() {
 
                 <div className="relative">
                   <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide">
-                      Limited Time Launch Offer
-                    </div>
+                    {!isSubscribed && (
+                      <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide">
+                        Limited Time Launch Offer
+                      </div>
+                    )}
                     {billingInterval === 'annual' && (
                       <div className="inline-flex items-center text-xs font-medium text-emerald-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse" />
