@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { PRICING_CONFIG } from '@/lib/pricing';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -36,28 +37,7 @@ const supabaseAdmin =
       })
     : null;
 
-// Price IDs (Should ideally be shared/ENV driven but hardcoded here for fallback robustness matching checkout/route.ts)
-const STRIPE_PRICE_HOBBY_MONTHLY =
-  process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwx10zEfO6BZMh7thtFU77';
-const STRIPE_PRICE_HOBBY_YEARLY =
-  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwx20zEfO6BZMhbgpxL8TI';
-const STRIPE_PRICE_PRO_MONTHLY =
-  process.env.STRIPE_PRICE_PRO_MONTHLY ?? 'price_1Sgwx20zEfO6BZMh3ix7hivi';
-const STRIPE_PRICE_PRO_YEARLY =
-  process.env.STRIPE_PRICE_PRO_YEARLY ?? 'price_1Sgwx30zEfO6BZMhJXsduOyl';
-const STRIPE_PRICE_MAX_MONTHLY =
-  process.env.STRIPE_PRICE_MAX_MONTHLY ?? 'price_1Sgwx30zEfO6BZMhJqItFYKF';
-const STRIPE_PRICE_MAX_YEARLY =
-  process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW';
-
-function getPlanFromPriceId(priceId: string | null | undefined): string | null {
-  if (!priceId) return null;
-  if (priceId === STRIPE_PRICE_HOBBY_MONTHLY || priceId === STRIPE_PRICE_HOBBY_YEARLY)
-    return 'hobby';
-  if (priceId === STRIPE_PRICE_PRO_MONTHLY || priceId === STRIPE_PRICE_PRO_YEARLY) return 'pro';
-  if (priceId === STRIPE_PRICE_MAX_MONTHLY || priceId === STRIPE_PRICE_MAX_YEARLY) return 'max';
-  return null;
-}
+const { getPlanFromPriceId } = PRICING_CONFIG;
 
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   if (!supabaseAdmin || !stripe) {
@@ -76,13 +56,13 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     return;
   }
 
-  let planTier = (session.metadata?.['plan_tier'] as string | undefined) ?? 'pro';
+  const planTier = session.metadata?.['plan_tier'] as string | undefined;
+  if (!planTier) {
+    logger.error({ sessionId: session.id }, 'CRITICAL: plan_tier is missing from session metadata');
+    throw new Error('plan_tier is missing from session metadata');
+  }
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
-
-  // Try to infer plan tier from Price ID if metadata is weird, or just to double check
-  // Note: We need to get stripePriceId first before we can use it.
-  // Re-ordering logic below to get line items first.
 
   logger.debug(
     {
@@ -107,23 +87,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
         stripePriceId = expandedSession.line_items.data[0].price?.id || null;
       }
     } catch (error) {
-      console.error('[billing] Failed to retrieve expanded session:', error);
-    }
-  }
-
-  // Refine Plan Tier inference - always infer from price_id if available (more reliable than metadata)
-  if (stripePriceId) {
-    const inferredPlan = getPlanFromPriceId(stripePriceId);
-    if (inferredPlan) {
-      console.log(
-        `[billing] Inferred plan ${inferredPlan} from price ${stripePriceId} (overriding metadata: ${session.metadata?.['plan_tier']})`,
-      );
-      planTier = inferredPlan;
-    } else if (!session.metadata?.['plan_tier']) {
-      // Only use default 'pro' if we can't infer from price_id AND no metadata
-      console.warn(
-        `[billing] Could not infer plan from price_id ${stripePriceId}, using default 'pro'`,
-      );
+      logger.error({ error, sessionId: session.id }, 'Failed to retrieve expanded session');
     }
   }
 
@@ -147,54 +111,50 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       // Ensure we always get price_id from subscription if not already set
       if (!stripePriceId && subscription.items.data.length > 0) {
         stripePriceId = subscription.items.data[0].price.id;
-        console.log(
-          `[billing] Retrieved price_id ${stripePriceId} from subscription ${stripeSubId}`,
+        logger.info(
+          { priceId: stripePriceId, subscriptionId: stripeSubId },
+          'Retrieved price_id from subscription',
         );
-      }
-
-      // Also update plan_tier from price_id if we have it (more reliable than metadata)
-      if (stripePriceId) {
-        const inferredPlan = getPlanFromPriceId(stripePriceId);
-        if (inferredPlan) {
-          console.log(
-            `[billing] Updating plan_tier to ${inferredPlan} from price_id ${stripePriceId}`,
-          );
-          planTier = inferredPlan;
-        }
       }
 
       if (subscription.discount?.coupon?.id) {
         stripeCouponId = subscription.discount.coupon.id;
       }
     } catch (error) {
-      console.error('[billing] Failed to retrieve subscription details:', error);
+      logger.error(
+        { error, subscriptionId: stripeSubId },
+        'Failed to retrieve subscription details',
+      );
     }
   }
 
   // Final fallback: if we still don't have price_id but have subscription_id, try one more time
   if (!stripePriceId && stripeSubId && stripe) {
     try {
-      console.warn(
-        `[billing] stripe_price_id still null after initial attempts, retrying for subscription ${stripeSubId}`,
+      logger.warn(
+        { subscriptionId: stripeSubId },
+        'stripe_price_id still null after initial attempts, retrying for subscription',
       );
       const subscription = await stripe.subscriptions.retrieve(stripeSubId, {
         expand: ['items.data.price'],
       });
       if (subscription.items.data.length > 0) {
         stripePriceId = subscription.items.data[0].price.id;
-        console.log(
-          `[billing] Successfully retrieved price_id ${stripePriceId} from subscription on retry`,
+        logger.info(
+          { priceId: stripePriceId, subscriptionId: stripeSubId },
+          'Successfully retrieved price_id from subscription on retry',
         );
       }
     } catch (error) {
-      console.error('[billing] Failed to retrieve price_id on retry:', error);
+      logger.error({ error, subscriptionId: stripeSubId }, 'Failed to retrieve price_id on retry');
     }
   }
 
   // Log warning if price_id is still missing and attempt one final retrieval
   if (!stripePriceId && stripeSubId && stripe) {
-    console.warn(
-      `[billing] WARNING: stripe_price_id is null for session ${session.id}, subscription ${stripeSubId}, user ${supabaseUserId}. Attempting final retrieval...`,
+    logger.warn(
+      { sessionId: session.id, subscriptionId: stripeSubId, userId: supabaseUserId },
+      'stripe_price_id is null for session. Attempting final retrieval...',
     );
     try {
       // Final attempt: retrieve subscription with full expansion
@@ -207,19 +167,24 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
           finalSubscription.items.data[0].plan?.id ||
           null;
         if (stripePriceId) {
-          console.log(
-            `[billing] Successfully retrieved price_id ${stripePriceId} in final attempt`,
+          logger.info(
+            { priceId: stripePriceId },
+            'Successfully retrieved price_id in final attempt',
           );
         }
       }
     } catch (error) {
-      console.error('[billing] Final attempt to retrieve price_id failed:', error);
+      logger.error(
+        { error, subscriptionId: stripeSubId },
+        'Final attempt to retrieve price_id failed',
+      );
     }
   }
 
   if (!stripePriceId) {
-    console.error(
-      `[billing] CRITICAL: stripe_price_id is still null after all attempts for session ${session.id}, subscription ${stripeSubId}, user ${supabaseUserId}`,
+    logger.error(
+      { sessionId: session.id, subscriptionId: stripeSubId, userId: supabaseUserId },
+      'CRITICAL: stripe_price_id is still null after all attempts',
     );
   }
 
@@ -236,7 +201,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
         }
       }
     } catch (error) {
-      console.error('[billing] Failed to retrieve session discount details:', error);
+      logger.error({ error, sessionId: session.id }, 'Failed to retrieve session discount details');
     }
   }
 
@@ -254,7 +219,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     canceled_at: canceledAt?.toISOString() || null,
   };
 
-  console.log('[billing] Upserting subscription:', subData);
+  logger.info({ subscriptionData: subData }, 'Upserting subscription');
 
   const { error, data } = await supabaseAdmin
     .from('subscriptions')
@@ -265,7 +230,7 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     .single();
 
   if (error) {
-    console.error('[billing] Failed to upsert subscription:', error);
+    logger.error({ error, subscriptionData: subData }, 'Failed to upsert subscription');
     throw error;
   }
 
@@ -303,14 +268,11 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
 async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Subscription) {
   if (!supabaseAdmin || !stripe) {
-    console.error('[billing] updateSubscriptionFromStripeSubscription: missing dependencies');
+    logger.error('updateSubscriptionFromStripeSubscription: missing dependencies');
     throw new Error('Missing dependencies');
   }
 
-  console.log(
-    '[billing] updateSubscriptionFromStripeSubscription: Processing sub',
-    subscription.id,
-  );
+  logger.info({ subscriptionId: subscription.id }, 'Processing subscription update');
 
   const stripeSubId = subscription.id;
   const stripeCustomerId = subscription.customer as string | null;
@@ -320,18 +282,18 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     stripePriceId = subscription.items.data[0].price.id;
   }
 
-  let planTier: string = 'pro';
-  if (subscription.metadata?.plan_tier) {
-    planTier = subscription.metadata.plan_tier;
-  } else if (stripePriceId) {
-    const inferred = getPlanFromPriceId(stripePriceId);
-    if (inferred) {
-      planTier = inferred;
-    } else {
-      console.log(
-        '[billing] No plan_tier in subscription metadata and unknown price ID, keeping pro default',
-      );
-    }
+  const planTier =
+    subscription.metadata?.plan_tier ??
+    (stripePriceId ? getPlanFromPriceId(stripePriceId) : null) ??
+    'pro';
+  if (!subscription.metadata?.plan_tier) {
+    logger.warn(
+      {
+        subscriptionId: subscription.id,
+        inferredPlan: planTier,
+      },
+      'plan_tier missing from subscription metadata. Inferred from price_id.',
+    );
   }
 
   // Force update plan tier if we found one
@@ -357,7 +319,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     plan_tier: planTier,
   };
 
-  console.log('[billing] Updating subscription:', { stripeSubId, stripeCustomerId, updateData });
+  logger.info({ stripeSubId, stripeCustomerId, updateData }, 'Updating subscription');
 
   let error;
   let supabaseUserId: string | null = null;
@@ -370,7 +332,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
       .maybeSingle();
 
     if (fetchError) {
-      console.error('[billing] Failed to check existing subscription:', fetchError);
+      logger.error({ error: fetchError, stripeSubId }, 'Failed to check existing subscription');
     }
 
     if (existingSub) {
@@ -458,8 +420,9 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
       // First, try metadata
       const metadataUserId = subscription.metadata?.supabase_user_id;
       if (metadataUserId) {
-        console.log(
-          `[billing] Subscription ${stripeSubId} not found. Creating via metadata user_id: ${metadataUserId}`,
+        logger.info(
+          { stripeSubId, metadataUserId },
+          'Subscription not found. Creating via metadata user_id',
         );
         supabaseUserId = metadataUserId;
       } else if (stripeCustomerId) {
@@ -468,25 +431,28 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           const customer = await stripe.customers.retrieve(stripeCustomerId);
           if (typeof customer !== 'string' && !customer.deleted && customer.email) {
             const customerEmail = customer.email;
-            console.log(`[billing] Attempting to find user by customer email: ${customerEmail}`);
+            logger.info({ customerEmail }, 'Attempting to find user by customer email');
             // Use Supabase Admin API to find user by email
             const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
             if (!userError && users?.users) {
               const matchingUser = users.users.find((u) => u.email === customerEmail);
               if (matchingUser) {
-                console.log(`[billing] Found user ${matchingUser.id} by email ${customerEmail}`);
+                logger.info(
+                  { userId: matchingUser.id, email: customerEmail },
+                  'Found user by email',
+                );
                 supabaseUserId = matchingUser.id;
               } else {
-                console.warn(`[billing] No Supabase user found with email ${customerEmail}`);
+                logger.warn({ email: customerEmail }, 'No Supabase user found with email');
               }
             } else {
-              console.error('[billing] Failed to list users:', userError);
+              logger.error({ error: userError }, 'Failed to list users');
             }
           } else {
-            console.warn(`[billing] Customer ${stripeCustomerId} has no email address`);
+            logger.warn({ stripeCustomerId }, 'Customer has no email address');
           }
         } catch (customerError) {
-          console.error('[billing] Failed to retrieve customer:', customerError);
+          logger.error({ error: customerError }, 'Failed to retrieve customer');
         }
       }
 
@@ -498,7 +464,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           stripe_subscription_id: stripeSubId,
           stripe_customer_id: stripeCustomerId,
         };
-        console.log('[billing] Creating new subscription:', createData);
+        logger.info({ createData }, 'Creating new subscription');
         const res = await supabaseAdmin
           .from('subscriptions')
           .upsert(createData, {
@@ -547,8 +513,9 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
         }
       } else {
         // Last resort: try to update by customer ID (might work if subscription exists)
-        console.warn(
-          `[billing] Subscription ${stripeSubId} not found and cannot determine user_id. Attempting customer ID update.`,
+        logger.warn(
+          { stripeSubId },
+          'Subscription not found and cannot determine user_id. Attempting customer ID update.',
         );
         const res = await supabaseAdmin
           .from('subscriptions')
@@ -556,8 +523,9 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           .eq('stripe_customer_id', stripeCustomerId);
         error = res.error;
         if (error) {
-          console.error(
-            `[billing] Cannot create or update subscription ${stripeSubId}: No user_id found and customer ID update failed.`,
+          logger.error(
+            { error, stripeSubId },
+            'Cannot create or update subscription: No user_id found and customer ID update failed.',
           );
         }
       }
@@ -571,7 +539,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   }
 
   if (error) {
-    console.error('[billing] Failed to update subscription:', error);
+    logger.error({ error }, 'Failed to update subscription');
     throw error;
   }
 }
@@ -607,6 +575,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
+  const { count } = await supabaseAdmin
+    .from('processed_stripe_events')
+    .select('event_id', { count: 'exact', head: true })
+    .eq('event_id', event.id);
+
+  if (count && count > 0) {
+    logger.warn({ eventId: event.id }, 'Stripe event already processed');
+    return NextResponse.json({ received: true, message: 'Event already processed' });
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -616,7 +594,7 @@ export async function POST(request: Request) {
       }
       case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session;
-        console.log('[billing] Async payment succeeded for session:', session.id);
+        logger.info({ sessionId: session.id }, 'Async payment succeeded');
         await upsertSubscriptionFromSession(session);
         break;
       }
@@ -624,7 +602,7 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         const stripeSubId = session.subscription as string | null;
         const stripeCustomerId = session.customer as string | null;
-        console.log('[billing] Async payment failed for session:', session.id);
+        logger.warn({ sessionId: session.id }, 'Async payment failed');
 
         if (supabaseAdmin) {
           try {
@@ -634,9 +612,9 @@ export async function POST(request: Request) {
                 .update({ status: 'past_due' })
                 .eq('stripe_subscription_id', stripeSubId);
               if (updateError) {
-                console.error(
-                  '[billing] Failed to update subscription for async payment failed:',
-                  updateError,
+                logger.error(
+                  { error: updateError, stripeSubId },
+                  'Failed to update subscription for async payment failed',
                 );
               }
             } else if (stripeCustomerId) {
@@ -645,14 +623,14 @@ export async function POST(request: Request) {
                 .update({ status: 'past_due' })
                 .eq('stripe_customer_id', stripeCustomerId);
               if (updateError) {
-                console.error(
-                  '[billing] Failed to update subscription by customer ID for async payment failed:',
-                  updateError,
+                logger.error(
+                  { error: updateError, stripeCustomerId },
+                  'Failed to update subscription by customer ID for async payment failed',
                 );
               }
             }
           } catch (error) {
-            console.error('[billing] Error updating subscription for async payment failed:', error);
+            logger.error({ error }, 'Error updating subscription for async payment failed');
           }
         }
         break;
@@ -668,7 +646,7 @@ export async function POST(request: Request) {
         const stripeCustomerId = invoice.customer as string | null;
         const stripeSubId = invoice.subscription as string | null;
 
-        console.log('[billing] Payment succeeded for invoice:', invoice.id);
+        logger.info({ invoiceId: invoice.id }, 'Payment succeeded for invoice');
 
         if (supabaseAdmin && stripe) {
           const updateData: {
@@ -688,7 +666,7 @@ export async function POST(request: Request) {
                 subscription.current_period_end * 1000,
               ).toISOString();
             } catch (error) {
-              console.error('[billing] Failed to retrieve subscription for invoice:', error);
+              logger.error({ error, stripeSubId }, 'Failed to retrieve subscription for invoice');
             }
           }
 
@@ -699,9 +677,9 @@ export async function POST(request: Request) {
                 .update(updateData)
                 .eq('stripe_subscription_id', stripeSubId);
               if (updateError) {
-                console.error(
-                  '[billing] Failed to update subscription for payment succeeded:',
-                  updateError,
+                logger.error(
+                  { error: updateError, stripeSubId },
+                  'Failed to update subscription for payment succeeded',
                 );
               }
             } else if (stripeCustomerId) {
@@ -710,14 +688,14 @@ export async function POST(request: Request) {
                 .update(updateData)
                 .eq('stripe_customer_id', stripeCustomerId);
               if (updateError) {
-                console.error(
-                  '[billing] Failed to update subscription by customer ID for payment succeeded:',
-                  updateError,
+                logger.error(
+                  { error: updateError, stripeCustomerId },
+                  'Failed to update subscription by customer ID for payment succeeded',
                 );
               }
             }
           } catch (error) {
-            console.error('[billing] Error updating subscription for payment succeeded:', error);
+            logger.error({ error }, 'Error updating subscription for payment succeeded');
           }
         }
         break;
@@ -725,7 +703,7 @@ export async function POST(request: Request) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         const stripeSubId = subscription.id;
-        console.log('[billing] Subscription deleted:', stripeSubId);
+        logger.info({ stripeSubId }, 'Subscription deleted');
         if (supabaseAdmin) {
           try {
             const { error: updateError } = await supabaseAdmin
@@ -736,13 +714,13 @@ export async function POST(request: Request) {
               })
               .eq('stripe_subscription_id', stripeSubId);
             if (updateError) {
-              console.error(
-                '[billing] Failed to update subscription for deleted event:',
-                updateError,
+              logger.error(
+                { error: updateError, stripeSubId },
+                'Failed to update subscription for deleted event',
               );
             }
           } catch (error) {
-            console.error('[billing] Error updating subscription for deleted event:', error);
+            logger.error({ error }, 'Error updating subscription for deleted event');
           }
         }
         break;
@@ -751,7 +729,7 @@ export async function POST(request: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string | null;
         const stripeSubId = invoice.subscription as string | null;
-        console.log('[billing] Payment failed for invoice:', invoice.id);
+        logger.warn({ invoiceId: invoice.id }, 'Payment failed for invoice');
 
         if (supabaseAdmin) {
           try {
@@ -761,9 +739,9 @@ export async function POST(request: Request) {
                 .update({ status: 'past_due' })
                 .eq('stripe_subscription_id', stripeSubId);
               if (updateError) {
-                console.error(
-                  '[billing] Failed to update subscription for payment failed:',
-                  updateError,
+                logger.error(
+                  { error: updateError, stripeSubId },
+                  'Failed to update subscription for payment failed',
                 );
               }
             } else if (stripeCustomerId) {
@@ -772,41 +750,46 @@ export async function POST(request: Request) {
                 .update({ status: 'past_due' })
                 .eq('stripe_customer_id', stripeCustomerId);
               if (updateError) {
-                console.error(
-                  '[billing] Failed to update subscription by customer ID for payment failed:',
-                  updateError,
+                logger.error(
+                  { error: updateError, stripeCustomerId },
+                  'Failed to update subscription by customer ID for payment failed',
                 );
               }
             }
           } catch (error) {
-            console.error('[billing] Error updating subscription for payment failed:', error);
+            logger.error({ error }, 'Error updating subscription for payment failed');
           }
         }
         break;
       }
       default:
-        console.log(`[billing] Unhandled Stripe event type: ${event.type}`);
+        logger.warn({ eventType: event.type }, 'Unhandled Stripe event type');
+    }
+
+    // Add event to processed table
+    const { error: insertError } = await supabaseAdmin
+      .from('processed_stripe_events')
+      .insert({ event_id: event.id });
+
+    if (insertError) {
+      logger.error({ eventId: event.id, error: insertError }, 'Failed to insert processed event');
+      throw new Error(`Failed to insert processed event ID: ${insertError.message}`);
     }
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     logger.error(
       {
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage,
         eventType: event.type,
         eventId: event.id,
         stack: err instanceof Error ? err.stack : undefined,
       },
       'Error handling Stripe webhook event',
     );
-    // Still return 200 to prevent Stripe from retrying
-    // Log the error for debugging
-    return NextResponse.json(
-      {
-        received: true,
-        error: err instanceof Error ? err.message : 'Unknown error',
-        eventType: event.type,
-      },
-      { status: 200 },
-    );
+
+    return new NextResponse(JSON.stringify({ error: `Webhook handler failed: ${errorMessage}` }), {
+      status: 500,
+    });
   }
 
   logger.info({ eventType: event.type, eventId: event.id }, 'Webhook processed successfully');
