@@ -307,7 +307,10 @@ impl WebhookHandler {
                 rusqlite::params![invoice
                     .customer
                     .as_ref()
-                    .map(|c| c.to_string())
+                    .map(|c| match c {
+                        stripe::Expandable::Id(id) => id.to_string(),
+                        stripe::Expandable::Object(obj) => obj.id.to_string(),
+                    })
                     .unwrap_or_default()],
                 |row| row.get(0),
             );
@@ -326,7 +329,10 @@ impl WebhookHandler {
                     rusqlite::params![
                         invoice_id,
                         customer_id,
-                        invoice.subscription.as_ref().map(|s| s.to_string()),
+                        invoice.subscription.as_ref().map(|s| match s {
+                            stripe::Expandable::Id(id) => id.to_string(),
+                            stripe::Expandable::Object(obj) => obj.id.to_string(),
+                        }),
                         invoice.id.to_string(),
                         invoice.number.as_ref(),
                         invoice.amount_due.unwrap_or(0),
@@ -339,7 +345,7 @@ impl WebhookHandler {
                         invoice.period_start.unwrap_or(0),
                         invoice.period_end.unwrap_or(0),
                         invoice.due_date,
-                        invoice.status_transitions.paid_at,
+                        invoice.status_transitions.as_ref().and_then(|st| st.paid_at),
                         now,
                     ],
                 )?;
@@ -363,7 +369,10 @@ impl WebhookHandler {
             let customer_id_str = invoice
                 .customer
                 .as_ref()
-                .map(|c| c.to_string())
+                .map(|c| match c {
+                    stripe::Expandable::Id(id) => id.to_string(),
+                    stripe::Expandable::Object(obj) => obj.id.to_string(),
+                })
                 .unwrap_or_default();
 
             if let Some(subscription_id) = invoice.subscription.as_ref() {
@@ -377,7 +386,14 @@ impl WebhookHandler {
                         grace_period_end = ?1,
                         updated_at = ?2
                      WHERE stripe_subscription_id = ?3",
-                    rusqlite::params![grace_period_end, now, subscription_id.to_string()],
+                    rusqlite::params![
+                        grace_period_end,
+                        now,
+                        match subscription_id {
+                            stripe::Expandable::Id(id) => id.to_string(),
+                            stripe::Expandable::Object(obj) => obj.id.to_string(),
+                        }
+                    ],
                 )?;
 
                 tracing::info!(
