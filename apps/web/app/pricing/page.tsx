@@ -234,10 +234,13 @@ function PricingContent() {
                     <Check className="h-4 w-4 text-emerald-400" /> Free to use own APIs
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> Core desktop agent
+                    <Check className="h-4 w-4 text-emerald-400" /> Full Vision & OCR
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> Community support
+                    <Check className="h-4 w-4 text-emerald-400" /> Browser Automation
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-emerald-400" /> 10 Concurrent Agents
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-emerald-400" /> $1/mo token credits
@@ -277,10 +280,16 @@ function PricingContent() {
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Unlimited automations*
+                    <Check className="h-4 w-4 text-blue-400" /> Free to use own APIs
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Web & UI automation
+                    <Check className="h-4 w-4 text-blue-400" /> Full Vision & OCR
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-blue-400" /> Browser Automation
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-blue-400" /> 10 Concurrent Agents
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-blue-400" /> $20/mo token credits
@@ -322,7 +331,19 @@ function PricingContent() {
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> All Pro features
+                    <Check className="h-4 w-4 text-purple-400" /> Free to use own APIs
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-purple-400" /> Full Vision & OCR
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-purple-400" /> Browser Automation
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-purple-400" /> 10 Concurrent Agents
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-purple-400" /> Priority Support
                   </li>
                   <li className="flex gap-2">
                     <Check className="h-4 w-4 text-purple-400" /> $250/mo token credits
