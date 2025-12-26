@@ -8,20 +8,9 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { STRIPE_PRICE_IDS } from '@/lib/pricing';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_PRICE_HOBBY_MONTHLY =
-  process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwx10zEfO6BZMh7thtFU77';
-const STRIPE_PRICE_HOBBY_YEARLY =
-  process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwx20zEfO6BZMhbgpxL8TI';
-const STRIPE_PRICE_PRO_MONTHLY =
-  process.env.STRIPE_PRICE_PRO_MONTHLY ?? 'price_1Sgwx20zEfO6BZMh3ix7hivi';
-const STRIPE_PRICE_PRO_YEARLY =
-  process.env.STRIPE_PRICE_PRO_YEARLY ?? 'price_1Sgwx30zEfO6BZMhJXsduOyl';
-const STRIPE_PRICE_MAX_MONTHLY =
-  process.env.STRIPE_PRICE_MAX_MONTHLY ?? 'price_1Sgwx30zEfO6BZMhJqItFYKF';
-const STRIPE_PRICE_MAX_YEARLY =
-  process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW';
 
 if (!STRIPE_SECRET_KEY) {
   logger.error(
@@ -47,32 +36,13 @@ function getPriceIdForPlan(
   plan: 'hobby' | 'free' | 'pro' | 'max' | 'enterprise',
   billingInterval: 'monthly' | 'annual',
 ): string | null {
-  if (plan === 'enterprise') {
+  if (plan === 'enterprise' || plan === 'free') {
     return null;
   }
 
-  if (plan === 'hobby') {
-    if (billingInterval === 'monthly') {
-      return STRIPE_PRICE_HOBBY_MONTHLY ?? null;
-    }
-    if (billingInterval === 'annual') {
-      return STRIPE_PRICE_HOBBY_YEARLY ?? null;
-    }
-    return null;
-  }
-
-  if (plan === 'pro') {
-    if (billingInterval === 'monthly') {
-      return STRIPE_PRICE_PRO_MONTHLY ?? null;
-    }
-    return STRIPE_PRICE_PRO_YEARLY ?? null;
-  }
-
-  if (plan === 'max') {
-    if (billingInterval === 'monthly') {
-      return STRIPE_PRICE_MAX_MONTHLY ?? null;
-    }
-    return STRIPE_PRICE_MAX_YEARLY ?? null;
+  const planPrices = STRIPE_PRICE_IDS[plan];
+  if (planPrices) {
+    return planPrices[billingInterval] ?? null;
   }
 
   return null;
