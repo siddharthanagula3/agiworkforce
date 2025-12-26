@@ -169,10 +169,12 @@ pub async fn ocr_process_image(
     let lang = language.unwrap_or_else(|| "eng".to_string());
 
     let mut tess = Tesseract::new(None, Some(&lang))
-        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?
-        .set_image(&image_path)
-        .map_err(|e| format!("Failed to set image: {}", e))?
-        .set_page_seg_mode(PageSegMode::PsmAuto);
+        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
+
+    tess.set_image(&image_path)
+        .map_err(|e| format!("Failed to set image: {}", e))?;
+
+    tess.set_page_seg_mode(PageSegMode::PsmAuto);
 
     let text = tess
         .get_text()
@@ -433,10 +435,12 @@ pub async fn ocr_process_with_boxes(
     };
 
     let mut tess = Tesseract::new(None, Some(&lang))
-        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?
-        .set_image(&processing_path)
-        .map_err(|e| format!("Failed to set image: {}", e))?
-        .set_page_seg_mode(PageSegMode::PsmAuto);
+        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
+
+    tess.set_image(&processing_path)
+        .map_err(|e| format!("Failed to set image: {}", e))?;
+
+    tess.set_page_seg_mode(PageSegMode::PsmAuto);
 
     let text = tess
         .get_text()
