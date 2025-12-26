@@ -169,12 +169,10 @@ pub async fn ocr_process_image(
     let lang = language.unwrap_or_else(|| "eng".to_string());
 
     let mut tess = Tesseract::new(None, Some(&lang))
-        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
-
-    tess.set_image(&image_path)
-        .map_err(|e| format!("Failed to set image: {}", e))?;
-
-    tess.set_page_seg_mode(PageSegMode::PsmAuto);
+        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?
+        .set_image(&image_path)
+        .map_err(|e| format!("Failed to set image: {}", e))?
+        .set_page_seg_mode(PageSegMode::PsmAuto);
 
     let text = tess
         .get_text()
@@ -262,7 +260,8 @@ pub async fn ocr_process_region(
 
     let img = image::open(&image_path).map_err(|e| format!("Failed to load image: {}", e))?;
 
-    let cropped = image::imageops::crop_imm(&img.to_rgba8(), x, y, width, height);
+    let rgba = img.to_rgba8();
+    let cropped = image::imageops::crop_imm(&rgba, x, y, width, height);
 
     let temp_path = std::env::temp_dir().join(format!("ocr_temp_{}.png", Uuid::new_v4()));
     cropped
@@ -434,12 +433,10 @@ pub async fn ocr_process_with_boxes(
     };
 
     let mut tess = Tesseract::new(None, Some(&lang))
-        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
-
-    tess.set_image(&processing_path)
-        .map_err(|e| format!("Failed to set image: {}", e))?;
-
-    tess.set_page_seg_mode(PageSegMode::PsmAuto);
+        .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?
+        .set_image(&processing_path)
+        .map_err(|e| format!("Failed to set image: {}", e))?
+        .set_page_seg_mode(PageSegMode::PsmAuto);
 
     let text = tess
         .get_text()
