@@ -231,19 +231,28 @@ function PricingContent() {
 
                 <ul className="space-y-3 text-sm text-zinc-300 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> Free to use own APIs
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Local & Privacy:</strong> Local LLMs (Ollama)
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> Full Vision & OCR
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Code Execution:</strong> Generate Code
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> Browser Automation
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Projects & Knowledge:</strong> Single Workspace
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> 10 Concurrent Agents
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-emerald-400" /> $1/mo token credits
+                    <Check className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Analyze Images & Vision:</strong> Analyze Uploaded Images
+                    </span>
                   </li>
                 </ul>
                 <Button
@@ -280,19 +289,28 @@ function PricingContent() {
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Free to use own APIs
+                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Search the Web & Browser Control:</strong> Autonomous Browser Agent
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Full Vision & OCR
+                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Analyze Images & Vision:</strong> Real-time Screen Context
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> Browser Automation
+                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Projects & Knowledge:</strong> Unlimited RAG Projects
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> 10 Concurrent Agents
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400" /> $20/mo token credits
+                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Code Execution:</strong> Run Code in Terminal
+                    </span>
                   </li>
                 </ul>
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
@@ -331,22 +349,28 @@ function PricingContent() {
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> Free to use own APIs
+                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Computer Use & Automation:</strong> Full Desktop Automation
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> Full Vision & OCR
+                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Computer Use & Automation:</strong> Cross-App Workflows
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> Browser Automation
+                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Local & Privacy:</strong> Advanced Privacy Controls
+                    </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> 10 Concurrent Agents
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> Priority Support
-                  </li>
-                  <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-purple-400" /> $250/mo token credits
+                    <Check className="h-4 w-4 text-purple-400 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Projects & Knowledge:</strong> Extended Context Window
+                    </span>
                   </li>
                 </ul>
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
