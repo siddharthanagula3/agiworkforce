@@ -18,6 +18,10 @@ export const rateLimitConfigs = {
     limit: 5,
     window: '1 m', // 5 requests per minute
   },
+  'device-link': {
+    limit: 10,
+    window: '1 m', // 10 device codes per minute (prevents abuse)
+  },
   'device-poll': {
     limit: 10,
     window: '1 s', // 10 requests per second
@@ -31,8 +35,8 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 requests per minute
   },
   'sync-subscription': {
-    limit: 5,
-    window: '1 m', // 5 requests per minute
+    limit: 10,
+    window: '1 m', // 10 requests per minute (increased for payment success polling)
   },
   default: {
     limit: 100,
