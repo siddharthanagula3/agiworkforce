@@ -38,8 +38,8 @@ impl VisionAutomation {
         Ok(path.to_string_lossy().to_string())
     }
 
-    pub async fn find_text(&self, _query: &str, _fuzzy: bool) -> Result<Vec<(i32, i32, String)>> {
-        let _screenshot_path = self.capture_screenshot(None).await?;
+    pub async fn find_text(&self, query: &str, fuzzy: bool) -> Result<Vec<(i32, i32, String)>> {
+        let screenshot_path = self.capture_screenshot(None).await?;
 
         #[cfg(feature = "ocr")]
         {

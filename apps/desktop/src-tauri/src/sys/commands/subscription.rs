@@ -15,24 +15,27 @@ pub async fn subscribe_to_plan(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.inner().0.lock().await;
+    let service = {
+        let billing = state.inner().0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let customer_stripe_id: String = {
+        let db = db_state
+            .conn
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let db = db_state
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-    let customer_stripe_id: String = db
-        .query_row(
+        db.query_row(
             "SELECT stripe_customer_id FROM billing_customers WHERE id = ?1",
             rusqlite::params![&user_id],
             |row| row.get(0),
         )
-        .map_err(|e| format!("Customer not found: {}", e))?;
+        .map_err(|e| format!("Customer not found: {}", e))?
+    };
 
     let existing_subscription = service
         .get_active_subscription(&user_id)
@@ -70,11 +73,13 @@ pub async fn upgrade_plan(
     new_plan_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.inner().0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.inner().0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     let active_subscription = service
         .get_active_subscription(&user_id)
@@ -101,24 +106,27 @@ pub async fn cancel_subscription(
     state: State<'_, BillingStateWrapper>,
     db_state: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<(), String> {
-    let billing = state.inner().0.lock().await;
+    let service = {
+        let billing = state.inner().0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let subscription_customer_id: String = {
+        let db = db_state
+            .conn
+            .lock()
+            .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let db = db_state
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-    let subscription_customer_id: String = db
-        .query_row(
+        db.query_row(
             "SELECT customer_id FROM billing_subscriptions WHERE stripe_subscription_id = ?1",
             rusqlite::params![&subscription_id],
             |row| row.get(0),
         )
-        .map_err(|e| format!("Subscription not found: {}", e))?;
+        .map_err(|e| format!("Subscription not found: {}", e))?
+    };
 
     if subscription_customer_id != user_id {
         return Err("Subscription does not belong to this user".to_string());

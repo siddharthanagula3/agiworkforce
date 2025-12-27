@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { getMediaHistory } from '../../api/media';
 
 type MediaItem = {
   id: string;
@@ -14,13 +15,31 @@ type MediaItem = {
 
 export const MediaGallery: React.FC = () => {
   const [selected, setSelected] = React.useState<MediaItem | null>(null);
-  const [items] = React.useState<MediaItem[]>([]);
+  const [items, setItems] = React.useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // TODO: Fetch media items from API/database
-    // For now, show empty state
-    setIsLoading(false);
+    async function fetchHistory() {
+      try {
+        const history = await getMediaHistory();
+        const mapped: MediaItem[] = history.map((h) => ({
+          id: h.id,
+          type: h.type === 'video' ? 'video' : 'image',
+          title: h.title,
+          prompt: h.prompt,
+          status: h.status === 'processing' ? 'processing' : 'completed',
+          src: h.src,
+          createdAt: new Date(h.createdAt).toLocaleString(),
+        }));
+        setItems(mapped);
+      } catch (error) {
+        console.error('Failed to load media history:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchHistory();
   }, []);
 
   return (

@@ -3,7 +3,6 @@ use tauri::State;
 
 use crate::sys::commands::AppDatabase;
 
-
 #[cfg(feature = "ocr")]
 use rusqlite::OptionalExtension;
 #[cfg(feature = "ocr")]
@@ -91,8 +90,6 @@ fn preprocess_image(image_path: &str) -> Result<String, String> {
 }
 
 #[cfg(feature = "ocr")]
-
-
 #[cfg(feature = "ocr")]
 fn detect_languages(image_path: &str) -> Result<Vec<LanguageDetection>, String> {
     use tesseract::PageSegMode;
@@ -436,7 +433,8 @@ pub async fn ocr_process_with_boxes(
     let tess = Tesseract::new(None, Some(&lang))
         .map_err(|e| format!("Failed to initialize Tesseract: {}", e))?;
 
-    let mut tess = tess.set_image(&processing_path)
+    let mut tess = tess
+        .set_image(&processing_path)
         .map_err(|e| format!("Failed to set image: {}", e))?;
 
     tess.set_page_seg_mode(PageSegMode::PsmAuto);
