@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe';
 import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
@@ -166,5 +167,117 @@ export class SubscriptionService {
    */
   static getCreditAllocation(planTier: string): number {
     return PLAN_CREDITS[planTier.toLowerCase()] || 0;
+  }
+
+  /**
+   * Sync subscription from Stripe by email (Self-healing)
+   */
+  static async syncWithStripe(userId: string, email: string): Promise<SubscriptionInfo | null> {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) {
+      logger.warn('STRIPE_SECRET_KEY not set, skipping sync');
+      return null;
+    }
+
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
+    });
+
+    try {
+      logger.info({ userId, email }, 'Attempting self-healing subscription sync');
+
+      const customers = await stripe.customers.list({ email: email, limit: 1 });
+      if (customers.data.length === 0) {
+        logger.info({ email }, 'No Stripe customer found for email');
+        return null;
+      }
+
+      const customerId = customers.data[0].id;
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'active',
+        limit: 1,
+        expand: ['data.items.data.price'],
+      });
+
+      if (subscriptions.data.length === 0) {
+        logger.info({ customerId }, 'No active subscriptions found for customer');
+        return null;
+      }
+
+      const stripeSubscription = subscriptions.data[0];
+      const stripePriceId = stripeSubscription.items.data[0]?.price.id;
+
+      // Basic plan inference (fallback)
+      const planTier =
+        stripeSubscription.metadata?.plan_tier ||
+        (stripePriceId
+          ? stripePriceId.includes('Hobby')
+            ? 'hobby'
+            : stripePriceId.includes('Pro')
+              ? 'pro'
+              : stripePriceId.includes('Max')
+                ? 'max'
+                : 'pro'
+          : 'pro');
+
+      if (!stripePriceId) {
+        logger.warn({ subscriptionId: stripeSubscription.id }, 'No price ID found in subscription');
+        return null;
+      }
+
+      const supabase = getSupabaseClient();
+      const subData = {
+        user_id: userId,
+        stripe_customer_id: customerId,
+        stripe_subscription_id: stripeSubscription.id,
+        stripe_price_id: stripePriceId,
+        status: stripeSubscription.status,
+        plan_tier: planTier,
+        current_period_start: new Date(
+          stripeSubscription.current_period_start * 1000,
+        ).toISOString(),
+        current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
+        cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+        canceled_at: stripeSubscription.canceled_at
+          ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
+          : null,
+        updated_at: new Date().toISOString(),
+        stripe_coupon_id: stripeSubscription.discount?.coupon?.id || null,
+      };
+
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .upsert(subData, { onConflict: 'user_id' })
+        .select()
+        .single();
+
+      if (error) {
+        logger.error({ error, userId }, 'Failed to upsert subscription during sync');
+        throw error;
+      }
+
+      // Allocate credits if needed
+      await this.allocateCreditsForPeriod(
+        userId,
+        data.id,
+        planTier,
+        new Date(subData.current_period_start),
+        new Date(subData.current_period_end),
+      );
+
+      return {
+        id: data.id,
+        user_id: data.user_id,
+        plan_tier: data.plan_tier,
+        status: data.status,
+        current_period_start: new Date(data.current_period_start),
+        current_period_end: new Date(data.current_period_end),
+        stripe_subscription_id: data.stripe_subscription_id,
+      };
+    } catch (error) {
+      logger.error({ error, userId }, 'Error executing syncWithStripe');
+      return null;
+    }
   }
 }
