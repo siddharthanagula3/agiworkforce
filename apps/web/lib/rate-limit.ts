@@ -59,6 +59,7 @@ function createRateLimiter(key: RateLimitKey) {
         smembers: async () => [],
         srem: async () => 0,
         eval: async () => [Date.now(), 0] as [number, number],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
       limiter: Ratelimit.slidingWindow(config.limit, config.window),
       analytics: false,

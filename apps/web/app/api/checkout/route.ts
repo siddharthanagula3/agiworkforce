@@ -104,7 +104,19 @@ async function handleCheckout(request: NextRequest) {
       },
     };
 
-    const session = await stripe.checkout.sessions.create({
+    let customerId: string | undefined;
+
+    if (user.email) {
+      const customers = await stripe.customers.list({
+        email: user.email,
+        limit: 1,
+      });
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+      }
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       line_items: [
         {
@@ -116,14 +128,26 @@ async function handleCheckout(request: NextRequest) {
       allow_promotion_codes: plan === 'hobby',
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
-      customer_email: user.email ?? undefined,
       client_reference_id: user.id,
       metadata: {
         supabase_user_id: user.id,
         plan_tier: plan,
         billing_interval: billingInterval,
       },
-    });
+    };
+
+    if (customerId) {
+      sessionParams.customer = customerId;
+      // When providing an existing customer, updating the email is optional but good practice if needed.
+      // However, Checkout uses the existing customer.
+      sessionParams.customer_update = {
+        address: 'auto',
+      };
+    } else {
+      sessionParams.customer_email = user.email ?? undefined;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     logger.info(
       {
