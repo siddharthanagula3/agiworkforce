@@ -41,6 +41,9 @@ vi.mock('stripe', () => {
           })),
         },
       },
+      customers: {
+        list: vi.fn(() => ({ data: [] })),
+      },
     })),
     errors: {
       StripeError: class StripeError extends Error {
