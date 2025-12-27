@@ -5,10 +5,17 @@ import { randomBytes } from 'crypto';
 import { getEnv, requireEnv } from '@/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 async function handleDeviceLink(request: NextRequest) {
+  // Rate limiting - prevent abuse of device code generation
+  const rateLimitResponse = await withRateLimit(request, 'device-link');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     // Parse and validate request body
     let body: unknown;
