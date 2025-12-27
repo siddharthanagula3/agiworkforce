@@ -49,7 +49,50 @@ async function handlePortal(request: NextRequest) {
     .eq('user_id', user.id)
     .single();
 
-  if (error || !subscription) {
+  // Self-healing: If no local subscription, try to find in Stripe by email
+  if (!subscription) {
+    if (!user.email) {
+      throw createError.validation('User has no email address');
+    }
+
+    try {
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (customers.data.length > 0) {
+        const customerId = customers.data[0].id;
+
+        // Found customer, allow portal access
+        // Ideally we should also trigger a sync here to fix the local state
+        // We'll proceed with creating the session using this ID
+        const origin = getOrigin(request);
+        const session = await stripe.billingPortal.sessions.create({
+          customer: customerId,
+          return_url: `${origin}/pricing`,
+        });
+
+        logger.info(
+          {
+            userId: user.id,
+            customerId: customerId,
+            sessionId: session.id,
+          },
+          'Portal session created via email lookup (self-healing)',
+        );
+
+        return NextResponse.json({ url: session.url }, { status: 200 });
+      } else {
+        throw createError.notFound('No subscription or customer found in Stripe');
+      }
+    } catch (err) {
+      // If catching our own throw or stripe error, rethrow or log
+      if (err instanceof Error && err.message.includes('No subscription')) {
+        throw err;
+      }
+      logger.error({ error: err, userId: user.id }, 'Self-healing portal lookup failed');
+      throw createError.notFound('No subscription found.');
+    }
+  }
+
+  if (error) {
     throw createError.notFound('No subscription found.');
   }
 
