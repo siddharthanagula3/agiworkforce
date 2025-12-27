@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
+import { PRICING_CONFIG } from '@/lib/pricing';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -109,49 +110,87 @@ async function handleSyncSubscription(request: NextRequest) {
       throw createError.internal('Could not retrieve price ID from Stripe subscription');
     }
 
-    // Import this at top, but for now assuming we can use it or fallback
-    // We need to determine plan_tier.
-    // Since I can't easily add import in this same chunk without breaking code flow, I will just hardcode the simplistic logic or rely on metadata.
-    const planTier = stripeSubscription.metadata?.plan_tier || 'pro'; // Fallback to pro if unknown? Or 'hobby' if price matches?
-    // Ideally we should use PRICING_CONFIG.getPlanFromPriceId(stripePriceId) but that requires import.
-    // I will use metadata as primary source.
+    // Determine plan tier, preferring explicit metadata but falling back to price mapping
+    const { getPlanFromPriceId } = PRICING_CONFIG;
+    const planTier =
+      stripeSubscription.metadata?.plan_tier ||
+      (stripePriceId ? getPlanFromPriceId(stripePriceId) : null) ||
+      'pro';
 
-    // Upsert Supabase subscription
-    const { error: updateError } = await supabaseAdmin.from('subscriptions').upsert(
-      {
-        user_id: user.id,
-        stripe_customer_id:
-          typeof stripeSubscription.customer === 'string'
-            ? stripeSubscription.customer
-            : stripeSubscription.customer.id,
-        stripe_subscription_id: stripeSubscription.id,
-        stripe_price_id: stripePriceId,
-        status: stripeSubscription.status,
-        plan_tier: planTier,
-        current_period_start: new Date(
-          stripeSubscription.current_period_start * 1000,
-        ).toISOString(),
-        current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
-        cancel_at_period_end: stripeSubscription.cancel_at_period_end,
-        canceled_at: stripeSubscription.canceled_at
-          ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
-          : null,
-        updated_at: new Date().toISOString(),
-        stripe_coupon_id: stripeSubscription.discount?.coupon?.id || null,
-      },
-      { onConflict: 'user_id' },
-    );
+    const baseSubscriptionData = {
+      user_id: user.id,
+      stripe_customer_id:
+        typeof stripeSubscription.customer === 'string'
+          ? stripeSubscription.customer
+          : stripeSubscription.customer.id,
+      stripe_subscription_id: stripeSubscription.id,
+      stripe_price_id: stripePriceId,
+      status: stripeSubscription.status,
+      plan_tier: planTier,
+      current_period_start: new Date(stripeSubscription.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
+      cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+      canceled_at: stripeSubscription.canceled_at
+        ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
+        : null,
+      updated_at: new Date().toISOString(),
+      stripe_coupon_id: stripeSubscription.discount?.coupon?.id || null,
+    } as const;
+
+    // Upsert Supabase subscription with graceful fallback if some columns are missing
+    let { error: updateError } = await supabaseAdmin
+      .from('subscriptions')
+      .upsert(baseSubscriptionData, { onConflict: 'user_id' });
 
     if (updateError) {
-      logger.error(
-        {
-          userId: user.id,
-          subscriptionId: stripeSubscription.id,
-          error: updateError,
-        },
-        'Error updating subscription',
-      );
-      throw createError.internal('Failed to update subscription');
+      const isUndefinedColumnError =
+        typeof updateError === 'object' && updateError !== null && 'code' in updateError
+          ? (updateError as { code?: string }).code === '42703'
+          : false;
+
+      if (isUndefinedColumnError) {
+        // Some environments may not yet have optional columns like stripe_coupon_id.
+        // Retry with a minimal, backwards-compatible payload.
+        logger.warn(
+          {
+            userId: user.id,
+            subscriptionId: stripeSubscription.id,
+            error: updateError,
+          },
+          'Subscriptions table missing one or more columns; retrying upsert with minimal fields',
+        );
+
+        const minimalData = {
+          user_id: baseSubscriptionData.user_id,
+          stripe_customer_id: baseSubscriptionData.stripe_customer_id,
+          stripe_subscription_id: baseSubscriptionData.stripe_subscription_id,
+          stripe_price_id: baseSubscriptionData.stripe_price_id,
+          status: baseSubscriptionData.status,
+          plan_tier: baseSubscriptionData.plan_tier,
+          current_period_start: baseSubscriptionData.current_period_start,
+          current_period_end: baseSubscriptionData.current_period_end,
+          cancel_at_period_end: baseSubscriptionData.cancel_at_period_end,
+          canceled_at: baseSubscriptionData.canceled_at,
+          updated_at: baseSubscriptionData.updated_at,
+        };
+
+        const fallbackResult = await supabaseAdmin
+          .from('subscriptions')
+          .upsert(minimalData, { onConflict: 'user_id' });
+        updateError = fallbackResult.error;
+      }
+
+      if (updateError) {
+        logger.error(
+          {
+            userId: user.id,
+            subscriptionId: stripeSubscription.id,
+            error: updateError,
+          },
+          'Error updating subscription',
+        );
+        throw createError.internal('Failed to update subscription');
+      }
     }
 
     // Get credit balance

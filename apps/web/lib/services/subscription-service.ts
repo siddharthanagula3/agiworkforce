@@ -246,11 +246,49 @@ export class SubscriptionService {
         stripe_coupon_id: stripeSubscription.discount?.coupon?.id || null,
       };
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('subscriptions')
         .upsert(subData, { onConflict: 'user_id' })
         .select()
         .single();
+
+      if (error) {
+        const isUndefinedColumnError =
+          typeof error === 'object' && error !== null && 'code' in error
+            ? (error as { code?: string }).code === '42703'
+            : false;
+
+        if (isUndefinedColumnError) {
+          logger.warn(
+            { userId, error },
+            'Subscriptions table missing columns; retrying sync with minimal fields',
+          );
+
+          const minimalData = {
+            user_id: subData.user_id,
+            stripe_customer_id: subData.stripe_customer_id,
+            stripe_subscription_id: subData.stripe_subscription_id,
+            stripe_price_id: subData.stripe_price_id,
+            status: subData.status,
+            plan_tier: subData.plan_tier,
+            current_period_start: subData.current_period_start,
+            current_period_end: subData.current_period_end,
+            cancel_at_period_end: subData.cancel_at_period_end,
+            canceled_at: subData.canceled_at,
+            updated_at: subData.updated_at,
+            // Exclude stripe_coupon_id
+          };
+
+          const fallbackResult = await supabase
+            .from('subscriptions')
+            .upsert(minimalData, { onConflict: 'user_id' })
+            .select()
+            .single();
+
+          data = fallbackResult.data;
+          error = fallbackResult.error;
+        }
+      }
 
       if (error) {
         logger.error({ error, userId }, 'Failed to upsert subscription during sync');
