@@ -3,14 +3,14 @@ use crate::core::router::LLMRouter;
 use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::RwLock;
 
 pub struct TaskPlanner {
-    router: Arc<TokioMutex<LLMRouter>>,
+    router: Arc<RwLock<LLMRouter>>,
 }
 
 impl TaskPlanner {
-    pub fn new(router: Arc<TokioMutex<LLMRouter>>) -> Result<Self> {
+    pub fn new(router: Arc<RwLock<LLMRouter>>) -> Result<Self> {
         Ok(Self { router })
     }
 
@@ -95,7 +95,7 @@ The user wants to open Notepad and type "Hello".
             description
         );
 
-        let response = match self.router.lock().await.send_message(&prompt, None).await {
+        let response = match self.router.read().await.send_message(&prompt, None).await {
             Ok(res) => res,
             Err(e) => {
                 tracing::warn!(

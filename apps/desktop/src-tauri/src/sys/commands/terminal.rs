@@ -57,6 +57,13 @@ pub async fn execute_terminal_command(
         "base64 -d |",
         "> /etc/passwd",
         "> /etc/shadow",
+        "mv /",
+        "cp /",
+        "> /boot",
+        "> /proc",
+        "> /sys",
+        "nc -e",
+        "bash -i >&",
     ];
 
     for pattern in &dangerous_patterns {
@@ -66,6 +73,20 @@ pub async fn execute_terminal_command(
                 "Command blocked for security: contains dangerous pattern '{}'",
                 pattern
             ));
+        }
+    }
+
+    let suspicious_patterns = [
+        "wget", "curl", "base64", "nc", "netcat", "ssh", "scp", "sftp",
+    ];
+
+    for pattern in &suspicious_patterns {
+        if normalized.contains(pattern) {
+            tracing::warn!(
+                "Executing suspicious command pattern '{}': {}",
+                pattern,
+                command
+            );
         }
     }
 

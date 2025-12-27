@@ -84,7 +84,7 @@ impl ToolRegistry {
     pub fn register_all_tools(
         &self,
         _automation: Arc<AutomationService>,
-        _router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        _router: Arc<tokio::sync::RwLock<LLMRouter>>,
     ) -> Result<()> {
         self.register_tool(Tool {
             id: "file_read".to_string(),

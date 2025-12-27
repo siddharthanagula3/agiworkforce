@@ -1,18 +1,17 @@
 use super::llm::LLMState;
 
-use crate::data::db::models::{
-    Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, MessageRole,
-    ProviderCostBreakdown,
-};
+use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 
 use tracing::info;
+
+pub mod types;
+pub use types::*;
 
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
 
@@ -67,111 +66,6 @@ impl AppDatabase {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateConversationRequest {
-    pub title: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateMessageRequest {
-    pub conversation_id: i64,
-    pub role: MessageRole,
-    pub content: String,
-    pub tokens: Option<i32>,
-    pub cost: Option<f64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UpdateConversationRequest {
-    pub title: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChatSendMessageRequest {
-    #[serde(default, alias = "conversationId")]
-    pub conversation_id: Option<i64>,
-    pub content: String,
-    #[serde(default)]
-    pub provider: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default, alias = "providerOverride")]
-    pub provider_override: Option<String>,
-    #[serde(default, alias = "modelOverride")]
-    pub model_override: Option<String>,
-    #[serde(default)]
-    pub strategy: Option<String>,
-    #[serde(default)]
-    pub stream: Option<bool>,
-    #[serde(default, alias = "enableTools")]
-    pub enable_tools: Option<bool>,
-    #[serde(default, alias = "conversationMode")]
-    pub conversation_mode: Option<String>,
-    #[serde(default, alias = "workflowHash")]
-    pub workflow_hash: Option<String>,
-    #[serde(default, alias = "taskMetadata")]
-    pub task_metadata: Option<TaskMetadata>,
-
-    #[serde(default, alias = "focusMode")]
-    pub focus_mode: Option<String>,
-
-    #[serde(default)]
-    pub attachments: Option<Vec<ChatAttachment>>,
-    #[serde(default, alias = "thinkingMode")]
-    pub thinking_mode: Option<bool>,
-
-    #[serde(default, alias = "enableAgentMode")]
-    pub enable_agent_mode: Option<bool>,
-    #[serde(default, alias = "preferCloudCredits")]
-    pub prefer_cloud_credits: bool, // Prefer cloud credits over own API keys
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatAttachment {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub attachment_type: String,
-    pub name: String,
-    #[serde(default)]
-    pub mime_type: Option<String>,
-
-    #[serde(default)]
-    pub content: Option<String>,
-
-    #[serde(default)]
-    pub path: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskMetadata {
-    #[serde(default)]
-    pub intents: Vec<String>,
-    #[serde(default)]
-    pub requires_vision: bool,
-    #[serde(default)]
-    pub token_estimate: Option<u32>,
-    #[serde(default)]
-    pub cost_priority: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ChatSendMessageResponse {
-    pub conversation: Conversation,
-    pub user_message: Message,
-    pub assistant_message: Message,
-    pub stats: ConversationStats,
-    pub last_message: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ConversationStats {
-    pub message_count: usize,
-    pub total_tokens: i32,
-    pub total_cost: f64,
-}
-
 #[tauri::command]
 pub fn chat_create_conversation(
     db: State<'_, AppDatabase>,
@@ -187,16 +81,16 @@ pub fn chat_create_conversation(
 
     let conn = db.connection()?;
     let id = repository::create_conversation(&conn, trimmed_title.to_string())
-        .map_err(|e| format!("Failed to create conversation: {}", e))?;
+        .map_err(|e| format!("Failed to create conversation: {e}"))?;
     repository::get_conversation(&conn, id)
-        .map_err(|e| format!("Failed to retrieve conversation {}: {}", id, e))
+        .map_err(|e| format!("Failed to retrieve conversation {}: {e}", id))
 }
 
 #[tauri::command]
 pub fn chat_get_conversations(db: State<'_, AppDatabase>) -> Result<Vec<Conversation>, String> {
     let conn = db.connection()?;
     repository::list_conversations(&conn, 1000, 0)
-        .map_err(|e| format!("Failed to list conversations: {}", e))
+        .map_err(|e| format!("Failed to list conversations: {e}"))
 }
 
 #[tauri::command]
@@ -210,7 +104,7 @@ pub fn chat_get_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<Conv
 
     let conn = db.connection()?;
     repository::get_conversation(&conn, id)
-        .map_err(|e| format!("Failed to get conversation {}: {}", id, e))
+        .map_err(|e| format!("Failed to get conversation {}: {e}", id))
 }
 
 #[tauri::command]
@@ -236,7 +130,7 @@ pub fn chat_update_conversation(
 
     let conn = db.connection()?;
     repository::update_conversation_title(&conn, id, trimmed_title.to_string())
-        .map_err(|e| format!("Failed to update conversation {}: {}", id, e))
+        .map_err(|e| format!("Failed to update conversation {}: {e}", id))
 }
 
 #[tauri::command]
@@ -250,7 +144,7 @@ pub fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<(
 
     let conn = db.connection()?;
     repository::delete_conversation(&conn, id)
-        .map_err(|e| format!("Failed to delete conversation {}: {}", id, e))
+        .map_err(|e| format!("Failed to delete conversation {}: {e}", id))
 }
 
 #[tauri::command]
@@ -307,12 +201,12 @@ pub fn chat_create_message(
 
     let id = repository::create_message(&conn, &message).map_err(|e| {
         format!(
-            "Failed to create message in conversation {}: {}",
-            request.conversation_id, e
+            "Failed to create message in conversation {}: {e}",
+            request.conversation_id
         )
     })?;
     repository::get_message(&conn, id)
-        .map_err(|e| format!("Failed to retrieve message {}: {}", id, e))
+        .map_err(|e| format!("Failed to retrieve message {}: {e}", id))
 }
 
 #[tauri::command]
@@ -330,8 +224,8 @@ pub fn chat_get_messages(
     let conn = db.connection()?;
     repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
-            "Failed to list messages for conversation {}: {}",
-            conversation_id, e
+            "Failed to list messages for conversation {}: {e}",
+            conversation_id
         )
     })
 }
@@ -356,7 +250,7 @@ pub fn chat_update_message(
 
     let conn = db.connection()?;
     repository::update_message_content(&conn, id, trimmed_content.to_string())
-        .map_err(|e| format!("Failed to update message {}: {}", id, e))
+        .map_err(|e| format!("Failed to update message {}: {e}", id))
 }
 
 #[tauri::command]
@@ -367,7 +261,7 @@ pub fn chat_delete_message(db: State<'_, AppDatabase>, id: i64) -> Result<(), St
 
     let conn = db.connection()?;
     repository::delete_message(&conn, id)
-        .map_err(|e| format!("Failed to delete message {}: {}", id, e))
+        .map_err(|e| format!("Failed to delete message {}: {e}", id))
 }
 
 #[tauri::command]
@@ -385,8 +279,8 @@ pub fn chat_get_conversation_stats(
     let conn = db.connection()?;
     let messages = repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
-            "Failed to list messages for conversation {}: {}",
-            conversation_id, e
+            "Failed to list messages for conversation {}: {e}",
+            conversation_id
         )
     })?;
 
@@ -432,7 +326,7 @@ pub async fn chat_send_message(
     {
         let conn = _db
             .connection()
-            .map_err(|e| format!("Budget check failed: {}", e))?;
+            .map_err(|e| format!("Budget check failed: {e}"))?;
 
         if let Ok(budget_setting) = repository::get_setting(&conn, "billing.monthly_budget") {
             if let Ok(budget_limit) = budget_setting.value.parse::<f64>() {
@@ -441,9 +335,9 @@ pub async fn chat_send_message(
                     let start_of_month = now
                         .date_naive()
                         .with_day(1)
-                        .unwrap()
+                        .ok_or_else(|| "Failed to determine start of month".to_string())?
                         .and_hms_opt(0, 0, 0)
-                        .unwrap()
+                        .ok_or_else(|| "Failed to set time for start of month".to_string())?
                         .and_utc();
 
                     let current_usage =
@@ -452,7 +346,8 @@ pub async fn chat_send_message(
                     if current_usage >= budget_limit {
                         return Err(format!(
                             "Monthly budget exceeded. Usage: ${:.2}, Limit: ${:.2}. Please update settings.",
-                            current_usage, budget_limit
+                            current_usage,
+                            budget_limit
                         ));
                     }
                 }
@@ -512,7 +407,7 @@ pub async fn chat_send_message(
                     last_message: None,
                 });
             }
-            Err(e) => return Err(format!("Orchestration failed: {}", e)),
+            Err(e) => return Err(format!("Orchestration failed: {e}")),
         }
     }
 
@@ -565,13 +460,13 @@ pub async fn chat_send_message(
         let conn = db.connection()?;
         if let Some(conv_id) = request.conversation_id {
             repository::get_conversation(&conn, conv_id)
-                .map_err(|e| format!("Failed to get conversation: {}", e))?
+                .map_err(|e| format!("Failed to get conversation: {e}"))?
         } else {
             let title = request.content.chars().take(50).collect::<String>();
             let id = repository::create_conversation(&conn, title)
-                .map_err(|e| format!("Failed to create conversation: {}", e))?;
+                .map_err(|e| format!("Failed to create conversation: {e}"))?;
             repository::get_conversation(&conn, id)
-                .map_err(|e| format!("Failed to get new conversation: {}", e))?
+                .map_err(|e| format!("Failed to get new conversation: {e}"))?
         }
     };
 
@@ -603,15 +498,15 @@ pub async fn chat_send_message(
             created_at: Utc::now(),
         };
         let id = repository::create_message(&conn, &msg)
-            .map_err(|e| format!("Failed to save user message: {}", e))?;
+            .map_err(|e| format!("Failed to save user message: {e}"))?;
         repository::get_message(&conn, id)
-            .map_err(|e| format!("Failed to retrieve user message: {}", e))?
+            .map_err(|e| format!("Failed to retrieve user message: {e}"))?
     };
 
     let history = {
         let conn = db.connection()?;
         repository::list_messages(&conn, conversation.id)
-            .map_err(|e| format!("Failed to load message history: {}", e))?
+            .map_err(|e| format!("Failed to load message history: {e}"))?
     };
 
     let llm_messages: Vec<ChatMessage> = history
@@ -643,7 +538,7 @@ pub async fn chat_send_message(
     let stream_mode = request.stream.unwrap_or(false);
 
     if stream_mode {
-        let router = _llm_state.router.lock().await;
+        let router = _llm_state.router.read().await;
 
         reset_stop_flag();
 
@@ -688,7 +583,7 @@ pub async fn chat_send_message(
                             );
                         }
                         Err(e) => {
-                            info!("[Chat] Stream error: {}", e);
+                            info!("[Chat] Stream error: {e}");
                             break;
                         }
                     }
@@ -719,9 +614,9 @@ pub async fn chat_send_message(
                         created_at: Utc::now(),
                     };
                     let id = repository::create_message(&conn, &msg)
-                        .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+                        .map_err(|e| format!("Failed to save assistant message: {e}"))?;
                     repository::get_message(&conn, id)
-                        .map_err(|e| format!("Failed to retrieve assistant message: {}", e))?
+                        .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
                 };
 
                 let _ = app_handle.emit(
@@ -735,7 +630,7 @@ pub async fn chat_send_message(
                 let stats = {
                     let conn = db.connection()?;
                     let messages = repository::list_messages(&conn, conversation.id)
-                        .map_err(|e| format!("Failed to compute stats: {}", e))?;
+                        .map_err(|e| format!("Failed to compute stats: {e}"))?;
                     ConversationStats {
                         message_count: messages.len(),
                         total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
@@ -752,13 +647,13 @@ pub async fn chat_send_message(
                 });
             }
             Err(e) => {
-                return Err(format!("Streaming failed: {}", e));
+                return Err(format!("Streaming failed: {e}"));
             }
         }
     }
 
     let candidates = {
-        let router = _llm_state.router.lock().await;
+        let router = _llm_state.router.read().await;
         router.candidates(&llm_request, &preferences)
     };
 
@@ -772,7 +667,7 @@ pub async fn chat_send_message(
     let mut last_error: Option<String> = None;
     for candidate in candidates {
         let result = {
-            let router = _llm_state.router.lock().await;
+            let router = _llm_state.router.read().await;
             router.invoke_candidate(&candidate, &llm_request).await
         };
 
@@ -792,15 +687,15 @@ pub async fn chat_send_message(
                         created_at: Utc::now(),
                     };
                     let id = repository::create_message(&conn, &msg)
-                        .map_err(|e| format!("Failed to save assistant message: {}", e))?;
+                        .map_err(|e| format!("Failed to save assistant message: {e}"))?;
                     repository::get_message(&conn, id)
-                        .map_err(|e| format!("Failed to retrieve assistant message: {}", e))?
+                        .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
                 };
 
                 let stats = {
                     let conn = db.connection()?;
                     let messages = repository::list_messages(&conn, conversation.id)
-                        .map_err(|e| format!("Failed to compute stats: {}", e))?;
+                        .map_err(|e| format!("Failed to compute stats: {e}"))?;
                     ConversationStats {
                         message_count: messages.len(),
                         total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
@@ -817,23 +712,15 @@ pub async fn chat_send_message(
                 });
             }
             Err(e) => {
-                last_error = Some(format!("{}: {}", candidate.provider.as_string(), e));
+                last_error = Some(format!("{}: {e}", candidate.provider.as_string()));
             }
         }
     }
 
     Err(format!(
-        "All providers failed. Last error: {}",
+        "All providers failed. Last error:{}",
         last_error.unwrap_or_else(|| "Unknown error".to_string())
     ))
-}
-
-#[derive(Debug, Serialize)]
-pub struct CostOverviewResponse {
-    pub today_total: f64,
-    pub month_total: f64,
-    pub monthly_budget: Option<f64>,
-    pub remaining_budget: Option<f64>,
 }
 
 #[tauri::command]
@@ -851,9 +738,9 @@ pub fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverview
         .ok_or_else(|| "Failed to compute start-of-month".to_string())?;
 
     let today_total = repository::sum_cost_since(&conn, today_start)
-        .map_err(|e| format!("Failed to compute today's cost: {}", e))?;
+        .map_err(|e| format!("Failed to compute today's cost: {e}"))?;
     let month_total = repository::sum_cost_since(&conn, month_start)
-        .map_err(|e| format!("Failed to compute monthly cost: {}", e))?;
+        .map_err(|e| format!("Failed to compute monthly cost: {e}"))?;
 
     let monthly_budget = repository::get_setting(&conn, "billing.monthly_budget")
         .ok()
@@ -866,13 +753,6 @@ pub fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverview
         monthly_budget,
         remaining_budget,
     })
-}
-
-#[derive(Debug, Serialize)]
-pub struct CostAnalyticsResponse {
-    pub timeseries: Vec<CostTimeseriesPoint>,
-    pub providers: Vec<ProviderCostBreakdown>,
-    pub top_conversations: Vec<ConversationCostBreakdown>,
 }
 
 #[tauri::command]
@@ -918,10 +798,10 @@ pub fn chat_get_cost_analytics(
     };
 
     let timeseries = repository::list_cost_timeseries(&conn, window, provider_ref, model_ref)
-        .map_err(|e| format!("Failed to load cost timeseries: {}", e))?;
+        .map_err(|e| format!("Failed to load cost timeseries: {e}"))?;
     let providers =
         repository::list_cost_by_provider(&conn, Some(start), Some(end), provider_ref, model_ref)
-            .map_err(|e| format!("Failed to load provider breakdown: {}", e))?;
+            .map_err(|e| format!("Failed to load provider breakdown: {e}"))?;
     let top_conversations = repository::list_top_conversations_by_cost_filtered(
         &conn,
         10,
@@ -930,7 +810,7 @@ pub fn chat_get_cost_analytics(
         provider_ref,
         model_ref,
     )
-    .map_err(|e| format!("Failed to load top conversations: {}", e))?;
+    .map_err(|e| format!("Failed to load top conversations: {e}"))?;
 
     Ok(CostAnalyticsResponse {
         timeseries,
@@ -968,9 +848,9 @@ pub fn chat_set_monthly_budget(
             format!("{:.2}", value),
             false,
         )
-        .map_err(|e| format!("Failed to save monthly budget: {}", e))?,
+        .map_err(|e| format!("Failed to save monthly budget: {e}"))?,
         None => repository::delete_setting(&conn, "billing.monthly_budget")
-            .map_err(|e| format!("Failed to clear monthly budget: {}", e))?,
+            .map_err(|e| format!("Failed to clear monthly budget: {e}"))?,
     }
 
     Ok(())

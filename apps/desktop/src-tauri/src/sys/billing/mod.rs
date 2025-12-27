@@ -1,6 +1,6 @@
+use anyhow::Result;
 #[cfg(feature = "billing")]
 use rusqlite::Connection;
-use anyhow::Result;
 
 pub mod models;
 #[cfg(feature = "billing")]

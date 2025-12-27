@@ -182,7 +182,10 @@ impl WebhookHandler {
 
             let customer_db_id: Result<String, rusqlite::Error> = db.query_row(
                 "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
-                rusqlite::params![subscription.customer.to_string()],
+                rusqlite::params![match &subscription.customer {
+                    stripe::Expandable::Id(id) => id.to_string(),
+                    stripe::Expandable::Object(c) => c.id.to_string(),
+                }],
                 |row| row.get(0),
             );
 
@@ -210,8 +213,7 @@ impl WebhookHandler {
                         subscription.status.to_string(),
                         subscription.current_period_start,
                         subscription.current_period_end,
-                        subscription.cancel_at_period_end.unwrap_or(false),
-                        subscription.cancel_at,
+                                                subscription.cancel_at_period_end,                        subscription.cancel_at,
                         subscription.canceled_at,
                         subscription.trial_start,
                         subscription.trial_end,
@@ -227,7 +229,10 @@ impl WebhookHandler {
 
                 tracing::info!("Subscription created: {}", subscription.id);
             } else {
-                tracing::warn!("Customer not found in database: {}", subscription.customer);
+                tracing::warn!(
+                    "Customer not found in database: {:?}",
+                    subscription.customer
+                );
             }
         }
 
@@ -257,7 +262,7 @@ impl WebhookHandler {
                     subscription.status.to_string(),
                     subscription.current_period_start,
                     subscription.current_period_end,
-                    subscription.cancel_at_period_end.unwrap_or(false),
+                    subscription.cancel_at_period_end,
                     subscription.cancel_at,
                     subscription.canceled_at,
                     now,

@@ -18,7 +18,7 @@ pub struct AGIExecutor {
     tool_registry: Arc<ToolRegistry>,
     _resource_manager: Arc<ResourceManager>,
     automation: Arc<AutomationService>,
-    router: Arc<tokio::sync::Mutex<LLMRouter>>,
+    router: Arc<tokio::sync::RwLock<LLMRouter>>,
     app_handle: Option<tauri::AppHandle>,
     tool_cache: Arc<ToolResultCache>,
     process_reasoning: Option<Arc<ProcessReasoning>>,
@@ -31,7 +31,7 @@ impl AGIExecutor {
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
         automation: Arc<AutomationService>,
-        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        router: Arc<tokio::sync::RwLock<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         Ok(Self {
@@ -51,7 +51,7 @@ impl AGIExecutor {
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
         automation: Arc<AutomationService>,
-        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        router: Arc<tokio::sync::RwLock<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
         process_reasoning: Arc<ProcessReasoning>,
         outcome_tracker: Arc<OutcomeTracker>,
@@ -73,7 +73,7 @@ impl AGIExecutor {
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
         automation: Arc<AutomationService>,
-        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        router: Arc<tokio::sync::RwLock<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
         cache_size_bytes: usize,
     ) -> Result<Self> {
@@ -847,7 +847,7 @@ impl AGIExecutor {
                     thinking_mode: None,
                 };
 
-                let router = self.router.lock().await;
+                let router = self.router.read().await;
                 let candidates = router.candidates(&request, &preferences);
 
                 if !candidates.is_empty() {

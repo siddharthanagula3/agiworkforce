@@ -6,11 +6,15 @@ use crate::integrations::api_integrations::veo3::{
     Veo3Client, VideoGenerationRequest, VideoResolution, VideoStatus,
 };
 use crate::integrations::api_integrations::{APIError, RequestConfig};
+use chrono::Utc;
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::time::Instant;
+use tauri::Manager;
 
 const KEYRING_SERVICE: &str = "AGIWorkforce";
+const HISTORY_FILE: &str = "media_history.json";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,8 +78,27 @@ pub struct MediaVideoResponse {
     pub latency_ms: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaHistoryItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub type_: String, // "image" or "video"
+    pub title: String,
+    pub prompt: String,
+    pub status: String, // "completed" or "processing"
+    pub src: Option<String>,
+    pub created_at: String, // ISO string
+}
+
+#[tauri::command]
+pub async fn media_get_history(app: tauri::AppHandle) -> Result<Vec<MediaHistoryItem>, String> {
+    load_history(&app).map_err(|e| format!("Failed to load history: {}", e))
+}
+
 #[tauri::command]
 pub async fn media_generate_image(
+    app: tauri::AppHandle,
     request: MediaImageRequest,
 ) -> Result<MediaImageResponse, String> {
     let provider = map_image_provider(request.provider.as_deref());
@@ -126,6 +149,23 @@ pub async fn media_generate_image(
         .map_err(|e| format!("Image generation failed: {}", e))?;
     let latency_ms = started.elapsed().as_millis() as u64;
 
+    // Save to history
+    let mut history = load_history(&app).unwrap_or_default();
+    let now = Utc::now().to_rfc3339();
+
+    for img in &response.images {
+        history.push(MediaHistoryItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            type_: "image".to_string(),
+            title: request.prompt.chars().take(30).collect::<String>(),
+            prompt: request.prompt.clone(),
+            status: "completed".to_string(),
+            src: img.url.clone(),
+            created_at: now.clone(),
+        });
+    }
+    let _ = save_history(&app, &history);
+
     Ok(MediaImageResponse {
         images: response.images,
         provider: provider_str.to_string(),
@@ -139,6 +179,7 @@ pub async fn media_generate_image(
 
 #[tauri::command]
 pub async fn media_generate_video(
+    app: tauri::AppHandle,
     request: MediaVideoRequest,
 ) -> Result<MediaVideoResponse, String> {
     if let Some(plan) = request.plan.as_deref() {
@@ -190,6 +231,21 @@ pub async fn media_generate_video(
 
     let latency_ms = started.elapsed().as_millis() as u64;
 
+    // Save to history
+    let mut history = load_history(&app).unwrap_or_default();
+    let now = Utc::now().to_rfc3339();
+
+    history.push(MediaHistoryItem {
+        id: final_response.id.clone(),
+        type_: "video".to_string(),
+        title: request.prompt.chars().take(30).collect::<String>(),
+        prompt: request.prompt.clone(),
+        status: "completed".to_string(),
+        src: final_response.video_url.clone(),
+        created_at: now,
+    });
+    let _ = save_history(&app, &history);
+
     Ok(MediaVideoResponse {
         id: final_response.id,
         status: format!("{:?}", final_response.status).to_lowercase(),
@@ -202,6 +258,36 @@ pub async fn media_generate_video(
         )),
         latency_ms,
     })
+}
+
+fn load_history(app: &tauri::AppHandle) -> anyhow::Result<Vec<MediaHistoryItem>> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?;
+    let history_path = app_dir.join(HISTORY_FILE);
+
+    if !history_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = fs::read_to_string(history_path)?;
+    let history: Vec<MediaHistoryItem> = serde_json::from_str(&content)?;
+    Ok(history)
+}
+
+fn save_history(app: &tauri::AppHandle, history: &[MediaHistoryItem]) -> anyhow::Result<()> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?;
+    if !app_dir.exists() {
+        fs::create_dir_all(&app_dir)?;
+    }
+    let history_path = app_dir.join(HISTORY_FILE);
+    let content = serde_json::to_string_pretty(history)?;
+    fs::write(history_path, content)?;
+    Ok(())
 }
 
 fn map_image_provider(source: Option<&str>) -> ImageProvider {

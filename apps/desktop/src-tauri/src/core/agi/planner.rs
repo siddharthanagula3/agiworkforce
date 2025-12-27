@@ -7,10 +7,10 @@ use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 pub struct AGIPlanner {
-    router: Arc<Mutex<LLMRouter>>,
+    router: Arc<RwLock<LLMRouter>>,
     tool_registry: Arc<ToolRegistry>,
     knowledge_base: Arc<KnowledgeBase>,
     process_reasoning: Option<Arc<ProcessReasoning>>,
@@ -37,7 +37,7 @@ pub struct PlanStep {
 
 impl AGIPlanner {
     pub fn new(
-        router: Arc<Mutex<LLMRouter>>,
+        router: Arc<RwLock<LLMRouter>>,
         tool_registry: Arc<ToolRegistry>,
         knowledge_base: Arc<KnowledgeBase>,
     ) -> Result<Self> {
@@ -51,7 +51,7 @@ impl AGIPlanner {
     }
 
     pub fn with_process_reasoning(
-        router: Arc<Mutex<LLMRouter>>,
+        router: Arc<RwLock<LLMRouter>>,
         tool_registry: Arc<ToolRegistry>,
         knowledge_base: Arc<KnowledgeBase>,
         process_reasoning: Arc<ProcessReasoning>,
@@ -225,12 +225,12 @@ Return ONLY the JSON array."#,
             thinking_mode: Some(true),
         };
 
-        let router = self.router.lock().await;
+        let router = self.router.read().await;
         let candidates = router.candidates(&request, &preferences);
         drop(router);
 
         if !candidates.is_empty() {
-            let router = self.router.lock().await;
+            let router = self.router.read().await;
             if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
                 return Ok(outcome.response.content);
             }
@@ -490,7 +490,7 @@ Respond with ONLY "true" or "false"."#,
             }
         );
 
-        let router = self.router.lock().await;
+        let router = self.router.read().await;
         match router.send_message(&prompt, None).await {
             Ok(response) => {
                 let response_lower = response.trim().to_lowercase();
@@ -594,12 +594,12 @@ Your response:"#,
             thinking_mode: None,
         };
 
-        let router = self.router.lock().await;
+        let router = self.router.read().await;
         let candidates = router.candidates(&request, &preferences);
         drop(router);
 
         if !candidates.is_empty() {
-            let router = self.router.lock().await;
+            let router = self.router.read().await;
             if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
                 let response = outcome.response.content.trim().to_lowercase();
                 tracing::debug!("[Planner] LLM evaluation response: {}", response);
@@ -766,12 +766,12 @@ Return ONLY a JSON array of steps with this structure:
             thinking_mode: None,
         };
 
-        let router = self.router.lock().await;
+        let router = self.router.read().await;
         let candidates = router.candidates(&request, &preferences);
         drop(router);
 
         if !candidates.is_empty() {
-            let router = self.router.lock().await;
+            let router = self.router.read().await;
             if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
                 return Ok(outcome.response.content);
             }

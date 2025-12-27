@@ -14,7 +14,7 @@ pub async fn ai_analyze_project(
     _state: State<'_, ContextManagerState>,
     project_root: String,
 ) -> Result<String, String> {
-    let router = llm_state.router.lock().await;
+    let router = llm_state.router.read().await;
 
     let mut structure = String::new();
     let walker = WalkDir::new(&project_root).max_depth(3).into_iter();
@@ -71,7 +71,7 @@ pub async fn ai_generate_code(
     target_files: Vec<String>,
     context: Option<String>,
 ) -> Result<String, String> {
-    let router = llm_state.router.lock().await;
+    let router = llm_state.router.read().await;
 
     let prompt = format!(
         "Generate code for the following task:\n\nDescription: {}\n\nTarget Files: {:?}\n\nContext: {}\n\nProvide only the code, formatted clearly.",
@@ -93,7 +93,7 @@ pub async fn ai_refactor_code(
     files: Vec<String>,
     description: String,
 ) -> Result<String, String> {
-    let router = llm_state.router.lock().await;
+    let router = llm_state.router.read().await;
 
     let prompt = format!(
         "Refactor the following files: {:?}\n\nGoal: {}\n\nProvide the refactored code.",
@@ -113,7 +113,7 @@ pub async fn ai_generate_tests(
     source_files: Vec<String>,
     test_framework: Option<String>,
 ) -> Result<Vec<String>, String> {
-    let router = llm_state.router.lock().await;
+    let router = llm_state.router.read().await;
 
     let prompt = format!(
         "Generate unit tests for: {:?}\n\nFramework: {}\n\nProvide the test code.",
@@ -146,7 +146,7 @@ pub async fn ai_generate_context_prompt(
     _state: State<'_, ContextManagerState>,
     task_description: String,
 ) -> Result<String, String> {
-    let router = llm_state.router.lock().await;
+    let router = llm_state.router.read().await;
     let prompt = format!(
         "Create a detailed system prompt for an AI agent to handle this task: {}",
         task_description

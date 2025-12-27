@@ -62,6 +62,171 @@ pub struct McpToolInfo {
     pub parameters: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryPackage {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: String,
+    pub category: String,
+    pub npm_package: Option<String>,
+    pub github: Option<String>,
+    pub tools: Vec<String>,
+    pub rating: f64,
+    pub downloads: u32,
+    pub installed: bool,
+}
+
+#[tauri::command]
+pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<RegistryPackage>, String> {
+    let config = state.config.lock();
+    let installed_servers: HashSet<String> = config.mcp_servers.keys().cloned().collect();
+
+    // Mock registry data
+    let registry = vec![
+        RegistryPackage {
+            id: "mcp-brave-search".to_string(),
+            name: "Brave Search".to_string(),
+            version: "0.1.0".to_string(),
+            description: "Web search capabilities using Brave Search API".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "search".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-brave-search".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "brave_web_search".to_string(),
+                "brave_local_search".to_string(),
+            ],
+            rating: 4.8,
+            downloads: 12500,
+            installed: installed_servers.contains("brave-search"),
+        },
+        RegistryPackage {
+            id: "mcp-filesystem".to_string(),
+            name: "Filesystem".to_string(),
+            version: "0.2.0".to_string(),
+            description: "Secure access to local filesystem".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "automation".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-filesystem".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "read_file".to_string(),
+                "write_file".to_string(),
+                "list_directory".to_string(),
+            ],
+            rating: 4.9,
+            downloads: 45000,
+            installed: installed_servers.contains("filesystem"),
+        },
+        RegistryPackage {
+            id: "mcp-google-drive".to_string(),
+            name: "Google Drive".to_string(),
+            version: "0.1.5".to_string(),
+            description: "Access and manage Google Drive files".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "data".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-google-drive".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "drive_list".to_string(),
+                "drive_read".to_string(),
+                "drive_upload".to_string(),
+            ],
+            rating: 4.7,
+            downloads: 8900,
+            installed: installed_servers.contains("google-drive"),
+        },
+        RegistryPackage {
+            id: "mcp-slack".to_string(),
+            name: "Slack".to_string(),
+            version: "0.1.2".to_string(),
+            description: "Send messages and read channels in Slack".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "productivity".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-slack".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "slack_post_message".to_string(),
+                "slack_list_channels".to_string(),
+            ],
+            rating: 4.6,
+            downloads: 15200,
+            installed: installed_servers.contains("slack"),
+        },
+        RegistryPackage {
+            id: "mcp-github".to_string(),
+            name: "GitHub".to_string(),
+            version: "0.3.1".to_string(),
+            description: "Interact with GitHub repositories, issues, and PRs".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "development".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-github".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "github_create_issue".to_string(),
+                "github_list_prs".to_string(),
+                "github_read_file".to_string(),
+            ],
+            rating: 4.9,
+            downloads: 32000,
+            installed: installed_servers.contains("github"),
+        },
+        RegistryPackage {
+            id: "mcp-postgres".to_string(),
+            name: "PostgreSQL".to_string(),
+            version: "0.1.1".to_string(),
+            description: "Read-only access to PostgreSQL databases".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "data".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-postgres".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "postgres_query".to_string(),
+                "postgres_list_tables".to_string(),
+            ],
+            rating: 4.5,
+            downloads: 6700,
+            installed: installed_servers.contains("postgres"),
+        },
+        RegistryPackage {
+            id: "mcp-memory".to_string(),
+            name: "Memory".to_string(),
+            version: "0.1.0".to_string(),
+            description: "Persistent memory server for storing knowledge graph".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "data".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-memory".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec!["memory_store".to_string(), "memory_retrieve".to_string()],
+            rating: 4.2,
+            downloads: 3400,
+            installed: installed_servers.contains("memory"),
+        },
+        RegistryPackage {
+            id: "mcp-time".to_string(),
+            name: "Time".to_string(),
+            version: "0.1.0".to_string(),
+            description: "Time and timezone utilities".to_string(),
+            author: "Model Context Protocol".to_string(),
+            category: "productivity".to_string(),
+            npm_package: Some("@modelcontextprotocol/server-time".to_string()),
+            github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+            tools: vec![
+                "get_current_time".to_string(),
+                "convert_timezone".to_string(),
+            ],
+            rating: 4.0,
+            downloads: 2100,
+            installed: installed_servers.contains("time"),
+        },
+    ];
+
+    Ok(registry)
+}
+
 #[tauri::command]
 pub async fn mcp_initialize(
     state: State<'_, McpState>,

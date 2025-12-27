@@ -148,7 +148,7 @@ pub struct AgentOrchestrator {
     resource_lock: ResourceLock,
     knowledge_base: Arc<KnowledgeBase>,
     config: AGIConfig,
-    router: Arc<TokioMutex<LLMRouter>>,
+    router: Arc<tokio::sync::RwLock<LLMRouter>>,
     automation: Arc<AutomationService>,
     app_handle: Option<tauri::AppHandle>,
 }
@@ -157,7 +157,7 @@ impl AgentOrchestrator {
     pub fn new(
         max_agents: usize,
         config: AGIConfig,
-        router: Arc<TokioMutex<LLMRouter>>,
+        router: Arc<tokio::sync::RwLock<LLMRouter>>,
         automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
