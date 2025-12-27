@@ -320,7 +320,7 @@ mod ocr_disabled_tests {
 
     #[tokio::test]
     async fn test_ocr_disabled_error() {
-        let result = perform_ocr("dummy_path.png");
+        let result = perform_ocr("dummy_path.png").await;
 
         assert!(
             result.is_err(),
