@@ -98,9 +98,35 @@ export default async function DiagnosePage() {
   checks.supabase.subscriptionFound = !!sub;
   checks.supabase.data = sub;
 
+  async function syncAction() {
+    'use server';
+    const { SubscriptionService } = await import('@/lib/services/subscription-service');
+    const supabaseAction = await createSupabaseServerClient();
+    const {
+      data: { session: currentSession },
+    } = await supabaseAction.auth.getSession();
+    if (currentSession?.user.email) {
+      await SubscriptionService.syncWithStripe(currentSession.user.id, currentSession.user.email);
+    }
+    redirect('/diagnose?synced=true');
+  }
+
   return (
     <div className="p-8 font-mono text-sm bg-black text-white min-h-screen">
       <h1 className="text-2xl font-bold mb-4">System Diagnosis</h1>
+
+      <form action={syncAction} className="mb-8 p-4 border border-zinc-800 rounded bg-zinc-900">
+        <h3 className="text-lg font-bold mb-2">Actions</h3>
+        <button
+          type="submit"
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 font-bold transition-colors"
+        >
+          Attempt Manual Sync Now
+        </button>
+        <p className="text-xs text-zinc-400 mt-2">
+          This will force a check against Stripe and update your local subscription.
+        </p>
+      </form>
 
       <div className="space-y-6">
         <section>
