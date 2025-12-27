@@ -1,52 +1,108 @@
 'use client';
 
-import { useEffect, useState, Suspense, useRef } from 'react';
+import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle, LayoutDashboard, Loader2 } from 'lucide-react';
+import { CheckCircle, LayoutDashboard, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { ManageBillingButton } from '@/components/stripe/ManageBillingButton';
-import { refreshSubscriptionStatus, type ClientSubscription } from '@/utils/subscription-client';
+import {
+  refreshSubscriptionStatus,
+  syncSubscriptionFromStripe,
+  type ClientSubscription,
+} from '@/utils/subscription-client';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams?.get('session_id');
   const [subscription, setSubscription] = useState<ClientSubscription | null>(null);
   const [isPolling, setIsPolling] = useState(true);
+  const [syncAttempted, setSyncAttempted] = useState(false);
   const [desktopAppError, setDesktopAppError] = useState(false);
   const attemptsRef = useRef(0);
+  const syncTriggeredRef = useRef(false);
 
-  const MAX_POLL_ATTEMPTS = 10; // Poll for up to 30 seconds (10 attempts * 3 seconds)
+  const MAX_POLL_ATTEMPTS = 15; // Poll for up to 45 seconds (15 attempts * 3 seconds)
   const POLL_INTERVAL = 3000; // 3 seconds
+  const SYNC_TRIGGER_ATTEMPT = 3; // Trigger sync after 3 failed attempts (9 seconds)
+
+  const isValidSubscription = useCallback((sub: ClientSubscription | null): boolean => {
+    if (!sub) return false;
+    const activeStatuses = ['active', 'trialing'];
+    return activeStatuses.includes(sub.status) && sub.plan_tier !== 'free';
+  }, []);
 
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
     let timeout: NodeJS.Timeout | null = null;
+    let isMounted = true;
 
     const pollSubscription = async () => {
-      const sub = await refreshSubscriptionStatus();
-      const activeStatuses = ['active', 'trialing'];
+      if (!isMounted) return;
 
-      if (sub) {
-        // Ignore 'free' plan as valid success state since this page follows a payment/subscription
-        if (activeStatuses.includes(sub.status) && sub.plan_tier !== 'free') {
+      // First, try direct DB fetch
+      let sub = await refreshSubscriptionStatus();
+
+      // If we have a valid subscription, we're done
+      if (isValidSubscription(sub)) {
+        if (isMounted) {
           setSubscription(sub);
           setIsPolling(false);
-          if (pollInterval) clearInterval(pollInterval);
-          if (timeout) clearTimeout(timeout);
-          return;
+        }
+        if (pollInterval) clearInterval(pollInterval);
+        if (timeout) clearTimeout(timeout);
+        return;
+      }
+
+      // Track attempts
+      attemptsRef.current += 1;
+
+      // After a few failed attempts, trigger a sync from Stripe
+      // This handles the case where the webhook is delayed
+      if (attemptsRef.current >= SYNC_TRIGGER_ATTEMPT && !syncTriggeredRef.current) {
+        syncTriggeredRef.current = true;
+        if (isMounted) setSyncAttempted(true);
+
+        try {
+          // Call sync-subscription API to force sync from Stripe
+          const syncResult = await syncSubscriptionFromStripe();
+
+          if (syncResult && isValidSubscription(syncResult)) {
+            if (isMounted) {
+              setSubscription(syncResult);
+              setIsPolling(false);
+            }
+            if (pollInterval) clearInterval(pollInterval);
+            if (timeout) clearTimeout(timeout);
+            return;
+          }
+        } catch (error) {
+          console.warn('[payment-success] Sync attempt failed:', error);
+          // Continue polling even if sync fails
         }
       }
 
-      // Track attempts using ref to persist across poll calls
-      attemptsRef.current += 1;
+      // Max attempts reached
       if (attemptsRef.current >= MAX_POLL_ATTEMPTS) {
-        // If we timeout, we might show the last fetched sub (even if free) or just stop polling
-        // If we have a sub but it was free, we can set it here as a fallback
-        if (sub && activeStatuses.includes(sub.status)) {
-          setSubscription(sub);
+        // Last-ditch effort: one more sync attempt
+        if (!syncTriggeredRef.current) {
+          try {
+            const syncResult = await syncSubscriptionFromStripe();
+            if (syncResult && isValidSubscription(syncResult)) {
+              sub = syncResult;
+            }
+          } catch {
+            // Ignore final sync error
+          }
         }
-        setIsPolling(false);
+
+        if (isMounted) {
+          // Set whatever subscription we have (even if not ideal)
+          if (sub) {
+            setSubscription(sub);
+          }
+          setIsPolling(false);
+        }
         if (pollInterval) clearInterval(pollInterval);
         if (timeout) clearTimeout(timeout);
       }
@@ -60,15 +116,42 @@ function PaymentSuccessContent() {
 
     // Set timeout to stop polling after max attempts
     timeout = setTimeout(() => {
-      setIsPolling(false);
+      if (isMounted) setIsPolling(false);
       if (pollInterval) clearInterval(pollInterval);
     }, MAX_POLL_ATTEMPTS * POLL_INTERVAL);
 
     return () => {
+      isMounted = false;
       if (pollInterval) clearInterval(pollInterval);
       if (timeout) clearTimeout(timeout);
     };
-  }, []);
+  }, [isValidSubscription]);
+
+  // Manual retry function for user-triggered refresh
+  const handleManualRetry = async () => {
+    setIsPolling(true);
+    attemptsRef.current = 0;
+    syncTriggeredRef.current = false;
+    setSyncAttempted(false);
+
+    try {
+      const syncResult = await syncSubscriptionFromStripe();
+      if (isValidSubscription(syncResult)) {
+        setSubscription(syncResult);
+        setIsPolling(false);
+        return;
+      }
+    } catch (error) {
+      console.warn('[payment-success] Manual retry failed:', error);
+    }
+
+    // If sync didn't work, try direct fetch
+    const sub = await refreshSubscriptionStatus();
+    if (isValidSubscription(sub)) {
+      setSubscription(sub);
+    }
+    setIsPolling(false);
+  };
 
   const handleOpenDesktopApp = () => {
     try {
@@ -103,7 +186,7 @@ function PaymentSuccessContent() {
             <p className="text-lg text-zinc-400">Updating your subscription...</p>
             <div className="flex items-center justify-center gap-2 text-sm text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Please wait</span>
+              <span>{syncAttempted ? 'Syncing with Stripe...' : 'Please wait'}</span>
             </div>
           </div>
         ) : subscription ? (
@@ -112,9 +195,22 @@ function PaymentSuccessContent() {
             <span className="font-semibold text-white">{planTierDisplay}</span> plan.
           </p>
         ) : (
-          <p className="text-lg text-zinc-400">
-            Thank you for subscribing to AGI Workforce. Your account upgrade is being processed.
-          </p>
+          <div className="space-y-4">
+            <p className="text-lg text-zinc-400">
+              Thank you for your payment! Your subscription is being processed.
+            </p>
+            <p className="text-sm text-zinc-500">
+              If your plan doesn&apos;t update automatically, click below to refresh.
+            </p>
+            <Button
+              onClick={handleManualRetry}
+              variant="outline"
+              className="border-zinc-700 hover:bg-zinc-800"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh Subscription Status
+            </Button>
+          </div>
         )}
 
         {sessionId && (

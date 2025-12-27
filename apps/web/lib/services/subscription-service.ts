@@ -170,7 +170,37 @@ export class SubscriptionService {
   }
 
   /**
+   * Infer plan tier from price ID or metadata
+   */
+  private static inferPlanTier(
+    metadata: Stripe.Metadata | null | undefined,
+    priceId: string | null | undefined,
+  ): string {
+    // First, check metadata (most reliable)
+    if (metadata?.plan_tier) {
+      return metadata.plan_tier;
+    }
+
+    // Second, infer from price ID
+    if (priceId) {
+      const lowerPriceId = priceId.toLowerCase();
+      if (lowerPriceId.includes('hobby')) return 'hobby';
+      if (lowerPriceId.includes('max')) return 'max';
+      if (lowerPriceId.includes('pro')) return 'pro';
+      if (lowerPriceId.includes('enterprise')) return 'enterprise';
+    }
+
+    // Default to 'pro' as it's the most common paid tier
+    return 'pro';
+  }
+
+  /**
    * Sync subscription from Stripe by email (Self-healing)
+   * This is a critical function that ensures local subscription data matches Stripe.
+   * It handles:
+   * - Both 'active' and 'trialing' subscription statuses
+   * - Missing or delayed webhook updates
+   * - Plan tier inference from multiple sources
    */
   static async syncWithStripe(userId: string, email: string): Promise<SubscriptionInfo | null> {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -186,6 +216,7 @@ export class SubscriptionService {
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
 
+      // Find customer by email
       const customers = await stripe.customers.list({ email: email, limit: 1 });
       if (customers.data.length === 0) {
         logger.info({ email }, 'No Stripe customer found for email');
@@ -193,45 +224,72 @@ export class SubscriptionService {
       }
 
       const customerId = customers.data[0].id;
-      const subscriptions = await stripe.subscriptions.list({
-        customer: customerId,
-        status: 'active',
-        limit: 1,
-        expand: ['data.items.data.price'],
-      });
 
-      if (subscriptions.data.length === 0) {
-        logger.info({ customerId }, 'No active subscriptions found for customer');
+      // Query for ALL subscription statuses that should grant access
+      // This is critical - we need to catch 'trialing' subscriptions too!
+      const validStatuses: Stripe.SubscriptionListParams['status'][] = ['active', 'trialing'];
+      let stripeSubscription: Stripe.Subscription | null = null;
+
+      for (const status of validStatuses) {
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customerId,
+          status: status,
+          limit: 1,
+          expand: ['data.items.data.price'],
+        });
+
+        if (subscriptions.data.length > 0) {
+          stripeSubscription = subscriptions.data[0];
+          break;
+        }
+      }
+
+      // Also check for recently created subscriptions that might be incomplete
+      if (!stripeSubscription) {
+        const recentSubs = await stripe.subscriptions.list({
+          customer: customerId,
+          limit: 5,
+          expand: ['data.items.data.price'],
+        });
+
+        // Find the most recent valid subscription
+        const validStatusSet = new Set(['active', 'trialing', 'past_due']);
+        stripeSubscription = recentSubs.data.find((sub) => validStatusSet.has(sub.status)) || null;
+      }
+
+      if (!stripeSubscription) {
+        logger.info({ customerId }, 'No valid subscriptions found for customer');
         return null;
       }
 
-      const stripeSubscription = subscriptions.data[0];
       const stripePriceId = stripeSubscription.items.data[0]?.price.id;
 
-      // Basic plan inference (fallback)
-      const planTier =
-        stripeSubscription.metadata?.plan_tier ||
-        (stripePriceId
-          ? stripePriceId.includes('Hobby')
-            ? 'hobby'
-            : stripePriceId.includes('Pro')
-              ? 'pro'
-              : stripePriceId.includes('Max')
-                ? 'max'
-                : 'pro'
-          : 'pro');
-
       if (!stripePriceId) {
-        logger.warn({ subscriptionId: stripeSubscription.id }, 'No price ID found in subscription');
-        return null;
+        logger.warn(
+          { subscriptionId: stripeSubscription.id },
+          'No price ID found in subscription, continuing with null',
+        );
       }
+
+      // Infer plan tier from metadata or price ID
+      const planTier = this.inferPlanTier(stripeSubscription.metadata, stripePriceId);
+
+      logger.info(
+        {
+          subscriptionId: stripeSubscription.id,
+          status: stripeSubscription.status,
+          planTier,
+          stripePriceId,
+        },
+        'Found valid subscription in Stripe',
+      );
 
       const supabase = getSupabaseClient();
       const subData = {
         user_id: userId,
         stripe_customer_id: customerId,
         stripe_subscription_id: stripeSubscription.id,
-        stripe_price_id: stripePriceId,
+        stripe_price_id: stripePriceId || null,
         status: stripeSubscription.status,
         plan_tier: planTier,
         current_period_start: new Date(

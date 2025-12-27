@@ -19,9 +19,15 @@ function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
+  // In production, CRON_SECRET is required
   if (!cronSecret) {
-    logger.warn('CRON_SECRET not set - allowing request (not recommended for production)');
-    return true; // Allow in development if secret not set
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction) {
+      logger.error('CRON_SECRET not set in production - denying request');
+      return false;
+    }
+    logger.warn('CRON_SECRET not set in development - allowing request');
+    return true;
   }
 
   return authHeader === `Bearer ${cronSecret}`;

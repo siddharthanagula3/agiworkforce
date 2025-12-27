@@ -47,19 +47,64 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   logger.info({ sessionId: session.id }, 'Processing checkout session');
 
-  const supabaseUserId = session.metadata?.['supabase_user_id'] || session.client_reference_id;
-  if (!supabaseUserId) {
-    logger.warn(
-      { sessionId: session.id },
-      'No supabase_user_id in metadata or client_reference_id',
-    );
-    return;
+  let supabaseUserId = session.metadata?.['supabase_user_id'] || session.client_reference_id;
+
+  // If no user ID in metadata, try to find user by customer email
+  if (!supabaseUserId && session.customer) {
+    try {
+      const customer = await stripe.customers.retrieve(session.customer as string);
+      if (typeof customer !== 'string' && !customer.deleted && customer.email) {
+        const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+        const matchingUser = users?.users.find((u) => u.email === customer.email);
+        if (matchingUser) {
+          supabaseUserId = matchingUser.id;
+          logger.info(
+            { sessionId: session.id, email: customer.email, userId: supabaseUserId },
+            'Resolved user_id from customer email',
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn({ error, sessionId: session.id }, 'Failed to resolve user from customer');
+    }
   }
 
-  const planTier = session.metadata?.['plan_tier'] as string | undefined;
+  if (!supabaseUserId) {
+    logger.error(
+      {
+        sessionId: session.id,
+        customerId: session.customer,
+        hasMetadata: !!session.metadata,
+        hasClientRef: !!session.client_reference_id,
+      },
+      'CRITICAL: No supabase_user_id found - cannot create subscription',
+    );
+    throw new Error('Cannot determine user_id for subscription');
+  }
+
+  // Get plan_tier from metadata, or infer from price
+  let planTier = session.metadata?.['plan_tier'] as string | undefined;
+
+  // If plan_tier is missing, try to infer from line items
+  if (!planTier && session.line_items?.data?.[0]?.price?.id) {
+    const priceId = session.line_items.data[0].price.id.toLowerCase();
+    if (priceId.includes('hobby')) planTier = 'hobby';
+    else if (priceId.includes('max')) planTier = 'max';
+    else if (priceId.includes('pro')) planTier = 'pro';
+    else planTier = 'pro'; // Default fallback
+    logger.warn(
+      { sessionId: session.id, inferredPlan: planTier },
+      'plan_tier missing from metadata, inferred from price_id',
+    );
+  }
+
   if (!planTier) {
-    logger.error({ sessionId: session.id }, 'CRITICAL: plan_tier is missing from session metadata');
-    throw new Error('plan_tier is missing from session metadata');
+    // Last resort: default to 'pro' but log as error
+    planTier = 'pro';
+    logger.error(
+      { sessionId: session.id },
+      'CRITICAL: plan_tier could not be determined, defaulting to pro',
+    );
   }
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
@@ -234,33 +279,62 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     throw error;
   }
 
-  // Allocate credits for the subscription period
+  // Allocate credits for the subscription period with retry
   if (data && currentPeriodStart && currentPeriodEnd) {
-    try {
-      await SubscriptionService.allocateCreditsForPeriod(
-        supabaseUserId,
-        data.id,
-        planTier,
-        new Date(currentPeriodStart),
-        new Date(currentPeriodEnd),
-      );
-      logger.info(
+    const maxRetries = 3;
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await SubscriptionService.allocateCreditsForPeriod(
+          supabaseUserId,
+          data.id,
+          planTier,
+          new Date(currentPeriodStart),
+          new Date(currentPeriodEnd),
+        );
+        logger.info(
+          {
+            userId: supabaseUserId,
+            subscriptionId: data.id,
+            planTier,
+            attempt,
+          },
+          'Credits allocated for new subscription',
+        );
+        lastError = null;
+        break; // Success, exit loop
+      } catch (creditError) {
+        lastError = creditError;
+        logger.warn(
+          {
+            error: creditError,
+            userId: supabaseUserId,
+            subscriptionId: data.id,
+            attempt,
+            maxRetries,
+          },
+          `Credit allocation attempt ${attempt}/${maxRetries} failed`,
+        );
+
+        // Wait before retry (exponential backoff)
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempt)));
+        }
+      }
+    }
+
+    if (lastError) {
+      // All retries failed - log critical error but don't fail webhook
+      // The sync-subscription endpoint can recover credits later
+      logger.error(
         {
+          error: lastError,
           userId: supabaseUserId,
           subscriptionId: data.id,
           planTier,
         },
-        'Credits allocated for new subscription',
-      );
-    } catch (creditError) {
-      // Log but don't fail the webhook if credit allocation fails
-      logger.error(
-        {
-          error: creditError,
-          userId: supabaseUserId,
-          subscriptionId: data.id,
-        },
-        'Failed to allocate credits for subscription',
+        'CRITICAL: Failed to allocate credits after all retries - user may need manual sync',
       );
     }
   }
