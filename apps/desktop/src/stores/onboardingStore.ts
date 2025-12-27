@@ -130,7 +130,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
           };
 
           try {
-            // TODO: Persist results
+            await invoke('record_demo_results', { result: finalResult });
           } catch (e) {
             console.warn('Failed to persist demo results', e);
           }
