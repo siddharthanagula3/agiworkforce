@@ -516,7 +516,9 @@ pub async fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
     }
     #[cfg(not(feature = "ocr"))]
     {
-        perform_ocr(&image_path).await.map_err(|err| err.to_string())
+        perform_ocr(&image_path)
+            .await
+            .map_err(|err| err.to_string())
     }
 }
 
