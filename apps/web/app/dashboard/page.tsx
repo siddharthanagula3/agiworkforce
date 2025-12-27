@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from '../../services/supabase-server';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { redirect } from 'next/navigation';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
@@ -27,7 +28,20 @@ export default async function DashboardPage() {
   const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
 
   if (!hasActiveSubscription) {
-    redirect('/pricing?reason=subscription_required');
+    // Attempt self-healing sync
+    if (session.user.email) {
+      const syncedSub = await SubscriptionService.syncWithStripe(
+        session.user.id,
+        session.user.email,
+      );
+      if (syncedSub && activeStatuses.includes(syncedSub.status)) {
+        // Sync successful and active, do not redirect
+      } else {
+        redirect('/pricing?reason=subscription_required');
+      }
+    } else {
+      redirect('/pricing?reason=subscription_required');
+    }
   }
 
   return (
