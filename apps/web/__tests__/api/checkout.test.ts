@@ -65,6 +65,7 @@ describe('POST /api/checkout', () => {
           data: { user: null },
         })),
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const request = new NextRequest('http://localhost/api/checkout', {

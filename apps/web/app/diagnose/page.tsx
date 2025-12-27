@@ -29,11 +29,11 @@ export default async function DiagnosePage() {
       connected: false,
       customersFound: 0,
       activeSubscriptions: 0,
-      data: null as any,
+      data: null as unknown,
     },
     supabase: {
       subscriptionFound: false,
-      data: null as any,
+      data: null as unknown,
     },
     serviceRole: {
       canConnect: false,
@@ -53,7 +53,8 @@ export default async function DiagnosePage() {
         .select('count', { count: 'exact', head: true });
       checks.serviceRole.canConnect = !error;
     }
-  } catch (e) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_e) {
     checks.serviceRole.canConnect = false;
   }
 
@@ -83,7 +84,8 @@ export default async function DiagnosePage() {
           }));
         }
       }
-    } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) {
       checks.stripe.connected = false;
     }
   }
