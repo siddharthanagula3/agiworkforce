@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
@@ -97,6 +98,104 @@ async function handleCheckout(request: NextRequest) {
   const origin = getOrigin(request);
 
   try {
+    // Prevent duplicate subscriptions for the same plan when one is already active.
+    // This uses the shared SubscriptionService so behavior is consistent with webhooks
+    // and the sync-subscription endpoint.
+    let existingSub = null;
+    try {
+      existingSub = await SubscriptionService.getSubscription(user.id);
+    } catch (err) {
+      // If the lookup fails for any reason, log and continue; we don't want
+      // checkout to break because of a non-critical read.
+      logger.warn(
+        {
+          error: err instanceof Error ? err.message : String(err),
+          userId: user.id,
+        },
+        'Failed to fetch existing subscription before checkout',
+      );
+    }
+
+    const activeStatuses = ['active', 'trialing', 'past_due'];
+    if (
+      existingSub &&
+      activeStatuses.includes(existingSub.status) &&
+      existingSub.plan_tier === plan
+    ) {
+      // User already has this plan. Instead of creating a new subscription,
+      // send them to the billing portal so they can manage or upgrade.
+      let customerId: string | undefined;
+
+      if (existingSub.stripe_subscription_id) {
+        try {
+          const stripeSub = await stripe.subscriptions.retrieve(existingSub.stripe_subscription_id);
+          customerId = stripeSub.customer as string;
+        } catch (err) {
+          logger.error(
+            {
+              error: err instanceof Error ? err.message : String(err),
+              userId: user.id,
+              subscriptionId: existingSub.stripe_subscription_id,
+            },
+            'Failed to retrieve Stripe subscription while preventing duplicate checkout',
+          );
+        }
+      }
+
+      // Fallback: try by email if we still don't have a customer ID
+      if (!customerId && user.email) {
+        try {
+          const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+          if (customers.data.length > 0) {
+            customerId = customers.data[0].id;
+          }
+        } catch (err) {
+          logger.error(
+            {
+              error: err instanceof Error ? err.message : String(err),
+              userId: user.id,
+            },
+            'Failed to look up Stripe customer while preventing duplicate checkout',
+          );
+        }
+      }
+
+      if (customerId) {
+        const portalSession = await stripe.billingPortal.sessions.create({
+          customer: customerId,
+          return_url: `${origin}/pricing`,
+        });
+
+        logger.info(
+          {
+            userId: user.id,
+            customerId,
+            existingPlan: existingSub.plan_tier,
+            subscriptionId: existingSub.stripe_subscription_id,
+          },
+          'Redirecting to billing portal instead of creating duplicate subscription',
+        );
+
+        return NextResponse.json(
+          {
+            alreadySubscribed: true,
+            url: portalSession.url,
+          },
+          { status: 200 },
+        );
+      }
+
+      // If we couldn't determine a customer ID for some reason, fall through and
+      // let normal checkout proceed rather than hard-failing.
+      logger.warn(
+        {
+          userId: user.id,
+          existingPlan: existingSub.plan_tier,
+        },
+        'Existing subscription detected but could not determine Stripe customer; proceeding with checkout',
+      );
+    }
+
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         plan_tier: plan,
