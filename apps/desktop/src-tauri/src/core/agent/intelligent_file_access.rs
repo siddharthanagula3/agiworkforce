@@ -126,7 +126,7 @@ impl IntelligentFileAccess {
     }
 
     async fn perform_ocr_on_screenshot(&self, screenshot_path: &str) -> Result<ScreenOcrResult> {
-        perform_ocr(screenshot_path).map_err(|e| anyhow!("OCR failed: {}", e))
+        perform_ocr(screenshot_path).await.map_err(|e| anyhow!("OCR failed: {}", e))
     }
 
     async fn analyze_screenshot(

@@ -281,7 +281,7 @@ mod dxgi_tests {
 mod ocr_tests {
     use super::super::capture::capture_primary_screen;
     use super::super::ocr::perform_ocr;
-    use std::fs;
+
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -295,7 +295,7 @@ mod ocr_tests {
             .save(&image_path)
             .expect("Failed to save test image");
 
-        let result = perform_ocr(image_path.to_str().unwrap());
+        let result = perform_ocr(image_path.to_str().unwrap()).await;
 
         match result {
             Ok(ocr_result) => {

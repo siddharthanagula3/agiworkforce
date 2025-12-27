@@ -788,7 +788,7 @@ impl AGIExecutor {
                 use crate::automation::screen::perform_ocr;
 
                 let ocr_result =
-                    perform_ocr(image_path).map_err(|e| anyhow!("OCR failed: {}", e))?;
+                    perform_ocr(image_path).await.map_err(|e| anyhow!("OCR failed: {}", e))?;
 
                 Ok(json!({
                     "success": true,

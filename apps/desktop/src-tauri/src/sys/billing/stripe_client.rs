@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use stripe::{
     Client, CreateCustomer, CreateSetupIntent, CreateSubscription, Customer, CustomerId, Invoice,
-    ListInvoices, PaymentMethod, PaymentMethodId, SetupIntent, SubscriptionId,
+    PaymentMethod, PaymentMethodId, SetupIntent, SubscriptionId,
 };
 use uuid::Uuid;
 
@@ -102,7 +102,7 @@ impl StripeService {
         Self { client, db }
     }
 
-    pub async fn create_customer(&self, email: &str, name: Option<&str>) -> Result<CustomerInfo> {
+    pub async fn create_customer(self, email: &str, name: Option<&str>) -> Result<CustomerInfo> {
         let mut params = CreateCustomer::new();
         params.email = Some(email);
         if let Some(n) = name {
@@ -172,7 +172,7 @@ impl StripeService {
     }
 
     pub async fn create_subscription(
-        &self,
+        self,
         customer_stripe_id: &str,
         price_id: &str,
         trial_days: Option<u32>,
@@ -266,7 +266,7 @@ impl StripeService {
         Ok(subscription_info)
     }
 
-    pub async fn get_subscription(&self, stripe_subscription_id: &str) -> Result<SubscriptionInfo> {
+    pub async fn get_subscription(self, stripe_subscription_id: &str) -> Result<SubscriptionInfo> {
         let subscription_id: SubscriptionId = stripe_subscription_id.parse().unwrap();
         let subscription =
             stripe::Subscription::retrieve(&self.client, &subscription_id, &[]).await?;
@@ -337,7 +337,7 @@ impl StripeService {
     }
 
     pub async fn update_subscription(
-        &self,
+        self,
         stripe_subscription_id: &str,
         new_price_id: &str,
         new_plan_name: &str,
@@ -364,33 +364,35 @@ impl StripeService {
         subscription =
             stripe::Subscription::update(&self.client, &subscription_id, update_params).await?;
 
-        let db = self
-            .db
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock database"))?;
+        {
+            let db = self
+                .db
+                .lock()
+                .map_err(|_| anyhow!("Failed to lock database"))?;
 
-        let now = Utc::now().timestamp();
+            let now = Utc::now().timestamp();
 
-        db.execute(
-            "UPDATE billing_subscriptions SET
-                stripe_price_id = ?1,
-                plan_name = ?2,
-                status = ?3,
-                updated_at = ?4
-             WHERE stripe_subscription_id = ?5",
-            rusqlite::params![
-                new_price_id,
-                new_plan_name,
-                subscription.status.to_string(),
-                now,
-                stripe_subscription_id
-            ],
-        )?;
+            db.execute(
+                "UPDATE billing_subscriptions SET
+                    stripe_price_id = ?1,
+                    plan_name = ?2,
+                    status = ?3,
+                    updated_at = ?4
+                 WHERE stripe_subscription_id = ?5",
+                rusqlite::params![
+                    new_price_id,
+                    new_plan_name,
+                    subscription.status.to_string(),
+                    now,
+                    stripe_subscription_id
+                ],
+            )?;
+        }
 
         self.get_subscription(stripe_subscription_id).await
     }
 
-    pub async fn cancel_subscription(&self, stripe_subscription_id: &str) -> Result<()> {
+    pub async fn cancel_subscription(self, stripe_subscription_id: &str) -> Result<()> {
         let subscription_id: SubscriptionId = stripe_subscription_id.parse().unwrap();
         stripe::Subscription::cancel(&self.client, &subscription_id, Default::default()).await?;
 
@@ -413,9 +415,10 @@ impl StripeService {
         Ok(())
     }
 
-    pub async fn get_invoices(&self, customer_stripe_id: &str) -> Result<Vec<InvoiceInfo>> {
+    pub async fn get_invoices(self, customer_stripe_id: &str) -> Result<Vec<InvoiceInfo>> {
         let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
 
+        let mut list_params = stripe::ListInvoices::new();
         list_params.customer = Some(customer_id.clone());
         list_params.limit = Some(100);
 
@@ -587,7 +590,7 @@ impl StripeService {
     }
 
     pub async fn create_portal_session(
-        &self,
+        self,
         customer_stripe_id: &str,
         return_url: &str,
     ) -> Result<String> {
@@ -692,27 +695,29 @@ impl StripeService {
     }
 
     pub async fn get_payment_methods(
-        &self,
+        self,
         customer_stripe_id: &str,
     ) -> Result<Vec<PaymentMethodInfo>> {
         let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
 
         let mut list_params = stripe::ListPaymentMethods::new();
-        list_params.customer = Some(customer_id);
+        list_params.customer = Some(customer_id.clone());
         list_params.limit = Some(100);
 
         let payment_methods = PaymentMethod::list(&self.client, &list_params).await?;
 
-        let db = self
-            .db
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock database"))?;
+        let customer_db_id: String = {
+            let db = self
+                .db
+                .lock()
+                .map_err(|_| anyhow!("Failed to lock database"))?;
 
-        let customer_db_id: String = db.query_row(
-            "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
-            rusqlite::params![customer_stripe_id],
-            |row| row.get(0),
-        )?;
+            db.query_row(
+                "SELECT id FROM billing_customers WHERE stripe_customer_id = ?1",
+                rusqlite::params![customer_stripe_id],
+                |row| row.get(0),
+            )?
+        };
 
         let customer = Customer::retrieve(&self.client, &customer_id, &[]).await?;
         let default_payment_method_id = customer
@@ -726,6 +731,11 @@ impl StripeService {
 
         let mut payment_method_infos = Vec::new();
         let now = Utc::now().timestamp();
+
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| anyhow!("Failed to lock database"))?;
 
         for pm in payment_methods.data {
             let pm_id = Uuid::new_v4().to_string();
@@ -763,7 +773,7 @@ impl StripeService {
             db.execute(
                 "INSERT OR REPLACE INTO billing_payment_methods (
                     id, customer_id, stripe_payment_method_id, type, card_brand, card_last4,
-                    card_exp_month, card_exp_year, is_default, created_at, updated_a
+                    card_exp_month, card_exp_year, is_default, created_at, updated_at
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 rusqlite::params![
                     &payment_method_info.id,
@@ -787,7 +797,7 @@ impl StripeService {
     }
 
     pub async fn attach_payment_method(
-        &self,
+        self,
         customer_stripe_id: &str,
         payment_method_id: &str,
     ) -> Result<PaymentMethodInfo> {
@@ -863,7 +873,7 @@ impl StripeService {
     }
 
     pub async fn set_default_payment_method(
-        &self,
+        self,
         customer_stripe_id: &str,
         payment_method_id: &str,
     ) -> Result<()> {
@@ -905,7 +915,7 @@ impl StripeService {
         Ok(())
     }
 
-    pub async fn create_setup_intent(&self, customer_stripe_id: &str) -> Result<String> {
+    pub async fn create_setup_intent(self, customer_stripe_id: &str) -> Result<String> {
         let customer_id: CustomerId = customer_stripe_id.parse().unwrap();
 
         let mut params = CreateSetupIntent::new();
@@ -918,7 +928,7 @@ impl StripeService {
         Ok(setup_intent.client_secret.unwrap_or_default())
     }
 
-    pub async fn detach_payment_method(&self, payment_method_id: &str) -> Result<()> {
+    pub async fn detach_payment_method(self, payment_method_id: &str) -> Result<()> {
         let pm_id: PaymentMethodId = payment_method_id.parse().unwrap();
 
         PaymentMethod::detach(&self.client, &pm_id).await?;
