@@ -9,7 +9,7 @@ export interface Subscription {
   id: string;
   user_id: string;
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
-  price_id: string;
+  stripe_price_id: string;
   quantity: number;
   cancel_at_period_end: boolean;
   current_period_start: string;

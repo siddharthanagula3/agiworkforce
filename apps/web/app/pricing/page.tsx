@@ -53,7 +53,7 @@ function PricingContent() {
 
   const [subscription, setSubscription] = useState<{
     status: string;
-    price_id: string;
+    stripe_price_id: string;
     plan_tier?: string;
   } | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
@@ -69,7 +69,7 @@ function PricingContent() {
         if (user) {
           const { data } = await supabase
             .from('subscriptions')
-            .select('status, price_id, plan_tier')
+            .select('status, stripe_price_id, plan_tier')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -83,7 +83,7 @@ function PricingContent() {
                 // Retry fetch
                 const { data: retryData } = await supabase
                   .from('subscriptions')
-                  .select('status, price_id, plan_tier')
+                  .select('status, stripe_price_id, plan_tier')
                   .eq('user_id', user.id)
                   .maybeSingle();
                 setSubscription(retryData);
