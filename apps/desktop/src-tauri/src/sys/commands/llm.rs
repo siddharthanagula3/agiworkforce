@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::State;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMSendMessageRequest {
@@ -27,7 +27,7 @@ pub struct LLMSendMessageRequest {
 }
 
 pub struct LLMState {
-    pub router: Arc<Mutex<LLMRouter>>,
+    pub router: Arc<RwLock<LLMRouter>>,
     pub cache_manager: CacheManager,
 }
 
@@ -47,7 +47,7 @@ impl Default for LLMState {
 impl LLMState {
     pub fn new() -> Self {
         Self {
-            router: Arc::new(Mutex::new(LLMRouter::new())),
+            router: Arc::new(RwLock::new(LLMRouter::new())),
             cache_manager: CacheManager::new(Duration::from_secs(60 * 60 * 24), 512),
         }
     }
@@ -128,7 +128,7 @@ pub async fn llm_send_message(
     };
 
     let candidates = {
-        let router = state.router.lock().await;
+        let router = state.router.read().await;
         router.candidates(&llm_request, &preferences)
     };
 
@@ -147,7 +147,7 @@ pub async fn llm_send_message(
 
     for candidate in candidates {
         let res = {
-            let router = state.router.lock().await;
+            let router = state.router.read().await;
             router.invoke_candidate(&candidate, &llm_request).await
         };
         match res {
@@ -242,7 +242,7 @@ pub async fn llm_configure_provider(
         }
     }
 
-    let mut router = state.router.lock().await;
+    let mut router = state.router.write().await;
 
     match provider.as_str() {
         "openai" => {
@@ -330,7 +330,7 @@ pub async fn llm_set_default_provider(
         return Err("Provider name cannot be empty".to_string());
     }
 
-    let mut router = state.router.lock().await;
+    let mut router = state.router.write().await;
 
     let provider_enum = match provider.as_str() {
         "openai" => Provider::OpenAI,
@@ -359,7 +359,7 @@ pub async fn llm_ensure_managed_cloud(state: State<'_, LLMState>) -> Result<bool
     match get_access_token() {
         Ok(_) => {
             // User is authenticated, register ManagedCloud provider
-            let mut router = state.router.lock().await;
+            let mut router = state.router.write().await;
             router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
             Ok(true)
         }
@@ -409,7 +409,7 @@ pub struct ProviderUsage {
 pub async fn llm_get_available_models(
     state: State<'_, LLMState>,
 ) -> Result<Vec<ModelInfo>, String> {
-    let router = state.router.lock().await;
+    let router = state.router.read().await;
 
     let all_models = vec![
         // OpenAI
@@ -575,7 +575,7 @@ pub async fn llm_check_provider_status(
     provider: String,
     state: State<'_, LLMState>,
 ) -> Result<ProviderStatus, String> {
-    let router = state.router.lock().await;
+    let router = state.router.read().await;
 
     let provider_enum = match provider.as_str() {
         "openai" => Provider::OpenAI,
@@ -802,7 +802,7 @@ pub async fn router_suggestions(
     state: State<'_, LLMState>,
     context: Option<RouterContext>,
 ) -> Result<RouterSuggestionPayload, String> {
-    let router = state.router.lock().await;
+    let router = state.router.read().await;
     let suggestion = router.suggest_for_context(&context.unwrap_or_default());
     Ok(RouterSuggestionPayload {
         provider: suggestion.provider.as_string().to_string(),

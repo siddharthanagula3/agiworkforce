@@ -1501,38 +1501,49 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let request = crate::sys::commands::media::MediaImageRequest {
-                    prompt: prompt.clone(),
-                    negative_prompt: None,
-                    provider,
-                    model: None,
-                    size,
-                    quality: None,
-                    style: None,
-                    n: Some(1),
-                };
+                if let Some(ref app) = self.app_handle {
+                    let request = crate::sys::commands::media::MediaImageRequest {
+                        prompt: prompt.clone(),
+                        negative_prompt: None,
+                        provider,
+                        model: None,
+                        size,
+                        quality: None,
+                        style: None,
+                        n: Some(1),
+                    };
 
-                match crate::sys::commands::media::media_generate_image(request).await {
-                    Ok(response) => {
-                        let result_data = json!({
-                            "success": true,
-                            "images": response.images,
-                            "provider": response.provider,
-                            "cost": response.cost_estimate
-                        });
-                        Ok(ToolResult {
-                            success: true,
-                            data: result_data,
-                            error: None,
+                    match crate::sys::commands::media::media_generate_image(app.clone(), request)
+                        .await
+                    {
+                        Ok(response) => {
+                            let result_data = json!({
+                                "success": true,
+                                "images": response.images,
+                                "provider": response.provider,
+                                "cost": response.cost_estimate
+                            });
+                            Ok(ToolResult {
+                                success: true,
+                                data: result_data,
+                                error: None,
+                                metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                            })
+                        }
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Image generation failed: {}", e)),
                             metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                        })
+                        }),
                     }
-                    Err(e) => Ok(ToolResult {
+                } else {
+                    Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some(format!("Image generation failed: {}", e)),
-                        metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                    }),
+                        error: Some("App handle not available for image generation".to_string()),
+                        metadata: HashMap::new(),
+                    })
                 }
             }
             "video_generate" => {
@@ -1546,38 +1557,49 @@ impl ToolExecutor {
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);
 
-                let request = crate::sys::commands::media::MediaVideoRequest {
-                    prompt: prompt.clone(),
-                    negative_prompt: None,
-                    duration_secs,
-                    resolution: None,
-                    style: None,
-                    model: None,
-                    plan: None,
-                };
+                if let Some(ref app) = self.app_handle {
+                    let request = crate::sys::commands::media::MediaVideoRequest {
+                        prompt: prompt.clone(),
+                        negative_prompt: None,
+                        duration_secs,
+                        resolution: None,
+                        style: None,
+                        model: None,
+                        plan: None,
+                    };
 
-                match crate::sys::commands::media::media_generate_video(request).await {
-                    Ok(response) => {
-                        let result_data = json!({
-                            "success": true,
-                            "video_url": response.video_url,
-                            "thumbnail_url": response.thumbnail_url,
-                            "id": response.id,
-                            "status": response.status
-                        });
-                        Ok(ToolResult {
-                            success: true,
-                            data: result_data,
-                            error: None,
+                    match crate::sys::commands::media::media_generate_video(app.clone(), request)
+                        .await
+                    {
+                        Ok(response) => {
+                            let result_data = json!({
+                                "success": true,
+                                "video_url": response.video_url,
+                                "thumbnail_url": response.thumbnail_url,
+                                "id": response.id,
+                                "status": response.status
+                            });
+                            Ok(ToolResult {
+                                success: true,
+                                data: result_data,
+                                error: None,
+                                metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
+                            })
+                        }
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Video generation failed: {}", e)),
                             metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                        })
+                        }),
                     }
-                    Err(e) => Ok(ToolResult {
+                } else {
+                    Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some(format!("Video generation failed: {}", e)),
-                        metadata: HashMap::from([("prompt".to_string(), json!(prompt))]),
-                    }),
+                        error: Some("App handle not available for video generation".to_string()),
+                        metadata: HashMap::new(),
+                    })
                 }
             }
             "llm_reason" => {
@@ -1618,7 +1640,7 @@ impl ToolExecutor {
                         prefer_cloud_credits: false,
                     });
 
-                    let router = llm_state.router.lock().await;
+                    let router = llm_state.router.read().await;
                     match router.send_message(prompt, preferences).await {
                         Ok(response) => Ok(ToolResult {
                             success: true,

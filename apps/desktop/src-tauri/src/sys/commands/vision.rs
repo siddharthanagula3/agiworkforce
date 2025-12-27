@@ -160,7 +160,7 @@ pub async fn vision_send_message(
     };
 
     let candidates = {
-        let router = state.router.lock().await;
+        let router = state.router.read().await;
         router.candidates(&llm_request, &preferences)
     };
 
@@ -172,7 +172,7 @@ pub async fn vision_send_message(
 
     for candidate in candidates {
         let res = {
-            let router = state.router.lock().await;
+            let router = state.router.read().await;
             router.invoke_candidate(&candidate, &llm_request).await
         };
         match res {
