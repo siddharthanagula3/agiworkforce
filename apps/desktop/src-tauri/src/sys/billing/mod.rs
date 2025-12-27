@@ -1,3 +1,7 @@
+#[cfg(feature = "billing")]
+use rusqlite::Connection;
+use anyhow::Result;
+
 pub mod models;
 #[cfg(feature = "billing")]
 pub mod stripe_client;
@@ -470,11 +474,11 @@ pub async fn stripe_delete_payment_method(
 #[cfg(feature = "billing")]
 #[tauri::command]
 pub async fn send_invoice_email(
-    invoice_id: String,
+    _invoice_id: String,
     recipient_email: String,
     subject: String,
     body: String,
-    state: State<'_, BillingStateWrapper>,
+    _state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
     let smtp_host = std::env::var("SMTP_HOST").ok();
     let smtp_port = std::env::var("SMTP_PORT")
