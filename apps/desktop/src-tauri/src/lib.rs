@@ -678,6 +678,7 @@ pub fn run() {
 
             crate::sys::commands::media_generate_image,
             crate::sys::commands::media_generate_video,
+            crate::sys::commands::media_get_history,
 
 
             crate::sys::commands::debug_parse_error,
@@ -940,6 +941,7 @@ pub fn run() {
 
             crate::sys::commands::mcp_initialize,
             crate::sys::commands::mcp_list_servers,
+            crate::sys::commands::mcp_get_registry,
             crate::sys::commands::mcp_connect_server,
             crate::sys::commands::mcp_disconnect_server,
             crate::sys::commands::mcp_list_tools,

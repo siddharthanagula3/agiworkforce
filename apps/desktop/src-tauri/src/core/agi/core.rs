@@ -11,6 +11,8 @@ use std::time::Duration;
 use tauri::Emitter;
 use tokio::time::sleep;
 
+use tokio::sync::RwLock;
+
 #[derive(Clone)]
 struct PlanStepRuntimeState {
     status: String,
@@ -38,7 +40,7 @@ pub struct AGICore {
     executor: Arc<AGIExecutor>,
     memory: Arc<AGIMemory>,
     learning: Arc<LearningSystem>,
-    router: Arc<tokio::sync::Mutex<LLMRouter>>,
+    router: Arc<RwLock<LLMRouter>>,
     automation: Arc<AutomationService>,
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
@@ -53,7 +55,7 @@ pub struct AGICore {
 impl AGICore {
     pub fn new(
         config: AGIConfig,
-        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        router: Arc<RwLock<LLMRouter>>,
         automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
@@ -114,7 +116,7 @@ impl AGICore {
 
     pub fn with_process_reasoning(
         config: AGIConfig,
-        router: Arc<tokio::sync::Mutex<LLMRouter>>,
+        router: Arc<RwLock<LLMRouter>>,
         automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
         db_path: String,

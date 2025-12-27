@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ProcessType {
@@ -173,12 +174,12 @@ pub struct OutcomeDetail {
 }
 
 pub struct ProcessReasoning {
-    router: Arc<tokio::sync::Mutex<LLMRouter>>,
+    router: Arc<RwLock<LLMRouter>>,
     process_cache: Arc<std::sync::Mutex<HashMap<String, ProcessType>>>,
 }
 
 impl ProcessReasoning {
-    pub fn new(router: Arc<tokio::sync::Mutex<LLMRouter>>) -> Result<Self> {
+    pub fn new(router: Arc<RwLock<LLMRouter>>) -> Result<Self> {
         Ok(Self {
             router,
             process_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -355,12 +356,12 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             thinking_mode: None,
         };
 
-        let router = self.router.lock().await;
+        let router = self.router.read().await;
         let candidates = router.candidates(&request, &preferences);
         drop(router);
 
         if !candidates.is_empty() {
-            let router = self.router.lock().await;
+            let router = self.router.read().await;
             if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
                 let response = outcome.response.content.trim();
                 if let Some(process_type) = ProcessType::from_str(response) {

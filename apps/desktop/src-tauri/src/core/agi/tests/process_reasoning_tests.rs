@@ -93,7 +93,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_select_optimal_strategy_includes_typical_tools() {
-        let router = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
+        let router = Arc::new(tokio::sync::RwLock::new(LLMRouter::new()));
         let reasoning = ProcessReasoning::new(router).unwrap();
 
         let context = create_execution_context(Vec::new());
@@ -107,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_evaluate_outcome_uses_tool_success_rate_for_accuracy_metrics() {
-        let router = Arc::new(tokio::sync::Mutex::new(LLMRouter::new()));
+        let router = Arc::new(tokio::sync::RwLock::new(LLMRouter::new()));
         let reasoning = ProcessReasoning::new(router).unwrap();
 
         let expected_outcomes = vec![Outcome {
