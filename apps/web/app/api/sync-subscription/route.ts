@@ -39,17 +39,28 @@ async function handleSyncSubscription(request: NextRequest) {
 
     if (!synced) {
       // Either no active subscription exists in Stripe, or syncWithStripe encountered
-      // an internal error and logged it. Expose a generic error to the client.
+      // an internal error and logged it.
+      //
+      // IMPORTANT: This is not a hard server error; the Pricing page treats this as a
+      // best-effort self-healing step. We therefore return 200 with success: false
+      // so the client can continue gracefully without a noisy 500 in the console.
+      logger.warn(
+        {
+          userId: user.id,
+        },
+        'syncWithStripe returned null in sync-subscription endpoint',
+      );
+
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'SYNC_FAILED',
             message:
-              'Failed to sync subscription from Stripe. Please try again or contact support.',
+              'No active Stripe subscription was found to sync. If you just subscribed, please wait a moment and try again.',
           },
         },
-        { status: 500 },
+        { status: 200 },
       );
     }
 
