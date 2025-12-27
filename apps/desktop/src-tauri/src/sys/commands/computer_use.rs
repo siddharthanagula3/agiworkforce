@@ -108,7 +108,12 @@ pub async fn computer_use_capture_screen(
         let mut cursor = std::io::Cursor::new(&mut png_bytes);
         use image::ImageEncoder;
         image::codecs::png::PngEncoder::new(&mut cursor)
-            .write_image(image.as_raw(), width, height, image::ColorType::Rgba8.into())
+            .write_image(
+                image.as_raw(),
+                width,
+                height,
+                image::ColorType::Rgba8.into(),
+            )
             .map_err(|e| format!("Failed to encode image: {}", e))?;
     }
 

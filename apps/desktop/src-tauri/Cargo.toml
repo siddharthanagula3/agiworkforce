@@ -99,8 +99,8 @@ hmac = "0.12"
 hex = "0.4"
 
 
-image = { version = "0.24.9", features = ["png", "jpeg", "webp"] }
-imageproc = "0.24"
+image = { version = "0.25", features = ["png", "jpeg", "webp"] }
+imageproc = "0.25"
 
 
 tracing = "0.1"

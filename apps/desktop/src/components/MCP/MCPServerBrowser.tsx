@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '../../lib/tauri-mock';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -34,9 +35,6 @@ interface ServerPackage {
   downloads: number;
   installed: boolean;
 }
-
-// MCP server registry will be fetched from API
-// TODO: Implement API endpoint to fetch MCP server registry
 
 const CATEGORIES = [
   { id: 'all', name: 'All Servers', icon: Package },
@@ -212,11 +210,8 @@ export function MCPServerBrowser() {
     const fetchServers = async () => {
       try {
         setIsLoading(true);
-        // TODO: Replace with actual API call
-        // const response = await fetch('/api/mcp-servers');
-        // const data = await response.json();
-        // setServers(data);
-        setServers([]); // Empty for now until API is implemented
+        const data = await invoke<ServerPackage[]>('mcp_get_registry');
+        setServers(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load MCP servers');
         console.error('Failed to fetch MCP servers:', err);

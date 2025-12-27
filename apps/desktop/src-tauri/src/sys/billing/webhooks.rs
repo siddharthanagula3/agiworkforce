@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[derive(Clone)]
 pub struct WebhookHandler {
     webhook_secret: String,
     db: Arc<Mutex<Connection>>,

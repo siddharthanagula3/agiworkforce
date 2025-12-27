@@ -81,13 +81,16 @@
 - **Browser Automation**: Implemented full-stack browser automation capabilities, including backend proxy/profile management and frontend control APIs.
 - **Backend Stability**: Resolved critical issues with mutex panics in automation, removed unsafe unwraps in git modules, and fixed AGI orchestrator result extraction.
 - **AI Enhancements**: Integrated RAG support for PDF/DOCX extraction and implemented `WalkDir`-based project analysis for better AI context.
+- **Ollama Integration**: Verified full functionality of local Ollama integration (localhost:11434), including response streaming (verified with `ministral-3:14b`) and model list parsing.
+- **Smart Provider Switching**: Enhanced dynamic LLM provider switching based on task complexity (e.g., Vision -> Google, Code -> Anthropic) and fixed UI bugs in `QuickModelSelector` for local model detection.
+- **System Verification**: Validated core capabilities including 'Thinking...' UI states, tool execution (file ops, browser, git, MCP), and the vision system (all 21 OCR/detection tests passed).
 - **Security**: Hardened file operations with permission checks and size limits for shell helper commands.
 - **Desktop UI/UX**: Enhanced authentication flows, added privacy/legal pages, and improved desktop stability with randomized test environments.
 - **Subscription & Billing**: Integrated subscription-related components and navigation logic for the desktop app.
 
 ### Current Focus
 
-- Ensuring long-term stability of the refactored component structure.
-- Refactoring `chat.rs` commands and enhancing the Ollama provider implementation.
+- Refactoring `chat.rs` commands to improve maintainability and performance.
 - Finalizing the subscription lock mechanism and usage dashboard analytics.
 - Improving SSE parsing for more robust agent communication.
+- Ensuring long-term stability of the refactored component structure.

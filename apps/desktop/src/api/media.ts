@@ -36,6 +36,20 @@ function toDataUrl(base64: string) {
   return `data:image/png;base64,${base64}`;
 }
 
+export interface MediaHistoryItem {
+  id: string;
+  type: string;
+  title: string;
+  prompt: string;
+  status: string;
+  src?: string;
+  createdAt: string;
+}
+
+export async function getMediaHistory(): Promise<MediaHistoryItem[]> {
+  return await invoke<MediaHistoryItem[]>('media_get_history');
+}
+
 export async function generateImage(
   payload: ImageGenerationPayload,
 ): Promise<GeneratedImageResult[]> {
