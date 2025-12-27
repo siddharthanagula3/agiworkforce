@@ -143,7 +143,7 @@ function PaymentSuccessContent() {
                   Open Desktop App
                 </button>
                 <p className="text-xs text-zinc-600">
-                  If the app didn't open, make sure AGI Workforce Desktop is installed.
+                  If the app didn&apos;t open, make sure AGI Workforce Desktop is installed.
                 </p>
               </div>
             ) : (
