@@ -10,13 +10,13 @@ pub async fn perform_ocr(path: &str) -> Result<OcrResult> {
     let path = path.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let mut instance = tesseract::Tesseract::new(None, "eng")
+        let instance = tesseract::Tesseract::new(None, Some("eng"))
             .context("Failed to initialise Tesseract (lang: eng)")?;
-        instance
+        let mut instance = instance
             .set_image(&path)
             .context("Failed to load image for OCR")?;
         let text = instance.get_text().context("Failed to extract OCR text")?;
-        let confidence = instance.mean_text_confidence().unwrap_or(0) as f32 / 100.0;
+        let confidence = instance.mean_text_conf() as f32 / 100.0;
         Ok(OcrResult { text, confidence })
     })
     .await

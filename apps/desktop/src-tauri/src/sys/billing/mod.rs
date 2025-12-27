@@ -132,7 +132,7 @@ pub async fn billing_initialize(
 ) -> Result<(), String> {
     let mut billing = state.inner().0.lock().await;
 
-    let db = Arc::new(db_state.inner().clone());
+    let db = db_state.conn.clone();
     billing.initialize(stripe_api_key, webhook_secret, db);
 
     Ok(())
@@ -145,11 +145,13 @@ pub async fn stripe_create_customer(
     name: Option<String>,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<CustomerInfo, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .create_customer(&email, name.as_deref())
@@ -184,11 +186,13 @@ pub async fn stripe_create_subscription(
     billing_interval: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .create_subscription(
@@ -208,11 +212,13 @@ pub async fn stripe_get_subscription(
     stripe_subscription_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .get_subscription(&stripe_subscription_id)
@@ -228,11 +234,13 @@ pub async fn stripe_update_subscription(
     new_plan_name: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<SubscriptionInfo, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .update_subscription(&stripe_subscription_id, &new_price_id, &new_plan_name)
@@ -246,11 +254,13 @@ pub async fn stripe_cancel_subscription(
     stripe_subscription_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .cancel_subscription(&stripe_subscription_id)
@@ -264,11 +274,13 @@ pub async fn stripe_get_invoices(
     customer_stripe_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<Vec<InvoiceInfo>, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .get_invoices(&customer_stripe_id)
@@ -331,11 +343,13 @@ pub async fn stripe_create_portal_session(
     return_url: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<String, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .create_portal_session(&customer_stripe_id, &return_url)
@@ -367,11 +381,13 @@ pub async fn stripe_process_webhook(
     signature: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state.0.lock().await;
-
-    let handler = billing
-        .webhook_handler()
-        .map_err(|e| format!("Webhook handler not initialized: {}", e))?;
+    let handler = {
+        let billing = state.0.lock().await;
+        billing
+            .webhook_handler()
+            .map_err(|e| format!("Webhook handler not initialized: {}", e))?
+            .clone()
+    };
 
     handler
         .process_event(&payload, &signature)
@@ -385,11 +401,13 @@ pub async fn stripe_get_payment_methods(
     customer_stripe_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<Vec<PaymentMethodInfo>, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .get_payment_methods(&customer_stripe_id)
@@ -404,11 +422,13 @@ pub async fn stripe_attach_payment_method(
     payment_method_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<PaymentMethodInfo, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .attach_payment_method(&customer_stripe_id, &payment_method_id)
@@ -423,11 +443,13 @@ pub async fn stripe_set_default_payment_method(
     payment_method_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .set_default_payment_method(&customer_stripe_id, &payment_method_id)
@@ -441,11 +463,13 @@ pub async fn stripe_create_setup_intent(
     customer_stripe_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<String, String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .create_setup_intent(&customer_stripe_id)
@@ -459,11 +483,13 @@ pub async fn stripe_delete_payment_method(
     payment_method_id: String,
     state: State<'_, BillingStateWrapper>,
 ) -> Result<(), String> {
-    let billing = state.0.lock().await;
-
-    let service = billing
-        .stripe_service()
-        .map_err(|e| format!("Stripe service not initialized: {}", e))?;
+    let service = {
+        let billing = state.0.lock().await;
+        billing
+            .stripe_service()
+            .map_err(|e| format!("Stripe service not initialized: {}", e))?
+            .clone()
+    };
 
     service
         .detach_payment_method(&payment_method_id)

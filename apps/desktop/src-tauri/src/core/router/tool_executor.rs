@@ -1428,7 +1428,7 @@ impl ToolExecutor {
                 #[cfg(feature = "ocr")]
                 {
                     use crate::automation::screen::perform_ocr;
-                    match perform_ocr(image_path) {
+                    match perform_ocr(image_path).await {
                         Ok(text) => Ok(ToolResult {
                             success: true,
                             data: json!({ "text": text, "image_path": image_path }),
