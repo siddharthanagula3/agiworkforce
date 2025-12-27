@@ -53,12 +53,24 @@ async function handleSyncSubscription(request: NextRequest) {
   }
 
   try {
-    // Get user's subscription from Supabase
-    const { data: subscription } = await supabaseAdmin
+    // Get user's subscription from Supabase (may or may not exist yet)
+    const { data: subscription, error: subscriptionError } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
+
+    if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+      // PGRST116 = no rows found; that's expected when healing a missing subscription
+      logger.error(
+        {
+          userId: user.id,
+          error: subscriptionError,
+        },
+        'Failed to fetch subscription from Supabase',
+      );
+      throw createError.supabase('Failed to fetch subscription', subscriptionError);
+    }
 
     let stripeSubscription: Stripe.Subscription | null = null;
 
