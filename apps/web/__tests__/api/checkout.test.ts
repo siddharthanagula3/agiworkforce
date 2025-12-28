@@ -15,6 +15,16 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+vi.mock('@/lib/csrf', () => ({
+  validateCsrfFromRequest: vi.fn(() => true),
+}));
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: {
+    getSubscription: vi.fn(() => null),
+  },
+}));
+
 vi.mock('../../services/supabase-server', () => ({
   createSupabaseServerClient: vi.fn(() => ({
     auth: {
