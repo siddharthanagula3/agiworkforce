@@ -39,7 +39,7 @@ describe('Sidebar Temporal Grouping', () => {
   describe('getTemporalGroup', () => {
     beforeEach(() => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2025-11-21T12:00:00Z'));
+      vi.setSystemTime(new Date('2026-01-21T12:00:00Z'));
     });
 
     afterEach(() => {
@@ -97,8 +97,10 @@ describe('Sidebar Temporal Grouping', () => {
     });
 
     it('should handle week boundaries correctly (Sunday start)', () => {
-      const sunday = new Date('2026-01-17T10:00:00Z');
-      expect(getTemporalGroup(sunday)).toBe('thisWeek');
+      // Jan 21, 2026 is Wednesday. Week starts Sunday Jan 18.
+      // Jan 17 (Saturday) is before this week's start, so it's last7Days.
+      const saturday = new Date('2026-01-17T10:00:00Z');
+      expect(getTemporalGroup(saturday)).toBe('last7Days');
     });
   });
 

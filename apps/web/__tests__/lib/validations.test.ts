@@ -70,6 +70,7 @@ describe('Validation Schemas', () => {
     it('should validate valid device poll request', () => {
       const result = DevicePollRequestSchema.safeParse({
         device_id: 'test-device-123',
+        device_fingerprint: 'abcdef1234567890',
       });
 
       expect(result.success).toBe(true);

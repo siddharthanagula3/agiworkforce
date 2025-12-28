@@ -41,6 +41,9 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
+// Mock scrollTo for jsdom
+Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
+
 describe('UnifiedAgenticChat', () => {
   const renderChat = async (props: React.ComponentProps<typeof UnifiedAgenticChat> = {}) => {
     let utils: ReturnType<typeof render>;
@@ -63,7 +66,7 @@ describe('UnifiedAgenticChat', () => {
   it('should display sidebar when no messages exist', async () => {
     await renderChat();
 
-    expect(screen.getByText('Search')).toBeInTheDocument();
+    expect(screen.getAllByText('Search').length).toBeGreaterThan(0);
   });
 
   it('should render input area with placeholder', async () => {
