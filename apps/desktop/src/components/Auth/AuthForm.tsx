@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  Github,
   KeyRound,
   Loader2,
   Lock,
@@ -583,6 +584,47 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             )}
           </Button>
         </form>
+
+        {}
+        {(mode === 'signin' || mode === 'signup') && (
+          <div className="mt-6 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border/50" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card px-2 text-muted-foreground">or continue with</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11"
+                onClick={async () => {
+                  const { signInWithOAuth } = useAuthStore.getState();
+                  await signInWithOAuth('github');
+                }}
+              >
+                <Github className="w-4 h-4" />
+                GitHub
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11"
+                onClick={async () => {
+                  const { signInWithOAuth } = useAuthStore.getState();
+                  await signInWithOAuth('google');
+                }}
+              >
+                <Mail className="w-4 h-4" />
+                Google
+              </Button>
+            </div>
+          </div>
+        )}
 
         {}
         <div className="mt-6 space-y-3">

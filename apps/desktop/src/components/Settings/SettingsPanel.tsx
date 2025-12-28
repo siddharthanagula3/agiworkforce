@@ -6,8 +6,7 @@ import {
   Check,
   Database,
   Download,
-  Eye,
-  EyeOff,
+  Github,
   Key,
   Loader2,
   Monitor,
@@ -17,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MODEL_PRESETS, PROVIDER_LABELS } from '../../constants/llm';
-import { cn } from '../../lib/utils';
 
 import {
   createDefaultLLMConfig,
@@ -36,182 +34,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
 import { UpdateSettings } from './UpdateSettings';
-import { canUseAPIKeys } from '../../utils/subscriptionGate';
-import { openPricingPage } from '../../utils/navigation';
-import { useAccountStore } from '../../stores/accountStore';
-import { Switch } from '../ui/Switch';
+import { GitHubTokenConfig } from './GitHubTokenConfig';
 
 interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-interface APIKeyFieldProps {
-  provider: Provider;
-  label: string;
-  placeholder: string;
-}
-
-function APIKeyField({ provider, label, placeholder }: APIKeyFieldProps) {
-  const { apiKeys, setAPIKey, testAPIKey, loading } = useSettingsStore();
-  const [showKey, setShowKey] = useState(false);
-  const [localKey, setLocalKey] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-
-  useEffect(() => {
-    setLocalKey(apiKeys[provider as keyof typeof apiKeys] || '');
-  }, [apiKeys, provider]);
-
-  const handleSave = async () => {
-    if (!localKey.trim()) return;
-
-    if (!canUseAPIKeys()) {
-      setShowUpgradePrompt(true);
-      return;
-    }
-
-    try {
-      await setAPIKey(provider, localKey.trim());
-      setTestResult('success');
-      setTimeout(() => setTestResult(null), 3000);
-    } catch (error) {
-      setTestResult('error');
-      setTimeout(() => setTestResult(null), 3000);
-    }
-  };
-
-  const handleTest = async () => {
-    if (!localKey.trim()) return;
-
-    if (!canUseAPIKeys()) {
-      setShowUpgradePrompt(true);
-      return;
-    }
-
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const currentKey = apiKeys[provider as keyof typeof apiKeys];
-      if (localKey.trim() !== currentKey) {
-        await setAPIKey(provider, localKey.trim());
-      }
-
-      const success = await testAPIKey(provider);
-      if (success) {
-        setTestResult('success');
-        setTimeout(() => setTestResult(null), 3000);
-      } else {
-        setTestResult('error');
-        setTimeout(() => setTestResult(null), 5000);
-      }
-    } catch (error) {
-      console.error('API key test failed:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      useSettingsStore.setState({ error: errorMessage });
-      setTestResult('error');
-      setTimeout(() => setTestResult(null), 5000);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={provider}>{label}</Label>
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Input
-            id={provider}
-            type={showKey ? 'text' : 'password'}
-            placeholder={placeholder}
-            value={localKey}
-            onChange={(e) => setLocalKey(e.target.value)}
-            className="pr-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowKey(!showKey)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSave}
-          disabled={
-            loading || !localKey.trim() || localKey === apiKeys[provider as keyof typeof apiKeys]
-          }
-        >
-          Save
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleTest}
-          disabled={testing || !localKey.trim()}
-        >
-          {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Test'}
-        </Button>
-        {testResult && (
-          <div
-            className={cn(
-              'flex items-center justify-center w-8 h-8 rounded-md',
-              testResult === 'success'
-                ? 'bg-green-500/20 text-green-500'
-                : 'bg-red-500/20 text-red-500',
-            )}
-          >
-            {testResult === 'success' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
-          </div>
-        )}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Your API key is securely stored in the system keyring
-      </p>
-
-      {showUpgradePrompt && (
-        <div className="mt-4 rounded-lg border border-amber-800 bg-amber-900/20 p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              <Shield className="h-5 w-5 text-amber-400" />
-            </div>
-            <div className="flex-1 space-y-2">
-              <h4 className="text-sm font-semibold text-amber-200">Subscription Required</h4>
-              <p className="text-xs text-amber-300/80">
-                A Hobby plan or higher subscription is required to use API keys. Subscribe now to
-                unlock this feature.
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setShowUpgradePrompt(false);
-                    void openPricingPage();
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                >
-                  Subscribe
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowUpgradePrompt(false)}
-                  className="text-xs"
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
@@ -226,13 +53,11 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
     setTheme,
     setStartupPosition,
     setDockOnStartup,
-    setUseCloudCredits,
     loadSettings,
     saveSettings,
     loading,
     error,
   } = useSettingsStore();
-  const { plan } = useAccountStore((state) => state.account);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
@@ -261,7 +86,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="text-2xl font-bold">Settings</DialogTitle>
             <DialogDescription>
-              Configure your API keys, LLM preferences, and application settings
+              Configure LLM preferences, integrations, and application settings
             </DialogDescription>
           </DialogHeader>
 
@@ -277,7 +102,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </div>
           ) : (
             <Tabs defaultValue="api-keys" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="api-keys" className="flex items-center gap-2">
                   <Key className="h-4 w-4" />
                   API Keys
@@ -290,7 +115,10 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <Database className="h-4 w-4" />
                   Filesystem
                 </TabsTrigger>
-                {}
+                <TabsTrigger value="integrations" className="flex items-center gap-2">
+                  <Github className="h-4 w-4" />
+                  Integrations
+                </TabsTrigger>
                 <TabsTrigger value="window" className="flex items-center gap-2">
                   <Monitor className="h-4 w-4" />
                   Window
@@ -307,73 +135,39 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <TabsContent value="api-keys" className="space-y-6 pt-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">API Keys</h3>
+                  <h3 className="text-lg font-semibold mb-4">API Configuration</h3>
                   <p className="text-sm text-muted-foreground mb-6">
-                    Configure your API keys for different LLM providers. Keys are stored securely in
-                    your system keyring.
+                    All LLM requests are securely routed through our backend servers. Your API keys
+                    are managed on our infrastructure for your safety and convenience.
                   </p>
 
-                  {/* Cloud Credits Toggle for Pro/Max users */}
-                  {(plan === 'pro' || plan === 'max') && (
-                    <div className="mb-6 rounded-lg border border-border bg-muted/50 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <Label htmlFor="use-cloud-credits" className="text-sm font-medium">
-                            Use Cloud Credits
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            When enabled, Pro/Max subscription credits will be used instead of your
-                            own API keys for LLM requests.
-                          </p>
-                        </div>
-                        <Switch
-                          id="use-cloud-credits"
-                          checked={llmConfig?.useCloudCredits ?? true}
-                          onCheckedChange={setUseCloudCredits}
-                        />
+                  <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-md bg-green-500/20 p-3">
+                        <Check className="h-6 w-6 text-green-500" />
                       </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-6">
-                    <APIKeyField provider="openai" label="OpenAI API Key" placeholder="sk-..." />
-
-                    <APIKeyField
-                      provider="anthropic"
-                      label="Anthropic API Key"
-                      placeholder="sk-ant-..."
-                    />
-
-                    <APIKeyField
-                      provider="google"
-                      label="Google AI API Key"
-                      placeholder="AIza..."
-                    />
-
-                    <APIKeyField provider="xai" label="XAI API Key" placeholder="xai-..." />
-
-                    <APIKeyField
-                      provider="deepseek"
-                      label="DeepSeek API Key"
-                      placeholder="sk-..."
-                    />
-
-                    <APIKeyField provider="qwen" label="Qwen API Key" placeholder="sk-..." />
-
-                    <APIKeyField provider="mistral" label="Mistral API Key" placeholder="..." />
-
-                    <div className="rounded-lg border border-border bg-muted/50 p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-md bg-primary/10 p-2">
-                          <Key className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium">Ollama (Local)</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Ollama runs locally and doesn&apos;t require an API key. Make sure
-                            Ollama is running on http:
-                          </p>
-                        </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold mb-2">Secure Backend API</h4>
+                        <ul className="space-y-2 text-sm text-muted-foreground">
+                          <li className="flex items-start gap-2">
+                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
+                            <span>
+                              All LLM requests are processed through our secure backend servers
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
+                            <span>API keys are managed securely by our infrastructure</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
+                            <span>No API keys are stored locally on your device</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
+                            <span>All communications are encrypted end-to-end</span>
+                          </li>
+                        </ul>
                       </div>
                     </div>
                   </div>
@@ -574,6 +368,16 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
               <TabsContent value="filesystem" className="space-y-6 pt-6">
                 <AllowedDirectoriesSettings />
+              </TabsContent>
+
+              <TabsContent value="integrations" className="space-y-6 pt-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Integrations</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Configure external service integrations and credentials
+                  </p>
+                  <GitHubTokenConfig />
+                </div>
               </TabsContent>
 
               <TabsContent value="window" className="space-y-6 pt-6">

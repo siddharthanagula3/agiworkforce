@@ -23,11 +23,11 @@ export const THINKING_MODEL_VARIANTS: Record<string, string> = {
 
 export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: string }>> = {
   openai: [
-    { value: 'gpt-5.2', label: 'GPT-5.2 ⭐ (Dec 2025 - New Flagship)' },
+    { value: 'gpt-5.2', label: 'GPT-5.2 ⭐ (Jan 2026 - New Flagship)' },
     { value: 'gpt-5.2-pro', label: 'GPT-5.2 Pro (High Performance)' },
     { value: 'gpt-5.2-chat-latest', label: 'GPT-5.2 Chat (Efficient)' },
     { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex (Agentic Coding)' },
-    { value: 'gpt-5.1', label: 'GPT-5.1 (Nov 24, 2025)' },
+    { value: 'gpt-5.1', label: 'GPT-5.1 (Jan 2026)' },
     { value: 'gpt-5.1-chat-latest', label: 'GPT-5.1 Instant (Quick Responses)' }, // Renamed from instant
     { value: 'gpt-5.1-thinking', label: 'GPT-5.1 Thinking 🧠' },
     { value: 'gpt-5.1-codex-max', label: 'GPT-5.1-Codex-Max' },
@@ -36,27 +36,27 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
     { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 ⭐ (Best Coding - 77.2% SWE-bench)' },
     {
       value: 'claude-haiku-4-5',
-      label: 'Claude Haiku 4.5 ⚡ (Oct 15, 2025 - Fast & Cost Effective)',
+      label: 'Claude Haiku 4.5 ⚡ (Jan 2026 - Fast & Cost Effective)',
     },
     { value: 'claude-opus-4-5', label: 'Claude Opus 4.5 🧠 (Deep Reasoning/Thinking)' },
   ],
   google: [
-    { value: 'gemini-3-pro', label: 'Gemini 3 Pro ⭐ (Nov 24, 2025 - Top Benchmarks)' },
+    { value: 'gemini-3-pro', label: 'Gemini 3 Pro ⭐ (Jan 2026 - Top Benchmarks)' },
     { value: 'gemini-3-flash', label: 'Gemini 3 Flash (Fast)' },
     { value: 'gemini-3-deep-think', label: 'Gemini 3 Deep Think 🧠 (Advanced Reasoning/Thinking)' },
   ],
   ollama: [{ value: 'llama4-maverick', label: 'Llama 4 Maverick ⭐ (1M Context, Local)' }],
   xai: [
-    { value: 'grok-4.1', label: 'Grok 4.1 ⭐ (Nov 24, 2025 - Enhanced Reasoning)' },
+    { value: 'grok-4.1', label: 'Grok 4.1 ⭐ (Jan 2026 - Enhanced Reasoning)' },
     { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast ⚡ (Tool-calling, 2M Context)' },
   ],
   deepseek: [],
-  qwen: [{ value: 'qwen3-max', label: 'Qwen3-Max ⭐ 🧠 (Nov 24, 2025 - Thinking Mode)' }],
+  qwen: [{ value: 'qwen3-max', label: 'Qwen3-Max ⭐ 🧠 (Jan 2026 - Thinking Mode)' }],
   mistral: [],
   moonshot: [
     {
       value: 'kimi-k2-thinking',
-      label: 'Kimi K2 Thinking ⭐ 🧠 (Nov 24, 2025 - Advanced Reasoning)',
+      label: 'Kimi K2 Thinking ⭐ 🧠 (Jan 2026 - Advanced Reasoning)',
     },
   ],
 };
@@ -127,6 +127,7 @@ export interface ModelMetadata {
   };
   speed: 'very-fast' | 'fast' | 'medium' | 'slow';
   quality: 'excellent' | 'good' | 'fair';
+  qualityTier: 'fast' | 'balanced' | 'best';
   bestFor: string[];
   released?: string;
 }
@@ -153,6 +154,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: ['General Intelligence', 'Reduced Hallucinations', 'Better Prompt Adherence'],
     released: 'November 24, 2025',
   },
@@ -167,6 +169,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     benchmarks: { swebench: 78.5, humaneval: 96.0, mmlu: 93.0 },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: ['Flagship Tasks', 'Complex Reasoning'],
     released: 'December 2025',
   },
@@ -181,6 +184,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     benchmarks: { swebench: 82.0, humaneval: 97.5, mmlu: 95.0 },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: ['Deep Analysis', 'Hardest Problems'],
     released: 'December 2025',
   },
@@ -194,6 +198,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: false },
     speed: 'fast',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: ['Chat', 'Quick Responses'],
     released: 'December 2025',
   },
@@ -207,6 +212,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: false },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: ['Coding', 'Agentic Workflows'],
     released: 'December 2025',
   },
@@ -231,6 +237,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'fast',
     quality: 'excellent',
+    qualityTier: 'fast',
     bestFor: ['Quick Responses', 'Real-time Applications'],
     released: 'November 24, 2025',
   },
@@ -255,6 +262,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'slow',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: ['Complex Tasks', 'Deep Reasoning', 'Multi-step Problems'],
     released: 'November 24, 2025',
   },
@@ -279,6 +287,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: ['Agentic Coding', 'Long-running Tasks (24h+)', 'Complex Software Engineering'],
     released: 'November 24, 2025',
   },
@@ -304,6 +313,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'fast',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: ['Reasoning', 'Multimodal Understanding', 'Agentic Coding', 'Enterprise Applications'],
     released: 'November 24, 2025',
   },
@@ -328,6 +338,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'very-fast',
     quality: 'excellent',
+    qualityTier: 'fast',
     bestFor: ['Speed', 'Cost Efficiency', 'Enterprise Applications'],
     released: 'November 24, 2025',
   },
@@ -352,6 +363,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'slow',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: ['Advanced Reasoning', 'Complex Enterprise Tasks'],
     released: 'November 24, 2025',
   },
@@ -377,6 +389,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: ['Coding', 'Software Engineering', 'Technical Writing'],
     released: 'November 24, 2025',
   },
@@ -401,6 +414,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'very-fast',
     quality: 'excellent',
+    qualityTier: 'fast',
     bestFor: ['Auto Mode', 'Fast Responses', 'Cost Efficiency'],
     released: 'October 15, 2025',
   },
@@ -425,6 +439,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'slow',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: ['Complex Reasoning', 'Research', 'Long Context', 'Deep Analysis'],
     released: 'November 24, 2025',
   },
@@ -450,6 +465,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'fast',
     quality: 'excellent',
+    qualityTier: 'fast',
     bestFor: ['Local Inference', 'Privacy', 'Zero Cost'],
     released: 'November 24, 2025',
   },
@@ -475,6 +491,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'fast',
     quality: 'excellent',
+    qualityTier: 'balanced',
     bestFor: [
       'Enhanced Reasoning',
       'Multimodal Understanding',
@@ -504,6 +521,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'very-fast',
     quality: 'excellent',
+    qualityTier: 'fast',
     bestFor: ['Tool-calling', 'Agentic Workflows', '2M Token Context', 'Agent Tools API'],
     released: 'November 24, 2025',
   },
@@ -529,6 +547,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: ['Thinking Mode', 'Advanced Reasoning', 'Foundation Model Performance'],
     released: 'November 24, 2025',
   },
@@ -554,6 +573,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
     },
     speed: 'medium',
     quality: 'excellent',
+    qualityTier: 'best',
     bestFor: [
       'Advanced Reasoning',
       'Agentic Tasks',

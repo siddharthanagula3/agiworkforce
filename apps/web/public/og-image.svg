@@ -1,0 +1,56 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGradient)"/>
+
+  <!-- Accent shapes -->
+  <circle cx="100" cy="100" r="150" fill="url(#accentGradient)" opacity="0.15"/>
+  <circle cx="1100" cy="550" r="200" fill="url(#accentGradient)" opacity="0.1"/>
+
+  <!-- Main content -->
+  <g>
+    <!-- Logo/Icon area -->
+    <rect x="100" y="100" width="150" height="150" rx="20" fill="url(#accentGradient)" opacity="0.2"/>
+    <circle cx="175" cy="175" r="40" fill="#3b82f6"/>
+    <path d="M 175 145 L 205 175 L 175 205 L 145 175 Z" fill="white" opacity="0.8"/>
+
+    <!-- Main title -->
+    <text x="300" y="180" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="white">
+      AGI Workforce
+    </text>
+
+    <!-- Subtitle -->
+    <text x="300" y="250" font-family="system-ui, -apple-system, sans-serif" font-size="32" fill="#cbd5e1">
+      Your On-Demand AI Workforce
+    </text>
+
+    <!-- Features list -->
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#94a3b8">
+      <text x="300" y="320">✓ Autonomous AI Agents</text>
+      <text x="300" y="360">✓ Computer Use & Automation</text>
+      <text x="300" y="400">✓ 9+ LLM Providers</text>
+    </g>
+
+    <!-- Call to action -->
+    <rect x="300" y="450" width="400" height="60" rx="8" fill="#3b82f6"/>
+    <text x="500" y="493" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="600" fill="white" text-anchor="middle">
+      Deploy AI Agents Now
+    </text>
+
+    <!-- Website URL -->
+    <text x="1100" y="590" font-family="monospace" font-size="16" fill="#64748b" text-anchor="end">
+      agiworkforce.com
+    </text>
+  </g>
+</svg>

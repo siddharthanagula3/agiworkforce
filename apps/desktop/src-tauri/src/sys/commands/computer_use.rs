@@ -270,7 +270,7 @@ pub async fn computer_use_execute_tool(
     }
 }
 
-#[allow(dead_code)]
+/// Records an action to the current session for audit/replay purposes
 async fn record_action(state: &ComputerUseState, action: ComputerAction) {
     if let Some(session_id) = state.current_session.lock().await.as_ref() {
         let mut sessions = state.sessions.lock().await;
@@ -283,7 +283,7 @@ async fn record_action(state: &ComputerUseState, action: ComputerAction) {
 fn current_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_else(|_| std::time::Duration::ZERO)
         .as_secs()
 }
 

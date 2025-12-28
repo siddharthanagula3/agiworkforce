@@ -5,6 +5,7 @@ import { AlertCircle, Bot, CheckCircle2, Github, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
+import { validatePassword, getPasswordRequirementsText } from '@/lib/password-validator';
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('');
@@ -13,14 +14,29 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [signupComplete, setSignupComplete] = useState(false);
   const [existingUser, setExistingUser] = useState(false);
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    const validation = validatePassword(value);
+    setPasswordErrors(validation.errors);
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setExistingUser(false);
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      setPasswordErrors(passwordValidation.errors);
+      setLoading(false);
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -122,22 +138,40 @@ export default function SignupPage() {
         </div>
 
         <div className="mt-8 space-y-4">
-          <Button
-            variant="outline"
-            className="w-full h-12"
-            onClick={async () => {
-              const supabase = getSupabaseClient();
-              await supabase.auth.signInWithOAuth({
-                provider: 'github',
-                options: {
-                  redirectTo: `${window.location.origin}/auth/callback`,
-                },
-              });
-            }}
-          >
-            <Github className="mr-2 h-5 w-5" /> {}
-            Continue with GitHub
-          </Button>
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              className="h-12"
+              onClick={async () => {
+                const supabase = getSupabaseClient();
+                await supabase.auth.signInWithOAuth({
+                  provider: 'github',
+                  options: {
+                    redirectTo: `${window.location.origin}/auth/callback`,
+                  },
+                });
+              }}
+            >
+              <Github className="mr-2 h-5 w-5" />
+              GitHub
+            </Button>
+            <Button
+              variant="outline"
+              className="h-12"
+              onClick={async () => {
+                const supabase = getSupabaseClient();
+                await supabase.auth.signInWithOAuth({
+                  provider: 'google',
+                  options: {
+                    redirectTo: `${window.location.origin}/auth/callback`,
+                  },
+                });
+              }}
+            >
+              <Mail className="mr-2 h-5 w-5" />
+              Google
+            </Button>
+          </div>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -168,15 +202,34 @@ export default function SignupPage() {
               required
             />
           </div>
-          <div>
+          <div className="space-y-2">
             <Input
               type="password"
-              placeholder="Password (min 6 characters)"
+              placeholder="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
+              onChange={(e) => handlePasswordChange(e.target.value)}
               required
             />
+            {password && (
+              <div className="text-xs space-y-1">
+                {passwordErrors.length === 0 ? (
+                  <div className="text-green-500 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Password meets requirements
+                  </div>
+                ) : (
+                  passwordErrors.map((err, i) => (
+                    <div key={i} className="text-amber-500 flex items-start gap-1">
+                      <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                      <span>{err}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            {!password && (
+              <p className="text-xs text-slate-400">Requires: {getPasswordRequirementsText()}</p>
+            )}
           </div>
           <div>
             <Input
