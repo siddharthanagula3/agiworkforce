@@ -38,6 +38,21 @@ impl MouseSimulator {
     }
 
     pub fn move_to(&mut self, x: i32, y: i32) -> Result<()> {
+        // Validate coordinates are reasonable (within typical screen bounds)
+        // Most displays are under 16K resolution
+        const MAX_COORD: i32 = 32000;
+        const MIN_COORD: i32 = -16000; // Allow for multi-monitor setups with negative coords
+
+        if x < MIN_COORD || x > MAX_COORD || y < MIN_COORD || y > MAX_COORD {
+            return Err(anyhow!(
+                "Coordinates out of bounds: ({}, {}). Must be between {} and {}",
+                x,
+                y,
+                MIN_COORD,
+                MAX_COORD
+            ));
+        }
+
         let _enigo_lock = lock_enigo()?;
         self.enigo
             .move_mouse(x, y, Coordinate::Abs)
@@ -45,21 +60,27 @@ impl MouseSimulator {
     }
 
     pub async fn move_to_smooth(&mut self, x: i32, y: i32, duration_ms: u32) -> Result<()> {
+        // Get current mouse position as starting point
+        let (start_x, start_y) = self.get_position().unwrap_or((0, 0));
+
         let duration_ms = duration_ms.max(10);
         let steps = ((duration_ms as f64 / 16.0).ceil() as usize).max(2);
         let step_delay = duration_ms / steps as u32;
 
-        let target_x = x;
-        let target_y = y;
+        let dx = x - start_x;
+        let dy = y - start_y;
 
         for i in 1..=steps {
             let t = i as f64 / steps as f64;
 
-            let _ease_t = 1.0 - (1.0 - t).powi(3);
+            // Cubic ease-out: 1 - (1 - t)^3
+            let ease_t = 1.0 - (1.0 - t).powi(3);
 
-            if i == steps {
-                self.move_to(target_x, target_y)?;
-            }
+            // Calculate interpolated position using easing
+            let current_x = start_x + (dx as f64 * ease_t) as i32;
+            let current_y = start_y + (dy as f64 * ease_t) as i32;
+
+            self.move_to(current_x, current_y)?;
 
             if i < steps {
                 sleep(Duration::from_millis(step_delay as u64)).await;
@@ -67,6 +88,51 @@ impl MouseSimulator {
         }
 
         Ok(())
+    }
+
+    /// Get current mouse position
+    pub fn get_position(&self) -> Result<(i32, i32)> {
+        // Note: enigo doesn't provide a direct way to get position on all platforms
+        // For now, we'll use a platform-specific approach or return a default
+        #[cfg(target_os = "macos")]
+        {
+            use core_graphics::event::CGEvent;
+            use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+            if let Ok(source) = CGEventSource::new(CGEventSourceStateID::CombinedSessionState) {
+                if let Ok(event) = CGEvent::new(source) {
+                    let location = event.location();
+                    return Ok((location.x as i32, location.y as i32));
+                }
+            }
+            Ok((0, 0))
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use windows::Win32::Foundation::POINT;
+            use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+            let mut point = POINT::default();
+            unsafe {
+                if GetCursorPos(&mut point).is_ok() {
+                    return Ok((point.x, point.y));
+                }
+            }
+            Ok((0, 0))
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // On Linux, we'd need X11 or Wayland APIs
+            // For now, return default
+            Ok((0, 0))
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        {
+            Ok((0, 0))
+        }
     }
 
     pub async fn double_click(&mut self, x: i32, y: i32) -> Result<()> {
@@ -105,6 +171,10 @@ impl MouseSimulator {
 
     pub fn drag(&mut self, start: (i32, i32), end: (i32, i32)) -> Result<()> {
         self.move_to(start.0, start.1)?;
+
+        // Small delay before pressing to ensure position is registered
+        std::thread::sleep(Duration::from_millis(10));
+
         {
             let _enigo_lock = lock_enigo()?;
             self.enigo
@@ -112,7 +182,23 @@ impl MouseSimulator {
                 .map_err(|e| anyhow!("Failed to press mouse button: {:?}", e))?;
         }
 
-        self.move_to(end.0, end.1)?;
+        // Add intermediate steps for smoother drag (minimum 5 steps)
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let distance = ((dx * dx + dy * dy) as f64).sqrt();
+        let steps = ((distance / 50.0).ceil() as usize).max(5); // One step per 50 pixels, min 5
+
+        for i in 1..=steps {
+            let t = i as f64 / steps as f64;
+            // Linear interpolation for simple drag
+            let current_x = start.0 + (dx as f64 * t) as i32;
+            let current_y = start.1 + (dy as f64 * t) as i32;
+            self.move_to(current_x, current_y)?;
+            std::thread::sleep(Duration::from_millis(5)); // Small delay between steps
+        }
+
+        // Small delay before releasing
+        std::thread::sleep(Duration::from_millis(10));
 
         let _enigo_lock = lock_enigo()?;
         self.enigo

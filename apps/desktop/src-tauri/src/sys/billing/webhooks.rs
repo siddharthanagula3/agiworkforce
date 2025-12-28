@@ -34,7 +34,7 @@ impl WebhookHandler {
         Self { webhook_secret, db }
     }
 
-    pub fn verify_signature(&self, payload: &str, signature: &str) -> Result<bool> {
+    pub fn verify_signature(&self, payload: &str, signature: &str) -> Result<(bool, String)> {
         let parts: Vec<&str> = signature.split(',').collect();
         let mut timestamp = "";
         let mut signatures = Vec::new();
@@ -55,22 +55,51 @@ impl WebhookHandler {
 
         let mut mac = HmacSha256::new_from_slice(self.webhook_secret.as_bytes())?;
         mac.update(signed_payload.as_bytes());
-        let result = mac.finalize();
-        let expected_signature = hex::encode(result.into_bytes());
 
+        // Use constant-time comparison via HMAC's verify_slice to prevent timing attacks
         for sig in signatures {
-            if sig == expected_signature {
-                return Ok(true);
+            if let Ok(sig_bytes) = hex::decode(sig) {
+                // Clone mac before verify since verify_slice consumes it
+                if mac.clone().verify_slice(&sig_bytes).is_ok() {
+                    return Ok((true, timestamp.to_string()));
+                }
             }
         }
 
-        Ok(false)
+        Ok((false, timestamp.to_string()))
+    }
+
+    fn validate_timestamp_freshness(&self, timestamp_str: &str) -> Result<()> {
+        let webhook_timestamp: i64 = timestamp_str
+            .parse()
+            .map_err(|_| anyhow!("Invalid timestamp format in webhook signature"))?;
+
+        let now = Utc::now().timestamp();
+        let time_diff = (now - webhook_timestamp).abs();
+
+        // Allow 5-minute tolerance (300 seconds) for clock skew
+        const TIMESTAMP_TOLERANCE: i64 = 300;
+
+        if time_diff > TIMESTAMP_TOLERANCE {
+            return Err(anyhow!(
+                "Webhook timestamp too old: {} seconds. Maximum allowed: {} seconds",
+                time_diff,
+                TIMESTAMP_TOLERANCE
+            ));
+        }
+
+        Ok(())
     }
 
     pub async fn process_event(&self, payload: &str, signature: &str) -> Result<()> {
-        if !self.verify_signature(payload, signature)? {
+        let (is_valid, timestamp) = self.verify_signature(payload, signature)?;
+
+        if !is_valid {
             return Err(anyhow!("Invalid webhook signature"));
         }
+
+        // Validate timestamp freshness to prevent replay attacks
+        self.validate_timestamp_freshness(&timestamp)?;
 
         let event: Event = serde_json::from_str(payload)?;
 
@@ -592,6 +621,27 @@ mod tests {
 
         let result = handler.verify_signature(payload, signature);
         assert!(result.is_ok());
+        if let Ok((_, timestamp)) = result {
+            assert_eq!(timestamp, "1234567890");
+        }
+    }
+
+    #[test]
+    fn test_validate_timestamp_freshness() {
+        let db = setup_test_db();
+        let handler = WebhookHandler::new("whsec_test".to_string(), db);
+
+        let now = Utc::now().timestamp();
+        let recent_timestamp = (now - 30).to_string(); // 30 seconds ago
+
+        // Should accept timestamps within 5-minute window
+        let result = handler.validate_timestamp_freshness(&recent_timestamp);
+        assert!(result.is_ok());
+
+        // Should reject timestamps older than 5 minutes
+        let old_timestamp = (now - 400).to_string(); // 400 seconds ago
+        let result = handler.validate_timestamp_freshness(&old_timestamp);
+        assert!(result.is_err());
     }
 
     #[test]

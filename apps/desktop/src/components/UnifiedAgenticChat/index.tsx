@@ -11,29 +11,22 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Layers, Square } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { useCostStore } from '../../stores/costStore';
 import { useModelStore } from '../../stores/modelStore';
-import { useSettingsStore, type Provider } from '../../stores/settingsStore';
-import { useAccountStore } from '../../stores/accountStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
-import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
 import { useUsageStore } from '../../stores/usageStore';
-import { Button } from '../ui/Button';
-import { CloudStoragePanel } from '../Cloud/CloudStoragePanel';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
-import { ArtifactsView } from './ArtifactsView';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
-import { MediaLab } from './MediaLab';
 import { ProjectsView } from './ProjectsView';
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
@@ -61,7 +54,6 @@ export const UnifiedAgenticChat: React.FC<{
   const activeView = useUnifiedChatStore((state) => state.activeView);
 
   const llmConfig = useSettingsStore((state) => state.llmConfig);
-  const { plan } = useAccountStore((state) => state.account);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const selectedModel = useModelStore((state) => state.selectedModel);
   const setWorkflowContext = useUnifiedChatStore((state) => state.setWorkflowContext);
@@ -69,9 +61,6 @@ export const UnifiedAgenticChat: React.FC<{
   const addTokenUsage = useTokenBudgetStore((state) => state.addTokenUsage);
   const { loadOverview } = useCostStore();
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
-
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [mediaLabOpen, setMediaLabOpen] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -98,27 +87,38 @@ export const UnifiedAgenticChat: React.FC<{
         'chat:stream-chunk',
         ({ payload }) => {
           const state = useUnifiedChatStore.getState();
-          const currentStreamingId = state.currentStreamingMessageId;
+          const targetMessageId = payload.message_id.toString();
 
-          if (currentStreamingId) {
-            state.updateMessage(currentStreamingId, {
+          // Always prefer message_id from payload
+          if (targetMessageId) {
+            state.updateMessage(targetMessageId, {
               content: payload.content,
               metadata: { streaming: true },
             });
           } else {
-            console.warn(
-              '[UnifiedAgenticChat] Stream chunk received but no currentStreamingMessageId set',
-            );
-            const lastStreaming = state.messages
-              .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
-              .pop();
-            if (lastStreaming) {
-              state.updateMessage(lastStreaming.id, {
+            // Fallback: use currentStreamingMessageId if available
+            const currentStreamingId = state.currentStreamingMessageId;
+            if (currentStreamingId) {
+              state.updateMessage(currentStreamingId, {
                 content: payload.content,
                 metadata: { streaming: true },
               });
             } else {
-              console.error('[UnifiedAgenticChat] No streaming message found to update');
+              // Last resort fallback (should rarely happen)
+              const lastStreaming = state.messages
+                .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
+                .pop();
+              if (lastStreaming) {
+                state.updateMessage(lastStreaming.id, {
+                  content: payload.content,
+                  metadata: { streaming: true },
+                });
+              } else {
+                console.error('[UnifiedAgenticChat] No streaming message found to update', {
+                  payloadMessageId: payload.message_id,
+                  currentStreamingId: state.currentStreamingMessageId,
+                });
+              }
             }
           }
         },
@@ -311,26 +311,6 @@ export const UnifiedAgenticChat: React.FC<{
 
     const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
 
-    if (
-      isTauri &&
-      enrichedOptions.providerOverride &&
-      enrichedOptions.providerOverride !== 'ollama'
-    ) {
-      try {
-        const { getAPIKey } = useSettingsStore.getState();
-        const apiKey = await getAPIKey(enrichedOptions.providerOverride as Provider);
-        if (apiKey && apiKey.trim()) {
-          await invoke('llm_configure_provider', {
-            provider: enrichedOptions.providerOverride,
-            apiKey: apiKey.trim(),
-            baseUrl: null,
-          });
-        }
-      } catch (error) {
-        console.warn('[UnifiedAgenticChat] Failed to configure provider before sending:', error);
-      }
-    }
-
     addMessage({ role: 'user', content, attachments: enrichedOptions.attachments });
 
     const assistantMessageId = addMessage({
@@ -346,11 +326,7 @@ export const UnifiedAgenticChat: React.FC<{
       if (onSendMessage) {
         await onSendMessage(content, enrichedOptions);
       } else {
-        // Determine if we should prefer cloud credits
-        // Only for Pro/Max users who have the preference enabled
-        const preferCloudCredits =
-          (plan === 'pro' || plan === 'max') && (llmConfig?.useCloudCredits ?? true);
-
+        // All LLM requests use cloud credits from subscription (except Ollama local)
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
@@ -369,7 +345,7 @@ export const UnifiedAgenticChat: React.FC<{
             conversationMode,
             taskMetadata,
             thinkingMode: useModelStore.getState().thinkingModeEnabled,
-            preferCloudCredits,
+            preferCloudCredits: true,
           },
         });
 
@@ -461,71 +437,22 @@ export const UnifiedAgenticChat: React.FC<{
     <div
       className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
     >
-      <AppLayout
-        onOpenSettings={onOpenSettings}
-        onOpenWorkspace={() => setWorkspaceOpen(true)}
-        onOpenMediaLab={() => setMediaLabOpen(true)}
-      >
+      <AppLayout onOpenSettings={onOpenSettings}>
         {activeView === 'chat' ? (
           <>
             <BudgetAlertsPanel />
-            <ChatStream onOpenSidecar={openSidecar} />
+            <ChatStream
+              onOpenSidecar={openSidecar}
+              onSuggestionClick={(prompt) => {
+                useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
+              }}
+            />
             <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
           </>
         ) : activeView === 'projects' ? (
           <ProjectsView />
-        ) : activeView === 'artifacts' ? (
-          <ArtifactsView />
         ) : null}
       </AppLayout>
-
-      {workspaceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
-          <div className="relative h-[80vh] w-[90vw] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c14] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm text-slate-200">
-                <Layers className="h-4 w-4" />
-                <span>Workspace</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-slate-400">
-                  Code + Terminal + Cloud
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => setWorkspaceOpen(false)}
-                >
-                  <Square className="h-4 w-4" />
-                  Close
-                </Button>
-              </div>
-            </div>
-            <div className="grid h-[calc(80vh-52px)] grid-cols-1 gap-3 overflow-hidden p-3 md:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-[#0f111d]">
-                <TerminalWorkspace className="h-full" />
-              </div>
-              <div className="rounded-xl border border-white/10 bg-[#0f111d]">
-                <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                  Hook your editor/file tree here for a full code view.
-                </div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-[#0f111d] overflow-hidden">
-                <CloudStoragePanel />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {mediaLabOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
-          <div className="relative h-[88vh] w-[96vw] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0c14] shadow-2xl">
-            <MediaLab onClose={() => setMediaLabOpen(false)} />
-          </div>
-        </div>
-      )}
 
       <ApprovalModal />
     </div>

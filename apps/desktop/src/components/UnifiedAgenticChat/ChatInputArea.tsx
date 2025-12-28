@@ -1,18 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
-import {
-  Camera,
-  ChevronDown,
-  Image as ImageIcon,
-  Loader2,
-  Mic,
-  MicOff,
-  Paperclip,
-  Send,
-  Square,
-  X,
-  Brain,
-} from 'lucide-react';
+import { ChevronDown, Loader2, Mic, MicOff, Paperclip, Send, Square, X, Brain } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getModelMetadata } from '../../constants/llm';
@@ -450,19 +438,37 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
           >
             <div className="flex h-full items-center justify-center">
               <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="flex flex-col items-center gap-4"
+                initial={{ scale: 0.8, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.8, opacity: 0, y: 20 }}
+                transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                className="flex flex-col items-center gap-6"
               >
-                <div className="rounded-full bg-primary/10 p-8">
-                  <Paperclip className="h-16 w-16 text-primary" />
+                {/* Animated border container */}
+                <div className="relative">
+                  <motion.div
+                    className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary via-purple-500 to-primary"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                    style={{ padding: '3px' }}
+                  />
+                  <div className="relative rounded-3xl bg-zinc-900 p-10">
+                    <motion.div
+                      animate={{ y: [0, -8, 0] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      <Paperclip className="h-16 w-16 text-primary" />
+                    </motion.div>
+                  </div>
                 </div>
-                <p className="text-2xl font-medium text-white">Drop to Attach</p>
+                <div className="text-center">
+                  <p className="text-2xl font-semibold text-white mb-2">Drop files here</p>
+                  <p className="text-sm text-zinc-400">Images, documents, and more</p>
+                </div>
               </motion.div>
             </div>
           </motion.div>
@@ -578,36 +584,58 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </div>
           )}
 
-          {}
+          {/* Attachments with image previews */}
           {attachments.length > 0 && (
             <div className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                {attachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-700 px-3 py-2 text-sm"
-                  >
-                    {attachment.type === 'image' ? (
-                      <ImageIcon size={16} className="text-gray-400" />
-                    ) : attachment.type === 'screenshot' ? (
-                      <Camera size={16} className="text-gray-400" />
-                    ) : attachment.mimeType?.startsWith('audio/') ? (
-                      <Mic size={16} className="text-gray-400" />
-                    ) : (
-                      <Paperclip size={16} className="text-gray-400" />
-                    )}
-                    <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-300">
-                      {attachment.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="text-gray-400 hover:text-gray-600 transition"
+                {attachments.map((attachment) => {
+                  const isImage = attachment.type === 'image' || attachment.type === 'screenshot';
+                  const imageUrl = attachment.content || attachment.path;
+
+                  return (
+                    <div
+                      key={attachment.id}
+                      className={cn(
+                        'group relative inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-700 text-sm overflow-hidden',
+                        isImage ? 'p-1' : 'px-3 py-2',
+                      )}
                     >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+                      {isImage && imageUrl ? (
+                        <div className="relative">
+                          <img
+                            src={imageUrl}
+                            alt={attachment.name}
+                            className="h-16 w-16 object-cover rounded-md"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors rounded-md" />
+                        </div>
+                      ) : (
+                        <>
+                          {attachment.mimeType?.startsWith('audio/') ? (
+                            <Mic size={16} className="text-gray-400" />
+                          ) : (
+                            <Paperclip size={16} className="text-gray-400" />
+                          )}
+                          <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-300">
+                            {attachment.name}
+                          </span>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(attachment.id)}
+                        className={cn(
+                          'transition',
+                          isImage
+                            ? 'absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100'
+                            : 'text-gray-400 hover:text-gray-600',
+                        )}
+                      >
+                        <X size={isImage ? 12 : 14} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

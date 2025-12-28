@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { PRICING_CONFIG } from '@/lib/pricing';
+import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -50,17 +51,30 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   let supabaseUserId = session.metadata?.['supabase_user_id'] || session.client_reference_id;
 
   // If no user ID in metadata, try to find user by customer email
+  // WARNING: Email-based lookup is a fallback and requires extra verification
   if (!supabaseUserId && session.customer) {
     try {
       const customer = await stripe.customers.retrieve(session.customer as string);
       if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-        const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-        const matchingUser = users?.users.find((u) => u.email === customer.email);
-        if (matchingUser) {
-          supabaseUserId = matchingUser.id;
+        // Query subscriptions table to find user with this email instead of listing all users
+        const { data: subscriptions, error: subError } = await supabaseAdmin
+          .from('subscriptions')
+          .select('user_id')
+          .eq('email', customer.email)
+          .limit(1)
+          .single();
+
+        if (!subError && subscriptions?.user_id) {
+          supabaseUserId = subscriptions.user_id;
           logger.info(
             { sessionId: session.id, email: customer.email, userId: supabaseUserId },
-            'Resolved user_id from customer email',
+            'Resolved user_id from customer email via subscriptions table',
+          );
+        } else {
+          // No existing subscription found - this might be a new customer
+          logger.warn(
+            { sessionId: session.id, email: customer.email },
+            'No existing subscription found for customer email - user ID cannot be resolved',
           );
         }
       }
@@ -82,29 +96,21 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     throw new Error('Cannot determine user_id for subscription');
   }
 
-  // Get plan_tier from metadata, or infer from price
-  let planTier = session.metadata?.['plan_tier'] as string | undefined;
+  // Get plan_tier from metadata or price ID using strict mapping
+  const priceId = session.line_items?.data?.[0]?.price?.id;
+  const planTier = resolvePlanTier(session.metadata as Record<string, string> | null, priceId);
 
-  // If plan_tier is missing, try to infer from line items
-  if (!planTier && session.line_items?.data?.[0]?.price?.id) {
-    const priceId = session.line_items.data[0].price.id.toLowerCase();
-    if (priceId.includes('hobby')) planTier = 'hobby';
-    else if (priceId.includes('max')) planTier = 'max';
-    else if (priceId.includes('pro')) planTier = 'pro';
-    else planTier = 'pro'; // Default fallback
-    logger.warn(
-      { sessionId: session.id, inferredPlan: planTier },
-      'plan_tier missing from metadata, inferred from price_id',
-    );
-  }
-
-  if (!planTier) {
-    // Last resort: default to 'pro' but log as error
-    planTier = 'pro';
+  if (!planTier || !isValidPlanTier(planTier)) {
     logger.error(
-      { sessionId: session.id },
-      'CRITICAL: plan_tier could not be determined, defaulting to pro',
+      {
+        sessionId: session.id,
+        priceId,
+        hasMetadata: !!session.metadata?.plan_tier,
+        inferredFromPrice: priceId ? 'attempted' : 'no-price-id',
+      },
+      'CRITICAL: Cannot determine valid plan_tier for subscription',
     );
+    throw new Error(`Cannot determine valid plan_tier for subscription (price: ${priceId})`);
   }
   const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
@@ -506,21 +512,25 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           if (typeof customer !== 'string' && !customer.deleted && customer.email) {
             const customerEmail = customer.email;
             logger.info({ customerEmail }, 'Attempting to find user by customer email');
-            // Use Supabase Admin API to find user by email
-            const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
-            if (!userError && users?.users) {
-              const matchingUser = users.users.find((u) => u.email === customerEmail);
-              if (matchingUser) {
-                logger.info(
-                  { userId: matchingUser.id, email: customerEmail },
-                  'Found user by email',
-                );
-                supabaseUserId = matchingUser.id;
-              } else {
-                logger.warn({ email: customerEmail }, 'No Supabase user found with email');
-              }
+            // Query subscriptions table instead of listing all auth users
+            const { data: subscriptions, error: subError } = await supabaseAdmin
+              .from('subscriptions')
+              .select('user_id')
+              .eq('email', customerEmail)
+              .limit(1)
+              .single();
+
+            if (!subError && subscriptions?.user_id) {
+              logger.info(
+                { userId: subscriptions.user_id, email: customerEmail },
+                'Found user by email in subscriptions table',
+              );
+              supabaseUserId = subscriptions.user_id;
             } else {
-              logger.error({ error: userError }, 'Failed to list users');
+              logger.warn(
+                { email: customerEmail },
+                'No existing subscription found for customer email - cannot create new subscription without user ID',
+              );
             }
           } else {
             logger.warn({ stripeCustomerId }, 'Customer has no email address');

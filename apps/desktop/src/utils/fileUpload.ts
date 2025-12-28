@@ -61,12 +61,19 @@ export async function uploadFiles(
   return attachments;
 }
 
-export const deleteFile = async (_fileId: string): Promise<void> => {
-  try {
-    // TODO: Implement file deletion
-  } catch (error) {
-    throw new Error(`Failed to delete file: ${error}`);
+/**
+ * Delete a file attachment by its ID
+ * Since files are stored as data URLs in memory/state, this is a no-op
+ * that signals the caller to remove the file from their state
+ */
+export const deleteFile = async (fileId: string): Promise<void> => {
+  if (!fileId) {
+    throw new Error('File ID is required for deletion');
   }
+  // Files are stored in component state as data URLs, not on disk
+  // The caller should handle removing the file from their state after this returns
+  // This function exists for API consistency and future server-side file storage
+  return Promise.resolve();
 };
 
 export async function downloadFile(url: string, filename: string): Promise<void> {

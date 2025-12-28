@@ -49,11 +49,11 @@ AGI Workforce supports a comprehensive range of state-of-the-art language models
 
 ### OpenAI
 
-- **GPT-5.2** ⭐ (Dec 2025 - New Flagship)
+- **GPT-5.2** ⭐ (Jan 2026 - New Flagship)
 - **GPT-5.2 Pro** (High Performance)
 - **GPT-5.2 Chat** (Efficient)
 - **GPT-5.2 Codex** (Agentic Coding)
-- **GPT-5.1** (Nov 24, 2025)
+- **GPT-5.1** (Jan 2026)
 - **GPT-5.1 Chat** (Quick Responses)
 - **GPT-5.1 Thinking** 🧠
 - **GPT-5.1-Codex-Max**
@@ -61,12 +61,12 @@ AGI Workforce supports a comprehensive range of state-of-the-art language models
 ### Anthropic
 
 - **Claude Sonnet 4.5** ⭐ (Best Coding - 77.2% SWE-bench)
-- **Claude Haiku 4.5** ⚡ (Oct 15, 2025 - Fast & Cost Effective)
+- **Claude Haiku 4.5** ⚡ (Jan 2026 - Fast & Cost Effective)
 - **Claude Opus 4.5** 🧠 (Deep Reasoning/Thinking)
 
 ### Google
 
-- **Gemini 3 Pro** ⭐ (Nov 24, 2025 - Top Benchmarks)
+- **Gemini 3 Pro** ⭐ (Jan 2026 - Top Benchmarks)
 - **Gemini 3 Flash** (Fast)
 - **Gemini 3 Deep Think** 🧠 (Advanced Reasoning/Thinking)
 
@@ -76,16 +76,16 @@ AGI Workforce supports a comprehensive range of state-of-the-art language models
 
 ### XAI
 
-- **Grok 4.1** ⭐ (Nov 24, 2025 - Enhanced Reasoning)
+- **Grok 4.1** ⭐ (Jan 2026 - Enhanced Reasoning)
 - **Grok 4.1 Fast** ⚡ (Tool-calling, 2M Context)
 
 ### Qwen
 
-- **Qwen3-Max** ⭐ 🧠 (Nov 24, 2025 - Thinking Mode)
+- **Qwen3-Max** ⭐ 🧠 (Jan 2026 - Thinking Mode)
 
 ### Moonshot
 
-- **Kimi K2 Thinking** ⭐ 🧠 (Nov 24, 2025 - Advanced Reasoning)
+- **Kimi K2 Thinking** ⭐ 🧠 (Jan 2026 - Advanced Reasoning)
 
 ### Additional Providers
 

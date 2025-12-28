@@ -244,7 +244,7 @@ const DesktopShell = () => {
 
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
+      <div className="flex h-screen w-full flex-col overflow-hidden bg-surface-base text-foreground font-sans">
         {!isTauri && (
           <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
@@ -257,7 +257,7 @@ const DesktopShell = () => {
           commandShortcutHint={commandShortcutHint}
           hideWindowControls={isMac}
         />
-        <main className="flex flex-1 min-h-0 min-w-0 bg-zinc-950">
+        <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
           <div className="flex-1 overflow-hidden">
             <Suspense fallback={<LoadingFallback />}>
               <UnifiedAgenticChat

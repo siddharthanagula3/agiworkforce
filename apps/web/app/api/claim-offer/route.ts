@@ -5,11 +5,19 @@ import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { ClaimOfferRequestSchema } from '@/lib/validations/claim-offer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { validateCsrfFromRequest } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
 async function handleClaimOffer(request: NextRequest) {
+  // CSRF protection
+  const csrfValid = await validateCsrfFromRequest(request);
+  if (!csrfValid) {
+    logger.warn({}, 'CSRF validation failed for claim-offer');
+    throw createError.forbidden('CSRF token validation failed');
+  }
+
   // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'claim-offer');
   if (rateLimitResponse) {

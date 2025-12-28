@@ -72,7 +72,7 @@
 - `packages/`: Workspace packages shared across apps and services.
 - `dev-scripts/`: Utility scripts for environment setup and resets.
 
-## Recent Progress (December 2025)
+## Recent Progress (January 2026 - Release)
 
 ### Key Milestones
 

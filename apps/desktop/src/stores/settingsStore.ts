@@ -26,18 +26,6 @@ export interface TaskRouting {
   video: { provider: Provider; model: string };
 }
 
-interface APIKeys {
-  openai: string;
-  anthropic: string;
-  google: string;
-  ollama: string;
-  xai: string;
-  deepseek: string;
-  qwen: string;
-  mistral: string;
-  moonshot: string;
-}
-
 interface LLMConfig {
   defaultProvider: Provider;
   temperature: number;
@@ -55,7 +43,6 @@ interface LLMConfig {
   };
   taskRouting: TaskRouting;
   favoriteModels: string[];
-  useCloudCredits: boolean; // Prefer cloud credits over own API keys for Pro/Max users
 }
 
 interface WindowPreferences {
@@ -65,16 +52,11 @@ interface WindowPreferences {
 }
 
 interface SettingsState {
-  apiKeys: APIKeys;
   llmConfig: LLMConfig;
   windowPreferences: WindowPreferences;
   allowedDirectories: string[];
   loading: boolean;
   error: string | null;
-
-  setAPIKey: (provider: Provider, key: string) => Promise<void>;
-  getAPIKey: (provider: Provider) => Promise<string>;
-  testAPIKey: (provider: Provider) => Promise<boolean>;
 
   setDefaultProvider: (provider: Provider) => Promise<void>;
   setTemperature: (temperature: number) => void;
@@ -84,7 +66,6 @@ interface SettingsState {
   setFavoriteModels: (models: string[]) => void;
   addFavoriteModel: (model: string) => void;
   removeFavoriteModel: (model: string) => void;
-  setUseCloudCredits: (useCloudCredits: boolean) => void;
 
   setTheme: (theme: Theme) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
@@ -100,24 +81,12 @@ interface SettingsState {
 
 const defaultSettings: Pick<
   SettingsState,
-  'apiKeys' | 'llmConfig' | 'windowPreferences' | 'allowedDirectories'
+  'llmConfig' | 'windowPreferences' | 'allowedDirectories'
 > = {
-  apiKeys: {
-    openai: '',
-    anthropic: '',
-    google: '',
-    ollama: '',
-    xai: '',
-    deepseek: '',
-    qwen: '',
-    mistral: '',
-    moonshot: '',
-  },
   llmConfig: {
     defaultProvider: 'anthropic',
     temperature: 0.7,
     maxTokens: 4096,
-    useCloudCredits: true, // Default to using cloud credits for Pro/Max users
     defaultModels: {
       openai: 'gpt-5.1',
       anthropic: 'claude-sonnet-4-5',
@@ -198,91 +167,6 @@ export const useSettingsStore = create<SettingsState>()(
       loading: false,
       error: null,
 
-      setAPIKey: async (provider: Provider, key: string) => {
-        set({ loading: true, error: null });
-        try {
-          const trimmedKey = key.trim();
-
-          await invoke('settings_save_api_key', { provider, key: trimmedKey });
-
-          if (provider === 'ollama') {
-            await invoke('llm_configure_provider', {
-              provider,
-              apiKey: null,
-              baseUrl: 'http://localhost:11434',
-            });
-          } else {
-            await invoke('llm_configure_provider', {
-              provider,
-              apiKey: trimmedKey,
-              baseUrl: null,
-            });
-          }
-
-          set((state) => ({
-            apiKeys: { ...state.apiKeys, [provider]: trimmedKey },
-            loading: false,
-          }));
-        } catch (error) {
-          console.error(`Failed to set API key for ${provider}:`, error);
-          set({ error: String(error), loading: false });
-          throw error;
-        }
-      },
-
-      getAPIKey: async (provider: Provider) => {
-        try {
-          const key = await invoke<string>('settings_get_api_key', { provider });
-          return key || '';
-        } catch (error) {
-          console.error(`Failed to get API key for ${provider}:`, error);
-          return '';
-        }
-      },
-
-      testAPIKey: async (provider: Provider) => {
-        set({ loading: true, error: null });
-        try {
-          const key = await get().getAPIKey(provider);
-          if (!key || !key.trim()) {
-            throw new Error(`No API key found for ${provider}. Please save your API key first.`);
-          }
-
-          if (provider !== 'ollama') {
-            await invoke('llm_configure_provider', {
-              provider,
-              apiKey: key.trim(),
-              baseUrl: null,
-            });
-          }
-
-          const defaultModel = get().llmConfig.defaultModels[provider];
-          if (!defaultModel || !defaultModel.trim()) {
-            throw new Error(
-              `No default model configured for provider: ${provider}. Please set a default model in settings.`,
-            );
-          }
-
-          await invoke('llm_send_message', {
-            request: {
-              messages: [{ role: 'user', content: 'Hi' }],
-              model: defaultModel.trim(),
-              provider,
-              temperature: null,
-              max_tokens: 10,
-              preferCloudCredits: false, // When testing API keys, don't use cloud credits
-            },
-          });
-          set({ loading: false, error: null });
-          return true;
-        } catch (error) {
-          console.error(`API key test failed for ${provider}:`, error);
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          set({ error: errorMessage, loading: false });
-          return false;
-        }
-      },
-
       setDefaultProvider: async (provider: Provider) => {
         try {
           await invoke('llm_set_default_provider', { provider });
@@ -305,12 +189,6 @@ export const useSettingsStore = create<SettingsState>()(
       setMaxTokens: (maxTokens: number) => {
         set((state) => ({
           llmConfig: { ...state.llmConfig, maxTokens },
-        }));
-      },
-
-      setUseCloudCredits: (useCloudCredits: boolean) => {
-        set((state) => ({
-          llmConfig: { ...state.llmConfig, useCloudCredits },
         }));
       },
 
@@ -439,74 +317,16 @@ export const useSettingsStore = create<SettingsState>()(
             ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
           };
 
-          const providers: Provider[] = [
-            'openai',
-            'anthropic',
-            'google',
-            'ollama',
-            'xai',
-            'deepseek',
-            'qwen',
-            'mistral',
-            'moonshot',
-          ];
-
-          const apiKeyResults = await Promise.allSettled(
-            providers.map(async (provider) => {
-              try {
-                const key = await get().getAPIKey(provider);
-                return { provider, key };
-              } catch (error) {
-                console.error(`Failed to load API key for ${provider}:`, error);
-                return { provider, key: '' };
-              }
-            }),
-          );
-
-          const apiKeys: APIKeys = {
-            openai: '',
-            anthropic: '',
-            google: '',
-            ollama: '',
-            xai: '',
-            deepseek: '',
-            qwen: '',
-            mistral: '',
-            moonshot: '',
-          };
-
-          for (const result of apiKeyResults) {
-            if (result.status === 'fulfilled') {
-              apiKeys[result.value.provider] = result.value.key;
-            }
+          // Configure local Ollama provider
+          try {
+            await invoke('llm_configure_provider', {
+              provider: 'ollama',
+              apiKey: null,
+              baseUrl: 'http://localhost:11434',
+            });
+          } catch (error) {
+            console.error('Failed to configure Ollama provider:', error);
           }
-
-          if (get().loading === false) {
-            console.warn('[settingsStore] Load cancelled before setting state');
-            return;
-          }
-
-          const configPromises = providers.map(async (provider) => {
-            try {
-              if (provider === 'ollama') {
-                await invoke('llm_configure_provider', {
-                  provider,
-                  apiKey: null,
-                  baseUrl: 'http://localhost:11434',
-                });
-              } else if (apiKeys[provider].trim().length > 0) {
-                await invoke('llm_configure_provider', {
-                  provider,
-                  apiKey: apiKeys[provider],
-                  baseUrl: null,
-                });
-              }
-            } catch (error) {
-              console.error(`Failed to configure provider ${provider}:`, error);
-            }
-          });
-
-          await Promise.allSettled(configPromises);
 
           if (get().loading === false) {
             console.warn('[settingsStore] Load cancelled before final update');
@@ -514,7 +334,6 @@ export const useSettingsStore = create<SettingsState>()(
           }
 
           set({
-            apiKeys,
             llmConfig: mergedLLMConfig,
             windowPreferences: mergedWindowPreferences,
             allowedDirectories: settings.allowedDirectories ?? [],

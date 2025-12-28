@@ -10,7 +10,6 @@ import {
   Settings,
 } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
-import { useSettingsStore } from '../../stores/settingsStore';
 import type { Provider } from '../../stores/settingsStore';
 import { PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
 import { cn } from '../../lib/utils';
@@ -22,7 +21,6 @@ interface ProviderStatusProps {
 
 export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, className }) => {
   const { providerStatuses, checkAllProviders, checkProviderStatus, loading } = useModelStore();
-  const { apiKeys } = useSettingsStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
@@ -103,7 +101,6 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
         <div className="space-y-3">
           {PROVIDERS_IN_ORDER.map((provider) => {
             const status = providerStatuses[provider];
-            const hasApiKey = apiKeys[provider] && apiKeys[provider].length > 0;
             const statusColor = getStatusColor(provider);
 
             return (
@@ -153,13 +150,20 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
                 <div className="flex items-center gap-2 mb-2">
                   <Key className="h-4 w-4 text-gray-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    API Key:{' '}
                     {provider === 'ollama' ? (
-                      <span className="text-blue-600 dark:text-blue-400">Not required (local)</span>
-                    ) : hasApiKey ? (
-                      <span className="text-green-600 dark:text-green-400">Configured</span>
+                      <>
+                        Local LLM:{' '}
+                        <span className="text-blue-600 dark:text-blue-400">
+                          No API key required
+                        </span>
+                      </>
                     ) : (
-                      <span className="text-red-600 dark:text-red-400">Not configured</span>
+                      <>
+                        Cloud Credits:{' '}
+                        <span className="text-green-600 dark:text-green-400">
+                          Using subscription
+                        </span>
+                      </>
                     )}
                   </span>
                 </div>
@@ -208,16 +212,6 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
                   <div className="mt-3 p-2 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
                     <strong>Error:</strong> {status.error}
                   </div>
-                )}
-
-                {}
-                {!status?.configured && provider !== 'ollama' && (
-                  <button
-                    onClick={() => onConfigure?.(provider)}
-                    className="mt-3 w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    Configure API Key
-                  </button>
                 )}
 
                 {provider === 'ollama' && !status?.ollamaRunning && (

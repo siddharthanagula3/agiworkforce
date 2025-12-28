@@ -55,6 +55,13 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
   const isCompleted = entry.type === 'completed';
   const isError = entry.type === 'error';
 
+  // Calculate progress if available
+  const progress =
+    entry.progress ??
+    (entry.currentStep && entry.totalSteps
+      ? Math.round((entry.currentStep / entry.totalSteps) * 100)
+      : undefined);
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -10, scale: 0.95 }}
@@ -66,7 +73,7 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
         damping: 25,
       }}
       className={cn(
-        'flex items-center gap-2 px-3 py-2 rounded-lg',
+        'flex flex-col gap-1.5 px-3 py-2 rounded-lg',
         'bg-zinc-800/50 backdrop-blur-sm',
         'border border-white/5',
         isCompleted && 'bg-emerald-900/20 border-emerald-500/20',
@@ -76,12 +83,40 @@ function StatusTrailItem({ entry }: StatusTrailItemProps) {
       aria-label={`${entry.type}: ${entry.message}`}
       aria-live={isInProgress ? 'polite' : 'off'}
     >
-      <span className={cn('shrink-0', getColorForType(entry.type))}>
-        {getIconForType(entry.type)}
-      </span>
-      <span className={cn('text-sm font-medium', getColorForType(entry.type))}>
-        {entry.message}
-      </span>
+      <div className="flex items-center gap-2">
+        <span className={cn('shrink-0', getColorForType(entry.type))}>
+          {getIconForType(entry.type)}
+        </span>
+        <span className={cn('text-sm font-medium flex-1', getColorForType(entry.type))}>
+          {entry.message}
+        </span>
+        {progress !== undefined && isInProgress && (
+          <span className="text-xs text-zinc-500 tabular-nums">{progress}%</span>
+        )}
+        {entry.currentStep !== undefined && entry.totalSteps !== undefined && (
+          <span className="text-xs text-zinc-500 tabular-nums">
+            {entry.currentStep}/{entry.totalSteps}
+          </span>
+        )}
+      </div>
+
+      {/* Progress bar for multi-step operations */}
+      {progress !== undefined && isInProgress && (
+        <div className="w-full h-1 bg-zinc-700/50 rounded-full overflow-hidden">
+          <motion.div
+            className={cn(
+              'h-full rounded-full',
+              entry.type === 'thinking' && 'bg-purple-500',
+              entry.type === 'searching' && 'bg-teal-500',
+              entry.type === 'coding' && 'bg-blue-500',
+              entry.type === 'running' && 'bg-amber-500',
+            )}
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          />
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -114,6 +114,14 @@ export default {
 
         'surface-floating': 'rgba(255, 255, 255, 0.08)',
         'surface-floating-hover': 'rgba(255, 255, 255, 0.12)',
+
+        // Semantic surface colors - unified dark theme
+        surface: {
+          base: '#0f0f0f', // Main application background
+          elevated: '#1a1a1a', // Cards, sidebars, elevated surfaces
+          overlay: '#242424', // Modals, popovers, overlays
+          hover: '#2e2e2e', // Hover states on elevated surfaces
+        },
       },
       borderRadius: {
         lg: '12px',

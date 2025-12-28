@@ -1,19 +1,24 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  Archive,
+  ArchiveRestore,
+  BarChart3,
   Calendar,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Code2,
-  Image,
+  Coins,
+  Download,
   Layers,
+  MessageSquare,
   Pin,
   PinOff,
   Plus,
   Search,
-  TerminalSquare,
   Trash2,
+  Zap,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
@@ -27,8 +32,6 @@ interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
   onOpenFeedback?: () => void;
-  onOpenWorkspace?: () => void;
-  onOpenMediaLab?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   isMobile?: boolean;
@@ -81,8 +84,6 @@ export function Sidebar({
   className,
   onOpenSettings,
   onOpenFeedback,
-  onOpenWorkspace,
-  onOpenMediaLab,
   collapsed = false,
   onToggleCollapse,
   isMobile = false,
@@ -97,18 +98,63 @@ export function Sidebar({
   const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
   const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
   const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
+  const archiveConversation = useUnifiedChatStore((state) => state.archiveConversation);
+  const restoreConversation = useUnifiedChatStore((state) => state.restoreConversation);
+  const getArchivedConversations = useUnifiedChatStore((state) => state.getArchivedConversations);
+  const exportConversationToMarkdown = useUnifiedChatStore(
+    (state) => state.exportConversationToMarkdown,
+  );
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
   const setActiveView = useUnifiedChatStore((state) => state.setActiveView);
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
+  const getConversationStats = useUnifiedChatStore((state) => state.getConversationStats);
+
+  // Get stats for active conversation
+  const stats = useMemo(() => {
+    if (!activeConversationId) return null;
+    return getConversationStats(activeConversationId);
+  }, [activeConversationId, getConversationStats]);
+
+  const handleExportConversation = useCallback(
+    (id: string, title: string) => {
+      const markdown = exportConversationToMarkdown(id);
+      if (!markdown) {
+        toast.error('No messages to export');
+        return;
+      }
+
+      // Create and trigger download
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_conversation.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success('Conversation exported');
+    },
+    [exportConversationToMarkdown],
+  );
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<TemporalGroup>>(
     new Set(['today', 'yesterday', 'thisWeek']),
   );
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+
+  // Get archived conversations
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const archivedConversations = useMemo(
+    () => getArchivedConversations(),
+    [getArchivedConversations],
+  );
 
   useEffect(() => {
     ensureActiveConversation();
@@ -116,12 +162,17 @@ export function Sidebar({
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
-    if (!term) return conversations;
-    return conversations.filter((conv) => {
+    // Filter out archived conversations from main list (unless showing archived)
+    let baseList = showArchived
+      ? conversations.filter((c) => c.archived === true)
+      : conversations.filter((c) => !c.archived);
+
+    if (!term) return baseList;
+    return baseList.filter((conv) => {
       const haystack = `${conv.title ?? ''} ${conv.lastMessage ?? ''}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, showArchived]);
 
   const pinnedConversations = useMemo(
     () =>
@@ -315,12 +366,53 @@ export function Sidebar({
             <Button
               onClick={(e) => {
                 e.stopPropagation();
+                handleExportConversation(conv.id, conv.title || 'Untitled');
+              }}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-blue-500"
+              title="Export to Markdown"
+            >
+              <Download className="h-3 w-3" />
+            </Button>
+            {showArchived ? (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  restoreConversation(conv.id);
+                  toast.success('Conversation restored');
+                }}
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-gray-400 hover:text-emerald-500"
+                title="Restore from archive"
+              >
+                <ArchiveRestore className="h-3 w-3" />
+              </Button>
+            ) : (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  archiveConversation(conv.id);
+                  toast.success('Conversation archived');
+                }}
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-gray-400 hover:text-amber-500"
+                title="Archive"
+              >
+                <Archive className="h-3 w-3" />
+              </Button>
+            )}
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
                 deleteConversation(conv.id);
               }}
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-gray-400 hover:text-red-500"
-              title="Delete"
+              title="Delete permanently"
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -332,7 +424,7 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <div className="w-16 flex flex-col bg-white dark:bg-charcoal-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out">
+      <div className="w-16 flex flex-col bg-white dark:bg-surface-elevated border-r border-gray-200 dark:border-border transition-all duration-300 ease-in-out">
         <div className="p-3 flex flex-col items-center gap-4">
           <Button
             onClick={onToggleCollapse}
@@ -483,63 +575,45 @@ export function Sidebar({
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                 activeView === 'projects'
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-hover',
               )}
             >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-teal-400/20 text-teal-400">
                 <Layers className="w-3.5 h-3.5" />
               </span>
               Projects
-              <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
-                Pro
-              </span>
             </button>
+          </div>
+        )}
+
+        {/* Archive toggle */}
+        {!collapsed && archivedConversations.length > 0 && (
+          <div className="px-3 py-1">
             <button
-              onClick={() => setActiveView('artifacts')}
+              onClick={() => setShowArchived(!showArchived)}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'artifacts'
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+                showArchived
+                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                  : 'text-muted-foreground hover:bg-surface-hover',
               )}
             >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                <Code2 className="w-3.5 h-3.5" />
+              <span
+                className={cn(
+                  'w-5 h-5 flex items-center justify-center rounded',
+                  showArchived
+                    ? 'bg-amber-400/20 text-amber-500'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500',
+                )}
+              >
+                <Archive className="w-3.5 h-3.5" />
               </span>
-              Artifacts
-              <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
-                Alpha
+              <span>Archived</span>
+              <span className="ml-auto text-xs bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
+                {archivedConversations.length}
               </span>
             </button>
-            {onOpenWorkspace && (
-              <button
-                onClick={onOpenWorkspace}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <span className="w-5 h-5 flex items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                  <TerminalSquare className="w-3.5 h-3.5" />
-                </span>
-                Workspace
-                <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
-                  Alpha
-                </span>
-              </button>
-            )}
-            {onOpenMediaLab && (
-              <button
-                onClick={onOpenMediaLab}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                  <Image className="w-3.5 h-3.5" />
-                </span>
-                Media Lab
-                <span className="ml-auto text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-500">
-                  Alpha
-                </span>
-              </button>
-            )}
           </div>
         )}
 
@@ -600,6 +674,36 @@ export function Sidebar({
             ))}
           </div>
         </ScrollArea>
+
+        {/* Conversation Stats */}
+        {!collapsed && stats && stats.messageCount > 0 && (
+          <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                Stats
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-1.5 text-zinc-500">
+                <MessageSquare className="h-3 w-3" />
+                <span>{stats.messageCount} messages</span>
+              </div>
+              {stats.totalTokens > 0 && (
+                <div className="flex items-center gap-1.5 text-zinc-500">
+                  <Zap className="h-3 w-3" />
+                  <span>{(stats.totalTokens / 1000).toFixed(1)}k tokens</span>
+                </div>
+              )}
+              {stats.totalCost > 0 && (
+                <div className="flex items-center gap-1.5 text-zinc-500 col-span-2">
+                  <Coins className="h-3 w-3" />
+                  <span>${stats.totalCost.toFixed(4)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {}
         <div className="mt-auto border-t border-gray-200 dark:border-gray-800 p-4">

@@ -1,0 +1,314 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AGI Workforce API",
+    "version": "1.0.0",
+    "description": "API for managing AI agents, subscriptions, and device authorization in AGI Workforce",
+    "contact": {
+      "name": "AGI Workforce Support",
+      "email": "support@agiworkforce.com",
+      "url": "https://agiworkforce.com"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://agiworkforce.com/api",
+      "description": "Production API server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key authentication using Bearer token"
+      }
+    },
+    "schemas": {
+      "CheckoutRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval"],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": ["hobby", "pro", "max", "enterprise"],
+            "description": "The subscription plan to checkout"
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "annual"],
+            "description": "Billing cycle interval"
+          }
+        }
+      },
+      "DeviceLinkRequest": {
+        "type": "object",
+        "required": ["device_id", "device_type"],
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Unique device identifier"
+          },
+          "device_name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Human-readable device name"
+          },
+          "device_type": {
+            "type": "string",
+            "enum": ["desktop", "mobile", "web"],
+            "description": "Type of device"
+          }
+        }
+      },
+      "DeviceCode": {
+        "type": "object",
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "description": "The code for user to enter"
+          },
+          "verify_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL where user can verify the device"
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Seconds until code expires"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email address"
+          },
+          "subscription": {
+            "type": "object",
+            "properties": {
+              "plan_tier": {
+                "type": "string",
+                "enum": ["hobby", "pro", "max", "enterprise"]
+              },
+              "status": {
+                "type": "string",
+                "enum": ["active", "trialing", "past_due", "canceled"]
+              },
+              "current_period_end": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/checkout": {
+      "post": {
+        "summary": "Create a checkout session",
+        "description": "Initiate a Stripe checkout session for subscription",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Stripe checkout URL"
+                    },
+                    "sessionId": {
+                      "type": "string",
+                      "description": "Stripe session ID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        }
+      }
+    },
+    "/device/link": {
+      "post": {
+        "summary": "Generate device authorization code",
+        "description": "Create a device authorization code for linking a new device",
+        "tags": ["Device Authorization"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device code generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid device parameters"
+          },
+          "429": {
+            "description": "Too many device authorization requests"
+          }
+        }
+      }
+    },
+    "/device/poll": {
+      "post": {
+        "summary": "Poll device authorization status",
+        "description": "Check if a device has been authorized by the user",
+        "tags": ["Device Authorization"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["device_id"],
+                "properties": {
+                  "device_id": {
+                    "type": "string"
+                  },
+                  "device_fingerprint": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device authorization status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["pending", "approved", "denied"]
+                    },
+                    "access_token": {
+                      "type": "string",
+                      "description": "Session token if approved"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Device fingerprint mismatch"
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Get current user information",
+        "description": "Retrieve authenticated user's profile and subscription information",
+        "tags": ["Users"],
+        "responses": {
+          "200": {
+            "description": "User information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        }
+      }
+    },
+    "/sync-subscription": {
+      "post": {
+        "summary": "Sync subscription from Stripe",
+        "description": "Manually sync subscription information from Stripe (self-healing)",
+        "tags": ["Billing"],
+        "responses": {
+          "200": {
+            "description": "Subscription synced successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "subscription": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        }
+      }
+    }
+  }
+}

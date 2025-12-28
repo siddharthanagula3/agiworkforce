@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getSafeRedirectUrl } from '@/lib/safe-redirect';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const next = requestUrl.searchParams.get('next') || '/';
+  const next = requestUrl.searchParams.get('next');
+
+  // Validate and sanitize the redirect URL to prevent open redirect attacks
+  const safeRedirectPath = getSafeRedirectUrl(next, requestUrl.origin, '/');
 
   if (code) {
     const supabase = await createSupabaseServerClient();
@@ -19,5 +23,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin));
+  return NextResponse.redirect(new URL(safeRedirectPath, requestUrl.origin));
 }

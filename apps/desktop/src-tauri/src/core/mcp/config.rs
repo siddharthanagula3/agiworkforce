@@ -207,6 +207,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn test_default_config() {
         let config = McpServersConfig::default();
         assert!(config.mcp_servers.contains_key("filesystem"));

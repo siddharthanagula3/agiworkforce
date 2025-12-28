@@ -41,22 +41,10 @@ describe('settingsStore', () => {
     };
 
     useSettingsStore.setState({
-      apiKeys: {
-        openai: '',
-        anthropic: '',
-        google: '',
-        ollama: '',
-        xai: '',
-        deepseek: '',
-        qwen: '',
-        mistral: '',
-        moonshot: '',
-      },
       llmConfig: {
         defaultProvider: 'openai',
         temperature: 0.7,
         maxTokens: 4096,
-        useCloudCredits: true,
         defaultModels,
         taskRouting: buildTaskRouting(defaultModels),
         favoriteModels: [],
@@ -79,7 +67,6 @@ describe('settingsStore', () => {
   describe('Initial State', () => {
     it('should have correct default settings', () => {
       const state = useSettingsStore.getState();
-      expect(state.apiKeys.openai).toBe('');
       expect(state.llmConfig.defaultProvider).toBe('openai');
       expect(state.llmConfig.temperature).toBe(0.7);
       expect(state.llmConfig.maxTokens).toBe(4096);
@@ -98,138 +85,6 @@ describe('settingsStore', () => {
       expect(state.llmConfig.defaultModels.deepseek).toBe('');
       expect(state.llmConfig.defaultModels.qwen).toBe('qwen3-max');
       expect(state.llmConfig.defaultModels.mistral).toBe('');
-    });
-  });
-
-  describe('API Key Management', () => {
-    it('should set OpenAI API key', async () => {
-      const testKey = 'sk-test123';
-      await useSettingsStore.getState().setAPIKey('openai', testKey);
-
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_save_api_key', {
-        provider: 'openai',
-        key: testKey,
-      });
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
-        provider: 'openai',
-        apiKey: testKey,
-        baseUrl: null,
-      });
-
-      const state = useSettingsStore.getState();
-      expect(state.apiKeys.openai).toBe(testKey);
-      expect(state.loading).toBe(false);
-      expect(state.error).toBeNull();
-    });
-
-    it('should set Anthropic API key', async () => {
-      const testKey = 'sk-ant-test123';
-      await useSettingsStore.getState().setAPIKey('anthropic', testKey);
-
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_save_api_key', {
-        provider: 'anthropic',
-        key: testKey,
-      });
-
-      const state = useSettingsStore.getState();
-      expect(state.apiKeys.anthropic).toBe(testKey);
-    });
-
-    it('should configure Ollama without API key', async () => {
-      await useSettingsStore.getState().setAPIKey('ollama', '');
-
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
-        provider: 'ollama',
-        apiKey: null,
-        baseUrl: 'http://localhost:11434',
-      });
-    });
-
-    it('should get API key', async () => {
-      vi.mocked(invoke).mockImplementation((cmd: string) => {
-        if (cmd === 'settings_get_api_key') return Promise.resolve('sk-test123');
-        return Promise.resolve(undefined);
-      });
-
-      const key = await useSettingsStore.getState().getAPIKey('openai');
-
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('settings_get_api_key', {
-        provider: 'openai',
-      });
-      expect(key).toBe('sk-test123');
-    });
-
-    it('should return empty string if API key not found', async () => {
-      vi.mocked(invoke).mockImplementation((cmd: string) => {
-        if (cmd === 'settings_get_api_key') return Promise.resolve(null);
-        return Promise.resolve(undefined);
-      });
-
-      const key = await useSettingsStore.getState().getAPIKey('openai');
-
-      expect(key).toBe('');
-    });
-
-    it('should handle API key retrieval error', async () => {
-      vi.mocked(invoke).mockImplementation(() => {
-        throw new Error('Keyring error');
-      });
-
-      const key = await useSettingsStore.getState().getAPIKey('openai');
-
-      expect(key).toBe('');
-    });
-
-    it('should handle API key save error', async () => {
-      vi.mocked(invoke).mockImplementation(() => {
-        throw new Error('Save failed');
-      });
-
-      await expect(useSettingsStore.getState().setAPIKey('openai', 'sk-test123')).rejects.toThrow();
-
-      const state = useSettingsStore.getState();
-      expect(state.error).toBe('Error: Save failed');
-      expect(state.loading).toBe(false);
-    });
-  });
-
-  describe('API Key Testing', () => {
-    it('should test valid API key', async () => {
-      vi.mocked(invoke).mockImplementation((cmd: string) => {
-        if (cmd === 'settings_get_api_key') return Promise.resolve('sk-test123');
-        return Promise.resolve({ content: 'Hello' });
-      });
-
-      const isValid = await useSettingsStore.getState().testAPIKey('openai');
-
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_send_message', {
-        request: {
-          messages: [{ role: 'user', content: 'Hi' }],
-          model: 'gpt-5.1',
-          provider: 'openai',
-          temperature: null,
-          max_tokens: 10,
-          preferCloudCredits: false,
-        },
-      });
-      expect(isValid).toBe(true);
-      const state = useSettingsStore.getState();
-      expect(state.loading).toBe(false);
-      expect(state.error).toBeNull();
-    });
-
-    it('should test invalid API key', async () => {
-      vi.mocked(invoke).mockImplementation((cmd: string) => {
-        if (cmd === 'settings_get_api_key') return Promise.resolve('sk-test123');
-        return Promise.reject(new Error('Invalid API key'));
-      });
-
-      const isValid = await useSettingsStore.getState().testAPIKey('openai');
-
-      expect(isValid).toBe(false);
-      const state = useSettingsStore.getState();
-      expect(state.error).toBe('Invalid API key');
-      expect(state.loading).toBe(false);
     });
   });
 
@@ -433,7 +288,6 @@ describe('settingsStore', () => {
           defaultProvider: 'anthropic',
           temperature: 0.8,
           maxTokens: 8192,
-          useCloudCredits: true,
           defaultModels: {
             openai: 'gpt-5.1',
             anthropic: 'claude-opus-4-5',
@@ -493,58 +347,9 @@ describe('settingsStore', () => {
     });
   });
 
-  describe('Loading States', () => {
-    it('should set loading while saving API key', async () => {
-      let resolvePromise: any;
-      const promise = new Promise((resolve) => {
-        resolvePromise = resolve;
-      });
-      vi.mocked(invoke).mockReturnValue(promise);
-
-      const savePromise = useSettingsStore.getState().setAPIKey('openai', 'sk-test');
-
-      expect(useSettingsStore.getState().loading).toBe(true);
-
-      resolvePromise(undefined);
-      await savePromise;
-
-      expect(useSettingsStore.getState().loading).toBe(false);
-    });
-
-    it('should set loading while testing API key', async () => {
-      let resolvePromise: any;
-      const promise = new Promise((resolve) => {
-        resolvePromise = resolve;
-      });
-      vi.mocked(invoke).mockReturnValue(promise);
-
-      const testPromise = useSettingsStore.getState().testAPIKey('openai');
-
-      expect(useSettingsStore.getState().loading).toBe(true);
-
-      resolvePromise({ content: 'Hello' });
-      await testPromise;
-
-      expect(useSettingsStore.getState().loading).toBe(false);
-    });
-  });
-
-  describe('Multiple Providers', () => {
-    it('should manage API keys for all providers', async () => {
-      vi.mocked(invoke).mockResolvedValue(undefined);
-
-      await useSettingsStore.getState().setAPIKey('openai', 'sk-openai-test');
-      await useSettingsStore.getState().setAPIKey('anthropic', 'sk-ant-test');
-      await useSettingsStore.getState().setAPIKey('google', 'google-key-test');
-
-      const state = useSettingsStore.getState();
-      expect(state.apiKeys.openai).toBe('sk-openai-test');
-      expect(state.apiKeys.anthropic).toBe('sk-ant-test');
-      expect(state.apiKeys.google).toBe('google-key-test');
-    });
-
-    it('should configure all providers during load', async () => {
-      vi.mocked(invoke).mockImplementation((cmd: string, args?: any) => {
+  describe('Provider Configuration', () => {
+    it('should configure Ollama provider during load', async () => {
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
         if (cmd === 'settings_load') {
           return Promise.resolve({
             llmConfig: {
@@ -581,9 +386,6 @@ describe('settingsStore', () => {
             },
           });
         }
-        if (cmd === 'settings_get_api_key') {
-          return Promise.resolve(args?.provider === 'openai' ? 'sk-test' : '');
-        }
         return Promise.resolve(undefined);
       });
 
@@ -598,16 +400,11 @@ describe('settingsStore', () => {
 
       await useSettingsStore.getState().loadSettings();
 
+      // Only Ollama should be configured (local LLM)
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
         provider: 'ollama',
         apiKey: null,
         baseUrl: 'http://localhost:11434',
-      });
-
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('llm_configure_provider', {
-        provider: 'openai',
-        apiKey: 'sk-test',
-        baseUrl: null,
       });
     });
   });

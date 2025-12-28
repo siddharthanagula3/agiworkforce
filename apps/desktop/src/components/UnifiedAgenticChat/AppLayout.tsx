@@ -5,23 +5,18 @@ import { FeedbackDialog } from '../Feedback';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { CommandPalette } from './CommandPalette';
 import { DynamicSidecar } from './DynamicSidecar';
+import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { Sidebar } from './Sidebar';
 
 interface AppLayoutProps {
   children: React.ReactNode;
   onOpenSettings?: () => void;
-  onOpenWorkspace?: () => void;
-  onOpenMediaLab?: () => void;
 }
 
-export function AppLayout({
-  children,
-  onOpenSettings,
-  onOpenWorkspace,
-  onOpenMediaLab,
-}: AppLayoutProps) {
+export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
 
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
@@ -105,6 +100,16 @@ export function AppLayout({
         e.preventDefault();
         handleNewChat();
       }
+
+      if (isMeta && e.key === '/') {
+        e.preventDefault();
+        setShortcutsDialogOpen((prev) => !prev);
+      }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        useUnifiedChatStore.getState().toggleMessageTimestamps();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -126,8 +131,6 @@ export function AppLayout({
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
         onOpenFeedback={() => setFeedbackOpen(true)}
-        onOpenWorkspace={onOpenWorkspace}
-        onOpenMediaLab={onOpenMediaLab}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
       />
@@ -179,11 +182,13 @@ export function AppLayout({
         </div>
       )}
 
-      {}
+      {/* Dialogs */}
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
-
-      {}
       <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+      <KeyboardShortcutsDialog
+        isOpen={shortcutsDialogOpen}
+        onClose={() => setShortcutsDialogOpen(false)}
+      />
 
       {}
       <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-cream-50 via-cream-50/80 to-transparent dark:from-charcoal-900 dark:via-charcoal-900/80 pointer-events-none z-10" />

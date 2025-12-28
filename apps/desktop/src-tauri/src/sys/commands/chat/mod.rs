@@ -445,6 +445,7 @@ pub async fn chat_send_message(
         requires_vision: meta.requires_vision,
         token_estimate: meta.token_estimate.unwrap_or(0),
         cost_priority: Default::default(),
+        plan_tier: "pro".to_string(), // Default to pro tier; can be overridden by request
     });
 
     let preferences = RouterPreferences {

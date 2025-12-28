@@ -1,6 +1,6 @@
 [package]
 name = "agiworkforce-desktop"
-version = "5.0.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"
@@ -80,8 +80,8 @@ oauth2 = "4.4"
 
 
 enigo = { version = "0.6", features = ["serde"] }
-xcap = "0.0.12"  
-arboard = "3.4"  
+xcap = "0.0.12"
+arboard = "3.4"
 
 
 portable-pty = "0.8"
@@ -207,6 +207,7 @@ windows = { version = "0.56", features = [
 [target.'cfg(target_os = "macos")'.dependencies]
 accessibility-sys = "0.1.2"
 core-foundation = "0.9"
+core-graphics = "0.24"
 objc = "0.2"
 cocoa = "0.25"
 

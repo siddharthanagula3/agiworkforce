@@ -5,6 +5,7 @@ import { AlertCircle, Bot, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '../../../services/supabase';
+import { validatePassword, PASSWORD_REQUIREMENTS } from '@/lib/password-validator';
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('');
@@ -12,6 +13,7 @@ export default function UpdatePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -20,14 +22,34 @@ export default function UpdatePasswordPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        // no session
+        // Redirect to login if no session
+        window.location.href = '/login';
       }
     };
     checkSession();
   }, []);
 
+  // Validate password on change
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (value) {
+      const validation = validatePassword(value);
+      setPasswordErrors(validation.errors);
+    } else {
+      setPasswordErrors([]);
+    }
+  };
+
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate password strength
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      setError(`Password requirements not met: ${validation.errors.join(', ')}`);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -92,12 +114,21 @@ export default function UpdatePasswordPage() {
           <div>
             <Input
               type="password"
-              placeholder="New password (min 6 characters)"
+              placeholder={`New password (min ${PASSWORD_REQUIREMENTS.minLength} characters)`}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
+              onChange={(e) => handlePasswordChange(e.target.value)}
+              minLength={PASSWORD_REQUIREMENTS.minLength}
               required
             />
+            {passwordErrors.length > 0 && password && (
+              <ul className="mt-2 text-xs text-zinc-400 space-y-1">
+                {passwordErrors.map((err, i) => (
+                  <li key={i} className="flex items-center gap-1">
+                    <span className="text-red-400">•</span> {err}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div>
             <Input
@@ -105,7 +136,7 @@ export default function UpdatePasswordPage() {
               placeholder="Confirm new password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              minLength={6}
+              minLength={PASSWORD_REQUIREMENTS.minLength}
               required
             />
           </div>
