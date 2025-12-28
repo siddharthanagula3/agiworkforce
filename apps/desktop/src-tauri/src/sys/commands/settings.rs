@@ -1,10 +1,7 @@
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
-
-const SERVICE_NAME: &str = "AGIWorkforce";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,35 +82,6 @@ impl SettingsState {
             })),
         }
     }
-}
-
-#[tauri::command]
-pub async fn settings_save_api_key(provider: String, key: String) -> Result<(), String> {
-    let entry = Entry::new(SERVICE_NAME, &format!("api_key_{}", provider))
-        .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-
-    let trimmed_key = key.trim();
-    if trimmed_key.is_empty() {
-        return Err("API key cannot be empty".to_string());
-    }
-
-    entry
-        .set_password(trimmed_key)
-        .map_err(|e| format!("Failed to save API key: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn settings_get_api_key(provider: String) -> Result<String, String> {
-    let entry = Entry::new(SERVICE_NAME, &format!("api_key_{}", provider))
-        .map_err(|e| format!("Failed to create keyring entry: {}", e))?;
-
-    let key = entry
-        .get_password()
-        .map_err(|e| format!("Failed to get API key: {}", e))?;
-
-    Ok(key.trim().to_string())
 }
 
 #[tauri::command]

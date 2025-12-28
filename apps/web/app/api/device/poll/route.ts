@@ -5,10 +5,18 @@ import { getEnv, requireEnv } from '@/utils/env';
 import { DevicePollRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { validateCsrfFromRequest } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 async function handleDevicePoll(request: NextRequest) {
+  // CSRF protection
+  const csrfValid = await validateCsrfFromRequest(request);
+  if (!csrfValid) {
+    logger.warn({}, 'CSRF validation failed for device/poll');
+    throw createError.forbidden('CSRF token validation failed');
+  }
+
   // Rate limiting - use device_id as identifier
   let deviceId: string | undefined;
   try {
@@ -41,7 +49,7 @@ async function handleDevicePoll(request: NextRequest) {
       throw createError.validation('Invalid request body', validationResult.error);
     }
 
-    const { device_id } = validationResult.data;
+    const { device_id, device_fingerprint } = validationResult.data;
 
     const cookieStore = await cookies();
 
@@ -67,6 +75,19 @@ async function handleDevicePoll(request: NextRequest) {
 
     if (error || !data) {
       return NextResponse.json({ status: 'pending' });
+    }
+
+    // Device ownership verification: ensure the fingerprint matches
+    if (data.device_fingerprint && data.device_fingerprint !== device_fingerprint) {
+      logger.warn(
+        {
+          deviceId: device_id,
+          expectedFingerprint: data.device_fingerprint,
+          providedFingerprint: device_fingerprint,
+        },
+        'Device fingerprint mismatch - potential unauthorized access attempt',
+      );
+      throw createError.forbidden('Device fingerprint does not match');
     }
 
     if (data.status === 'approved' && data.user_id) {

@@ -33,7 +33,9 @@
     "build": "pnpm build:all",
     "build:all": "pnpm -r --filter='!@agiworkforce/desktop' build",
     "build:desktop": "pnpm --filter @agiworkforce/desktop build",
+    "build:docs": "pnpm --filter @agiworkforce/docs build",
     "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",
+    "dev:docs": "pnpm --filter @agiworkforce/docs start",
     "typecheck:all": "pnpm -r typecheck"
   },
   "devDependencies": {

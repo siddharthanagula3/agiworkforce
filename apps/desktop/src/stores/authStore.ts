@@ -23,6 +23,7 @@ interface AuthState {
   signUp: (email: string, password: string, name?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>;
+  signInWithOAuth: (provider: 'github' | 'google') => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
 }
 
@@ -154,6 +155,28 @@ export const useAuthStore = create<AuthState>()(
 
         set({ isLoading: false });
         return { error: null };
+      },
+
+      signInWithOAuth: async (provider: 'github' | 'google') => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const { error } = await supabaseAuth.signInWithOAuth(provider);
+
+          if (error) {
+            set({ error: error.message });
+            return { error: error.message };
+          }
+
+          return { error: null };
+        } catch (error) {
+          console.error(`[AuthStore] OAuth sign in exception (${provider}):`, error);
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message });
+          return { error: message };
+        } finally {
+          set({ isLoading: false });
+        }
       },
     }),
     {

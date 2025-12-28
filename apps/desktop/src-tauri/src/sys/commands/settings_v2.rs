@@ -166,42 +166,6 @@ pub async fn settings_v2_get_category(
 }
 
 #[tauri::command]
-pub async fn settings_v2_save_api_key(
-    provider: String,
-    key: String,
-    state: State<'_, SettingsServiceState>,
-) -> Result<SettingsResponse, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    service
-        .save_api_key(&provider, &key)
-        .map_err(|e| format!("Failed to save API key: {}", e))?;
-
-    Ok(SettingsResponse {
-        success: true,
-        message: Some("API key saved successfully".to_string()),
-    })
-}
-
-#[tauri::command]
-pub async fn settings_v2_get_api_key(
-    provider: String,
-    state: State<'_, SettingsServiceState>,
-) -> Result<String, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    service
-        .get_api_key(&provider)
-        .map_err(|e| format!("Failed to get API key: {}", e))
-}
-
-#[tauri::command]
 pub async fn settings_v2_load_app_settings(
     state: State<'_, SettingsServiceState>,
 ) -> Result<AppSettings, String> {

@@ -1,0 +1,58 @@
+/* HUMANS.TXT */
+/* humanstxt.org */
+
+/* TEAM */
+Title: Founder & Creator
+Name: AGI Automation LLC
+Site: https://agiworkforce.com
+Twitter: @agiworkforce
+GitHub: @agiworkforce
+Email: support@agiworkforce.com
+
+Title: Platform Engineering
+Role: Desktop Application (Tauri/Rust)
+GitHub: agiworkforce
+Location: Remote
+
+Title: Product Team
+Role: Web Platform (Next.js/React)
+GitHub: agiworkforce
+Location: Remote
+
+/* THANKS */
+Thanks: All contributors to this project
+Thanks: Anthropic for Claude API
+Thanks: OpenAI for GPT integration
+Thanks: Google for Gemini API
+Thanks: Meta for Llama models
+Thanks: Tauri for desktop framework
+Thanks: Supabase for backend infrastructure
+Thanks: Vercel for web hosting
+
+/* SITE */
+Last Updated: 2026-01-01
+Standards: HTML5, CSS3, JavaScript
+Components: React 19, TypeScript, Rust
+Hosting: Vercel, Custom Infrastructure
+IDE: VSCode, RustRover
+Version Control: Git/GitHub
+
+/* BUILD INFORMATION */
+Build Tool: pnpm workspaces
+Languages: TypeScript, Rust, JavaScript
+Frameworks: Next.js, React, Tauri
+Database: PostgreSQL (Supabase)
+Cache: Redis (Upstash)
+CDN: Vercel Edge Network
+
+/* CONTACT */
+Email: support@agiworkforce.com
+Discord: https://discord.gg/agiworkforce (if available)
+GitHub Issues: https://github.com/agiworkforce/issues
+Security: security@agiworkforce.com
+
+/* MISSION */
+Our mission is to make AI-powered automation accessible and affordable to everyone.
+We believe in open, transparent, and privacy-first technology that empowers users.
+
+Last Updated: 2026-01-01

@@ -150,7 +150,7 @@ impl StripeService {
             .map_err(|_| anyhow!("Failed to lock database"))?;
 
         let mut stmt = db.prepare(
-            "SELECT id, stripe_customer_id, email, name, created_at, updated_a
+            "SELECT id, stripe_customer_id, email, name, created_at, updated_at
              FROM billing_customers
              WHERE email = ?1",
         )?;
@@ -239,7 +239,7 @@ impl StripeService {
                 id, customer_id, stripe_subscription_id, stripe_price_id, plan_name, billing_interval,
                 status, current_period_start, current_period_end, cancel_at_period_end,
                 cancel_at, canceled_at, trial_start, trial_end, amount, currency,
-                created_at, updated_a
+                created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             rusqlite::params![
                 &subscription_info.id,
@@ -304,7 +304,7 @@ impl StripeService {
             "SELECT id, customer_id, stripe_subscription_id, stripe_price_id, plan_name, billing_interval,
                     status, current_period_start, current_period_end, cancel_at_period_end,
                     cancel_at, canceled_at, trial_start, trial_end, amount, currency,
-                    created_at, updated_a
+                    created_at, updated_at
              FROM billing_subscriptions
              WHERE stripe_subscription_id = ?1",
         )?;
@@ -614,7 +614,7 @@ impl StripeService {
             "SELECT id, customer_id, stripe_subscription_id, stripe_price_id, plan_name, billing_interval,
                     status, current_period_start, current_period_end, cancel_at_period_end,
                     cancel_at, canceled_at, trial_start, trial_end, amount, currency,
-                    created_at, updated_a
+                    created_at, updated_at
              FROM billing_subscriptions
              WHERE customer_id = ?1 AND status IN ('active', 'trialing')
              ORDER BY created_at DESC
@@ -659,7 +659,7 @@ impl StripeService {
             "SELECT id, customer_id, stripe_subscription_id, stripe_price_id, plan_name, billing_interval,
                     status, current_period_start, current_period_end, cancel_at_period_end,
                     cancel_at, canceled_at, trial_start, trial_end, amount, currency,
-                    created_at, updated_a
+                    created_at, updated_at
              FROM billing_subscriptions
              WHERE status IN ('active', 'trialing')
              ORDER BY created_at DESC
@@ -852,7 +852,7 @@ impl StripeService {
         db.execute(
             "INSERT INTO billing_payment_methods (
                 id, customer_id, stripe_payment_method_id, type, card_brand, card_last4,
-                card_exp_month, card_exp_year, is_default, created_at, updated_a
+                card_exp_month, card_exp_year, is_default, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 &payment_method_info.id,

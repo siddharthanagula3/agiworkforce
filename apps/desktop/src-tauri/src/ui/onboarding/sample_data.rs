@@ -623,8 +623,8 @@ impl SampleInvoice {
             invoices.push(SampleInvoice {
                 invoice_number: invoice_num.clone(),
                 vendor_name: vendor_name.to_string(),
-                date: format!("2025-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1),
-                due_date: format!("2025-{:02}-{:02}", ((i + 1) % 12) + 1, (i % 28) + 1),
+                date: format!("2026-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1),
+                due_date: format!("2026-{:02}-{:02}", ((i + 1) % 12) + 1, (i % 28) + 1),
                 line_items,
                 subtotal,
                 tax,

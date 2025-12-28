@@ -1,6 +1,6 @@
 import { invoke } from '@/lib/tauri-mock';
-import { Brain, Check, Sparkles, Wand2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Brain, Check, Search, Sparkles, Wand2, X } from 'lucide-react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   getModelMetadata,
   PROVIDER_LABELS,
@@ -8,8 +8,10 @@ import {
   THINKING_MODEL_VARIANTS,
   type ModelMetadata,
 } from '../../constants/llm';
+import { canUseModel } from '../../constants/planModels';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { cn } from '../../lib/utils';
+import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
@@ -27,6 +29,15 @@ type RouterSuggestion = {
 };
 
 const AUTO_MODEL_ID = 'auto';
+
+const getQualityTierLabel = (tier: 'fast' | 'balanced' | 'best') => {
+  const labels: Record<'fast' | 'balanced' | 'best', { text: string; className: string }> = {
+    fast: { text: 'Fast', className: 'text-emerald-600 dark:text-emerald-400' },
+    balanced: { text: 'Balanced', className: 'text-blue-600 dark:text-blue-400' },
+    best: { text: 'Best', className: 'text-amber-600 dark:text-amber-400' },
+  };
+  return labels[tier];
+};
 
 export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorProps) => {
   const {
@@ -47,6 +58,13 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     getAvailableModels: state.getAvailableModels,
   }));
 
+  const { account } = useAccountStore((state) => ({
+    account: state.account,
+  }));
+
+  // Get user's plan tier (defaults to 'free' if not subscribed)
+  const userPlanTier = account.plan || 'free';
+
   useEffect(() => {
     if (availableModels.length <= 15) {
       void getAvailableModels();
@@ -56,6 +74,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   const messages = useUnifiedChatStore((state) => state.messages);
   const [suggestion, setSuggestion] = useState<RouterSuggestion | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const latestUserMessage = useMemo(
     () => [...messages].reverse().find((msg) => msg.role === 'user'),
@@ -73,12 +93,19 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   const modelGroups = useMemo(() => {
     const groups: Record<string, ModelMetadata[]> = {};
     const allProviders: Provider[] = PROVIDERS_IN_ORDER;
+    const query = searchQuery.toLowerCase().trim();
 
     allProviders.forEach((p) => {
       groups[p] = [];
     });
 
     availableModels.forEach((model) => {
+      // Filter models based on user's plan
+      const planTier = userPlanTier as any;
+      if (!canUseModel(planTier, model.id)) {
+        return; // Skip models not available for this plan
+      }
+
       const group = groups[model.provider];
       if (group) {
         let metadata = getModelMetadata(model.id);
@@ -100,18 +127,31 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             },
             speed: 'medium',
             quality: 'good',
+            qualityTier: 'balanced',
             bestFor: ['Local Inference', 'Privacy'],
           };
         }
 
         if (metadata) {
+          // Filter by search query
+          if (query) {
+            const matchesName = metadata.name.toLowerCase().includes(query);
+            const matchesId = metadata.id.toLowerCase().includes(query);
+            const matchesProvider = metadata.provider.toLowerCase().includes(query);
+            const matchesBestFor = metadata.bestFor?.some((tag) =>
+              tag.toLowerCase().includes(query),
+            );
+            if (!matchesName && !matchesId && !matchesProvider && !matchesBestFor) {
+              return;
+            }
+          }
           group.push(metadata);
         }
       }
     });
 
     return groups;
-  }, [availableModels]);
+  }, [availableModels, userPlanTier, searchQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +164,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             requiresVision: suggestionContext.requiresVision,
             tokenEstimate: suggestionContext.tokenEstimate,
             costPriority: suggestionContext.costPriority,
+            planTier: userPlanTier,
           },
         });
         if (!cancelled) {
@@ -145,7 +186,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     return () => {
       cancelled = true;
     };
-  }, [suggestionContext]);
+  }, [suggestionContext, userPlanTier]);
 
   const handleModelChange = (modelId: string) => {
     if (modelId === AUTO_MODEL_ID) {
@@ -168,6 +209,18 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     ? availableModels.find((m) => m.id === suggestion.model) || getModelMetadata(suggestion.model)
     : null;
 
+  // Auto-switch to suggested model when suggestion loads (Auto mode behavior)
+  useEffect(() => {
+    if (isAutoMode && suggestion && suggestedMetadata) {
+      // Check if suggested model is available for user's plan
+      const planTier = userPlanTier as any;
+      if (canUseModel(planTier, suggestion.model)) {
+        // Auto-switch to the suggested model without user interaction
+        void selectModel(suggestion.model, suggestedMetadata.provider);
+      }
+    }
+  }, [suggestion, isAutoMode, userPlanTier, suggestedMetadata, selectModel]);
+
   return (
     <div
       className={cn(
@@ -181,6 +234,35 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           Models
         </p>
         <span className="text-[10px] text-gray-400 dark:text-gray-500">Choose a provider</span>
+      </div>
+
+      {/* Search Input */}
+      <div className="relative mb-2">
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search models..."
+          className={cn(
+            'w-full pl-7 pr-7 py-1.5 text-xs rounded-lg border transition-colors',
+            'bg-gray-50 dark:bg-charcoal-800 border-gray-200 dark:border-gray-700',
+            'placeholder:text-gray-400 dark:placeholder:text-gray-500',
+            'focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
+          )}
+        />
+        {searchQuery && (
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              searchInputRef.current?.focus();
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <X size={12} />
+          </button>
+        )}
       </div>
 
       {}
@@ -227,6 +309,67 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
       <hr className="my-2 border-gray-200 dark:border-gray-700" />
 
+      {/* Plan Tier Indicator with Pricing */}
+      <div className="mb-2 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-800/50">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+            {userPlanTier === 'free' && '📍 Free Plan'}
+            {userPlanTier === 'hobby' && '🎯 Hobby ($10/mo)'}
+            {userPlanTier === 'pro' && '⚡ Pro ($30/mo)'}
+            {userPlanTier === 'max' && '🚀 Max ($300/mo)'}
+            {userPlanTier === 'enterprise' && '👑 Enterprise'}
+          </p>
+          {userPlanTier === 'free' && (
+            <span className="text-[8px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-1.5 py-0.5 rounded">
+              Local only
+            </span>
+          )}
+          {userPlanTier === 'hobby' && (
+            <span className="text-[8px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded">
+              Budget
+            </span>
+          )}
+          {userPlanTier === 'pro' && (
+            <span className="text-[8px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded">
+              Mid-range
+            </span>
+          )}
+          {userPlanTier === 'max' && (
+            <span className="text-[8px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded">
+              Premium
+            </span>
+          )}
+        </div>
+
+        {userPlanTier === 'free' && (
+          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
+            Only Llama 4 local model. Upgrade to Hobby for cloud models.
+          </p>
+        )}
+        {userPlanTier === 'hobby' && (
+          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
+            ~$1/month credits. Ultra-cheap: Haiku ($1/$5), Flash ($0.1/$0.4), Llama 4 (free)
+          </p>
+        )}
+        {userPlanTier === 'pro' && (
+          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
+            $20/month credits. Mid-range: Sonnet ($3/$15), Gemini Pro ($1.5/$6), GPT-5.2-Chat
+            ($4/$12)
+          </p>
+        )}
+        {userPlanTier === 'max' && (
+          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
+            $250/month credits. ALL models: Opus ($15/$75), GPT-5.2-Pro ($10/$30), GPT-5.2 ($6/$18),
+            and more
+          </p>
+        )}
+        {userPlanTier === 'enterprise' && (
+          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
+            Unlimited credits. All models available: Opus, GPT-5.2-Pro, and complete model library
+          </p>
+        )}
+      </div>
+
       {}
       {!isAutoMode && suggestion && suggestedMetadata && (
         <div className="mb-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-2 text-xs text-primary dark:border-primary/30 dark:bg-primary/10 dark:text-primary-foreground">
@@ -254,7 +397,24 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         </div>
       )}
 
-      <div className="max-h-[200px] space-y-2 overflow-y-auto pr-1">
+      <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+        {/* No results message */}
+        {searchQuery && Object.values(modelGroups).every((models) => models.length === 0) && (
+          <div className="py-6 text-center">
+            <Search size={24} className="mx-auto mb-2 text-gray-400" />
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              No models found for "{searchQuery}"
+            </p>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-2 text-[10px] text-primary hover:underline"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
+
+        {/* Available Models Section */}
         {Object.entries(modelGroups).map(([provider, models]) => {
           if (models.length === 0) return null;
           return (
@@ -265,6 +425,21 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               <div className="flex flex-col gap-1">
                 {models.map((model) => {
                   const isActive = model.id === selectedModel;
+
+                  // Determine which plan tier(s) this model requires
+                  const getModelTierTag = (modelId: string): string => {
+                    const hobbySafe = canUseModel('hobby' as any, modelId);
+                    const proSafe = canUseModel('pro' as any, modelId);
+                    const maxSafe = canUseModel('max' as any, modelId);
+
+                    if (maxSafe && !proSafe) return 'Max Only';
+                    if (proSafe && !hobbySafe) return 'Pro+';
+                    if (hobbySafe) return 'Hobby+';
+                    return '';
+                  };
+
+                  const tierTag = getModelTierTag(model.id);
+
                   return (
                     <button
                       key={model.id}
@@ -276,12 +451,33 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                           : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
                       )}
                     >
-                      <span className="truncate">{model.name}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{model.name}</span>
+                        {tierTag && !isActive && (
+                          <span
+                            className={cn(
+                              'text-[8px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0',
+                              tierTag === 'Max Only'
+                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                : tierTag === 'Pro+'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+                            )}
+                          >
+                            {tierTag}
+                          </span>
+                        )}
+                      </div>
                       {isActive ? (
-                        <Check size={14} className="text-primary" />
+                        <Check size={14} className="text-primary flex-shrink-0" />
                       ) : (
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                          {PROVIDER_LABELS[model.provider]}
+                        <span
+                          className={cn(
+                            'text-[10px] font-medium flex-shrink-0',
+                            getQualityTierLabel(model.qualityTier).className,
+                          )}
+                        >
+                          {getQualityTierLabel(model.qualityTier).text}
                         </span>
                       )}
                     </button>
@@ -291,6 +487,24 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             </div>
           );
         })}
+
+        {/* Locked Models Info */}
+        {(userPlanTier === 'free' || userPlanTier === 'hobby') && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-[8px] text-gray-600 dark:text-gray-500 px-1">
+              🔒 <span className="font-semibold">Premium models locked:</span> Claude Opus,
+              GPT-5.2-Pro, GPT-5.1-Thinking and 10+ others require Pro/Max plan.
+            </p>
+          </div>
+        )}
+        {userPlanTier === 'pro' && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-[8px] text-gray-600 dark:text-gray-500 px-1">
+              🔒 <span className="font-semibold">Enterprise models locked:</span> Claude Opus
+              ($15/$75), GPT-5.2-Pro ($10/$30) require Max plan.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">

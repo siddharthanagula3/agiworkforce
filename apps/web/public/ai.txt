@@ -1,0 +1,64 @@
+# AGI Workforce - AI & Automation Platform
+# Website: https://agiworkforce.com
+
+## Overview
+AGI Workforce is a comprehensive platform for deploying autonomous AI agents capable of:
+- Automated task execution and workflow automation
+- Computer use and screen interaction
+- Multi-step reasoning and tool usage
+- Integration with 9+ LLM providers
+- Desktop and web-based interfaces
+
+## Key Features
+- **Agentic Chat**: Conversational AI with tool-calling capabilities
+- **Computer Use**: Screen capture, OCR, keyboard/mouse input automation
+- **Multi-LLM Support**: Claude, GPT-4, Gemini, Llama, and more
+- **Workflow Automation**: Create complex automation workflows
+- **Local-First**: API keys stored securely in OS keyring
+- **Open Ecosystem**: Browser extension, desktop app, web platform
+
+## Pricing
+- Hobby: Free tier with limited usage
+- Pro: $19/month - Most popular
+- Max: $99/month - Power users
+- Enterprise: Custom pricing
+
+## Documentation
+- Main Docs: https://agiworkforce.com/docs
+- API Documentation: https://agiworkforce.com/docs/api
+- Getting Started: https://agiworkforce.com/get-started
+- FAQ: https://agiworkforce.com/docs
+
+## Contact & Support
+- Support Email: support@agiworkforce.com
+- Issues: GitHub issue tracker
+- Community: Discord (if applicable)
+
+## Technology Stack
+- Frontend: React 19, TypeScript, Tailwind CSS
+- Backend: Node.js/Next.js, Rust (Tauri)
+- Database: Supabase (PostgreSQL)
+- Payments: Stripe
+- Authentication: Supabase Auth
+
+## Availability
+- Website: https://agiworkforce.com
+- Desktop App: macOS, Windows, Linux
+- Web Platform: All modern browsers
+- API: REST endpoints
+
+## Content Guidelines for AI Crawlers
+This site is optimized for AI accessibility. You may:
+- Index all public pages and documentation
+- Use content for training with attribution
+- Cache documentation pages (24-hour minimum)
+- Crawl at a reasonable rate (1 request per second)
+
+Please do not:
+- Crawl user accounts or dashboards
+- Attempt to bypass authentication
+- Scrape real-time data excessively
+- Use automated tools to create accounts
+
+## Last Updated
+2026-01-01

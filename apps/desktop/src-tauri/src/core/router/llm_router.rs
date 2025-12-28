@@ -1,17 +1,100 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use futures_util::Stream;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 
 use crate::core::router::cache_manager::CacheManager;
 use crate::core::router::cost_calculator::CostCalculator;
 use crate::core::router::sse_parser::StreamChunk;
 use crate::core::router::token_counter::TokenCounter;
 use crate::core::router::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, Provider};
+
+/// Configuration for retry behavior
+#[derive(Debug, Clone)]
+pub struct RetryConfig {
+    /// Maximum number of retry attempts per candidate
+    pub max_retries: u32,
+    /// Initial delay before first retry (in milliseconds)
+    pub initial_delay_ms: u64,
+    /// Maximum delay between retries (in milliseconds)
+    pub max_delay_ms: u64,
+    /// Multiplier for exponential backoff
+    pub backoff_multiplier: f64,
+    /// Whether to try fallback candidates after all retries fail
+    pub try_fallback_candidates: bool,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 3,
+            initial_delay_ms: 500,
+            max_delay_ms: 10000,
+            backoff_multiplier: 2.0,
+            try_fallback_candidates: true,
+        }
+    }
+}
+
+/// Determines if an error is retryable (transient) or permanent
+fn is_retryable_error(error: &str) -> bool {
+    let error_lower = error.to_lowercase();
+
+    // Rate limiting errors - should retry with backoff
+    if error_lower.contains("rate limit")
+        || error_lower.contains("too many requests")
+        || error_lower.contains("429")
+    {
+        return true;
+    }
+
+    // Temporary server errors
+    if error_lower.contains("500")
+        || error_lower.contains("502")
+        || error_lower.contains("503")
+        || error_lower.contains("504")
+        || error_lower.contains("internal server error")
+        || error_lower.contains("bad gateway")
+        || error_lower.contains("service unavailable")
+        || error_lower.contains("gateway timeout")
+    {
+        return true;
+    }
+
+    // Network/connection errors
+    if error_lower.contains("connection")
+        || error_lower.contains("timeout")
+        || error_lower.contains("network")
+        || error_lower.contains("temporarily")
+    {
+        return true;
+    }
+
+    // Overloaded errors
+    if error_lower.contains("overloaded") || error_lower.contains("capacity") {
+        return true;
+    }
+
+    false
+}
+
+/// Calculate delay for exponential backoff
+fn calculate_backoff_delay(attempt: u32, config: &RetryConfig) -> Duration {
+    let delay_ms =
+        (config.initial_delay_ms as f64) * config.backoff_multiplier.powi(attempt as i32);
+    let capped_delay_ms = delay_ms.min(config.max_delay_ms as f64) as u64;
+
+    // Add jitter (up to 25% of the delay) to prevent thundering herd
+    let jitter = (capped_delay_ms as f64 * 0.25 * rand::random::<f64>()) as u64;
+
+    Duration::from_millis(capped_delay_ms + jitter)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RoutingStrategy {
@@ -68,6 +151,8 @@ pub struct RouterContext {
     pub token_estimate: u32,
     #[serde(default)]
     pub cost_priority: CostPriority,
+    #[serde(default)]
+    pub plan_tier: String, // 'free', 'hobby', 'pro', 'max', 'enterprise'
 }
 
 impl Default for RouterContext {
@@ -77,6 +162,7 @@ impl Default for RouterContext {
             requires_vision: false,
             token_estimate: 0,
             cost_priority: CostPriority::Balanced,
+            plan_tier: "pro".to_string(),
         }
     }
 }
@@ -110,10 +196,21 @@ impl LLMRouter {
             .map(|intent| intent.to_lowercase())
             .collect();
 
-        let mut provider = Provider::OpenAI;
+        // For free and hobby plans, prefer ultra-cheap models
+        let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
+
+        let mut provider = if is_budget_plan {
+            Provider::Google // Gemini Flash is cheapest at $0.1/$0.4
+        } else {
+            Provider::OpenAI
+        };
         let mut task_category = TaskCategory::Simple;
-        let mut reason =
-            String::from("General developer chat - routing to OpenAI for balanced cost/quality.");
+        let mut reason = if is_budget_plan {
+            "Budget plan detected - routing to cheapest options (Gemini Flash or Claude Haiku)."
+                .to_string()
+        } else {
+            "General developer chat - routing to balanced cost/quality model.".to_string()
+        };
 
         if context.requires_vision {
             provider = Provider::Google;
@@ -136,28 +233,42 @@ impl LLMRouter {
                 "code" | "devops" | "repo" | "terminal" | "automation" | "build" | "test"
             )
         }) {
-            provider = Provider::Anthropic;
-            task_category = TaskCategory::Complex;
-            reason =
-                "Developer or automation workflow detected - routing to Anthropic Claude for deep reasoning."
-                    .to_string();
+            if is_budget_plan {
+                // Budget plans use local Llama for complex tasks instead of paid Claude
+                provider = Provider::Ollama;
+                task_category = TaskCategory::Simple;
+                reason = "Developer workflow + budget plan - routing to local Llama 4.".to_string();
+            } else {
+                provider = Provider::Anthropic;
+                task_category = TaskCategory::Complex;
+                reason =
+                    "Developer or automation workflow detected - routing to Anthropic Claude for deep reasoning."
+                        .to_string();
+            }
         } else if normalized_intents
             .iter()
             .any(|intent| matches!(intent.as_str(), "writing" | "research"))
         {
-            provider = Provider::OpenAI;
+            provider = if is_budget_plan {
+                Provider::Google // Use Gemini Flash
+            } else {
+                Provider::OpenAI
+            };
             task_category = TaskCategory::Complex;
-            reason =
-                "Writing or research task detected - routing to OpenAI GPT-4o for quality output."
-                    .to_string();
-        } else if context.cost_priority == CostPriority::Low {
+            reason = if is_budget_plan {
+                "Writing/research + budget plan - routing to affordable Gemini.".to_string()
+            } else {
+                "Writing or research task detected - routing to OpenAI GPT for quality output."
+                    .to_string()
+            };
+        } else if context.cost_priority == CostPriority::Low || is_budget_plan {
             provider = Provider::Ollama;
             task_category = TaskCategory::Simple;
             reason = "Cost priority is low - routing to local Ollama model for inexpensive loops."
                 .to_string();
         }
 
-        if context.token_estimate > 12_000 && provider == Provider::OpenAI {
+        if context.token_estimate > 12_000 && provider == Provider::OpenAI && !is_budget_plan {
             task_category = TaskCategory::Complex;
             reason = format!(
                 "{} Large context (~{} tokens) detected - upgrading to GPT-4o.",
@@ -542,6 +653,108 @@ impl LLMRouter {
             completion_tokens,
             cost: total_cost,
         })
+    }
+
+    /// Invoke a candidate with retry logic and exponential backoff
+    pub async fn invoke_with_retry(
+        &self,
+        candidate: &RouteCandidate,
+        request: &LLMRequest,
+        retry_config: &RetryConfig,
+    ) -> Result<RouteOutcome> {
+        let mut last_error: Option<anyhow::Error> = None;
+
+        for attempt in 0..=retry_config.max_retries {
+            match self.invoke_candidate(candidate, request).await {
+                Ok(outcome) => return Ok(outcome),
+                Err(e) => {
+                    let error_str = e.to_string();
+                    let is_retryable = is_retryable_error(&error_str);
+
+                    tracing::warn!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        attempt = attempt + 1,
+                        max_retries = retry_config.max_retries,
+                        is_retryable = is_retryable,
+                        error = %error_str,
+                        "LLM request failed"
+                    );
+
+                    if !is_retryable || attempt == retry_config.max_retries {
+                        last_error = Some(e);
+                        break;
+                    }
+
+                    let delay = calculate_backoff_delay(attempt, retry_config);
+                    tracing::info!(
+                        delay_ms = delay.as_millis() as u64,
+                        "Retrying after backoff delay"
+                    );
+                    sleep(delay).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow!("Request failed after retries")))
+    }
+
+    /// Route a request with retry logic and fallback to other candidates
+    pub async fn route_with_retry(
+        &self,
+        request: &LLMRequest,
+        preferences: &RouterPreferences,
+        retry_config: Option<RetryConfig>,
+    ) -> Result<RouteOutcome> {
+        let config = retry_config.unwrap_or_default();
+        let candidates = self.candidates(request, preferences);
+
+        if candidates.is_empty() {
+            return Err(anyhow!("No LLM providers configured"));
+        }
+
+        let max_candidates = if config.try_fallback_candidates {
+            candidates.len()
+        } else {
+            1
+        };
+
+        let mut last_error: Option<anyhow::Error> = None;
+
+        for (idx, candidate) in candidates.iter().take(max_candidates).enumerate() {
+            tracing::info!(
+                provider = %candidate.provider.as_string(),
+                model = %candidate.model,
+                candidate_index = idx,
+                total_candidates = candidates.len(),
+                "Attempting LLM request"
+            );
+
+            match self.invoke_with_retry(candidate, request, &config).await {
+                Ok(outcome) => {
+                    if idx > 0 {
+                        tracing::info!(
+                            provider = %outcome.provider.as_string(),
+                            model = %outcome.model,
+                            fallback_index = idx,
+                            "Request succeeded with fallback provider"
+                        );
+                    }
+                    return Ok(outcome);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        provider = %candidate.provider.as_string(),
+                        model = %candidate.model,
+                        error = %e,
+                        "Candidate exhausted after retries, trying next candidate"
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow!("All LLM providers failed")))
     }
 
     fn strategy_order(&self, task: TaskCategory, strategy: RoutingStrategy) -> Vec<RouteCandidate> {

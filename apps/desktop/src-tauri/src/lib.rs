@@ -753,8 +753,6 @@ pub fn run() {
             crate::sys::commands::on_file_deleted,
 
 
-            crate::sys::commands::settings_save_api_key,
-            crate::sys::commands::settings_get_api_key,
             crate::sys::commands::settings_load,
             crate::sys::commands::settings_save,
             crate::sys::commands::settings_v2_get,
@@ -762,7 +760,6 @@ pub fn run() {
             crate::sys::commands::settings_v2_get_batch,
             crate::sys::commands::settings_v2_delete,
             crate::sys::commands::settings_v2_get_category,
-            crate::sys::commands::settings_v2_save_api_key,
 
 
             crate::sys::account::device_link_initiate,
@@ -796,7 +793,6 @@ pub fn run() {
             crate::sys::commands::calculate_team_cost,
             crate::sys::commands::update_team_usage,
             crate::sys::commands::transfer_team_ownership,
-            crate::sys::commands::settings_v2_get_api_key,
             crate::sys::commands::settings_v2_load_app_settings,
             crate::sys::commands::settings_v2_save_app_settings,
             crate::sys::commands::settings_v2_clear_cache,
