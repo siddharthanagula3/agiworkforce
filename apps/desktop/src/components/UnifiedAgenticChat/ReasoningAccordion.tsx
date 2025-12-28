@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, ChevronDown, Clock, Layers } from 'lucide-react';
+import { Brain, ChevronDown, Clock, Layers, Loader2, Sparkles } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '../../lib/utils';
@@ -11,8 +11,10 @@ interface ReasoningAccordionProps {
   metadata?: {
     duration?: number;
     steps?: number;
+    thinkingPattern?: string;
   };
   className?: string;
+  isStreaming?: boolean;
 }
 
 export function ReasoningAccordion({
@@ -20,17 +22,51 @@ export function ReasoningAccordion({
   summary,
   metadata,
   className,
+  isStreaming = false,
 }: ReasoningAccordionProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  // Generate an intelligent summary from thinking content
   const displaySummary = useMemo(() => {
     if (summary) return summary;
-    const firstLine = content
-      .split('\n')
-      .find((line) => line.trim().length > 0)
-      ?.trim();
-    return firstLine || 'Thinking process';
-  }, [content, summary]);
+
+    // Don't generate summary while actively streaming
+    if (isStreaming && content.length < 50) {
+      return 'Thinking...';
+    }
+
+    // Look for key phrases that indicate the thinking topic
+    const topicPatterns = [
+      /(?:I need to|Let me|I'll|I should|First,? I|To answer|To solve|Looking at)/i,
+      /(?:The (?:user|question|task|problem) (?:is|wants|asks|requires))/i,
+      /(?:This (?:is|seems|appears|looks|involves))/i,
+    ];
+
+    // Find the first meaningful line
+    const lines = content.split('\n').filter((line) => line.trim().length > 0);
+
+    for (const line of lines.slice(0, 5)) {
+      const trimmed = line.trim();
+      // Skip very short lines or lines that are just numbering
+      if (trimmed.length < 15 || /^[\d.*-]+\s*$/.test(trimmed)) continue;
+
+      // Check if line starts with a topic indicator
+      for (const pattern of topicPatterns) {
+        if (pattern.test(trimmed)) {
+          // Truncate long lines
+          return trimmed.length > 80 ? trimmed.slice(0, 77) + '...' : trimmed;
+        }
+      }
+    }
+
+    // Fallback: use first meaningful line
+    const firstLine = lines.find((line) => line.trim().length > 15)?.trim();
+    if (firstLine) {
+      return firstLine.length > 80 ? firstLine.slice(0, 77) + '...' : firstLine;
+    }
+
+    return 'Analyzing and reasoning...';
+  }, [content, summary, isStreaming]);
 
   const stats = useMemo(() => {
     const lines = content.split('\n').filter((line) => line.trim().length > 0);
@@ -43,9 +79,16 @@ export function ReasoningAccordion({
 
   return (
     <div
-      className={cn('overflow-hidden rounded-2xl', 'border border-zinc-800 bg-zinc-950', className)}
+      className={cn(
+        'overflow-hidden rounded-2xl',
+        'border bg-zinc-950',
+        isStreaming
+          ? 'border-agent-thinking/50 shadow-lg shadow-agent-thinking/10'
+          : 'border-zinc-800',
+        className,
+      )}
     >
-      {}
+      {/* Header */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
@@ -59,25 +102,49 @@ export function ReasoningAccordion({
         aria-label={`${isOpen ? 'Hide' : 'Show'} thinking process`}
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Brain
-            className={cn('w-4 h-4 shrink-0', isOpen ? 'text-agent-thinking' : 'text-zinc-400')}
-          />
+          {isStreaming ? (
+            <div className="relative">
+              <Brain className="w-4 h-4 shrink-0 text-agent-thinking" />
+              <Sparkles className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-agent-thinking animate-pulse" />
+            </div>
+          ) : (
+            <Brain
+              className={cn('w-4 h-4 shrink-0', isOpen ? 'text-agent-thinking' : 'text-zinc-400')}
+            />
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="font-semibold text-sm text-zinc-200 truncate">{displaySummary}</span>
+              <span
+                className={cn(
+                  'font-semibold text-sm truncate',
+                  isStreaming ? 'text-agent-thinking' : 'text-zinc-200',
+                )}
+              >
+                {displaySummary}
+              </span>
+              {isStreaming && <Loader2 className="w-3 h-3 text-agent-thinking animate-spin" />}
             </div>
             <div className="flex items-center gap-3 text-xs text-zinc-500">
-              <span className="flex items-center gap-1">
-                <Layers className="w-3 h-3" />
-                {stats.steps} {stats.steps === 1 ? 'step' : 'steps'}
-              </span>
-              {stats.duration > 0 && (
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {stats.duration}s
+              {isStreaming ? (
+                <span className="flex items-center gap-1 text-agent-thinking/70">
+                  <Sparkles className="w-3 h-3" />
+                  Reasoning in progress...
                 </span>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1">
+                    <Layers className="w-3 h-3" />
+                    {stats.steps} {stats.steps === 1 ? 'step' : 'steps'}
+                  </span>
+                  {stats.duration > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {stats.duration}s
+                    </span>
+                  )}
+                  <span>{stats.words} words</span>
+                </>
               )}
-              <span>{stats.words} words</span>
             </div>
           </div>
         </div>

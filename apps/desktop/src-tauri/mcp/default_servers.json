@@ -28,7 +28,7 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_credential_manager>"
       },
-      "enabled": false
+      "enabled": true
     },
     "terminal": {
       "command": "npx",

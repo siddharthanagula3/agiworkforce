@@ -6,10 +6,18 @@ import { getEnv, requireEnv } from '@/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { validateCsrfFromRequest } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 async function handleDeviceLink(request: NextRequest) {
+  // CSRF protection
+  const csrfValid = await validateCsrfFromRequest(request);
+  if (!csrfValid) {
+    logger.warn({}, 'CSRF validation failed for device/link');
+    throw createError.forbidden('CSRF token validation failed');
+  }
+
   // Rate limiting - prevent abuse of device code generation
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) {
@@ -50,7 +58,9 @@ async function handleDeviceLink(request: NextRequest) {
       },
     });
 
-    const user_code = randomBytes(3).toString('hex').toUpperCase();
+    // Generate device code with higher entropy (5 bytes = 10 hex chars = 2^40 possibilities)
+    // This makes brute-force attacks infeasible even within the 15-minute window
+    const user_code = randomBytes(5).toString('hex').toUpperCase();
     const appUrl = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
     const verify_url = `${appUrl}/verify?code=${user_code}`;
 

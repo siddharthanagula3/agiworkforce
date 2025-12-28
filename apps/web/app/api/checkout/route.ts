@@ -10,6 +10,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { validateCsrfFromRequest } from '@/lib/csrf';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
@@ -54,6 +55,12 @@ async function handleCheckout(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'checkout');
   if (rateLimitResponse) {
     return rateLimitResponse;
+  }
+
+  // CSRF protection
+  const csrfValid = await validateCsrfFromRequest(request);
+  if (!csrfValid) {
+    throw createError.unauthorized('Invalid or missing CSRF token');
   }
 
   if (!stripe) {

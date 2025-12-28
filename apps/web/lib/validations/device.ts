@@ -35,8 +35,15 @@ export const DeviceLinkRequestSchema = z.object({
   device_type: DeviceTypeSchema,
 });
 
+export const DeviceFingerprintSchema = z
+  .string()
+  .min(1, 'device_fingerprint is required')
+  .max(255, 'device_fingerprint must be 255 characters or less')
+  .regex(/^[a-f0-9]+$/, 'device_fingerprint must be a valid hex string');
+
 export const DevicePollRequestSchema = z.object({
   device_id: DeviceIdSchema,
+  device_fingerprint: DeviceFingerprintSchema,
 });
 
 export type DeviceLinkRequest = z.infer<typeof DeviceLinkRequestSchema>;

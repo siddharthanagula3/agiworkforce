@@ -68,6 +68,14 @@ export interface Operation {
   data: any;
 }
 
+export type MessageReaction =
+  | 'thumbsUp'
+  | 'thumbsDown'
+  | 'heart'
+  | 'laugh'
+  | 'thinking'
+  | 'celebrate';
+
 export interface EnhancedMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -80,6 +88,8 @@ export interface EnhancedMessage {
   streaming?: boolean;
   pending?: boolean;
   error?: string;
+  bookmarked?: boolean;
+  reactions?: MessageReaction[];
 }
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
@@ -186,6 +196,7 @@ export interface ConversationSummary {
   id: string;
   title: string;
   pinned: boolean;
+  archived?: boolean;
   lastMessage?: string;
   updatedAt: Date;
 }
@@ -315,6 +326,10 @@ export interface ActionTrailEntry {
   timestamp: Date;
   fadeAfter?: number;
   metadata?: Record<string, unknown>;
+  // Progress tracking
+  progress?: number; // 0-100 percentage
+  currentStep?: number;
+  totalSteps?: number;
 }
 
 export interface TokenUsage {
@@ -368,6 +383,35 @@ export function dbIdToUuid(dbId: number): string {
 
 export function uuidToDbId(uuid: string): number | undefined {
   return idMappings.uuidToDbId[uuid];
+}
+
+/**
+ * Generate a conversation title from the first user message
+ */
+function generateTitleFromMessage(content: string): string {
+  // Remove markdown formatting, code blocks, and special characters
+  const cleaned = content
+    .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+    .replace(/`[^`]+`/g, '') // Remove inline code
+    .replace(/[#*_~[\](){}]/g, '') // Remove markdown chars
+    .replace(/\n+/g, ' ') // Replace newlines with spaces
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+
+  // If empty after cleaning, use a default
+  if (!cleaned) return 'New conversation';
+
+  // Truncate to reasonable length
+  const maxLength = 50;
+  if (cleaned.length <= maxLength) return cleaned;
+
+  // Find a good break point (end of word)
+  const truncated = cleaned.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > 30) {
+    return truncated.slice(0, lastSpace) + '...';
+  }
+  return truncated + '...';
 }
 
 export interface UnifiedChatState {
@@ -428,12 +472,19 @@ export interface UnifiedChatState {
   draftContent: string;
   editingMessageId: string | null;
 
+  // UI preferences
+  showMessageTimestamps: boolean;
+
   ensureActiveConversation: () => void;
   createConversation: (title?: string) => string;
   selectConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
   togglePinnedConversation: (id: string) => void;
+  archiveConversation: (id: string) => void;
+  restoreConversation: (id: string) => void;
+  getArchivedConversations: () => ConversationSummary[];
+  exportConversationToMarkdown: (id?: string) => string;
 
   addMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'> & { id?: string }) => string;
   addOptimisticMessage: (message: Omit<EnhancedMessage, 'id' | 'timestamp'>) => string;
@@ -498,6 +549,19 @@ export interface UnifiedChatState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setMissionControlOpen: (open: boolean) => void;
   setSelectedMessage: (id: string | null) => void;
+  toggleMessageTimestamps: () => void;
+  toggleMessageBookmark: (messageId: string) => void;
+  toggleMessageReaction: (messageId: string, reaction: MessageReaction) => void;
+  getBookmarkedMessages: () => EnhancedMessage[];
+  getConversationStats: (id?: string) => {
+    messageCount: number;
+    userMessages: number;
+    assistantMessages: number;
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number;
+  };
   setAutonomousMode: (value: boolean) => void;
 
   setActiveView: (view: ActiveView) => void;
@@ -598,6 +662,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       draftContent: '',
       editingMessageId: null,
 
+      // UI preferences
+      showMessageTimestamps: true,
+
       ensureActiveConversation: () =>
         set((state) => {
           if (state.activeConversationId) {
@@ -679,6 +746,84 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           }
         }),
 
+      archiveConversation: (id: string) =>
+        set((state) => {
+          const convo = state.conversations.find((c) => c.id === id);
+          if (convo) {
+            convo.archived = true;
+            convo.pinned = false; // Unpin when archiving
+            convo.updatedAt = new Date();
+            // If this was the active conversation, switch to a non-archived one
+            if (state.activeConversationId === id) {
+              const next = state.conversations.find((c) => c.id !== id && !c.archived);
+              state.activeConversationId = next ? next.id : null;
+              state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
+            }
+          }
+        }),
+
+      restoreConversation: (id: string) =>
+        set((state) => {
+          const convo = state.conversations.find((c) => c.id === id);
+          if (convo) {
+            convo.archived = false;
+            convo.updatedAt = new Date();
+          }
+        }),
+
+      getArchivedConversations: () => {
+        const state = get();
+        return state.conversations.filter((c) => c.archived === true);
+      },
+
+      exportConversationToMarkdown: (id?: string) => {
+        const state = get();
+        const targetId = id || state.activeConversationId;
+        if (!targetId) return '';
+
+        const convo = state.conversations.find((c) => c.id === targetId);
+        const messages = state.messagesByConversation[targetId] || [];
+
+        if (messages.length === 0) return '';
+
+        const title = convo?.title || 'Untitled Conversation';
+        const date = convo?.updatedAt
+          ? new Date(convo.updatedAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+          : new Date().toLocaleDateString();
+
+        let markdown = `# ${title}\n\n`;
+        markdown += `*Exported on ${date}*\n\n---\n\n`;
+
+        for (const msg of messages) {
+          const role =
+            msg.role === 'user'
+              ? '**You**'
+              : msg.role === 'assistant'
+                ? '**Assistant**'
+                : '**System**';
+          const timestamp = new Date(msg.timestamp).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+
+          markdown += `### ${role} *${timestamp}*\n\n`;
+          markdown += `${msg.content}\n\n`;
+
+          // Include attachments info
+          if (msg.attachments && msg.attachments.length > 0) {
+            markdown += `*Attachments: ${msg.attachments.map((a) => a.name).join(', ')}*\n\n`;
+          }
+
+          markdown += '---\n\n';
+        }
+
+        return markdown;
+      },
+
       addMessage: (message) => {
         const assignedId = message.id ?? crypto.randomUUID();
         set((state) => {
@@ -710,6 +855,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (convo) {
             convo.lastMessage = newMessage.content;
             convo.updatedAt = newMessage.timestamp;
+
+            // Auto-generate title from first user message
+            if (convo.title === 'New chat' && newMessage.role === 'user' && newMessage.content) {
+              const generatedTitle = generateTitleFromMessage(newMessage.content);
+              convo.title = generatedTitle;
+            }
           }
         });
         return assignedId;
@@ -1191,6 +1342,96 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.selectedMessage = id;
         }),
 
+      toggleMessageTimestamps: () =>
+        set((state) => {
+          state.showMessageTimestamps = !state.showMessageTimestamps;
+        }),
+
+      toggleMessageBookmark: (messageId) =>
+        set((state) => {
+          // Search through all conversations for the message
+          for (const convoId of Object.keys(state.messagesByConversation)) {
+            const messages = state.messagesByConversation[convoId];
+            if (messages) {
+              const message = messages.find((m) => m.id === messageId);
+              if (message) {
+                message.bookmarked = !message.bookmarked;
+                break;
+              }
+            }
+          }
+        }),
+
+      toggleMessageReaction: (messageId, reaction) =>
+        set((state) => {
+          // Search through all conversations for the message
+          for (const convoId of Object.keys(state.messagesByConversation)) {
+            const messages = state.messagesByConversation[convoId];
+            if (messages) {
+              const message = messages.find((m) => m.id === messageId);
+              if (message) {
+                if (!message.reactions) {
+                  message.reactions = [];
+                }
+                const index = message.reactions.indexOf(reaction);
+                if (index >= 0) {
+                  message.reactions.splice(index, 1);
+                } else {
+                  message.reactions.push(reaction);
+                }
+                break;
+              }
+            }
+          }
+        }),
+
+      getBookmarkedMessages: () => {
+        const state = get();
+        const bookmarked: EnhancedMessage[] = [];
+        for (const convoId of Object.keys(state.messagesByConversation)) {
+          const messages = state.messagesByConversation[convoId];
+          if (messages) {
+            bookmarked.push(...messages.filter((m) => m.bookmarked));
+          }
+        }
+        return bookmarked.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
+      },
+
+      getConversationStats: (id?: string) => {
+        const state = get();
+        const targetId = id || state.activeConversationId;
+        const messages = targetId ? state.messagesByConversation[targetId] || [] : [];
+
+        let userMessages = 0;
+        let assistantMessages = 0;
+        let inputTokens = 0;
+        let outputTokens = 0;
+        let totalCost = 0;
+
+        for (const msg of messages) {
+          if (msg.role === 'user') userMessages++;
+          if (msg.role === 'assistant') assistantMessages++;
+
+          if (msg.metadata) {
+            inputTokens += msg.metadata.inputTokens || 0;
+            outputTokens += msg.metadata.outputTokens || 0;
+            totalCost += msg.metadata.cost || 0;
+          }
+        }
+
+        return {
+          messageCount: messages.length,
+          userMessages,
+          assistantMessages,
+          totalTokens: inputTokens + outputTokens,
+          inputTokens,
+          outputTokens,
+          totalCost,
+        };
+      },
+
       setAutonomousMode: (value) =>
         set((state) => {
           state.isAutonomousMode = value;
@@ -1455,6 +1696,7 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
         focusMode: state.focusMode,
         sidecar: state.sidecar,
+        showMessageTimestamps: state.showMessageTimestamps,
       }),
     },
   ),

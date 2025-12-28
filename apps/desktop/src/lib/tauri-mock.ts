@@ -37,7 +37,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_settings':
       return {
         theme: 'dark',
-        apiKeys: {},
       } as T;
 
     case 'chat_get_conversation_stats':

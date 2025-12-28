@@ -1,67 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
+import { useThemeContext } from '../providers/ThemeProvider';
 
-type Theme = 'light' | 'dark' | 'system';
-
+/**
+ * DEPRECATED: Use useThemeContext() instead
+ * This hook now delegates to useThemeContext for backward compatibility
+ * but should be replaced with useThemeContext in new code
+ */
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('theme') as Theme | null;
-      return stored || 'system';
-    }
-    return 'system';
-  });
+  console.warn('[useTheme] This hook is deprecated. Use useThemeContext() instead.');
 
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-
-    const applyTheme = (currentTheme: Theme) => {
-      root.classList.remove('light', 'dark');
-
-      if (currentTheme === 'system') {
-        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light';
-        root.classList.add(systemTheme);
-      } else {
-        root.classList.add(currentTheme);
-      }
-    };
-
-    applyTheme(theme);
-
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
-        const systemTheme = e.matches ? 'dark' : 'light';
-        root.classList.remove('light', 'dark');
-        root.classList.add(systemTheme);
-      };
-
-      if (mediaQuery.addEventListener) {
-        mediaQuery.addEventListener('change', handleChange);
-        return () => mediaQuery.removeEventListener('change', handleChange);
-      } else {
-        mediaQuery.addListener(handleChange);
-        return () => mediaQuery.removeListener(handleChange);
-      }
-    }
-
-    return undefined;
-  }, [theme]);
-
-  const setTheme = useCallback((newTheme: Theme) => {
-    localStorage.setItem('theme', newTheme);
-    setThemeState(newTheme);
-  }, []);
+  const { theme, setTheme } = useThemeContext();
 
   const toggleTheme = useCallback(() => {
-    const currentTheme = themeRef.current;
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-  }, [setTheme]);
+  }, [theme, setTheme]);
 
   return {
     theme,

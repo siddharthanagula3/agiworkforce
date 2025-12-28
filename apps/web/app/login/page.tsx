@@ -1,15 +1,23 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { Bot, Github } from 'lucide-react';
+import { getSafeRedirectUrl } from '@/lib/safe-redirect';
+import { Bot, Github, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useMemo } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+
+  // Validate and sanitize the redirect URL to prevent open redirect attacks
+  const redirectTo = useMemo(() => {
+    const rawRedirect = searchParams.get('redirectTo');
+    // Use window.location.origin on client side
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return getSafeRedirectUrl(rawRedirect, origin, '/dashboard');
+  }, [searchParams]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -107,10 +115,16 @@ function LoginForm() {
         </div>
 
         <div className="mt-8 space-y-4">
-          <Button variant="outline" className="w-full h-12" onClick={() => handleOAuth('github')}>
-            <Github className="mr-2 h-5 w-5" />
-            Continue with GitHub
-          </Button>
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" className="h-12" onClick={() => handleOAuth('github')}>
+              <Github className="mr-2 h-5 w-5" />
+              GitHub
+            </Button>
+            <Button variant="outline" className="h-12" onClick={() => handleOAuth('google')}>
+              <Mail className="mr-2 h-5 w-5" />
+              Google
+            </Button>
+          </div>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

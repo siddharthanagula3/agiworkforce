@@ -47,57 +47,57 @@ describe('Sidebar Temporal Grouping', () => {
     });
 
     it('should categorize dates from today as "today"', () => {
-      const date = new Date('2025-11-21T08:00:00Z');
+      const date = new Date('2026-01-21T08:00:00Z');
       expect(getTemporalGroup(date)).toBe('today');
     });
 
     it('should categorize dates from yesterday as "yesterday"', () => {
-      const date = new Date('2025-11-20T15:00:00Z');
+      const date = new Date('2026-01-20T15:00:00Z');
       expect(getTemporalGroup(date)).toBe('yesterday');
     });
 
     it('should categorize dates from this week as "thisWeek"', () => {
-      const date = new Date('2025-11-19T10:00:00Z');
+      const date = new Date('2026-01-19T10:00:00Z');
       expect(getTemporalGroup(date)).toBe('thisWeek');
     });
 
     it('should categorize dates from last 7 days as "last7Days"', () => {
-      const date = new Date('2025-11-15T10:00:00Z');
+      const date = new Date('2026-01-15T10:00:00Z');
       expect(getTemporalGroup(date)).toBe('last7Days');
     });
 
     it('should categorize dates from last 30 days as "last30Days"', () => {
-      const date = new Date('2025-10-25T10:00:00Z');
+      const date = new Date('2025-12-22T10:00:00Z');
       expect(getTemporalGroup(date)).toBe('last30Days');
     });
 
     it('should categorize dates older than 30 days as "older"', () => {
-      const date = new Date('2025-09-15T10:00:00Z');
+      const date = new Date('2025-11-21T10:00:00Z');
       expect(getTemporalGroup(date)).toBe('older');
     });
 
     it('should handle edge case: exactly at midnight today', () => {
-      const date = new Date('2025-11-21T12:00:00Z');
+      const date = new Date('2026-01-21T12:00:00Z');
       expect(getTemporalGroup(date)).toBe('today');
     });
 
     it('should handle edge case: just before midnight yesterday', () => {
-      const date = new Date('2025-11-20T23:59:59Z');
+      const date = new Date('2026-01-20T23:59:59Z');
       expect(getTemporalGroup(date)).toBe('yesterday');
     });
 
     it('should handle edge case: exactly 7 days ago', () => {
-      const date = new Date('2025-11-14T12:00:00Z');
+      const date = new Date('2026-01-14T12:00:00Z');
       expect(getTemporalGroup(date)).toBe('last7Days');
     });
 
     it('should handle edge case: exactly 30 days ago', () => {
-      const date = new Date('2025-10-22T12:00:00Z');
+      const date = new Date('2025-12-22T12:00:00Z');
       expect(getTemporalGroup(date)).toBe('last30Days');
     });
 
     it('should handle week boundaries correctly (Sunday start)', () => {
-      const sunday = new Date('2025-11-17T10:00:00Z');
+      const sunday = new Date('2026-01-17T10:00:00Z');
       expect(getTemporalGroup(sunday)).toBe('thisWeek');
     });
   });
@@ -125,7 +125,7 @@ describe('Sidebar Temporal Grouping', () => {
   describe('Grouping Logic', () => {
     beforeEach(() => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2025-11-21T12:00:00Z'));
+      vi.setSystemTime(new Date('2026-01-21T12:00:00Z'));
     });
 
     afterEach(() => {
@@ -134,12 +134,12 @@ describe('Sidebar Temporal Grouping', () => {
 
     it('should correctly group multiple conversations by temporal category', () => {
       const conversations = [
-        { id: '1', updatedAt: new Date('2025-11-21T10:00:00Z') },
-        { id: '2', updatedAt: new Date('2025-11-20T15:00:00Z') },
-        { id: '3', updatedAt: new Date('2025-11-19T10:00:00Z') },
-        { id: '4', updatedAt: new Date('2025-11-15T10:00:00Z') },
-        { id: '5', updatedAt: new Date('2025-10-25T10:00:00Z') },
-        { id: '6', updatedAt: new Date('2025-09-15T10:00:00Z') },
+        { id: '1', updatedAt: new Date('2026-01-21T10:00:00Z') },
+        { id: '2', updatedAt: new Date('2026-01-20T15:00:00Z') },
+        { id: '3', updatedAt: new Date('2026-01-19T10:00:00Z') },
+        { id: '4', updatedAt: new Date('2026-01-15T10:00:00Z') },
+        { id: '5', updatedAt: new Date('2025-12-22T10:00:00Z') },
+        { id: '6', updatedAt: new Date('2025-11-21T10:00:00Z') },
       ];
 
       const groups: Record<TemporalGroup, typeof conversations> = {

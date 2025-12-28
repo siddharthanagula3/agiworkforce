@@ -1,14 +1,19 @@
 import { invoke } from '@/lib/tauri-mock';
+import { save } from '@tauri-apps/plugin-dialog';
 import {
   BarChart3,
   Check,
+  ChevronDown,
   Code2,
   Copy,
   Download,
   FileSpreadsheet,
+  FileText,
   FileUp,
+  Image as ImageIcon,
   Network,
   Presentation,
+  Table2,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -39,6 +44,13 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { usePrompt } from '../ui/PromptDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/DropdownMenu';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
 import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
 
@@ -114,6 +126,265 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = async () => {
+    try {
+      const savePath = await save({
+        defaultPath: `${artifact.title || 'document'}.pdf`,
+        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+      });
+      if (!savePath) return;
+
+      // Split content into paragraphs for PDF generation
+      const paragraphs = artifact.content
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+
+      await invoke('document_create_pdf_simple', {
+        output_path: savePath,
+        title: artifact.title || 'Document',
+        author: null,
+        paragraphs,
+      });
+      toast.success('Exported to PDF successfully');
+    } catch (error) {
+      console.error('Failed to export PDF:', error);
+      toast.error('Failed to export to PDF');
+    }
+  };
+
+  const handleExportWord = async () => {
+    try {
+      const savePath = await save({
+        defaultPath: `${artifact.title || 'document'}.docx`,
+        filters: [{ name: 'Word Document', extensions: ['docx'] }],
+      });
+      if (!savePath) return;
+
+      // Split content into paragraphs for Word generation
+      const paragraphs = artifact.content
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+
+      await invoke('document_create_word_simple', {
+        output_path: savePath,
+        title: artifact.title || 'Document',
+        author: null,
+        paragraphs,
+      });
+      toast.success('Exported to Word successfully');
+    } catch (error) {
+      console.error('Failed to export Word:', error);
+      toast.error('Failed to export to Word');
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (artifact.type !== 'spreadsheet' && artifact.type !== 'table') return;
+
+    try {
+      const savePath = await save({
+        defaultPath: `${artifact.title || 'spreadsheet'}.xlsx`,
+        filters: [{ name: 'Excel Spreadsheet', extensions: ['xlsx'] }],
+      });
+      if (!savePath) return;
+
+      // Parse the JSON content to extract headers and rows
+      const data = JSON.parse(artifact.content) as Record<string, string | number>[];
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.error('No data to export');
+        return;
+      }
+
+      const firstRow = data[0];
+      if (!firstRow) {
+        toast.error('No data to export');
+        return;
+      }
+
+      const headers = Object.keys(firstRow);
+      const rows = data.map((row) => headers.map((h) => String(row[h] ?? '')));
+
+      await invoke('document_create_excel_simple', {
+        output_path: savePath,
+        sheet_name: artifact.title || 'Sheet1',
+        headers,
+        rows,
+      });
+      toast.success('Exported to Excel successfully');
+    } catch (error) {
+      console.error('Failed to export Excel:', error);
+      toast.error('Failed to export to Excel');
+    }
+  };
+
+  // Check if artifact type supports document export
+  const supportsDocumentExport = ['code', 'presentation', 'mermaid'].includes(artifact.type);
+  const supportsExcelExport = ['spreadsheet', 'table'].includes(artifact.type);
+  const supportsImageExport = ['chart', 'mermaid'].includes(artifact.type);
+  const supportsMarkdownExport = ['table', 'spreadsheet'].includes(artifact.type);
+
+  const handleExportSvg = async () => {
+    try {
+      // Find the SVG element in the artifact container
+      const container = document.querySelector(`[data-artifact-id="${artifact.id}"]`);
+      const svgElement = container?.querySelector('svg');
+
+      if (!svgElement) {
+        toast.error('No chart found to export');
+        return;
+      }
+
+      // Clone the SVG and add necessary attributes
+      const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+      // Add background for better visibility
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('width', '100%');
+      rect.setAttribute('height', '100%');
+      rect.setAttribute('fill', '#1a1a2e');
+      clonedSvg.insertBefore(rect, clonedSvg.firstChild);
+
+      const svgString = new XMLSerializer().serializeToString(clonedSvg);
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+
+      const savePath = await save({
+        defaultPath: `${artifact.title || 'chart'}.svg`,
+        filters: [{ name: 'SVG Image', extensions: ['svg'] }],
+      });
+
+      if (!savePath) return;
+
+      // Convert blob to base64 and write to file
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        await invoke('file_write_binary', { file_path: savePath, content: base64 });
+        toast.success('Exported as SVG');
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error('Failed to export SVG:', error);
+      // Fallback: download using blob URL
+      try {
+        const container = document.querySelector(`[data-artifact-id="${artifact.id}"]`);
+        const svgElement = container?.querySelector('svg');
+        if (svgElement) {
+          const svgString = new XMLSerializer().serializeToString(svgElement);
+          const blob = new Blob([svgString], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${artifact.title || 'chart'}.svg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          toast.success('Exported as SVG');
+        }
+      } catch {
+        toast.error('Failed to export SVG');
+      }
+    }
+  };
+
+  const handleExportPng = async () => {
+    try {
+      const container = document.querySelector(`[data-artifact-id="${artifact.id}"]`);
+      const svgElement = container?.querySelector('svg');
+
+      if (!svgElement) {
+        toast.error('No chart found to export');
+        return;
+      }
+
+      // Get SVG dimensions
+      const bbox = svgElement.getBoundingClientRect();
+      const width = bbox.width || 800;
+      const height = bbox.height || 600;
+
+      // Clone and prepare SVG
+      const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clonedSvg.setAttribute('width', String(width));
+      clonedSvg.setAttribute('height', String(height));
+
+      const svgString = new XMLSerializer().serializeToString(clonedSvg);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      // Create canvas and draw SVG
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width * 2; // 2x for retina
+        canvas.height = height * 2;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+          ctx.scale(2, 2);
+          ctx.fillStyle = '#1a1a2e';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(async (blob) => {
+            if (blob) {
+              const pngUrl = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = pngUrl;
+              a.download = `${artifact.title || 'chart'}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(pngUrl);
+              toast.success('Exported as PNG');
+            }
+          }, 'image/png');
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    } catch (error) {
+      console.error('Failed to export PNG:', error);
+      toast.error('Failed to export PNG');
+    }
+  };
+
+  const handleCopyMarkdown = async () => {
+    try {
+      const data = JSON.parse(artifact.content) as Record<string, string | number>[];
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.error('No data to copy');
+        return;
+      }
+
+      const firstRow = data[0];
+      if (!firstRow) {
+        toast.error('No data to copy');
+        return;
+      }
+
+      const headers = Object.keys(firstRow);
+
+      // Build markdown table
+      const headerRow = `| ${headers.join(' | ')} |`;
+      const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
+      const dataRows = data
+        .map((row) => `| ${headers.map((h) => String(row[h] ?? '')).join(' | ')} |`)
+        .join('\n');
+
+      const markdown = `${headerRow}\n${separatorRow}\n${dataRows}`;
+
+      await navigator.clipboard.writeText(markdown);
+      toast.success('Copied as Markdown table');
+    } catch (error) {
+      console.error('Failed to copy as Markdown:', error);
+      toast.error('Failed to copy as Markdown');
+    }
+  };
+
   const getFileExtension = (artifact: Artifact): string => {
     if (artifact.type === 'code' && artifact.language) {
       return artifact.language;
@@ -143,7 +414,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
   return (
     <>
-      <Card className={cn('overflow-hidden', className)}>
+      <Card className={cn('overflow-hidden', className)} data-artifact-id={artifact.id}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-muted/50">
           <div className="flex items-center gap-2">
             {icon}
@@ -199,22 +470,73 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
                 <p>{copied ? 'Copied!' : 'Copy to clipboard'}</p>
               </TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={handleDownload}
-                  aria-label="Download artifact"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Download</p>
-              </TooltipContent>
-            </Tooltip>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label="Download or export artifact"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Download / Export</p>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={handleDownload}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download as text
+                </DropdownMenuItem>
+                {(supportsDocumentExport || supportsExcelExport) && <DropdownMenuSeparator />}
+                {supportsDocumentExport && (
+                  <>
+                    <DropdownMenuItem onClick={handleExportPdf}>
+                      <FileText className="mr-2 h-4 w-4 text-red-500" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportWord}>
+                      <FileText className="mr-2 h-4 w-4 text-blue-500" />
+                      Export as Word
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {supportsExcelExport && (
+                  <DropdownMenuItem onClick={handleExportExcel}>
+                    <FileSpreadsheet className="mr-2 h-4 w-4 text-green-500" />
+                    Export as Excel
+                  </DropdownMenuItem>
+                )}
+                {supportsImageExport && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleExportSvg}>
+                      <ImageIcon className="mr-2 h-4 w-4 text-purple-500" />
+                      Export as SVG
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPng}>
+                      <ImageIcon className="mr-2 h-4 w-4 text-orange-500" />
+                      Export as PNG
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {supportsMarkdownExport && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleCopyMarkdown}>
+                      <Table2 className="mr-2 h-4 w-4 text-cyan-500" />
+                      Copy as Markdown
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardHeader>
         <CardContent className="p-0">
