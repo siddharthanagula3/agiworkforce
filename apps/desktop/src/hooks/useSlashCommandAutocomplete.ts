@@ -66,7 +66,7 @@ export function useSlashCommandAutocomplete() {
 
     // Extract the command part (after / and before space)
     const commandMatch = input.match(/^\/([a-zA-Z]*)/);
-    if (!commandMatch) {
+    if (!commandMatch || commandMatch[1] === undefined) {
       return {
         showAutocomplete: false,
         suggestions: [],
