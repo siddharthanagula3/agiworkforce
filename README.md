@@ -4,6 +4,22 @@
 
 **AGI Workforce** is a cutting-edge platform designed to revolutionize how we interact with AI. By combining a high-performance Rust backend with a sleek React frontend, we deliver a desktop experience that isn't just a chatbot—it's an intelligent, capable workforce living on your machine.
 
+**Current Version:** v1.0.0 (January 2026)
+
+---
+
+## 🎯 What AGI Workforce Can Do
+
+AGI Workforce is a comprehensive AI automation platform that enables users to:
+
+- **Automate Complex Workflows**: Create multi-step automations that combine browser automation, file operations, API calls, and AI reasoning
+- **Control Desktop & Web Applications**: Use screen capture, OCR, and input emulation to interact with any desktop or web application
+- **Manage Code Projects**: Edit code, run tests, manage git operations, and execute scripts all within the platform
+- **Generate Creative Content**: Create images, videos, and text using state-of-the-art generative AI models
+- **Extract & Process Data**: Scrape websites, extract information from documents, and transform data at scale
+- **Collaborate as a Team**: Share automations, workflows, and templates with team members with role-based access
+- **Monitor & Optimize**: Track costs, usage analytics, and ROI of your AI automations
+
 ---
 
 ## 🌟 Capabilities at a Glance
@@ -40,6 +56,40 @@ Your AI agent has hands and eyes.
 - **UI Automation**: Record and replay UI interactions with advanced element detection.
 - **Terminal & Coding**: Direct integration with your filesystem and terminal allows the agent to write code, execute scripts, and manage projects.
 - **Web Search**: Integrated search engine capabilities to fetch real-time information.
+
+---
+
+## 📦 Project Architecture
+
+AGI Workforce is organized as a **monorepo** with the following structure:
+
+### Applications
+
+- **Desktop** (`apps/desktop`) - Tauri v2 native desktop application with React 18 frontend and Rust backend
+- **Web** (`apps/web`) - Next.js 16 web platform with Supabase integration for management portal and API services
+- **Extension** (`apps/extension`) - Browser extension component for extended capabilities
+
+### Services
+
+- **API Gateway** (`services/api`) - Express-based gateway for mobile companion and API routing
+- **Signaling Server** (`services/signaling`) - WebSocket-based P2P/WebRTC communication for real-time features
+
+### Shared Packages
+
+- **types** - TypeScript type definitions shared across all applications
+- **utils** - Common utility functions used across the monorepo
+
+### Backend Technologies (Rust)
+
+- **Tauri 2.9** - Native desktop framework for system-level access
+- **Tokio** - Async runtime for concurrent operations
+- **SQLite** - Local database for desktop app (offline-first)
+- **PostgreSQL** - Cloud database via Supabase
+- **Tesseract** - OCR for text extraction from images and screens
+- **xcap** - Screen capture and vision capabilities
+- **enigo** - Input emulation for mouse and keyboard control
+- **portable-pty** - Terminal/PTY support for shell integration
+- **WebRTC** - Real-time communication capabilities
 
 ---
 
@@ -91,6 +141,59 @@ AGI Workforce supports a comprehensive range of state-of-the-art language models
 
 - **DeepSeek** (Deep reasoning capabilities)
 - **Mistral** (High-performance models)
+
+### 🔧 Key Features for Automation
+
+- **Thinking Mode**: Enables Claude models (Opus 4.5, GPT-5.1) to reason through complex problems before acting, improving accuracy for challenging tasks
+- **Computer Use**: Screen capture, OCR, and mouse/keyboard control allow agents to interact with any desktop application
+- **Browser Automation**: Full browser control including form filling, navigation, data extraction, and network monitoring
+- **Multi-Agent Support**: Orchestrate multiple agents working together on complex tasks
+- **RAG Support**: Index and search PDFs and DOCX documents for intelligent content retrieval
+- **Extensible Tool System**: MCP servers provide a framework for adding custom tools and integrations
+
+---
+
+## Model Tiers
+
+AGI Workforce organizes AI models into three tiers, each optimized for different use cases and aligned with subscription plans.
+
+### Speed Tier (Hobby Plan)
+
+Ultra-fast, cost-efficient models for quick tasks:
+
+- **GPT-5 Nano** - $0.05/$0.40 per MTok - Cheapest OpenAI option
+- **Gemini 2.0 Flash** - $0.10/$0.40 per MTok - Ultra fast multimodal
+- **DeepSeek V3.2** - $0.028/$0.42 per MTok - Budget champion
+- **Devstral Small 2** - $0.10/$0.30 per MTok - Fast coding
+- **Grok 3 Mini** - $0.30/$0.50 per MTok - Affordable general use
+- **Claude Haiku 4.5** - $1/$5 per MTok - Best quality/price ratio
+
+**Capabilities**: Vision, basic computer use, image analysis
+
+### Balanced Tier (Pro Plan)
+
+Best balance of speed and quality for everyday tasks:
+
+- **Claude Sonnet 4.5** - $3/$15 per MTok - Best for coding (77.2% SWE-bench)
+- **GPT-5 Mini** - $0.25/$2 per MTok - Good balance
+- **Gemini 3 Pro** - $1.50/$6 per MTok - Great reasoning
+- **Grok 4.1 Fast** - $4/$12 per MTok - 2M context window
+- **Qwen3 Max** - $2.50/$10 per MTok - Reasoning capabilities
+- **Kimi K2 Thinking** - $1.50/$6 per MTok - Advanced reasoning
+
+**Capabilities**: Full computer use, browser automation, image generation, web search
+
+### Reasoning Tier (Max Plan)
+
+Deep thinking and complex analysis for power users:
+
+- **Claude Opus 4.5** - $5/$25 per MTok - Advanced reasoning & computer use
+- **GPT-5.1 Thinking** - $7/$21 per MTok - Deep thinking mode
+- **GPT-5.2 Pro** - $10/$30 per MTok - Most capable GPT
+- **Gemini 3 Deep Think** - $3/$12 per MTok - Advanced reasoning
+- **GPT-5.2 Codex** - $8/$24 per MTok - Agentic coding
+
+**Capabilities**: Deep reasoning, agentic coding, video generation, research
 
 ---
 
@@ -280,25 +383,25 @@ AGI Workforce provides specialized workspaces for different tasks and workflows:
   - Content Creation
   - Finance
 
-### 📋 Templates & Agents
+### 📋 Templates & Pre-built Agents
 
-Pre-built agent templates for common tasks:
+**15+ Ready-to-Use Agent Templates** for immediate productivity:
 
-1. **Accounts Payable Agent** - Process invoices and manage payables
-2. **Customer Support Agent** - Automate customer service responses
-3. **Data Entry Agent** - Automate data entry tasks
-4. **Email Management Agent** - Manage and respond to emails
-5. **Social Media Agent** - Automate social media tasks
-6. **Lead Qualification Agent** - Qualify and score leads
-7. **Code Review Agent** - Automated code review
-8. **Testing Agent** - Generate and run tests
-9. **Documentation Agent** - Generate documentation
-10. **Deployment Agent** - Automate deployments
-11. **Meeting Scheduler Agent** - Schedule meetings automatically
-12. **Expense Report Agent** - Process expense reports
-13. **Content Writer Agent** - Generate written content
-14. **Job Application Agent** - Process job applications
-15. **Research Agent** - Conduct research and analysis
+**Finance & Operations:**
+
+1. **Accounts Payable Agent** - Process invoices and manage payables automatically
+2. **Expense Report Agent** - Process, categorize, and approve expense reports
+3. **Financial Analysis Agent** - Analyze financial data and generate reports
+
+**Sales & Customer Success:** 4. **Customer Support Agent** - Automate customer service responses and ticket routing 5. **Lead Qualification Agent** - Qualify and score leads, prioritize sales opportunities 6. **Social Media Agent** - Automate social media posting and engagement
+
+**Development & DevOps:** 7. **Code Review Agent** - Automated code review with suggestions and quality checks 8. **Testing Agent** - Generate tests, run test suites, and analyze coverage 9. **Deployment Agent** - Automate code deployment and release management
+
+**Documentation & Content:** 10. **Documentation Agent** - Generate and maintain technical documentation 11. **Content Writer Agent** - Generate written content, blog posts, and articles 12. **Meeting Scheduler Agent** - Schedule meetings and manage calendars automatically
+
+**HR & Administrative:** 13. **Job Application Agent** - Process job applications and screen candidates 14. **Data Entry Agent** - Automate data entry tasks from various sources 15. **Research Agent** - Conduct research and compile information from multiple sources
+
+All templates are customizable and can be modified using the Configurator or deployed as-is.
 
 ### 📊 Analytics & Cost Tracking
 
@@ -414,20 +517,40 @@ AGI Workforce provides a comprehensive set of tools for the AI agent:
 
 ### MCP (Model Context Protocol) Servers
 
-AGI Workforce supports a wide range of MCP servers:
+AGI Workforce supports an extensive range of MCP servers for seamless tool integration:
 
-- **Filesystem**: Read and write files on local filesystem
-- **Git**: Git operations and version control
-- **GitHub**: GitHub API integration
-- **Terminal/Shell**: Execute shell commands
-- **Slack**: Slack workspace integration
-- **Notion**: Notion workspace access
-- **Google Drive**: Google Drive file management
-- **Brave Search**: Web search capabilities
-- **Stripe**: Payment processing integration
-- **PostgreSQL**: Database operations
+**File & Version Control:**
+
+- **Filesystem**: Read and write files on local filesystem with full access control
+- **Git**: Git operations and version control integration
+- **GitHub**: GitHub API integration for repository management
+
+**Communication & Automation:**
+
+- **Terminal/Shell**: Execute system commands and shell scripts
+- **Slack**: Slack workspace integration for notifications and messaging
+- **Email**: Email provider integration
+
+**Cloud & Storage:**
+
+- **Notion**: Notion workspace access for notes and databases
+- **Google Drive**: Google Drive file management and synchronization
+- **Supabase**: Cloud database and backend integration
+
+**Search & Information:**
+
+- **Brave Search**: Web search capabilities with privacy focus
+- **Context7**: Comprehensive library documentation and code examples
+
+**Databases & APIs:**
+
+- **PostgreSQL**: Cloud database operations
 - **SQLite**: Local database operations
-- **Windows UI**: Windows UI automation (Windows only)
+- **Stripe**: Payment processing and subscription management
+
+**System Integration:**
+
+- **Windows UI**: Windows UI automation and control (Windows only)
 
 ### Productivity Integrations
 
@@ -461,36 +584,96 @@ AGI Workforce supports a wide range of MCP servers:
 
 ## 🏗️ Technical Architecture
 
-AGI Workforce is built as a highly optimized monorepo:
+AGI Workforce is built as a highly optimized monorepo supporting multiple platforms and deployment scenarios:
 
 ### Desktop Application
 
-- **Backend**: `Tauri v2` (Rust) — Providing native performance, system-level access, and security
-- **Frontend**: `React v18` + `Tailwind CSS` — Delivering a beautiful, responsive, and fluid user interface
-- **Database**: `Better-SQLite3` — Local database for offline-first capabilities
-- **State Management**: `Zustand` — Lightweight state management
-- **Build System**: `Vite` — Fast build tooling
+**Frontend Stack:**
+
+- **React 18** + **Tailwind CSS** — Modern, responsive UI
+- **Radix UI** — Accessible component library
+- **Vite** — Fast build system with hot module replacement
+- **Zustand** — Lightweight state management
+- **React Router** — Client-side routing
+- **Monaco Editor** — Advanced code editing capabilities
+- **xterm.js** — Terminal emulation
+- **Playwright** — End-to-end testing
+
+**Backend Stack (Rust):**
+
+- **Tauri 2.9** — Native desktop framework with IPC bridge
+- **Tokio** — Async runtime for concurrent operations
+- **SQLite** (with Better-SQLite3 bindings) — Local offline-first database
+- **PostgreSQL** — Cloud database integration
+- **Tesseract OCR** — Text extraction from images and screens
+- **xcap** — Cross-platform screen capture
+- **enigo** — Input emulation (mouse, keyboard)
+- **portable-pty** — Terminal/shell integration
+- **WebRTC** — Real-time peer-to-peer communication
 
 ### Web Platform
 
-- **Framework**: `Next.js 16` — Powering our web platform, management portal, and API services
-- **Database**: `Supabase` — Cloud database with real-time capabilities
-- **Authentication**: `Supabase Auth` — Secure authentication system
-- **Payments**: `Stripe` — Payment processing and subscription management
+- **Framework**: `Next.js 16` — Full-stack web application
+- **Database**: `Supabase (PostgreSQL)` — Cloud database with real-time capabilities
+- **Authentication**: `Supabase Auth` — Secure authentication and session management
+- **Payments**: `Stripe` — Payment processing and subscription billing
+- **React 19** — Latest React features for web UI
 
-### Core Technologies
+### API Services
 
-- **Rust**: High-performance backend with memory safety
-- **TypeScript**: Type-safe frontend development
-- **SQLite**: Local database for desktop app
-- **PostgreSQL**: Cloud database via Supabase
+- **API Gateway** (Express) — Routes mobile and API requests
+- **Signaling Server** (WebSocket) — WebRTC and real-time communication coordination
+
+### Code Quality & Testing
+
+- **TypeScript** — Type-safe development across all packages
+- **ESLint** — Code linting and consistency
+- **Prettier** — Code formatting
+- **Vitest** — Unit testing framework
+- **Playwright** — End-to-end testing
+- **Husky** — Git hooks for pre-commit checks
+- **commitlint** — Commit message standards enforcement
+
+### AI Integration Stack
+
+- **OpenAI API** — GPT-5.2, GPT-5.1 models
+- **Anthropic API** — Claude Sonnet 4.5, Haiku 4.5, Opus 4.5
+- **Google API** — Gemini 3 models, Veo 3.1 video generation
+- **XAI API** — Grok 4.1 models
+- **Ollama** — Local model inference
+- **Model Context Protocol (MCP)** — Extensible tool integration framework
 
 ### Security Features
 
 - **OS Keyring Integration**: Secure credential storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-- **Permission System**: Fine-grained permission controls
-- **Tool Guards**: Approval workflows for sensitive operations
-- **Audit Logging**: Complete audit trail of all actions
+- **Permission System**: Fine-grained permission controls with role-based access
+- **Approval Workflows**: Tool Guards for sensitive operations (file writes, terminal commands)
+- **Audit Logging**: Complete audit trail of all agent and user actions
+- **Encrypted Storage**: Sensitive data encrypted at rest
+- **Local-First Architecture**: Option to run entirely locally with no cloud dependency
+
+---
+
+## ✨ What's New in v1.0.0
+
+**January 2026 Release Highlights:**
+
+- **Full Browser Automation Engine** - Complete control over web browsers with form filling, navigation, and data extraction
+- **Smart Model Routing (QuickModelSelector)** - Automatically selects the best AI model for each task to optimize cost and performance
+- **Enhanced Desktop Automation** - Improved screen capture, OCR, and input emulation for reliable desktop application control
+- **Ollama Local Model Support** - Run AI models locally with privacy and no external API costs
+- **Subscription & Billing Integration** - Stripe-powered subscription management with flexible pricing tiers
+- **Approval Workflow System** - Governance controls and tool guards for sensitive operations
+- **RAG Support for Documents** - Extract and index information from PDFs and DOCX files
+- **Multi-Agent Orchestration** - Coordinate multiple agents working together on complex workflows
+- **Improved UI/UX** - Polished interface with better navigation and workspace organization
+- **Enterprise Features** - Team collaboration, role-based access, and audit logging
+
+**Stability Improvements:**
+
+- Resolved failing CI tests across desktop and web packages
+- Enhanced sync-subscription robustness
+- Improved payment success UX and error handling
 
 ---
 
@@ -521,27 +704,60 @@ pnpm build:desktop
 
 ### First Steps
 
-1. **Configure API Keys**: Add your API keys in Settings for the LLM providers you want to use
-2. **Set Allowed Directories**: Configure which directories the agent can access
-3. **Try a Template**: Start with a pre-built agent template from the Templates section
-4. **Create Your First Automation**: Use the Configurator to build a custom workflow
+1. **Configure API Keys**: Add your API keys in Settings for the LLM providers you want to use (or run locally with Ollama)
+2. **Set Allowed Directories**: Configure which directories the agent can access for file operations
+3. **Choose Your Model**: Select your preferred AI model (Claude Sonnet 4.5 recommended for coding, GPT-5.2 for reasoning)
+4. **Try a Template**: Start with a pre-built agent template from the Templates section to see what's possible
+5. **Explore a Workspace**: Familiarize yourself with the Code, Browser, or Terminal workspace
+6. **Create Your First Automation**: Use the Configurator to build a custom workflow combining multiple tools
+
+### Example Use Cases
+
+**For Developers:**
+
+- Automate code reviews across your codebase
+- Generate tests for new features
+- Deploy code to production with a single command
+- Monitor repositories and send alerts
+
+**For Business Users:**
+
+- Qualify leads from email and web forms
+- Automate invoice processing and expense reports
+- Generate reports from multiple data sources
+- Schedule meetings and manage calendars
+
+**For Content Creators:**
+
+- Generate images and videos from prompts
+- Repurpose content across multiple platforms
+- Manage social media accounts
+- Create documentation from code
 
 ### Development Commands
 
 ```bash
-# Desktop App
-pnpm dev:desktop          # Run desktop app in development mode
-pnpm build:desktop        # Build desktop app for production
-pnpm test:desktop         # Run desktop app tests
+# Desktop Application
+pnpm dev:desktop          # Run desktop app in development mode with hot reload
+pnpm build:desktop        # Build desktop app for production (creates binary)
+pnpm test:e2e            # Run end-to-end tests with Playwright
+pnpm test:smoke          # Run smoke tests
+pnpm test:coverage       # Generate test coverage reports
 
 # Web Platform
 pnpm dev:web              # Run web platform in development mode
 pnpm build:web            # Build web platform for production
+pnpm start:web            # Start production server
 
 # All Projects
-pnpm lint                 # Lint all projects
-pnpm typecheck            # Type check all projects
-pnpm test                 # Run all tests
+pnpm build:all            # Build all packages except desktop app
+pnpm lint                 # Lint all projects with ESLint
+pnpm lint:fix            # Fix linting issues automatically
+pnpm format              # Format code with Prettier
+pnpm typecheck           # Type check all projects with TypeScript
+pnpm test                # Run all tests across projects
+pnpm clean               # Clean all build artifacts and dist folders
+pnpm clean:build         # Clean only dist folders
 ```
 
 ---
@@ -635,24 +851,37 @@ We treat your data with the highest priority.
 
 ## 📚 Additional Resources
 
-### Documentation
+### Documentation & Guides
 
-- **User Guide**: Comprehensive guide to using AGI Workforce
-- **API Documentation**: Complete API reference
-- **Template Library**: Browse available templates
-- **Workflow Examples**: Example workflows and use cases
+- **User Guide**: Step-by-step guides for using AGI Workforce features
+- **API Documentation**: Complete API reference for custom integrations
+- **Workspace Guides**: Detailed documentation for each workspace
+- **Template Library**: Browse and customize pre-built agent templates
+- **Workflow Examples**: Real-world examples and use cases
+- **Troubleshooting**: Common issues and solutions
+- **MCP Integration Guide**: Building custom MCP servers
 
-### Community
+### Staying Updated
 
-- **GitHub Discussions**: Ask questions and share ideas
-- **Discord Community**: Join our Discord server
+- **Release Notes**: Latest features and improvements in each version
+- **Blog**: Articles, tutorials, and announcements
+- **GitHub**: Source code and project tracking
+
+### Community & Support
+
+- **GitHub Discussions**: Ask questions and share ideas with the community
+- **Discord Community**: Real-time chat with developers and users
 - **Issue Tracker**: Report bugs and request features
-
-### Support
-
 - **Email Support**: Available for Pro and Max plans
-- **Priority Support**: Available for Max and Enterprise plans
-- **Community Support**: Free community support for all users
+- **Priority Support**: Dedicated support for Max and Enterprise plans
+- **Community Support**: Free community support through discussions and Discord
+
+### Developer Resources
+
+- **Contributing Guide**: How to contribute to AGI Workforce
+- **Development Setup**: Local development environment setup
+- **Architecture Documentation**: Understanding the codebase structure
+- **CLI Documentation**: Using Claude Code with AGI Workforce
 
 ---
 

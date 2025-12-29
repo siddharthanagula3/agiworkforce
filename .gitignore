@@ -157,3 +157,4 @@ ms-playwright/
 
 # --- Sentry ---
 .sentryclirc
+.env*.local
