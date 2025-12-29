@@ -19,6 +19,7 @@ export const LLMCompletionRequestSchema = z.object({
   tools: z.array(z.unknown()).optional(),
   tool_choice: z.unknown().optional(),
   thinking_mode: z.boolean().optional(),
+  usePromptCache: z.boolean().optional().default(false),
 });
 
 export type LLMCompletionRequest = z.infer<typeof LLMCompletionRequestSchema>;

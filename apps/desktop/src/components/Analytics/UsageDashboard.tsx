@@ -17,7 +17,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAnalyticsStore } from '../../stores/analyticsStore';
-import { useUsageStore } from '../../stores/usageStore';
+import { useUsageStore, getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
 import { useBillingStore } from '../../stores/billingStore';
 import { useAccountStore } from '../../stores/accountStore';
 import {
@@ -138,11 +138,15 @@ export const UsageDashboard: React.FC = () => {
                     Daily Credits
                   </h3>
                   <p className="text-2xl font-bold mt-2 text-blue-500">
-                    ${((credits.daily_remaining_cents || 0) / 100).toFixed(2)}
+                    {getRemainingPercentage(
+                      credits.daily_used_cents || 0,
+                      credits.daily_limit_cents,
+                    )}
+                    % remaining
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
                     {credits.daily_limit_cents
-                      ? `${((credits.daily_used_cents || 0) / 100).toFixed(2)} / ${((credits.daily_limit_cents || 0) / 100).toFixed(2)} used`
+                      ? `${getUsagePercentage(credits.daily_used_cents || 0, credits.daily_limit_cents)}% used`
                       : 'No daily limit'}
                   </p>
                   {credits.daily_limit_cents && credits.daily_limit_cents > 0 && (
@@ -151,7 +155,10 @@ export const UsageDashboard: React.FC = () => {
                         className="h-full bg-blue-500 transition-all"
                         style={{
                           width: `${Math.min(
-                            ((credits.daily_used_cents || 0) / credits.daily_limit_cents) * 100,
+                            getUsagePercentage(
+                              credits.daily_used_cents || 0,
+                              credits.daily_limit_cents,
+                            ),
                             100,
                           )}%`,
                         }}
@@ -178,18 +185,21 @@ export const UsageDashboard: React.FC = () => {
                     Monthly Credits
                   </h3>
                   <p className="text-2xl font-bold mt-2 text-amber-500">
-                    ${((credits.remaining_cents || 0) / 100).toFixed(2)}
+                    {getRemainingPercentage(credits.used_cents || 0, credits.allocated_cents)}%
+                    remaining
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
                     {credits.allocated_cents
-                      ? `${((credits.used_cents || 0) / 100).toFixed(2)} / ${((credits.allocated_cents || 0) / 100).toFixed(2)} used`
+                      ? `${getUsagePercentage(credits.used_cents || 0, credits.allocated_cents)}% used`
                       : 'No credits allocated'}
                   </p>
-                  {credits.percentage_used !== undefined && (
+                  {credits.allocated_cents && (
                     <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
                       <div
                         className="h-full bg-amber-500 transition-all"
-                        style={{ width: `${Math.min(credits.percentage_used, 100)}%` }}
+                        style={{
+                          width: `${Math.min(getUsagePercentage(credits.used_cents || 0, credits.allocated_cents), 100)}%`,
+                        }}
                       />
                     </div>
                   )}

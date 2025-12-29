@@ -14,6 +14,7 @@ import { listen } from '@tauri-apps/api/event';
 import React, { useEffect, useRef } from 'react';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
+import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { useCostStore } from '../../stores/costStore';
@@ -28,6 +29,12 @@ import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
+import {
+  executeTerminalCommand,
+  executeBrowserCommand,
+  executeCodeCommand,
+  executeDatabaseCommand,
+} from '../../handlers/slashCommandHandlers';
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
 export const UnifiedAgenticChat: React.FC<{
@@ -65,6 +72,9 @@ export const UnifiedAgenticChat: React.FC<{
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useAgenticEvents();
+
+  // Initialize slash command parsing
+  const { parseSlashCommand } = useSlashCommands();
 
   useEffect(() => {
     if (!isTauri) return;
@@ -186,6 +196,49 @@ export const UnifiedAgenticChat: React.FC<{
   }, [loadOverview]);
 
   const handleSendMessage = async (content: string, options: SendOptions) => {
+    // Handle slash commands
+    const slashCommand = parseSlashCommand(content);
+
+    if (slashCommand) {
+      // Create user message with slash command metadata
+      const userMessageId = addMessage({
+        role: 'user',
+        content: slashCommand.rawInput,
+        slashCommand,
+        inlinePanels: [],
+      });
+
+      try {
+        // Execute the appropriate command handler
+        let panel;
+        switch (slashCommand.command) {
+          case 'browser':
+            panel = await executeBrowserCommand(slashCommand.args);
+            break;
+          case 'terminal':
+            panel = await executeTerminalCommand(slashCommand.args);
+            break;
+          case 'code':
+            panel = await executeCodeCommand(slashCommand.args);
+            break;
+          case 'database':
+            panel = await executeDatabaseCommand(slashCommand.args);
+            break;
+          default:
+            throw new Error(`Unknown command: ${slashCommand.command}`);
+        }
+
+        // Add the inline panel to the message
+        useUnifiedChatStore.getState().addInlinePanel(userMessageId, panel);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        updateMessage(userMessageId, {
+          error: errorMessage,
+        });
+      }
+      return;
+    }
+
     const editingMessageId = useUnifiedChatStore.getState().editingMessageId;
     if (editingMessageId) {
       const currentMessages = useUnifiedChatStore.getState().messages;

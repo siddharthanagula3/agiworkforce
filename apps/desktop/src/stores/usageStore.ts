@@ -10,6 +10,28 @@ import { checkUsageLimit, shouldShowUsageWarning } from '../utils/featureGates';
 import { useBillingStore } from './billingStore';
 import { getModelMetadata } from '../constants/llm';
 
+/**
+ * Calculate usage percentage (how much has been used)
+ * @param used - Amount used
+ * @param total - Total allocated amount
+ * @returns Percentage used (0-100)
+ */
+export function getUsagePercentage(used: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.round((used / total) * 100);
+}
+
+/**
+ * Calculate remaining percentage (how much is left)
+ * @param used - Amount used
+ * @param total - Total allocated amount
+ * @returns Percentage remaining (0-100)
+ */
+export function getRemainingPercentage(used: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.round(((total - used) / total) * 100);
+}
+
 interface UsageState {
   stats: UsageStats | null;
   statsLoading: boolean;

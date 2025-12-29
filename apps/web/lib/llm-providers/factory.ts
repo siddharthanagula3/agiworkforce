@@ -11,6 +11,7 @@ import { MistralProvider } from './mistral';
 import { MoonshotProvider } from './moonshot';
 import { DeepSeekProvider } from './deepseek';
 import { logger } from '@/lib/logger';
+import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
 
 export class LLMProviderFactory {
   static createProvider(provider: string, apiKey?: string): BaseLLMProvider | null {
@@ -104,6 +105,7 @@ export class LLMProviderFactory {
 
   /**
    * Send request using appropriate provider
+   * Automatically enables prompt caching for compatible models with large system prompts
    */
   static async sendRequest(
     provider: string,
@@ -116,6 +118,14 @@ export class LLMProviderFactory {
       throw new Error(`Provider ${provider} not available or not configured`);
     }
 
-    return providerInstance.sendRequest(request);
+    // Auto-enable prompt caching for large system prompts (RAG, documents, etc.)
+    // This is beneficial for Anthropic Claude and OpenAI models
+    const requestWithCache: LLMProviderRequest = {
+      ...request,
+      usePromptCache:
+        request.usePromptCache !== false && shouldEnablePromptCache(request, request.model),
+    };
+
+    return providerInstance.sendRequest(requestWithCache);
   }
 }

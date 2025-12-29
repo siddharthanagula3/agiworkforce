@@ -12,6 +12,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 
 async function handleLLMCompletion(request: NextRequest) {
   // Rate limiting
@@ -228,6 +229,17 @@ async function handleLLMCompletion(request: NextRequest) {
   // Get updated balance for response
   const updatedBalance = await CreditService.getBalance(user.id);
 
+  // Calculate cache savings if applicable
+  const cacheMetrics = calculateCacheSavings(
+    llmResponse,
+    LLMCostCalculator.getInputCostPerMtok(provider, llmResponse.model),
+  );
+
+  // Log cache analytics for monitoring
+  if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {
+    logCacheAnalytics(user.id, llmResponse.model, provider, llmResponse, cacheMetrics);
+  }
+
   // Return response in OpenAI-compatible format
   return NextResponse.json({
     choices: [
@@ -244,6 +256,8 @@ async function handleLLMCompletion(request: NextRequest) {
       prompt_tokens: llmResponse.promptTokens,
       completion_tokens: llmResponse.completionTokens,
       total_tokens: llmResponse.totalTokens,
+      cache_creation_input_tokens: llmResponse.cacheCreationInputTokens,
+      cache_read_input_tokens: llmResponse.cachedInputTokens,
     },
     credits: {
       cost_cents: actualCostCents,
@@ -252,6 +266,13 @@ async function handleLLMCompletion(request: NextRequest) {
       daily_used: updatedBalance?.daily_used_cents,
       daily_remaining: updatedBalance?.daily_remaining_cents,
       daily_reset_at: updatedBalance?.daily_reset_at,
+    },
+    cache: {
+      cached_input_tokens: llmResponse.cachedInputTokens || 0,
+      cache_creation_input_tokens: llmResponse.cacheCreationInputTokens || 0,
+      tokens_saved: cacheMetrics.tokensSavedByCache,
+      cost_saved_cents: cacheMetrics.savedCostCents,
+      cache_write_cost_cents: cacheMetrics.cacheWriteCostCents,
     },
   });
 }

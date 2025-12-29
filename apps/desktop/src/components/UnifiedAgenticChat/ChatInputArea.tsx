@@ -2,6 +2,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import { ChevronDown, Loader2, Mic, MicOff, Paperclip, Send, Square, X, Brain } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSlashCommands } from '../../hooks/useSlashCommands';
+import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
+import { usePromptSuggestions } from '../../hooks/usePromptSuggestions';
+import { PromptSuggestionsDropdown } from './PromptSuggestionsDropdown';
 
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -83,11 +87,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [lockGateResult, setLockGateResult] = useState<SubscriptionGateResult | undefined>(
     undefined,
   );
+  const [showSlashAutocomplete, setShowSlashAutocomplete] = useState(false);
+  const [slashAutocompleteIndex, setSlashAutocompleteIndex] = useState(-1);
+  const [showPromptSuggestions, setShowPromptSuggestions] = useState(false);
+  const [promptSuggestionIndex, setPromptSuggestionIndex] = useState(-1);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadersRef = useRef<FileReader[]>([]);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
+
+  // Initialize slash command hooks
+  const { isSlashCommandInput } = useSlashCommands();
+  const { getAutocomplete } = useSlashCommandAutocomplete();
+
+  // Get autocomplete suggestions based on current input
+  const autocompleteResult = getAutocomplete(content, slashAutocompleteIndex);
+
+  // Get prompt suggestions based on current input
+  const promptSuggestions = usePromptSuggestions(content);
 
   const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
@@ -291,6 +309,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     if (value.length <= maxLength) {
       setContent(value);
       setDraftContent(value);
+
+      // Update slash command autocomplete state
+      const isSlashInput = isSlashCommandInput(value);
+      setShowSlashAutocomplete(isSlashInput);
+      if (!isSlashInput) {
+        setSlashAutocompleteIndex(-1);
+      } else {
+        // Reset index when input changes
+        setSlashAutocompleteIndex(-1);
+      }
+
+      // Update prompt suggestions state
+      // Show suggestions only when not typing a slash command
+      setPromptSuggestionIndex(-1);
+      setShowPromptSuggestions(!isSlashInput && value.length > 0);
     }
   };
 
@@ -348,6 +381,62 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle slash command autocomplete navigation
+    if (showSlashAutocomplete && autocompleteResult.suggestions.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSlashAutocompleteIndex((prev) =>
+          prev === autocompleteResult.suggestions.length - 1 ? 0 : prev + 1,
+        );
+        return;
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSlashAutocompleteIndex((prev) =>
+          prev === 0 ? autocompleteResult.suggestions.length - 1 : prev - 1,
+        );
+        return;
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        setShowSlashAutocomplete(false);
+        setSlashAutocompleteIndex(-1);
+        return;
+      }
+    }
+
+    // Handle prompt suggestions navigation
+    if (showPromptSuggestions && promptSuggestions.length > 0 && !showSlashAutocomplete) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setPromptSuggestionIndex((prev) => (prev === promptSuggestions.length - 1 ? 0 : prev + 1));
+        return;
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setPromptSuggestionIndex((prev) => (prev === 0 ? promptSuggestions.length - 1 : prev - 1));
+        return;
+      } else if (event.key === 'Tab') {
+        // Accept suggestion with Tab key
+        event.preventDefault();
+        if (promptSuggestionIndex >= 0 && promptSuggestionIndex < promptSuggestions.length) {
+          const selectedSuggestion = promptSuggestions[promptSuggestionIndex];
+          if (selectedSuggestion) {
+            const newContent = content + ' ' + selectedSuggestion.text;
+            setContent(newContent);
+            setDraftContent(newContent);
+            setShowPromptSuggestions(false);
+            setPromptSuggestionIndex(-1);
+            textareaRef.current?.focus();
+          }
+        }
+        return;
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        setShowPromptSuggestions(false);
+        setPromptSuggestionIndex(-1);
+        return;
+      }
+    }
+
+    // Handle normal submit
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSubmit();
@@ -710,6 +799,79 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 )}
                 style={{ maxHeight: `${24 * MAX_ROWS}px` }}
               />
+
+              {/* Slash Command Autocomplete Dropdown */}
+              <AnimatePresence>
+                {showSlashAutocomplete && autocompleteResult.suggestions.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-white dark:bg-charcoal-800 border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden z-50"
+                  >
+                    <div className="max-h-72 overflow-y-auto">
+                      {autocompleteResult.suggestions.map((suggestion, index) => (
+                        <button
+                          key={suggestion.command}
+                          onClick={() => {
+                            const newContent = content.replace(/\/\w*$/, suggestion.command);
+                            setContent(newContent + ' ');
+                            setDraftContent(newContent + ' ');
+                            setShowSlashAutocomplete(false);
+                            textareaRef.current?.focus();
+                          }}
+                          onMouseEnter={() => setSlashAutocompleteIndex(index)}
+                          className={cn(
+                            'w-full text-left px-4 py-3 transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0',
+                            index === slashAutocompleteIndex
+                              ? 'bg-primary/10 dark:bg-primary/10'
+                              : 'hover:bg-gray-50 dark:hover:bg-charcoal-700',
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{suggestion.icon}</span>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <code className="text-sm font-semibold text-primary">
+                                  {suggestion.command}
+                                </code>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {suggestion.description}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                {suggestion.example}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-4 py-2 bg-gray-50 dark:bg-charcoal-700/50 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                      Use ↑↓ to navigate • Enter to select • Esc to close
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Prompt Suggestions Dropdown */}
+              {showPromptSuggestions && promptSuggestions.length > 0 && !showSlashAutocomplete && (
+                <PromptSuggestionsDropdown
+                  suggestions={promptSuggestions}
+                  isVisible={showPromptSuggestions}
+                  selectedIndex={promptSuggestionIndex}
+                  onSelectSuggestion={(suggestion) => {
+                    const newContent = content + ' ' + suggestion.text;
+                    setContent(newContent);
+                    setDraftContent(newContent);
+                    setShowPromptSuggestions(false);
+                    setPromptSuggestionIndex(-1);
+                    textareaRef.current?.focus();
+                  }}
+                  onMouseEnterSuggestion={(index) => setPromptSuggestionIndex(index)}
+                />
+              )}
             </div>
 
             {}
