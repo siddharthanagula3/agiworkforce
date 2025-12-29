@@ -3,6 +3,16 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getEnv } from './utils/env';
 import { logger } from './lib/logger';
 
+/**
+ * Middleware for request-level authentication and authorization checks.
+ * Validates:
+ * - User session (Supabase authentication)
+ * - Active subscription status
+ * - Subscription grace period (7 days past due)
+ *
+ * This uses Next.js middleware convention which is appropriate for
+ * request-level security checks that must run on every request.
+ */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {

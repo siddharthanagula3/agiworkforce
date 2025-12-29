@@ -1,41 +1,15 @@
-# Exclude build artifacts
-**/target/
-**/dist/
-**/.next/
-**/node_modules/
-**/coverage/
-**/test-results/
-**/playwright-report/
+# Exclude build output from Vercel uploads
+.next
+.turbo
+node_modules
+.git
+.gitignore
+README.md
 
-# Exclude Rust build artifacts
-apps/desktop/src-tauri/target/
-apps/desktop/src-tauri/gen/
-
-# Exclude IDE files
-**/.vscode/
-**/.idea/
-**/*.swp
-**/*.swo
+# Exclude development files
+.env.local
+.env.*.local
 
 # Exclude OS files
-**/.DS_Store
-**/Thumbs.db
-
-# Exclude logs
-**/*.log
-**/logs/
-
-# Exclude database files
-**/*.db
-**/*.sqlite
-**/*.sqlite3
-
-# Keep only necessary files for web app
-!apps/web/**
-!packages/**
-!services/api-gateway/**
-!pnpm-workspace.yaml
-!package.json
-!pnpm-lock.yaml
-!tsconfig.base.json
-
+.DS_Store
+Thumbs.db
