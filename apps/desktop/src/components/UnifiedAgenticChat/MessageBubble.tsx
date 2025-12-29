@@ -110,7 +110,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     if (suggestedMode) {
       openSidecar(suggestedMode, message.id);
     }
-  }, [message, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
+    // Only re-run when message ID changes, not on every message property update
+    // to prevent unnecessary sidecar opens during streaming
+  }, [message.id, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
 
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
