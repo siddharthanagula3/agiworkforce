@@ -209,11 +209,68 @@ export const UnifiedAgenticChat: React.FC<{
     );
   }, [loadOverview]);
 
+  // Validate slash command arguments for safety
+  const validateSlashCommandArgs = (command: string, args: string): boolean => {
+    // Maximum argument length
+    const MAX_ARGS_LENGTH = 2000;
+    if (args.length > MAX_ARGS_LENGTH) {
+      return false;
+    }
+
+    switch (command) {
+      case 'terminal':
+        // Terminal commands shouldn't contain shell metacharacters in certain positions
+        if (/[;|&`$(){}[\]\\]/.test(args) && /\b(rm|del|format|shutdown|poweroff)\b/i.test(args)) {
+          return false; // Reject dangerous combinations
+        }
+        break;
+
+      case 'browser':
+        // Browser URLs should be relatively safe but check for injection
+        if (args.includes('\n') || args.includes('\r')) {
+          return false; // No newlines in URLs
+        }
+        break;
+
+      case 'code':
+        // Code arguments should not be excessively large (prevent memory issues)
+        if (args.length > 5000) {
+          return false;
+        }
+        break;
+
+      case 'database':
+        // Database queries should not be excessively long
+        if (args.length > 3000) {
+          return false;
+        }
+        break;
+    }
+
+    return true;
+  };
+
   const handleSendMessage = async (content: string, options: SendOptions) => {
     // Handle slash commands
     const slashCommand = parseSlashCommand(content);
 
     if (slashCommand) {
+      // Validate command arguments first
+      if (!validateSlashCommandArgs(slashCommand.command, slashCommand.args)) {
+        const userMessageId = addMessage({
+          role: 'user',
+          content: slashCommand.rawInput,
+          slashCommand,
+          inlinePanels: [],
+        });
+
+        updateMessage(userMessageId, {
+          content: `Error: Invalid or suspicious arguments for /${slashCommand.command}. Arguments may be too long or contain dangerous patterns.`,
+          metadata: { streaming: false },
+        });
+        return;
+      }
+
       // Create user message with slash command metadata
       const userMessageId = addMessage({
         role: 'user',
