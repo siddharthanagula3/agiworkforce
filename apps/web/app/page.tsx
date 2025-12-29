@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowRight, Bot, Cpu, Globe, Shield, Zap } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 
+// Trigger rebuild with workspace dependency fix
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
