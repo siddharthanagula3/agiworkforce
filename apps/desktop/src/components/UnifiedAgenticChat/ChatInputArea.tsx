@@ -30,6 +30,12 @@ const PLAN_CREDIT_LIMITS = {
   max: { monthly: 250.0, daily: 75.0 },
 };
 
+const ATTACHMENT_LIMITS = {
+  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB per file
+  MAX_TOTAL_SIZE: 200 * 1024 * 1024, // 200MB total
+  MAX_COUNT: 10, // Maximum 10 attachments per message
+};
+
 export interface SendOptions {
   attachments?: Attachment[];
   context?: ContextItem[];
@@ -95,6 +101,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadersRef = useRef<FileReader[]>([]);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
+  const sendAbortControllerRef = useRef<AbortController | null>(null);
 
   // Initialize slash command hooks
   const { isSlashCommandInput } = useSlashCommands();
@@ -238,6 +245,38 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const handleFilesAdded = useCallback(
     (files: File[]) => {
+      // Validate file sizes
+      const oversizedFiles: string[] = [];
+      let totalSize = 0;
+
+      for (const file of files) {
+        if (file.size > ATTACHMENT_LIMITS.MAX_FILE_SIZE) {
+          oversizedFiles.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        }
+        totalSize += file.size;
+      }
+
+      if (oversizedFiles.length > 0) {
+        setSubmitError(`File(s) exceed 50MB limit: ${oversizedFiles.join(', ')}`);
+        return;
+      }
+
+      // Check total attachment count
+      const totalAttachments = attachments.length + files.length;
+      if (totalAttachments > ATTACHMENT_LIMITS.MAX_COUNT) {
+        setSubmitError(
+          `Maximum ${ATTACHMENT_LIMITS.MAX_COUNT} attachments allowed (${totalAttachments} provided)`,
+        );
+        return;
+      }
+
+      // Check total size across all attachments
+      const currentTotalSize = attachments.reduce((sum, att) => sum + (att.size || 0), 0);
+      if (currentTotalSize + totalSize > ATTACHMENT_LIMITS.MAX_TOTAL_SIZE) {
+        setSubmitError(`Total attachment size would exceed 200MB limit`);
+        return;
+      }
+
       // Check for image files
       const hasImages = files.some((f) => f.type.startsWith('image/'));
       const metadata = selectedModel ? getModelMetadata(selectedModel) : null;
@@ -253,11 +292,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
         const newAttachments: Attachment[] = nonImageFiles.map((file) => ({
           id: crypto.randomUUID(),
-          type: 'file', // Treat as generic file
+          type: 'file',
           name: file.name,
           size: file.size,
           mimeType: file.type,
-          path: URL.createObjectURL(file), // Still create object URL for generic file preview if needed
+          path: URL.createObjectURL(file),
         }));
         setAttachments((prev) => [...prev, ...newAttachments]);
         return;
@@ -274,7 +313,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       setAttachments((prev) => [...prev, ...newAttachments]);
       setSubmitError(null); // Clear error on success
     },
-    [selectedModel],
+    [selectedModel, attachments],
   );
 
   useEffect(() => {
@@ -332,7 +371,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
-    if (!content.trim() || isDisabled) return;
+    if (!content.trim() || isDisabled || isSending) return;
+
+    // Prevent concurrent sends - abort any in-flight request
+    if (sendAbortControllerRef.current) {
+      sendAbortControllerRef.current.abort();
+    }
+    sendAbortControllerRef.current = new AbortController();
+    const currentAbortSignal = sendAbortControllerRef.current.signal;
 
     // Check for Auto Mode restrictions
     if (selectedModel === 'auto') {
@@ -340,12 +386,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       if (!autoModeGate.hasAccess) {
         setLockGateResult(autoModeGate);
         setShowLockDialog(true);
+        sendAbortControllerRef.current = null;
         return;
       }
 
       // Start token check (optional, but good practice for Auto Mode)
       if (monthlyLimit > 0 && monthlyCost >= monthlyLimit * 0.99) {
         setSubmitError('Insufficient token credits for Auto Mode. Please upgrade plan.');
+        sendAbortControllerRef.current = null;
         return;
       }
     } else {
@@ -364,6 +412,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     setAttachments([]);
 
     try {
+      // Only proceed if this abort signal is still valid (not cancelled)
+      if (currentAbortSignal.aborted) {
+        throw new Error('Message send was cancelled');
+      }
+
       await onSend(messageContent, {
         attachments: messageAttachments,
         context: activeContext.length > 0 ? activeContext : undefined,
@@ -371,15 +424,25 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         modelOverride: selectedModel ? selectedModel : undefined,
         providerOverride: selectedProvider ? selectedProvider : undefined,
       });
-      cancelEditing();
+
+      // Only cancel editing if this send was not aborted
+      if (!currentAbortSignal.aborted) {
+        cancelEditing();
+      }
     } catch (error) {
-      setContent(messageContent);
-      setDraftContent(messageContent);
-      if (messageAttachments) setAttachments(messageAttachments);
-      setSubmitError(error instanceof Error ? error.message : String(error));
-      console.error('[ChatInputArea] Send failed:', error);
+      // Don't restore content if the send was cancelled (user intentionally stopped it)
+      if (!currentAbortSignal.aborted) {
+        setContent(messageContent);
+        setDraftContent(messageContent);
+        if (messageAttachments) setAttachments(messageAttachments);
+        setSubmitError(error instanceof Error ? error.message : String(error));
+        console.error('[ChatInputArea] Send failed:', error);
+      }
     } finally {
-      setIsSending(false);
+      if (!currentAbortSignal.aborted) {
+        setIsSending(false);
+      }
+      sendAbortControllerRef.current = null;
     }
   };
 
