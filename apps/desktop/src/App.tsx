@@ -259,14 +259,32 @@ const DesktopShell = () => {
         />
         <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
           <div className="flex-1 overflow-hidden">
-            <Suspense fallback={<LoadingFallback />}>
-              <UnifiedAgenticChat
-                className="h-full w-full"
-                layout="default"
-                defaultSidecarOpen={false}
-                onOpenSettings={() => setSettingsPanelOpen(true)}
-              />
-            </Suspense>
+            <ErrorBoundary
+              fallback={
+                <div className="flex h-full w-full items-center justify-center bg-surface-base">
+                  <div className="text-center">
+                    <p className="mb-4 text-lg font-semibold text-foreground">
+                      Chat interface encountered an error
+                    </p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="rounded bg-primary px-4 py-2 text-white hover:bg-primary/90"
+                    >
+                      Reload Application
+                    </button>
+                  </div>
+                </div>
+              }
+            >
+              <Suspense fallback={<LoadingFallback />}>
+                <UnifiedAgenticChat
+                  className="h-full w-full"
+                  layout="default"
+                  defaultSidecarOpen={false}
+                  onOpenSettings={() => setSettingsPanelOpen(true)}
+                />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
         <CommandPalette

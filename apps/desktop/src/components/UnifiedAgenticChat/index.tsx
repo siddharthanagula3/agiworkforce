@@ -313,24 +313,67 @@ export const UnifiedAgenticChat: React.FC<{
     };
 
     if (conversationMode === 'safe') {
-      const riskyPatterns = [
-        'rm -rf',
-        'format c:',
-        'shutdown',
-        'del /f /s /q',
-        'poweroff',
-        'wipe',
-        'disable antivirus',
-        'registry delete',
-        'ignore previous instructions',
-        'system prompt',
+      // Dangerous command patterns - using word boundaries to prevent simple bypasses
+      const dangerousCommandPatterns = [
+        /\b(rm|del|erase|format|diskpart|fdisk|wipe)\b/i,
+        /\b(shutdown|poweroff|reboot|halt)\b/i,
+        /(disable|disallow|stop|kill)\s+(antivirus|firewall|defender|av)/i,
+        /\b(registry\s+delete|regedit|reg\s+delete)\b/i,
+        /taskkill\s+\/f/i,
+        /\b(dd|shred)\b.*if=/i,
       ];
+
+      // Shell operators and redirection that could be dangerous with command injection
+      const dangerousOperatorPatterns = [/[;&|`$(){}[\]\\]/];
+
+      // Prompt injection patterns
+      const promptInjectionPatterns = [
+        /ignore\s+(previous\s+)?instructions/i,
+        /override\s+(system\s+)?prompt/i,
+        /system\s+prompt|system\s+message/i,
+        /forget\s+(everything|previous)/i,
+        /roleplay\s+as\s+(?!the assistant)/i,
+      ];
+
       const lower = content.toLowerCase();
-      const matched = riskyPatterns.find((p) => lower.includes(p));
-      if (matched) {
-        const confirmed = window.confirm(
-          `This request contains a risky instruction ("${matched}"). Proceed anyway?`,
-        );
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      let matchedRisk: string | null = null;
+
+      // Check for dangerous commands (high risk)
+      for (const pattern of dangerousCommandPatterns) {
+        if (pattern.test(lower)) {
+          riskLevel = 'high';
+          matchedRisk = pattern.source;
+          break;
+        }
+      }
+
+      // Check for prompt injection (medium risk)
+      if (riskLevel === 'low') {
+        for (const pattern of promptInjectionPatterns) {
+          if (pattern.test(lower)) {
+            riskLevel = 'medium';
+            matchedRisk = pattern.source;
+            break;
+          }
+        }
+      }
+
+      // Check for shell operators combined with commands (medium risk)
+      if (riskLevel === 'low' && dangerousOperatorPatterns[0]!.test(content)) {
+        if (/\b(execute|run|system|shell|cmd|command|bash|sh|powershell)\b/i.test(lower)) {
+          riskLevel = 'medium';
+          matchedRisk = 'Shell operators with execution keywords';
+        }
+      }
+
+      if (riskLevel !== 'low') {
+        const riskMessage =
+          riskLevel === 'high'
+            ? `This request contains a HIGH-RISK instruction that could cause system damage: ${matchedRisk}. This is not recommended.`
+            : `This request may contain a potential security risk: ${matchedRisk}. Proceed with caution.`;
+
+        const confirmed = window.confirm(`${riskMessage}\n\nProceed anyway?`);
         if (!confirmed) {
           return;
         }
@@ -452,8 +495,29 @@ export const UnifiedAgenticChat: React.FC<{
     } catch (error) {
       console.error('[UnifiedAgenticChat] Error sending message:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Generate contextual error message based on error type
+      let userMessage = `Error: ${errorMessage}`;
+      if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+        userMessage +=
+          '\n\nYour API credentials may have expired or are invalid. Please check your API key in Settings > API Keys.';
+      } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+        userMessage += "\n\nYou've hit a rate limit. Please try again in a few moments.";
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+        userMessage +=
+          '\n\nThe request timed out. Please check your internet connection and try again.';
+      } else if (errorMessage.includes('network') || errorMessage.includes('ECONNREFUSED')) {
+        userMessage += '\n\nNetwork error. Please check your internet connection.';
+      } else if (errorMessage.includes('invalid') || errorMessage.includes('validation')) {
+        userMessage +=
+          '\n\nThe request was invalid. This may be due to unsupported content or format.';
+      } else {
+        userMessage +=
+          '\n\nPlease check your API configuration in Settings > API Keys and try again.';
+      }
+
       updateMessage(assistantMessageId, {
-        content: `Error: ${errorMessage}. Please check your API key in Settings > API Keys.`,
+        content: userMessage,
         metadata: { streaming: false },
         error: errorMessage,
       });
