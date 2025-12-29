@@ -172,11 +172,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const isEmptyState = messages.length === 0;
   const showStopButton = isStreaming && onStopGeneration;
 
+  // Sync draft content from store, but don't overwrite if user is actively editing
   useEffect(() => {
-    if (draftContent !== content) {
+    // Only update content if draft is different AND content is empty or draft is more recent
+    // This prevents overwriting user input while they're typing
+    if (draftContent && draftContent !== content && content === '') {
       setContent(draftContent);
     }
-  }, [draftContent, content]);
+  }, [draftContent]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -528,24 +531,60 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     event.preventDefault();
     setSubmitError(null); // Clear error
 
+    const MAX_PASTE_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit for paste
+    const MAX_CONCURRENT_READS = 3; // Limit concurrent FileReaders
+
     items.forEach((item) => {
       const file = item.getAsFile();
       if (!file) return;
+
+      // Skip files that are too large
+      if (file.size > MAX_PASTE_FILE_SIZE) {
+        setSubmitError(
+          `Pasted file is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum is 10MB.`,
+        );
+        return;
+      }
+
+      // Throttle concurrent reads to prevent memory exhaustion
+      if (fileReadersRef.current.length >= MAX_CONCURRENT_READS) {
+        setSubmitError('Too many files being processed. Please wait and try again.');
+        return;
+      }
+
       const reader = new FileReader();
       fileReadersRef.current.push(reader);
-      reader.onload = (e) => {
-        const base64 = e.target?.result as string;
-        const attachment: Attachment = {
-          id: crypto.randomUUID(),
-          type: 'image',
-          name: 'pasted-image.png',
-          size: file.size,
-          mimeType: file.type,
-          content: base64,
-        };
-        setAttachments((prev) => [...prev, attachment]);
+
+      reader.onerror = () => {
+        setSubmitError('Failed to read pasted file. Please try again.');
         fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
       };
+
+      reader.onload = (e) => {
+        try {
+          const base64 = e.target?.result as string;
+          if (!base64 || base64.length === 0) {
+            setSubmitError('Pasted file is empty or unreadable.');
+            return;
+          }
+
+          const attachment: Attachment = {
+            id: crypto.randomUUID(),
+            type: 'image',
+            name: 'pasted-image.png',
+            size: file.size,
+            mimeType: file.type,
+            content: base64,
+          };
+          setAttachments((prev) => [...prev, attachment]);
+        } catch (err) {
+          console.error('[ChatInputArea] Error processing pasted file:', err);
+          setSubmitError('Error processing pasted file. Please try again.');
+        } finally {
+          fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
+        }
+      };
+
       reader.readAsDataURL(file);
     });
   };
