@@ -209,7 +209,7 @@ accessibility-sys = "0.1.2"
 core-foundation = "0.9"
 core-graphics = "0.24"
 objc = "0.2"
-cocoa = "0.25"
+cocoa = "0.26"
 
 
 [features]
