@@ -21,6 +21,11 @@ const ContentSecurityPolicy = `
   .trim();
 
 const nextConfig: NextConfig = {
+  // Middleware configuration for authentication
+  // Using middleware for request-level auth checks (Session & Subscription validation)
+  experimental: {
+    optimizePackageImports: ['@supabase/ssr'],
+  },
   // Security headers
   async headers() {
     return [
