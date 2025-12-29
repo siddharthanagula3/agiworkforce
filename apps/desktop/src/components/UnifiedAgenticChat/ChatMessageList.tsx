@@ -32,7 +32,10 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     if (!messages || !Array.isArray(messages)) return [];
     if (!searchQuery.trim()) return messages;
     const query = searchQuery.toLowerCase();
-    return messages.filter((msg) => msg.content.toLowerCase().includes(query));
+    return messages.filter((msg) => {
+      if (!msg.content) return false;
+      return msg.content.toLowerCase().includes(query);
+    });
   }, [messages, searchQuery]);
 
   useEffect(() => {
@@ -46,7 +49,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     if (!message) return 100;
 
     const baseHeight = 100;
-    const contentHeight = Math.min(message.content.length / 2, 500);
+    const contentLength = message.content?.length || 0;
+    const contentHeight = Math.min(contentLength / 2, 500);
     const attachmentHeight = (message.attachments?.length || 0) * 40;
     return baseHeight + contentHeight + attachmentHeight;
   };

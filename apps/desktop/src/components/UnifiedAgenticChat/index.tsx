@@ -97,10 +97,19 @@ export const UnifiedAgenticChat: React.FC<{
         'chat:stream-chunk',
         ({ payload }) => {
           const state = useUnifiedChatStore.getState();
-          const targetMessageId = payload.message_id.toString();
 
-          // Always prefer message_id from payload
-          if (targetMessageId) {
+          // Validate payload has required fields
+          if (!payload.message_id || typeof payload.content !== 'string') {
+            console.error('[UnifiedAgenticChat] Invalid stream payload', { payload });
+            return;
+          }
+
+          const targetMessageId = String(payload.message_id);
+
+          // First priority: verify message exists with this ID
+          const messageExists = state.messages.some((m) => m.id === targetMessageId);
+
+          if (messageExists) {
             state.updateMessage(targetMessageId, {
               content: payload.content,
               metadata: { streaming: true },
@@ -108,7 +117,7 @@ export const UnifiedAgenticChat: React.FC<{
           } else {
             // Fallback: use currentStreamingMessageId if available
             const currentStreamingId = state.currentStreamingMessageId;
-            if (currentStreamingId) {
+            if (currentStreamingId && state.messages.some((m) => m.id === currentStreamingId)) {
               state.updateMessage(currentStreamingId, {
                 content: payload.content,
                 metadata: { streaming: true },
@@ -118,16 +127,21 @@ export const UnifiedAgenticChat: React.FC<{
               const lastStreaming = state.messages
                 .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
                 .pop();
+
               if (lastStreaming) {
                 state.updateMessage(lastStreaming.id, {
                   content: payload.content,
                   metadata: { streaming: true },
                 });
               } else {
-                console.error('[UnifiedAgenticChat] No streaming message found to update', {
-                  payloadMessageId: payload.message_id,
-                  currentStreamingId: state.currentStreamingMessageId,
-                });
+                console.error(
+                  '[UnifiedAgenticChat] No streaming message found to update. Payload message_id does not match any existing message.',
+                  {
+                    payloadMessageId: payload.message_id,
+                    currentStreamingId: state.currentStreamingMessageId,
+                    availableMessageIds: state.messages.map((m) => m.id),
+                  },
+                );
               }
             }
           }

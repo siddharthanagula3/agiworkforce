@@ -191,7 +191,15 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       if (!savePath) return;
 
       // Parse the JSON content to extract headers and rows
-      const data = JSON.parse(artifact.content) as Record<string, string | number>[];
+      let data: Record<string, string | number>[];
+      try {
+        data = JSON.parse(artifact.content) as Record<string, string | number>[];
+      } catch (parseError) {
+        toast.error('Invalid JSON format in artifact');
+        console.error('[ArtifactRenderer] JSON parse failed:', parseError);
+        return;
+      }
+
       if (!Array.isArray(data) || data.length === 0) {
         toast.error('No data to export');
         return;
