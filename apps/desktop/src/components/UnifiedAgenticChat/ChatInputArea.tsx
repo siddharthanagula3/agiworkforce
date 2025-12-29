@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
 import { usePromptSuggestions } from '../../hooks/usePromptSuggestions';
-import { PromptSuggestionsDropdown } from './PromptSuggestionsDropdown';
 
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -89,8 +88,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   );
   const [showSlashAutocomplete, setShowSlashAutocomplete] = useState(false);
   const [slashAutocompleteIndex, setSlashAutocompleteIndex] = useState(-1);
-  const [showPromptSuggestions, setShowPromptSuggestions] = useState(false);
-  const [promptSuggestionIndex, setPromptSuggestionIndex] = useState(-1);
+  // Current inline suggestion (not a dropdown)
+  const [inlineSuggestion, setInlineSuggestion] = useState<string>('');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -320,10 +319,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         setSlashAutocompleteIndex(-1);
       }
 
-      // Update prompt suggestions state
+      // Update inline prompt suggestions (ghost text)
       // Show suggestions only when not typing a slash command
-      setPromptSuggestionIndex(-1);
-      setShowPromptSuggestions(!isSlashInput && value.length > 0);
+      if (!isSlashInput && promptSuggestions.length > 0 && promptSuggestions[0]) {
+        // Show first suggestion as inline ghost text
+        setInlineSuggestion(' ' + promptSuggestions[0].text);
+      } else {
+        setInlineSuggestion('');
+      }
     }
   };
 
@@ -403,37 +406,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       }
     }
 
-    // Handle prompt suggestions navigation
-    if (showPromptSuggestions && promptSuggestions.length > 0 && !showSlashAutocomplete) {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setPromptSuggestionIndex((prev) => (prev === promptSuggestions.length - 1 ? 0 : prev + 1));
-        return;
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setPromptSuggestionIndex((prev) => (prev === 0 ? promptSuggestions.length - 1 : prev - 1));
-        return;
-      } else if (event.key === 'Tab') {
-        // Accept suggestion with Tab key
-        event.preventDefault();
-        if (promptSuggestionIndex >= 0 && promptSuggestionIndex < promptSuggestions.length) {
-          const selectedSuggestion = promptSuggestions[promptSuggestionIndex];
-          if (selectedSuggestion) {
-            const newContent = content + ' ' + selectedSuggestion.text;
-            setContent(newContent);
-            setDraftContent(newContent);
-            setShowPromptSuggestions(false);
-            setPromptSuggestionIndex(-1);
-            textareaRef.current?.focus();
-          }
-        }
-        return;
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        setShowPromptSuggestions(false);
-        setPromptSuggestionIndex(-1);
-        return;
-      }
+    // Handle inline suggestion acceptance with Tab
+    if (inlineSuggestion && event.key === 'Tab' && !showSlashAutocomplete) {
+      event.preventDefault();
+      // Accept the inline suggestion
+      const newContent = content + inlineSuggestion;
+      setContent(newContent);
+      setDraftContent(newContent);
+      setInlineSuggestion('');
+      textareaRef.current?.focus();
+      return;
+    }
+
+    // Dismiss suggestion with Escape
+    if (inlineSuggestion && event.key === 'Escape') {
+      event.preventDefault();
+      setInlineSuggestion('');
+      return;
     }
 
     // Handle normal submit
@@ -855,22 +844,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* Prompt Suggestions Dropdown */}
-              {showPromptSuggestions && promptSuggestions.length > 0 && !showSlashAutocomplete && (
-                <PromptSuggestionsDropdown
-                  suggestions={promptSuggestions}
-                  isVisible={showPromptSuggestions}
-                  selectedIndex={promptSuggestionIndex}
-                  onSelectSuggestion={(suggestion) => {
-                    const newContent = content + ' ' + suggestion.text;
-                    setContent(newContent);
-                    setDraftContent(newContent);
-                    setShowPromptSuggestions(false);
-                    setPromptSuggestionIndex(-1);
-                    textareaRef.current?.focus();
+              {/* Inline Suggestion (Ghost Text) */}
+              {inlineSuggestion && !showSlashAutocomplete && (
+                <div
+                  className="absolute top-2 left-2 text-[15px] leading-6 text-gray-400 dark:text-gray-600 pointer-events-none"
+                  style={{
+                    paddingLeft: '8px',
+                    paddingRight: '8px',
                   }}
-                  onMouseEnterSuggestion={(index) => setPromptSuggestionIndex(index)}
-                />
+                >
+                  <span className="invisible">{content}</span>
+                  <span className="italic">{inlineSuggestion}</span>
+                </div>
               )}
             </div>
 
