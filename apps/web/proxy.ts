@@ -4,16 +4,16 @@ import { getEnv } from './utils/env';
 import { logger } from './lib/logger';
 
 /**
- * Middleware for request-level authentication and authorization checks.
+ * Proxy for request-level authentication and authorization checks.
  * Validates:
  * - User session (Supabase authentication)
  * - Active subscription status
  * - Subscription grace period (7 days past due)
  *
- * This uses Next.js middleware convention which is appropriate for
+ * This uses Next.js proxy convention which is appropriate for
  * request-level security checks that must run on every request.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
     const supabaseAnonKey = getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
 
     // If required env vars are missing, allow request through but log error
-    // This prevents middleware from breaking the entire app
+    // This prevents proxy from breaking the entire app
     if (!supabaseUrl || !supabaseAnonKey) {
       logger.error('Missing Supabase environment variables. Authentication check skipped.');
       return response;
