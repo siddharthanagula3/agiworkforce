@@ -25,11 +25,12 @@ export function useSlashCommands() {
     }
 
     const match = input.match(/^\/(\w+)\s*(.*)$/);
-    if (!match) {
+    if (!match || !match[1]) {
       return null;
     }
 
-    const [, command, args] = match;
+    const command = match[1];
+    const args = match[2] || '';
     const lowerCommand = command.toLowerCase();
 
     if (!VALID_COMMANDS.includes(lowerCommand)) {

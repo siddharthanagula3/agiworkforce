@@ -58,23 +58,25 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               {getTitle(panel.type)}
             </span>
-            {panel.metadata?.duration && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto flex-shrink-0">
-                {panel.metadata.duration}ms
-              </span>
-            )}
-            {panel.metadata?.status && (
+            {panel.metadata &&
+              'duration' in panel.metadata &&
+              panel.metadata['duration'] != null && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto flex-shrink-0">
+                  {String(panel.metadata['duration'])}ms
+                </span>
+              )}
+            {panel.metadata && 'status' in panel.metadata && panel.metadata['status'] != null && (
               <span
                 className={cn(
                   'text-xs font-medium px-2 py-0.5 rounded flex-shrink-0',
-                  panel.metadata.status === 'success'
+                  String(panel.metadata['status']) === 'success'
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                    : panel.metadata.status === 'error'
+                    : String(panel.metadata['status']) === 'error'
                       ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                       : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
                 )}
               >
-                {panel.metadata.status}
+                {String(panel.metadata['status'])}
               </span>
             )}
           </div>
