@@ -1,15 +1,105 @@
-# Exclude build output from Vercel uploads
+# Dependencies and Build Outputs
+node_modules
 .next
 .turbo
-node_modules
-.git
-.gitignore
-README.md
+dist
+build
+out
+.nuxt
+*.tsbuildinfo
 
-# Exclude development files
+# Cache and Temporary Files
+.cache
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+.vuepress/dist
+coverage
+*.lcov
+
+# Development and Testing
+.env
 .env.local
 .env.*.local
-
-# Exclude OS files
+.env.production.local
+.env.test
+.env.development.local
 .DS_Store
 Thumbs.db
+*.pem
+
+# Git and VCS
+.git
+.gitignore
+.github
+
+# Documentation and Config (Not needed for deployment)
+README.md
+CONTRIBUTING.md
+LICENSE
+.editorconfig
+.prettierrc
+.prettierrc.cjs
+.eslintrc.json
+.eslintignore
+tsconfig.json
+jest.config.*
+vitest.config.*
+
+# IDE and Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Monorepo - Only include web app
+apps/desktop
+apps/cli
+apps/mobile
+services
+core
+crates
+src
+packages
+libs
+
+# Development Scripts
+.husky
+scripts
+.lintstagedrc.json
+
+# Rust/Cargo (Not needed for web deployment)
+target
+Cargo.lock
+Cargo.toml
+*.rs
+
+# Test Files
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+vitest.config.ts
+jest.config.js
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+azure-pipelines.yml
+
+# Misc
+.pnpm-debug.log
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+lerna-debug.log
+.pnpm-store
+
+# Vercel specific
+.vercel
