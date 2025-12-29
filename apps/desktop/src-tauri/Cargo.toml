@@ -80,7 +80,7 @@ oauth2 = "4.4"
 
 
 enigo = { version = "0.6", features = ["serde"] }
-xcap = "0.0.12"
+xcap = "0.8.0"
 arboard = "3.4"
 
 
