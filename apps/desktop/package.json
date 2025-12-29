@@ -51,7 +51,7 @@
     "@radix-ui/react-toggle-group": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.0.7",
     "@sentry/react": "^10.25.0",
-    "@supabase/supabase-js": "^2.87.3",
+    "@supabase/supabase-js": "^2.89.0",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-dialog": "^2.4.2",
     "@tauri-apps/plugin-fs": "^2.4.4",
