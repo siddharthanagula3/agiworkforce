@@ -173,6 +173,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const showStopButton = isStreaming && onStopGeneration;
 
   // Sync draft content from store, but don't overwrite if user is actively editing
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: only run when draft changes, not on every content change to avoid circular updates
   useEffect(() => {
     // Only update content if draft is different AND content is empty or draft is more recent
     // This prevents overwriting user input while they're typing
