@@ -230,21 +230,38 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [content]);
 
-  useEffect(() => {
-    return () => {
-      fileReadersRef.current.forEach((reader) => {
+  // Track blob URLs to properly clean them up
+  const blobUrlsRef = useRef<Set<string>>(new Set());
+
+  // Cleanup function for blob URLs and FileReaders
+  const cleanup = useCallback(() => {
+    // Abort any in-progress FileReaders
+    fileReadersRef.current.forEach((reader) => {
+      try {
         if (reader.readyState === FileReader.LOADING) {
           reader.abort();
         }
-      });
-      fileReadersRef.current = [];
-      attachments.forEach((attachment) => {
-        if (attachment.path && attachment.path.startsWith('blob:')) {
-          URL.revokeObjectURL(attachment.path);
-        }
-      });
-    };
-  }, [attachments]);
+      } catch (err) {
+        console.error('[ChatInputArea] Error aborting FileReader:', err);
+      }
+    });
+    fileReadersRef.current = [];
+
+    // Revoke all tracked blob URLs
+    blobUrlsRef.current.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('[ChatInputArea] Error revoking blob URL:', err);
+      }
+    });
+    blobUrlsRef.current.clear();
+  }, []);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return cleanup;
+  }, [cleanup]);
 
   const handleFilesAdded = useCallback(
     (files: File[]) => {
@@ -293,26 +310,34 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
         if (nonImageFiles.length === 0) return;
 
-        const newAttachments: Attachment[] = nonImageFiles.map((file) => ({
-          id: crypto.randomUUID(),
-          type: 'file',
-          name: file.name,
-          size: file.size,
-          mimeType: file.type,
-          path: URL.createObjectURL(file),
-        }));
+        const newAttachments: Attachment[] = nonImageFiles.map((file) => {
+          const blobUrl = URL.createObjectURL(file);
+          blobUrlsRef.current.add(blobUrl);
+          return {
+            id: crypto.randomUUID(),
+            type: 'file',
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+            path: blobUrl,
+          };
+        });
         setAttachments((prev) => [...prev, ...newAttachments]);
         return;
       }
 
-      const newAttachments: Attachment[] = files.map((file) => ({
-        id: crypto.randomUUID(),
-        type: file.type.startsWith('image/') ? 'image' : 'file',
-        name: file.name,
-        size: file.size,
-        mimeType: file.type,
-        path: URL.createObjectURL(file),
-      }));
+      const newAttachments: Attachment[] = files.map((file) => {
+        const blobUrl = URL.createObjectURL(file);
+        blobUrlsRef.current.add(blobUrl);
+        return {
+          id: crypto.randomUUID(),
+          type: file.type.startsWith('image/') ? 'image' : 'file',
+          name: file.name,
+          size: file.size,
+          mimeType: file.type,
+          path: blobUrl,
+        };
+      });
       setAttachments((prev) => [...prev, ...newAttachments]);
       setSubmitError(null); // Clear error on success
     },
@@ -347,28 +372,47 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    if (value.length <= maxLength) {
-      setContent(value);
-      setDraftContent(value);
 
-      // Update slash command autocomplete state
-      const isSlashInput = isSlashCommandInput(value);
-      setShowSlashAutocomplete(isSlashInput);
-      if (!isSlashInput) {
-        setSlashAutocompleteIndex(-1);
-      } else {
-        // Reset index when input changes
-        setSlashAutocompleteIndex(-1);
-      }
+    // Allow input but warn if exceeding limit
+    if (value.length > maxLength) {
+      setSubmitError(`Character limit exceeded by ${value.length - maxLength} characters`);
+      return;
+    }
 
-      // Update inline prompt suggestions (ghost text)
-      // Show suggestions only when not typing a slash command
-      if (!isSlashInput && promptSuggestions.length > 0 && promptSuggestions[0]) {
-        // Show first suggestion as inline ghost text
-        setInlineSuggestion(' ' + promptSuggestions[0].text);
-      } else {
-        setInlineSuggestion('');
-      }
+    setContent(value);
+    setDraftContent(value);
+
+    // Show warning when approaching limit (90% threshold)
+    const charPercentage = (value.length / maxLength) * 100;
+    if (charPercentage > 90) {
+      setSubmitError(
+        `${maxLength - value.length} characters remaining (${charPercentage.toFixed(0)}% used)`,
+      );
+    } else if (
+      submitError?.includes('Character limit') ||
+      submitError?.includes('characters remaining')
+    ) {
+      // Clear previous character limit warnings
+      setSubmitError(null);
+    }
+
+    // Update slash command autocomplete state
+    const isSlashInput = isSlashCommandInput(value);
+    setShowSlashAutocomplete(isSlashInput);
+    if (!isSlashInput) {
+      setSlashAutocompleteIndex(-1);
+    } else {
+      // Reset index when input changes
+      setSlashAutocompleteIndex(-1);
+    }
+
+    // Update inline prompt suggestions (ghost text)
+    // Show suggestions only when not typing a slash command
+    if (!isSlashInput && promptSuggestions.length > 0 && promptSuggestions[0]) {
+      // Show first suggestion as inline ghost text
+      setInlineSuggestion(' ' + promptSuggestions[0].text);
+    } else {
+      setInlineSuggestion('');
     }
   };
 
@@ -882,7 +926,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 disabled={isDisabled}
                 rows={1}
                 className={cn(
-                  'w-full resize-none bg-transparent py-2 px-2',
+                  'w-full resize-none bg-transparent py-2 px-2 pr-12',
                   'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
                   'focus:outline-none',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -890,6 +934,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 )}
                 style={{ maxHeight: `${24 * MAX_ROWS}px` }}
               />
+
+              {/* Character count indicator */}
+              <div
+                className={cn(
+                  'absolute bottom-2 right-2 text-xs font-medium pointer-events-none',
+                  content.length > maxLength * 0.9
+                    ? 'text-orange-500 dark:text-orange-400'
+                    : 'text-gray-400 dark:text-gray-500',
+                )}
+              >
+                {content.length} / {maxLength}
+              </div>
 
               {/* Slash Command Autocomplete Dropdown */}
               <AnimatePresence>

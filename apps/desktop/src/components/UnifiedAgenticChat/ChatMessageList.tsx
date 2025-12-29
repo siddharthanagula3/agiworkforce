@@ -27,16 +27,30 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  // Debounce search to prevent performance issues during rapid typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300); // 300ms debounce
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const filteredMessages = React.useMemo(() => {
     if (!messages || !Array.isArray(messages)) return [];
-    if (!searchQuery.trim()) return messages;
-    const query = searchQuery.toLowerCase();
-    return messages.filter((msg) => {
-      if (!msg.content) return false;
+
+    if (!debouncedSearchQuery.trim()) return messages;
+
+    // Limit search to last 1000 messages for performance with large histories
+    const recentMessages = messages.slice(-1000);
+    const query = debouncedSearchQuery.toLowerCase();
+
+    return recentMessages.filter((msg) => {
+      if (!msg.content || typeof msg.content !== 'string') return false;
       return msg.content.toLowerCase().includes(query);
     });
-  }, [messages, searchQuery]);
+  }, [messages, debouncedSearchQuery]);
 
   useEffect(() => {
     if (autoScroll && listRef.current) {
@@ -48,11 +62,21 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     const message = filteredMessages[index];
     if (!message) return 100;
 
-    const baseHeight = 100;
-    const contentLength = message.content?.length || 0;
-    const contentHeight = Math.min(contentLength / 2, 500);
-    const attachmentHeight = (message.attachments?.length || 0) * 40;
-    return baseHeight + contentHeight + attachmentHeight;
+    const baseHeight = 100; // Header, padding, etc.
+    const avatarHeight = 40;
+
+    let contentHeight = 60; // Minimum content area
+    if (message.content && typeof message.content === 'string') {
+      // Better heuristic: estimate lines based on average 80 chars per line
+      // Then multiply by line height of ~24px
+      const estimatedLines = Math.ceil(message.content.length / 80);
+      contentHeight = Math.max(60, Math.min(estimatedLines * 24, 600)); // Cap at 600px
+    }
+
+    const attachmentHeight = (message.attachments?.length || 0) * 120; // 120px per image/file
+    const artifactHeight = message.artifacts && message.artifacts.length > 0 ? 300 : 0; // Artifacts take more space
+
+    return baseHeight + avatarHeight + contentHeight + attachmentHeight + artifactHeight;
   };
 
   const handleExport = useCallback(async () => {
