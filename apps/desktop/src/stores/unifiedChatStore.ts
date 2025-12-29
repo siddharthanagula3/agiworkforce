@@ -90,6 +90,59 @@ export interface EnhancedMessage {
   error?: string;
   bookmarked?: boolean;
   reactions?: MessageReaction[];
+  inlinePanels?: InlinePanel[];
+  slashCommand?: SlashCommandMetadata;
+}
+
+export interface InlinePanelContent {
+  terminal?: {
+    command: string;
+    cwd?: string;
+    exitCode?: number;
+    stdout?: string;
+    stderr?: string;
+    duration?: number;
+    status: 'running' | 'success' | 'error';
+  };
+  browser?: {
+    url: string;
+    title?: string;
+    screenshot?: string;
+    status: 'loading' | 'success' | 'error';
+    actions?: Array<{ type: string; timestamp: Date }>;
+  };
+  code?: {
+    filePath: string;
+    language?: string;
+    content: string;
+    diff?: string;
+    isModified?: boolean;
+  };
+  database?: {
+    query: string;
+    results?: {
+      columns: string[];
+      rows: any[][];
+      rowCount: number;
+    };
+    executionTime?: number;
+    error?: string;
+  };
+}
+
+export interface InlinePanel {
+  id: string;
+  type: 'terminal' | 'browser' | 'code' | 'database';
+  content: InlinePanelContent;
+  isCollapsed: boolean;
+  timestamp: Date;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SlashCommandMetadata {
+  command: 'browser' | 'terminal' | 'code' | 'database';
+  args: string;
+  rawInput: string;
 }
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
@@ -496,6 +549,13 @@ export interface UnifiedChatState {
   setIsLoading: (loading: boolean) => void;
   setStreamingMessage: (id: string | null) => void;
   appendToStreamingMessage: (content: string) => void;
+  addInlinePanel: (messageId: string, panel: InlinePanel) => void;
+  updateInlinePanel: (
+    messageId: string,
+    panelId: string,
+    content: Partial<InlinePanelContent>,
+  ) => void;
+  toggleInlinePanelCollapse: (messageId: string, panelId: string) => void;
 
   addFileOperation: (op: Omit<FileOperation, 'timestamp'>) => void;
   addTerminalCommand: (cmd: Omit<TerminalCommand, 'timestamp'>) => void;
@@ -1003,6 +1063,64 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             state.messages = state.messages.map((m) =>
               m.id === currentStreamingMessageId ? { ...m, content: m.content + content } : m,
             );
+          }
+        }),
+
+      addInlinePanel: (messageId, panel) =>
+        set((state) => {
+          const applyPanelAdd = (list: EnhancedMessage[]) => {
+            const idx = list.findIndex((m) => m.id === messageId);
+            if (idx !== -1 && list[idx]) {
+              if (!list[idx]!.inlinePanels) {
+                list[idx]!.inlinePanels = [];
+              }
+              list[idx]!.inlinePanels!.push(panel);
+            }
+          };
+          applyPanelAdd(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyPanelAdd(state.messagesByConversation[convoId]!);
+          }
+        }),
+
+      updateInlinePanel: (messageId, panelId, content) =>
+        set((state) => {
+          const applyPanelUpdate = (list: EnhancedMessage[]) => {
+            const msgIdx = list.findIndex((m) => m.id === messageId);
+            if (msgIdx !== -1 && list[msgIdx]?.inlinePanels) {
+              const panelIdx = list[msgIdx]!.inlinePanels!.findIndex((p) => p.id === panelId);
+              if (panelIdx !== -1 && list[msgIdx]!.inlinePanels![panelIdx]) {
+                list[msgIdx]!.inlinePanels![panelIdx]!.content = {
+                  ...list[msgIdx]!.inlinePanels![panelIdx]!.content,
+                  ...content,
+                };
+              }
+            }
+          };
+          applyPanelUpdate(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyPanelUpdate(state.messagesByConversation[convoId]!);
+          }
+        }),
+
+      toggleInlinePanelCollapse: (messageId, panelId) =>
+        set((state) => {
+          const applyToggleCollapse = (list: EnhancedMessage[]) => {
+            const msgIdx = list.findIndex((m) => m.id === messageId);
+            if (msgIdx !== -1 && list[msgIdx]?.inlinePanels) {
+              const panelIdx = list[msgIdx]!.inlinePanels!.findIndex((p) => p.id === panelId);
+              if (panelIdx !== -1 && list[msgIdx]!.inlinePanels![panelIdx]) {
+                list[msgIdx]!.inlinePanels![panelIdx]!.isCollapsed =
+                  !list[msgIdx]!.inlinePanels![panelIdx]!.isCollapsed;
+              }
+            }
+          };
+          applyToggleCollapse(state.messages);
+          const convoId = state.activeConversationId;
+          if (convoId && state.messagesByConversation[convoId]) {
+            applyToggleCollapse(state.messagesByConversation[convoId]!);
           }
         }),
 

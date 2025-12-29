@@ -13,7 +13,7 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: request.messages.map((msg) => {
+      messages: request.messages.map((msg, index, array) => {
         const messageObj: Record<string, unknown> = {
           role: msg.role,
           content: msg.content,
@@ -24,6 +24,12 @@ export class OpenAIProvider extends BaseLLMProvider {
         if (msg.tool_call_id) {
           messageObj.tool_call_id = msg.tool_call_id;
         }
+
+        // Add cache_control to last message if prompt caching is enabled
+        if (request.usePromptCache && index === array.length - 1 && msg.role === 'user') {
+          messageObj.cache_control = { type: 'ephemeral' };
+        }
+
         return messageObj;
       }),
     };
@@ -68,6 +74,8 @@ export class OpenAIProvider extends BaseLLMProvider {
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason: data.choices[0]?.finish_reason,
+        cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
+        cachedInputTokens: data.usage?.cache_read_input_tokens,
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'OpenAI request failed');

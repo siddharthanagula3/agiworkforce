@@ -43,6 +43,7 @@ import { useExecutionStore } from '../../stores/executionStore';
 import { DeepResearchPanel } from './DeepResearchPanel';
 import { CodeBlock } from './Visualizations/CodeBlock';
 import { ImageLightbox } from './ImageLightbox';
+import { InlinePanelRenderer } from './InlinePanels/InlinePanelRenderer';
 
 export interface MessageBubbleProps {
   message: EnhancedMessage;
@@ -907,6 +908,22 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Inline Panels */}
+          {message.inlinePanels && message.inlinePanels.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {message.inlinePanels.map((panel) => (
+                <InlinePanelRenderer
+                  key={panel.id}
+                  panel={panel}
+                  messageId={message.id}
+                  onToggleCollapse={() =>
+                    useUnifiedChatStore.getState().toggleInlinePanelCollapse(message.id, panel.id)
+                  }
+                />
+              ))}
             </div>
           )}
 
