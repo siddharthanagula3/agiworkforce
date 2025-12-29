@@ -44,9 +44,9 @@ LICENSE
 .prettierrc.cjs
 .eslintrc.json
 .eslintignore
-tsconfig.json
-jest.config.*
-vitest.config.*
+/tsconfig.json
+/jest.config.*
+/vitest.config.*
 
 # IDE and Editor
 .vscode
@@ -57,9 +57,9 @@ vitest.config.*
 .DS_Store
 
 # Monorepo - Only include web app
-apps/desktop
-apps/cli
-apps/mobile
+/apps/desktop
+/apps/cli
+/apps/mobile
 /services
 /core
 /crates
