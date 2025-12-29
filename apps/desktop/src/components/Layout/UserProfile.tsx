@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
 import { useAuthStore } from '../../stores/authStore';
 import { openPricingPage } from '../../utils/navigation';
+import { getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
 
 interface UserProfileProps {
   onSettingsClick?: () => void;
@@ -106,14 +107,21 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Remaining</span>
                         <span className="text-sm font-semibold text-zinc-100">
-                          ${((credits.daily_remaining_cents || 0) / 100).toFixed(2)}
+                          {getRemainingPercentage(
+                            credits.daily_used_cents || 0,
+                            credits.daily_limit_cents,
+                          )}
+                          %
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
-                          ${((credits.daily_used_cents || 0) / 100).toFixed(2)} / $
-                          {((credits.daily_limit_cents || 0) / 100).toFixed(2)}
+                          {getUsagePercentage(
+                            credits.daily_used_cents || 0,
+                            credits.daily_limit_cents,
+                          )}
+                          % used
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
@@ -121,8 +129,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                           className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all"
                           style={{
                             width: `${Math.min(
-                              ((credits.daily_used_cents || 0) / (credits.daily_limit_cents || 1)) *
-                                100,
+                              getUsagePercentage(
+                                credits.daily_used_cents || 0,
+                                credits.daily_limit_cents,
+                              ),
                               100,
                             )}%`,
                           }}
@@ -153,21 +163,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Remaining</span>
                         <span className="text-sm font-semibold text-zinc-100">
-                          ${((credits.remaining_cents || 0) / 100).toFixed(2)}
+                          {getRemainingPercentage(credits.used_cents || 0, credits.allocated_cents)}
+                          %
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-400">Used</span>
                         <span className="text-xs text-zinc-400">
-                          ${((credits.used_cents || 0) / 100).toFixed(2)} / $
-                          {((credits.allocated_cents || 0) / 100).toFixed(2)}
+                          {getUsagePercentage(credits.used_cents || 0, credits.allocated_cents)}%
+                          used
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all"
                           style={{
-                            width: `${Math.min(credits.percentage_used || 0, 100)}%`,
+                            width: `${Math.min(getUsagePercentage(credits.used_cents || 0, credits.allocated_cents), 100)}%`,
                           }}
                         />
                       </div>

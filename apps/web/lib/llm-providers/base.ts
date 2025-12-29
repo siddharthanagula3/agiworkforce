@@ -7,6 +7,8 @@ export interface LLMProviderResponse {
   completionTokens: number;
   totalTokens: number;
   finishReason?: string;
+  cacheCreationInputTokens?: number;
+  cachedInputTokens?: number;
 }
 
 export interface LLMProviderRequest {
@@ -24,6 +26,7 @@ export interface LLMProviderRequest {
   tools?: unknown[];
   tool_choice?: unknown;
   thinking_mode?: boolean;
+  usePromptCache?: boolean;
 }
 
 export abstract class BaseLLMProvider {

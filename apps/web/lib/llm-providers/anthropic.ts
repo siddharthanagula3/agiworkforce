@@ -22,21 +22,49 @@ export class AnthropicProvider extends BaseLLMProvider {
     // Convert messages format for Anthropic
     const messages = request.messages
       .filter((msg) => msg.role !== 'system')
-      .map((msg) => ({
-        role: msg.role === 'tool' ? 'user' : msg.role,
-        content: msg.content,
-      }));
+      .map((msg, index, array) => {
+        const contentObj: Record<string, unknown> = {
+          role: msg.role === 'tool' ? 'user' : msg.role,
+          content: msg.content,
+        };
+
+        // Add cache_control to last message if prompt caching is enabled
+        if (request.usePromptCache && index === array.length - 1) {
+          contentObj.cache_control = { type: 'ephemeral' };
+        }
+
+        return contentObj;
+      });
 
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
+
+    // Build system content with cache_control if caching is enabled
+    let systemContent: unknown = undefined;
+    if (systemMessage) {
+      if (request.usePromptCache) {
+        systemContent = [
+          {
+            type: 'text',
+            text: systemMessage.content,
+            cache_control: { type: 'ephemeral' },
+          },
+        ];
+      } else {
+        systemContent = systemMessage.content;
+      }
+    }
 
     const body: Record<string, unknown> = {
       model: request.model,
       max_tokens: request.max_tokens || 4096,
       messages,
-      ...(systemMessage && { system: systemMessage.content }),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(request.tools && { tools: request.tools }),
     };
+
+    if (systemContent) {
+      body.system = systemContent;
+    }
 
     try {
       const response = await fetch(url, {
@@ -63,6 +91,8 @@ export class AnthropicProvider extends BaseLLMProvider {
         completionTokens: data.usage?.output_tokens || 0,
         totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
         finishReason: data.stop_reason,
+        cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
+        cachedInputTokens: data.usage?.cache_read_input_tokens,
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'Anthropic request failed');
