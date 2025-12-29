@@ -60,11 +60,11 @@ vitest.config.*
 apps/desktop
 apps/cli
 apps/mobile
-services
-core
-crates
-src
-libs
+/services
+/core
+/crates
+/src
+/libs
 
 # Development Scripts
 .husky
