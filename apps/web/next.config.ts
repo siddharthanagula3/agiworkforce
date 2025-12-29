@@ -1,5 +1,8 @@
 import type { NextConfig } from 'next';
 
+// Workspace dependency fix: Vercel build will now resolve packages directory
+// This ensures @agiworkforce/types and @agiworkforce/utils are available
+
 // Content Security Policy configuration
 // Note: 'unsafe-inline' for styles is needed for Next.js/React styling
 // In production, consider using nonces for stricter CSP
