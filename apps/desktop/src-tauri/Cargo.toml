@@ -131,7 +131,7 @@ serde_yaml = "0.9"
 notify = "6.1"
 walkdir = "2.5"
 glob = "0.3"
-dirs = "5.0"
+dirs = "6.0"
 
 
 regex = "1.10"
