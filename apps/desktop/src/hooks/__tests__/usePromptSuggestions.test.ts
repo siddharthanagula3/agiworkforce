@@ -32,8 +32,8 @@ describe('usePromptSuggestions', () => {
       const suggestions = result.current;
 
       expect(suggestions.length).toBeGreaterThan(0);
-      expect(suggestions[0].type).toBe('expansion');
-      expect(suggestions[0].text).toContain('debugging');
+      expect(suggestions[0]?.type).toBe('expansion');
+      expect(suggestions[0]?.text).toContain('debugging');
     });
 
     it('should include step-by-step suggestion', () => {
@@ -105,7 +105,7 @@ describe('usePromptSuggestions', () => {
       const suggestions = result.current;
 
       expect(suggestions.length).toBeGreaterThan(0);
-      expect(suggestions[0].text).toContain('closures');
+      expect(suggestions[0]?.text).toContain('closures');
     });
 
     it('should include beginner-friendly suggestion', () => {
