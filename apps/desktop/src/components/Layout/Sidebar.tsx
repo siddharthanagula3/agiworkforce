@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
@@ -82,92 +82,6 @@ export function Sidebar({
     [editingTitle, renameConversation],
   );
 
-  const renderConversation = useCallback(
-    (conversation: ConversationSummary) => {
-      const isActive = conversation.id === activeConversationId;
-      const isEditing = conversation.id === editingId;
-      const title = conversation.title?.trim() || 'Untitled chat';
-
-      return (
-        <div
-          key={conversation.id}
-          className={cn(
-            'sidebar-item group flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left transition-all',
-            isActive ? 'active bg-white/10 text-white' : 'hover:bg-white/5',
-          )}
-        >
-          <button
-            type="button"
-            className="flex-1 text-left"
-            onClick={() => void handleSelect(conversation.id)}
-          >
-            {isEditing ? (
-              <input
-                value={editingTitle}
-                onChange={(event) => setEditingTitle(event.target.value)}
-                onBlur={() => void handleRename(conversation.id)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    void handleRename(conversation.id);
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setEditingId(null);
-                  }
-                }}
-                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                autoFocus
-              />
-            ) : (
-              <>
-                <span className="truncate text-sm font-semibold text-slate-200">{title}</span>
-              </>
-            )}
-          </button>
-          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
-              className="rounded-md p-1 text-slate-400 hover:bg-white/10"
-              title={conversation.pinned ? 'Unpin' : 'Pin'}
-              onClick={() => togglePinnedConversation(conversation.id)}
-            >
-              {conversation.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-            </button>
-            <button
-              type="button"
-              className="rounded-md p-1 text-slate-400 hover:bg-white/10"
-              title="Rename"
-              onClick={() => {
-                setEditingId(conversation.id);
-                setEditingTitle(title);
-              }}
-            >
-              <Search className="h-4 w-4 rotate-90" />
-            </button>
-            <button
-              type="button"
-              className="rounded-md p-1 text-slate-400 hover:bg-white/10"
-              title="Delete"
-              onClick={() => deleteConversation(conversation.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      );
-    },
-    [
-      activeConversationId,
-      deleteConversation,
-      editingId,
-      editingTitle,
-      handleSelect,
-      handleRename,
-      togglePinnedConversation,
-    ],
-  );
-
   return (
     <aside
       className={cn(
@@ -212,14 +126,50 @@ export function Sidebar({
       <ScrollArea className="flex-1 px-1">
         {!collapsed && pinned.length > 0 && (
           <Section title="Pinned">
-            {pinned.map((conversation) => renderConversation(conversation))}
+            {pinned.map((conversation) => (
+              <ConversationItem
+                key={conversation.id}
+                conversation={conversation}
+                isActive={conversation.id === activeConversationId}
+                isEditing={conversation.id === editingId}
+                editingTitle={editingTitle}
+                onSelect={handleSelect}
+                onRename={handleRename}
+                onDelete={deleteConversation}
+                onTogglePinned={togglePinnedConversation}
+                onStartEdit={(title) => {
+                  setEditingId(conversation.id);
+                  setEditingTitle(title);
+                }}
+                onCancelEdit={() => setEditingId(null)}
+                onEditTitleChange={setEditingTitle}
+              />
+            ))}
           </Section>
         )}
         <Section title={collapsed ? '' : 'Recent'}>
           {recents.length === 0 ? (
             <EmptyState onNewChat={handleNewChat} collapsed={collapsed} />
           ) : (
-            recents.map((conversation) => renderConversation(conversation))
+            recents.map((conversation) => (
+              <ConversationItem
+                key={conversation.id}
+                conversation={conversation}
+                isActive={conversation.id === activeConversationId}
+                isEditing={conversation.id === editingId}
+                editingTitle={editingTitle}
+                onSelect={handleSelect}
+                onRename={handleRename}
+                onDelete={deleteConversation}
+                onTogglePinned={togglePinnedConversation}
+                onStartEdit={(title) => {
+                  setEditingId(conversation.id);
+                  setEditingTitle(title);
+                }}
+                onCancelEdit={() => setEditingId(null)}
+                onEditTitleChange={setEditingTitle}
+              />
+            ))
           )}
         </Section>
       </ScrollArea>
@@ -264,3 +214,92 @@ const EmptyState = ({ onNewChat, collapsed }: { onNewChat: () => void; collapsed
 function sortByUpdated(a: ConversationSummary, b: ConversationSummary) {
   return (b.updatedAt?.valueOf?.() ?? 0) - (a.updatedAt?.valueOf?.() ?? 0);
 }
+
+interface ConversationItemProps {
+  conversation: ConversationSummary;
+  isActive: boolean;
+  isEditing: boolean;
+  editingTitle: string;
+  onSelect: (id: string) => void;
+  onRename: (id: string) => Promise<void>;
+  onDelete: (id: string) => void;
+  onTogglePinned: (id: string) => void;
+  onStartEdit: (title: string) => void;
+  onCancelEdit: () => void;
+  onEditTitleChange: (title: string) => void;
+}
+
+const ConversationItem = memo(function ConversationItem({
+  conversation,
+  isActive,
+  isEditing,
+  editingTitle,
+  onSelect,
+  onRename,
+  onDelete,
+  onTogglePinned,
+  onStartEdit,
+  onCancelEdit,
+  onEditTitleChange,
+}: ConversationItemProps) {
+  const title = conversation.title?.trim() || 'Untitled chat';
+
+  return (
+    <div
+      className={cn(
+        'sidebar-item group flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left transition-all',
+        isActive ? 'active bg-white/10 text-white' : 'hover:bg-white/5',
+      )}
+    >
+      <button type="button" className="flex-1 text-left" onClick={() => onSelect(conversation.id)}>
+        {isEditing ? (
+          <input
+            value={editingTitle}
+            onChange={(event) => onEditTitleChange(event.target.value)}
+            onBlur={() => void onRename(conversation.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void onRename(conversation.id);
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                onCancelEdit();
+              }
+            }}
+            className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            autoFocus
+          />
+        ) : (
+          <span className="truncate text-sm font-semibold text-slate-200">{title}</span>
+        )}
+      </button>
+      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          className="rounded-md p-1 text-slate-400 hover:bg-white/10"
+          title={conversation.pinned ? 'Unpin' : 'Pin'}
+          onClick={() => onTogglePinned(conversation.id)}
+        >
+          {conversation.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          className="rounded-md p-1 text-slate-400 hover:bg-white/10"
+          title="Rename"
+          onClick={() => onStartEdit(title)}
+        >
+          <Search className="h-4 w-4 rotate-90" />
+        </button>
+        <button
+          type="button"
+          className="rounded-md p-1 text-slate-400 hover:bg-white/10"
+          title="Delete"
+          onClick={() => onDelete(conversation.id)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+});

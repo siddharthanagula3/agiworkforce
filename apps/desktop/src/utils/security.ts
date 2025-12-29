@@ -1,7 +1,4 @@
-
-
 import DOMPurify from 'dompurify';
-
 
 export function sanitizeHtml(
   html: string,
@@ -45,20 +42,19 @@ export function sanitizeHtml(
     SAFE_FOR_TEMPLATES: true,
   };
 
-  
   if (options?.allowLinks) {
     config.ALLOWED_TAGS?.push('a');
     if (config.ALLOWED_ATTR) {
       config.ALLOWED_ATTR.push('href', 'target', 'rel');
     }
-    
+
     DOMPurify.addHook('afterSanitizeAttributes', (node) => {
       if (node.tagName === 'A') {
         const anchor = node as HTMLAnchorElement;
         if (anchor.getAttribute('target') === '_blank') {
           anchor.setAttribute('rel', 'noopener noreferrer');
         }
-        
+
         const href = anchor.getAttribute('href');
         if (href && !/^https?:\/\//.test(href)) {
           anchor.removeAttribute('href');
@@ -69,7 +65,6 @@ export function sanitizeHtml(
 
   return DOMPurify.sanitize(html, config) as unknown as string;
 }
-
 
 export function sanitizeEmailHtml(html: string): string {
   const config: any = {
@@ -113,22 +108,18 @@ export function sanitizeEmailHtml(html: string): string {
     SAFE_FOR_TEMPLATES: true,
   };
 
-  
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    
     if (node.tagName === 'A') {
       const anchor = node as HTMLAnchorElement;
       anchor.setAttribute('target', '_blank');
       anchor.setAttribute('rel', 'noopener noreferrer');
 
-      
       const href = anchor.getAttribute('href');
       if (href && !/^(?:https?:|mailto:|tel:)/i.test(href)) {
         anchor.removeAttribute('href');
       }
     }
 
-    
     if (node.tagName === 'IMG') {
       const img = node as HTMLImageElement;
       const src = img.getAttribute('src');
@@ -140,7 +131,6 @@ export function sanitizeEmailHtml(html: string): string {
 
   return DOMPurify.sanitize(html, config) as unknown as string;
 }
-
 
 export function sanitizeMarkdownHtml(html: string): string {
   const config: any = {
@@ -179,7 +169,6 @@ export function sanitizeMarkdownHtml(html: string): string {
     SAFE_FOR_TEMPLATES: true,
   };
 
-  
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (node.tagName === 'A') {
       const anchor = node as HTMLAnchorElement;
@@ -196,6 +185,83 @@ export function sanitizeMarkdownHtml(html: string): string {
   return DOMPurify.sanitize(html, config) as unknown as string;
 }
 
+// Security hooks for enhanced XSS protection - initialized on module load
+(() => {
+  // Hook 1: Remove event handlers and validate href attributes
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (!(node instanceof Element)) return;
+
+    // Remove dangerous SVG/HTML event handlers
+    const eventHandlers = [
+      'onload',
+      'onerror',
+      'onmouseover',
+      'onmousemove',
+      'onclick',
+      'onfocus',
+      'onblur',
+      'onchange',
+      'onsubmit',
+      'onwheel',
+      'onbegin',
+      'onend',
+      'onactivate',
+      'onrepeat',
+      'onmouseenter',
+      'onmouseleave',
+      'ondoubleclick',
+      'onkeydown',
+      'onkeyup',
+      'onkeypress',
+    ];
+
+    for (const handler of eventHandlers) {
+      if (node.hasAttribute(handler)) {
+        node.removeAttribute(handler);
+      }
+    }
+
+    // Validate href attributes to prevent javascript: protocol execution
+    const hrefAttributes = ['href', 'xlink:href'];
+    for (const attr of hrefAttributes) {
+      if (node.hasAttribute(attr)) {
+        const value = node.getAttribute(attr);
+        if (
+          value &&
+          (value.startsWith('javascript:') ||
+            value.startsWith('data:text/html') ||
+            value.startsWith('data:application/javascript'))
+        ) {
+          node.removeAttribute(attr);
+        }
+      }
+    }
+
+    // Sanitize style attribute to prevent CSS injection attacks
+    if (node.hasAttribute('style')) {
+      const style = node.getAttribute('style');
+      if (style) {
+        // Block dangerous CSS patterns
+        const dangerousPatterns = [
+          'behavior:',
+          'expression(',
+          'javascript:',
+          '-moz-binding:',
+          'url(javascript',
+          'url("javascript',
+          "url('javascript",
+          '&{',
+          'vbscript:',
+          'url(vbscript',
+        ];
+
+        if (dangerousPatterns.some((pattern) => style.toLowerCase().includes(pattern))) {
+          node.removeAttribute('style');
+        }
+      }
+    }
+  });
+})();
 
 export function escapeHtml(text: string): string {
   const map: Record<string, string> = {
@@ -209,17 +275,14 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => map[char] || char);
 }
 
-
 export function validateUrl(url: string): { valid: boolean; sanitized?: string; error?: string } {
   try {
     const parsed = new URL(url);
 
-    
     if (parsed.protocol !== 'http://' && parsed.protocol !== 'https://') {
       return { valid: false, error: 'Only HTTP and HTTPS protocols are allowed' };
     }
 
-    
     const hostname = parsed.hostname.toLowerCase();
     const privatePatterns = [
       /^localhost$/,
@@ -233,7 +296,6 @@ export function validateUrl(url: string): { valid: boolean; sanitized?: string; 
       /^fe80:/,
     ];
 
-    
     if (import.meta.env.PROD && privatePatterns.some((pattern) => pattern.test(hostname))) {
       return { valid: false, error: 'Access to private networks is not allowed' };
     }
@@ -243,7 +305,6 @@ export function validateUrl(url: string): { valid: boolean; sanitized?: string; 
     return { valid: false, error: 'Invalid URL format' };
   }
 }
-
 
 export function validateSearchParams(
   params: URLSearchParams,
@@ -259,7 +320,6 @@ export function validateSearchParams(
 
     const value = params.get(key);
     if (value) {
-      
       const xssPatterns = [
         /<script/i,
         /javascript:/i,
@@ -281,13 +341,11 @@ export function validateSearchParams(
   return { valid: errors.length === 0, errors };
 }
 
-
 export function generateCsrfToken(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
-
 
 export function getCsrfToken(): string {
   const storageKey = 'csrf_token';
@@ -301,7 +359,6 @@ export function getCsrfToken(): string {
   return token;
 }
 
-
 export function addCsrfHeaders(headers: HeadersInit = {}): HeadersInit {
   const token = getCsrfToken();
   return {
@@ -310,9 +367,7 @@ export function addCsrfHeaders(headers: HeadersInit = {}): HeadersInit {
   };
 }
 
-
 export function checkForInjection(input: string): { safe: boolean; type?: string } {
-  
   const sqlPatterns = [
     /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/i,
     /(--|;|\/\*|\*\/|xp_)/i,
@@ -326,7 +381,6 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     }
   }
 
-  
   const commandPatterns = [/[;&|`$()]/];
 
   for (const pattern of commandPatterns) {
@@ -335,7 +389,6 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     }
   }
 
-  
   const xssPatterns = [
     /<script[\s\S]*?>[\s\S]*?<\/script>/i,
     /javascript:/i,
@@ -353,7 +406,6 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
 
   return { safe: true };
 }
-
 
 export const CSP_CONFIG = {
   'default-src': ["'self'"],
@@ -375,7 +427,6 @@ export const CSP_CONFIG = {
   'frame-ancestors': ["'none'"],
   'upgrade-insecure-requests': [],
 };
-
 
 export function generateCspHeader(): string {
   return Object.entries(CSP_CONFIG)

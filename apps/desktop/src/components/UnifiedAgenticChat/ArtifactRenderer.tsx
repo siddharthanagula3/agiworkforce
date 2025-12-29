@@ -402,7 +402,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     return artifact.type === 'chart' || artifact.type === 'diagram' ? 'json' : 'txt';
   };
 
-  const icon = useMemo(() => {
+  // Inline icon calculation - switch statement overhead doesn't justify memoization
+  const icon = (() => {
     switch (artifact.type) {
       case 'code':
         return <Code2 className="h-4 w-4" />;
@@ -418,7 +419,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       default:
         return <Code2 className="h-4 w-4" />;
     }
-  }, [artifact.type]);
+  })();
 
   return (
     <>
@@ -772,7 +773,7 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
         mermaid.initialize({
           startOnLoad: false,
           theme: 'dark',
-          securityLevel: 'loose',
+          securityLevel: 'strict', // Updated from 'loose' for security - blocks arbitrary JavaScript in diagrams
           fontFamily: 'Styrene, Inter, sans-serif',
         });
 
