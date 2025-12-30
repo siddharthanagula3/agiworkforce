@@ -39,8 +39,9 @@ pub mod ui;
 pub use data::state::{AppState, DockPosition, PersistentWindowState, WindowGeometry};
 pub use ui::tray::build_system_tray;
 pub use ui::window::{
-    apply_dock, hide_window, initialize_window, set_always_on_top, set_pinned, show_window, undock,
-    DockPreviewEvent, DockState,
+    apply_dock, close_floating_window, create_floating_window, hide_window, initialize_window,
+    is_floating_window_visible, set_always_on_top, set_pinned, show_window, toggle_floating_window,
+    undock, DockPreviewEvent, DockState,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -71,6 +72,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
 
             let app_data_dir = match app.path().app_data_dir() {
@@ -374,6 +376,11 @@ pub fn run() {
                 eprintln!("[tray] initialization failed: {err:?}");
             }
 
+            // Initialize global shortcuts (Option+Space, etc.)
+            if let Err(err) = crate::sys::commands::shortcuts::init_global_shortcuts(app.handle()) {
+                eprintln!("[shortcuts] global shortcuts initialization failed: {err:?}");
+            }
+
             if let Some(window) = app.get_webview_window("main") {
                 if let Err(err) = initialize_window(&window) {
                     eprintln!("[window] initialization failed: {err:?}");
@@ -444,6 +451,11 @@ pub fn run() {
             crate::sys::commands::ai_generate_context_prompt,
             crate::sys::commands::ai_access_file,
 
+            // Completion / Ghost Text
+            crate::sys::commands::get_code_completion,
+            crate::sys::commands::get_inline_completion,
+            crate::sys::commands::get_prompt_completion,
+
 
             crate::sys::commands::window_get_state,
             crate::sys::commands::window_set_pinned,
@@ -456,6 +468,10 @@ pub fn run() {
             crate::sys::commands::window_toggle_maximize,
             crate::sys::commands::window_set_fullscreen,
             crate::sys::commands::window_is_fullscreen,
+            crate::sys::commands::window_toggle_floating,
+            crate::sys::commands::window_open_floating,
+            crate::sys::commands::window_close_floating,
+            crate::sys::commands::window_is_floating_visible,
             crate::sys::commands::tray_set_unread_badge,
 
 
@@ -470,6 +486,10 @@ pub fn run() {
             crate::sys::commands::chat_delete_message,
             crate::sys::commands::chat_send_message,
             crate::sys::commands::chat_stop_generation,
+            crate::sys::commands::chat_add_pending_message,
+            crate::sys::commands::chat_get_pending_messages,
+            crate::sys::commands::chat_clear_pending_messages,
+            crate::sys::commands::chat_pop_pending_message,
             crate::sys::commands::chat_get_conversation_stats,
             crate::sys::commands::chat_get_cost_overview,
             crate::sys::commands::chat_get_cost_analytics,
@@ -1001,6 +1021,8 @@ pub fn run() {
             crate::sys::commands::shortcuts_reset,
             crate::sys::commands::shortcuts_check_key,
             crate::sys::commands::shortcuts_get_defaults,
+            crate::sys::commands::shortcuts_register_global,
+            crate::sys::commands::shortcuts_unregister_global,
 
 
             crate::sys::commands::workspace_index,

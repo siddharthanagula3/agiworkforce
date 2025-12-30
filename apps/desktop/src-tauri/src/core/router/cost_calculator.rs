@@ -98,7 +98,7 @@ impl CostCalculator {
         );
 
         pricing.insert(
-            (Provider::Ollama, "llama3"),
+            (Provider::Ollama, "llama3.1"),
             Pricing {
                 input_per_million: 0.0,
                 output_per_million: 0.0,

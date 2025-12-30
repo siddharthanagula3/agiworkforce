@@ -1,5 +1,6 @@
 use crate::core::agi::tools::{Tool, ToolRegistry, ToolResult};
 use crate::core::router::{ToolCall, ToolDefinition};
+use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
 use crate::ui::events::{
     create_file_delete_event, create_file_read_event, create_file_write_event, emit_file_operation,
@@ -152,6 +153,28 @@ impl ToolExecutor {
     }
 
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
+        // Check for pending user messages before executing tool
+        // This allows the AI to be aware of new user input mid-task
+        if has_pending_messages() {
+            if let Some(app_handle) = &self.app_handle {
+                let pending = peek_pending_messages();
+                tracing::info!(
+                    "[ToolExecutor] {} pending user message(s) detected before executing '{}'",
+                    pending.len(),
+                    tool_call.name
+                );
+                // Emit event so AI can incorporate the new context
+                let _ = app_handle.emit(
+                    "chat:pending-context-available",
+                    json!({
+                        "pending_messages": pending,
+                        "current_tool": tool_call.name,
+                        "count": pending.len()
+                    }),
+                );
+            }
+        }
+
         let args: HashMap<String, serde_json::Value> =
             serde_json::from_str(&tool_call.arguments)
                 .map_err(|e| anyhow!("Invalid tool arguments: {}", e))?;
@@ -1668,26 +1691,155 @@ impl ToolExecutor {
                     })
                 }
             }
-            "email_send" | "email_fetch" => Ok(ToolResult {
-                success: false,
-                data: json!(null),
-                error: Some(
-                    "Email operations require SMTP/IMAP configuration (low priority feature)"
-                        .to_string(),
-                ),
-                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-            }),
-            "calendar_create_event" | "calendar_list_events" => {
-                if let Some(ref _app) = self.app_handle {
+            "email_send" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::email::{email_send, SendEmailRequest};
+                    #[allow(unused_imports)]
+                    use tauri::Manager;
+
+                    let account_id = args
+                        .get("account_id")
+                        .and_then(|v| v.as_i64())
+                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?;
+
+                    let to: Vec<crate::features::communications::EmailAddress> = args
+                        .get("to")
+                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                        .unwrap_or_default();
+
+                    let subject = args
+                        .get("subject")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let body_text = args
+                        .get("body_text")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let body_html = args
+                        .get("body_html")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let request = SendEmailRequest {
+                        account_id,
+                        to,
+                        cc: vec![],
+                        bcc: vec![],
+                        reply_to: None,
+                        subject,
+                        body_text,
+                        body_html,
+                        attachments: vec![],
+                    };
+
+                    match email_send(app.clone(), request).await {
+                        Ok(message_id) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "message_id": message_id,
+                                "status": "sent"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to send email: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some(
-                            "Calendar operations require OAuth setup (low priority feature)"
-                                .to_string(),
-                        ),
+                        error: Some("App handle not available for email operations".to_string()),
                         metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
                     })
+                }
+            }
+            "email_fetch" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::email::email_fetch_inbox;
+
+                    let account_id = args
+                        .get("account_id")
+                        .and_then(|v| v.as_i64())
+                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?;
+
+                    let folder = args
+                        .get("folder")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let limit = args
+                        .get("limit")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as usize);
+
+                    match email_fetch_inbox(app.clone(), account_id, folder, limit, None).await {
+                        Ok(emails) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "emails": emails,
+                                "count": emails.len()
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to fetch emails: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for email operations".to_string()),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                    })
+                }
+            }
+            "calendar_create_event" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::features::calendar::CreateEventRequest;
+                    use crate::sys::commands::calendar::{calendar_create_event, CalendarState};
+                    use tauri::Manager;
+
+                    let state = app.state::<CalendarState>();
+                    let account_id = args
+                        .get("account_id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                        .to_string();
+
+                    let request: CreateEventRequest =
+                        serde_json::from_value(args.get("event").cloned().unwrap_or(json!({})))
+                            .map_err(|e| anyhow!("Invalid event data: {}", e))?;
+
+                    match calendar_create_event(account_id, request, state, app.clone()).await {
+                        Ok(event) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "event": event,
+                                "status": "created"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to create calendar event: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
                 } else {
                     Ok(ToolResult {
                         success: false,
@@ -1697,17 +1849,159 @@ impl ToolExecutor {
                     })
                 }
             }
-            "cloud_upload" | "cloud_download" => {
-                if let Some(ref _app) = self.app_handle {
+            "calendar_list_events" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::features::calendar::ListEventsRequest;
+                    use crate::sys::commands::calendar::{calendar_list_events, CalendarState};
+                    use tauri::Manager;
+
+                    let state = app.state::<CalendarState>();
+                    let account_id = args
+                        .get("account_id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                        .to_string();
+
+                    let request: ListEventsRequest =
+                        serde_json::from_value(args.get("request").cloned().unwrap_or(json!({})))
+                            .map_err(|e| anyhow!("Invalid request format: {}", e))?;
+
+                    match calendar_list_events(account_id, request, state, app.clone()).await {
+                        Ok(response) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "events": response.events,
+                                "next_page_token": response.next_page_token
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to list calendar events: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some(
-                            "Cloud storage operations require OAuth setup (low priority feature)"
-                                .to_string(),
-                        ),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        error: Some("App handle not available for calendar operations".to_string()),
+                        metadata: HashMap::new(),
                     })
+                }
+            }
+            "cloud_upload" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::cloud::{
+                        cloud_upload, CloudState, CloudUploadRequest,
+                    };
+                    use tauri::Manager;
+
+                    let state = app.state::<CloudState>();
+                    let account_id = args
+                        .get("account_id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                        .to_string();
+
+                    let local_path = args
+                        .get("local_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing local_path parameter"))?
+                        .to_string();
+
+                    let remote_path = args
+                        .get("remote_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing remote_path parameter"))?
+                        .to_string();
+
+                    let request = CloudUploadRequest {
+                        account_id: account_id.clone(),
+                        local_path: local_path.clone(),
+                        remote_path: remote_path.clone(),
+                    };
+
+                    match cloud_upload(request, state, app.clone()).await {
+                        Ok(file_id) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "file_id": file_id,
+                                "local_path": local_path,
+                                "remote_path": remote_path,
+                                "status": "uploaded"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to upload to cloud storage: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for cloud storage".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "cloud_download" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::cloud::{
+                        cloud_download, CloudDownloadRequest, CloudState,
+                    };
+                    use tauri::Manager;
+
+                    let state = app.state::<CloudState>();
+                    let account_id = args
+                        .get("account_id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing account_id parameter"))?
+                        .to_string();
+
+                    let remote_path = args
+                        .get("remote_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing remote_path parameter"))?
+                        .to_string();
+
+                    let local_path = args
+                        .get("local_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing local_path parameter"))?
+                        .to_string();
+
+                    let request = CloudDownloadRequest {
+                        account_id: account_id.clone(),
+                        remote_path: remote_path.clone(),
+                        local_path: local_path.clone(),
+                    };
+
+                    match cloud_download(request, state, app.clone()).await {
+                        Ok(()) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "remote_path": remote_path,
+                                "local_path": local_path,
+                                "status": "downloaded"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to download from cloud storage: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
                 } else {
                     Ok(ToolResult {
                         success: false,
@@ -1718,16 +2012,59 @@ impl ToolExecutor {
                 }
             }
             "productivity_create_task" => {
-                if let Some(ref _app) = self.app_handle {
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!(null),
-                        error: Some(
-                            "Productivity tools require API configuration (low priority feature)"
-                                .to_string(),
-                        ),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
-                    })
+                if let Some(ref app) = self.app_handle {
+                    use crate::features::productivity::{Provider, Task};
+                    use crate::sys::commands::productivity::{
+                        productivity_create_task, ProductivityState,
+                    };
+                    use tauri::Manager;
+
+                    let state = app.state::<ProductivityState>();
+
+                    let provider_str = args
+                        .get("provider")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing provider parameter"))?;
+
+                    let provider = match provider_str.to_lowercase().as_str() {
+                        "notion" => Provider::Notion,
+                        "trello" => Provider::Trello,
+                        "asana" => Provider::Asana,
+                        other => {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!(null),
+                                error: Some(format!(
+                                    "Unknown provider: {}. Use 'notion', 'trello', or 'asana'",
+                                    other
+                                )),
+                                metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                            })
+                        }
+                    };
+
+                    let task: Task =
+                        serde_json::from_value(args.get("task").cloned().unwrap_or(json!({})))
+                            .map_err(|e| anyhow!("Invalid task data: {}", e))?;
+
+                    match productivity_create_task(state, provider, task).await {
+                        Ok(response) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "task_id": response.task_id,
+                                "success": response.success,
+                                "status": "created"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to create task: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
                 } else {
                     Ok(ToolResult {
                         success: false,
@@ -1737,16 +2074,251 @@ impl ToolExecutor {
                     })
                 }
             }
-            "document_read" | "document_search" => {
-                if let Some(ref _app) = self.app_handle {
+            "document_read" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::document::{document_read, DocumentState};
+                    use tauri::Manager;
+
+                    let state = app.state::<DocumentState>();
+                    let file_path = args
+                        .get("file_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing file_path parameter"))?
+                        .to_string();
+
+                    match document_read(file_path.clone(), state).await {
+                        Ok(content) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "content": content,
+                                "file_path": file_path
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to read document: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
                     Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some(
-                            "Document operations require setup (low priority feature)".to_string(),
-                        ),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        error: Some("App handle not available for document operations".to_string()),
+                        metadata: HashMap::new(),
                     })
+                }
+            }
+            "document_search" => {
+                if let Some(ref app) = self.app_handle {
+                    use crate::sys::commands::document::{document_search, DocumentState};
+                    use tauri::Manager;
+
+                    let state = app.state::<DocumentState>();
+                    let file_path = args
+                        .get("file_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing file_path parameter"))?
+                        .to_string();
+
+                    let query = args
+                        .get("query")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing query parameter"))?
+                        .to_string();
+
+                    match document_search(file_path.clone(), query.clone(), state).await {
+                        Ok(results) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "results": results,
+                                "file_path": file_path,
+                                "query": query,
+                                "count": results.len()
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to search document: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for document operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "document_create_word" => {
+                if let Some(ref _app) = self.app_handle {
+                    use crate::sys::commands::document::document_create_word_simple;
+
+                    let output_path = args
+                        .get("output_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing output_path parameter"))?
+                        .to_string();
+
+                    let title = args
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let author = args
+                        .get("author")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let paragraphs: Vec<String> = args
+                        .get("paragraphs")
+                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                        .unwrap_or_default();
+
+                    match document_create_word_simple(
+                        output_path.clone(),
+                        title,
+                        author,
+                        paragraphs,
+                    )
+                    .await
+                    {
+                        Ok(path) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "file_path": path,
+                                "status": "created"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to create Word document: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for document operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "document_create_excel" => {
+                if let Some(ref _app) = self.app_handle {
+                    use crate::sys::commands::document::document_create_excel_simple;
+
+                    let output_path = args
+                        .get("output_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing output_path parameter"))?
+                        .to_string();
+
+                    let sheet_name = args
+                        .get("sheet_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Sheet1")
+                        .to_string();
+
+                    let headers: Vec<String> = args
+                        .get("headers")
+                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                        .unwrap_or_default();
+
+                    let rows: Vec<Vec<String>> = args
+                        .get("rows")
+                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                        .unwrap_or_default();
+
+                    match document_create_excel_simple(
+                        output_path.clone(),
+                        sheet_name,
+                        headers,
+                        rows,
+                    )
+                    .await
+                    {
+                        Ok(path) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "file_path": path,
+                                "status": "created"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to create Excel document: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
+                } else {
+                    Ok(ToolResult {
+                        success: false,
+                        data: json!(null),
+                        error: Some("App handle not available for document operations".to_string()),
+                        metadata: HashMap::new(),
+                    })
+                }
+            }
+            "document_create_pdf" => {
+                if let Some(ref _app) = self.app_handle {
+                    use crate::sys::commands::document::document_create_pdf_simple;
+
+                    let output_path = args
+                        .get("output_path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow!("Missing output_path parameter"))?
+                        .to_string();
+
+                    let title = args
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let author = args
+                        .get("author")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let paragraphs: Vec<String> = args
+                        .get("paragraphs")
+                        .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+                        .unwrap_or_default();
+
+                    match document_create_pdf_simple(output_path.clone(), title, author, paragraphs)
+                        .await
+                    {
+                        Ok(path) => Ok(ToolResult {
+                            success: true,
+                            data: json!({
+                                "file_path": path,
+                                "status": "created"
+                            }),
+                            error: None,
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                        Err(e) => Ok(ToolResult {
+                            success: false,
+                            data: json!(null),
+                            error: Some(format!("Failed to create PDF document: {}", e)),
+                            metadata: HashMap::from([("tool".to_string(), json!(tool.id))]),
+                        }),
+                    }
                 } else {
                     Ok(ToolResult {
                         success: false,
