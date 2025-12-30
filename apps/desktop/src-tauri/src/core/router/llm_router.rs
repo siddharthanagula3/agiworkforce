@@ -762,7 +762,7 @@ impl LLMRouter {
             RoutingStrategy::LocalFirst => {
                 vec![RouteCandidate {
                     provider: Provider::Ollama,
-                    model: "llama3".to_string(),
+                    model: "llama3.1".to_string(),
                     reason: "strategy-local-first",
                 }]
             }
@@ -770,7 +770,7 @@ impl LLMRouter {
                 TaskCategory::Simple => vec![
                     RouteCandidate {
                         provider: Provider::Ollama,
-                        model: "llama3".to_string(),
+                        model: "llama3.1".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -884,7 +884,7 @@ impl LLMRouter {
                 TaskCategory::Complex => "gemini-1.5-pro".to_string(),
                 TaskCategory::Creative => "gemini-1.5-pro".to_string(),
             },
-            Provider::Ollama => "llama3".to_string(),
+            Provider::Ollama => "llama3.1".to_string(),
             Provider::XAI => match task {
                 TaskCategory::Simple => "grok-3".to_string(),
                 TaskCategory::Complex => "grok-4".to_string(),
