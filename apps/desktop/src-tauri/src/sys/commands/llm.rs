@@ -1,7 +1,5 @@
 use crate::core::router::providers::{
-    anthropic::AnthropicProvider, deepseek::DeepSeekProvider, google::GoogleProvider,
-    managed_cloud_provider::ManagedCloudProvider, mistral::MistralProvider, ollama::OllamaProvider,
-    openai::OpenAIProvider, qwen::QwenProvider, xai::XAIProvider,
+    managed_cloud_provider::ManagedCloudProvider, ollama::OllamaProvider,
 };
 use crate::core::router::{
     cache_manager::CacheManager,
@@ -135,11 +133,13 @@ pub async fn llm_send_message(
     if candidates.is_empty() {
         if let Some(name) = provider_name {
             return Err(format!(
-                "Provider '{}' is not configured. Add an API key in Settings > API Keys.",
+                "Provider '{}' is not configured. Please sign in to use Managed Cloud.",
                 name
             ));
         }
-        return Err("No LLM providers are configured.".to_string());
+        return Err(
+            "No LLM providers are configured. Please sign in to use Managed Cloud.".to_string(),
+        );
     }
 
     let mut last_error: Option<anyhow::Error> = None;
@@ -164,7 +164,7 @@ pub async fn llm_send_message(
                     || error_msg.contains("invalid_api_key")
                 {
                     return Err(format!(
-                        "API key authentication failed for {}. Please check your API key in Settings > API Keys.",
+                        "Authentication failed for {}. Please check your connection or sign in again.",
                         candidate.provider.as_string()
                     ));
                 }
@@ -202,7 +202,7 @@ pub async fn llm_send_message(
 #[tauri::command]
 pub async fn llm_configure_provider(
     provider: String,
-    api_key: Option<String>,
+    _api_key: Option<String>,
     base_url: Option<String>,
     state: State<'_, LLMState>,
 ) -> Result<(), String> {
@@ -210,114 +210,22 @@ pub async fn llm_configure_provider(
         return Err("Provider name cannot be empty".to_string());
     }
 
-    if let Some(ref key) = api_key {
-        let trimmed = key.trim();
-        if trimmed.is_empty() {
-            return Err("API key cannot be empty".to_string());
-        }
-        if trimmed.len() < 10 {
-            return Err("API key too short. Minimum length is 10 characters".to_string());
-        }
-        if trimmed.len() > 500 {
-            return Err(format!(
-                "API key too long: {} characters. Maximum is 500",
-                trimmed.len()
-            ));
-        }
-    }
-
-    if let Some(ref url) = base_url {
-        if !url.starts_with("http") {
-            return Err(format!(
-                "Invalid base URL: {}. Must start with http:// or https://",
-                url
-            ));
-        }
-
-        if url.len() > 1000 {
-            return Err(format!(
-                "Base URL too long: {} characters. Maximum is 1000",
-                url.len()
-            ));
-        }
-    }
-
     let mut router = state.router.write().await;
 
     match provider.as_str() {
-        "openai" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_openai(Box::new(OpenAIProvider::new(trimmed_key)));
-                Ok(())
-            } else {
-                Err("OpenAI requires an API key".to_string())
-            }
-        }
-        "anthropic" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_anthropic(Box::new(AnthropicProvider::new(trimmed_key)));
-                Ok(())
-            } else {
-                Err("Anthropic requires an API key".to_string())
-            }
-        }
-        "google" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_google(Box::new(GoogleProvider::new(trimmed_key)));
-                Ok(())
-            } else {
-                Err("Google requires an API key".to_string())
-            }
-        }
         "ollama" => {
             router.set_ollama(Box::new(OllamaProvider::new(base_url)));
             Ok(())
-        }
-        "xai" | "grok" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_xai(Box::new(XAIProvider::new(Some(trimmed_key))));
-                Ok(())
-            } else {
-                Err("XAI requires an API key".to_string())
-            }
-        }
-        "deepseek" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_deepseek(Box::new(DeepSeekProvider::new(Some(trimmed_key))));
-                Ok(())
-            } else {
-                Err("DeepSeek requires an API key".to_string())
-            }
-        }
-        "qwen" | "alibaba" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_qwen(Box::new(QwenProvider::new(Some(trimmed_key))));
-                Ok(())
-            } else {
-                Err("Qwen requires an API key".to_string())
-            }
-        }
-        "mistral" | "mistralai" => {
-            if let Some(key) = api_key {
-                let trimmed_key = key.trim().to_string();
-                router.set_mistral(Box::new(MistralProvider::new(Some(trimmed_key))));
-                Ok(())
-            } else {
-                Err("Mistral requires an API key".to_string())
-            }
         }
         "managed_cloud" | "managedcloud" | "cloud" => {
             // ManagedCloud doesn't need an API key - it uses the access token from keyring
             router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
             Ok(())
         }
-        _ => Err(format!("Unknown provider: {}", provider)),
+        _ => Err(format!(
+            "Provider '{}' must be configured via Vercel environment variables. Local key storage is disabled for security.",
+            provider
+        )),
     }
 }
 
