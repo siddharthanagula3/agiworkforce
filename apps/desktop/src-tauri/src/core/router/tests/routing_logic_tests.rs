@@ -103,8 +103,8 @@ mod tests {
 
         let suggestion = router.suggest_for_context(&context);
 
-        assert_eq!(suggestion.provider, Provider::Ollama);
-        assert_eq!(suggestion.model, "llama3.1");
+        assert_eq!(suggestion.provider, Provider::Google);
+        assert_eq!(suggestion.model, "gemini-1.5-flash");
     }
 
     #[test]

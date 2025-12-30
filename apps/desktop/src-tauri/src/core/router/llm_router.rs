@@ -234,10 +234,11 @@ impl LLMRouter {
             )
         }) {
             if is_budget_plan {
-                // Budget plans use local Llama for complex tasks instead of paid Claude
-                provider = Provider::Ollama;
+                // Budget plans use affordable cloud models
+                provider = Provider::Google; // Gemini Flash is cheapest
                 task_category = TaskCategory::Simple;
-                reason = "Developer workflow + budget plan - routing to local Llama 4.".to_string();
+                reason = "Developer workflow + budget plan - routing to affordable Gemini Flash."
+                    .to_string();
             } else {
                 provider = Provider::Anthropic;
                 task_category = TaskCategory::Complex;
@@ -262,10 +263,11 @@ impl LLMRouter {
                     .to_string()
             };
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
-            provider = Provider::Ollama;
+            provider = Provider::Google; // Use Gemini Flash for low cost
             task_category = TaskCategory::Simple;
-            reason = "Cost priority is low - routing to local Ollama model for inexpensive loops."
-                .to_string();
+            reason =
+                "Cost priority is low - routing to affordable Gemini Flash for inexpensive loops."
+                    .to_string();
         }
 
         if context.token_estimate > 12_000 && provider == Provider::OpenAI && !is_budget_plan {
@@ -296,6 +298,7 @@ impl LLMRouter {
 
         let fallback_order = [
             self.default_provider,
+            Provider::ManagedCloud,
             Provider::Anthropic,
             Provider::OpenAI,
             Provider::Google,
@@ -303,7 +306,6 @@ impl LLMRouter {
             Provider::Qwen,
             Provider::Mistral,
             Provider::Moonshot,
-            Provider::Ollama,
             Provider::XAI,
         ];
 
@@ -481,16 +483,15 @@ impl LLMRouter {
         }
 
         for provider in [
+            Provider::ManagedCloud,
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::Google,
-            Provider::Ollama,
             Provider::XAI,
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Mistral,
             Provider::Moonshot,
-            Provider::ManagedCloud,
         ] {
             if order.iter().any(|c| c.provider == provider) {
                 continue;
@@ -760,17 +761,18 @@ impl LLMRouter {
     fn strategy_order(&self, task: TaskCategory, strategy: RoutingStrategy) -> Vec<RouteCandidate> {
         match strategy {
             RoutingStrategy::LocalFirst => {
+                // LocalFirst strategy removed - use ManagedCloud or cloud providers instead
                 vec![RouteCandidate {
-                    provider: Provider::Ollama,
-                    model: "llama3.1".to_string(),
-                    reason: "strategy-local-first",
+                    provider: Provider::ManagedCloud,
+                    model: "managed-cloud-auto".to_string(),
+                    reason: "strategy-cloud-first",
                 }]
             }
             RoutingStrategy::CostOptimized => match task {
                 TaskCategory::Simple => vec![
                     RouteCandidate {
-                        provider: Provider::Ollama,
-                        model: "llama3.1".to_string(),
+                        provider: Provider::Google,
+                        model: "gemini-1.5-flash".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -779,8 +781,8 @@ impl LLMRouter {
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
-                        provider: Provider::Google,
-                        model: "gemini-1.5-flash".to_string(),
+                        provider: Provider::ManagedCloud,
+                        model: "managed-cloud-auto".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -824,6 +826,11 @@ impl LLMRouter {
             RoutingStrategy::Auto => match task {
                 TaskCategory::Simple => vec![
                     RouteCandidate {
+                        provider: Provider::ManagedCloud,
+                        model: "managed-cloud-auto".to_string(),
+                        reason: "task-simple-auto",
+                    },
+                    RouteCandidate {
                         provider: Provider::OpenAI,
                         model: "gpt-4o-mini".to_string(),
                         reason: "task-simple",
@@ -841,6 +848,11 @@ impl LLMRouter {
                 ],
                 TaskCategory::Complex => vec![
                     RouteCandidate {
+                        provider: Provider::ManagedCloud,
+                        model: "managed-cloud-auto".to_string(),
+                        reason: "task-complex-auto",
+                    },
+                    RouteCandidate {
                         provider: Provider::OpenAI,
                         model: "gpt-4o".to_string(),
                         reason: "task-complex",
@@ -852,6 +864,11 @@ impl LLMRouter {
                     },
                 ],
                 TaskCategory::Creative => vec![
+                    RouteCandidate {
+                        provider: Provider::ManagedCloud,
+                        model: "managed-cloud-auto".to_string(),
+                        reason: "task-creative-auto",
+                    },
                     RouteCandidate {
                         provider: Provider::Google,
                         model: "gemini-1.5-pro".to_string(),
