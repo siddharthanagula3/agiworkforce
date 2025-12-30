@@ -211,30 +211,30 @@ pub async fn storage_is_unlocked(state: State<'_, SecureStorageState>) -> Result
 
 #[tauri::command]
 pub async fn storage_store_api_key(
-    provider: String,
-    api_key: String,
-    state: State<'_, SecureStorageState>,
+    _provider: String,
+    _api_key: String,
+    _state: State<'_, SecureStorageState>,
 ) -> Result<(), String> {
-    let storage = state.inner().read();
-    storage.store_api_key(&provider, &api_key)
+    Err("Local API key storage is disabled. Please configure secrets via Vercel environment variables.".to_string())
 }
 
 #[tauri::command]
 pub async fn storage_retrieve_api_key(
-    provider: String,
-    state: State<'_, SecureStorageState>,
+    _provider: String,
+    _state: State<'_, SecureStorageState>,
 ) -> Result<String, String> {
-    let storage = state.inner().read();
-    storage.retrieve_api_key(&provider)
+    Err("Local API key retrieval is disabled. Use the Managed Cloud provider to access Vercel-hosted secrets.".to_string())
 }
 
 #[tauri::command]
 pub async fn storage_delete_api_key(
-    provider: String,
-    state: State<'_, SecureStorageState>,
+    _provider: String,
+    _state: State<'_, SecureStorageState>,
 ) -> Result<(), String> {
-    let storage = state.inner().read();
-    storage.delete_api_key(&provider)
+    Err(
+        "Local API key management is disabled. Manage your secrets in the Vercel dashboard."
+            .to_string(),
+    )
 }
 
 #[tauri::command]

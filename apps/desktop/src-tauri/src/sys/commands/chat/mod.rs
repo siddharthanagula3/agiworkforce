@@ -13,7 +13,21 @@ use tracing::info;
 pub mod types;
 pub use types::*;
 
+use once_cell::sync::Lazy;
+
 static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
+
+// Pending messages queue for mid-task user input
+static PENDING_MESSAGES: Lazy<Mutex<Vec<PendingUserMessage>>> =
+    Lazy::new(|| Mutex::new(Vec::new()));
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PendingUserMessage {
+    pub id: String,
+    pub content: String,
+    pub timestamp: chrono::DateTime<Utc>,
+    pub conversation_id: Option<i64>,
+}
 
 fn detect_agentic_intent(content: &str) -> bool {
     let content_lower = content.to_lowercase();
@@ -561,11 +575,30 @@ pub async fn chat_send_message(
                 let mut token_count = 0u32;
                 let mut was_stopped = false;
 
+                let mut pending_notified = false;
                 while let Some(chunk_result) = stream.next().await {
                     if should_stop_generation() {
                         info!("[Chat] Generation stopped by user");
                         was_stopped = true;
                         break;
+                    }
+
+                    // Check for pending user messages during streaming
+                    if has_pending_messages() && !pending_notified {
+                        let pending = peek_pending_messages();
+                        info!(
+                            "[Chat] {} pending message(s) detected during streaming",
+                            pending.len()
+                        );
+                        let _ = app_handle.emit(
+                            "chat:pending-context-available",
+                            serde_json::json!({
+                                "pending_messages": pending,
+                                "current_phase": "streaming",
+                                "count": pending.len()
+                            }),
+                        );
+                        pending_notified = true;
                     }
 
                     match chunk_result {
@@ -579,7 +612,8 @@ pub async fn chat_send_message(
                                     "conversation_id": conversation.id,
                                     "message_id": 0,
                                     "delta": chunk.content,
-                                    "content": full_content
+                                    "content": full_content,
+                                    "has_pending_messages": has_pending_messages()
                                 }),
                             );
                         }
@@ -620,13 +654,33 @@ pub async fn chat_send_message(
                         .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
                 };
 
+                // Check for pending messages at stream end
+                let pending_at_end = peek_pending_messages();
                 let _ = app_handle.emit(
                     "chat:stream-end",
                     serde_json::json!({
                         "conversation_id": conversation.id,
-                        "message_id": assistant_message.id
+                        "message_id": assistant_message.id,
+                        "pending_messages_count": pending_at_end.len(),
+                        "has_pending_messages": !pending_at_end.is_empty()
                     }),
                 );
+
+                // If there are pending messages, emit them for processing
+                if !pending_at_end.is_empty() {
+                    info!(
+                        "[Chat] Stream ended with {} pending message(s) to process",
+                        pending_at_end.len()
+                    );
+                    let _ = app_handle.emit(
+                        "chat:pending-messages-ready",
+                        serde_json::json!({
+                            "conversation_id": conversation.id,
+                            "pending_messages": pending_at_end,
+                            "count": pending_at_end.len()
+                        }),
+                    );
+                }
 
                 let stats = {
                     let conn = db.connection()?;
@@ -870,4 +924,130 @@ pub fn should_stop_generation() -> bool {
 
 pub fn reset_stop_flag() {
     STOP_GENERATION.store(false, Ordering::SeqCst);
+}
+
+// ============================================================================
+// Pending Messages API - Allows users to queue messages while AI is processing
+// ============================================================================
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AddPendingMessageRequest {
+    pub content: String,
+    pub conversation_id: Option<i64>,
+}
+
+#[tauri::command]
+pub async fn chat_add_pending_message(
+    app_handle: tauri::AppHandle,
+    request: AddPendingMessageRequest,
+) -> Result<PendingUserMessage, String> {
+    let trimmed_content = request.content.trim();
+    if trimmed_content.is_empty() {
+        return Err("Pending message content cannot be empty".to_string());
+    }
+    if trimmed_content.len() > 100_000 {
+        return Err("Pending message content cannot exceed 100,000 characters".to_string());
+    }
+
+    let pending_msg = PendingUserMessage {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: trimmed_content.to_string(),
+        timestamp: Utc::now(),
+        conversation_id: request.conversation_id,
+    };
+
+    {
+        let mut queue = PENDING_MESSAGES
+            .lock()
+            .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
+        queue.push(pending_msg.clone());
+        info!(
+            "[Chat] Added pending message (queue size: {}): {}...",
+            queue.len(),
+            &trimmed_content.chars().take(50).collect::<String>()
+        );
+    }
+
+    // Emit event to notify frontend
+    let _ = app_handle.emit("chat:pending-message-added", &pending_msg);
+
+    Ok(pending_msg)
+}
+
+#[tauri::command]
+pub async fn chat_get_pending_messages() -> Result<Vec<PendingUserMessage>, String> {
+    let queue = PENDING_MESSAGES
+        .lock()
+        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
+    Ok(queue.clone())
+}
+
+#[tauri::command]
+pub async fn chat_clear_pending_messages(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let mut queue = PENDING_MESSAGES
+        .lock()
+        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
+    let count = queue.len();
+    queue.clear();
+    info!("[Chat] Cleared {} pending messages", count);
+
+    // Emit event to notify frontend
+    let _ = app_handle.emit(
+        "chat:pending-messages-cleared",
+        serde_json::json!({ "count": count }),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn chat_pop_pending_message(
+    app_handle: tauri::AppHandle,
+) -> Result<Option<PendingUserMessage>, String> {
+    let mut queue = PENDING_MESSAGES
+        .lock()
+        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
+
+    if queue.is_empty() {
+        return Ok(None);
+    }
+
+    let msg = queue.remove(0);
+    info!(
+        "[Chat] Popped pending message (remaining: {}): {}...",
+        queue.len(),
+        &msg.content.chars().take(50).collect::<String>()
+    );
+
+    // Emit event to notify frontend
+    let _ = app_handle.emit(
+        "chat:pending-message-consumed",
+        serde_json::json!({
+            "message": msg,
+            "remaining": queue.len()
+        }),
+    );
+
+    Ok(Some(msg))
+}
+
+/// Check if there are pending messages (used by tool executor)
+pub fn has_pending_messages() -> bool {
+    PENDING_MESSAGES
+        .lock()
+        .map(|q| !q.is_empty())
+        .unwrap_or(false)
+}
+
+/// Get pending messages count
+pub fn pending_messages_count() -> usize {
+    PENDING_MESSAGES.lock().map(|q| q.len()).unwrap_or(0)
+}
+
+/// Peek at pending messages without removing them
+pub fn peek_pending_messages() -> Vec<PendingUserMessage> {
+    PENDING_MESSAGES
+        .lock()
+        .map(|q| q.clone())
+        .unwrap_or_default()
 }
