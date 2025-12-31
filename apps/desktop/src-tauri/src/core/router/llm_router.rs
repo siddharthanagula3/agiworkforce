@@ -207,7 +207,7 @@ impl LLMRouter {
         let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
 
         let mut provider = if is_budget_plan {
-            Provider::Google // Gemini Flash is cheapest at $0.1/$0.4
+            Provider::DeepSeek // DeepSeek V3 is cheapest at $0.028/$0.42
         } else {
             Provider::OpenAI
         };
@@ -435,7 +435,20 @@ impl LLMRouter {
         }
 
         // If user prefers cloud credits and ManagedCloud is available, prioritize it
-        if preferences.prefer_cloud_credits && self.has_provider(Provider::ManagedCloud) {
+        // BUT skip this if we are using an Auto strategy, as the strategy itself will handle
+        // ManagedCloud selection with better model specificity (e.g. AutoEconomy -> deepseek-v3)
+        let is_auto_strategy = matches!(
+            preferences.strategy,
+            RoutingStrategy::Auto
+                | RoutingStrategy::AutoEconomy
+                | RoutingStrategy::AutoBalanced
+                | RoutingStrategy::AutoPremium
+        );
+
+        if preferences.prefer_cloud_credits
+            && self.has_provider(Provider::ManagedCloud)
+            && !is_auto_strategy
+        {
             let task_type = classify_request(request);
             order.push(RouteCandidate {
                 provider: Provider::ManagedCloud,
@@ -831,8 +844,16 @@ impl LLMRouter {
                 },
             ],
             RoutingStrategy::Auto => {
-                // Legacy Auto - maps to AutoBalanced for backward compatibility
-                self.strategy_order(task, RoutingStrategy::AutoBalanced, plan_tier)
+                // Auto maps to different strategies based on plan tier
+                let strategy =
+                    if matches!(plan_tier, Some("free") | Some("hobby") | Some("standard")) {
+                        RoutingStrategy::AutoEconomy
+                    } else if matches!(plan_tier, Some("pro") | Some("professional")) {
+                        RoutingStrategy::AutoBalanced
+                    } else {
+                        RoutingStrategy::AutoPremium
+                    };
+                self.strategy_order(task, strategy, plan_tier)
             }
             RoutingStrategy::AutoEconomy => {
                 // AutoEconomy: Cost-optimized routing - Best value models ranked by cost efficiency
@@ -840,6 +861,11 @@ impl LLMRouter {
                 match task {
                     TaskCategory::Simple => {
                         vec![
+                            RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                reason: "auto-economy-best-value-cloud",
+                            },
                             RouteCandidate {
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME (DeepSeek V3.2)
@@ -851,9 +877,19 @@ impl LLMRouter {
                                 reason: "auto-economy-best-chat-value",
                             },
                             RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "gpt-5-nano".to_string(), // Managed Cloud fallback
+                                reason: "auto-economy-fast-cloud",
+                            },
+                            RouteCandidate {
                                 provider: Provider::OpenAI,
                                 model: "gpt-5-nano".to_string(), // 2,667 Elo/$, $0.45/1M
                                 reason: "auto-economy-fast",
+                            },
+                            RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "grok-4.1-fast".to_string(), // Managed Cloud option
+                                reason: "auto-economy-xai-cloud",
                             },
                             RouteCandidate {
                                 provider: Provider::XAI,
@@ -875,6 +911,11 @@ impl LLMRouter {
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                reason: "auto-economy-best-value-cloud",
+                            },
+                            RouteCandidate {
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME
                                 reason: "auto-economy-best-value",
@@ -883,6 +924,11 @@ impl LLMRouter {
                                 provider: Provider::Google,
                                 model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$
                                 reason: "auto-economy",
+                            },
+                            RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "grok-4.1-fast-reasoning".to_string(), // Managed Cloud Reasoning
+                                reason: "auto-economy-xai-reasoning-cloud",
                             },
                             RouteCandidate {
                                 provider: Provider::XAI,
@@ -914,9 +960,19 @@ impl LLMRouter {
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                reason: "auto-economy-deepseek-cloud",
+                            },
+                            RouteCandidate {
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M
                                 reason: "auto-economy-deepseek",
+                            },
+                            RouteCandidate {
+                                provider: Provider::ManagedCloud,
+                                model: "gpt-5-nano".to_string(), // Managed Cloud fallback
+                                reason: "auto-economy-fast-cloud",
                             },
                             RouteCandidate {
                                 provider: Provider::OpenAI,
