@@ -452,7 +452,7 @@ pub async fn chat_send_message(
     let model = request
         .model_override
         .or(request.model.clone())
-        .unwrap_or_else(|| "gpt-5-mini".to_string());
+        .unwrap_or_else(|| "gpt-5-nano".to_string());
 
     let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
         intents: meta.intents.clone(),

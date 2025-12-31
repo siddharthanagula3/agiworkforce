@@ -45,7 +45,7 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
   hobby: [
     // Ultra-cheap speed models (December 2025)
     'gpt-5-nano', // $0.05/$0.40 - cheapest OpenAI
-    'gpt-5-mini', // $0.25/$2.00 - good balance
+    'gpt-5-nano', // $0.25/$2.00 - good balance
     'gemini-2-flash', // $0.10/$0.40 - very cheap
     'gemini-3-flash', // $0.10/$0.40 - essentially free
     'deepseek-v3', // $0.028/$0.42 - ultra cheap
@@ -60,7 +60,7 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
   pro: [
     // All Speed tier models
     'gpt-5-nano',
-    'gpt-5-mini',
+    'gpt-5-nano',
     'gemini-2-flash',
     'gemini-3-flash',
     'deepseek-v3',
@@ -84,7 +84,7 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
   max: [
     // All Balanced tier models
     'gpt-5-nano',
-    'gpt-5-mini',
+    'gpt-5-nano',
     'gemini-2-flash',
     'gemini-3-flash',
     'deepseek-v3',
@@ -117,7 +117,7 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
   enterprise: [
     // All Reasoning tier models
     'gpt-5-nano',
-    'gpt-5-mini',
+    'gpt-5-nano',
     'gemini-2-flash',
     'gemini-3-flash',
     'deepseek-v3',
@@ -178,7 +178,7 @@ export const PLAN_DEFAULT_MODELS: Record<PlanTier, Record<string, string>> = {
 
   // BALANCED TIER: Good balance defaults
   pro: {
-    openai: 'gpt-5-mini', // $0.25/$2.00 - better than nano
+    openai: 'gpt-5-nano', // $0.05/$0.40 - cheapest OpenAI model
     anthropic: 'claude-sonnet-4-5', // $3/$15 - best coding
     google: 'gemini-3-pro', // $1.50/$6 - good reasoning
     ollama: 'llama4-maverick',
@@ -236,7 +236,7 @@ export const MODEL_TIER_INFO = {
     name: 'Balanced Models',
     description: 'Best balance of speed and quality',
     models: [
-      'gpt-5-mini',
+      'gpt-5-nano',
       'claude-sonnet-4-5',
       'gemini-3-pro',
       'grok-4.1-fast',

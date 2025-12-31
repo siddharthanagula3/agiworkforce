@@ -777,7 +777,7 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-5-mini".to_string(),
+                        model: "gpt-5-nano".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -806,7 +806,7 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-5-mini".to_string(),
+                        model: "gpt-5-nano".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -814,7 +814,7 @@ impl LLMRouter {
             RoutingStrategy::LatencyOptimized => vec![
                 RouteCandidate {
                     provider: Provider::OpenAI,
-                    model: "gpt-5-mini".to_string(),
+                    model: "gpt-5-nano".to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
@@ -832,7 +832,7 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-5-mini".to_string(),
+                        model: "gpt-5-nano".to_string(),
                         reason: "task-simple",
                     },
                     RouteCandidate {
@@ -876,7 +876,7 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-5-mini".to_string(),
+                        model: "gpt-5-nano".to_string(),
                         reason: "task-creative",
                     },
                 ],
@@ -887,9 +887,9 @@ impl LLMRouter {
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         match provider {
             Provider::OpenAI => match task {
-                TaskCategory::Simple => "gpt-5-mini".to_string(),
+                TaskCategory::Simple => "gpt-5-nano".to_string(),
                 TaskCategory::Complex => "gpt-5.2".to_string(),
-                TaskCategory::Creative => "gpt-5-mini".to_string(),
+                TaskCategory::Creative => "gpt-5-nano".to_string(),
             },
             Provider::Anthropic => match task {
                 TaskCategory::Simple => "claude-haiku-4-5".to_string(),
@@ -928,7 +928,7 @@ impl LLMRouter {
                 TaskCategory::Creative => "kimi-k2-thinking".to_string(),
             },
             Provider::ManagedCloud => match task {
-                TaskCategory::Simple => "gpt-5-mini".to_string(),
+                TaskCategory::Simple => "gpt-5-nano".to_string(),
                 TaskCategory::Complex => "gpt-5".to_string(),
                 TaskCategory::Creative => "gpt-5".to_string(),
             },
