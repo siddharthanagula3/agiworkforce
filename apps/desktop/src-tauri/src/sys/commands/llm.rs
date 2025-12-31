@@ -104,7 +104,7 @@ pub async fn llm_send_message(
     let model = request
         .model
         .clone()
-        .unwrap_or_else(|| "gpt-5-mini".to_string());
+        .unwrap_or_else(|| "gpt-5-nano".to_string());
 
     let llm_request = LLMRequest {
         messages: request.messages,

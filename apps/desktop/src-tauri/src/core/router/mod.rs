@@ -230,7 +230,7 @@ impl Provider {
 
     pub fn get_model_for_task(&self, task: TaskType) -> &'static str {
         match (self, task) {
-            (Provider::OpenAI, TaskType::FastCompletion) => "gpt-5-mini",
+            (Provider::OpenAI, TaskType::FastCompletion) => "gpt-5-nano",
             (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5-codex",
             (Provider::OpenAI, TaskType::ComplexReasoning) => "o3",
             (Provider::OpenAI, TaskType::Chat) => "gpt-5",
@@ -267,7 +267,7 @@ impl Provider {
             (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2-thinking",
             (Provider::Moonshot, _) => "kimi-k2-thinking",
 
-            (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-mini",
+            (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-nano",
             (Provider::ManagedCloud, TaskType::CodeGeneration) => "gpt-5-codex",
             (Provider::ManagedCloud, TaskType::ComplexReasoning) => "gpt-5",
             (Provider::ManagedCloud, TaskType::Chat) => "gpt-5",
