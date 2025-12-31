@@ -403,6 +403,92 @@ fn emit_preview(window: &WebviewWindow, preview: Option<DockPosition>) -> Result
     Ok(())
 }
 
+// Floating window constants
+const FLOATING_WINDOW_WIDTH: f64 = 400.0;
+const FLOATING_WINDOW_HEIGHT: f64 = 500.0;
+const FLOATING_WINDOW_LABEL: &str = "floating";
+
+/// Create or show the floating companion window
+pub fn create_floating_window(app: &tauri::AppHandle) -> Result<WebviewWindow> {
+    use tauri::WebviewWindowBuilder;
+
+    // Check if floating window already exists
+    if let Some(existing) = app.get_webview_window(FLOATING_WINDOW_LABEL) {
+        existing.show()?;
+        existing.set_focus()?;
+        return Ok(existing);
+    }
+
+    // Get primary monitor for positioning
+    let monitor = app
+        .primary_monitor()?
+        .or_else(|| app.available_monitors().ok()?.into_iter().next())
+        .context("No monitor available")?;
+
+    let scale_factor = monitor.scale_factor();
+    let monitor_size: LogicalSize<f64> = monitor.size().to_logical(scale_factor);
+    let monitor_position: LogicalPosition<f64> = monitor.position().to_logical(scale_factor);
+
+    // Position in bottom-right corner with padding
+    let padding = 20.0;
+    let x = monitor_position.x + monitor_size.width - FLOATING_WINDOW_WIDTH - padding;
+    let y = monitor_position.y + monitor_size.height - FLOATING_WINDOW_HEIGHT - padding - 50.0; // Extra for taskbar
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        FLOATING_WINDOW_LABEL,
+        tauri::WebviewUrl::App("/floating".into()),
+    )
+    .title("AGI Workforce - Quick Chat")
+    .inner_size(FLOATING_WINDOW_WIDTH, FLOATING_WINDOW_HEIGHT)
+    .position(x, y)
+    .resizable(true)
+    .decorations(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible(true)
+    .focused(true)
+    .build()
+    .context("Failed to create floating window")?;
+
+    tracing::info!("Created floating window at ({}, {})", x, y);
+
+    Ok(window)
+}
+
+/// Toggle the floating window visibility
+pub fn toggle_floating_window(app: &tauri::AppHandle) -> Result<bool> {
+    if let Some(window) = app.get_webview_window(FLOATING_WINDOW_LABEL) {
+        let is_visible = window.is_visible()?;
+        if is_visible {
+            window.hide()?;
+            Ok(false)
+        } else {
+            window.show()?;
+            window.set_focus()?;
+            Ok(true)
+        }
+    } else {
+        create_floating_window(app)?;
+        Ok(true)
+    }
+}
+
+/// Close the floating window
+pub fn close_floating_window(app: &tauri::AppHandle) -> Result<()> {
+    if let Some(window) = app.get_webview_window(FLOATING_WINDOW_LABEL) {
+        window.close()?;
+    }
+    Ok(())
+}
+
+/// Check if floating window exists and is visible
+pub fn is_floating_window_visible(app: &tauri::AppHandle) -> bool {
+    app.get_webview_window(FLOATING_WINDOW_LABEL)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
+}
+
 fn register_event_handlers(window: &WebviewWindow, app_state: &AppState) -> Result<()> {
     let window_handle = window.clone();
     let app_state_handle = app_state.clone();
