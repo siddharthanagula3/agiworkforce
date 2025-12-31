@@ -133,4 +133,40 @@ export class OpenAIProvider extends BaseLLMProvider {
       throw error;
     }
   }
+  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+    const url = `${this.baseUrl}/chat/completions`;
+
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: request.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        ...(msg.tool_calls && { tool_calls: msg.tool_calls }),
+        ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id }),
+      })),
+      stream: true,
+    };
+
+    if (request.temperature !== undefined) body.temperature = request.temperature;
+    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+    if (request.tools) body.tools = request.tools;
+    if (request.tool_choice) body.tool_choice = request.tool_choice;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body for streaming request');
+    }
+
+    return response.body;
+  }
 }

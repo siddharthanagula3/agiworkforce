@@ -205,7 +205,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       modelId === AUTO_BALANCED_ID ||
       modelId === AUTO_PREMIUM_ID
     ) {
-      void selectModel(modelId, 'openai');
+      // Use managed_cloud as the default provider container for Auto models
+      void selectModel(modelId, 'managed_cloud');
       onClose?.();
       return;
     }
@@ -228,18 +229,20 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   // Determine which auto modes to show based on plan tier
   const availableAutoModes = useMemo(() => {
     const plan = userPlanTier as string;
-    if (plan === 'hobby' || plan === 'free') {
-      return [{ id: AUTO_ECONOMY_ID, name: 'Auto Economy', description: 'Best value models' }];
+    if (plan === 'hobby' || plan === 'free' || plan === 'none') {
+      return [
+        { id: AUTO_ECONOMY_ID, name: 'Auto (Best Value)', description: 'Cost-optimized for Hobby' },
+      ];
     } else if (plan === 'pro') {
       return [
-        { id: AUTO_ECONOMY_ID, name: 'Auto Economy', description: 'Best value models' },
+        { id: AUTO_ECONOMY_ID, name: 'Auto (Best Value)', description: 'Cost-optimized' },
         { id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' },
       ];
     } else if (plan === 'max' || plan === 'enterprise') {
       return [
-        { id: AUTO_ECONOMY_ID, name: 'Auto Economy', description: 'Best value models' },
+        { id: AUTO_ECONOMY_ID, name: 'Auto (Best Value)', description: 'Cost-optimized' },
         { id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' },
-        { id: AUTO_PREMIUM_ID, name: 'Auto Premium', description: 'Best performance' },
+        { id: AUTO_PREMIUM_ID, name: 'Auto (Best Model)', description: 'Maximum performance' },
       ];
     }
     return [{ id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' }];

@@ -53,6 +53,10 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
     'gpt-5-nano', // $0.45/1M, 1200 Elo (2,667 Elo/$)
     // Rank 3: Best coding value
     'deepseek-v3', // $0.28/1M, 73.1% SWE-bench (best cost efficiency)
+    'deepseek-reasoner', // SOTA Reasoning ($0.55/2.2)
+    'deepseek-coder', // SOTA Coding
+    'managed-cloud-auto',
+    'auto-economy',
     // Rank 4: Latest Grok reasoning (cheaper than Grok 3 Mini, same price as non-reasoning)
     'grok-4.1-fast-reasoning', // $0.50/1M, ~1230 Elo, 2M context, reasoning, tool-calling (prioritized)
     'grok-4.1-fast', // $0.50/1M, ~1230 Elo, 2M context, tool-calling (non-reasoning)
@@ -72,6 +76,11 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
     'gemini-3-flash', // Best value
     'gpt-5-nano',
     'deepseek-v3',
+    'deepseek-reasoner',
+    'deepseek-coder',
+    'managed-cloud-auto',
+    'auto-economy',
+    'auto-balanced',
     'grok-3-mini',
     'claude-haiku-4-5',
     'llama4-maverick',
@@ -97,6 +106,12 @@ export const PLAN_MODEL_RESTRICTIONS: Record<PlanTier, string[]> = {
     'gemini-3-flash',
     'gpt-5-nano',
     'deepseek-v3',
+    'deepseek-reasoner',
+    'deepseek-coder',
+    'managed-cloud-auto',
+    'auto-economy',
+    'auto-balanced',
+    'auto-premium',
     'grok-3-mini',
     'claude-haiku-4-5',
     'llama4-maverick',

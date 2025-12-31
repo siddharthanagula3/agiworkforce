@@ -143,4 +143,20 @@ export class LLMProviderFactory {
 
     return providerInstance.sendRequest(requestWithCache);
   }
+  /**
+   * Send streaming request using appropriate provider
+   */
+  static async streamRequest(
+    provider: string,
+    request: LLMProviderRequest,
+    apiKey?: string,
+  ): Promise<ReadableStream> {
+    const providerInstance = this.createProvider(provider, apiKey);
+
+    if (!providerInstance) {
+      throw new Error(`Provider ${provider} not available or not configured`);
+    }
+
+    return providerInstance.streamRequest(request);
+  }
 }

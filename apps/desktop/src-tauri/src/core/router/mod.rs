@@ -212,26 +212,26 @@ impl Provider {
 
     pub fn default_model(&self) -> &'static str {
         match self {
-            Provider::OpenAI => "gpt-5",
+            Provider::OpenAI => "gpt-5.2",
             Provider::Anthropic => "claude-sonnet-4-5",
             Provider::Google => "gemini-3-pro",
             Provider::Ollama => "llama4-maverick",
-            Provider::XAI => "grok-4",
-            Provider::DeepSeek => "deepseek-chat",
-            Provider::Qwen => "qwen-max-2025-01-25",
+            Provider::XAI => "grok-4.1",
+            Provider::DeepSeek => "deepseek-v3",
+            Provider::Qwen => "qwen3-max",
             Provider::Moonshot => "kimi-k2-thinking",
-            Provider::ManagedCloud => "gpt-5", // Default to OpenAI via cloud
+            Provider::ManagedCloud => "deepseek-v3", // Default to budget king via cloud
         }
     }
 
     pub fn get_model_for_task(&self, task: TaskType) -> &'static str {
         match (self, task) {
             (Provider::OpenAI, TaskType::FastCompletion) => "gpt-5-nano",
-            (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5-codex",
+            (Provider::OpenAI, TaskType::CodeGeneration) => "gpt-5.2-codex",
             (Provider::OpenAI, TaskType::ComplexReasoning) => "o3",
-            (Provider::OpenAI, TaskType::Chat) => "gpt-5",
-            (Provider::OpenAI, TaskType::Vision) => "gpt-5-vision",
-            (Provider::OpenAI, TaskType::LongContext) => "gpt-5",
+            (Provider::OpenAI, TaskType::Chat) => "gpt-5.2",
+            (Provider::OpenAI, TaskType::Vision) => "gpt-5.2",
+            (Provider::OpenAI, TaskType::LongContext) => "gpt-5.2",
 
             (Provider::Anthropic, TaskType::FastCompletion) => "claude-haiku-4-5",
             (Provider::Anthropic, TaskType::CodeGeneration) => "claude-sonnet-4-5",
@@ -240,19 +240,21 @@ impl Provider {
 
             (Provider::Google, TaskType::FastCompletion) => "gemini-3-flash",
             (Provider::Google, TaskType::CodeGeneration) => "gemini-3-pro",
+            (Provider::Google, TaskType::ComplexReasoning) => "gemini-3-deep-think",
             (Provider::Google, TaskType::Vision) => "gemini-3-pro",
             (Provider::Google, TaskType::LongContext) => "gemini-3-pro",
             (Provider::Google, _) => "gemini-3-flash",
 
-            (Provider::XAI, TaskType::FastCompletion) => "grok-3",
-            (Provider::XAI, _) => "grok-4",
+            (Provider::XAI, TaskType::FastCompletion) => "grok-4.1-fast",
+            (Provider::XAI, TaskType::ComplexReasoning) => "grok-4.1-fast-reasoning",
+            (Provider::XAI, _) => "grok-4.1",
 
             (Provider::DeepSeek, TaskType::CodeGeneration) => "deepseek-coder",
             (Provider::DeepSeek, TaskType::ComplexReasoning) => "deepseek-reasoner",
-            (Provider::DeepSeek, _) => "deepseek-chat",
+            (Provider::DeepSeek, _) => "deepseek-v3",
 
             (Provider::Qwen, TaskType::CodeGeneration) => "qwen3-coder",
-            (Provider::Qwen, _) => "qwen-max-2025-01-25",
+            (Provider::Qwen, _) => "qwen3-max",
 
             (Provider::Ollama, TaskType::CodeGeneration) => "llama4-maverick",
             (Provider::Ollama, _) => "llama4-maverick",
@@ -261,11 +263,11 @@ impl Provider {
             (Provider::Moonshot, _) => "kimi-k2-thinking",
 
             (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-nano",
-            (Provider::ManagedCloud, TaskType::CodeGeneration) => "gpt-5-codex",
-            (Provider::ManagedCloud, TaskType::ComplexReasoning) => "gpt-5",
-            (Provider::ManagedCloud, TaskType::Chat) => "gpt-5",
-            (Provider::ManagedCloud, TaskType::Vision) => "gpt-5-vision",
-            (Provider::ManagedCloud, TaskType::LongContext) => "gpt-5",
+            (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-coder",
+            (Provider::ManagedCloud, TaskType::ComplexReasoning) => "deepseek-reasoner",
+            (Provider::ManagedCloud, TaskType::Chat) => "deepseek-v3",
+            (Provider::ManagedCloud, TaskType::Vision) => "gemini-3-flash", // Best budget vision
+            (Provider::ManagedCloud, TaskType::LongContext) => "deepseek-v3",
         }
     }
 }

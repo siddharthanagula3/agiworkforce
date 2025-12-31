@@ -437,16 +437,7 @@ pub async fn chat_send_message(
         .provider_override
         .as_deref()
         .or(request.provider.as_deref())
-        .and_then(|p| match p {
-            "openai" => Some(Provider::OpenAI),
-            "anthropic" => Some(Provider::Anthropic),
-            "google" => Some(Provider::Google),
-            "ollama" => Some(Provider::Ollama),
-            "xai" | "grok" => Some(Provider::XAI),
-            "deepseek" => Some(Provider::DeepSeek),
-            "qwen" | "alibaba" => Some(Provider::Qwen),
-            _ => None,
-        });
+        .and_then(Provider::from_string);
 
     let model = request
         .model_override
@@ -462,12 +453,27 @@ pub async fn chat_send_message(
         _ => RoutingStrategy::Auto, // Default to Auto (maps to AutoBalanced)
     };
 
+    let _billing_guard = _billing_state.0.lock().await;
+    #[cfg(feature = "billing")]
+    let plan_tier = if let Ok(service) = _billing_guard.stripe_service() {
+        if let Ok(Some(sub)) = service.get_primary_subscription() {
+            sub.plan_name.to_lowercase()
+        } else {
+            "free".to_string()
+        }
+    } else {
+        "free".to_string()
+    };
+
+    #[cfg(not(feature = "billing"))]
+    let plan_tier = "free".to_string();
+
     let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
         intents: meta.intents.clone(),
         requires_vision: meta.requires_vision,
         token_estimate: meta.token_estimate.unwrap_or(0),
         cost_priority: Default::default(),
-        plan_tier: "pro".to_string(), // Default to pro tier; can be overridden by request
+        plan_tier,
     });
 
     let preferences = RouterPreferences {
@@ -721,8 +727,73 @@ pub async fn chat_send_message(
     };
 
     if candidates.is_empty() {
+        // Fallback logic: If the requested provider (e.g. OpenAI) is not locally configured,
+        // but Managed Cloud IS available (authenticated user), redirect to Managed Cloud proxy.
+        let router = _llm_state.router.read().await;
+        if router.has_provider(Provider::ManagedCloud) {
+            let provider_name = request.provider_override.clone().or(request.provider.clone());
+            if let Some(name) = provider_name {
+                info!(
+                    "[Chat] Redirecting request for unconfigured provider '{}' to Managed Cloud",
+                    name
+                );
+
+                let fallback_candidate = crate::core::router::llm_router::RouteCandidate {
+                    provider: Provider::ManagedCloud,
+                    model: model.clone(), // Use the same model name as a hint for the cloud proxy
+                    reason: "fallback-redirect-to-managed-cloud",
+                };
+
+                let result = router.invoke_candidate(&fallback_candidate, &llm_request).await;
+                match result {
+                    Ok(outcome) => {
+                        let assistant_message = {
+                            let conn = db.connection()?;
+                            let msg = Message {
+                                id: 0,
+                                conversation_id: conversation.id,
+                                role: MessageRole::Assistant,
+                                content: outcome.response.content.clone(),
+                                tokens: outcome.response.tokens.map(|t| t as i32),
+                                cost: outcome.response.cost,
+                                provider: Some(outcome.provider.as_string().to_string()),
+                                model: Some(outcome.model.clone()),
+                                created_at: Utc::now(),
+                            };
+                            let id = repository::create_message(&conn, &msg)
+                                .map_err(|e| format!("Failed to save assistant message: {e}"))?;
+                            repository::get_message(&conn, id)
+                                .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
+                        };
+
+                        let stats = {
+                            let conn = db.connection()?;
+                            let messages = repository::list_messages(&conn, conversation.id)
+                                .map_err(|e| format!("Failed to compute stats: {e}"))?;
+                            ConversationStats {
+                                message_count: messages.len(),
+                                total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
+                                total_cost: messages.iter().filter_map(|m| m.cost).sum(),
+                            }
+                        };
+
+                        return Ok(ChatSendMessageResponse {
+                            conversation,
+                            user_message,
+                            assistant_message,
+                            stats,
+                            last_message: Some(outcome.response.content),
+                        });
+                    }
+                    Err(e) => {
+                        info!("[Chat] Managed Cloud fallback failed: {e}");
+                    }
+                }
+            }
+        }
+
         return Err(
-            "No LLM providers configured. Please add an API key in Settings > API Keys."
+            "No LLM providers configured. Please add an API key in Settings > API Keys or sign in to use Managed Cloud."
                 .to_string(),
         );
     }
