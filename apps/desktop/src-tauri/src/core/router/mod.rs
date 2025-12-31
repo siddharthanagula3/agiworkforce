@@ -174,7 +174,6 @@ pub enum Provider {
     XAI,
     DeepSeek,
     Qwen,
-    Mistral,
     Moonshot,
     ManagedCloud,
 }
@@ -190,7 +189,6 @@ impl Provider {
             Provider::XAI => "xai",
             Provider::DeepSeek => "deepseek",
             Provider::Qwen => "qwen",
-            Provider::Mistral => "mistral",
             Provider::Moonshot => "moonshot",
             Provider::ManagedCloud => "managed_cloud",
         }
@@ -206,7 +204,6 @@ impl Provider {
             "xai" | "grok" => Some(Provider::XAI),
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
-            "mistral" | "mistralai" => Some(Provider::Mistral),
             "moonshot" | "kimi" => Some(Provider::Moonshot),
             "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
             _ => None,
@@ -222,7 +219,6 @@ impl Provider {
             Provider::XAI => "grok-4",
             Provider::DeepSeek => "deepseek-chat",
             Provider::Qwen => "qwen-max-2025-01-25",
-            Provider::Mistral => "mistral-large-2",
             Provider::Moonshot => "kimi-k2-thinking",
             Provider::ManagedCloud => "gpt-5", // Default to OpenAI via cloud
         }
@@ -257,9 +253,6 @@ impl Provider {
 
             (Provider::Qwen, TaskType::CodeGeneration) => "qwen3-coder",
             (Provider::Qwen, _) => "qwen-max-2025-01-25",
-
-            (Provider::Mistral, TaskType::CodeGeneration) => "codestral-latest",
-            (Provider::Mistral, _) => "mistral-large-2",
 
             (Provider::Ollama, TaskType::CodeGeneration) => "llama4-maverick",
             (Provider::Ollama, _) => "llama4-maverick",

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
 
 const router: Router = Router();
 
@@ -46,12 +47,13 @@ const pairingCodeResponseSchema = z.object({
   qrData: z.string(),
 });
 
-router.post('/register', (req: Request, res: Response) => {
-  try {
+router.post(
+  '/register',
+  asyncHandler(async (req: Request, res: Response) => {
     const { clientId, platform, name, pushToken } = registerSchema.parse(req.body);
     const user = req.user;
     if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      throw new AppError('Unauthorized', 401);
     }
 
     const id = clientId ?? randomUUID();
@@ -69,25 +71,21 @@ router.post('/register', (req: Request, res: Response) => {
 
     devices.set(device.id, device);
 
-    return res.json({ deviceId: device.id });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+    res.json({ deviceId: device.id });
+  }),
+);
 
-router.post('/push-token', (req: Request, res: Response) => {
-  try {
+router.post(
+  '/push-token',
+  asyncHandler(async (req: Request, res: Response) => {
     const { deviceId, pushToken } = pushTokenSchema.parse(req.body);
     const device = devices.get(deviceId);
     if (!device) {
-      return res.status(404).json({ error: 'Device not found' });
+      throw new AppError('Device not found', 404);
     }
     const user = req.user;
     if (!user || device.userId !== user.userId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      throw new AppError('Forbidden', 403);
     }
 
     devices.set(deviceId, {
@@ -96,29 +94,25 @@ router.post('/push-token', (req: Request, res: Response) => {
       updatedAt: Date.now(),
     });
 
-    return res.json({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  '/pairing-code',
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
     }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
-router.post('/pairing-code', async (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+    const parseResult = pairingCodeRequestSchema.safeParse(req.body ?? {});
+    if (!parseResult.success) {
+      throw new AppError('Invalid request body', 400);
+    }
 
-  const parseResult = pairingCodeRequestSchema.safeParse(req.body ?? {});
-  if (!parseResult.success) {
-    return res.status(400).json({ error: parseResult.error.flatten() });
-  }
+    const ttlSeconds = parseResult.data.ttlSeconds;
 
-  const ttlSeconds = parseResult.data.ttlSeconds;
-
-  try {
     const response = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
       method: 'POST',
       headers: {
@@ -135,12 +129,12 @@ router.post('/pairing-code', async (req: Request, res: Response) => {
 
     if (!response.ok) {
       const text = await response.text();
-      return res.status(502).json({ error: `Failed to provision pairing: ${text}` });
+      throw new AppError(`Failed to provision pairing: ${text}`, 502);
     }
 
     const payload = pairingCodeResponseSchema.parse(await response.json());
 
-    return res.json({
+    res.json({
       code: payload.code,
       expiresAt: payload.expiresAt,
       expiresIn: payload.expiresIn,
@@ -150,16 +144,13 @@ router.post('/pairing-code', async (req: Request, res: Response) => {
         wsUrl: payload.wsUrl,
       },
     });
-  } catch (error) {
-    console.error('Failed to request pairing code from signaling server', error);
-    return res.status(500).json({ error: 'Failed to request pairing code' });
-  }
-});
+  }),
+);
 
 router.get('/', (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new AppError('Unauthorized', 401);
   }
 
   const result = Array.from(devices.values())
@@ -172,7 +163,7 @@ router.get('/', (req: Request, res: Response) => {
       updatedAt: device.updatedAt,
     }));
 
-  return res.json({ devices: result });
+  res.json({ devices: result });
 });
 
 export { router as mobileRouter };

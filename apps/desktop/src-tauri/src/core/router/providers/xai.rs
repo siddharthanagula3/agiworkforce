@@ -27,7 +27,7 @@ impl XAIProvider {
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
         let (input_cost, output_cost) = match model {
             "grok-4.1" => (5.5, 16.5),
-            "grok-4.1-fast" => (4.0, 12.0),
+            "grok-4.1-fast" | "grok-4.1-fast-reasoning" => (0.1, 0.4), // Same price for reasoning and non-reasoning
             _ => (3.0, 15.0), // Default to Grok Beta pricing or similar
         };
 

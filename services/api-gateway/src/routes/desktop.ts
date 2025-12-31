@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
 
 const router: Router = Router();
 
@@ -30,12 +31,13 @@ const commandSchema = z.object({
   payload: z.record(z.any()),
 });
 
-router.post('/register', (req: Request, res: Response) => {
-  try {
+router.post(
+  '/register',
+  asyncHandler(async (req: Request, res: Response) => {
     const { name, platform, version } = registerDesktopSchema.parse(req.body);
     const user = req.user;
     if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      throw new AppError('Unauthorized', 401);
     }
 
     const desktopId = randomUUID();
@@ -51,38 +53,33 @@ router.post('/register', (req: Request, res: Response) => {
 
     desktops.set(desktopId, desktop);
 
-    return res.json({
+    res.json({
       desktopId,
       message: 'Desktop registered successfully',
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  }),
+);
 
 router.get('/:desktopId/status', (req: Request<{ desktopId: string }>, res: Response) => {
   const { desktopId } = req.params;
   const desktop = desktops.get(desktopId);
 
   if (!desktop) {
-    return res.status(404).json({ error: 'Desktop not found' });
+    throw new AppError('Desktop not found', 404);
   }
 
   const user = req.user;
   if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new AppError('Unauthorized', 401);
   }
 
   if (desktop.userId !== user.userId) {
-    return res.status(403).json({ error: 'Unauthorized' });
+    throw new AppError('Forbidden', 403);
   }
 
   const online = Date.now() - desktop.lastSeen < 60000;
 
-  return res.json({
+  res.json({
     id: desktop.id,
     name: desktop.name,
     platform: desktop.platform,
@@ -92,44 +89,40 @@ router.get('/:desktopId/status', (req: Request<{ desktopId: string }>, res: Resp
   });
 });
 
-router.post('/:desktopId/command', (req: Request<{ desktopId: string }>, res: Response) => {
-  try {
+router.post(
+  '/:desktopId/command',
+  asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
     const { desktopId } = req.params;
     const { type, payload } = commandSchema.parse(req.body);
 
     const desktop = desktops.get(desktopId);
     if (!desktop) {
-      return res.status(404).json({ error: 'Desktop not found' });
+      throw new AppError('Desktop not found', 404);
     }
 
     const user = req.user;
     if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      throw new AppError('Unauthorized', 401);
     }
 
     if (desktop.userId !== user.userId) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      throw new AppError('Forbidden', 403);
     }
 
-    return res.json({
+    res.json({
       commandId: randomUUID(),
       status: 'queued',
       message: 'Command queued for delivery',
       type,
       payload,
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  }),
+);
 
 router.get('/', (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new AppError('Unauthorized', 401);
   }
 
   const userDesktops = Array.from(desktops.values())
@@ -143,7 +136,7 @@ router.get('/', (req: Request, res: Response) => {
       lastSeen: d.lastSeen,
     }));
 
-  return res.json({ desktops: userDesktops });
+  res.json({ desktops: userDesktops });
 });
 
 export { router as desktopRouter };

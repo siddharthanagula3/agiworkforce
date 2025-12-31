@@ -13,7 +13,11 @@ export function getSupabaseClient(): SupabaseClient {
         'Supabase client is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.',
       );
     }
-    client = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        flowType: 'pkce', // Use PKCE flow for enhanced security
+      },
+    });
   }
   return client;
 }

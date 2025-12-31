@@ -57,6 +57,9 @@ export async function proxy(request: NextRequest) {
     }
 
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        flowType: 'pkce', // Use PKCE flow for enhanced security
+      },
       cookies: {
         get(name: string) {
           return request.cookies.get(name)?.value;

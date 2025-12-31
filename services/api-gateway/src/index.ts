@@ -9,6 +9,7 @@ import { desktopRouter } from './routes/desktop';
 import { syncRouter } from './routes/sync';
 import { setupWebSocket } from './websocket';
 import { mobileRouter } from './routes/mobile';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 if (!process.env['JWT_SECRET']) {
   console.error('FATAL: JWT_SECRET environment variable is required but not set.');
@@ -22,6 +23,16 @@ if (!process.env['JWT_SECRET']) {
 const app = express();
 const port = Number(process.env['PORT'] ?? '3000');
 
+// Configure application settings
+app.set('port', port);
+app.set('json spaces', 0); // Compact JSON output for APIs
+app.disable('x-powered-by'); // Remove X-Powered-By header for security
+
+// Trust proxy if behind a reverse proxy (e.g., Nginx, load balancer)
+if (process.env['TRUST_PROXY'] === 'true') {
+  app.set('trust proxy', true);
+}
+
 const corsOrigins = (() => {
   const configured = process.env['ALLOWED_ORIGINS'];
   if (!configured) {
@@ -33,6 +44,7 @@ const corsOrigins = (() => {
     .filter(Boolean);
 })();
 
+// Security middleware - helmet provides security headers
 app.use(helmet());
 app.use(
   cors({
@@ -52,6 +64,12 @@ app.use('/api/mobile', mobileRouter);
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
+
+// 404 handler for undefined routes (must be before error handler)
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
 
 const server = createServer(app);
 

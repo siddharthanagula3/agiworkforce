@@ -10,7 +10,6 @@ export type Provider =
   | 'xai'
   | 'deepseek'
   | 'qwen'
-  | 'mistral'
   | 'moonshot'
   | 'managed_cloud';
 export type Theme = 'light' | 'dark' | 'system';
@@ -39,7 +38,6 @@ interface LLMConfig {
     xai: string;
     deepseek: string;
     qwen: string;
-    mistral: string;
     moonshot: string;
     managed_cloud: string;
   };
@@ -105,7 +103,6 @@ const defaultSettings: Pick<
       xai: '',
       deepseek: '',
       qwen: '',
-      mistral: '',
       moonshot: '',
       managed_cloud: 'auto',
     },

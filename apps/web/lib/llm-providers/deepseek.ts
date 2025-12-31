@@ -5,7 +5,15 @@ import { logger } from '@/lib/logger';
 
 export class DeepSeekProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
-    return 'https://api.deepseek.com/v1';
+    return 'https://api.deepseek.com';
+  }
+
+  protected getHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${this.apiKey}`,
+    };
   }
 
   async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
@@ -20,6 +28,8 @@ export class DeepSeekProvider extends BaseLLMProvider {
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(request.max_tokens !== undefined && { max_tokens: request.max_tokens }),
       ...(request.stream !== undefined && { stream: request.stream }),
+      // DeepSeek supports thinking mode - default to disabled
+      thinking: { type: 'disabled' },
     };
 
     try {
@@ -30,12 +40,36 @@ export class DeepSeekProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText: string;
+        let errorData: unknown;
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorText = response.statusText;
+          errorData = { status: response.status };
+        }
+
         logger.error(
-          { status: response.status, error: errorText, model: request.model },
+          {
+            status: response.status,
+            error: errorText,
+            errorData,
+            model: request.model,
+          },
           'DeepSeek API error',
         );
-        throw new Error(`DeepSeek API error: ${response.status} ${errorText}`);
+
+        // Handle specific error types
+        if (response.status === 401) {
+          throw new Error('DeepSeek API authentication failed. Please check your API key.');
+        } else if (response.status === 429) {
+          throw new Error('DeepSeek API rate limit exceeded. Please try again later.');
+        } else if (response.status >= 500) {
+          throw new Error('DeepSeek API service temporarily unavailable. Please try again later.');
+        } else {
+          throw new Error(`DeepSeek API error: ${response.status} ${errorText}`);
+        }
       }
 
       const data = await response.json();

@@ -31,7 +31,6 @@ impl TokenCounter {
             Provider::XAI => (1.0, 1.0),
             Provider::DeepSeek => (1.05, 1.05),
             Provider::Qwen => (1.0, 1.0),
-            Provider::Mistral => (1.0, 1.0),
             Provider::Moonshot => (1.0, 1.0),
             Provider::ManagedCloud => (1.0, 1.0), // ManagedCloud uses OpenAI-compatible format
         };

@@ -18,6 +18,8 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
+  // Fetch subscription data with no-store cache for dynamic data
+  // This ensures fresh data on every request (similar to getServerSideProps)
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('*')

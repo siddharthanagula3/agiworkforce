@@ -96,7 +96,6 @@ pub async fn llm_send_message(
         "xai" | "grok" => Some(Provider::XAI),
         "deepseek" => Some(Provider::DeepSeek),
         "qwen" | "alibaba" => Some(Provider::Qwen),
-        "mistral" | "mistralai" => Some(Provider::Mistral),
         "managed_cloud" | "managedcloud" | "cloud" => Some(Provider::ManagedCloud),
         _ => None,
     });
@@ -248,7 +247,6 @@ pub async fn llm_set_default_provider(
         "xai" | "grok" => Provider::XAI,
         "deepseek" => Provider::DeepSeek,
         "qwen" | "alibaba" => Provider::Qwen,
-        "mistral" | "mistralai" => Provider::Mistral,
         "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
@@ -447,7 +445,7 @@ pub async fn llm_get_available_models(
             "google" => Provider::Google,
             "xai" => Provider::XAI,
             "qwen" => Provider::Qwen,
-            "moonshot" | "mistral" => Provider::Mistral,
+            "moonshot" => Provider::Moonshot,
             _ => continue,
         };
 
@@ -493,7 +491,6 @@ pub async fn llm_check_provider_status(
         "xai" | "grok" => Provider::XAI,
         "deepseek" => Provider::DeepSeek,
         "qwen" | "alibaba" => Provider::Qwen,
-        "mistral" | "mistralai" => Provider::Mistral,
         "managed_cloud" | "managedcloud" | "cloud" => Provider::ManagedCloud,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
