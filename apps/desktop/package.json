@@ -139,7 +139,7 @@
     "tailwindcss": "^3.4.3",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "5.4.5",
-    "vite": "^5.4.21",
+    "vite": "^7.3.0",
     "vite-plugin-monaco-editor": "^1.1.0",
     "vitest": "^1.6.0"
   }
