@@ -530,12 +530,11 @@ export const UnifiedAgenticChat: React.FC<{
 
     const enrichedOptions: SendOptions = {
       ...options,
-      providerOverride: isAutoMode
-        ? undefined
-        : (options.providerOverride ??
-          routingOverrides.providerId ??
-          providerForMessage ??
-          llmConfig.defaultProvider),
+      providerOverride:
+        options.providerOverride ||
+        (isAutoMode
+          ? undefined
+          : (routingOverrides.providerId ?? providerForMessage ?? llmConfig.defaultProvider)),
       modelOverride: isAutoMode
         ? undefined
         : (options.modelOverride ??
@@ -655,7 +654,7 @@ export const UnifiedAgenticChat: React.FC<{
       let userMessage = `Error: ${errorMessage}`;
       if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
         userMessage +=
-          '\n\nYour API credentials may have expired or are invalid. Please check your API key in Settings > API Keys.';
+          '\n\nAuthentication failed. Please check your subscription status or contact support if the issue persists.';
       } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
         userMessage += "\n\nYou've hit a rate limit. Please try again in a few moments.";
       } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
@@ -668,7 +667,7 @@ export const UnifiedAgenticChat: React.FC<{
           '\n\nThe request was invalid. This may be due to unsupported content or format.';
       } else {
         userMessage +=
-          '\n\nPlease check your API configuration in Settings > API Keys and try again.';
+          '\n\nPlease check your internet connection and try again. If the issue persists, contact support.';
       }
 
       updateMessage(assistantMessageId, {

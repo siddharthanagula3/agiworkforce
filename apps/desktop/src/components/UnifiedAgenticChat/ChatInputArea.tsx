@@ -191,9 +191,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     ),
   });
 
-  const modelDisplayName =
-    selectedModel === 'auto'
-      ? 'Auto'
+  const modelDisplayName = selectedModel?.startsWith('auto')
+    ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Smart Routing)')
+    : selectedModel === 'auto'
+      ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Best Value)')
       : selectedModel
         ? (getModelMetadata(selectedModel)?.name ??
           availableModels.find((m) => m.id === selectedModel)?.name ??
@@ -536,21 +537,22 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         throw new Error('Message send was cancelled');
       }
 
-      const { account } = useAccountStore.getState();
-      const isManagedPlan = ['hobby', 'pro', 'max', 'enterprise'].includes(account?.plan || '');
+      const state = useAccountStore.getState();
+      const plan = state.account?.plan?.toLowerCase() || 'free';
+      const isManagedPlan = plan !== 'free' && plan !== 'none';
+
+      // Force managed_cloud for managed plans unless using local ollama
+      const computedProviderOverride =
+        isManagedPlan && selectedProvider !== 'ollama'
+          ? 'managed_cloud'
+          : selectedProvider || undefined;
 
       await onSend(messageContent, {
         attachments: messageAttachments,
         context: activeContext.length > 0 ? activeContext : undefined,
         focusMode: focusMode,
         modelOverride: selectedModel ? selectedModel : undefined,
-        // If in Auto mode and on a managed plan, force managed_cloud provider if no specific provider selected
-        providerOverride:
-          selectedModel === 'auto' && isManagedPlan && !selectedProvider
-            ? 'managed_cloud'
-            : selectedProvider
-              ? selectedProvider
-              : undefined,
+        providerOverride: computedProviderOverride,
       });
 
       // Only cancel editing if this send was not aborted

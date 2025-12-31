@@ -9,10 +9,11 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   deepseek: 'DeepSeek',
   qwen: 'Qwen',
   moonshot: 'Moonshot AI',
-  managed_cloud: 'Cloud (Pro)',
+  managed_cloud: 'Managed Cloud',
 };
 
 export const THINKING_MODEL_VARIANTS: Record<string, string> = {
+  'gpt-5.2': 'gpt-5.2-pro',
   'gpt-5.1': 'gpt-5.1-thinking',
   'gpt-5.1-chat-latest': 'gpt-5.1-thinking',
   'claude-sonnet-4-5': 'claude-opus-4-5',
@@ -61,7 +62,7 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
       label: 'Kimi K2 Thinking ⭐ 🧠 (Advanced Reasoning)',
     },
   ],
-  managed_cloud: [{ value: 'managed-cloud-auto', label: 'Auto (Best Model) ⭐' }],
+  managed_cloud: [{ value: 'managed-cloud-auto', label: 'Auto (Smart Routing) ⭐' }],
 };
 
 export const PROVIDERS_IN_ORDER: Provider[] = [
@@ -154,7 +155,7 @@ export const MODEL_METADATA: Record<string, ModelMetadata> = {
   // ============================================
   'managed-cloud-auto': {
     id: 'managed-cloud-auto',
-    name: 'Auto (Best Model)',
+    name: 'Auto (Best Value)',
     provider: 'managed_cloud',
     modelType: 'chat',
     contextWindow: 128_000,

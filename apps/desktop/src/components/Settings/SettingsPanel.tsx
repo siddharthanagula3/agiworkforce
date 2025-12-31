@@ -567,7 +567,8 @@ function DataPrivacyTab() {
               : '~/.local/share/agi-workforce/'}
           </code>
           <p className="text-xs text-muted-foreground mt-2">
-            Your API keys are stored securely in your system keyring, separate from the database.
+            Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely in
+            your system keyring, separate from the database.
           </p>
         </div>
 
@@ -621,7 +622,7 @@ function DataPrivacyTab() {
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-              <span>API keys are encrypted and stored in your system keyring</span>
+              <span>Integration credentials are encrypted and stored in your system keyring</span>
             </li>
           </ul>
         </div>

@@ -149,4 +149,46 @@ export class AnthropicProvider extends BaseLLMProvider {
       throw error;
     }
   }
+  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+    const url = `${this.baseUrl}/messages`;
+
+    const messages = request.messages
+      .filter((msg) => msg.role !== 'system')
+      .map((msg) => ({
+        role: msg.role === 'tool' ? 'user' : msg.role,
+        content: msg.content,
+      }));
+
+    const systemMessage = request.messages.find((msg) => msg.role === 'system');
+
+    const body: Record<string, unknown> = {
+      model: request.model,
+      max_tokens: request.max_tokens || 4096,
+      messages,
+      stream: true,
+      ...(request.temperature !== undefined && { temperature: request.temperature }),
+      ...(request.tools && { tools: request.tools }),
+    };
+
+    if (systemMessage) {
+      body.system = systemMessage.content;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body for streaming request');
+    }
+
+    return response.body;
+  }
 }

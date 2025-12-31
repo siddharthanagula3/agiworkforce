@@ -40,6 +40,7 @@ export abstract class BaseLLMProvider {
 
   abstract getDefaultBaseUrl(): string;
   abstract sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse>;
+  abstract streamRequest(request: LLMProviderRequest): Promise<ReadableStream>;
 
   protected getHeaders(): Record<string, string> {
     return {

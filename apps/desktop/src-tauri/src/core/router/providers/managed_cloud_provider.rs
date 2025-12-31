@@ -127,20 +127,69 @@ impl LLMProvider for ManagedCloudProvider {
         Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
         Box<dyn Error + Send + Sync>,
     > {
-        // For now, managed cloud doesn't support streaming
-        // Fall back to non-streaming and convert to stream
-        let response = self.send_message(request).await?;
-        Ok(Box::pin(tokio_stream::iter(vec![Ok(StreamChunk {
-            content: response.content,
-            done: true,
-            finish_reason: None,
-            model: Some(response.model),
-            usage: Some(crate::core::router::sse_parser::TokenUsage {
-                prompt_tokens: response.prompt_tokens,
-                completion_tokens: response.completion_tokens,
-                total_tokens: response.tokens,
-            }),
-        })])))
+        // Get access token from keyring
+        let token = get_access_token()
+            .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
+
+        let url = "https://agiworkforce.com/api/llm/completion";
+
+        let mut streaming_request = request.clone();
+        streaming_request.stream = true;
+
+        let res = self
+            .client
+            .post(url)
+            .bearer_auth(&token)
+            .json(&streaming_request)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+
+        if !res.status().is_success() {
+            let status = res.status().as_u16();
+            if status == 402 {
+                let error_body: Value = res.json().await.unwrap_or(Value::Null);
+                let error_code = error_body
+                    .get("code")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("CREDIT_LIMIT_REACHED");
+
+                let error_message = if error_code == "DAILY_CREDIT_LIMIT_REACHED" {
+                    let reset_hours = error_body
+                        .get("reset_in_hours")
+                        .and_then(|h| h.as_f64())
+                        .map(|h| h.ceil() as u64)
+                        .unwrap_or(24);
+                    format!(
+                        "Daily credit limit reached. You can use more credits in {} hours.",
+                        reset_hours
+                    )
+                } else {
+                    "Monthly credit limit reached. Please upgrade your plan (Pro/Max) to continue using Cloud models.".to_string()
+                };
+
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    error_message,
+                )));
+            } else if status == 401 {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "Authentication failed. Please sign in again.",
+                )));
+            } else {
+                return Err(Box::new(std::io::Error::other(format!(
+                    "Cloud provider error: {}",
+                    status
+                ))));
+            }
+        }
+
+        use crate::core::router::sse_parser::parse_sse_stream;
+        Ok(Box::pin(parse_sse_stream(
+            res,
+            crate::core::router::Provider::ManagedCloud,
+        )))
     }
 
     fn is_configured(&self) -> bool {

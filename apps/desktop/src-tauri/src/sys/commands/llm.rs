@@ -130,6 +130,51 @@ pub async fn llm_send_message(
     };
 
     if candidates.is_empty() {
+        // Fallback logic: If the requested provider (e.g. OpenAI) is not configured,
+        // but Managed Cloud IS available, redirect to Managed Cloud.
+        let router = state.router.read().await;
+        let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
+        
+        if managed_cloud_available && provider_name.is_some() {
+             let requested = provider_name.as_ref().unwrap();
+             tracing::info!(
+                "Redirecting request for unconfigured provider '{}' to Managed Cloud",
+                 requested
+             );
+             
+             // Create a fallback candidate for Managed Cloud
+             // We use "managed-cloud-auto" or pass the requested model as a hint if compatible
+             let fallback_candidate = crate::core::router::llm_router::RouteCandidate {
+                 provider: Provider::ManagedCloud,
+                 model: request.model.clone().unwrap_or_else(|| "gpt-5-nano".to_string()), 
+                 reason: "fallback-redirect-to-managed-cloud",
+             };
+             
+             // Need to drop the read lock before we can invoke (invoke might need locks internally?)
+             // Actually `invoke_candidate` takes &self, so read lock is fine if we are careful.
+             // But `candidates` variable assumes we dropped the lock? 
+             // In the original code:
+             // let candidates = { let router = state.router.read().await; router.candidates(...) };
+             // So the lock is dropped here. We need to re-acquire.
+             
+             // Since we can't easily append to `candidates` (it's immutable local var in valid scope, but empty),
+             // let's just proceed with this fallback candidate.
+             
+             let res = router.invoke_candidate(&fallback_candidate, &llm_request).await;
+             
+             match res {
+                Ok(mut outcome) => {
+                    outcome.response.cached = false;
+                    return Ok(outcome.response);
+                }
+                Err(err) => {
+                     // If fallback also fails, return the original error logic but mention the fallback attempt
+                     tracing::error!("Managed Cloud fallback failed: {}", err);
+                     // Fall through to standard error handling
+                }
+             }
+        }
+
         if let Some(name) = provider_name {
             return Err(format!(
                 "Provider '{}' is not configured. Please sign in to use Managed Cloud.",

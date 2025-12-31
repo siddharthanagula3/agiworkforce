@@ -39,12 +39,8 @@ function findCheaperFallbackModel(
     { model: 'gemini-3-flash', provider: 'google' }, // $0.075/$0.3 per 1M - Very cheap
     { model: 'gpt-5-nano', provider: 'openai' }, // $0.05/$0.4 per 1M - Cheap OpenAI
     { model: 'grok-4.1-fast', provider: 'xai' }, // $0.1/$0.4 per 1M - Fast Grok
-    { model: 'gemini-2.0-flash', provider: 'google' }, // $0.1/$0.4 per 1M
-    { model: 'grok-3-mini', provider: 'xai' }, // $0.3/$0.5 per 1M
-    { model: 'kimi-k2-thinking', provider: 'moonshot' }, // $0.3/$1.2 per 1M
     { model: 'claude-haiku-4-5', provider: 'anthropic' }, // $1/$5 per 1M - Quality option
     { model: 'qwen3-max', provider: 'qwen' }, // $0.5/$2 per 1M
-    { model: 'deepseek-chat', provider: 'deepseek' }, // $0.14/$0.56 per 1M
   ];
 
   // Try each fallback model and find the cheapest one that's cheaper than current
@@ -277,6 +273,32 @@ async function handleLLMCompletion(request: NextRequest) {
   }
 
   // Make LLM request
+  if (llmRequest.stream) {
+    try {
+      const stream = await LLMProviderFactory.streamRequest(provider, llmRequest);
+      return new NextResponse(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          provider,
+          model: llmRequest.model,
+          userId: user.id,
+        },
+        'Streaming request failed',
+      );
+      throw createError.internal(
+        `Streaming request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
   let llmResponse;
   try {
     llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
