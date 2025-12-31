@@ -102,11 +102,11 @@ pub enum RoutingStrategy {
     #[default]
     Auto, // Legacy - maps to AutoBalanced for backward compatibility
     #[serde(rename = "auto-economy")]
-    AutoEconomy,   // Cost-optimized: Best value models (Hobby plan)
+    AutoEconomy, // Cost-optimized: Best value models (Hobby plan)
     #[serde(rename = "auto-balanced")]
-    AutoBalanced,  // Quality/cost balance: Balanced models (Pro plan)
+    AutoBalanced, // Quality/cost balance: Balanced models (Pro plan)
     #[serde(rename = "auto-premium")]
-    AutoPremium,   // Performance-optimized: Best models (Max plan)
+    AutoPremium, // Performance-optimized: Best models (Max plan)
     CostOptimized,
     LatencyOptimized,
     LocalFirst,
@@ -460,10 +460,7 @@ impl LLMRouter {
         }
 
         let task_type = classify_request(request);
-        let plan_tier = preferences
-            .context
-            .as_ref()
-            .map(|c| c.plan_tier.as_str());
+        let plan_tier = preferences.context.as_ref().map(|c| c.plan_tier.as_str());
         let mut strategy_set = self.strategy_order(task_type, preferences.strategy, plan_tier);
 
         for candidate in strategy_set.drain(..) {
@@ -836,7 +833,7 @@ impl LLMRouter {
             RoutingStrategy::Auto => {
                 // Legacy Auto - maps to AutoBalanced for backward compatibility
                 self.strategy_order(task, RoutingStrategy::AutoBalanced, plan_tier)
-            },
+            }
             RoutingStrategy::AutoEconomy => {
                 // AutoEconomy: Cost-optimized routing - Best value models ranked by cost efficiency
                 // Focuses on maximum tokens per dollar (Hobby plan models)
@@ -874,7 +871,7 @@ impl LLMRouter {
                                 reason: "auto-economy-quality",
                             },
                         ]
-                    },
+                    }
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
@@ -908,7 +905,7 @@ impl LLMRouter {
                                 reason: "auto-economy",
                             },
                         ]
-                    },
+                    }
                     TaskCategory::Creative => {
                         vec![
                             RouteCandidate {
@@ -942,13 +939,13 @@ impl LLMRouter {
                                 reason: "auto-economy-xai-legacy",
                             },
                         ]
-                    },
+                    }
                 }
-            },
+            }
             RoutingStrategy::AutoBalanced => {
                 // AutoBalanced: Quality/cost balance - Balanced models (Pro plan focus)
                 // Best quality per dollar with good performance
-                // 
+                //
                 // Reasoning Model Priority (December 2025):
                 // When same provider offers reasoning and non-reasoning at same price, prioritize reasoning.
                 // Example: grok-4.1-fast-reasoning ($0.50/1M) over grok-4.1-fast ($0.50/1M)
@@ -1006,7 +1003,7 @@ impl LLMRouter {
                                 reason: "auto-balanced",
                             },
                         ]
-                    },
+                    }
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
@@ -1055,7 +1052,7 @@ impl LLMRouter {
                                 reason: "auto-balanced-deepseek",
                             },
                         ]
-                    },
+                    }
                     TaskCategory::Creative => {
                         vec![
                             RouteCandidate {
@@ -1099,13 +1096,13 @@ impl LLMRouter {
                                 reason: "auto-balanced-xai",
                             },
                         ]
-                    },
+                    }
                 }
-            },
+            }
             RoutingStrategy::AutoPremium => {
                 // AutoPremium: Performance-optimized - Best models regardless of cost (Max plan focus)
                 // Focuses on highest quality and performance
-                // 
+                //
                 // Reasoning Model Priority (December 2025):
                 // When same provider offers reasoning and non-reasoning at same price, prioritize reasoning.
                 // Example: grok-4.1-fast-reasoning ($0.50/1M) over grok-4.1-fast ($0.50/1M)
@@ -1163,7 +1160,7 @@ impl LLMRouter {
                                 reason: "auto-premium-deepseek",
                             },
                         ]
-                    },
+                    }
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
@@ -1217,7 +1214,7 @@ impl LLMRouter {
                                 reason: "auto-premium-deepseek",
                             },
                         ]
-                    },
+                    }
                     TaskCategory::Creative => {
                         vec![
                             RouteCandidate {
@@ -1261,21 +1258,21 @@ impl LLMRouter {
                                 reason: "auto-premium-xai",
                             },
                         ]
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 
     /// Default model selection for each provider and task category.
-    /// 
+    ///
     /// **Reasoning Model Priority (December 2025):**
     /// When a provider offers both reasoning and non-reasoning variants at the same price,
     /// we prioritize the reasoning variant to get better capabilities without additional cost.
-    /// 
+    ///
     /// **Confirmed Same-Price Reasoning Variants (December 2025):**
     /// - **xAI**: `grok-4.1-fast-reasoning` ($0.50/1M) prioritized over `grok-4.1-fast` ($0.50/1M)
-    /// 
+    ///
     /// **Other Providers Checked:**
     /// - **Qwen**: `qwen3-max` has thinking mode built-in (always reasoning, no separate non-reasoning variant)
     /// - **OpenAI**: GPT-5.2 "thinking" mode mentioned but separate model ID not confirmed at same price
