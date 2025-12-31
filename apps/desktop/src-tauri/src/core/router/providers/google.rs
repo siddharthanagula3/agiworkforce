@@ -488,8 +488,9 @@ mod tests {
         let cost = GoogleProvider::calculate_cost("gemini-2.5-pro", 1_000_000, 1_000_000);
         assert_eq!(cost, 6.25);
 
+        // gemini-1.5-flash uses default pricing: (0.5, 1.5) per 1M tokens
         let cost = GoogleProvider::calculate_cost("gemini-1.5-flash", 1_000_000, 1_000_000);
-        assert_eq!(cost, 0.375);
+        assert_eq!(cost, 2.0);
     }
 
     #[test]
