@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 function getDownloadUrls() {
   return {
-    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/api/download?platform=mac',
+    mac: process.env.NEXT_PUBLIC_DOWNLOAD_URL_MAC || '/downloads/agiworkforce.dmg',
     windows: process.env.NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS || '/api/download?platform=windows',
     linux: process.env.NEXT_PUBLIC_DOWNLOAD_URL_LINUX || '/api/download?platform=linux',
   };
