@@ -14,7 +14,6 @@ const buildTaskRouting = (defaults: {
   xai: string;
   deepseek: string;
   qwen: string;
-  mistral: string;
   moonshot: string;
 }) => ({
   search: { provider: 'openai' as Provider, model: defaults.openai },
@@ -36,7 +35,6 @@ describe('settingsStore', () => {
       xai: 'grok-4.1',
       deepseek: '',
       qwen: 'qwen3-max',
-      mistral: '',
       moonshot: 'kimi-k2-thinking',
       managed_cloud: 'auto',
     };
@@ -85,7 +83,6 @@ describe('settingsStore', () => {
       expect(state.llmConfig.defaultModels.xai).toBe('grok-4.1');
       expect(state.llmConfig.defaultModels.deepseek).toBe('');
       expect(state.llmConfig.defaultModels.qwen).toBe('qwen3-max');
-      expect(state.llmConfig.defaultModels.mistral).toBe('');
     });
   });
 
@@ -222,7 +219,6 @@ describe('settingsStore', () => {
             xai: 'grok-4.1',
             deepseek: '',
             qwen: 'qwen3-max',
-            mistral: '',
             moonshot: 'kimi-k2-thinking',
             managed_cloud: 'auto',
           },
@@ -234,7 +230,6 @@ describe('settingsStore', () => {
             xai: 'grok-4.1',
             deepseek: '',
             qwen: 'qwen3-max',
-            mistral: '',
             moonshot: 'kimi-k2-thinking',
           }),
           favoriteModels: [],
@@ -298,7 +293,6 @@ describe('settingsStore', () => {
             xai: 'grok-4.1',
             deepseek: '',
             qwen: 'qwen3-max',
-            mistral: '',
             moonshot: 'kimi-k2-thinking',
             managed_cloud: 'auto',
           },
@@ -310,7 +304,6 @@ describe('settingsStore', () => {
             xai: 'grok-4.1',
             deepseek: '',
             qwen: 'qwen3-max',
-            mistral: '',
             moonshot: 'kimi-k2-thinking',
           }),
           favoriteModels: [],
@@ -367,7 +360,6 @@ describe('settingsStore', () => {
                 xai: 'grok-beta',
                 deepseek: 'deepseek-chat',
                 qwen: 'qwen-turbo',
-                mistral: 'mistral-small',
                 moonshot: 'moonshot-v1',
                 managed_cloud: 'auto',
               },
@@ -379,7 +371,6 @@ describe('settingsStore', () => {
                 xai: 'grok-beta',
                 deepseek: 'deepseek-chat',
                 qwen: 'qwen-turbo',
-                mistral: 'mistral-small',
                 moonshot: 'kimi-k2-thinking',
               }),
               favoriteModels: [],

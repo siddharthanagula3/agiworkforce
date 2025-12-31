@@ -12,7 +12,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
-      'anthropic-version': '2025-12-01',
+      'anthropic-version': '2023-06-01', // Latest stable version per documentation
     };
   }
 
@@ -74,23 +74,73 @@ export class AnthropicProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText: string;
+        let errorData: unknown;
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorText = response.statusText;
+          errorData = { status: response.status };
+        }
+
         logger.error(
-          { status: response.status, error: errorText, model: request.model },
+          {
+            status: response.status,
+            error: errorText,
+            errorData,
+            model: request.model,
+          },
           'Anthropic API error',
         );
-        throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+
+        // Handle specific error types based on status code
+        if (response.status === 401) {
+          throw new Error('Anthropic API authentication failed. Please check your API key.');
+        } else if (response.status === 403) {
+          throw new Error(
+            'Anthropic API permission denied. Your API key may not have access to this resource.',
+          );
+        } else if (response.status === 413) {
+          throw new Error('Anthropic API request too large. Maximum request size is 32 MB.');
+        } else if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after');
+          throw new Error(
+            `Anthropic API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+          );
+        } else if (response.status === 500) {
+          throw new Error('Anthropic API internal server error. Please try again later.');
+        } else if (response.status === 529) {
+          throw new Error('Anthropic API is temporarily overloaded. Please try again later.');
+        } else {
+          throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+        }
       }
 
       const data = await response.json();
 
+      // Check stop_reason for error cases
+      const stopReason = data.stop_reason;
+      if (stopReason === 'max_tokens') {
+        logger.warn(
+          { model: request.model, stopReason },
+          'Anthropic response was truncated due to max_tokens limit',
+        );
+      } else if (stopReason === 'refusal') {
+        logger.warn({ model: request.model, stopReason }, 'Anthropic request was refused');
+      }
+
+      // Extract text content from content array
+      const textContent =
+        data.content?.find((block: { type: string }) => block.type === 'text')?.text || '';
+
       return {
-        content: data.content[0]?.text || '',
+        content: textContent,
         model: data.model || request.model,
         promptTokens: data.usage?.input_tokens || 0,
         completionTokens: data.usage?.output_tokens || 0,
         totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
-        finishReason: data.stop_reason,
+        finishReason: stopReason,
         cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
         cachedInputTokens: data.usage?.cache_read_input_tokens,
       };

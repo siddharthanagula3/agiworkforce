@@ -129,6 +129,28 @@ const DesktopShell = () => {
 
       const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
       await initializeModelStoreFromSettings();
+
+      // Sync access token to keyring if user is already authenticated
+      if (isTauri) {
+        try {
+          const { supabaseAuth } = await import('./services/supabaseAuth');
+          const authState = supabaseAuth.getState();
+          if (authState.session?.access_token) {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('account_store_access_token', {
+              access_token: authState.session.access_token,
+            });
+            if (authState.session.refresh_token) {
+              await invoke('account_store_refresh_token', {
+                refresh_token: authState.session.refresh_token,
+              });
+            }
+            await invoke('llm_ensure_managed_cloud');
+          }
+        } catch (error) {
+          console.warn('[App] Failed to sync access token on startup:', error);
+        }
+      }
     })();
 
     return () => {

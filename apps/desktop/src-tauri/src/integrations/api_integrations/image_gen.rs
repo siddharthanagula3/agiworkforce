@@ -351,7 +351,11 @@ impl ImageGenerationClient {
         use_lite: bool,
     ) -> Result<ImageGenerationResponse> {
         let default_model = if use_lite {
-            "imagen-3.1-nano"
+            // Try Nano Banana Pro first (imagen-3.2-flash-image), fallback to imagen-3.1-nano
+            request
+                .model
+                .as_deref()
+                .unwrap_or("imagen-3.2-flash-image")
         } else {
             "imagen-3.1-pro"
         };

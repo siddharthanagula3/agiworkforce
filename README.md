@@ -65,8 +65,8 @@ AGI Workforce is organized as a **monorepo** with the following structure:
 
 ### Applications
 
-- **Desktop** (`apps/desktop`) - Tauri v2 native desktop application with React 18 frontend and Rust backend
-- **Web** (`apps/web`) - Next.js 16 web platform with Supabase integration for management portal and API services
+- **Desktop** (`apps/desktop`) - Tauri v2.9 native desktop application with React 18 frontend and Rust backend
+- **Web** (`apps/web`) - Next.js 16.1.0 web platform with Supabase integration for management portal and API services
 - **Extension** (`apps/extension`) - Browser extension component for extended capabilities
 
 ### Services
@@ -81,7 +81,7 @@ AGI Workforce is organized as a **monorepo** with the following structure:
 
 ### Backend Technologies (Rust)
 
-- **Tauri 2.9** - Native desktop framework for system-level access
+- **Tauri 2.9** - Native desktop framework with powerful plugin system, multi-webview support, and enhanced IPC communication
 - **Tokio** - Async runtime for concurrent operations
 - **SQLite** - Local database for desktop app (offline-first)
 - **PostgreSQL** - Cloud database via Supabase
@@ -601,7 +601,7 @@ AGI Workforce is built as a highly optimized monorepo supporting multiple platfo
 
 **Backend Stack (Rust):**
 
-- **Tauri 2.9** — Native desktop framework with IPC bridge
+- **Tauri 2.9** — Native desktop framework with enhanced plugin system, multi-webview support, and improved IPC communication
 - **Tokio** — Async runtime for concurrent operations
 - **SQLite** (with Better-SQLite3 bindings) — Local offline-first database
 - **PostgreSQL** — Cloud database integration
@@ -613,11 +613,11 @@ AGI Workforce is built as a highly optimized monorepo supporting multiple platfo
 
 ### Web Platform
 
-- **Framework**: `Next.js 16` — Full-stack web application
-- **Database**: `Supabase (PostgreSQL)` — Cloud database with real-time capabilities
-- **Authentication**: `Supabase Auth` — Secure authentication and session management
+- **Framework**: `Next.js 16.1.0` — Full-stack web application with App Router, Server Components, and Server Actions
+- **Database**: `Supabase (PostgreSQL)` — Cloud database with real-time capabilities and SSR integration
+- **Authentication**: `Supabase Auth` — Secure authentication with cookie-based session management via `@supabase/ssr`
 - **Payments**: `Stripe` — Payment processing and subscription billing
-- **React 19** — Latest React features for web UI
+- **React 19** — Latest React features including Server Components and enhanced form handling
 
 ### API Services
 
@@ -658,6 +658,9 @@ AGI Workforce is built as a highly optimized monorepo supporting multiple platfo
 
 **January 2026 Release Highlights:**
 
+- **Next.js 16.1.0 Integration** - Latest App Router features including stable Form component, `cacheLife()` API, and enhanced React 19 compatibility
+- **Tauri 2.9 Enhanced Plugin System** - Modular plugin architecture with Swift/Kotlin bindings support and improved IPC communication
+- **Supabase SSR Integration** - Cookie-based authentication with `@supabase/ssr` for seamless Next.js integration
 - **Full Browser Automation Engine** - Complete control over web browsers with form filling, navigation, and data extraction
 - **Smart Model Routing (QuickModelSelector)** - Automatically selects the best AI model for each task to optimize cost and performance
 - **Enhanced Desktop Automation** - Improved screen capture, OCR, and input emulation for reliable desktop application control
@@ -681,9 +684,10 @@ AGI Workforce is built as a highly optimized monorepo supporting multiple platfo
 
 ### Prerequisites
 
-- **Node.js**: `v20.11.0` or higher
+- **Node.js**: `v20.11.0` or higher (LTS recommended)
 - **pnpm**: `v9.15.0` or higher
 - **Rust**: Stable toolchain (configured via `rust-toolchain.toml`)
+- **TypeScript**: `5.4.5` or higher
 
 ### Installation
 
@@ -853,6 +857,7 @@ We treat your data with the highest priority.
 
 ### Documentation & Guides
 
+- **Technical Architecture**: [Technical Architecture Guide](docs/TECHNICAL_ARCHITECTURE.md) - Framework versions, best practices, and development guidelines
 - **User Guide**: Step-by-step guides for using AGI Workforce features
 - **API Documentation**: Complete API reference for custom integrations
 - **Workspace Guides**: Detailed documentation for each workspace

@@ -30,15 +30,50 @@ export class MoonshotProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText: string;
+        let errorData: unknown;
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorText = response.statusText;
+          errorData = { status: response.status };
+        }
+
         logger.error(
-          { status: response.status, error: errorText, model: request.model },
+          {
+            status: response.status,
+            error: errorText,
+            errorData,
+            model: request.model,
+          },
           'Moonshot API error',
         );
-        throw new Error(`Moonshot API error: ${response.status} ${errorText}`);
+
+        // Handle specific error types
+        if (response.status === 401) {
+          throw new Error('Moonshot API authentication failed. Please check your API key.');
+        } else if (response.status === 429) {
+          throw new Error('Moonshot API rate limit exceeded. Please try again later.');
+        } else if (response.status >= 500) {
+          throw new Error('Moonshot API service temporarily unavailable. Please try again later.');
+        } else {
+          throw new Error(`Moonshot API error: ${response.status} ${errorText}`);
+        }
       }
 
       const data = await response.json();
+
+      // Check for error in response (Moonshot returns errors in response body)
+      if (data.error) {
+        logger.error(
+          { error: data.error, model: request.model },
+          'Moonshot API returned error in response',
+        );
+        throw new Error(
+          `Moonshot API error: ${data.error.type || 'unknown'} - ${data.error.message || JSON.stringify(data.error)}`,
+        );
+      }
 
       return {
         content: data.choices[0]?.message?.content || '',
@@ -47,6 +82,8 @@ export class MoonshotProvider extends BaseLLMProvider {
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason: data.choices[0]?.finish_reason,
+        // Moonshot supports cached_tokens
+        cachedInputTokens: data.usage?.cached_tokens,
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'Moonshot request failed');

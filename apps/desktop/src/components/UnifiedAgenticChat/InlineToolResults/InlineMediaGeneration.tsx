@@ -31,7 +31,7 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
   const data = result?.data as ImageGenerationData | undefined;
   if (!data) return null;
 
-  const { prompt = '', images = [], cost, success = true, error } = data;
+  const { prompt = '', images = [], success = true, error } = data;
 
   if (status === 'running') {
     return (
@@ -111,13 +111,6 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
           </div>
         ))}
       </div>
-
-      {/* Footer with cost */}
-      {cost !== undefined && (
-        <div className="px-3 py-2 border-t border-border/30 bg-surface-base/50 text-xs text-muted-foreground">
-          Cost: ~${cost.toFixed(3)}
-        </div>
-      )}
     </div>
   );
 };
@@ -128,7 +121,7 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
   const data = result?.data as VideoGenerationData | undefined;
   if (!data) return null;
 
-  const { prompt = '', videoUrl, duration, resolution, cost, success = true, error } = data;
+  const { prompt = '', videoUrl, duration, resolution, success = true, error } = data;
 
   if (status === 'running') {
     return (
@@ -178,7 +171,6 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
           {duration && <span>{Math.round(duration)}s</span>}
           {resolution && <span>{resolution}</span>}
         </div>
-        {cost !== undefined && <span>Cost: ~${cost.toFixed(3)}</span>}
       </div>
     </div>
   );

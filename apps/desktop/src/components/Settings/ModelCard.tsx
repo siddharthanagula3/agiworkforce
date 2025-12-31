@@ -1,17 +1,6 @@
 import React from 'react';
-import {
-  CheckCircle2,
-  Zap,
-  Eye,
-  Wrench,
-  FileJson,
-  Star,
-  TrendingUp,
-  Clock,
-  DollarSign,
-} from 'lucide-react';
+import { CheckCircle2, Zap, Eye, Wrench, FileJson, Star, TrendingUp, Clock } from 'lucide-react';
 import type { ModelMetadata } from '../../constants/llm';
-import { formatCost } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 
 interface ModelCardProps {
@@ -134,12 +123,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           <TrendingUp className="h-4 w-4 text-gray-500" />
           <span className="text-gray-700 dark:text-gray-300">
             Context: {(model.contextWindow / 1000).toFixed(0)}K tokens
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <DollarSign className="h-4 w-4 text-gray-500" />
-          <span className="text-gray-700 dark:text-gray-300">
-            {formatCost(model.inputCost, model.outputCost)}
           </span>
         </div>
       </div>

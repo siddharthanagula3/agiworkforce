@@ -415,15 +415,31 @@ export function initializeAccountStore(): () => void {
         lastSyncedAt: Date.now(),
       });
 
+      // Sync access token to Rust backend keyring for ManagedCloud provider
       // Auto-initialize ManagedCloud provider if user is authenticated
       // This ensures it's available for Pro/Max users who prefer cloud credits
       if (isTauri) {
         (async () => {
           try {
             const { invoke } = await import('@tauri-apps/api/core');
+            // Store access token in keyring so ManagedCloud provider can use it
+            if (authState.session?.access_token) {
+              await invoke('account_store_access_token', {
+                access_token: authState.session.access_token,
+              });
+            }
+            if (authState.session?.refresh_token) {
+              await invoke('account_store_refresh_token', {
+                refresh_token: authState.session.refresh_token,
+              });
+            }
+            // Now ensure ManagedCloud provider is initialized
             await invoke('llm_ensure_managed_cloud');
           } catch (error) {
-            console.warn('[Account] Failed to ensure ManagedCloud provider:', error);
+            console.warn(
+              '[Account] Failed to sync tokens and ensure ManagedCloud provider:',
+              error,
+            );
             // Non-critical - provider will be checked when needed
           }
         })();

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
 
 const router: Router = Router();
 
@@ -22,12 +23,13 @@ const syncSchema = z.object({
   deviceId: z.string(),
 });
 
-router.post('/push', (req: Request, res: Response) => {
-  try {
+router.post(
+  '/push',
+  asyncHandler(async (req: Request, res: Response) => {
     const { type, data, deviceId } = syncSchema.parse(req.body);
     const user = req.user;
     if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      throw new AppError('Unauthorized', 401);
     }
 
     const syncData: SyncData = {
@@ -42,22 +44,17 @@ router.post('/push', (req: Request, res: Response) => {
     userSyncData.push(syncData);
     syncStore.set(user.userId, userSyncData);
 
-    return res.json({
+    res.json({
       success: true,
       timestamp: syncData.timestamp,
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  }),
+);
 
 router.get('/pull', (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new AppError('Unauthorized', 401);
   }
 
   const sinceRaw = req.query['since'];
@@ -70,7 +67,7 @@ router.get('/pull', (req: Request, res: Response) => {
     .filter((d) => d.timestamp > since && (!deviceId || d.deviceId !== deviceId))
     .sort((a, b) => a.timestamp - b.timestamp);
 
-  return res.json({
+  res.json({
     data: filteredData,
     timestamp: Date.now(),
   });
@@ -79,12 +76,12 @@ router.get('/pull', (req: Request, res: Response) => {
 router.delete('/clear', (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    throw new AppError('Unauthorized', 401);
   }
 
   syncStore.delete(user.userId);
 
-  return res.json({ success: true });
+  res.json({ success: true });
 });
 
 export { router as syncRouter };

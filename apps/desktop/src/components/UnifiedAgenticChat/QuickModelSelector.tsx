@@ -28,7 +28,10 @@ type RouterSuggestion = {
   reason: string;
 };
 
-const AUTO_MODEL_ID = 'auto';
+const AUTO_MODEL_ID = 'auto'; // Legacy - maps to AutoBalanced
+const AUTO_ECONOMY_ID = 'auto-economy';
+const AUTO_BALANCED_ID = 'auto-balanced';
+const AUTO_PREMIUM_ID = 'auto-premium';
 
 const getQualityTierLabel = (tier: 'fast' | 'balanced' | 'best') => {
   const labels: Record<'fast' | 'balanced' | 'best', { text: string; className: string }> = {
@@ -196,8 +199,13 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   }, [suggestionContext, userPlanTier]);
 
   const handleModelChange = (modelId: string) => {
-    if (modelId === AUTO_MODEL_ID) {
-      void selectModel(AUTO_MODEL_ID, 'openai');
+    if (
+      modelId === AUTO_MODEL_ID ||
+      modelId === AUTO_ECONOMY_ID ||
+      modelId === AUTO_BALANCED_ID ||
+      modelId === AUTO_PREMIUM_ID
+    ) {
+      void selectModel(modelId, 'openai');
       onClose?.();
       return;
     }
@@ -211,7 +219,31 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     onClose?.();
   };
 
-  const isAutoMode = selectedModel === AUTO_MODEL_ID;
+  const isAutoMode =
+    selectedModel === AUTO_MODEL_ID ||
+    selectedModel === AUTO_ECONOMY_ID ||
+    selectedModel === AUTO_BALANCED_ID ||
+    selectedModel === AUTO_PREMIUM_ID;
+
+  // Determine which auto modes to show based on plan tier
+  const availableAutoModes = useMemo(() => {
+    const plan = userPlanTier as string;
+    if (plan === 'hobby' || plan === 'free') {
+      return [{ id: AUTO_ECONOMY_ID, name: 'Auto Economy', description: 'Best value models' }];
+    } else if (plan === 'pro') {
+      return [
+        { id: AUTO_ECONOMY_ID, name: 'Auto Economy', description: 'Best value models' },
+        { id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' },
+      ];
+    } else if (plan === 'max' || plan === 'enterprise') {
+      return [
+        { id: AUTO_ECONOMY_ID, name: 'Auto Economy', description: 'Best value models' },
+        { id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' },
+        { id: AUTO_PREMIUM_ID, name: 'Auto Premium', description: 'Best performance' },
+      ];
+    }
+    return [{ id: AUTO_BALANCED_ID, name: 'Auto Balanced', description: 'Quality/cost balance' }];
+  }, [userPlanTier]);
   const suggestedMetadata = suggestion
     ? availableModels.find((m) => m.id === suggestion.model) || getModelMetadata(suggestion.model)
     : null;
@@ -275,28 +307,34 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       {}
       <div className="mb-2 space-y-1">
         <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Smart Routing
+          Smart Routing (2026)
         </div>
-        <button
-          onClick={() => handleModelChange(AUTO_MODEL_ID)}
-          className={cn(
-            'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
-            isAutoMode
-              ? 'border-primary bg-gradient-to-r from-primary/10 to-purple-500/10 text-primary shadow-sm dark:border-primary/50 dark:from-primary/20 dark:to-purple-500/20 dark:text-primary-foreground'
-              : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <Wand2 size={14} className={isAutoMode ? 'text-primary' : 'text-gray-500'} />
-            <div className="text-left">
-              <div className="font-medium">Auto</div>
-              <div className="text-[9px] text-gray-500 dark:text-gray-400">
-                Routes to best model
+        {availableAutoModes.map((mode) => {
+          const isSelected = selectedModel === mode.id;
+          return (
+            <button
+              key={mode.id}
+              onClick={() => handleModelChange(mode.id)}
+              className={cn(
+                'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
+                isSelected
+                  ? 'border-primary bg-gradient-to-r from-primary/10 to-purple-500/10 text-primary shadow-sm dark:border-primary/50 dark:from-primary/20 dark:to-purple-500/20 dark:text-primary-foreground'
+                  : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Wand2 size={14} className={isSelected ? 'text-primary' : 'text-gray-500'} />
+                <div className="text-left">
+                  <div className="font-medium">{mode.name}</div>
+                  <div className="text-[9px] text-gray-500 dark:text-gray-400">
+                    {mode.description}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          {isAutoMode && <Check size={14} className="text-primary" />}
-        </button>
+              {isSelected && <Check size={14} className="text-primary" />}
+            </button>
+          );
+        })}
 
         {}
         {isAutoMode && suggestion && suggestedMetadata && (

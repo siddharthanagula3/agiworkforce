@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Plus, TrendingUp, DollarSign, Zap, Award } from 'lucide-react';
+import { X, Plus, TrendingUp, Zap, Award } from 'lucide-react';
 import type { ModelMetadata } from '../../constants/llm';
-import { getAllModels, formatCost, PROVIDER_LABELS } from '../../constants/llm';
+import { getAllModels, PROVIDER_LABELS } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 
 interface ModelComparisonProps {
@@ -76,8 +76,6 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
               isBest = value === Math.max(...(values as number[]));
             } else if (label.includes('Context')) {
               isBest = value === Math.max(...(values as number[]));
-            } else if (label.includes('Cost')) {
-              isBest = value === Math.min(...(values as number[]));
             }
           }
         }
@@ -206,32 +204,6 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
             {}
             <div className="mb-4">
               <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 font-semibold text-sm flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Pricing (per 1M tokens)
-              </div>
-              <ComparisonRow
-                label="Input Cost"
-                getValue={(m) => m.inputCost}
-                format={(v) => (v === 0 ? 'Free' : `$${v.toFixed(2)}`)}
-                highlight
-              />
-              <ComparisonRow
-                label="Output Cost"
-                getValue={(m) => m.outputCost}
-                format={(v) => (v === 0 ? 'Free' : `$${v.toFixed(2)}`)}
-                highlight
-              />
-              <ComparisonRow
-                label="Total (Avg)"
-                getValue={(m) => (m.inputCost + m.outputCost) / 2}
-                format={(v) => (v === 0 ? 'Free' : `$${v.toFixed(2)}`)}
-                highlight
-              />
-            </div>
-
-            {}
-            <div className="mb-4">
-              <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 font-semibold text-sm flex items-center gap-2">
                 <Zap className="h-4 w-4" />
                 Capabilities
               </div>
@@ -299,8 +271,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
                   >
                     <div className="font-medium">{model.name}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-                      {PROVIDER_LABELS[model.provider]} •{' '}
-                      {formatCost(model.inputCost, model.outputCost)}
+                      {PROVIDER_LABELS[model.provider]}
                     </div>
                   </button>
                 ))}
