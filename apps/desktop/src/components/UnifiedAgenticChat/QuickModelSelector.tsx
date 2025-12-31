@@ -102,8 +102,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     availableModels.forEach((model) => {
       // Filter models based on user's plan
       const planTier = userPlanTier as any;
-      if (!canUseModel(planTier, model.id)) {
-        return; // Skip models not available for this plan
+      if (model.provider !== 'ollama' && !canUseModel(planTier, model.id)) {
+        return; // Skip models not available for this plan, but always allow local Ollama
       }
 
       const group = groups[model.provider];
@@ -316,66 +316,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
       <hr className="my-2 border-gray-200 dark:border-gray-700" />
 
-      {/* Plan Tier Indicator with Pricing */}
-      <div className="mb-2 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-800/50">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-            {userPlanTier === 'free' && '📍 Free Plan'}
-            {userPlanTier === 'hobby' && '🎯 Hobby ($10/mo)'}
-            {userPlanTier === 'pro' && '⚡ Pro ($30/mo)'}
-            {userPlanTier === 'max' && '🚀 Max ($300/mo)'}
-            {userPlanTier === 'enterprise' && '👑 Enterprise'}
-          </p>
-          {userPlanTier === 'free' && (
-            <span className="text-[8px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-1.5 py-0.5 rounded">
-              Local only
-            </span>
-          )}
-          {userPlanTier === 'hobby' && (
-            <span className="text-[8px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded">
-              Budget
-            </span>
-          )}
-          {userPlanTier === 'pro' && (
-            <span className="text-[8px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded">
-              Mid-range
-            </span>
-          )}
-          {userPlanTier === 'max' && (
-            <span className="text-[8px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded">
-              Premium
-            </span>
-          )}
-        </div>
-
-        {userPlanTier === 'free' && (
-          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
-            Only Llama 4 local model. Upgrade to Hobby for cloud models.
-          </p>
-        )}
-        {userPlanTier === 'hobby' && (
-          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
-            ~$1/month credits. Ultra-cheap: Haiku ($1/$5), Flash ($0.1/$0.4), Llama 4 (free)
-          </p>
-        )}
-        {userPlanTier === 'pro' && (
-          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
-            $20/month credits. Mid-range: Sonnet ($3/$15), Gemini Pro ($1.5/$6), GPT-5.2-Chat
-            ($4/$12)
-          </p>
-        )}
-        {userPlanTier === 'max' && (
-          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
-            $250/month credits. ALL models: Opus ($15/$75), GPT-5.2-Pro ($10/$30), GPT-5.2 ($6/$18),
-            and more
-          </p>
-        )}
-        {userPlanTier === 'enterprise' && (
-          <p className="text-[8px] text-gray-600 dark:text-gray-400 mt-0.5">
-            Unlimited credits. All models available: Opus, GPT-5.2-Pro, and complete model library
-          </p>
-        )}
-      </div>
+      {/* Plan info removed */}
 
       {}
       {!isAutoMode && suggestion && suggestedMetadata && (

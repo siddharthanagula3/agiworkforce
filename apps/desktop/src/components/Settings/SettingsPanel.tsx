@@ -7,7 +7,6 @@ import {
   Database,
   Download,
   Github,
-  Key,
   Loader2,
   Monitor,
   Settings2,
@@ -45,7 +44,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
   const {
     llmConfig,
     windowPreferences,
-    setDefaultProvider,
     setTemperature,
     setMaxTokens,
     setDefaultModel,
@@ -101,12 +99,8 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <Tabs defaultValue="api-keys" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-7">
-                <TabsTrigger value="api-keys" className="flex items-center gap-2">
-                  <Key className="h-4 w-4" />
-                  API Keys
-                </TabsTrigger>
+            <Tabs defaultValue="llm-config" className="mt-6 px-6">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="llm-config" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
                   Models
@@ -133,47 +127,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="api-keys" className="space-y-6 pt-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">API Configuration</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    All LLM requests are securely routed through our backend servers. Your API keys
-                    are managed on our infrastructure for your safety and convenience.
-                  </p>
-
-                  <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="rounded-md bg-green-500/20 p-3">
-                        <Check className="h-6 w-6 text-green-500" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold mb-2">Secure Backend API</h4>
-                        <ul className="space-y-2 text-sm text-muted-foreground">
-                          <li className="flex items-start gap-2">
-                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                            <span>
-                              All LLM requests are processed through our secure backend servers
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                            <span>API keys are managed securely by our infrastructure</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                            <span>No API keys are stored locally on your device</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                            <span>All communications are encrypted end-to-end</span>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
               <TabsContent value="llm-config" className="space-y-6 pt-6">
                 <div>
                   <h3 className="text-lg font-semibold mb-4">LLM Configuration</h3>
@@ -184,72 +137,52 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   <div className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="defaultProvider">Default Provider</Label>
-                      <Select
-                        value={resolvedLLMConfig.defaultProvider}
-                        onValueChange={(value) => setDefaultProvider(value as Provider)}
-                      >
+                      <Select value="managed_cloud" disabled={true} onValueChange={() => {}}>
                         <SelectTrigger id="defaultProvider">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="openai">OpenAI</SelectItem>
-                          <SelectItem value="anthropic">Anthropic</SelectItem>
-                          <SelectItem value="google">Google AI</SelectItem>
-                          <SelectItem value="ollama">Ollama (Local)</SelectItem>
-                          <SelectItem value="xai">XAI (Grok)</SelectItem>
-                          <SelectItem value="deepseek">DeepSeek</SelectItem>
-                          <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
-                          <SelectItem value="mistral">Mistral AI</SelectItem>
-                          <SelectItem value="moonshot">Moonshot AI</SelectItem>
+                          <SelectItem value="managed_cloud">Managed Cloud (Vercel/Pro)</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        The system will automatically fall back to other providers if this one fails
+                        All models are managed via the cloud infrastructure (Vercel Env)
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                      {(
-                        [
-                          'openai',
-                          'anthropic',
-                          'google',
-                          'ollama',
-                          'xai',
-                          'deepseek',
-                          'qwen',
-                          'mistral',
-                          'moonshot',
-                        ] as Provider[]
-                      ).map((provider) => {
-                        const models = MODEL_PRESETS[provider];
-                        if (models.length === 0) return null;
-
-                        return (
-                          <div key={provider} className="space-y-2">
-                            <Label htmlFor={`${provider}Model`}>
-                              {PROVIDER_LABELS[provider]} Model
-                            </Label>
-                            <Select
-                              value={resolvedLLMConfig.defaultModels[provider] || ''}
-                              onValueChange={(value) => setDefaultModel(provider, value)}
-                            >
-                              <SelectTrigger id={`${provider}Model`}>
-                                <SelectValue
-                                  placeholder={`Select ${PROVIDER_LABELS[provider]} model`}
-                                />
-                              </SelectTrigger>
-                              <SelectContent>
+                    <div className="space-y-2">
+                      <Label htmlFor="managedModel">Primary Model</Label>
+                      <Select
+                        value={
+                          resolvedLLMConfig.defaultModels.managed_cloud || 'managed-cloud-auto'
+                        }
+                        onValueChange={(value) => setDefaultModel('managed_cloud', value)}
+                      >
+                        <SelectTrigger id="managedModel">
+                          <SelectValue placeholder="Select a model" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          <SelectItem value="managed-cloud-auto">Auto (Best Model)</SelectItem>
+                          {Object.entries(MODEL_PRESETS).map(([provider, models]) => {
+                            if (provider === 'managed_cloud' || provider === 'ollama') return null;
+                            return (
+                              <div key={provider}>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground opacity-50">
+                                  {PROVIDER_LABELS[provider as Provider]}
+                                </div>
                                 {models.map((model) => (
                                   <SelectItem key={model.value} value={model.value}>
                                     {model.label}
                                   </SelectItem>
                                 ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        );
-                      })}
+                              </div>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Choose which model to use via the Managed Cloud.
+                      </p>
                     </div>
 
                     <div className="space-y-3 rounded-lg border border-muted/30 p-4">
@@ -272,48 +205,46 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           ] as TaskCategory[]
                         ).map((category) => {
                           const routing = resolvedLLMConfig.taskRouting?.[category];
+                          const currentModel =
+                            routing?.model ||
+                            resolvedLLMConfig.defaultModels.managed_cloud ||
+                            'managed-cloud-auto';
+
                           return (
                             <div key={category} className="space-y-2">
                               <Label className="capitalize">{category}</Label>
-                              <Select
-                                value={routing?.provider ?? resolvedLLMConfig.defaultProvider}
-                                onValueChange={(provider) =>
-                                  setTaskRouting(
-                                    category,
-                                    provider as Provider,
-                                    routing?.model ??
-                                      resolvedLLMConfig.defaultModels[provider as Provider] ??
-                                      '',
-                                  )
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Provider" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="openai">OpenAI</SelectItem>
-                                  <SelectItem value="anthropic">Anthropic</SelectItem>
-                                  <SelectItem value="google">Google</SelectItem>
-                                  <SelectItem value="ollama">Ollama</SelectItem>
-                                  <SelectItem value="xai">xAI</SelectItem>
-                                  <SelectItem value="deepseek">DeepSeek</SelectItem>
-                                  <SelectItem value="qwen">Qwen</SelectItem>
-                                  <SelectItem value="mistral">Mistral</SelectItem>
-                                  <SelectItem value="moonshot">Moonshot AI</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Input
-                                value={routing?.model ?? ''}
-                                placeholder="Model id (e.g., gpt-5.1, claude-opus-4-5)"
-                                onChange={(event) =>
-                                  setTaskRouting(
-                                    category,
-                                    (routing?.provider ??
-                                      resolvedLLMConfig.defaultProvider) as Provider,
-                                    event.target.value,
-                                  )
-                                }
-                              />
+                              <div className="flex gap-2">
+                                {/* Hidden Provider Selector - Always Managed Cloud */}
+                                <Select
+                                  value={currentModel}
+                                  onValueChange={(value) =>
+                                    setTaskRouting(category, 'managed_cloud', value)
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select model" />
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-[300px]">
+                                    <SelectItem value="managed-cloud-auto">Auto</SelectItem>
+                                    {Object.entries(MODEL_PRESETS).map(([provider, models]) => {
+                                      if (provider === 'managed_cloud' || provider === 'ollama')
+                                        return null;
+                                      return (
+                                        <div key={provider}>
+                                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground opacity-50">
+                                            {PROVIDER_LABELS[provider as Provider]}
+                                          </div>
+                                          {models.map((model) => (
+                                            <SelectItem key={model.value} value={model.value}>
+                                              {model.label}
+                                            </SelectItem>
+                                          ))}
+                                        </div>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
                           );
                         })}

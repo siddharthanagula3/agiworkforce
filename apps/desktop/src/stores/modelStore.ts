@@ -89,6 +89,7 @@ const defaultUsageStats: UsageStats = {
     qwen: { tokens: 0, cost: 0, messages: 0 },
     mistral: { tokens: 0, cost: 0, messages: 0 },
     moonshot: { tokens: 0, cost: 0, messages: 0 },
+    managed_cloud: { tokens: 0, cost: 0, messages: 0 },
   },
   byModel: {},
 };
@@ -129,6 +130,7 @@ export const useModelStore = create<ModelState>()(
         qwen: null,
         mistral: null,
         moonshot: null,
+        managed_cloud: null,
       },
       availableModels: [],
       usageStats: null,
@@ -210,20 +212,8 @@ export const useModelStore = create<ModelState>()(
       checkAllProviders: async () => {
         set({ loading: true, error: null });
         try {
-          const providers: Provider[] = [
-            'openai',
-            'anthropic',
-            'google',
-            'ollama',
-            'xai',
-            'deepseek',
-            'qwen',
-            'mistral',
-            'moonshot',
-          ];
-
-          await Promise.all(providers.map((p) => get().checkProviderStatus(p)));
-
+          const { PROVIDERS_IN_ORDER } = await import('../constants/llm');
+          await Promise.all(PROVIDERS_IN_ORDER.map((p) => get().checkProviderStatus(p)));
           set({ loading: false });
         } catch (error) {
           console.error('Failed to check provider statuses:', error);
@@ -286,6 +276,7 @@ export const useModelStore = create<ModelState>()(
             qwen: null,
             mistral: null,
             moonshot: null,
+            managed_cloud: null,
           },
           usageStats: null,
           loading: false,
@@ -349,7 +340,15 @@ export const initializeModelStoreFromSettings = async () => {
     const defaultModel = settingsStore.llmConfig.defaultModels[defaultProvider];
 
     if (defaultProvider && defaultModel) {
-      await modelStore.selectModel(defaultModel, defaultProvider);
+      // access settings store directly to avoid circular dependency issues if possible,
+      // but here we are using the imported one.
+
+      // If default is auto/managed_cloud, ensure we set the provider correctly in the store
+      if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
+        await modelStore.selectModel('auto', 'managed_cloud');
+      } else {
+        await modelStore.selectModel(defaultModel, defaultProvider);
+      }
     }
   } catch (error) {
     console.error('Failed to initialize model store from settings:', error);

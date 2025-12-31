@@ -10,6 +10,7 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
   qwen: 'Qwen',
   mistral: 'Mistral',
   moonshot: 'Moonshot AI',
+  managed_cloud: 'Cloud (Pro)',
 };
 
 export const THINKING_MODEL_VARIANTS: Record<string, string> = {
@@ -60,6 +61,7 @@ export const MODEL_PRESETS: Record<Provider, Array<{ value: string; label: strin
       label: 'Kimi K2 Thinking ⭐ 🧠 (Advanced Reasoning)',
     },
   ],
+  managed_cloud: [{ value: 'managed-cloud-auto', label: 'Auto (Best Model) ⭐' }],
 };
 
 export const PROVIDERS_IN_ORDER: Provider[] = [
@@ -72,6 +74,7 @@ export const PROVIDERS_IN_ORDER: Provider[] = [
   'qwen',
   'mistral',
   'moonshot',
+  'managed_cloud',
 ];
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
@@ -101,6 +104,8 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'qwen3-max': 128_000,
 
   'kimi-k2-thinking': 256_000,
+
+  'managed-cloud-auto': 128_000,
 };
 
 export function getModelContextWindow(modelId: string): number {
@@ -144,6 +149,36 @@ export interface ModelMetadata {
 }
 
 export const MODEL_METADATA: Record<string, ModelMetadata> = {
+  // ============================================
+  // MANAGED CLOUD (AUTO)
+  // ============================================
+  'managed-cloud-auto': {
+    id: 'managed-cloud-auto',
+    name: 'Auto (Best Model)',
+    provider: 'managed_cloud',
+    modelType: 'chat',
+    contextWindow: 128_000,
+    inputCost: 0,
+    outputCost: 0,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      json: true,
+      thinking: true,
+      computerUse: true,
+      agentic: true,
+      imageGen: true,
+      videoGen: true,
+      search: true,
+      research: true,
+    },
+    speed: 'fast',
+    quality: 'excellent',
+    qualityTier: 'best',
+    bestFor: ['All Tasks (Managed)'],
+    released: 'December 2025',
+  },
   // ============================================
   // ULTRA-CHEAP SPEED MODELS (December 2025)
   // ============================================

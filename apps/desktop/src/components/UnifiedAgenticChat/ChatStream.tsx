@@ -5,10 +5,7 @@ import {
   Braces,
   ChevronDown,
   ChevronUp,
-  Code2,
-  FileSearch,
   FileText,
-  Globe,
   MousePointerClick,
   PanelTopOpen,
   Search,
@@ -32,57 +29,11 @@ interface ChatStreamProps {
 const card =
   'rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.35)]';
 
-// Suggestion prompts for empty state
-const SUGGESTIONS = [
-  {
-    icon: Code2,
-    label: 'Write code',
-    prompt: 'Help me write a function that',
-    color: 'text-purple-400',
-    bgColor: 'bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30',
-  },
-  {
-    icon: FileSearch,
-    label: 'Analyze files',
-    prompt: 'Read and analyze the file at',
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30',
-  },
-  {
-    icon: Terminal,
-    label: 'Run commands',
-    prompt: 'Run this terminal command:',
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30',
-  },
-  {
-    icon: Globe,
-    label: 'Search web',
-    prompt: 'Search the web for information about',
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30',
-  },
-  {
-    icon: MousePointerClick,
-    label: 'Computer use',
-    prompt: 'Take control of my computer to',
-    color: 'text-rose-400',
-    bgColor: 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30',
-  },
-  {
-    icon: Wand2,
-    label: 'Create content',
-    prompt: 'Generate a creative piece about',
-    color: 'text-cyan-400',
-    bgColor: 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30',
-  },
-];
+// Suggestion prompts removed
 
-// Keyboard shortcut hints
-const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
-const metaKey = isMac ? '⌘' : 'Ctrl';
+// Keyboard shortcuts removed
 
-export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggestionClick }) => {
+export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
   const messages = useUnifiedChatStore((state) => state.messages);
   const agentStatus = useUnifiedChatStore((state) => state.agentStatus);
   const isLoading = useUnifiedChatStore((state) => state.isLoading);
@@ -442,262 +393,148 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
           ) : null}
         </AnimatePresence>
 
-        {items.length === 0 ? (
-          <motion.div
-            className="flex-1 flex flex-col items-center justify-center py-12 px-4 relative"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            {/* Background glow effect */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gradient-radial from-purple-500/10 via-transparent to-transparent blur-3xl" />
-            </div>
+        {items.length === 0
+          ? null
+          : items.map((message, messageIndex) => {
+              const meta = message.metadata || {};
+              const kind: SidecarMode | undefined =
+                (meta.sidecarType as SidecarMode | undefined) ||
+                (meta.tool === 'terminal'
+                  ? 'terminal'
+                  : meta.tool === 'browser'
+                    ? 'browser'
+                    : meta.tool === 'code'
+                      ? 'code'
+                      : meta.tool === 'media' || meta.tool === 'video'
+                        ? 'preview'
+                        : meta.tool === 'files'
+                          ? 'code'
+                          : undefined);
 
-            {/* Logo/Icon */}
-            <motion.div
-              className="relative mb-6"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1, duration: 0.4, type: 'spring' }}
-            >
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-white/10 flex items-center justify-center shadow-xl">
-                <Sparkles className="h-8 w-8 text-purple-400" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-zinc-900 flex items-center justify-center">
-                <span className="text-[10px] font-bold text-white">AI</span>
-              </div>
-            </motion.div>
+              // Check if this message is a search match or keyboard focused
+              const isSearchMatch =
+                searchQuery && searchMatches.some((m) => m.index === messageIndex);
+              const isCurrentMatch =
+                isSearchMatch && searchMatches[currentMatchIndex]?.index === messageIndex;
+              const isKeyboardFocused = focusedMessageIndex === messageIndex;
 
-            <motion.h2
-              className="text-2xl font-semibold text-zinc-100 mb-2"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              How can I help you today?
-            </motion.h2>
-            <motion.p
-              className="text-sm text-zinc-400 mb-8 text-center max-w-md"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              I can write code, analyze files, run terminal commands, browse the web, control your
-              computer, and much more.
-            </motion.p>
-
-            {/* Suggestion grid - now 3 columns for 6 items */}
-            <motion.div
-              className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl w-full mb-8"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              {SUGGESTIONS.map((suggestion, index) => {
-                const Icon = suggestion.icon;
-                return (
-                  <motion.button
-                    key={suggestion.label}
-                    onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left group ${suggestion.bgColor} hover:scale-[1.02] active:scale-[0.98]`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 + index * 0.05 }}
-                  >
-                    <Icon className={`h-5 w-5 flex-shrink-0 ${suggestion.color}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors">
-                        {suggestion.label}
-                      </div>
-                      <div className="text-xs text-zinc-500 truncate">{suggestion.prompt}...</div>
-                    </div>
-                  </motion.button>
+              if (meta.phase === 'thinking' || meta.thinking) {
+                return renderThought(
+                  message.id,
+                  meta.thinking?.title || 'Planning task...',
+                  meta.thinking?.details ||
+                    message.content ||
+                    'The agent is reasoning about this task.',
                 );
-              })}
-            </motion.div>
+              }
 
-            {/* Keyboard shortcuts hint */}
-            <motion.div
-              className="flex flex-wrap items-center justify-center gap-4 text-xs text-zinc-500"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-            >
-              <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono">
-                  {metaKey}
-                </kbd>
-                <span>+</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono">
-                  Enter
-                </kbd>
-                <span className="text-zinc-400 ml-1">Send</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono">
-                  {metaKey}
-                </kbd>
-                <span>+</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono">
-                  /
-                </kbd>
-                <span className="text-zinc-400 ml-1">Shortcuts</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono">
-                  {metaKey}
-                </kbd>
-                <span>+</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono">
-                  K
-                </kbd>
-                <span className="text-zinc-400 ml-1">Search</span>
-              </span>
-            </motion.div>
-          </motion.div>
-        ) : (
-          items.map((message, messageIndex) => {
-            const meta = message.metadata || {};
-            const kind: SidecarMode | undefined =
-              (meta.sidecarType as SidecarMode | undefined) ||
-              (meta.tool === 'terminal'
-                ? 'terminal'
-                : meta.tool === 'browser'
-                  ? 'browser'
-                  : meta.tool === 'code'
-                    ? 'code'
-                    : meta.tool === 'media' || meta.tool === 'video'
-                      ? 'preview'
-                      : meta.tool === 'files'
-                        ? 'code'
-                        : undefined);
+              if (meta.event === 'action' && kind) {
+                return renderActionCard(
+                  message.id,
+                  meta.label || 'Action executed',
+                  meta.summary || message.content || 'Agent performed an action.',
+                  kind,
+                  { messageId: message.id, ...meta },
+                );
+              }
 
-            // Check if this message is a search match or keyboard focused
-            const isSearchMatch =
-              searchQuery && searchMatches.some((m) => m.index === messageIndex);
-            const isCurrentMatch =
-              isSearchMatch && searchMatches[currentMatchIndex]?.index === messageIndex;
-            const isKeyboardFocused = focusedMessageIndex === messageIndex;
+              if (kind === 'terminal' && meta.command) {
+                return renderActionCard(
+                  message.id,
+                  `Executed ${meta.command}`,
+                  meta.preview || 'Command finished. View output for details.',
+                  'terminal',
+                  { command: meta.command, messageId: message.id },
+                );
+              }
 
-            if (meta.phase === 'thinking' || meta.thinking) {
-              return renderThought(
-                message.id,
-                meta.thinking?.title || 'Planning task...',
-                meta.thinking?.details ||
-                  message.content ||
-                  'The agent is reasoning about this task.',
-              );
-            }
+              return (
+                <div
+                  key={message.id}
+                  data-message-index={messageIndex}
+                  className={`space-y-3 transition-all duration-200 rounded-lg ${
+                    isCurrentMatch
+                      ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-zinc-900'
+                      : isSearchMatch
+                        ? 'ring-1 ring-zinc-600'
+                        : isKeyboardFocused
+                          ? 'ring-2 ring-blue-500/50 ring-offset-2 ring-offset-zinc-900 bg-blue-500/5'
+                          : ''
+                  }`}
+                >
+                  <MessageBubble
+                    message={message}
+                    showAvatar
+                    showTimestamp={showMessageTimestamps}
+                    enableActions
+                    onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
+                    onRegenerate={() => handleRetry(message.id, message.content)}
+                    onEdit={(content) => handleRetry(message.id, content)}
+                  />
+                  {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
+                        (artifact: any, idx: number) => {
+                          // Check if this artifact has an inline renderer
+                          const toolName = artifact.toolName || artifact.type;
+                          const inlineRenderer =
+                            toolName && hasInlineRenderer(toolName)
+                              ? renderInlineToolResult(
+                                  toolName,
+                                  { data: artifact },
+                                  artifact.status || 'completed',
+                                )
+                              : null;
 
-            if (meta.event === 'action' && kind) {
-              return renderActionCard(
-                message.id,
-                meta.label || 'Action executed',
-                meta.summary || message.content || 'Agent performed an action.',
-                kind,
-                { messageId: message.id, ...meta },
-              );
-            }
+                          // If inline renderer exists, use it
+                          if (inlineRenderer) {
+                            return (
+                              <div key={idx} className="space-y-2">
+                                {inlineRenderer}
+                              </div>
+                            );
+                          }
 
-            if (kind === 'terminal' && meta.command) {
-              return renderActionCard(
-                message.id,
-                `Executed ${meta.command}`,
-                meta.preview || 'Command finished. View output for details.',
-                'terminal',
-                { command: meta.command, messageId: message.id },
-              );
-            }
-
-            return (
-              <div
-                key={message.id}
-                data-message-index={messageIndex}
-                className={`space-y-3 transition-all duration-200 rounded-lg ${
-                  isCurrentMatch
-                    ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-zinc-900'
-                    : isSearchMatch
-                      ? 'ring-1 ring-zinc-600'
-                      : isKeyboardFocused
-                        ? 'ring-2 ring-blue-500/50 ring-offset-2 ring-offset-zinc-900 bg-blue-500/5'
-                        : ''
-                }`}
-              >
-                <MessageBubble
-                  message={message}
-                  showAvatar
-                  showTimestamp={showMessageTimestamps}
-                  enableActions
-                  onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
-                  onRegenerate={() => handleRetry(message.id, message.content)}
-                  onEdit={(content) => handleRetry(message.id, content)}
-                />
-                {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
-                  <div className="grid grid-cols-1 gap-2">
-                    {(message.artifacts || (message.metadata as any)?.artifacts || []).map(
-                      (artifact: any, idx: number) => {
-                        // Check if this artifact has an inline renderer
-                        const toolName = artifact.toolName || artifact.type;
-                        const inlineRenderer =
-                          toolName && hasInlineRenderer(toolName)
-                            ? renderInlineToolResult(
-                                toolName,
-                                { data: artifact },
-                                artifact.status || 'completed',
-                              )
-                            : null;
-
-                        // If inline renderer exists, use it
-                        if (inlineRenderer) {
+                          // Fallback to clickable card
                           return (
-                            <div key={idx} className="space-y-2">
-                              {inlineRenderer}
+                            <div
+                              key={idx}
+                              onClick={() => onOpenSidecar?.('preview', { artifact })}
+                              className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
+                                  {artifact.type === 'image' ? (
+                                    <FileText className="w-4 h-4" />
+                                  ) : (
+                                    <Braces className="w-4 h-4" />
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-zinc-200">
+                                    {artifact.title || 'Generated Artifact'}
+                                  </div>
+                                  <div className="text-xs text-zinc-400">
+                                    {artifact.type === 'code' ? artifact.language : artifact.type}
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-zinc-400 group-hover:text-white"
+                              >
+                                View <PanelTopOpen className="ml-2 w-3 h-3" />
+                              </Button>
                             </div>
                           );
-                        }
-
-                        // Fallback to clickable card
-                        return (
-                          <div
-                            key={idx}
-                            onClick={() => onOpenSidecar?.('preview', { artifact })}
-                            className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
-                                {artifact.type === 'image' ? (
-                                  <FileText className="w-4 h-4" />
-                                ) : (
-                                  <Braces className="w-4 h-4" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium text-zinc-200">
-                                  {artifact.title || 'Generated Artifact'}
-                                </div>
-                                <div className="text-xs text-zinc-400">
-                                  {artifact.type === 'code' ? artifact.language : artifact.type}
-                                </div>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-zinc-400 group-hover:text-white"
-                            >
-                              View <PanelTopOpen className="ml-2 w-3 h-3" />
-                            </Button>
-                          </div>
-                        );
-                      },
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })
-        )}
+                        },
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
       </div>
 
       {/* Scroll to bottom button */}

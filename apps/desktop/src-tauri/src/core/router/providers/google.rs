@@ -144,22 +144,20 @@ impl GoogleProvider {
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
         let (input_cost, output_cost) = match model {
+            // Gemini 3 models (Latest - 2025)
             "gemini-3-pro" => (1.5, 6.0),
-            "gemini-3-flash" => (0.1, 0.4),
-            "gemini-3-deep-think" => (3.0, 12.0),
+            "gemini-3-flash" => (0.075, 0.3),
+            "gemini-3-deep-think" => (2.0, 8.0),
 
+            // Gemini 2 models
+            "gemini-2-flash" | "gemini-2.0-flash" => (0.1, 0.4),
+            "gemini-2.5-pro" | "gemini-2-5-pro" => (1.25, 5.0),
+            "gemini-2.5-flash" | "gemini-2-5-flash" => (0.075, 0.3),
+            "gemini-2.5-computer-use" => (1.25, 5.0),
             "gemini-2.0-flash" | "gemini-2-0-flash" => (0.075, 0.3),
             "gemini-2.0-pro-exp-02-05" => (1.25, 5.0),
             "gemini-exp-1206" => (1.25, 5.0),
             "gemini-2.0-flash-thinking-exp-1219" => (0.075, 0.3),
-
-            "gemini-2.5-pro" | "gemini-2-5-pro" => (1.25, 5.0),
-            "gemini-2.5-flash" | "gemini-2-5-flash" => (0.075, 0.3),
-            "gemini-2.5-computer-use" => (1.25, 5.0),
-
-            "gemini-1.5-pro" => (1.25, 5.0),
-            "gemini-1.5-flash" => (0.075, 0.3),
-            "gemini-1.0-pro" => (0.5, 1.5),
 
             _ => (0.5, 1.5),
         };
