@@ -772,12 +772,12 @@ impl LLMRouter {
                 TaskCategory::Simple => vec![
                     RouteCandidate {
                         provider: Provider::Google,
-                        model: "gemini-1.5-flash".to_string(),
+                        model: "gemini-3-flash".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-4o-mini".to_string(),
+                        model: "gpt-5-mini".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -789,24 +789,24 @@ impl LLMRouter {
                 TaskCategory::Complex => vec![
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-4o".to_string(),
+                        model: "gpt-5.2".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         provider: Provider::Anthropic,
-                        model: "claude-3-5-sonnet-20241022".to_string(),
+                        model: "claude-sonnet-4-5".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
                 TaskCategory::Creative => vec![
                     RouteCandidate {
                         provider: Provider::Google,
-                        model: "gemini-1.5-pro".to_string(),
+                        model: "gemini-3-pro".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-4o-mini".to_string(),
+                        model: "gpt-5-mini".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -814,12 +814,12 @@ impl LLMRouter {
             RoutingStrategy::LatencyOptimized => vec![
                 RouteCandidate {
                     provider: Provider::OpenAI,
-                    model: "gpt-4o-mini".to_string(),
+                    model: "gpt-5-mini".to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
                     provider: Provider::Google,
-                    model: "gemini-1.5-flash".to_string(),
+                    model: "gemini-3-flash".to_string(),
                     reason: "strategy-latency",
                 },
             ],
@@ -832,17 +832,17 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-4o-mini".to_string(),
+                        model: "gpt-5-mini".to_string(),
                         reason: "task-simple",
                     },
                     RouteCandidate {
                         provider: Provider::Anthropic,
-                        model: "claude-3-5-haiku-20241022".to_string(),
+                        model: "claude-haiku-4-5".to_string(),
                         reason: "task-simple",
                     },
                     RouteCandidate {
                         provider: Provider::Google,
-                        model: "gemini-1.5-flash".to_string(),
+                        model: "gemini-3-flash".to_string(),
                         reason: "task-simple",
                     },
                 ],
@@ -854,12 +854,12 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-4o".to_string(),
+                        model: "gpt-5.2".to_string(),
                         reason: "task-complex",
                     },
                     RouteCandidate {
                         provider: Provider::Anthropic,
-                        model: "claude-3-5-sonnet-20241022".to_string(),
+                        model: "claude-sonnet-4-5".to_string(),
                         reason: "task-complex",
                     },
                 ],
@@ -871,12 +871,12 @@ impl LLMRouter {
                     },
                     RouteCandidate {
                         provider: Provider::Google,
-                        model: "gemini-1.5-pro".to_string(),
+                        model: "gemini-3-pro".to_string(),
                         reason: "task-creative",
                     },
                     RouteCandidate {
                         provider: Provider::OpenAI,
-                        model: "gpt-4o-mini".to_string(),
+                        model: "gpt-5-mini".to_string(),
                         reason: "task-creative",
                     },
                 ],
@@ -887,21 +887,21 @@ impl LLMRouter {
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         match provider {
             Provider::OpenAI => match task {
-                TaskCategory::Simple => "gpt-4o-mini".to_string(),
-                TaskCategory::Complex => "gpt-4o".to_string(),
-                TaskCategory::Creative => "gpt-4o-mini".to_string(),
+                TaskCategory::Simple => "gpt-5-mini".to_string(),
+                TaskCategory::Complex => "gpt-5.2".to_string(),
+                TaskCategory::Creative => "gpt-5-mini".to_string(),
             },
             Provider::Anthropic => match task {
-                TaskCategory::Simple => "claude-3-5-haiku-20241022".to_string(),
-                TaskCategory::Complex => "claude-3-5-sonnet-20241022".to_string(),
-                TaskCategory::Creative => "claude-3-5-sonnet-20241022".to_string(),
+                TaskCategory::Simple => "claude-haiku-4-5".to_string(),
+                TaskCategory::Complex => "claude-sonnet-4-5".to_string(),
+                TaskCategory::Creative => "claude-sonnet-4-5".to_string(),
             },
             Provider::Google => match task {
-                TaskCategory::Simple => "gemini-1.5-flash".to_string(),
-                TaskCategory::Complex => "gemini-1.5-pro".to_string(),
-                TaskCategory::Creative => "gemini-1.5-pro".to_string(),
+                TaskCategory::Simple => "gemini-3-flash".to_string(),
+                TaskCategory::Complex => "gemini-3-pro".to_string(),
+                TaskCategory::Creative => "gemini-3-pro".to_string(),
             },
-            Provider::Ollama => "llama3.1".to_string(),
+            Provider::Ollama => "llama4-maverick".to_string(),
             Provider::XAI => match task {
                 TaskCategory::Simple => "grok-3".to_string(),
                 TaskCategory::Complex => "grok-4".to_string(),

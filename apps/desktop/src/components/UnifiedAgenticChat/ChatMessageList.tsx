@@ -226,7 +226,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       <div className="flex-1 overflow-hidden">
         <AutoSizer>
           {({ height, width }) => (
-            // @ts-expect-error: SyntaxHighlighter types incompatible
             <List
               ref={listRef}
               height={height}

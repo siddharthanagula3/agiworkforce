@@ -1,10 +1,22 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
-import { ChevronDown, Loader2, Mic, MicOff, Paperclip, Send, Square, X, Brain } from 'lucide-react';
+import {
+  ChevronDown,
+  Loader2,
+  Mic,
+  MicOff,
+  Paperclip,
+  Send,
+  Square,
+  X,
+  Brain,
+  Clock,
+} from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
-import { usePromptSuggestions } from '../../hooks/usePromptSuggestions';
+import { useApiPromptCompletion } from '../../hooks/useApiPromptCompletion';
 
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -17,12 +29,14 @@ import {
   useUnifiedChatStore,
   Attachment,
   ContextItem,
+  PendingUserMessage,
 } from '../../stores/unifiedChatStore';
 import { QuickModelSelector } from './QuickModelSelector';
-import { checkAutoModeAccess, SubscriptionGateResult } from '../../utils/subscriptionGate';
+import { SubscriptionGateResult } from '../../utils/subscriptionGate';
 import { SubscriptionLockDialog } from '../SubscriptionLockDialog';
 import { useUsageStore } from '../../stores/usageStore';
 import { useBillingStore } from '../../stores/billingStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 const PLAN_CREDIT_LIMITS = {
   hobby: { monthly: 1.0, daily: 0.3 },
@@ -110,8 +124,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   // Get autocomplete suggestions based on current input
   const autocompleteResult = getAutocomplete(content, slashAutocompleteIndex);
 
-  // Get prompt suggestions based on current input
-  const promptSuggestions = usePromptSuggestions(content);
+  // Get prompt completion setting from store
+  const promptCompletionEnabled = useSettingsStore(
+    (state) => state.chatPreferences?.promptCompletionEnabled ?? true,
+  );
+
+  // Get AI-powered prompt completion (ghost text) - similar to Gemini CLI
+  const promptCompletion = useApiPromptCompletion(content, {
+    enabled: promptCompletionEnabled,
+    onSuggestionChange: (suggestion) => {
+      // Only update inline suggestion when not showing slash autocomplete
+      if (!showSlashAutocomplete && suggestion) {
+        setInlineSuggestion(' ' + suggestion);
+      } else if (!suggestion) {
+        setInlineSuggestion('');
+      }
+    },
+  });
 
   const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
   const removeContextItem = useUnifiedChatStore((state) => state.removeContextItem);
@@ -134,6 +163,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const selectedModel = useModelStore((state) => state.selectedModel);
   const selectedProvider = useModelStore((state) => state.selectedProvider);
   const thinkingModeEnabled = useModelStore((state) => state.thinkingModeEnabled);
+  const availableModels = useModelStore((state) => state.availableModels);
   const { account: _account, isPro: _isPro } = useAccountStore();
   const prefersReducedMotion = useReducedMotion();
 
@@ -165,21 +195,31 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     selectedModel === 'auto'
       ? 'Auto'
       : selectedModel
-        ? (getModelMetadata(selectedModel)?.name ?? 'GPT-5.1 Instant')
+        ? (getModelMetadata(selectedModel)?.name ??
+          availableModels.find((m) => m.id === selectedModel)?.name ??
+          selectedModel)
         : 'GPT-5.1 Instant';
 
-  const isDisabled = disabled || isLoading || isSending || isStreaming;
+  // Allow typing while streaming - only disable when actually sending
+  const isInputDisabled = disabled || isSending;
+  // Track if we're in "queue mode" - AI is busy but user can still type
+  const isQueueMode = isLoading || isStreaming;
   const isEmptyState = messages.length === 0;
   const showStopButton = isStreaming && onStopGeneration;
 
+  // Get pending messages from store
+  const pendingMessages = useUnifiedChatStore((state) => state.pendingMessages);
+  const addPendingMessage = useUnifiedChatStore((state) => state.addPendingMessage);
+  const pendingCount = pendingMessages.length;
+
   // Sync draft content from store, but don't overwrite if user is actively editing
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: only run when draft changes, not on every content change to avoid circular updates
   useEffect(() => {
     // Only update content if draft is different AND content is empty or draft is more recent
     // This prevents overwriting user input while they're typing
     if (draftContent && draftContent !== content && content === '') {
       setContent(draftContent);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: only run when draft changes, not on every content change to avoid circular updates
   }, [draftContent]);
 
   useEffect(() => {
@@ -405,22 +445,45 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     } else {
       // Reset index when input changes
       setSlashAutocompleteIndex(-1);
-    }
-
-    // Update inline prompt suggestions (ghost text)
-    // Show suggestions only when not typing a slash command
-    if (!isSlashInput && promptSuggestions.length > 0 && promptSuggestions[0]) {
-      // Show first suggestion as inline ghost text
-      setInlineSuggestion(' ' + promptSuggestions[0].text);
-    } else {
+      // Clear ghost text when typing slash commands
       setInlineSuggestion('');
+      promptCompletion.clear();
     }
   };
 
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
-    if (!content.trim() || isDisabled || isSending) return;
+    if (!content.trim() || isInputDisabled || isSending) return;
 
+    const messageContent = content.trim();
+
+    // If AI is currently processing, queue the message instead of sending
+    if (isQueueMode) {
+      try {
+        // Queue message via Tauri backend
+        const pendingMsg = await invoke<PendingUserMessage>('chat_add_pending_message', {
+          request: {
+            content: messageContent,
+            conversation_id: null, // Will be associated with current conversation
+          },
+        });
+
+        // Also update local store for immediate UI feedback
+        addPendingMessage(pendingMsg);
+
+        // Clear input
+        setContent('');
+        setDraftContent('');
+
+        console.log('[ChatInputArea] Message queued:', pendingMsg.id);
+      } catch (error) {
+        console.error('[ChatInputArea] Failed to queue message:', error);
+        setSubmitError('Failed to queue message. Please try again.');
+      }
+      return;
+    }
+
+    // Normal send flow when AI is not busy
     // Prevent concurrent sends - abort any in-flight request
     if (sendAbortControllerRef.current) {
       sendAbortControllerRef.current.abort();
@@ -430,14 +493,23 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     // Check for Auto Mode restrictions
     if (selectedModel === 'auto') {
-      const autoModeGate = checkAutoModeAccess();
-      if (!autoModeGate.hasAccess) {
-        setLockGateResult(autoModeGate);
+      // Check access directly against account store to ensure freshness
+      const { account } = useAccountStore.getState();
+      const plan = account?.plan || 'free';
+      const hasAccess = ['hobby', 'pro', 'max', 'enterprise'].includes(plan);
+
+      if (!hasAccess) {
+        setLockGateResult({
+          hasAccess: false,
+          reason: 'Auto Mode requires a Hobby plan or higher.',
+          requiresUpgrade: true,
+          currentTier: plan,
+          currentStatus: (account as any)?.subscriptionStatus || 'none',
+        });
         setShowLockDialog(true);
         sendAbortControllerRef.current = null;
         return;
       }
-
       // Start token check (optional, but good practice for Auto Mode)
       if (monthlyLimit > 0 && monthlyCost >= monthlyLimit * 0.99) {
         setSubmitError('Insufficient token credits for Auto Mode. Please upgrade plan.');
@@ -452,7 +524,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     setIsSending(true);
     setSubmitError(null);
-    const messageContent = content;
     const messageAttachments = attachments.length > 0 ? attachments : undefined;
 
     setContent('');
@@ -465,12 +536,21 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         throw new Error('Message send was cancelled');
       }
 
+      const { account } = useAccountStore.getState();
+      const isManagedPlan = ['hobby', 'pro', 'max', 'enterprise'].includes(account?.plan || '');
+
       await onSend(messageContent, {
         attachments: messageAttachments,
         context: activeContext.length > 0 ? activeContext : undefined,
         focusMode: focusMode,
         modelOverride: selectedModel ? selectedModel : undefined,
-        providerOverride: selectedProvider ? selectedProvider : undefined,
+        // If in Auto mode and on a managed plan, force managed_cloud provider if no specific provider selected
+        providerOverride:
+          selectedModel === 'auto' && isManagedPlan && !selectedProvider
+            ? 'managed_cloud'
+            : selectedProvider
+              ? selectedProvider
+              : undefined,
       });
 
       // Only cancel editing if this send was not aborted
@@ -520,11 +600,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     // Handle inline suggestion acceptance with Tab
     if (inlineSuggestion && event.key === 'Tab' && !showSlashAutocomplete) {
       event.preventDefault();
-      // Accept the inline suggestion
-      const newContent = content + inlineSuggestion;
-      setContent(newContent);
-      setDraftContent(newContent);
-      setInlineSuggestion('');
+      // Accept the inline suggestion using the hook's accept method
+      const accepted = promptCompletion.accept();
+      if (accepted) {
+        const newContent = content + ' ' + accepted;
+        setContent(newContent);
+        setDraftContent(newContent);
+        setInlineSuggestion('');
+      }
       textareaRef.current?.focus();
       return;
     }
@@ -532,6 +615,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     // Dismiss suggestion with Escape
     if (inlineSuggestion && event.key === 'Escape') {
       event.preventDefault();
+      promptCompletion.clear();
       setInlineSuggestion('');
       return;
     }
@@ -879,7 +963,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isDisabled}
+                  disabled={isInputDisabled}
                   className={cn(
                     'p-2 rounded-lg transition-colors',
                     'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
@@ -901,7 +985,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
               <button
                 type="button"
                 onClick={toggleListening}
-                disabled={isDisabled || !isVoiceSupported}
+                disabled={isInputDisabled || !isVoiceSupported}
                 className={cn(
                   'p-2 rounded-lg transition-all duration-200',
                   isListening
@@ -923,8 +1007,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder={placeholder}
-                disabled={isDisabled}
+                placeholder={
+                  isQueueMode ? 'Type to queue a message while AI is working...' : placeholder
+                }
+                disabled={isInputDisabled}
                 rows={1}
                 className={cn(
                   'w-full resize-none bg-transparent py-2 px-2 pr-12',
@@ -1003,8 +1089,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* Inline Suggestion (Ghost Text) */}
-              {inlineSuggestion && !showSlashAutocomplete && (
+              {/* Inline Suggestion (Ghost Text) - AI-powered like Gemini CLI */}
+              {(inlineSuggestion || promptCompletion.isLoading) && !showSlashAutocomplete && (
                 <div
                   className="absolute top-2 left-2 text-[15px] leading-6 text-gray-400 dark:text-gray-600 pointer-events-none"
                   style={{
@@ -1013,7 +1099,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   }}
                 >
                   <span className="invisible">{content}</span>
-                  <span className="italic">{inlineSuggestion}</span>
+                  {promptCompletion.isLoading ? (
+                    <span className="text-gray-300 dark:text-gray-700 animate-pulse">...</span>
+                  ) : (
+                    <span className="italic">{inlineSuggestion}</span>
+                  )}
                 </div>
               )}
             </div>
@@ -1052,6 +1142,17 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 </Popover>
               </div>
 
+              {/* Pending messages indicator */}
+              {pendingCount > 0 && (
+                <div
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium"
+                  title={`${pendingCount} message(s) queued`}
+                >
+                  <Clock size={12} />
+                  <span>{pendingCount}</span>
+                </div>
+              )}
+
               {}
               {showStopButton ? (
                 <button
@@ -1070,16 +1171,24 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 <button
                   type="button"
                   onClick={() => handleSubmit()}
-                  disabled={isDisabled || !content.trim()}
+                  disabled={isInputDisabled || !content.trim()}
                   className={cn(
                     'p-2 rounded-lg transition-all duration-200',
-                    content.trim() && !isDisabled
-                      ? 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
+                    content.trim() && !isInputDisabled
+                      ? isQueueMode
+                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-md'
+                        : 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
                       : 'bg-gray-100 dark:bg-charcoal-700 text-gray-400 cursor-not-allowed',
                   )}
-                  title="Send message"
+                  title={isQueueMode ? 'Queue message' : 'Send message'}
                 >
-                  {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  {isSending ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : isQueueMode ? (
+                    <Clock size={16} />
+                  ) : (
+                    <Send size={16} />
+                  )}
                 </button>
               )}
             </div>
@@ -1128,10 +1237,14 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             )}
           </AnimatePresence>
 
-          {}
+          {/* Footer */}
           <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700/50">
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              Enter to send / Shift+Enter for newline
+              {inlineSuggestion ? (
+                <>Tab to accept suggestion / Esc to dismiss</>
+              ) : (
+                <>Enter to send / Shift+Enter for newline</>
+              )}
             </span>
 
             {showCreditUsage ? (

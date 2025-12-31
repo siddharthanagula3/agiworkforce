@@ -38,6 +38,7 @@ describe('settingsStore', () => {
       qwen: 'qwen3-max',
       mistral: '',
       moonshot: 'kimi-k2-thinking',
+      managed_cloud: 'auto',
     };
 
     useSettingsStore.setState({
@@ -67,7 +68,7 @@ describe('settingsStore', () => {
   describe('Initial State', () => {
     it('should have correct default settings', () => {
       const state = useSettingsStore.getState();
-      expect(state.llmConfig.defaultProvider).toBe('openai');
+      expect(state.llmConfig.defaultProvider).toBe('managed_cloud');
       expect(state.llmConfig.temperature).toBe(0.7);
       expect(state.llmConfig.maxTokens).toBe(4096);
       expect(state.windowPreferences.theme).toBe('system');
@@ -223,6 +224,7 @@ describe('settingsStore', () => {
             qwen: 'qwen3-max',
             mistral: '',
             moonshot: 'kimi-k2-thinking',
+            managed_cloud: 'auto',
           },
           taskRouting: buildTaskRouting({
             openai: 'gpt-5.1',
@@ -298,6 +300,7 @@ describe('settingsStore', () => {
             qwen: 'qwen3-max',
             mistral: '',
             moonshot: 'kimi-k2-thinking',
+            managed_cloud: 'auto',
           },
           taskRouting: buildTaskRouting({
             openai: 'gpt-5.1',
@@ -359,17 +362,19 @@ describe('settingsStore', () => {
               defaultModels: {
                 openai: 'gpt-5.1',
                 anthropic: 'claude-sonnet-4-5',
-                google: 'gemini-1.5-flash',
+                google: 'gemini-3-flash',
                 ollama: 'llama3',
                 xai: 'grok-beta',
                 deepseek: 'deepseek-chat',
                 qwen: 'qwen-turbo',
                 mistral: 'mistral-small',
+                moonshot: 'moonshot-v1',
+                managed_cloud: 'auto',
               },
               taskRouting: buildTaskRouting({
                 openai: 'gpt-5.1',
                 anthropic: 'claude-sonnet-4-5',
-                google: 'gemini-1.5-flash',
+                google: 'gemini-3-flash',
                 ollama: 'llama3',
                 xai: 'grok-beta',
                 deepseek: 'deepseek-chat',

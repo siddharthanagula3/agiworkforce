@@ -67,6 +67,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       qwen: [],
       mistral: [],
       moonshot: [],
+      managed_cloud: [],
     };
 
     filteredModels.forEach((model) => {

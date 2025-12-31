@@ -130,7 +130,7 @@ pub async fn vision_send_message(
     let selected_model = request
         .model
         .clone()
-        .unwrap_or_else(|| "gpt-4o".to_string());
+        .unwrap_or_else(|| "gpt-5.2".to_string());
 
     let llm_request = LLMRequest {
         messages,
@@ -258,7 +258,7 @@ pub async fn vision_extract_text(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some("gpt-4o".to_string()),
+        model: Some("gpt-5.2".to_string()),
         temperature: Some(0.0),
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),
@@ -310,7 +310,7 @@ pub async fn vision_compare_images(
             },
         ],
         provider,
-        model: Some("gpt-4o".to_string()),
+        model: Some("gpt-5.2".to_string()),
         temperature: Some(0.3),
         max_tokens: Some(1500),
         detail_level: Some("high".to_string()),
@@ -363,7 +363,7 @@ pub async fn vision_locate_element(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some("gpt-4o".to_string()),
+        model: Some("gpt-5.2".to_string()),
         temperature: Some(0.0),
         max_tokens: Some(500),
         detail_level: Some("high".to_string()),
@@ -400,7 +400,7 @@ pub async fn vision_describe_ui_elements(
             detail: Some("high".to_string()),
         }],
         provider,
-        model: Some("gpt-4o".to_string()),
+        model: Some("gpt-5.2".to_string()),
         temperature: Some(0.3),
         max_tokens: Some(2000),
         detail_level: Some("high".to_string()),

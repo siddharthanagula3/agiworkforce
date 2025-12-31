@@ -31,74 +31,91 @@ impl CostCalculator {
     pub fn new() -> Self {
         let mut pricing = HashMap::new();
 
+        // GPT-5 models (Latest - 2025)
         pricing.insert(
-            (Provider::OpenAI, "gpt-4o"),
+            (Provider::OpenAI, "gpt-5-nano"),
             Pricing {
-                input_per_million: 5.0,
-                output_per_million: 15.0,
+                input_per_million: 0.05,
+                output_per_million: 0.4,
             },
         );
         pricing.insert(
-            (Provider::OpenAI, "gpt-4o-mini"),
+            (Provider::OpenAI, "gpt-5-mini"),
             Pricing {
-                input_per_million: 0.15,
-                output_per_million: 0.60,
+                input_per_million: 0.25,
+                output_per_million: 2.0,
             },
         );
         pricing.insert(
-            (Provider::OpenAI, "gpt-4.1"),
-            Pricing {
-                input_per_million: 10.0,
-                output_per_million: 30.0,
-            },
-        );
-        pricing.insert(
-            (Provider::OpenAI, "gpt-4.1-mini"),
+            (Provider::OpenAI, "gpt-5.2"),
             Pricing {
                 input_per_million: 2.5,
                 output_per_million: 10.0,
             },
         );
-
         pricing.insert(
-            (Provider::Anthropic, "claude-3-5-sonnet-20241022"),
+            (Provider::OpenAI, "gpt-5.2-pro"),
+            Pricing {
+                input_per_million: 5.0,
+                output_per_million: 15.0,
+            },
+        );
+
+        // Claude 4.5 models (Current pricing as of 2025)
+        pricing.insert(
+            (Provider::Anthropic, "claude-sonnet-4-5"),
             Pricing {
                 input_per_million: 3.0,
                 output_per_million: 15.0,
             },
         );
         pricing.insert(
-            (Provider::Anthropic, "claude-3-5-haiku-20241022"),
+            (Provider::Anthropic, "claude-haiku-4-5"),
             Pricing {
-                input_per_million: 0.25,
-                output_per_million: 1.25,
-            },
-        );
-        pricing.insert(
-            (Provider::Anthropic, "claude-3-opus-20240229"),
-            Pricing {
-                input_per_million: 15.0,
-                output_per_million: 75.0,
-            },
-        );
-
-        pricing.insert(
-            (Provider::Google, "gemini-1.5-pro"),
-            Pricing {
-                input_per_million: 1.25,
+                input_per_million: 1.0,
                 output_per_million: 5.0,
             },
         );
         pricing.insert(
-            (Provider::Google, "gemini-1.5-flash"),
+            (Provider::Anthropic, "claude-opus-4-5"),
+            Pricing {
+                input_per_million: 5.0,
+                output_per_million: 25.0,
+            },
+        );
+
+        // Gemini 3 models (Latest - 2025)
+        pricing.insert(
+            (Provider::Google, "gemini-3-pro"),
+            Pricing {
+                input_per_million: 1.5,
+                output_per_million: 6.0,
+            },
+        );
+        pricing.insert(
+            (Provider::Google, "gemini-3-flash"),
             Pricing {
                 input_per_million: 0.075,
-                output_per_million: 0.30,
+                output_per_million: 0.3,
+            },
+        );
+        pricing.insert(
+            (Provider::Google, "gemini-3-deep-think"),
+            Pricing {
+                input_per_million: 2.0,
+                output_per_million: 8.0,
+            },
+        );
+        pricing.insert(
+            (Provider::Google, "gemini-2-flash"),
+            Pricing {
+                input_per_million: 0.1,
+                output_per_million: 0.4,
             },
         );
 
         pricing.insert(
-            (Provider::Ollama, "llama3.1"),
+            (Provider::Ollama, "llama4-maverick"),
             Pricing {
                 input_per_million: 0.0,
                 output_per_million: 0.0,
@@ -109,8 +126,8 @@ impl CostCalculator {
         provider_defaults.insert(
             Provider::OpenAI,
             Pricing {
-                input_per_million: 2.5,
-                output_per_million: 10.0,
+                input_per_million: 0.25, // GPT-5-mini default
+                output_per_million: 2.0,
             },
         );
         provider_defaults.insert(
@@ -123,8 +140,8 @@ impl CostCalculator {
         provider_defaults.insert(
             Provider::Google,
             Pricing {
-                input_per_million: 0.5,
-                output_per_million: 1.5,
+                input_per_million: 0.075, // Gemini-3-flash default
+                output_per_million: 0.3,
             },
         );
         provider_defaults.insert(

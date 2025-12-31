@@ -58,7 +58,7 @@ impl SettingsState {
         Self {
             settings: Arc::new(Mutex::new(Settings {
                 llm_config: LLMConfig {
-                    default_provider: "openai".to_string(),
+                    default_provider: "managed_cloud".to_string(),
                     temperature: 0.7,
                     max_tokens: 4096,
                     default_models: DefaultModels {

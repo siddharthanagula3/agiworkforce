@@ -30,9 +30,9 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gpt-5.1-thinking': { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 12.0 },
   'gpt-5.1-codex-max': { inputCostPer1MTokens: 4.0, outputCostPer1MTokens: 16.0 },
 
-  // Anthropic
-  'claude-sonnet-4-5': { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 15.0 },
-  'claude-haiku-4-5': { inputCostPer1MTokens: 0.25, outputCostPer1MTokens: 1.25 },
+  // Anthropic Claude 4.5 (Current pricing as of 2025)
+  'claude-sonnet-4-5': { inputCostPer1MTokens: 3.0, outputCostPer1MTokens: 15.0 }, // ≤200K tokens
+  'claude-haiku-4-5': { inputCostPer1MTokens: 1.0, outputCostPer1MTokens: 5.0 },
   'claude-opus-4-5': { inputCostPer1MTokens: 5.0, outputCostPer1MTokens: 25.0 },
 
   // Google

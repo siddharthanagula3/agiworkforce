@@ -577,7 +577,6 @@ function CodeArtifact({ artifact, isDark: _isDark }: { artifact: Artifact; isDar
   return (
     <div className="overflow-x-auto bg-gray-950">
       {}
-      {/* @ts-expect-error SyntaxHighlighter types issue */}
       <SyntaxHighlighter
         language={artifact.language || 'text'}
         style={oneDark}

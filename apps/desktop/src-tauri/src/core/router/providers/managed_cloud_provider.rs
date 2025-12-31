@@ -36,7 +36,7 @@ impl LLMProvider for ManagedCloudProvider {
         let token = get_access_token()
             .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
-        let url = "https://api.agiworkforce.com/api/llm/completion";
+        let url = "https://agiworkforce.com/api/llm/completion";
 
         let res = self
             .client

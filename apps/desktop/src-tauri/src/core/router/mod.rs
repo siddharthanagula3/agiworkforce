@@ -217,8 +217,8 @@ impl Provider {
         match self {
             Provider::OpenAI => "gpt-5",
             Provider::Anthropic => "claude-sonnet-4-5",
-            Provider::Google => "gemini-2.5-pro",
-            Provider::Ollama => "llama3.1",
+            Provider::Google => "gemini-3-pro",
+            Provider::Ollama => "llama4-maverick",
             Provider::XAI => "grok-4",
             Provider::DeepSeek => "deepseek-chat",
             Provider::Qwen => "qwen-max-2025-01-25",
@@ -239,14 +239,14 @@ impl Provider {
 
             (Provider::Anthropic, TaskType::FastCompletion) => "claude-haiku-4-5",
             (Provider::Anthropic, TaskType::CodeGeneration) => "claude-sonnet-4-5",
-            (Provider::Anthropic, TaskType::ComplexReasoning) => "claude-opus-4-1",
+            (Provider::Anthropic, TaskType::ComplexReasoning) => "claude-opus-4-5",
             (Provider::Anthropic, _) => "claude-sonnet-4-5",
 
-            (Provider::Google, TaskType::FastCompletion) => "gemini-2.5-flash",
-            (Provider::Google, TaskType::CodeGeneration) => "gemini-2.5-pro",
-            (Provider::Google, TaskType::Vision) => "gemini-2.5-computer-use",
-            (Provider::Google, TaskType::LongContext) => "gemini-2.5-pro",
-            (Provider::Google, _) => "gemini-2.5-flash",
+            (Provider::Google, TaskType::FastCompletion) => "gemini-3-flash",
+            (Provider::Google, TaskType::CodeGeneration) => "gemini-3-pro",
+            (Provider::Google, TaskType::Vision) => "gemini-3-pro",
+            (Provider::Google, TaskType::LongContext) => "gemini-3-pro",
+            (Provider::Google, _) => "gemini-3-flash",
 
             (Provider::XAI, TaskType::FastCompletion) => "grok-3",
             (Provider::XAI, _) => "grok-4",
@@ -261,8 +261,8 @@ impl Provider {
             (Provider::Mistral, TaskType::CodeGeneration) => "codestral-latest",
             (Provider::Mistral, _) => "mistral-large-2",
 
-            (Provider::Ollama, TaskType::CodeGeneration) => "codellama",
-            (Provider::Ollama, _) => "llama3.1",
+            (Provider::Ollama, TaskType::CodeGeneration) => "llama4-maverick",
+            (Provider::Ollama, _) => "llama4-maverick",
 
             (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2-thinking",
             (Provider::Moonshot, _) => "kimi-k2-thinking",
