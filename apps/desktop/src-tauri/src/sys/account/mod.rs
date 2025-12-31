@@ -244,6 +244,19 @@ pub async fn oauth_refresh(
     Ok(result)
 }
 
+/// Store access token from Supabase authentication
+/// This is called when user signs in via Supabase to sync the token to the keyring
+#[tauri::command]
+pub async fn account_store_access_token(access_token: String) -> Result<(), String> {
+    store_access_token(&access_token)
+}
+
+/// Store refresh token from Supabase authentication
+#[tauri::command]
+pub async fn account_store_refresh_token(refresh_token: String) -> Result<(), String> {
+    store_refresh_token(&refresh_token)
+}
+
 use keyring::Entry;
 
 fn get_service() -> String {

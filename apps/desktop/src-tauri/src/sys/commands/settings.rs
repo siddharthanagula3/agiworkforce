@@ -22,7 +22,6 @@ pub struct DefaultModels {
     pub xai: String,
     pub deepseek: String,
     pub qwen: String,
-    pub mistral: String,
     pub moonshot: String,
 }
 
@@ -69,7 +68,6 @@ impl SettingsState {
                         xai: "grok-4.1".to_string(),
                         deepseek: "".to_string(),
                         qwen: "qwen3-max".to_string(),
-                        mistral: "".to_string(),
                         moonshot: "kimi-k2-thinking".to_string(),
                     },
                 },

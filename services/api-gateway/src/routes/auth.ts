@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
+import { asyncHandler, AppError } from '../middleware/errorHandler';
 
 const router: Router = Router();
 
@@ -31,12 +32,13 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
-router.post('/register', async (req: Request, res: Response) => {
-  try {
+router.post(
+  '/register',
+  asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = registerSchema.parse(req.body);
 
     if (users.has(email)) {
-      return res.status(400).json({ error: 'User already exists' });
+      throw new AppError('User already exists', 400);
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -53,40 +55,36 @@ router.post('/register', async (req: Request, res: Response) => {
       expiresIn: JWT_EXPIRES_IN,
     });
 
-    return res.json({
+    res.json({
       token,
       user: {
         id: user.id,
         email: user.email,
       },
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  }),
+);
 
-router.post('/login', async (req: Request, res: Response) => {
-  try {
+router.post(
+  '/login',
+  asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = loginSchema.parse(req.body);
 
     const user = users.get(email);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      throw new AppError('Invalid credentials', 401);
     }
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      throw new AppError('Invalid credentials', 401);
     }
 
     const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
     });
 
-    return res.json({
+    res.json({
       token,
       user: {
         id: user.id,
@@ -94,26 +92,21 @@ router.post('/login', async (req: Request, res: Response) => {
         desktopId: user.desktopId,
       },
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors });
-    }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+  }),
+);
 
 router.get('/verify', (req: Request, res: Response) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
+    throw new AppError('No token provided', 401);
   }
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     const user = authenticatedUserSchema.parse(payload);
-    return res.json({ valid: true, userId: user.userId, email: user.email });
+    res.json({ valid: true, userId: user.userId, email: user.email });
   } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+    throw new AppError('Invalid token', 401);
   }
 });
 

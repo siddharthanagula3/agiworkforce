@@ -48,17 +48,83 @@ export class GoogleProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText: string;
+        let errorData: unknown;
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorText = response.statusText;
+          errorData = { status: response.status };
+        }
+
         logger.error(
-          { status: response.status, error: errorText, model: request.model },
+          {
+            status: response.status,
+            error: errorText,
+            errorData,
+            model: request.model,
+          },
           'Google API error',
         );
-        throw new Error(`Google API error: ${response.status} ${errorText}`);
+
+        // Handle specific error types based on status code
+        if (response.status === 400) {
+          throw new Error('Google API invalid request. Please check your request parameters.');
+        } else if (response.status === 401) {
+          throw new Error('Google API authentication failed. Please check your API key.');
+        } else if (response.status === 403) {
+          throw new Error(
+            'Google API permission denied. Your API key may not have access to this resource.',
+          );
+        } else if (response.status === 429) {
+          throw new Error('Google API rate limit exceeded. Please try again later.');
+        } else if (response.status >= 500) {
+          throw new Error('Google API service temporarily unavailable. Please try again later.');
+        } else {
+          throw new Error(`Google API error: ${response.status} ${errorText}`);
+        }
       }
 
       const data = await response.json();
 
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      // Check for errors in response
+      if (data.error) {
+        logger.error(
+          { error: data.error, model: request.model },
+          'Google API returned error in response',
+        );
+        throw new Error(`Google API error: ${data.error.message || JSON.stringify(data.error)}`);
+      }
+
+      const candidate = data.candidates?.[0];
+      if (!candidate) {
+        logger.warn({ model: request.model, data }, 'Google API returned no candidates');
+        throw new Error('Google API returned no response candidates');
+      }
+
+      // Check finishReason for error cases
+      const finishReason = candidate.finishReason;
+      if (finishReason === 'MAX_TOKENS') {
+        logger.warn(
+          { model: request.model, finishReason },
+          'Google response was truncated due to token limit',
+        );
+      } else if (finishReason === 'SAFETY') {
+        logger.warn(
+          { model: request.model, finishReason, safetyRatings: candidate.safetyRatings },
+          'Google response was blocked by safety filters',
+        );
+        throw new Error('Response was blocked by safety filters');
+      } else if (finishReason === 'RECITATION') {
+        logger.warn(
+          { model: request.model, finishReason },
+          'Google response was blocked due to recitation concerns',
+        );
+        throw new Error('Response was blocked due to recitation concerns');
+      }
+
+      const content = candidate.content?.parts?.[0]?.text || '';
 
       // Google returns token counts in usageMetadata
       const promptTokens = data.usageMetadata?.promptTokenCount || 0;
@@ -71,7 +137,7 @@ export class GoogleProvider extends BaseLLMProvider {
         promptTokens,
         completionTokens,
         totalTokens,
-        finishReason: data.candidates?.[0]?.finishReason,
+        finishReason,
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'Google request failed');

@@ -65,7 +65,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       xai: [],
       deepseek: [],
       qwen: [],
-      mistral: [],
       moonshot: [],
       managed_cloud: [],
     };

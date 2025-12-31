@@ -7,7 +7,6 @@ import { AnthropicProvider } from './anthropic';
 import { GoogleProvider } from './google';
 import { XAIProvider } from './xai';
 import { QwenProvider } from './qwen';
-import { MistralProvider } from './mistral';
 import { MoonshotProvider } from './moonshot';
 import { DeepSeekProvider } from './deepseek';
 import { logger } from '@/lib/logger';
@@ -25,27 +24,47 @@ export class LLMProviderFactory {
       return null;
     }
 
+    // Get custom base URL if available (for providers like Qwen using MuleRouter)
+    const baseUrl = this.getProviderBaseUrl(providerLower);
+
     switch (providerLower) {
       case 'openai':
-        return new OpenAIProvider(key);
+        return new OpenAIProvider(key, baseUrl);
       case 'anthropic':
-        return new AnthropicProvider(key);
+        return new AnthropicProvider(key, baseUrl);
       case 'google':
-        return new GoogleProvider(key);
+        return new GoogleProvider(key, baseUrl);
       case 'xai':
-        return new XAIProvider(key);
+        return new XAIProvider(key, baseUrl);
       case 'qwen':
-        return new QwenProvider(key);
-      case 'mistral':
-        return new MistralProvider(key);
+        return new QwenProvider(key, baseUrl);
       case 'moonshot':
-        return new MoonshotProvider(key);
+        return new MoonshotProvider(key, baseUrl);
       case 'deepseek':
-        return new DeepSeekProvider(key);
+        return new DeepSeekProvider(key, baseUrl);
       default:
         logger.warn({ provider }, 'Unknown provider');
         return null;
     }
+  }
+
+  private static getProviderBaseUrl(provider: string): string | undefined {
+    const envKeyMap: Record<string, string> = {
+      qwen: 'QWEN_BASE_URL',
+      openai: 'OPENAI_BASE_URL',
+      anthropic: 'ANTHROPIC_BASE_URL',
+      google: 'GOOGLE_BASE_URL',
+      xai: 'XAI_BASE_URL',
+      moonshot: 'MOONSHOT_BASE_URL',
+      deepseek: 'DEEPSEEK_BASE_URL',
+    };
+
+    const envKey = envKeyMap[provider.toLowerCase()];
+    if (!envKey) {
+      return undefined;
+    }
+
+    return getOptionalEnv(envKey);
   }
 
   private static getProviderApiKey(provider: string): string | undefined {
@@ -55,7 +74,6 @@ export class LLMProviderFactory {
       google: 'GOOGLE_API_KEY',
       xai: 'XAI_API_KEY',
       qwen: 'QWEN_API_KEY',
-      mistral: 'MISTRAL_API_KEY',
       moonshot: 'MOONSHOT_API_KEY',
       deepseek: 'DEEPSEEK_API_KEY',
     };
@@ -88,9 +106,6 @@ export class LLMProviderFactory {
     }
     if (modelLower.includes('qwen')) {
       return 'qwen';
-    }
-    if (modelLower.includes('mistral') || modelLower.includes('codestral')) {
-      return 'mistral';
     }
     if (modelLower.includes('kimi')) {
       return 'moonshot';

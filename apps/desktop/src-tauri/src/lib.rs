@@ -786,6 +786,8 @@ pub fn run() {
             crate::sys::account::device_link_poll,
             crate::sys::account::fetch_user_profile,
             crate::sys::account::oauth_refresh,
+            crate::sys::account::account_store_access_token,
+            crate::sys::account::account_store_refresh_token,
 
 
             crate::sys::commands::create_team,

@@ -26,37 +26,33 @@ const imageProviders: Array<{
   id: ImageProviderId;
   label: string;
   description: string;
-  cost: string;
   model?: string;
   badge?: string;
 }> = [
   {
     id: 'google_imagen',
-    label: 'Imagen 3.1 (Google)',
+    label: 'Imagen 3.1 Pro (Google)',
     description: 'Photoreal + design quality, best default',
-    cost: '~$0.025 / image',
     model: 'imagen-3.1-pro',
     badge: 'Recommended',
   },
   {
     id: 'google_imagen_lite',
-    label: 'Imagen 3.1 Nano (Banana)',
-    description: 'Fast lightweight for drafts & UI mocks',
-    cost: '~$0.0035 / image',
-    model: 'imagen-3.1-nano',
+    label: 'Nano Banana Pro (Google)',
+    description: '4K resolution, perfect text rendering - #1 Quality',
+    model: 'imagen-3.2-flash-image',
+    badge: 'Best Quality',
   },
   {
     id: 'dalle',
     label: 'DALL·E 3 (OpenAI)',
     description: 'Strong compositional control and text rendering',
-    cost: '~$0.040 / image',
     model: 'dall-e-3',
   },
   {
     id: 'stable_diffusion',
     label: 'Stable Diffusion XL',
     description: 'Local/cheap SDXL with style presets',
-    cost: '~$0.010 / image',
     model: 'stability-sdxl',
   },
 ];
@@ -276,7 +272,6 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       </p>
                       <p className="text-xs text-slate-400">{provider.description}</p>
                     </div>
-                    <div className="text-xs text-emerald-200">{provider.cost}</div>
                   </button>
                 ))}
               </div>
@@ -359,11 +354,6 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <p className="line-clamp-2 text-sm text-white">{job.prompt}</p>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
                         <span className="rounded-full bg-white/10 px-2 py-0.5">{job.provider}</span>
-                        {job.costEstimate && (
-                          <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-200">
-                            ~${job.costEstimate.toFixed(3)}
-                          </span>
-                        )}
                         {job.latencyMs && (
                           <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5">
                             <Timer className="h-3 w-3" />
@@ -521,11 +511,6 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   <div className="flex items-center justify-between text-xs text-slate-300">
                     <span className="rounded-full bg-white/10 px-2 py-0.5">veo-3.1</span>
                     <div className="flex items-center gap-2">
-                      {job.costEstimate && (
-                        <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-200">
-                          ~${job.costEstimate.toFixed(2)}
-                        </span>
-                      )}
                       {job.latencyMs && (
                         <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5">
                           <Timer className="h-3 w-3" />
