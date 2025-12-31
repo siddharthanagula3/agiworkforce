@@ -17,7 +17,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5-mini");
+        assert_eq!(suggestion.model, "gpt-5-nano");
     }
 
     #[test]
