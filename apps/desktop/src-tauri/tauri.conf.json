@@ -65,9 +65,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://releases.agiworkforce.com/{{target}}/{{current_version}}"
+        "https://agiworkforce.com/api/releases/{{target}}/{{current_version}}"
       ],
-      "pubkey": "YOUR_PUBLIC_KEY_HERE"
+      "pubkey": "RWQahuITpry6oPekJf8JP5xSoAxMiUVUohL85U3V/vq1wVfLYzejJZCM"
     }
   }
 }
