@@ -1250,7 +1250,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             {showCreditUsage ? (
               <div
                 className="flex items-center gap-2"
-                title={`Monthly Usage: $${monthlyCost.toFixed(2)} / $${monthlyLimit.toFixed(2)}`}
+                title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
               >
                 <div className="w-24 h-1.5 bg-gray-200 dark:bg-charcoal-700 rounded-full overflow-hidden">
                   <div
@@ -1271,7 +1271,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     isLowBalance ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500',
                   )}
                 >
-                  ${monthlyCost.toFixed(2)} / ${monthlyLimit.toFixed(0)}
+                  {creditPercentage.toFixed(1)}%
                 </span>
               </div>
             ) : (

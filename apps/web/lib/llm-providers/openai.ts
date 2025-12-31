@@ -57,23 +57,74 @@ export class OpenAIProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText: string;
+        let errorData: unknown;
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorText = response.statusText;
+          errorData = { status: response.status };
+        }
+
         logger.error(
-          { status: response.status, error: errorText, model: request.model },
+          {
+            status: response.status,
+            error: errorText,
+            errorData,
+            model: request.model,
+          },
           'OpenAI API error',
         );
-        throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+
+        // Handle specific error types based on status code
+        if (response.status === 401) {
+          throw new Error('OpenAI API authentication failed. Please check your API key.');
+        } else if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after');
+          throw new Error(
+            `OpenAI API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+          );
+        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+          throw new Error('OpenAI API service temporarily unavailable. Please try again later.');
+        } else {
+          throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+        }
       }
 
       const data = await response.json();
 
+      // Check for refusal in response (OpenAI safety system)
+      const message = data.choices[0]?.message;
+      if (message?.refusal) {
+        logger.warn(
+          { refusal: message.refusal, model: request.model },
+          'OpenAI request was refused by safety system',
+        );
+        throw new Error(`Request was refused: ${message.refusal}`);
+      }
+
+      // Check finish_reason for error cases
+      const finishReason = data.choices[0]?.finish_reason;
+      if (finishReason === 'length') {
+        logger.warn(
+          { model: request.model, finishReason },
+          'OpenAI response was truncated due to token limit',
+        );
+      } else if (finishReason === 'content_filter') {
+        logger.warn(
+          { model: request.model, finishReason },
+          'OpenAI response was filtered by content filter',
+        );
+      }
+
       return {
-        content: data.choices[0]?.message?.content || '',
+        content: message?.content || '',
         model: data.model || request.model,
         promptTokens: data.usage?.prompt_tokens || 0,
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
-        finishReason: data.choices[0]?.finish_reason,
+        finishReason,
         cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
         cachedInputTokens: data.usage?.cache_read_input_tokens,
       };

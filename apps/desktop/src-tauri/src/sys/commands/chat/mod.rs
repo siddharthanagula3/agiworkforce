@@ -445,7 +445,6 @@ pub async fn chat_send_message(
             "xai" | "grok" => Some(Provider::XAI),
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
-            "mistral" | "mistralai" => Some(Provider::Mistral),
             _ => None,
         });
 
@@ -453,6 +452,15 @@ pub async fn chat_send_message(
         .model_override
         .or(request.model.clone())
         .unwrap_or_else(|| "gpt-5-nano".to_string());
+
+    // Map auto mode model IDs to routing strategies (2026)
+    let routing_strategy = match model.as_str() {
+        "auto" => RoutingStrategy::Auto, // Legacy - maps to AutoBalanced
+        "auto-economy" => RoutingStrategy::AutoEconomy,
+        "auto-balanced" => RoutingStrategy::AutoBalanced,
+        "auto-premium" => RoutingStrategy::AutoPremium,
+        _ => RoutingStrategy::Auto, // Default to Auto (maps to AutoBalanced)
+    };
 
     let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
         intents: meta.intents.clone(),
@@ -465,7 +473,7 @@ pub async fn chat_send_message(
     let preferences = RouterPreferences {
         provider: provider_enum,
         model: Some(model.clone()),
-        strategy: RoutingStrategy::Auto,
+        strategy: routing_strategy,
         context: router_context,
         prefer_cloud_credits: request.prefer_cloud_credits,
     };

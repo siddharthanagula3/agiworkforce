@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { useAnalyticsStore } from '../../stores/analyticsStore';
 import { useUsageStore, getUsagePercentage, getRemainingPercentage } from '../../stores/usageStore';
+import { cn } from '../../lib/utils';
 import { useBillingStore } from '../../stores/billingStore';
 import { useAccountStore } from '../../stores/accountStore';
 import {
@@ -44,6 +45,16 @@ export const UsageDashboard: React.FC = () => {
   const { stats: billingUsageStats, getTokenCost } = useUsageStore();
   const { subscription } = useBillingStore();
   const { credits, plan } = useAccountStore((state) => state.account);
+
+  // Calculate monthly credit usage percentage
+  const planName = subscription?.plan_name?.toLowerCase() || '';
+  let monthlyLimit = 0;
+  if (planName.includes('hobby')) monthlyLimit = 1.0;
+  else if (planName.includes('pro')) monthlyLimit = 12.0;
+  else if (planName.includes('max')) monthlyLimit = 150.0;
+
+  const monthlyCost = getTokenCost();
+  const creditPercentage = monthlyLimit > 0 ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;
 
   const [dauData, setDauData] = useState<TimeSeriesData[]>([]);
   const [featureData, setFeatureData] = useState<CategoryData[]>([]);
@@ -209,11 +220,33 @@ export const UsageDashboard: React.FC = () => {
           )}
 
           <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Month-to-Date Cost
-            </h3>
-            <p className="text-2xl font-bold mt-2 text-amber-500">${getTokenCost().toFixed(2)}</p>
-            <p className="text-xs text-gray-400 mt-1">Estimated token spend</p>
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Monthly Usage</h3>
+            {monthlyLimit > 0 ? (
+              <>
+                <p className="text-2xl font-bold mt-2 text-amber-500">
+                  {creditPercentage.toFixed(1)}%
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Monthly credits used</p>
+                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full transition-all',
+                      creditPercentage > 90
+                        ? 'bg-red-500'
+                        : creditPercentage > 75
+                          ? 'bg-amber-500'
+                          : 'bg-amber-500',
+                    )}
+                    style={{ width: `${Math.min(creditPercentage, 100)}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold mt-2 text-amber-500">—</p>
+                <p className="text-xs text-gray-400 mt-1">No monthly limit</p>
+              </>
+            )}
           </div>
 
           <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-charcoal-600">

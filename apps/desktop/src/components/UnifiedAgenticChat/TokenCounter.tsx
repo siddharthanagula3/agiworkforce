@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, DollarSign, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, TrendingUp } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../../lib/utils';
 import { formatTokens } from '../../utils/tokenCount';
@@ -62,8 +62,8 @@ export const TokenCounter = ({
   inputTokens = 0,
   outputTokens = 0,
   maxTokens,
-  costPerToken,
-  estimatedCost: estimatedCostProp,
+  costPerToken: _costPerToken,
+  estimatedCost: _estimatedCostProp,
   budgetLimit,
   showDetails = true,
   compact = false,
@@ -73,14 +73,6 @@ export const TokenCounter = ({
     () => getUsageStatus(currentTokens, maxTokens, budgetLimit),
     [currentTokens, maxTokens, budgetLimit],
   );
-
-  const estimatedCost = useMemo(() => {
-    if (estimatedCostProp !== undefined) {
-      return estimatedCostProp.toFixed(4);
-    }
-    if (!costPerToken) return null;
-    return (currentTokens * costPerToken).toFixed(4);
-  }, [currentTokens, costPerToken, estimatedCostProp]);
 
   const tokensRemaining = maxTokens - currentTokens;
   const budgetRemaining = budgetLimit ? budgetLimit - currentTokens : null;
@@ -129,12 +121,6 @@ export const TokenCounter = ({
                 <span className="text-xs text-muted-foreground">Remaining</span>
                 <span className="text-xs font-medium">{formatTokens(tokensRemaining)}</span>
               </div>
-              {estimatedCost && (
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-xs text-muted-foreground">Est. cost</span>
-                  <span className="text-xs font-medium">${estimatedCost}</span>
-                </div>
-              )}
             </div>
           </TooltipContent>
         )}
@@ -243,16 +229,6 @@ export const TokenCounter = ({
             </div>
             <div className="text-sm font-medium">{formatTokens(tokensRemaining)}</div>
           </div>
-
-          {estimatedCost && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <DollarSign className="h-3 w-3" />
-                <span>Est. cost</span>
-              </div>
-              <div className="text-sm font-medium">${estimatedCost}</div>
-            </div>
-          )}
 
           {budgetRemaining !== null && (
             <div className="space-y-1">

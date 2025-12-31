@@ -57,11 +57,6 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'deepseek-v3': { inputCostPer1MTokens: 0.028, outputCostPer1MTokens: 0.42 },
   'deepseek-reasoner': { inputCostPer1MTokens: 0.55, outputCostPer1MTokens: 2.2 },
   'deepseek-chat': { inputCostPer1MTokens: 0.14, outputCostPer1MTokens: 0.56 },
-
-  // Mistral
-  'devstral-small': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.3 },
-  'mistral-large-2': { inputCostPer1MTokens: 2.7, outputCostPer1MTokens: 8.1 },
-  'codestral-latest': { inputCostPer1MTokens: 0.2, outputCostPer1MTokens: 0.6 },
 };
 
 export class LLMCostCalculator {
@@ -97,7 +92,6 @@ export class LLMCostCalculator {
       qwen: { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 2.0 },
       moonshot: { inputCostPer1MTokens: 0.3, outputCostPer1MTokens: 1.2 },
       deepseek: { inputCostPer1MTokens: 0.55, outputCostPer1MTokens: 2.2 },
-      mistral: { inputCostPer1MTokens: 2.7, outputCostPer1MTokens: 8.1 },
     };
 
     return (

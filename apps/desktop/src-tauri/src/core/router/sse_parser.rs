@@ -145,7 +145,6 @@ fn parse_sse_event(
         crate::core::router::Provider::XAI => parse_openai_sse(event),
         crate::core::router::Provider::DeepSeek => parse_openai_sse(event),
         crate::core::router::Provider::Qwen => parse_openai_sse(event),
-        crate::core::router::Provider::Mistral => parse_openai_sse(event),
         crate::core::router::Provider::Moonshot => parse_openai_sse(event),
         crate::core::router::Provider::ManagedCloud => parse_openai_sse(event), // ManagedCloud uses OpenAI-compatible format
     }
