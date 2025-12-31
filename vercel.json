@@ -9,9 +9,5 @@
     "deploymentEnabled": {
       "main": true
     }
-  },
-  "buildCache": {
-    "paths": [".vercelignore", "apps/web/.next", "pnpm-lock.yaml"]
-  },
-  "prune": true
+  }
 }
