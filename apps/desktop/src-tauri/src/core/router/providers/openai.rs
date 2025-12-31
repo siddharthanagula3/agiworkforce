@@ -207,6 +207,9 @@ impl OpenAIProvider {
 
     fn calculate_cost(model: &str, prompt_tokens: u32, completion_tokens: u32) -> f64 {
         let (input_cost, output_cost) = match model {
+            // GPT-5 models (Latest - 2025)
+            "gpt-5-nano" => (0.05, 0.4),
+            "gpt-5-mini" => (0.25, 2.0),
             "gpt-5.2" => (6.0, 18.0),
             "gpt-5.2-pro" => (10.0, 30.0),
             "gpt-5.2-chat-latest" => (4.0, 12.0),
@@ -215,10 +218,8 @@ impl OpenAIProvider {
             "gpt-5.1-chat-latest" => (4.0, 12.0),
             "gpt-5.1-thinking" => (7.0, 21.0),
             "gpt-5.1-codex-max" => (8.0, 24.0),
-
-            "gpt-5" => (15.0, 45.0),
-            "gpt-5-codex" => (10.0, 30.0),
-            "gpt-5-mini" => (2.0, 6.0),
+            "gpt-5" => (5.5, 16.5),
+            "gpt-5-codex" => (8.0, 24.0),
             "o1" | "o1-2024-12-17" => (15.0, 60.0),
             "o1-mini" | "o1-mini-2024-09-12" => (1.1, 4.4),
             "o1-preview" | "o1-preview-2024-09-12" => (15.0, 60.0),

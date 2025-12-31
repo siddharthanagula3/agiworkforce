@@ -275,6 +275,14 @@ export interface WorkflowContext {
   entryPoint?: string;
 }
 
+// Pending user message - for mid-task input while AI is processing
+export interface PendingUserMessage {
+  id: string;
+  content: string;
+  timestamp: string;
+  conversation_id?: number;
+}
+
 export interface AgentStatus {
   id: string;
   name: string;
@@ -477,6 +485,9 @@ export interface UnifiedChatState {
   isStreaming: boolean;
   currentStreamingMessageId: string | null;
 
+  // Pending messages for mid-task user input
+  pendingMessages: PendingUserMessage[];
+
   fileOperations: FileOperation[];
   terminalCommands: TerminalCommand[];
   toolExecutions: ToolExecution[];
@@ -556,6 +567,12 @@ export interface UnifiedChatState {
     content: Partial<InlinePanelContent>,
   ) => void;
   toggleInlinePanelCollapse: (messageId: string, panelId: string) => void;
+
+  // Pending message actions for mid-task user input
+  addPendingMessage: (message: PendingUserMessage) => void;
+  removePendingMessage: (id: string) => void;
+  clearPendingMessages: () => void;
+  getPendingMessagesCount: () => number;
 
   addFileOperation: (op: Omit<FileOperation, 'timestamp'>) => void;
   addTerminalCommand: (cmd: Omit<TerminalCommand, 'timestamp'>) => void;
@@ -652,6 +669,7 @@ export interface UnifiedChatState {
 
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
+  linkConversationId: (uuid: string, dbId: number) => void;
 }
 
 export const useUnifiedChatStore = create<UnifiedChatState>()(
@@ -664,6 +682,9 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
       isLoading: false,
       isStreaming: false,
       currentStreamingMessageId: null,
+
+      // Pending messages queue - for mid-task user input
+      pendingMessages: [] as PendingUserMessage[],
 
       fileOperations: [],
       terminalCommands: [],
@@ -1123,6 +1144,24 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
             applyToggleCollapse(state.messagesByConversation[convoId]!);
           }
         }),
+
+      // Pending message actions for mid-task user input
+      addPendingMessage: (message) =>
+        set((state) => {
+          state.pendingMessages.push(message);
+        }),
+
+      removePendingMessage: (id) =>
+        set((state) => {
+          state.pendingMessages = state.pendingMessages.filter((m) => m.id !== id);
+        }),
+
+      clearPendingMessages: () =>
+        set((state) => {
+          state.pendingMessages = [];
+        }),
+
+      getPendingMessagesCount: () => get().pendingMessages.length,
 
       addFileOperation: (op) =>
         set((state) => {
@@ -1785,6 +1824,14 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.citations = [];
           state.focusMode = null;
         }),
+
+      linkConversationId: (uuid, dbId) => {
+        if (!idMappings.uuidToDbId[uuid]) {
+          idMappings.uuidToDbId[uuid] = dbId;
+          idMappings.dbIdToUuid[dbId] = uuid;
+          persistIdMappings();
+        }
+      },
 
       exportConversation: async () => {
         const state = get();

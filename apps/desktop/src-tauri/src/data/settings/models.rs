@@ -296,16 +296,16 @@ impl Default for AppSettings {
     fn default() -> Self {
         let mut model_configs = HashMap::new();
         model_configs.insert(
-            "gpt-4o-mini".to_string(),
+            "gpt-5-mini".to_string(),
             ModelConfig {
-                model_name: "gpt-4o-mini".to_string(),
+                model_name: "gpt-5-mini".to_string(),
                 ..Default::default()
             },
         );
         model_configs.insert(
-            "claude-3-5-sonnet-20241022".to_string(),
+            "claude-sonnet-4-5".to_string(),
             ModelConfig {
-                model_name: "claude-3-5-sonnet-20241022".to_string(),
+                model_name: "claude-sonnet-4-5".to_string(),
                 ..Default::default()
             },
         );
@@ -328,7 +328,7 @@ impl Default for AppSettings {
 
         Self {
             default_provider: "openai".to_string(),
-            default_model: "gpt-4o-mini".to_string(),
+            default_model: "gpt-5-mini".to_string(),
             model_configs,
             provider_configs,
             ui_preferences: UIPreferences::default(),

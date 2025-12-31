@@ -1,8 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { isTauri } from './lib/tauri-mock';
+import { isTauri, invoke, listen } from './lib/tauri-mock';
 
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
-import TitleBar from './components/Layout/TitleBar';
 import { useTheme } from './hooks/useTheme';
 import { useWindowManager } from './hooks/useWindowManager';
 import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
@@ -23,6 +22,11 @@ import useErrorStore from './stores/errorStore';
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
     default: m.VisualizationLayer,
+  })),
+);
+const FloatingChat = lazy(() =>
+  import('./components/FloatingChat').then((m) => ({
+    default: m.FloatingChat,
   })),
 );
 const AuthPage = lazy(() =>
@@ -63,7 +67,6 @@ const DesktopShell = () => {
   const addError = useErrorStore((store) => store.addError);
 
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
-  const commandShortcutHint = isMac ? 'Cmd+K' : 'Ctrl+K';
 
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
@@ -120,6 +123,10 @@ const DesktopShell = () => {
     void initializeAgentStatusListener();
 
     void (async () => {
+      // Initialize settings first (syncs with backend and configures providers)
+      const { useSettingsStore } = await import('./stores/settingsStore');
+      await useSettingsStore.getState().loadSettings();
+
       const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
       await initializeModelStoreFromSettings();
     })();
@@ -151,6 +158,42 @@ const DesktopShell = () => {
   const startNewChat = useCallback(async () => {
     clearHistory();
   }, [clearHistory]);
+
+  // Listen for global shortcut actions
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let unlisten: (() => void) | undefined;
+
+    const setupListener = async () => {
+      unlisten = await listen<string>('shortcut_action', (event) => {
+        const action = event.payload;
+        switch (action) {
+          case 'floating_window':
+            void invoke('window_toggle_floating');
+            break;
+          case 'new_composer':
+            void startNewChat();
+            break;
+          case 'open_chat':
+            setCommandPaletteOpen(true);
+            break;
+          case 'voice_input':
+            // Handle voice input
+            break;
+          case 'quick_capture':
+            // Handle quick capture
+            break;
+        }
+      });
+    };
+
+    void setupListener();
+
+    return () => {
+      unlisten?.();
+    };
+  }, [startNewChat]);
 
   const openSettings = useCallback(() => setSettingsPanelOpen(true), []);
 
@@ -250,13 +293,6 @@ const DesktopShell = () => {
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
           </div>
         )}
-        <TitleBar
-          state={{ focused: state.focused, maximized: state.maximized }}
-          actions={actions}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-          commandShortcutHint={commandShortcutHint}
-          hideWindowControls={isMac}
-        />
         <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary
@@ -326,25 +362,42 @@ const App = () => {
 
   useDeepLink();
 
-  const isOverlayMode = (() => {
-    if (typeof window === 'undefined') return false;
+  const windowMode = (() => {
+    if (typeof window === 'undefined') return 'default';
 
     try {
+      // Check URL path first (for Tauri windows)
+      const pathname = window.location.pathname;
+      if (pathname === '/floating') return 'floating';
+      if (pathname === '/overlay') return 'overlay';
+
+      // Fallback to query params
       const params = new URLSearchParams(window.location.search);
       const mode = params.get('mode');
 
-      return mode === 'overlay';
+      if (mode === 'overlay') return 'overlay';
+      if (mode === 'floating') return 'floating';
+      return 'default';
     } catch {
-      return false;
+      return 'default';
     }
   })();
+
+  const renderContent = () => {
+    switch (windowMode) {
+      case 'overlay':
+        return <VisualizationLayer />;
+      case 'floating':
+        return <FloatingChat />;
+      default:
+        return <DesktopShell />;
+    }
+  };
 
   return (
     <ErrorBoundary>
       <TooltipProvider delayDuration={300}>
-        <Suspense fallback={<LoadingFallback />}>
-          {isOverlayMode ? <VisualizationLayer /> : <DesktopShell />}
-        </Suspense>
+        <Suspense fallback={<LoadingFallback />}>{renderContent()}</Suspense>
       </TooltipProvider>
     </ErrorBoundary>
   );

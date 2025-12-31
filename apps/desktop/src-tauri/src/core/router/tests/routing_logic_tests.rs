@@ -17,7 +17,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-4o-mini");
+        assert_eq!(suggestion.model, "gpt-5-mini");
     }
 
     #[test]
@@ -34,7 +34,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-1.5-pro");
+        assert_eq!(suggestion.model, "gemini-3-pro");
     }
 
     #[test]
@@ -51,7 +51,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-1.5-pro");
+        assert_eq!(suggestion.model, "gemini-3-pro");
     }
 
     #[test]
@@ -69,7 +69,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-3-5-sonnet-20241022");
+        assert_eq!(suggestion.model, "claude-sonnet-4-5");
     }
 
     #[test]
@@ -87,7 +87,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-4o");
+        assert_eq!(suggestion.model, "gpt-5.2");
     }
 
     #[test]
@@ -104,7 +104,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-1.5-flash");
+        assert_eq!(suggestion.model, "gemini-3-flash");
     }
 
     #[test]
@@ -122,6 +122,6 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-4o");
+        assert_eq!(suggestion.model, "gpt-5.2");
     }
 }

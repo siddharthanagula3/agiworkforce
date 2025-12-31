@@ -11,7 +11,8 @@ export type Provider =
   | 'deepseek'
   | 'qwen'
   | 'mistral'
-  | 'moonshot';
+  | 'moonshot'
+  | 'managed_cloud';
 export type Theme = 'light' | 'dark' | 'system';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
@@ -40,6 +41,7 @@ interface LLMConfig {
     qwen: string;
     mistral: string;
     moonshot: string;
+    managed_cloud: string;
   };
   taskRouting: TaskRouting;
   favoriteModels: string[];
@@ -51,9 +53,15 @@ interface WindowPreferences {
   dockOnStartup: 'left' | 'right' | null;
 }
 
+export interface ChatPreferences {
+  /** Enable AI-powered prompt completion (ghost text suggestions) */
+  promptCompletionEnabled: boolean;
+}
+
 interface SettingsState {
   llmConfig: LLMConfig;
   windowPreferences: WindowPreferences;
+  chatPreferences: ChatPreferences;
   allowedDirectories: string[];
   loading: boolean;
   error: string | null;
@@ -71,6 +79,8 @@ interface SettingsState {
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
+  setPromptCompletionEnabled: (enabled: boolean) => void;
+
   addAllowedDirectory: (path: string) => void;
   removeAllowedDirectory: (path: string) => void;
   setAllowedDirectories: (paths: string[]) => void;
@@ -81,22 +91,23 @@ interface SettingsState {
 
 const defaultSettings: Pick<
   SettingsState,
-  'llmConfig' | 'windowPreferences' | 'allowedDirectories'
+  'llmConfig' | 'windowPreferences' | 'chatPreferences' | 'allowedDirectories'
 > = {
   llmConfig: {
-    defaultProvider: 'anthropic',
+    defaultProvider: 'managed_cloud',
     temperature: 0.7,
     maxTokens: 4096,
     defaultModels: {
-      openai: 'gpt-5.1',
-      anthropic: 'claude-sonnet-4-5',
-      google: 'gemini-3-pro',
-      ollama: 'llama4-maverick',
-      xai: 'grok-4.1',
+      openai: '',
+      anthropic: '',
+      google: '',
+      ollama: '',
+      xai: '',
       deepseek: '',
-      qwen: 'qwen3-max',
+      qwen: '',
       mistral: '',
-      moonshot: 'kimi-k2-thinking',
+      moonshot: '',
+      managed_cloud: 'auto',
     },
     favoriteModels: [
       'openai/gpt-5.1',
@@ -116,20 +127,23 @@ const defaultSettings: Pick<
       'moonshot/kimi-k2-thinking',
     ],
     taskRouting: {
-      search: { provider: 'openai', model: 'gpt-5.1' },
-      code: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
-      docs: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
+      search: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
+      code: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
+      docs: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
 
-      chat: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
-      vision: { provider: 'google', model: 'gemini-3-pro' },
-      image: { provider: 'google', model: 'imagen-3' },
-      video: { provider: 'google', model: 'veo-3.1' },
+      chat: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
+      vision: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
+      image: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
+      video: { provider: 'managed_cloud', model: 'managed-cloud-auto' },
     },
   },
   windowPreferences: {
     theme: 'system',
     startupPosition: 'center',
     dockOnStartup: null,
+  },
+  chatPreferences: {
+    promptCompletionEnabled: true, // AI-powered ghost text enabled by default
   },
   allowedDirectories: [],
 };
@@ -269,6 +283,12 @@ export const useSettingsStore = create<SettingsState>()(
         }));
       },
 
+      setPromptCompletionEnabled: (enabled: boolean) => {
+        set((state) => ({
+          chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
+        }));
+      },
+
       addAllowedDirectory: (path: string) => {
         set((state) => {
           if (state.allowedDirectories.includes(path)) return {};
@@ -361,11 +381,12 @@ export const useSettingsStore = create<SettingsState>()(
       saveSettings: async () => {
         set({ loading: true, error: null });
         try {
-          const { llmConfig, windowPreferences, allowedDirectories } = get();
+          const { llmConfig, windowPreferences, chatPreferences, allowedDirectories } = get();
           await invoke('settings_save', {
             settings: {
               llmConfig,
               windowPreferences,
+              chatPreferences,
               allowedDirectories,
             },
           });
@@ -383,6 +404,7 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         llmConfig: state.llmConfig,
         windowPreferences: state.windowPreferences,
+        chatPreferences: state.chatPreferences,
         allowedDirectories: state.allowedDirectories,
       }),
       merge: (persistedState, currentState) => {
@@ -403,11 +425,17 @@ export const useSettingsStore = create<SettingsState>()(
           ...(persisted?.windowPreferences ?? {}),
         };
 
+        const mergedChatPreferences: ChatPreferences = {
+          ...currentState.chatPreferences,
+          ...(persisted?.chatPreferences ?? {}),
+        };
+
         return {
           ...currentState,
           ...persisted,
           llmConfig: mergedLLMConfig,
           windowPreferences: mergedWindowPreferences,
+          chatPreferences: mergedChatPreferences,
           allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
         };
       },

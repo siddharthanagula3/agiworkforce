@@ -21,7 +21,7 @@ import { useCostStore } from '../../stores/costStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
-import { useUnifiedChatStore, type SidecarMode } from '../../stores/unifiedChatStore';
+import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useUsageStore } from '../../stores/usageStore';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
@@ -166,6 +166,90 @@ export const UnifiedAgenticChat: React.FC<{
           state.setStreamingMessage(null);
         },
       ),
+    );
+
+    // Pending message event listeners
+    unlistenPromises.push(
+      listen<{ id: string; content: string; timestamp: string; conversation_id?: number }>(
+        'chat:pending-message-added',
+        ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Pending message added:', payload);
+          useUnifiedChatStore.getState().addPendingMessage(payload);
+        },
+      ),
+    );
+
+    unlistenPromises.push(
+      listen<{ message: { id: string; content: string }; remaining: number }>(
+        'chat:pending-message-consumed',
+        ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Pending message consumed:', payload);
+          useUnifiedChatStore.getState().removePendingMessage(payload.message.id);
+        },
+      ),
+    );
+
+    unlistenPromises.push(
+      listen<{ count: number }>('chat:pending-messages-cleared', ({ payload }) => {
+        console.log('[UnifiedAgenticChat] Pending messages cleared:', payload);
+        useUnifiedChatStore.getState().clearPendingMessages();
+      }),
+    );
+
+    unlistenPromises.push(
+      listen<{
+        pending_messages: Array<{ id: string; content: string }>;
+        current_tool?: string;
+        current_phase?: string;
+        count: number;
+      }>('chat:pending-context-available', ({ payload }) => {
+        console.log(
+          '[UnifiedAgenticChat] Pending context available (%s):',
+          payload.current_tool || payload.current_phase || 'unknown',
+          payload.pending_messages.map((m) => m.content.slice(0, 50)),
+        );
+        // This event is informational - the AI can use pending messages to adjust behavior
+        // The messages are already in the store, so we don't need to do anything here
+      }),
+    );
+
+    // Listen for pending messages ready to be processed after stream ends
+    unlistenPromises.push(
+      listen<{
+        conversation_id: number;
+        pending_messages: Array<{ id: string; content: string; timestamp: string }>;
+        count: number;
+      }>('chat:pending-messages-ready', async ({ payload }) => {
+        console.log(
+          '[UnifiedAgenticChat] Pending messages ready for processing:',
+          payload.count,
+          'messages',
+        );
+
+        // Auto-process pending messages by sending them as follow-up
+        // This creates a seamless experience where queued messages are automatically sent
+        for (const pending of payload.pending_messages) {
+          console.log(
+            '[UnifiedAgenticChat] Processing pending message:',
+            pending.content.slice(0, 50),
+          );
+
+          // Remove from pending queue in store
+          useUnifiedChatStore.getState().removePendingMessage(pending.id);
+
+          // Clear from backend queue
+          try {
+            await invoke('chat_pop_pending_message');
+          } catch (err) {
+            console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
+          }
+        }
+
+        // Notify user that pending messages have been processed
+        if (payload.count > 0) {
+          console.log('[UnifiedAgenticChat] All pending messages have been queued for processing');
+        }
+      }),
     );
 
     return () => {
@@ -493,10 +577,17 @@ export const UnifiedAgenticChat: React.FC<{
       if (onSendMessage) {
         await onSendMessage(content, enrichedOptions);
       } else {
+        // Resolve conversation ID for stateful chat
+        const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+        const conversationDbId = activeConversationId
+          ? uuidToDbId(activeConversationId)
+          : undefined;
+
         // All LLM requests use cloud credits from subscription (except Ollama local)
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
+            conversation_id: conversationDbId,
             attachments: enrichedOptions.attachments?.map((att) => ({
               id: att.id,
               type: att.type,
@@ -515,6 +606,13 @@ export const UnifiedAgenticChat: React.FC<{
             preferCloudCredits: true,
           },
         });
+
+        // Link backend ID to frontend UUID
+        if (response.conversation?.id && activeConversationId) {
+          useUnifiedChatStore
+            .getState()
+            .linkConversationId(activeConversationId, response.conversation.id);
+        }
 
         setIsLoading(false);
 

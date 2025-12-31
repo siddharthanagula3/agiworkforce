@@ -208,7 +208,6 @@ export function CodeBlock({
           </div>
         ) : (
           // Regular syntax highlighting
-          /* @ts-expect-error SyntaxHighlighter types are incomplete */
           <SyntaxHighlighter
             language={language}
             style={oneDark}

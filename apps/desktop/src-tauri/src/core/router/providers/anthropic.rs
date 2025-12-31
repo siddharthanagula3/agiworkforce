@@ -161,20 +161,23 @@ impl AnthropicProvider {
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
         let (input_cost, output_cost) = match model {
-            "claude-sonnet-4-5" | "claude-4.5-sonnet" => (3.0, 15.0),
+            // Claude 4.5 models (Current pricing as of 2025)
+            "claude-sonnet-4-5" | "claude-4.5-sonnet" => (3.0, 15.0), // ≤200K tokens: $3/$15
             "claude-haiku-4-5" | "claude-4.5-haiku" => (1.0, 5.0),
-            "claude-opus-4-5" | "claude-4.5-opus" => (15.0, 75.0),
+            "claude-opus-4-5" | "claude-4.5-opus" => (5.0, 25.0),
 
-            "claude-opus-4" | "claude-4-opus" => (15.0, 75.0),
+            "claude-opus-4" | "claude-4-opus" => (5.0, 25.0),
 
+            // Claude 3.5 models
             "claude-3-5-sonnet-20241022" | "claude-3-5-sonnet-latest" => (3.0, 15.0),
             "claude-3-5-haiku-20241022" | "claude-3-5-haiku-latest" => (0.80, 4.0),
 
-            "claude-3-opus-20240229" => (15.0, 75.0),
+            // Claude 3 models (legacy pricing)
+            "claude-3-opus-20240229" => (15.0, 75.0), // Legacy pricing
             "claude-3-sonnet-20240229" => (3.0, 15.0),
-            "claude-3-haiku-20240307" => (0.25, 1.25),
+            "claude-3-haiku-20240307" => (0.25, 1.25), // Legacy pricing
 
-            _ => (3.0, 15.0),
+            _ => (3.0, 15.0), // Default to Sonnet pricing
         };
 
         let input = (input_tokens as f64 / 1_000_000.0) * input_cost;
