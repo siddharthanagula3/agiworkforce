@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { invoke } from '../lib/tauri-mock';
 import type { CostAnalyticsResponse, CostOverviewResponse } from '../types/chat';
+import { supabaseAuth } from '../services/supabaseAuth';
 
 interface CostFilters {
   days: number;
@@ -40,7 +41,9 @@ export const useCostStore = create<CostState>((set, get) => ({
   loadOverview: async () => {
     set({ loadingOverview: true, error: null });
     try {
-      const response = await invoke<CostOverviewResponse>('chat_get_cost_overview');
+      const userId = supabaseAuth.getUser()?.id;
+      if (!userId) throw new Error('User not authenticated');
+      const response = await invoke<CostOverviewResponse>('chat_get_cost_overview', { userId });
       set({ overview: response, loadingOverview: false });
     } catch (error) {
       console.error('Failed to load cost overview:', error);
@@ -74,7 +77,10 @@ export const useCostStore = create<CostState>((set, get) => ({
     });
 
     try {
+      const userId = supabaseAuth.getUser()?.id;
+      if (!userId) throw new Error('User not authenticated');
       const analytics = await invoke<CostAnalyticsResponse>('chat_get_cost_analytics', {
+        userId,
         days: sanitized.days,
         provider: sanitized.provider ?? null,
         model: sanitized.model ?? null,
@@ -91,7 +97,10 @@ export const useCostStore = create<CostState>((set, get) => ({
 
   setMonthlyBudget: async (amount) => {
     try {
+      const userId = supabaseAuth.getUser()?.id;
+      if (!userId) throw new Error('User not authenticated');
       await invoke('chat_set_monthly_budget', {
+        userId,
         amount: amount ?? null,
       });
       await get().loadOverview();

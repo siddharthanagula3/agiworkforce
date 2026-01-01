@@ -74,11 +74,36 @@ pub struct AppDatabase {
 }
 
 impl AppDatabase {
-    pub fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
-        self.conn
-            .lock()
-            .map_err(|e| format!("Failed to acquire database lock: {e}"))
+    pub fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {}
+}
+
+#[tauri::command]
+pub fn clear_local_database(db: State<'_, AppDatabase>) -> Result<(), String> {
+    let conn = db.connection()?;
+    // Delete user-specific data from tables
+    conn.execute("DELETE FROM messages", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM conversations", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM automation_history", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM command_history", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM clipboard_history", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM overlay_events", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM settings", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM settings_v2", [])
+        .map_err(|e| e.to_string())?;
+
+    // Clear in-memory pending messages
+    if let Ok(mut queue) = PENDING_MESSAGES.lock() {
+        queue.clear();
     }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -93,32 +118,49 @@ pub fn chat_create_conversation(
     if trimmed_title.len() > 500 {
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
+    if request.user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
 
     let conn = db.connection()?;
-    let id = repository::create_conversation(&conn, trimmed_title.to_string())
-        .map_err(|e| format!("Failed to create conversation: {e}"))?;
-    repository::get_conversation(&conn, id)
+    let id =
+        repository::create_conversation(&conn, trimmed_title.to_string(), request.user_id.clone())
+            .map_err(|e| format!("Failed to create conversation: {e}"))?;
+    repository::get_conversation(&conn, id, &request.user_id)
         .map_err(|e| format!("Failed to retrieve conversation {}: {e}", id))
 }
 
 #[tauri::command]
-pub fn chat_get_conversations(db: State<'_, AppDatabase>) -> Result<Vec<Conversation>, String> {
+pub fn chat_get_conversations(
+    db: State<'_, AppDatabase>,
+    user_id: String,
+) -> Result<Vec<Conversation>, String> {
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
     let conn = db.connection()?;
-    repository::list_conversations(&conn, 1000, 0)
+    repository::list_conversations(&conn, 1000, 0, &user_id)
         .map_err(|e| format!("Failed to list conversations: {e}"))
 }
 
 #[tauri::command]
-pub fn chat_get_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<Conversation, String> {
+pub fn chat_get_conversation(
+    db: State<'_, AppDatabase>,
+    id: i64,
+    user_id: String,
+) -> Result<Conversation, String> {
     if id <= 0 {
         return Err(format!(
             "Invalid conversation ID: {}. ID must be positive",
             id
         ));
     }
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
 
     let conn = db.connection()?;
-    repository::get_conversation(&conn, id)
+    repository::get_conversation(&conn, id, &user_id)
         .map_err(|e| format!("Failed to get conversation {}: {e}", id))
 }
 
@@ -143,22 +185,46 @@ pub fn chat_update_conversation(
         return Err("Conversation title cannot exceed 500 characters".to_string());
     }
 
+    if request.user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+    // Verify ownership implicitly via update query check?
+    // Actually update_conversation_title now takes user_id and adds it to WHERE clause.
+    // However, Tauri command arguments are separate.
+    // The previous implementation had `request: UpdateConversationRequest` which now has `user_id`.
+    // And usually we might also accept `user_id` as a separate arg if we want to be consistent with get_conversations.
+    // But `UpdateConversationRequest` fields are sufficient.
+
+    // Wait, the signature of the command in mod.rs:
+    // pub fn chat_update_conversation(db: State<'_, AppDatabase>, id: i64, request: UpdateConversationRequest)
+    // The implementation plan says "Update your Tauri commands to require the user_id".
+    // I can just use request.user_id.
+
     let conn = db.connection()?;
-    repository::update_conversation_title(&conn, id, trimmed_title.to_string())
+    // Check existence/ownership first? Or just try update.
+    // repository::update_conversation_title uses user_id in WHERE.
+    repository::update_conversation_title(&conn, id, trimmed_title.to_string(), request.user_id)
         .map_err(|e| format!("Failed to update conversation {}: {e}", id))
 }
 
 #[tauri::command]
-pub fn chat_delete_conversation(db: State<'_, AppDatabase>, id: i64) -> Result<(), String> {
+pub fn chat_delete_conversation(
+    db: State<'_, AppDatabase>,
+    id: i64,
+    user_id: String,
+) -> Result<(), String> {
     if id <= 0 {
         return Err(format!(
             "Invalid conversation ID: {}. ID must be positive",
             id
         ));
     }
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
 
     let conn = db.connection()?;
-    repository::delete_conversation(&conn, id)
+    repository::delete_conversation(&conn, id, &user_id)
         .map_err(|e| format!("Failed to delete conversation {}: {e}", id))
 }
 
@@ -205,6 +271,7 @@ pub fn chat_create_message(
     let message = Message {
         id: 0,
         conversation_id: request.conversation_id,
+        user_id: request.user_id.clone(),
         role: request.role,
         content: trimmed_content.to_string(),
         tokens: request.tokens,
@@ -228,6 +295,7 @@ pub fn chat_create_message(
 pub fn chat_get_messages(
     db: State<'_, AppDatabase>,
     conversation_id: i64,
+    user_id: String,
 ) -> Result<Vec<Message>, String> {
     if conversation_id <= 0 {
         return Err(format!(
@@ -235,8 +303,16 @@ pub fn chat_get_messages(
             conversation_id
         ));
     }
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
 
     let conn = db.connection()?;
+
+    // Verify conversation ownership first
+    repository::get_conversation(&conn, conversation_id, &user_id)
+        .map_err(|e| format!("Access denied or conversation not found: {e}"))?;
+
     repository::list_messages(&conn, conversation_id).map_err(|e| {
         format!(
             "Failed to list messages for conversation {}: {e}",
@@ -356,7 +432,8 @@ pub async fn chat_send_message(
                         .and_utc();
 
                     let current_usage =
-                        repository::sum_cost_since(&conn, start_of_month).unwrap_or(0.0);
+                        repository::sum_cost_since(&conn, start_of_month, &request.user_id)
+                            .unwrap_or(0.0);
 
                     if current_usage >= budget_limit {
                         return Err(format!(
@@ -492,13 +569,13 @@ pub async fn chat_send_message(
     let conversation = {
         let conn = db_arc.connection()?;
         if let Some(conv_id) = request.conversation_id {
-            repository::get_conversation(&conn, conv_id)
+            repository::get_conversation(&conn, conv_id, &request.user_id)
                 .map_err(|e| format!("Failed to get conversation: {e}"))?
         } else {
             let title = request.content.chars().take(50).collect::<String>();
-            let id = repository::create_conversation(&conn, title)
+            let id = repository::create_conversation(&conn, title, request.user_id.clone())
                 .map_err(|e| format!("Failed to create conversation: {e}"))?;
-            repository::get_conversation(&conn, id)
+            repository::get_conversation(&conn, id, &request.user_id)
                 .map_err(|e| format!("Failed to get new conversation: {e}"))?
         }
     };
@@ -522,6 +599,7 @@ pub async fn chat_send_message(
         let msg = Message {
             id: 0,
             conversation_id: conversation.id,
+            user_id: request.user_id.clone(),
             role: MessageRole::User,
             content: request.content.clone(),
             tokens: Some(input_tokens as i32),
@@ -599,6 +677,7 @@ pub async fn chat_send_message(
         let db_arc_clone = db_arc.clone();
         let provider_enum_clone = provider_enum;
         let model_clone = model.clone();
+        let user_id_clone = request.user_id.clone();
 
         // Spawn streaming task to avoid blocking the command response
         // Return immediately - events will handle the streaming updates
@@ -701,6 +780,7 @@ pub async fn chat_send_message(
                         let msg = Message {
                             id: 0,
                             conversation_id: conversation_id_clone,
+                            user_id: user_id_clone.clone(),
                             role: MessageRole::Assistant,
                             content: full_content.clone(),
                             tokens: Some(token_count as i32),
@@ -865,6 +945,7 @@ pub async fn chat_send_message(
                                 provider: Some(outcome.provider.as_string().to_string()),
                                 model: Some(outcome.model.clone()),
                                 created_at: Utc::now(),
+                                user_id: conversation.user_id.clone(),
                             };
                             let id = repository::create_message(&conn, &msg)
                                 .map_err(|e| format!("Failed to save assistant message: {e}"))?;
@@ -925,7 +1006,9 @@ pub async fn chat_send_message(
                         provider: Some(outcome.provider.as_string().to_string()),
                         model: Some(outcome.model.clone()),
                         created_at: Utc::now(),
+                        user_id: conversation.user_id.clone(),
                     };
+
                     let id = repository::create_message(&conn, &msg)
                         .map_err(|e| format!("Failed to save assistant message: {e}"))?;
                     repository::get_message(&conn, id)
