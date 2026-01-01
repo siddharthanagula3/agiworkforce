@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useFilesystemStore, type DirEntry, type FileMetadata } from '../../stores/filesystemStore';
 import { Button } from '../ui/Button';
-import { useConfirm } from '../ui/ConfirmDialog'; 
+import { useConfirm } from '../ui/ConfirmDialog';
 import { Input } from '../ui/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 
@@ -63,9 +63,8 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [selectedMetadata, setSelectedMetadata] = useState<FileMetadata | null>(null);
   const [editingFile, setEditingFile] = useState(false);
-  const { confirm, dialog: confirmDialog } = useConfirm(); 
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
-  
   useEffect(() => {
     if (!currentPath) {
       navigateTo('C:\\Users').catch((err) => {
@@ -75,14 +74,12 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     }
   }, [currentPath, navigateTo]);
 
-  
   useEffect(() => {
     if (currentPath) {
       setPathInput(currentPath);
     }
   }, [currentPath]);
 
-  
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -130,7 +127,6 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     }
   };
 
-  
   const handleDeleteEntry = async (entry: DirEntry, event: React.MouseEvent) => {
     event.stopPropagation();
 

@@ -109,6 +109,7 @@ pub struct ChatSendMessageResponse {
     pub assistant_message: Message,
     pub stats: ConversationStats,
     pub last_message: Option<String>,
+    pub credits: Option<crate::core::router::CreditsInfo>,
 }
 
 #[derive(Debug, Serialize)]

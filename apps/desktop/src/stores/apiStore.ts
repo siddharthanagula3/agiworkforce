@@ -60,44 +60,36 @@ export interface ApiHistoryItem {
 }
 
 interface ApiState {
-  
   currentRequest: ApiRequest;
   response: ApiResponse | null;
   loading: boolean;
   error: string | null;
 
-  
   savedRequests: SavedRequest[];
   templates: RequestTemplate[];
 
-  
   oauthClients: Map<string, OAuth2Config>;
   tokens: Map<string, TokenResponse>;
 
-  
   history: ApiHistoryItem[];
 
-  
   executeRequest: (request: ApiRequest) => Promise<ApiResponse>;
   get: (url: string) => Promise<ApiResponse>;
   post: (url: string, body: string) => Promise<ApiResponse>;
   put: (url: string, body: string) => Promise<ApiResponse>;
   delete: (url: string) => Promise<ApiResponse>;
 
-  
   setCurrentRequest: (request: Partial<ApiRequest>) => void;
   saveRequest: (name: string, request: ApiRequest) => void;
   loadRequest: (id: string) => void;
   deleteRequest: (id: string) => void;
 
-  
   createOAuthClient: (clientId: string, config: OAuth2Config) => Promise<void>;
   getAuthUrl: (clientId: string, state: string, usePkce: boolean) => Promise<string>;
   exchangeCode: (clientId: string, code: string) => Promise<TokenResponse>;
   refreshToken: (clientId: string, refreshToken: string) => Promise<TokenResponse>;
   clientCredentials: (clientId: string) => Promise<TokenResponse>;
 
-  
   renderTemplate: (
     template: RequestTemplate,
     variables: Record<string, string>,
@@ -105,17 +97,14 @@ interface ApiState {
   extractVariables: (templateStr: string) => Promise<string[]>;
   validateTemplate: (templateStr: string) => Promise<boolean>;
 
-  
   parseResponse: (body: string, contentType?: string) => Promise<any>;
   extractJsonPath: (body: string, path: string) => Promise<any>;
 
-  
   clearResponse: () => void;
   clearError: () => void;
 }
 
 export const useApiStore = create<ApiState>((set, get) => {
-  
   const SENSITIVE_HEADERS = [
     'authorization',
     'x-api-key',
@@ -153,7 +142,6 @@ export const useApiStore = create<ApiState>((set, get) => {
   });
 
   return {
-    
     currentRequest: {
       method: 'GET',
       url: 'https://api.agiworkforce.com',
@@ -168,7 +156,6 @@ export const useApiStore = create<ApiState>((set, get) => {
     tokens: new Map(),
     history: [],
 
-    
     executeRequest: async (request: ApiRequest) => {
       set({ loading: true, error: null });
       try {
@@ -313,7 +300,6 @@ export const useApiStore = create<ApiState>((set, get) => {
       }
     },
 
-    
     setCurrentRequest: (request: Partial<ApiRequest>) => {
       set((state) => ({
         currentRequest: { ...state.currentRequest, ...request },
@@ -346,7 +332,6 @@ export const useApiStore = create<ApiState>((set, get) => {
       }));
     },
 
-    
     createOAuthClient: async (clientId: string, config: OAuth2Config) => {
       try {
         await invoke('api_oauth_create_client', { clientId, config });
@@ -445,7 +430,6 @@ export const useApiStore = create<ApiState>((set, get) => {
       }
     },
 
-    
     renderTemplate: async (template: RequestTemplate, variables: Record<string, string>) => {
       try {
         const rendered = await invoke<any>('api_render_template', {
@@ -496,7 +480,6 @@ export const useApiStore = create<ApiState>((set, get) => {
       }
     },
 
-    
     parseResponse: async (body: string, contentType?: string) => {
       try {
         const parsed = await invoke<any>('api_parse_response', {
@@ -529,7 +512,6 @@ export const useApiStore = create<ApiState>((set, get) => {
       }
     },
 
-    
     clearResponse: () => {
       set({ response: null });
     },

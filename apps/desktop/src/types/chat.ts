@@ -127,12 +127,22 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   conversationMode?: 'safe' | 'full_control';
 }
 
+export interface CreditsInfo {
+  cost_cents: number;
+  remaining_cents: number;
+  daily_limit?: number;
+  daily_used?: number;
+  daily_remaining?: number;
+  daily_reset_at?: string;
+}
+
 export interface ChatSendMessageResponse {
   conversation: Conversation;
   user_message: Message;
   assistant_message: Message;
   stats: ConversationStats;
   last_message: string | null;
+  credits?: CreditsInfo | null;
 }
 
 export interface MessageUI extends Message {

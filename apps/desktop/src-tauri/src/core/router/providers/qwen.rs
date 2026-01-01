@@ -282,6 +282,7 @@ impl LLMProvider for QwenProvider {
             prompt_tokens: Some(qwen_response.usage.prompt_tokens),
             completion_tokens: Some(qwen_response.usage.completion_tokens),
             cost: Some(cost),
+            credits: None,
             model: qwen_response.model,
             cached: false,
             tool_calls,

@@ -541,6 +541,27 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       const plan = state.account?.plan?.toLowerCase() || 'free';
       const isManagedPlan = plan !== 'free' && plan !== 'none';
 
+      // Pre-flight Credit Check
+      // Only apply to managed plans using cloud providers (not local ollama)
+      if (isManagedPlan && selectedProvider !== 'ollama') {
+        const { creditBalance_cents, dailyUsage_cents, dailyLimit_cents } =
+          useBillingStore.getState();
+
+        if (creditBalance_cents !== null && creditBalance_cents <= 0) {
+          setSubmitError(
+            'Insufficient credits to send message. Please upgrade your plan or wait for credits to refresh.',
+          );
+          sendAbortControllerRef.current = null;
+          return;
+        }
+
+        if (dailyLimit_cents && dailyUsage_cents && dailyUsage_cents >= dailyLimit_cents) {
+          setSubmitError('Daily credit limit reached. Credits will reset at midnight UTC.');
+          sendAbortControllerRef.current = null;
+          return;
+        }
+      }
+
       // Force managed_cloud for managed plans unless using local ollama
       const computedProviderOverride =
         isManagedPlan && selectedProvider !== 'ollama'

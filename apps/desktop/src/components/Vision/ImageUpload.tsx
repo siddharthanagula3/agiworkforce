@@ -85,7 +85,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
 
   const removeImage = (id: string) => {
     const updatedImages = images.filter((img) => img.id !== id);
-    
+
     const removedImage = images.find((img) => img.id === id);
     if (removedImage && removedImage.sourceType === 'file') {
       URL.revokeObjectURL(removedImage.preview);
@@ -124,14 +124,10 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
           <div className="flex flex-col items-center gap-2">
             <Upload className="h-8 w-8 text-gray-400" />
             <div className="text-center">
-              <span className="font-medium text-blue-500 hover:text-blue-600">
-                Click to upload
-              </span>{' '}
+              <span className="font-medium text-blue-500 hover:text-blue-600">Click to upload</span>{' '}
               <span className="text-gray-500 dark:text-gray-400">or drag and drop</span>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              PNG, JPG, GIF up to 10MB
-            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, GIF up to 10MB</p>
           </div>
         </label>
 

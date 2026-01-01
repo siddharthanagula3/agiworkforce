@@ -125,10 +125,10 @@ export function ApplicationPreview() {
 
         {/* Caption */}
         <p className="mt-4 text-center text-sm text-zinc-400">
-          Clean, focused interface designed for productivity. Switch between specialized modes, choose from multiple AI models, and experience real-time streaming responses.
+          Clean, focused interface designed for productivity. Switch between specialized modes,
+          choose from multiple AI models, and experience real-time streaming responses.
         </p>
       </div>
     </div>
   );
 }
-
