@@ -76,8 +76,8 @@ fn map_conversation(row: &Row) -> Result<Conversation> {
 
 pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
     conn.execute(
-        "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
-        params![message.conversation_id],
+        "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND user_id = ?2",
+        params![message.conversation_id, message.user_id],
     )?;
 
     conn.execute(
