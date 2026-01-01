@@ -68,6 +68,7 @@ fn detect_agentic_intent(content: &str) -> bool {
         .any(|pattern| content_lower.contains(pattern))
 }
 
+#[derive(Clone)]
 pub struct AppDatabase {
     pub conn: Arc<Mutex<Connection>>,
 }
@@ -484,9 +485,12 @@ pub async fn chat_send_message(
         prefer_cloud_credits: request.prefer_cloud_credits,
     };
 
-    let db = _db;
+    // Clone the inner Arc before moving _db
+    let db_arc = AppDatabase {
+        conn: _db.inner().conn.clone(),
+    };
     let conversation = {
-        let conn = db.connection()?;
+        let conn = db_arc.connection()?;
         if let Some(conv_id) = request.conversation_id {
             repository::get_conversation(&conn, conv_id)
                 .map_err(|e| format!("Failed to get conversation: {e}"))?
@@ -514,7 +518,7 @@ pub async fn chat_send_message(
     };
 
     let user_message = {
-        let conn = db.connection()?;
+        let conn = _db.connection()?;
         let msg = Message {
             id: 0,
             conversation_id: conversation.id,
@@ -533,7 +537,7 @@ pub async fn chat_send_message(
     };
 
     let history = {
-        let conn = db.connection()?;
+        let conn = _db.connection()?;
         repository::list_messages(&conn, conversation.id)
             .map_err(|e| format!("Failed to load message history: {e}"))?
     };
@@ -567,158 +571,227 @@ pub async fn chat_send_message(
     let stream_mode = request.stream.unwrap_or(false);
 
     if stream_mode {
-        let router = _llm_state.router.read().await;
-
         reset_stop_flag();
 
+        // Use frontend message ID if provided, otherwise use 0 as fallback
+        let frontend_message_id = request
+            .frontend_message_id
+            .clone()
+            .unwrap_or_else(|| "0".to_string());
+
+        // Emit stream start event
         let _ = app_handle.emit(
             "chat:stream-start",
             serde_json::json!({
                 "conversation_id": conversation.id,
-                "message_id": 0,
+                "message_id": frontend_message_id,
                 "created_at": Utc::now().to_rfc3339()
             }),
         );
 
-        match router
-            .send_message_streaming(&llm_request, &preferences)
-            .await
-        {
-            Ok(mut stream) => {
-                let mut full_content = String::new();
-                let mut token_count = 0u32;
-                let mut was_stopped = false;
+        // Clone all needed variables for the spawned task
+        let app_handle_clone = app_handle.clone();
+        let frontend_message_id_clone = frontend_message_id.clone();
+        let conversation_id_clone = conversation.id;
+        let llm_request_clone = llm_request.clone();
+        let preferences_clone = preferences.clone();
+        let router_arc = _llm_state.router.clone();
+        let db_arc_clone = db_arc.clone();
+        let provider_enum_clone = provider_enum;
+        let model_clone = model.clone();
 
-                let mut pending_notified = false;
-                while let Some(chunk_result) = stream.next().await {
-                    if should_stop_generation() {
-                        info!("[Chat] Generation stopped by user");
-                        was_stopped = true;
-                        break;
-                    }
+        // Spawn streaming task to avoid blocking the command response
+        // Return immediately - events will handle the streaming updates
+        tauri::async_runtime::spawn(async move {
+            let router = router_arc.read().await;
 
-                    // Check for pending user messages during streaming
-                    if has_pending_messages() && !pending_notified {
-                        let pending = peek_pending_messages();
-                        info!(
-                            "[Chat] {} pending message(s) detected during streaming",
-                            pending.len()
-                        );
-                        let _ = app_handle.emit(
-                            "chat:pending-context-available",
-                            serde_json::json!({
-                                "pending_messages": pending,
-                                "current_phase": "streaming",
-                                "count": pending.len()
-                            }),
-                        );
-                        pending_notified = true;
-                    }
+            match router
+                .send_message_streaming(&llm_request_clone, &preferences_clone)
+                .await
+            {
+                Ok(mut stream) => {
+                    let mut full_content = String::new();
+                    let mut token_count = 0u32;
+                    let mut was_stopped = false;
 
-                    match chunk_result {
-                        Ok(chunk) => {
-                            full_content.push_str(&chunk.content);
-                            token_count += 1;
-
-                            let _ = app_handle.emit(
-                                "chat:stream-chunk",
-                                serde_json::json!({
-                                    "conversation_id": conversation.id,
-                                    "message_id": 0,
-                                    "delta": chunk.content,
-                                    "content": full_content,
-                                    "has_pending_messages": has_pending_messages()
-                                }),
-                            );
-                        }
-                        Err(e) => {
-                            info!("[Chat] Stream error: {e}");
+                    let mut pending_notified = false;
+                    while let Some(chunk_result) = stream.next().await {
+                        if should_stop_generation() {
+                            info!("[Chat] Generation stopped by user");
+                            was_stopped = true;
                             break;
                         }
+
+                        // Check for pending user messages during streaming
+                        if has_pending_messages() && !pending_notified {
+                            let pending = peek_pending_messages();
+                            info!(
+                                "[Chat] {} pending message(s) detected during streaming",
+                                pending.len()
+                            );
+                            let _ = app_handle_clone.emit(
+                                "chat:pending-context-available",
+                                serde_json::json!({
+                                    "pending_messages": pending,
+                                    "current_phase": "streaming",
+                                    "count": pending.len()
+                                }),
+                            );
+                            pending_notified = true;
+                        }
+
+                        match chunk_result {
+                            Ok(chunk) => {
+                                full_content.push_str(&chunk.content);
+                                token_count += 1;
+
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-chunk",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "delta": chunk.content,
+                                        "content": full_content.clone(),
+                                        "has_pending_messages": has_pending_messages()
+                                    }),
+                                );
+                            }
+                            Err(e) => {
+                                info!("[Chat] Stream error: {e}");
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-error",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "error": e.to_string()
+                                    }),
+                                );
+                                break;
+                            }
+                        }
+                    }
+
+                    if was_stopped && !full_content.is_empty() {
+                        full_content.push_str("\n\n*[Generation stopped by user]*");
+                    }
+
+                    // Save assistant message to database
+                    let assistant_message = {
+                        let conn = match db_arc_clone.connection() {
+                            Ok(conn) => conn,
+                            Err(e) => {
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-error",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "error": format!("Database error: {e}")
+                                    }),
+                                );
+                                return;
+                            }
+                        };
+
+                        let output_cost = if let Some(p) = provider_enum_clone {
+                            CostCalculator::new().calculate(p, &model_clone, 0, token_count)
+                        } else {
+                            0.0
+                        };
+
+                        let msg = Message {
+                            id: 0,
+                            conversation_id: conversation_id_clone,
+                            role: MessageRole::Assistant,
+                            content: full_content.clone(),
+                            tokens: Some(token_count as i32),
+                            cost: Some(output_cost),
+                            provider: provider_enum_clone.map(|p| p.as_string().to_string()),
+                            model: Some(model_clone.clone()),
+                            created_at: Utc::now(),
+                        };
+                        match repository::create_message(&conn, &msg) {
+                            Ok(id) => match repository::get_message(&conn, id) {
+                                Ok(msg) => msg,
+                                Err(e) => {
+                                    let _ = app_handle_clone.emit(
+                                        "chat:stream-error",
+                                        serde_json::json!({
+                                            "conversation_id": conversation_id_clone,
+                                            "message_id": frontend_message_id_clone,
+                                            "error": format!("Failed to retrieve message: {e}")
+                                        }),
+                                    );
+                                    return;
+                                }
+                            },
+                            Err(e) => {
+                                let _ = app_handle_clone.emit(
+                                    "chat:stream-error",
+                                    serde_json::json!({
+                                        "conversation_id": conversation_id_clone,
+                                        "message_id": frontend_message_id_clone,
+                                        "error": format!("Failed to save message: {e}")
+                                    }),
+                                );
+                                return;
+                            }
+                        }
+                    };
+
+                    // Check for pending messages at stream end
+                    let pending_at_end = peek_pending_messages();
+                    let _ = app_handle_clone.emit(
+                        "chat:stream-end",
+                        serde_json::json!({
+                            "conversation_id": conversation_id_clone,
+                            "message_id": frontend_message_id_clone,
+                            "backend_message_id": assistant_message.id,
+                            "pending_messages_count": pending_at_end.len(),
+                            "has_pending_messages": !pending_at_end.is_empty()
+                        }),
+                    );
+
+                    // If there are pending messages, emit them for processing
+                    if !pending_at_end.is_empty() {
+                        info!(
+                            "[Chat] Stream ended with {} pending message(s) to process",
+                            pending_at_end.len()
+                        );
+                        let _ = app_handle_clone.emit(
+                            "chat:pending-messages-ready",
+                            serde_json::json!({
+                                "conversation_id": conversation_id_clone,
+                                "pending_messages": pending_at_end,
+                                "count": pending_at_end.len()
+                            }),
+                        );
                     }
                 }
-
-                if was_stopped && !full_content.is_empty() {
-                    full_content.push_str("\n\n*[Generation stopped by user]*");
-                }
-
-                let assistant_message = {
-                    let conn = db.connection()?;
-
-                    let output_cost = if let Some(p) = provider_enum {
-                        CostCalculator::new().calculate(p, &model, 0, token_count)
-                    } else {
-                        0.0
-                    };
-
-                    let msg = Message {
-                        id: 0,
-                        conversation_id: conversation.id,
-                        role: MessageRole::Assistant,
-                        content: full_content.clone(),
-                        tokens: Some(token_count as i32),
-                        cost: Some(output_cost),
-                        provider: provider_enum.map(|p| p.as_string().to_string()),
-                        model: Some(model.clone()),
-                        created_at: Utc::now(),
-                    };
-                    let id = repository::create_message(&conn, &msg)
-                        .map_err(|e| format!("Failed to save assistant message: {e}"))?;
-                    repository::get_message(&conn, id)
-                        .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?
-                };
-
-                // Check for pending messages at stream end
-                let pending_at_end = peek_pending_messages();
-                let _ = app_handle.emit(
-                    "chat:stream-end",
-                    serde_json::json!({
-                        "conversation_id": conversation.id,
-                        "message_id": assistant_message.id,
-                        "pending_messages_count": pending_at_end.len(),
-                        "has_pending_messages": !pending_at_end.is_empty()
-                    }),
-                );
-
-                // If there are pending messages, emit them for processing
-                if !pending_at_end.is_empty() {
-                    info!(
-                        "[Chat] Stream ended with {} pending message(s) to process",
-                        pending_at_end.len()
-                    );
-                    let _ = app_handle.emit(
-                        "chat:pending-messages-ready",
+                Err(e) => {
+                    let _ = app_handle_clone.emit(
+                        "chat:stream-error",
                         serde_json::json!({
-                            "conversation_id": conversation.id,
-                            "pending_messages": pending_at_end,
-                            "count": pending_at_end.len()
+                            "conversation_id": conversation_id_clone,
+                            "message_id": frontend_message_id_clone,
+                            "error": format!("Streaming failed: {e}")
                         }),
                     );
                 }
-
-                let stats = {
-                    let conn = db.connection()?;
-                    let messages = repository::list_messages(&conn, conversation.id)
-                        .map_err(|e| format!("Failed to compute stats: {e}"))?;
-                    ConversationStats {
-                        message_count: messages.len(),
-                        total_tokens: messages.iter().filter_map(|m| m.tokens).sum(),
-                        total_cost: messages.iter().filter_map(|m| m.cost).sum(),
-                    }
-                };
-
-                return Ok(ChatSendMessageResponse {
-                    conversation,
-                    user_message,
-                    assistant_message,
-                    stats,
-                    last_message: Some(full_content),
-                });
             }
-            Err(e) => {
-                return Err(format!("Streaming failed: {e}"));
-            }
-        }
+        });
+
+        // Return immediately for streaming mode - events handle the response
+        return Ok(ChatSendMessageResponse {
+            conversation,
+            user_message,
+            assistant_message: Message::default(),
+            stats: ConversationStats {
+                message_count: 0,
+                total_tokens: 0,
+                total_cost: 0.0,
+            },
+            last_message: None,
+        });
     }
 
     // Ensure ManagedCloud provider is initialized if user is authenticated
@@ -781,7 +854,7 @@ pub async fn chat_send_message(
                 match result {
                     Ok(outcome) => {
                         let assistant_message = {
-                            let conn = db.connection()?;
+                            let conn = _db.connection()?;
                             let msg = Message {
                                 id: 0,
                                 conversation_id: conversation.id,
@@ -800,7 +873,7 @@ pub async fn chat_send_message(
                         };
 
                         let stats = {
-                            let conn = db.connection()?;
+                            let conn = _db.connection()?;
                             let messages = repository::list_messages(&conn, conversation.id)
                                 .map_err(|e| format!("Failed to compute stats: {e}"))?;
                             ConversationStats {
@@ -841,7 +914,7 @@ pub async fn chat_send_message(
         match result {
             Ok(outcome) => {
                 let assistant_message = {
-                    let conn = db.connection()?;
+                    let conn = _db.connection()?;
                     let msg = Message {
                         id: 0,
                         conversation_id: conversation.id,
@@ -860,7 +933,7 @@ pub async fn chat_send_message(
                 };
 
                 let stats = {
-                    let conn = db.connection()?;
+                    let conn = _db.connection()?;
                     let messages = repository::list_messages(&conn, conversation.id)
                         .map_err(|e| format!("Failed to compute stats: {e}"))?;
                     ConversationStats {

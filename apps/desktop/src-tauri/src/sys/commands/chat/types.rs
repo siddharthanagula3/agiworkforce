@@ -61,6 +61,10 @@ pub struct ChatSendMessageRequest {
     pub enable_agent_mode: Option<bool>,
     #[serde(default, alias = "preferCloudCredits")]
     pub prefer_cloud_credits: bool,
+
+    // Frontend message ID for event coordination
+    #[serde(default, alias = "frontendMessageId")]
+    pub frontend_message_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
