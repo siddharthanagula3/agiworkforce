@@ -571,7 +571,12 @@ mod tests {
         let conn = setup_test_db();
         let test_user_id = "test_user";
 
-        let id = create_conversation(&conn, "Test Conversation".to_string(), test_user_id.to_string()).unwrap();
+        let id = create_conversation(
+            &conn,
+            "Test Conversation".to_string(),
+            test_user_id.to_string(),
+        )
+        .unwrap();
         assert!(id > 0);
 
         let conv = get_conversation(&conn, id, test_user_id).unwrap();
@@ -593,8 +598,14 @@ mod tests {
         let conn = setup_test_db();
         let test_user_id = "test_user";
 
-        let conv_id = create_conversation(&conn, "Test".to_string(), test_user_id.to_string()).unwrap();
-        let msg = Message::new(conv_id, test_user_id.to_string(), MessageRole::User, "Hello".to_string());
+        let conv_id =
+            create_conversation(&conn, "Test".to_string(), test_user_id.to_string()).unwrap();
+        let msg = Message::new(
+            conv_id,
+            test_user_id.to_string(),
+            MessageRole::User,
+            "Hello".to_string(),
+        );
 
         let id = create_message(&conn, &msg).unwrap();
         assert!(id > 0);
@@ -647,17 +658,37 @@ mod tests {
         let conn = setup_test_db();
         let test_user_id = "test_user";
 
-        let conv_a = create_conversation(&conn, "Conversation A".to_string(), test_user_id.to_string()).unwrap();
-        let conv_b = create_conversation(&conn, "Conversation B".to_string(), test_user_id.to_string()).unwrap();
+        let conv_a = create_conversation(
+            &conn,
+            "Conversation A".to_string(),
+            test_user_id.to_string(),
+        )
+        .unwrap();
+        let conv_b = create_conversation(
+            &conn,
+            "Conversation B".to_string(),
+            test_user_id.to_string(),
+        )
+        .unwrap();
 
-        let mut message_a = Message::new(conv_a, test_user_id.to_string(), MessageRole::Assistant, "Response A".to_string())
-            .with_metrics(100, 0.5);
+        let mut message_a = Message::new(
+            conv_a,
+            test_user_id.to_string(),
+            MessageRole::Assistant,
+            "Response A".to_string(),
+        )
+        .with_metrics(100, 0.5);
         message_a.provider = Some("openai".to_string());
         message_a.model = Some("gpt-4o".to_string());
         create_message(&conn, &message_a).unwrap();
 
-        let mut message_b = Message::new(conv_b, test_user_id.to_string(), MessageRole::Assistant, "Response B".to_string())
-            .with_metrics(80, 0.2);
+        let mut message_b = Message::new(
+            conv_b,
+            test_user_id.to_string(),
+            MessageRole::Assistant,
+            "Response B".to_string(),
+        )
+        .with_metrics(80, 0.2);
         message_b.provider = Some("google".to_string());
         message_b.model = Some("gemini-1.5-flash".to_string());
         create_message(&conn, &message_b).unwrap();
@@ -666,7 +697,8 @@ mod tests {
         assert_eq!(all_timeseries.len(), 1);
         assert!((all_timeseries[0].total_cost - 0.7).abs() < f64::EPSILON);
 
-        let openai_timeseries = list_cost_timeseries(&conn, 7, Some("openai"), None, test_user_id).unwrap();
+        let openai_timeseries =
+            list_cost_timeseries(&conn, 7, Some("openai"), None, test_user_id).unwrap();
         assert_eq!(openai_timeseries.len(), 1);
         assert!((openai_timeseries[0].total_cost - 0.5).abs() < f64::EPSILON);
 
@@ -676,13 +708,21 @@ mod tests {
             .iter()
             .any(|p| p.provider == "openai" && (p.total_cost - 0.5).abs() < f64::EPSILON));
 
-        let google_only = list_cost_by_provider(&conn, None, None, Some("google"), None, test_user_id).unwrap();
+        let google_only =
+            list_cost_by_provider(&conn, None, None, Some("google"), None, test_user_id).unwrap();
         assert_eq!(google_only.len(), 1);
         assert_eq!(google_only[0].provider, "google");
 
-        let top_openai =
-            list_top_conversations_by_cost_filtered(&conn, 5, None, None, Some("openai"), None, test_user_id)
-                .unwrap();
+        let top_openai = list_top_conversations_by_cost_filtered(
+            &conn,
+            5,
+            None,
+            None,
+            Some("openai"),
+            None,
+            test_user_id,
+        )
+        .unwrap();
         assert_eq!(top_openai.len(), 1);
         assert_eq!(top_openai[0].conversation_id, conv_a);
     }
