@@ -33,16 +33,16 @@ describe('useCostStore', () => {
       top_conversations: [],
     });
 
-    await useCostStore.getState().loadAnalytics({ provider: 'openai', model: 'gpt-5.1' });
+    await useCostStore.getState().loadAnalytics({ provider: 'openai', model: 'gpt-5.2' });
     expect(invokeMock).toHaveBeenCalledWith('chat_get_cost_analytics', {
       days: 30,
       provider: 'openai',
-      model: 'gpt-5.1',
+      model: 'gpt-5.2',
     });
     expect(useCostStore.getState().filters).toEqual({
       days: 30,
       provider: 'openai',
-      model: 'gpt-5.1',
+      model: 'gpt-5.2',
     });
 
     invokeMock.mockResolvedValue({

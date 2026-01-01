@@ -2,16 +2,8 @@ import { invoke } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type Provider =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'ollama'
-  | 'xai'
-  | 'deepseek'
-  | 'qwen'
-  | 'moonshot'
-  | 'managed_cloud';
+import type { Provider } from '../types/provider';
+export type { Provider };
 export type Theme = 'light' | 'dark' | 'system';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';

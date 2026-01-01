@@ -207,13 +207,13 @@ impl LLMRouter {
         let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
 
         let mut provider = if is_budget_plan {
-            Provider::DeepSeek // DeepSeek V3 is cheapest at $0.028/$0.42
+            Provider::DeepSeek // DeepSeek V3 is best value
         } else {
-            Provider::OpenAI
+            Provider::Google // Gemini 3 Pro is best balanced/quality
         };
         let mut task_category = TaskCategory::Simple;
         let mut reason = if is_budget_plan {
-            "Budget plan detected - routing to cheapest options (Gemini Flash or Claude Haiku)."
+            "Budget plan detected - routing to best value options (DeepSeek or Gemini Flash)."
                 .to_string()
         } else {
             "General developer chat - routing to balanced cost/quality model.".to_string()
@@ -223,7 +223,7 @@ impl LLMRouter {
             provider = Provider::Google;
             task_category = TaskCategory::Creative;
             reason =
-                "Vision or multimodal content detected - routing to Google Gemini for multimodal reasoning."
+                "Vision or multimodal content detected - routing to Google Gemini for multimodal capabilities."
                     .to_string();
         } else if normalized_intents
             .iter()
@@ -241,11 +241,10 @@ impl LLMRouter {
             )
         }) {
             if is_budget_plan {
-                // Budget plans use affordable cloud models
-                provider = Provider::Google; // Gemini Flash is cheapest
-                task_category = TaskCategory::Simple;
-                reason = "Developer workflow + budget plan - routing to affordable Gemini Flash."
-                    .to_string();
+                // Budget plans use affordable models
+                provider = Provider::DeepSeek; // DeepSeek V3 is excellent for code
+                task_category = TaskCategory::Complex;
+                reason = "Developer workflow + budget plan - routing to DeepSeek V3.".to_string();
             } else {
                 provider = Provider::Anthropic;
                 task_category = TaskCategory::Complex;
@@ -270,10 +269,10 @@ impl LLMRouter {
                     .to_string()
             };
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
-            provider = Provider::Google; // Use Gemini Flash for low cost
+            provider = Provider::DeepSeek; // Use DeepSeek for low cost high quality
             task_category = TaskCategory::Simple;
             reason =
-                "Cost priority is low - routing to affordable Gemini Flash for inexpensive loops."
+                "Cost priority is low - routing to affordable DeepSeek for efficient loops."
                     .to_string();
         }
 
@@ -586,7 +585,7 @@ impl LLMRouter {
         // FIX: Handle "auto" selection
         routed_request.model = if candidate.model == "auto" {
             // Default "Auto" behavior: Use a smart/capable model
-            "claude-3-opus-20240229".to_string()
+            "claude-opus-4-5".to_string()
         } else {
             candidate.model.clone()
         };
@@ -869,12 +868,12 @@ impl LLMRouter {
                         vec![
                             RouteCandidate {
                                 provider: Provider::ManagedCloud,
-                                model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
+                                model: "deepseek-v3.2".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
                                 reason: "auto-economy-best-value-cloud",
                             },
                             RouteCandidate {
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME (DeepSeek V3.2)
+                                model: "deepseek-v3.2".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench
                                 reason: "auto-economy-best-value",
                             },
                             RouteCandidate {
@@ -884,32 +883,12 @@ impl LLMRouter {
                             },
                             RouteCandidate {
                                 provider: Provider::ManagedCloud,
-                                model: "gpt-5-nano".to_string(), // Managed Cloud fallback
-                                reason: "auto-economy-fast-cloud",
+                                model: "managed-cloud-auto".to_string(), // Fallback
+                                reason: "auto-economy-cloud",
                             },
-                            RouteCandidate {
-                                provider: Provider::OpenAI,
-                                model: "gpt-5-nano".to_string(), // 2,667 Elo/$, $0.45/1M
-                                reason: "auto-economy-fast",
-                            },
-                            RouteCandidate {
-                                provider: Provider::ManagedCloud,
-                                model: "grok-4.1-fast".to_string(), // Managed Cloud option
-                                reason: "auto-economy-xai-cloud",
-                            },
-                            RouteCandidate {
-                                provider: Provider::XAI,
-                                model: "grok-4.1-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context, tool-calling (latest Grok)
-                                reason: "auto-economy-xai",
-                            },
-                            RouteCandidate {
-                                provider: Provider::XAI,
-                                model: "grok-3-mini".to_string(), // $0.80/1M, general purpose (legacy)
-                                reason: "auto-economy-xai-legacy",
-                            },
-                            RouteCandidate {
+                             RouteCandidate {
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$, $6.00/1M
+                                model: "claude-haiku-4-5".to_string(),
                                 reason: "auto-economy-quality",
                             },
                         ]
@@ -1020,49 +999,24 @@ impl LLMRouter {
                                 reason: "auto-balanced-cloud",
                             },
                             RouteCandidate {
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
-                                reason: "auto-balanced-reasoning",
-                            },
-                            RouteCandidate {
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, perfect math: 100% AIME ($7.50/1M)
+                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning
                                 reason: "auto-balanced-best-quality",
                             },
-                            RouteCandidate {
-                                provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$
-                                reason: "auto-balanced-best-value",
-                            },
-                            RouteCandidate {
-                                provider: Provider::OpenAI,
-                                model: "gpt-5-nano".to_string(), // Fast budget: 2,667 Elo/$
-                                reason: "auto-balanced",
-                            },
-                            RouteCandidate {
-                                provider: Provider::XAI,
-                                model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
-                                reason: "auto-balanced-xai-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::XAI,
-                                model: "grok-4.1-fast".to_string(), // Fast, 2M context (non-reasoning)
-                                reason: "auto-balanced-xai",
-                            },
-                            RouteCandidate {
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M
-                                reason: "auto-balanced-deepseek",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Qwen,
-                                model: "qwen3-max".to_string(), // Reasoning capabilities
-                                reason: "auto-balanced-qwen",
-                            },
-                            RouteCandidate {
+                             RouteCandidate {
                                 provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
-                                reason: "auto-balanced",
+                                model: "claude-sonnet-4-5".to_string(),
+                                reason: "auto-balanced-sonnet",
+                            },
+                            RouteCandidate {
+                                provider: Provider::Moonshot,
+                                model: "kimi-k2-thinking".to_string(), 
+                                reason: "auto-balanced-reasoning",
+                            },
+                             RouteCandidate {
+                                provider: Provider::DeepSeek,
+                                model: "deepseek-v3.2".to_string(), 
+                                reason: "auto-balanced-deepseek",
                             },
                         ]
                     }
@@ -1176,50 +1130,30 @@ impl LLMRouter {
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-premium-cloud",
                             },
-                            RouteCandidate {
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Qwen,
-                                model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Google,
-                                model: "gemini-3-deep-think".to_string(), // Reasoning model: $10.00/1M, advanced reasoning
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, perfect math: 100% AIME ($7.50/1M)
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
+                             RouteCandidate {
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2".to_string(), // Fastest premium: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA, 100% AIME
-                                reason: "auto-premium-fast",
-                            },
-                            RouteCandidate {
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo, 100% AIME
+                                model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(), // Best coding: 80.9% SWE-bench, best reasoning: 87.0% GPQA
+                                model: "claude-opus-4-5".to_string(), // Best reasoning/coding
+                                reason: "auto-premium",
+                            },
+                            RouteCandidate {
+                                provider: Provider::Google,
+                                model: "gemini-3-pro".to_string(), // Best multimodal
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
                                 provider: Provider::XAI,
-                                model: "grok-4.1".to_string(), // Second best chat: 1483 Elo, 75% SWE-bench, 87.5% GPQA
+                                model: "grok-4.1".to_string(), 
                                 reason: "auto-premium-xai",
                             },
-                            RouteCandidate {
+                             RouteCandidate {
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: still available
-                                reason: "auto-premium-deepseek",
+                                model: "deepseek-v3.2".to_string(),
+                                reason: "auto-premium-deepseek", // Good backup
                             },
                         ]
                     }
@@ -1232,47 +1166,27 @@ impl LLMRouter {
                             },
                             RouteCandidate {
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(), // Best coding: 80.9% SWE-bench, best reasoning: 87.0% GPQA
+                                model: "claude-opus-4-5".to_string(), // Best coding: 80.9% SWE-bench
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-codex".to_string(), // Best code generation: 89% Pass@1, 97% HumanEval
+                                model: "gpt-5.2-codex".to_string(), // Best code generation
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, advanced reasoning: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Qwen,
-                                model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M
+                                model: "o3".to_string(), // Reasoning specialist
                                 reason: "auto-premium-reasoning",
                             },
                             RouteCandidate {
                                 provider: Provider::Google,
-                                model: "gemini-3-deep-think".to_string(), // Reasoning model: $10.00/1M, advanced reasoning
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
-                                provider: Provider::XAI,
-                                model: "grok-4.1".to_string(), // Enhanced reasoning: 1483 Elo, 87.5% GPQA
-                                reason: "auto-premium-xai",
+                                model: "gemini-3-pro".to_string(), 
+                                reason: "auto-premium-complex",
                             },
                             RouteCandidate {
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3".to_string(), // Best cost efficiency: still available
+                                model: "deepseek-v3.2".to_string(), // Strong code reasoning
                                 reason: "auto-premium-deepseek",
                             },
                         ]
@@ -1285,39 +1199,19 @@ impl LLMRouter {
                                 reason: "auto-premium-cloud",
                             },
                             RouteCandidate {
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, advanced reasoning: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Qwen,
-                                model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
                                 provider: Provider::Google,
-                                model: "gemini-3-deep-think".to_string(), // Reasoning model: $10.00/1M, advanced reasoning
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, multimodal ($7.50/1M)
-                                reason: "auto-premium",
+                                model: "gemini-3-pro".to_string(), // Best multimodal/creative
+                                reason: "auto-premium-creative",
                             },
                             RouteCandidate {
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo, 100% AIME
-                                reason: "auto-premium",
+                                model: "gpt-5.2-pro".to_string(), // High creativity
+                                reason: "auto-premium-creative",
                             },
-                            RouteCandidate {
+                             RouteCandidate {
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(), // Deep reasoning: 87.0% GPQA
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
-                                provider: Provider::XAI,
-                                model: "grok-4.1".to_string(), // Enhanced reasoning: 1483 Elo, 87.5% GPQA
-                                reason: "auto-premium-xai",
+                                model: "claude-opus-4-5".to_string(), 
+                                reason: "auto-premium-creative",
                             },
                         ]
                     }
@@ -1366,9 +1260,9 @@ impl LLMRouter {
                 TaskCategory::Creative => "grok-4.1".to_string(),
             },
             Provider::DeepSeek => match task {
-                TaskCategory::Simple => "deepseek-v3".to_string(), // DeepSeek V3.2
-                TaskCategory::Complex => "deepseek-v3".to_string(), // DeepSeek V3.2
-                TaskCategory::Creative => "deepseek-v3".to_string(), // DeepSeek V3.2
+                TaskCategory::Simple => "deepseek-v3.2".to_string(), // DeepSeek V3.2
+                TaskCategory::Complex => "deepseek-v3.2".to_string(), // DeepSeek V3.2
+                TaskCategory::Creative => "deepseek-v3.2".to_string(), // DeepSeek V3.2
             },
             Provider::Qwen => match task {
                 TaskCategory::Simple => "qwen-max-2025-01-25".to_string(),
