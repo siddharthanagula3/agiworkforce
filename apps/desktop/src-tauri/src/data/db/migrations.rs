@@ -274,7 +274,7 @@ fn apply_migration_v42(conn: &Connection) -> Result<()> {
 fn ensure_column(conn: &Connection, table: &str, column: &str, column_def: &str) -> Result<()> {
     let pragma_sql = format!("PRAGMA table_info({})", table);
     let mut stmt = conn.prepare(&pragma_sql)?;
-    let column_exists = stmt.exists(rusqlite::params![])?; // This is wrong use of exists on pragma?
+    let _column_exists = stmt.exists(rusqlite::params![])?; // This is wrong use of exists on pragma?
 
     // Correct way to check column existence
     let mut rows = stmt.query([])?;
