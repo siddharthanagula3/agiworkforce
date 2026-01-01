@@ -234,6 +234,35 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [42])?;
     }
 
+    if current_version < 43 {
+        apply_migration_v43(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [43])?;
+    }
+
+    Ok(())
+}
+
+fn apply_migration_v43(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS token_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            input_tokens INTEGER NOT NULL,
+            output_tokens INTEGER NOT NULL,
+            total_cost REAL NOT NULL,
+            model TEXT,
+            provider TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_token_usage_user_created
+         ON token_usage(user_id, created_at DESC)",
+        [],
+    )?;
+
     Ok(())
 }
 
