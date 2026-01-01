@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ModelMetadata } from '../constants/llm';
 import { getAllModels, getModelMetadata } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
-import type { Provider } from './settingsStore';
+import type { Provider } from '../types/provider';
 
 export interface ProviderStatus {
   provider: Provider;
