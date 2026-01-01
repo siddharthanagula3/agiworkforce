@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { ArrowRight, Bot, Cpu, Globe, Shield, Zap } from 'lucide-react';
 import { Header } from '../components/layout/Header';
+import { ApplicationPreview } from '../components/ApplicationPreview';
 
 // Trigger rebuild with workspace dependency fix
 export default function Home() {
@@ -45,19 +45,7 @@ export default function Home() {
             </div>
 
             {/* Application Preview */}
-            <div className="mt-20 rounded-xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm mx-auto max-w-5xl shadow-2xl shadow-blue-900/20">
-              <div className="rounded-lg bg-black aspect-video w-full flex items-center justify-center border border-white/5 relative overflow-hidden group">
-                <Image
-                  src="/app-preview.png"
-                  alt="AGI Workforce Application Preview"
-                  fill
-                  className="object-cover object-top opacity-90 transition-opacity hover:opacity-100"
-                  priority
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1280px"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-              </div>
-            </div>
+            <ApplicationPreview />
           </div>
         </section>
 
