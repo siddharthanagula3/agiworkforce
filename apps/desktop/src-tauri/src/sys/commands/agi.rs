@@ -3,12 +3,13 @@ use crate::core::agi::{
     AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, ExecutionContext, Goal,
     Priority, ScoredResult,
 };
+use crate::core::router::Provider;
 use crate::sys::commands::llm::LLMState;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Emitter, State};
 use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -732,4 +733,104 @@ pub async fn get_knowledge_by_category(
         .collect();
 
     Ok(filtered)
+}
+
+/// Helper function to get user tier (simplified - can be enhanced with actual DB lookup)
+fn get_user_tier() -> &'static str {
+    // TODO: Replace with actual subscription lookup from database
+    // For now, defaulting to "pro" - in production, fetch from:
+    // - get_current_plan() or
+    // - UserSubscription from billing state
+    "pro"
+}
+
+/// Select best model and provider based on user tier
+fn select_best_model_by_tier(tier: &str) -> (&'static str, Provider) {
+    match tier.to_lowercase().as_str() {
+        "max" | "enterprise" => ("claude-3-5-sonnet-20241022", Provider::Anthropic),
+        "pro" => ("gpt-4o", Provider::OpenAI),
+        _ => ("gpt-4o-mini", Provider::OpenAI), // Default/Free/Hobby
+    }
+}
+
+#[tauri::command]
+pub async fn start_agent_task(
+    app: tauri::AppHandle,
+    goal: String,
+    _mode: String,
+    llm_state: State<'_, LLMState>,
+) -> Result<String, String> {
+    tracing::info!("[start_agent_task] Starting agent task with goal: {}", goal);
+
+    // 1. Determine User Tier
+    let user_tier = get_user_tier();
+
+    // 2. Select Best Model based on Tier
+    let (model, provider) = select_best_model_by_tier(user_tier);
+
+    tracing::info!(
+        "[start_agent_task] Auto-selecting model {} (provider: {:?}) for tier {}",
+        model,
+        provider,
+        user_tier
+    );
+
+    // 3. Prepare the Request
+    let router = llm_state.router.clone();
+    let request = crate::core::router::LLMRequest {
+        messages: vec![crate::core::router::ChatMessage {
+            role: "user".to_string(),
+            content: goal.clone(),
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        }],
+        model: model.to_string(),
+        temperature: Some(0.7),
+        max_tokens: Some(4096),
+        stream: false,
+        tools: None,
+        tool_choice: None,
+        thinking_mode: None,
+    };
+
+    // 4. Call API
+    let router_guard = router.read().await;
+    let preferences = crate::core::router::llm_router::RouterPreferences {
+        provider: Some(provider),
+        model: Some(model.to_string()),
+        ..Default::default()
+    };
+
+    let route_outcome = router_guard
+        .route_with_retry(
+            &request,
+            &preferences,
+            None, // Use default retry config
+        )
+        .await
+        .map_err(|e| format!("Failed to route request: {}", e))?;
+
+    // 5. Emit streaming tokens to frontend (for real-time updates)
+    // Emit the full response content
+    let _ = app.emit("chat-token", &route_outcome.response.content);
+
+    // 6. Calculate and log token usage
+    let input_tokens = route_outcome.prompt_tokens;
+    let output_tokens = route_outcome.completion_tokens;
+    let total_cost = route_outcome.cost;
+
+    tracing::info!(
+        "[start_agent_task] Tokens Used: {} input + {} output = {} total | Cost: ${:.6}",
+        input_tokens,
+        output_tokens,
+        input_tokens + output_tokens,
+        total_cost
+    );
+
+    // TODO: Save `total_cost` to database here
+    // Example:
+    // save_token_usage(user_id, input_tokens, output_tokens, total_cost, model).await?;
+
+    Ok(route_outcome.response.content)
 }

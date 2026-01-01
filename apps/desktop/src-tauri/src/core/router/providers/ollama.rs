@@ -5,6 +5,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OllamaMessage {
@@ -51,8 +52,13 @@ pub struct OllamaProvider {
 
 impl OllamaProvider {
     pub fn new(base_url: Option<String>) -> Self {
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(300))
+            .build()
+            .expect("Failed to create HTTP client");
         Self {
-            client: Client::new(),
+            client,
             base_url: base_url.unwrap_or_else(|| "http://localhost:3000".to_string()),
         }
     }

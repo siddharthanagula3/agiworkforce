@@ -60,6 +60,21 @@ impl CostCalculator {
                 output_per_million: 15.0,
             },
         );
+        // GPT-4o models
+        pricing.insert(
+            (Provider::OpenAI, "gpt-4o"),
+            Pricing {
+                input_per_million: 5.0,
+                output_per_million: 15.0,
+            },
+        );
+        pricing.insert(
+            (Provider::OpenAI, "gpt-4o-mini"),
+            Pricing {
+                input_per_million: 0.15,
+                output_per_million: 0.6,
+            },
+        );
 
         // Claude 4.5 models (Current pricing as of 2025)
         pricing.insert(
@@ -81,6 +96,14 @@ impl CostCalculator {
             Pricing {
                 input_per_million: 5.0,
                 output_per_million: 25.0,
+            },
+        );
+        // Claude 3.5 Sonnet (for backward compatibility)
+        pricing.insert(
+            (Provider::Anthropic, "claude-3-5-sonnet-20241022"),
+            Pricing {
+                input_per_million: 3.0,
+                output_per_million: 15.0,
             },
         );
 

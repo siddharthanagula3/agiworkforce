@@ -7,6 +7,7 @@ use reqwest::Client;
 use serde_json::Value;
 use std::error::Error;
 use std::pin::Pin;
+use std::time::Duration;
 
 pub struct ManagedCloudProvider {
     client: Client,
@@ -20,9 +21,12 @@ impl Default for ManagedCloudProvider {
 
 impl ManagedCloudProvider {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(300))
+            .build()
+            .expect("Failed to create HTTP client");
+        Self { client }
     }
 }
 
