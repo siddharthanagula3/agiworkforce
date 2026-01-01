@@ -144,4 +144,48 @@ export class GoogleProvider extends BaseLLMProvider {
       throw error;
     }
   }
+
+  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+    const url = `${this.baseUrl}/models/${request.model}:streamGenerateContent?key=${this.apiKey}`;
+
+    // Convert messages format for Google Gemini
+    const contents = request.messages
+      .filter((msg) => msg.role !== 'system')
+      .map((msg) => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      }));
+
+    const systemInstruction = request.messages.find((msg) => msg.role === 'system');
+
+    const body: Record<string, unknown> = {
+      contents,
+      ...(systemInstruction && {
+        systemInstruction: {
+          parts: [{ text: systemInstruction.content }],
+        },
+      }),
+      generationConfig: {
+        ...(request.temperature !== undefined && { temperature: request.temperature }),
+        ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
+      },
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google API error: ${response.status} ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body for streaming request');
+    }
+
+    return response.body;
+  }
 }

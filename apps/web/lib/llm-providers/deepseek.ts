@@ -87,4 +87,39 @@ export class DeepSeekProvider extends BaseLLMProvider {
       throw error;
     }
   }
+
+  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+    const url = `${this.baseUrl}/chat/completions`;
+
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: request.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
+      stream: true,
+      // DeepSeek supports thinking mode - default to disabled
+      thinking: { type: 'disabled' },
+    };
+
+    if (request.temperature !== undefined) body.temperature = request.temperature;
+    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`DeepSeek API error: ${response.status} ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body for streaming request');
+    }
+
+    return response.body;
+  }
 }
