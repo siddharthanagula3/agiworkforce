@@ -82,18 +82,20 @@ export const UnifiedAgenticChat: React.FC<{
     const unlistenPromises: Promise<() => void>[] = [];
 
     unlistenPromises.push(
-      listen<{ conversation_id: number; message_id: number; created_at: string }>(
+      listen<{ conversation_id: number; message_id: string | number; created_at: string }>(
         'chat:stream-start',
         ({ payload }) => {
           console.log('[UnifiedAgenticChat] Stream started:', payload);
 
-          useUnifiedChatStore.getState().setIsLoading(false);
+          // Stream has started, but we keep isLoading true until stream-end
+          // This allows the UI to show streaming state
+          useUnifiedChatStore.getState().setIsLoading(true);
         },
       ),
     );
 
     unlistenPromises.push(
-      listen<{ conversation_id: number; message_id: number; delta: string; content: string }>(
+      listen<{ conversation_id: number; message_id: string | number; delta: string; content: string }>(
         'chat:stream-chunk',
         ({ payload }) => {
           const state = useUnifiedChatStore.getState();
@@ -104,6 +106,7 @@ export const UnifiedAgenticChat: React.FC<{
             return;
           }
 
+          // Handle both string (UUID) and number (backend ID) message IDs
           const targetMessageId = String(payload.message_id);
 
           // First priority: verify message exists with this ID
@@ -150,15 +153,49 @@ export const UnifiedAgenticChat: React.FC<{
     );
 
     unlistenPromises.push(
-      listen<{ conversation_id: number; message_id: number }>(
+      listen<{ conversation_id: number; message_id: string | number; backend_message_id?: number }>(
         'chat:stream-end',
-        ({ payload: _payload }) => {
+        ({ payload }) => {
           const state = useUnifiedChatStore.getState();
+          const messageId = String(payload.message_id);
           const currentStreamingId = state.currentStreamingMessageId;
 
-          if (currentStreamingId) {
-            state.updateMessage(currentStreamingId, {
+          // Update the message that was streaming
+          const targetId = state.messages.some((m) => m.id === messageId) 
+            ? messageId 
+            : currentStreamingId;
+
+          if (targetId) {
+            state.updateMessage(targetId, {
               metadata: { streaming: false },
+            });
+          }
+
+          state.setIsLoading(false);
+          state.setStreamingMessage(null);
+        },
+      ),
+    );
+
+    // Listen for stream errors
+    unlistenPromises.push(
+      listen<{ conversation_id: number; message_id: string | number; error: string }>(
+        'chat:stream-error',
+        ({ payload }) => {
+          const state = useUnifiedChatStore.getState();
+          const messageId = String(payload.message_id);
+          const currentStreamingId = state.currentStreamingMessageId;
+
+          // Update the message that was streaming with error
+          const targetId = state.messages.some((m) => m.id === messageId) 
+            ? messageId 
+            : currentStreamingId;
+
+          if (targetId) {
+            state.updateMessage(targetId, {
+              content: `Error: ${payload.error}`,
+              metadata: { streaming: false },
+              error: payload.error,
             });
           }
 
@@ -583,6 +620,8 @@ export const UnifiedAgenticChat: React.FC<{
           : undefined;
 
         // All LLM requests use cloud credits from subscription (except Ollama local)
+        // For streaming mode, we pass the frontend message ID and don't wait for the response
+        // Events will handle all updates
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
@@ -603,48 +642,21 @@ export const UnifiedAgenticChat: React.FC<{
             taskMetadata,
             thinkingMode: useModelStore.getState().thinkingModeEnabled,
             preferCloudCredits: true,
+            frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination
           },
         });
 
-        // Link backend ID to frontend UUID
+        // Link backend ID to frontend UUID (if conversation was created)
         if (response.conversation?.id && activeConversationId) {
           useUnifiedChatStore
             .getState()
             .linkConversationId(activeConversationId, response.conversation.id);
         }
 
-        setIsLoading(false);
-
-        if (response.assistant_message?.content) {
-          updateMessage(assistantMessageId, {
-            content: response.assistant_message.content,
-            artifacts: response.assistant_message.artifacts,
-            metadata: {
-              streaming: false,
-              model: response.assistant_message.model,
-              provider: response.assistant_message.provider,
-              tokenCount: response.assistant_message.tokens,
-              cost: response.assistant_message.cost,
-              artifacts: response.assistant_message.artifacts,
-            },
-          });
-
-          const usageStore = useUsageStore.getState();
-          const modelId = response.assistant_message.model;
-          const provider = response.assistant_message.provider;
-
-          const inputTokens = response.user_message?.tokens || Math.ceil(content.length / 4);
-          const outputTokens = response.assistant_message?.tokens || 0;
-
-          void usageStore
-            .trackLLMUsageDetailed({
-              modelId,
-              provider,
-              inputTokens,
-              outputTokens,
-            })
-            .catch((err) => console.error('[UnifiedAgenticChat] Failed to track usage:', err));
-        }
+        // For streaming mode, we don't update from the response
+        // All updates come from events (chat:stream-chunk, chat:stream-end, etc.)
+        // The response is just an acknowledgment that streaming started
+        // setIsLoading will be set to false by the chat:stream-end event handler
       }
     } catch (error) {
       console.error('[UnifiedAgenticChat] Error sending message:', error);
