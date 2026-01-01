@@ -177,7 +177,7 @@ pub async fn ocr_process_image(
 
     let confidence = tess.mean_text_conf() as f32;
 
-    let words = extract_word_data(&tess)?;
+    let words = extract_word_data(&mut tess)?;
 
     let processing_time = start.elapsed().as_millis() as u64;
 
@@ -280,7 +280,7 @@ pub async fn ocr_process_region(
         .map_err(|e| format!("Failed to extract text: {}", e))?;
 
     let confidence = tess.mean_text_conf() as f32;
-    let words = extract_word_data(&tess)?;
+    let words = extract_word_data(&mut tess)?;
 
     let processing_time = start.elapsed().as_millis() as u64;
 
@@ -445,7 +445,7 @@ pub async fn ocr_process_with_boxes(
 
     let confidence = tess.mean_text_conf() as f32;
 
-    let words = extract_word_data(&tess)?;
+    let words = extract_word_data(&mut tess)?;
 
     let processing_time = start.elapsed().as_millis() as u64;
 
@@ -564,40 +564,55 @@ pub async fn ocr_preprocess_image(
 }
 
 #[cfg(feature = "ocr")]
-fn extract_word_data(_tess: &Tesseract) -> Result<Vec<WordData>, String> {
-    let words = Vec::new();
-
-    // FIXME: Tesseract crate version mismatch or missing method.
-    // Disabling word box extraction temporarily to fix build.
-
-    // let boxes: Vec<tesseract::ComponentBox> = Vec::new();
-    // tess.get_component_boxes(PageIteratorLevel::Word, true)
-    //    .map_err(|e| format!("Failed to get word boxes: {}", e))?;
-
-    /*
-    for bbox in boxes {
-        let word_text = bbox.text.trim().to_string();
-
-        if word_text.is_empty() {
+fn extract_word_data(tess: &mut Tesseract) -> Result<Vec<WordData>, String> {
+    // Attempt to use TSV for bounding boxes which is reliable across Tesseract versions
+    let tsv = tess.get_tsv_text(0)
+        .map_err(|e| format!("Failed to get TSV text: {}", e))?;
+    
+    let mut words = Vec::new();
+    
+    // TSV format: level page_num block_num par_num line_num word_num left top width height conf text
+    // Level 5 corresponds to Word
+    
+    for line in tsv.lines().skip(1) {
+        let parts: Vec<&str> = line.split('\t').collect();
+        // Check if we have enough parts (at least 12 usually, but text acts as 12th)
+        if parts.len() < 12 { 
+            continue; 
+        }
+        
+        // Parse level (index 0)
+        let level: i32 = parts[0].parse().unwrap_or(0);
+        if level != 5 { 
+            continue; 
+        }
+        
+        // Parse geometry and confidence
+        // indices: 6=left, 7=top, 8=width, 9=height, 10=conf, 11=text
+        let left: i32 = parts[6].parse().unwrap_or(0);
+        let top: i32 = parts[7].parse().unwrap_or(0);
+        let width: u32 = parts[8].parse().unwrap_or(0);
+        let height: u32 = parts[9].parse().unwrap_or(0);
+        let conf: f32 = parts[10].parse().unwrap_or(0.0);
+        let text = parts[11].trim().to_string();
+        
+        if text.is_empty() {
             continue;
         }
-
-        let word_confidence = bbox.confidence as f32;
-
+        
         words.push(WordData {
-            text: word_text,
-            confidence: word_confidence,
+            text,
+            confidence: conf,
             bbox: BoundingBox {
-                x: bbox.x,
-                y: bbox.y,
-                width: bbox.w as u32,
-                height: bbox.h as u32,
+                x: left,
+                y: top,
+                width,
+                height,
             },
         });
     }
-    */
 
-    tracing::debug!("Extracted {} words with bounding boxes", words.len());
+    tracing::debug!("Extracted {} words with bounding boxes from TSV", words.len());
     Ok(words)
 }
 
