@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::time::Duration;
 
 const DEEPSEEK_API_BASE: &str = "https://api.agiworkforce.com";
 
@@ -15,10 +16,12 @@ pub struct DeepSeekProvider {
 
 impl DeepSeekProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self {
-            api_key,
-            client: Client::new(),
-        }
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(300))
+            .build()
+            .expect("Failed to create HTTP client");
+        Self { api_key, client }
     }
 
     fn get_api_key(&self) -> Result<&str, Box<dyn Error + Send + Sync>> {

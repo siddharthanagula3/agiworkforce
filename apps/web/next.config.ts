@@ -6,6 +6,11 @@ import type { NextConfig } from 'next';
 // Content Security Policy configuration
 // Note: 'unsafe-inline' for styles is needed for Next.js/React styling
 // In production, consider using nonces for stricter CSP
+//
+// Note about font-src: External fonts from domains like r2cdn.perplexity.ai may be blocked.
+// This is expected behavior - CSP only allows fonts from 'self', fonts.gstatic.com, and data:.
+// If you see font loading errors in console from browser extensions or third-party scripts,
+// this is the CSP working correctly to prevent unauthorized resource loading.
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com https://challenges.cloudflare.com;

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 
-use tracing::info;
+use tracing::{debug, info};
 
 pub mod types;
 pub use types::*;
@@ -717,6 +717,34 @@ pub async fn chat_send_message(
             }
             Err(e) => {
                 return Err(format!("Streaming failed: {e}"));
+            }
+        }
+    }
+
+    // Ensure ManagedCloud provider is initialized if user is authenticated
+    // This handles cases where provider wasn't initialized on startup
+    {
+        use crate::core::router::providers::managed_cloud_provider::ManagedCloudProvider;
+        use crate::sys::account::get_access_token;
+
+        // Check if user has access token (is authenticated) and provider isn't already set
+        let has_managed_cloud = {
+            let router = _llm_state.router.read().await;
+            router.has_provider(Provider::ManagedCloud)
+        };
+
+        if !has_managed_cloud {
+            match get_access_token() {
+                Ok(_) => {
+                    // User is authenticated, register ManagedCloud provider
+                    let mut router = _llm_state.router.write().await;
+                    router.set_managed_cloud(Box::new(ManagedCloudProvider::new()));
+                    info!("[Chat] Initialized ManagedCloud provider for authenticated user");
+                }
+                Err(_) => {
+                    // User not authenticated, ManagedCloud won't be available
+                    debug!("[Chat] User not authenticated, ManagedCloud provider not available");
+                }
             }
         }
     }
