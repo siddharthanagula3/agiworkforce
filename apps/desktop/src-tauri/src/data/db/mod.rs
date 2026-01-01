@@ -58,24 +58,24 @@ impl Database {
         Arc::clone(&self.conn)
     }
 
-    pub fn create_conversation(&self, title: String) -> Result<i64> {
-        self.with_connection(|conn| repository::create_conversation(conn, title))
+    pub fn create_conversation(&self, title: String, user_id: String) -> Result<i64> {
+        self.with_connection(|conn| repository::create_conversation(conn, title, user_id))
     }
 
-    pub fn get_conversation(&self, id: i64) -> Result<Conversation> {
-        self.with_connection(|conn| repository::get_conversation(conn, id))
+    pub fn get_conversation(&self, id: i64, user_id: &str) -> Result<Conversation> {
+        self.with_connection(|conn| repository::get_conversation(conn, id, user_id))
     }
 
-    pub fn list_conversations(&self, limit: i64, offset: i64) -> Result<Vec<Conversation>> {
-        self.with_connection(|conn| repository::list_conversations(conn, limit, offset))
+    pub fn list_conversations(&self, limit: i64, offset: i64, user_id: &str) -> Result<Vec<Conversation>> {
+        self.with_connection(|conn| repository::list_conversations(conn, limit, offset, user_id))
     }
 
-    pub fn update_conversation_title(&self, id: i64, title: String) -> Result<()> {
-        self.with_connection(|conn| repository::update_conversation_title(conn, id, title))
+    pub fn update_conversation_title(&self, id: i64, user_id: &str, title: String) -> Result<()> {
+        self.with_connection(|conn| repository::update_conversation_title(conn, id, user_id, title))
     }
 
-    pub fn delete_conversation(&self, id: i64) -> Result<()> {
-        self.with_connection(|conn| repository::delete_conversation(conn, id))
+    pub fn delete_conversation(&self, id: i64, user_id: &str) -> Result<()> {
+        self.with_connection(|conn| repository::delete_conversation(conn, id, user_id))
     }
 
     pub fn create_message(&self, message: &Message) -> Result<i64> {
@@ -166,10 +166,10 @@ mod tests {
     fn test_database_creation() {
         let db = Database::in_memory().unwrap();
 
-        let conv_id = db.create_conversation("Test".to_string()).unwrap();
+        let conv_id = db.create_conversation("Test".to_string(), "test_user".to_string()).unwrap();
         assert!(conv_id > 0);
 
-        let conv = db.get_conversation(conv_id).unwrap();
+        let conv = db.get_conversation(conv_id, "test_user").unwrap();
         assert_eq!(conv.title, "Test");
     }
 
@@ -177,7 +177,7 @@ mod tests {
     fn test_full_workflow() {
         let db = Database::in_memory().unwrap();
 
-        let conv_id = db.create_conversation("Test Chat".to_string()).unwrap();
+        let conv_id = db.create_conversation("Test Chat".to_string(), "test_user".to_string()).unwrap();
 
         let msg1 = Message::new(conv_id, MessageRole::User, "Hello".to_string());
         let msg1_id = db.create_message(&msg1).unwrap();
@@ -192,9 +192,9 @@ mod tests {
         assert_eq!(messages[0].id, msg1_id);
         assert_eq!(messages[1].id, msg2_id);
 
-        db.update_conversation_title(conv_id, "Updated Chat".to_string())
+        db.update_conversation_title(conv_id, "test_user", "Updated Chat".to_string())
             .unwrap();
-        let conv = db.get_conversation(conv_id).unwrap();
+        let conv = db.get_conversation(conv_id, "test_user").unwrap();
         assert_eq!(conv.title, "Updated Chat");
 
         let history = AutomationHistory::new(TaskType::WindowsAutomation, true, 150);
