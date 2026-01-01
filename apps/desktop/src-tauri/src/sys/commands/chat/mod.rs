@@ -1133,11 +1133,18 @@ pub fn chat_get_cost_analytics(
         end
     };
 
-    let timeseries = repository::list_cost_timeseries(&conn, window, provider_ref, model_ref, &user_id)
-        .map_err(|e| format!("Failed to load cost timeseries: {e}"))?;
-    let providers =
-        repository::list_cost_by_provider(&conn, Some(start), Some(end), provider_ref, model_ref, &user_id)
-            .map_err(|e| format!("Failed to load provider breakdown: {e}"))?;
+    let timeseries =
+        repository::list_cost_timeseries(&conn, window, provider_ref, model_ref, &user_id)
+            .map_err(|e| format!("Failed to load cost timeseries: {e}"))?;
+    let providers = repository::list_cost_by_provider(
+        &conn,
+        Some(start),
+        Some(end),
+        provider_ref,
+        model_ref,
+        &user_id,
+    )
+    .map_err(|e| format!("Failed to load provider breakdown: {e}"))?;
     let top_conversations = repository::list_top_conversations_by_cost_filtered(
         &conn,
         10,
