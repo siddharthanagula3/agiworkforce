@@ -4,6 +4,7 @@ use rusqlite::{params, Connection, Result, Row};
 use super::models::{
     AutomationHistory, Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message,
     MessageRole, OverlayEvent, OverlayEventType, ProviderCostBreakdown, Setting, TaskType,
+    TokenUsage,
 };
 
 pub fn create_conversation(conn: &Connection, title: String, user_id: String) -> Result<i64> {
@@ -552,6 +553,22 @@ fn start_of_day(dt: DateTime<Utc>) -> DateTime<Utc> {
         .and_hms_opt(0, 0, 0)
         .expect("00:00:00 should be a valid time");
     Utc.from_utc_datetime(&naive)
+}
+
+pub fn create_token_usage(conn: &Connection, usage: &TokenUsage) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO token_usage (user_id, input_tokens, output_tokens, total_cost, model, provider)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            usage.user_id,
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.total_cost,
+            usage.model,
+            usage.provider,
+        ],
+    )?;
+    Ok(conn.last_insert_rowid())
 }
 
 #[cfg(test)]
