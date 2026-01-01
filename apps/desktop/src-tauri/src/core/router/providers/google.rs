@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 use std::pin::Pin;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct GoogleContent {
@@ -135,9 +136,14 @@ pub struct GoogleProvider {
 
 impl GoogleProvider {
     pub fn new(api_key: String) -> Self {
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(300))
+            .build()
+            .expect("Failed to create HTTP client");
         Self {
             api_key,
-            client: Client::new(),
+            client,
             base_url: "https://api.agiworkforce.com".to_string(),
         }
     }

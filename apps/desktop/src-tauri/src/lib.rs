@@ -402,6 +402,7 @@ pub fn run() {
             crate::sys::commands::agi_list_goals,
             crate::sys::commands::agi_stop,
             crate::sys::commands::agi_cancel_goal,
+            crate::sys::commands::start_agent_task,
 
 
             crate::sys::commands::orchestrator_init,
