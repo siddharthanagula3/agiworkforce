@@ -271,9 +271,8 @@ impl LLMRouter {
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
             provider = Provider::DeepSeek; // Use DeepSeek for low cost high quality
             task_category = TaskCategory::Simple;
-            reason =
-                "Cost priority is low - routing to affordable DeepSeek for efficient loops."
-                    .to_string();
+            reason = "Cost priority is low - routing to affordable DeepSeek for efficient loops."
+                .to_string();
         }
 
         if context.token_estimate > 12_000 && provider == Provider::OpenAI && !is_budget_plan {
@@ -886,7 +885,7 @@ impl LLMRouter {
                                 model: "managed-cloud-auto".to_string(), // Fallback
                                 reason: "auto-economy-cloud",
                             },
-                             RouteCandidate {
+                            RouteCandidate {
                                 provider: Provider::Anthropic,
                                 model: "claude-haiku-4-5".to_string(),
                                 reason: "auto-economy-quality",
@@ -1003,19 +1002,19 @@ impl LLMRouter {
                                 model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning
                                 reason: "auto-balanced-best-quality",
                             },
-                             RouteCandidate {
+                            RouteCandidate {
                                 provider: Provider::Anthropic,
                                 model: "claude-sonnet-4-5".to_string(),
                                 reason: "auto-balanced-sonnet",
                             },
                             RouteCandidate {
                                 provider: Provider::Moonshot,
-                                model: "kimi-k2-thinking".to_string(), 
+                                model: "kimi-k2-thinking".to_string(),
                                 reason: "auto-balanced-reasoning",
                             },
-                             RouteCandidate {
+                            RouteCandidate {
                                 provider: Provider::DeepSeek,
-                                model: "deepseek-v3.2".to_string(), 
+                                model: "deepseek-v3.2".to_string(),
                                 reason: "auto-balanced-deepseek",
                             },
                         ]
@@ -1130,7 +1129,7 @@ impl LLMRouter {
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-premium-cloud",
                             },
-                             RouteCandidate {
+                            RouteCandidate {
                                 provider: Provider::OpenAI,
                                 model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo
                                 reason: "auto-premium",
@@ -1147,10 +1146,10 @@ impl LLMRouter {
                             },
                             RouteCandidate {
                                 provider: Provider::XAI,
-                                model: "grok-4.1".to_string(), 
+                                model: "grok-4.1".to_string(),
                                 reason: "auto-premium-xai",
                             },
-                             RouteCandidate {
+                            RouteCandidate {
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3.2".to_string(),
                                 reason: "auto-premium-deepseek", // Good backup
@@ -1181,7 +1180,7 @@ impl LLMRouter {
                             },
                             RouteCandidate {
                                 provider: Provider::Google,
-                                model: "gemini-3-pro".to_string(), 
+                                model: "gemini-3-pro".to_string(),
                                 reason: "auto-premium-complex",
                             },
                             RouteCandidate {
@@ -1208,9 +1207,9 @@ impl LLMRouter {
                                 model: "gpt-5.2-pro".to_string(), // High creativity
                                 reason: "auto-premium-creative",
                             },
-                             RouteCandidate {
+                            RouteCandidate {
                                 provider: Provider::Anthropic,
-                                model: "claude-opus-4-5".to_string(), 
+                                model: "claude-opus-4-5".to_string(),
                                 reason: "auto-premium-creative",
                             },
                         ]

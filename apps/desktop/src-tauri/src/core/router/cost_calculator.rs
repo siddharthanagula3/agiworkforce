@@ -173,7 +173,7 @@ impl CostCalculator {
                 output_per_million: 10.00,
             },
         );
-         pricing.insert(
+        pricing.insert(
             (Provider::Qwen, "qwen3-max"),
             Pricing {
                 input_per_million: 2.50,
