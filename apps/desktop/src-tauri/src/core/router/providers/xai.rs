@@ -8,6 +8,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
+use std::time::Duration;
 
 const XAI_API_BASE: &str = "https://api.agiworkforce.com";
 
@@ -18,10 +19,12 @@ pub struct XAIProvider {
 
 impl XAIProvider {
     pub fn new(api_key: Option<String>) -> Self {
-        Self {
-            api_key,
-            client: Client::new(),
-        }
+        let client = Client::builder()
+            .connect_timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(300))
+            .build()
+            .expect("Failed to create HTTP client");
+        Self { api_key, client }
     }
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
