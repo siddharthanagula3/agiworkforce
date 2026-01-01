@@ -569,30 +569,32 @@ mod tests {
     #[test]
     fn test_conversation_crud() {
         let conn = setup_test_db();
+        let test_user_id = "test_user";
 
-        let id = create_conversation(&conn, "Test Conversation".to_string()).unwrap();
+        let id = create_conversation(&conn, "Test Conversation".to_string(), test_user_id.to_string()).unwrap();
         assert!(id > 0);
 
-        let conv = get_conversation(&conn, id).unwrap();
+        let conv = get_conversation(&conn, id, test_user_id).unwrap();
         assert_eq!(conv.title, "Test Conversation");
 
-        update_conversation_title(&conn, id, "Updated Title".to_string()).unwrap();
-        let conv = get_conversation(&conn, id).unwrap();
+        update_conversation_title(&conn, id, test_user_id, "Updated Title".to_string()).unwrap();
+        let conv = get_conversation(&conn, id, test_user_id).unwrap();
         assert_eq!(conv.title, "Updated Title");
 
-        let convs = list_conversations(&conn, 10, 0).unwrap();
+        let convs = list_conversations(&conn, 10, 0, test_user_id).unwrap();
         assert_eq!(convs.len(), 1);
 
-        delete_conversation(&conn, id).unwrap();
-        assert!(get_conversation(&conn, id).is_err());
+        delete_conversation(&conn, id, test_user_id).unwrap();
+        assert!(get_conversation(&conn, id, test_user_id).is_err());
     }
 
     #[test]
     fn test_message_crud() {
         let conn = setup_test_db();
+        let test_user_id = "test_user";
 
-        let conv_id = create_conversation(&conn, "Test".to_string()).unwrap();
-        let msg = Message::new(conv_id, MessageRole::User, "Hello".to_string());
+        let conv_id = create_conversation(&conn, "Test".to_string(), test_user_id.to_string()).unwrap();
+        let msg = Message::new(conv_id, test_user_id.to_string(), MessageRole::User, "Hello".to_string());
 
         let id = create_message(&conn, &msg).unwrap();
         assert!(id > 0);
@@ -625,59 +627,61 @@ mod tests {
     #[test]
     fn test_cost_analytics_empty() {
         let conn = setup_test_db();
+        let test_user_id = "test_user";
 
-        let total = sum_cost_since(&conn, Utc::now()).unwrap();
+        let total = sum_cost_since(&conn, Utc::now(), test_user_id).unwrap();
         assert_eq!(total, 0.0);
 
-        let timeseries = list_cost_timeseries(&conn, 7, None, None).unwrap();
+        let timeseries = list_cost_timeseries(&conn, 7, None, None, test_user_id).unwrap();
         assert!(timeseries.is_empty());
 
-        let providers = list_cost_by_provider(&conn, None, None, None, None).unwrap();
+        let providers = list_cost_by_provider(&conn, None, None, None, None, test_user_id).unwrap();
         assert!(providers.is_empty());
 
-        let top = list_top_conversations_by_cost(&conn, 5, None, None).unwrap();
+        let top = list_top_conversations_by_cost(&conn, 5, None, None, test_user_id).unwrap();
         assert!(top.is_empty());
     }
 
     #[test]
     fn test_cost_analytics_filters() {
         let conn = setup_test_db();
+        let test_user_id = "test_user";
 
-        let conv_a = create_conversation(&conn, "Conversation A".to_string()).unwrap();
-        let conv_b = create_conversation(&conn, "Conversation B".to_string()).unwrap();
+        let conv_a = create_conversation(&conn, "Conversation A".to_string(), test_user_id.to_string()).unwrap();
+        let conv_b = create_conversation(&conn, "Conversation B".to_string(), test_user_id.to_string()).unwrap();
 
-        let mut message_a = Message::new(conv_a, MessageRole::Assistant, "Response A".to_string())
+        let mut message_a = Message::new(conv_a, test_user_id.to_string(), MessageRole::Assistant, "Response A".to_string())
             .with_metrics(100, 0.5);
         message_a.provider = Some("openai".to_string());
         message_a.model = Some("gpt-4o".to_string());
         create_message(&conn, &message_a).unwrap();
 
-        let mut message_b = Message::new(conv_b, MessageRole::Assistant, "Response B".to_string())
+        let mut message_b = Message::new(conv_b, test_user_id.to_string(), MessageRole::Assistant, "Response B".to_string())
             .with_metrics(80, 0.2);
         message_b.provider = Some("google".to_string());
         message_b.model = Some("gemini-1.5-flash".to_string());
         create_message(&conn, &message_b).unwrap();
 
-        let all_timeseries = list_cost_timeseries(&conn, 7, None, None).unwrap();
+        let all_timeseries = list_cost_timeseries(&conn, 7, None, None, test_user_id).unwrap();
         assert_eq!(all_timeseries.len(), 1);
         assert!((all_timeseries[0].total_cost - 0.7).abs() < f64::EPSILON);
 
-        let openai_timeseries = list_cost_timeseries(&conn, 7, Some("openai"), None).unwrap();
+        let openai_timeseries = list_cost_timeseries(&conn, 7, Some("openai"), None, test_user_id).unwrap();
         assert_eq!(openai_timeseries.len(), 1);
         assert!((openai_timeseries[0].total_cost - 0.5).abs() < f64::EPSILON);
 
-        let providers = list_cost_by_provider(&conn, None, None, None, None).unwrap();
+        let providers = list_cost_by_provider(&conn, None, None, None, None, test_user_id).unwrap();
         assert_eq!(providers.len(), 2);
         assert!(providers
             .iter()
             .any(|p| p.provider == "openai" && (p.total_cost - 0.5).abs() < f64::EPSILON));
 
-        let google_only = list_cost_by_provider(&conn, None, None, Some("google"), None).unwrap();
+        let google_only = list_cost_by_provider(&conn, None, None, Some("google"), None, test_user_id).unwrap();
         assert_eq!(google_only.len(), 1);
         assert_eq!(google_only[0].provider, "google");
 
         let top_openai =
-            list_top_conversations_by_cost_filtered(&conn, 5, None, None, Some("openai"), None)
+            list_top_conversations_by_cost_filtered(&conn, 5, None, None, Some("openai"), None, test_user_id)
                 .unwrap();
         assert_eq!(top_openai.len(), 1);
         assert_eq!(top_openai[0].conversation_id, conv_a);
