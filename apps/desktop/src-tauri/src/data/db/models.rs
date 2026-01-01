@@ -130,6 +130,40 @@ impl Message {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsage {
+    pub id: i64,
+    pub user_id: String,
+    pub input_tokens: i32,
+    pub output_tokens: i32,
+    pub total_cost: f64,
+    pub model: Option<String>,
+    pub provider: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl TokenUsage {
+    pub fn new(
+        user_id: String,
+        input_tokens: i32,
+        output_tokens: i32,
+        total_cost: f64,
+        model: Option<String>,
+        provider: Option<String>,
+    ) -> Self {
+        Self {
+            id: 0,
+            user_id,
+            input_tokens,
+            output_tokens,
+            total_cost,
+            model,
+            provider,
+            created_at: Utc::now(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CostTimeseriesPoint {
     pub date: String,
     pub total_cost: f64,
