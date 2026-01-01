@@ -4,16 +4,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Conversation {
     pub id: i64,
+    pub user_id: String,
     pub title: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl Conversation {
-    pub fn new(title: String) -> Self {
+    pub fn new(user_id: String, title: String) -> Self {
         let now = Utc::now();
         Self {
             id: 0,
+            user_id,
             title,
             created_at: now,
             updated_at: now,
@@ -25,6 +27,7 @@ impl Default for Conversation {
     fn default() -> Self {
         Self {
             id: 0,
+            user_id: String::new(),
             title: "New Conversation".to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -70,6 +73,7 @@ impl MessageRole {
 pub struct Message {
     pub id: i64,
     pub conversation_id: i64,
+    pub user_id: String,
     pub role: MessageRole,
     pub content: String,
     pub tokens: Option<i32>,
@@ -84,6 +88,7 @@ impl Default for Message {
         Self {
             id: 0,
             conversation_id: 0,
+            user_id: String::new(),
             role: MessageRole::default(),
             content: String::new(),
             tokens: None,
@@ -96,10 +101,11 @@ impl Default for Message {
 }
 
 impl Message {
-    pub fn new(conversation_id: i64, role: MessageRole, content: String) -> Self {
+    pub fn new(conversation_id: i64, user_id: String, role: MessageRole, content: String) -> Self {
         Self {
             id: 0,
             conversation_id,
+            user_id,
             role,
             content,
             tokens: None,

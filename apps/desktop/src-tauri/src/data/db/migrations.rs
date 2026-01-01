@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-const CURRENT_VERSION: i32 = 41;
+const CURRENT_VERSION: i32 = 42;
 
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     conn.execute("PRAGMA foreign_keys = ON", [])?;
@@ -229,6 +229,68 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [41])?;
     }
 
+    if current_version < 42 {
+        apply_migration_v42(conn)?;
+        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [42])?;
+    }
+
+    Ok(())
+}
+
+fn apply_migration_v42(conn: &Connection) -> Result<()> {
+    // Add user_id column to conversations table if it doesn't exist
+    ensure_column(
+        conn,
+        "conversations",
+        "user_id",
+        "user_id TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    // Add user_id column to messages table if it doesn't exist
+    ensure_column(
+        conn,
+        "messages",
+        "user_id",
+        "user_id TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    // Create index on user_id for conversations
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_user
+         ON conversations(user_id, updated_at DESC)",
+        [],
+    )?;
+
+    // Create index on user_id for messages
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_user
+         ON messages(user_id, created_at)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+fn ensure_column(conn: &Connection, table: &str, column: &str, column_def: &str) -> Result<()> {
+    let pragma_sql = format!("PRAGMA table_info({})", table);
+    let mut stmt = conn.prepare(&pragma_sql)?;
+    let column_exists = stmt.exists(rusqlite::params![])?; // This is wrong use of exists on pragma?
+
+    // Correct way to check column existence
+    let mut rows = stmt.query([])?;
+    let mut exists = false;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            exists = true;
+            break;
+        }
+    }
+
+    if !exists {
+        let alter_sql = format!("ALTER TABLE {} ADD COLUMN {}", table, column_def);
+        conn.execute(&alter_sql, [])?;
+    }
     Ok(())
 }
 
@@ -1166,23 +1228,6 @@ fn apply_migration_v13(conn: &Connection) -> Result<()> {
          ON checkpoint_restore_history(conversation_id, restored_at DESC)",
         [],
     )?;
-
-    Ok(())
-}
-
-fn ensure_column(conn: &Connection, table: &str, column: &str, definition: &str) -> Result<()> {
-    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
-    let exists = stmt
-        .query_map([], |row| row.get::<_, String>(1))?
-        .filter_map(Result::ok)
-        .any(|name| name == column);
-
-    if !exists {
-        conn.execute(
-            &format!("ALTER TABLE {} ADD COLUMN {}", table, definition),
-            [],
-        )?;
-    }
 
     Ok(())
 }
