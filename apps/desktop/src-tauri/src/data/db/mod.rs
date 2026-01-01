@@ -66,7 +66,12 @@ impl Database {
         self.with_connection(|conn| repository::get_conversation(conn, id, user_id))
     }
 
-    pub fn list_conversations(&self, limit: i64, offset: i64, user_id: &str) -> Result<Vec<Conversation>> {
+    pub fn list_conversations(
+        &self,
+        limit: i64,
+        offset: i64,
+        user_id: &str,
+    ) -> Result<Vec<Conversation>> {
         self.with_connection(|conn| repository::list_conversations(conn, limit, offset, user_id))
     }
 
@@ -166,7 +171,9 @@ mod tests {
     fn test_database_creation() {
         let db = Database::in_memory().unwrap();
 
-        let conv_id = db.create_conversation("Test".to_string(), "test_user".to_string()).unwrap();
+        let conv_id = db
+            .create_conversation("Test".to_string(), "test_user".to_string())
+            .unwrap();
         assert!(conv_id > 0);
 
         let conv = db.get_conversation(conv_id, "test_user").unwrap();
@@ -177,7 +184,9 @@ mod tests {
     fn test_full_workflow() {
         let db = Database::in_memory().unwrap();
 
-        let conv_id = db.create_conversation("Test Chat".to_string(), "test_user".to_string()).unwrap();
+        let conv_id = db
+            .create_conversation("Test Chat".to_string(), "test_user".to_string())
+            .unwrap();
 
         let msg1 = Message::new(conv_id, MessageRole::User, "Hello".to_string());
         let msg1_id = db.create_message(&msg1).unwrap();
