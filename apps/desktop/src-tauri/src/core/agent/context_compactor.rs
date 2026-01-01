@@ -237,6 +237,7 @@ impl ContextCompactor {
                 provider: None,
                 model: None,
                 created_at: chrono::Utc::now(),
+                user_id: messages[0].user_id.clone(),
             };
             compacted.push(summary_msg);
         }
