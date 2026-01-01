@@ -15,11 +15,12 @@ function getSupabaseClient() {
 }
 
 // Credit allocation in cents per month (dollar amount * 100)
+// Based on 35% rule from PRICING_STRATEGY.md
 const PLAN_CREDITS: Record<string, number> = {
   free: 0,
-  hobby: 100, // $1/month = 100 cents
-  pro: 2000, // $20/month = 2000 cents
-  max: 25000, // $250/month = 25000 cents
+  hobby: 350, // $3.50/month (was $1)
+  pro: 1050, // $10.50/month (was $20)
+  max: 10500, // $105.00/month (was $250)
   enterprise: 0, // Custom - handled separately
 };
 
