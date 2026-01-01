@@ -252,16 +252,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     : null;
 
   // Auto-switch to suggested model when suggestion loads (Auto mode behavior)
-  useEffect(() => {
-    if (isAutoMode && suggestion && suggestedMetadata) {
-      // Check if suggested model is available for user's plan
-      const planTier = userPlanTier as any;
-      if (canUseModel(planTier, suggestion.model)) {
-        // Auto-switch to the suggested model without user interaction
-        void selectModel(suggestion.model, suggestedMetadata.provider);
-      }
-    }
-  }, [suggestion, isAutoMode, userPlanTier, suggestedMetadata, selectModel]);
+  // Auto-switch effect removed to keep "Auto" selected
+  // The UI will still show "Routing to [Model]" but the selection remains "Auto"
 
   return (
     <div
