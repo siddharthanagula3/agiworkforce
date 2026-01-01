@@ -583,7 +583,13 @@ impl LLMRouter {
             .ok_or_else(|| anyhow!("Provider {:?} not configured", candidate.provider))?;
 
         let mut routed_request = request.clone();
-        routed_request.model = candidate.model.clone();
+        // FIX: Handle "auto" selection
+        routed_request.model = if candidate.model == "auto" {
+            // Default "Auto" behavior: Use a smart/capable model
+            "claude-3-opus-20240229".to_string()
+        } else {
+            candidate.model.clone()
+        };
 
         let mut response = provider
             .send_message(&routed_request)
