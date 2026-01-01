@@ -49,11 +49,13 @@ export async function POST(req: Request) {
         userId: session.user.id,
         plan_tier: plan, // Useful for the webhook
       },
+      allow_promotion_codes: true,
     });
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
     console.error('Checkout error:', error);
-    return new NextResponse('Internal Error', { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

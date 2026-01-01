@@ -16,8 +16,8 @@ mod tests {
 
         let suggestion = router.suggest_for_context(&context);
 
-        assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5-nano");
+        assert_eq!(suggestion.provider, Provider::DeepSeek);
+        assert_eq!(suggestion.model, "deepseek-v3.2");
     }
 
     #[test]
@@ -51,7 +51,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
 
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-pro");
+        assert_eq!(suggestion.model, "gemini-3-pro"); // Creative uses Pro for vision/multimodal
     }
 
     #[test]
@@ -68,8 +68,8 @@ mod tests {
 
         let suggestion = router.suggest_for_context(&context);
 
-        assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-5");
+        assert_eq!(suggestion.provider, Provider::DeepSeek);
+        assert_eq!(suggestion.model, "deepseek-v3.2");
     }
 
     #[test]
@@ -86,8 +86,8 @@ mod tests {
 
         let suggestion = router.suggest_for_context(&context);
 
-        assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.2");
+        assert_eq!(suggestion.provider, Provider::Google);
+        assert_eq!(suggestion.model, "gemini-3-flash");
     }
 
     #[test]
@@ -103,8 +103,8 @@ mod tests {
 
         let suggestion = router.suggest_for_context(&context);
 
-        assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.provider, Provider::DeepSeek);
+        assert_eq!(suggestion.model, "deepseek-v3.2");
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
 
         let suggestion = router.suggest_for_context(&context);
 
-        assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.2");
+        assert_eq!(suggestion.provider, Provider::Google);
+        assert_eq!(suggestion.model, "gemini-3-flash"); // Budget plan heavy context -> Gemini Flash
     }
 }
