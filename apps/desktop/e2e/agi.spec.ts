@@ -2,8 +2,6 @@ import { test, expect } from './fixtures';
 import { SettingsSnapshot } from './page-objects/SettingsPage';
 import { createErrorHandler } from './utils/error-handler';
 
-
-
 test.describe('AGI Goal Management', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:3000');

@@ -1,4 +1,3 @@
-
 import { invoke } from '@/lib/tauri-mock';
 import * as monaco from 'monaco-editor';
 import React, { useEffect, useRef, useState } from 'react';
@@ -40,7 +39,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     onChangeRef.current = onChange;
   }, [onChange]);
 
-  
   useEffect(() => {
     const detectLanguage = async () => {
       if (filePath && !propLanguage) {
@@ -59,7 +57,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     detectLanguage();
   }, [filePath, propLanguage]);
 
-  
   useEffect(() => {
     if (filePath) {
       setFileUri(`file://${filePath}`);
@@ -68,29 +65,18 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     }
   }, [filePath, detectedLanguage]);
 
-  
   const lsp = useLSP({
     language: detectedLanguage,
     rootPath,
     autoStart: enableLSP && detectedLanguage !== 'plaintext',
   });
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
     const completionProvider = monaco.languages.registerCompletionItemProvider(detectedLanguage, {
       triggerCharacters: ['.', ':', '<', '"', '/', '@'],
       provideCompletionItems: async (_model, position) => {
-        
-        
-        
-        
-        
-        
-        
-        
-
         const items = await lsp.getCompletions(
           fileUri,
           position.lineNumber - 1,
@@ -120,7 +106,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, detectedLanguage, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
@@ -149,7 +134,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, detectedLanguage, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
@@ -178,7 +162,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, detectedLanguage, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
@@ -207,7 +190,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, detectedLanguage, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
@@ -235,7 +217,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, detectedLanguage, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
@@ -279,7 +260,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, detectedLanguage, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!enableLSP || !lsp.server || !editorRef.current) return;
 
@@ -310,7 +290,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       monaco.editor.setModelMarkers(model, 'lsp', markers);
     };
 
-    
     const interval = setInterval(updateDiagnostics, 1000);
     updateDiagnostics();
 
@@ -319,7 +298,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [enableLSP, lsp.server, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -339,25 +317,20 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
     editorRef.current = editor;
 
-    
     if (enableLSP && lsp.server) {
       lsp.didOpen(fileUri, detectedLanguage, editor.getValue());
     }
 
-    
     editor.onDidChangeModelContent(() => {
       const newValue = editor.getValue();
       onChangeRef.current?.(newValue);
 
-      
       if (enableLSP && lsp.server) {
         lsp.didChange(fileUri, newValue);
       }
     });
 
-    
     editor.addCommand(monaco.KeyCode.F12, () => {
-      
       const position = editor.getPosition();
       if (position) {
         editor.getAction('editor.action.revealDefinition')?.run();
@@ -365,7 +338,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     });
 
     editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
-      
       const position = editor.getPosition();
       if (position) {
         editor.getAction('editor.action.goToReferences')?.run();
@@ -373,7 +345,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     });
 
     editor.addCommand(monaco.KeyCode.F2, () => {
-      
       const position = editor.getPosition();
       if (position) {
         editor.getAction('editor.action.rename')?.run();
@@ -381,7 +352,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     });
 
     return () => {
-      
       if (enableLSP && lsp.server) {
         lsp.didClose(fileUri);
       }
@@ -390,7 +360,6 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     };
   }, [detectedLanguage, theme, options, enableLSP, fileUri, lsp]);
 
-  
   useEffect(() => {
     if (editorRef.current && editorRef.current.getValue() !== value) {
       editorRef.current.setValue(value);

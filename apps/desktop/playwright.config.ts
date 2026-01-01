@@ -1,6 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
 
-
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -73,7 +72,6 @@ export default defineConfig({
     },
   ],
 
-  
   webServer: {
     command: 'pnpm tauri dev',
     url: 'http://localhost:1420',
@@ -81,10 +79,8 @@ export default defineConfig({
     timeout: 120000,
   },
 
-  
-  globalTimeout: process.env['CI'] ? 1800000 : 3600000, 
+  globalTimeout: process.env['CI'] ? 1800000 : 3600000,
 
-  
   expect: {
     timeout: 5000,
   },

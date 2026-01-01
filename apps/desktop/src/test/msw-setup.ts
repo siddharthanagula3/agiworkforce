@@ -1,13 +1,10 @@
-
-
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 
-
 export const handlers = [
-  
-  http.post('https://api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {
+  http.post('https://api.openai.com/v1/chat/completions', async () => {
+    //api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {
     return HttpResponse.json({
       id: 'chatcmpl-test',
       object: 'chat.completion',
@@ -31,8 +28,8 @@ export const handlers = [
     });
   }),
 
-  
-  http.post('https://api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {
+  http.post('https://api.openai.com/v1/chat/completions', async () => {
+    //api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {
     return HttpResponse.json({
       id: 'msg_test',
       type: 'message',
@@ -52,8 +49,8 @@ export const handlers = [
     });
   }),
 
-  
-  http.post('http://localhost:11434/api/chat', async () => {//localhost:11434/api/chat', async () => {
+  http.post('http://localhost:11434/api/chat', async () => {
+    //localhost:11434/api/chat', async () => {
     return HttpResponse.json({
       model: 'llama3',
       created_at: new Date().toISOString(),
@@ -66,14 +63,10 @@ export const handlers = [
   }),
 ];
 
-
 export const server = setupServer(...handlers);
-
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
 
-
 afterEach(() => server.resetHandlers());
-
 
 afterAll(() => server.close());

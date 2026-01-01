@@ -1,5 +1,3 @@
-
-
 import { getSupabase } from '../lib/supabase';
 
 export interface WaitlistEntry {
@@ -33,7 +31,6 @@ export interface WaitlistStats {
   converted: number;
 }
 
-
 export const STRIPE_PAYMENT_LINKS = {
   pro: 'https://buy.stripe.com/test_pro',
   enterprise: 'https://buy.stripe.com/test_enterprise',
@@ -51,7 +48,6 @@ class WaitlistService {
     return WaitlistService.instance;
   }
 
-  
   async joinWaitlist(entry: WaitlistEntry): Promise<{ success: boolean; error?: string }> {
     const supabase = getSupabase();
 
@@ -70,7 +66,6 @@ class WaitlistService {
 
       if (error) {
         if (error.code === '23505') {
-          
           return { success: false, error: 'This email is already on the waitlist!' };
         }
         throw error;
@@ -83,14 +78,12 @@ class WaitlistService {
     }
   }
 
-  
   async checkWaitlistStatus(
     email: string,
   ): Promise<{ onWaitlist: boolean; position?: number; status?: string }> {
     const supabase = getSupabase();
 
     try {
-      
       const { data: entry, error } = await supabase
         .from('waitlist')
         .select('id, status, created_at')
@@ -101,7 +94,6 @@ class WaitlistService {
         return { onWaitlist: false };
       }
 
-      
       const { count } = await supabase
         .from('waitlist')
         .select('*', { count: 'exact', head: true })
@@ -119,7 +111,6 @@ class WaitlistService {
     }
   }
 
-  
   async validateInviteCode(
     code: string,
   ): Promise<{ valid: boolean; invite?: BetaInvite; error?: string }> {
@@ -137,12 +128,10 @@ class WaitlistService {
         return { valid: false, error: 'Invalid invite code' };
       }
 
-      
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
         return { valid: false, error: 'This invite code has expired' };
       }
 
-      
       if ((data.current_uses ?? 0) >= (data.max_uses ?? 1)) {
         return { valid: false, error: 'This invite code has reached its usage limit' };
       }
@@ -168,7 +157,6 @@ class WaitlistService {
     }
   }
 
-  
   async redeemInviteCode(
     code: string,
     userId: string,
@@ -176,13 +164,11 @@ class WaitlistService {
     const supabase = getSupabase();
 
     try {
-      
       const validation = await this.validateInviteCode(code);
       if (!validation.valid || !validation.invite) {
         return { success: false, error: validation.error };
       }
 
-      
       const { error: redemptionError } = await supabase.from('beta_redemptions').insert({
         invite_id: validation.invite.id,
         user_id: userId,
@@ -195,7 +181,6 @@ class WaitlistService {
         throw redemptionError;
       }
 
-      
       const { error: subscriptionError } = await supabase
         .from('subscriptions')
         .update({
@@ -220,7 +205,6 @@ class WaitlistService {
     }
   }
 
-  
   async getReferralCode(userId: string): Promise<string | null> {
     const supabase = getSupabase();
 
@@ -242,7 +226,6 @@ class WaitlistService {
     }
   }
 
-  
   async getReferralStats(
     userId: string,
   ): Promise<{ total: number; converted: number; rewarded: number }> {
@@ -269,19 +252,16 @@ class WaitlistService {
     }
   }
 
-  
   getPaymentLink(plan: 'pro' | 'enterprise', couponCode?: string): string {
     let url = STRIPE_PAYMENT_LINKS[plan];
 
     if (couponCode) {
-      
       url += `?prefilled_promo_code=${encodeURIComponent(couponCode)}`;
     }
 
     return url;
   }
 
-  
   async updateEmailPreferences(
     email: string,
     preferences: {
@@ -314,7 +294,6 @@ class WaitlistService {
     }
   }
 
-  
   async unsubscribe(token: string): Promise<{ success: boolean; error?: string }> {
     const supabase = getSupabase();
 
@@ -337,6 +316,5 @@ class WaitlistService {
     }
   }
 }
-
 
 export const waitlistService = WaitlistService.getInstance();

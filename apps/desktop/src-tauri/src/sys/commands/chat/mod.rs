@@ -499,6 +499,7 @@ pub async fn chat_send_message(
                         total_cost: 0.0,
                     },
                     last_message: None,
+                    credits: None,
                 });
             }
             Err(e) => return Err(format!("Orchestration failed: {e}")),
@@ -694,6 +695,8 @@ pub async fn chat_send_message(
                     let mut full_content = String::new();
                     let mut token_count = 0u32;
                     let mut was_stopped = false;
+                    let mut final_usage = None;
+                    let mut final_credits = None;
 
                     let mut pending_notified = false;
                     while let Some(chunk_result) = stream.next().await {
@@ -725,6 +728,13 @@ pub async fn chat_send_message(
                             Ok(chunk) => {
                                 full_content.push_str(&chunk.content);
                                 token_count += 1;
+
+                                if let Some(usage) = chunk.usage {
+                                    final_usage = Some(usage);
+                                }
+                                if let Some(credits) = chunk.credits {
+                                    final_credits = Some(credits);
+                                }
 
                                 let _ = app_handle_clone.emit(
                                     "chat:stream-chunk",
@@ -829,7 +839,9 @@ pub async fn chat_send_message(
                             "message_id": frontend_message_id_clone,
                             "backend_message_id": assistant_message.id,
                             "pending_messages_count": pending_at_end.len(),
-                            "has_pending_messages": !pending_at_end.is_empty()
+                            "has_pending_messages": !pending_at_end.is_empty(),
+                            "usage": final_usage,
+                            "credits": final_credits
                         }),
                     );
 
@@ -873,6 +885,7 @@ pub async fn chat_send_message(
                 total_cost: 0.0,
             },
             last_message: None,
+            credits: None,
         });
     }
 
@@ -928,6 +941,7 @@ pub async fn chat_send_message(
                     provider: Provider::ManagedCloud,
                     model: model.clone(), // Use the same model name as a hint for the cloud proxy
                     reason: "fallback-redirect-to-managed-cloud",
+                    strategy: None,
                 };
 
                 let result = router
@@ -972,6 +986,7 @@ pub async fn chat_send_message(
                             assistant_message,
                             stats,
                             last_message: Some(outcome.response.content),
+                            credits: outcome.response.credits,
                         });
                     }
                     Err(e) => {
@@ -1034,6 +1049,7 @@ pub async fn chat_send_message(
                     assistant_message,
                     stats,
                     last_message: Some(outcome.response.content),
+                    credits: outcome.response.credits,
                 });
             }
             Err(e) => {

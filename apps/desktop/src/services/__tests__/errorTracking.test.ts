@@ -1,8 +1,5 @@
-
-
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ErrorTrackingService, ErrorSeverity } from '../errorTracking';
-
 
 vi.mock('../analytics', () => ({
   analytics: {
@@ -14,15 +11,12 @@ describe('ErrorTrackingService', () => {
   let service: ErrorTrackingService;
 
   beforeEach(() => {
-    
     localStorage.clear();
 
-    
     vi.stubEnv('VITE_SENTRY_DSN', '');
     vi.stubEnv('VITE_APP_VERSION', '1.0.0');
     vi.stubEnv('MODE', 'test');
 
-    
     service = new ErrorTrackingService();
   });
 
@@ -59,7 +53,7 @@ describe('ErrorTrackingService', () => {
       const newService = new ErrorTrackingService();
       const config = newService.getConfig();
 
-      expect(config.dsn).toBe('https://examplePublicKey@o0.ingest.sentry.io/0');//examplePublicKey@o0.ingest.sentry.io/0');
+      expect(config.dsn).toBe('https://examplePublicKey@o0.ingest.sentry.io/0'); //examplePublicKey@o0.ingest.sentry.io/0');
     });
 
     it('should not initialize when disabled', () => {
@@ -121,7 +115,6 @@ describe('ErrorTrackingService', () => {
         extra: { userId: '123' },
       };
 
-      
       expect(() => service.captureError(error, context)).not.toThrow();
     });
 
@@ -141,7 +134,6 @@ describe('ErrorTrackingService', () => {
 
       const error = new Error('Test error');
 
-      
       expect(() => service.captureError(error)).not.toThrow();
     });
   });
@@ -150,7 +142,6 @@ describe('ErrorTrackingService', () => {
     it('should capture message when enabled', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() => service.captureMessage('Test message', ErrorSeverity.LOW)).not.toThrow();
     });
 
@@ -167,7 +158,6 @@ describe('ErrorTrackingService', () => {
     it('should default to LOW severity', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() => service.captureMessage('Test message')).not.toThrow();
     });
   });
@@ -176,7 +166,6 @@ describe('ErrorTrackingService', () => {
     it('should add breadcrumb when enabled', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() =>
         service.addBreadcrumb('navigation', 'User clicked button', {
           buttonId: 'submit',
@@ -185,7 +174,6 @@ describe('ErrorTrackingService', () => {
     });
 
     it('should not add breadcrumb when disabled', () => {
-      
       expect(() => service.addBreadcrumb('navigation', 'User clicked button')).not.toThrow();
     });
   });
@@ -194,12 +182,10 @@ describe('ErrorTrackingService', () => {
     it('should set user context when enabled', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() => service.setUser('user-123', { plan: 'pro' })).not.toThrow();
     });
 
     it('should not set user context when disabled', () => {
-      
       expect(() => service.setUser('user-123')).not.toThrow();
     });
   });
@@ -208,12 +194,10 @@ describe('ErrorTrackingService', () => {
     it('should set tags when enabled', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() => service.setTags({ version: '1.0.0', platform: 'desktop' })).not.toThrow();
     });
 
     it('should not set tags when disabled', () => {
-      
       expect(() => service.setTags({ version: '1.0.0' })).not.toThrow();
     });
   });
@@ -222,12 +206,10 @@ describe('ErrorTrackingService', () => {
     it('should show feedback dialog when enabled', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() => service.showFeedbackDialog('event-123')).not.toThrow();
     });
 
     it('should not show feedback dialog when disabled', () => {
-      
       expect(() => service.showFeedbackDialog()).not.toThrow();
     });
   });
@@ -237,7 +219,7 @@ describe('ErrorTrackingService', () => {
       service.updateConfig({ enabled: true });
 
       const transaction = service.startTransaction('api_call', 'http');
-      expect(transaction).toBeNull(); 
+      expect(transaction).toBeNull();
     });
 
     it('should return null when disabled', () => {
@@ -257,7 +239,6 @@ describe('ErrorTrackingService', () => {
     it('should capture errors with different severity levels', () => {
       service.updateConfig({ enabled: true });
 
-      
       expect(() =>
         service.captureError(new Error('Low'), { severity: ErrorSeverity.LOW }),
       ).not.toThrow();
@@ -277,8 +258,6 @@ describe('ErrorTrackingService', () => {
 
   describe('Error Handler Setup', () => {
     it('should be able to set up error handlers', () => {
-      
-      
       expect(service).toBeDefined();
       expect(service.captureError).toBeDefined();
     });

@@ -284,6 +284,7 @@ impl LLMProvider for DeepSeekProvider {
             cached: false,
             tool_calls,
             finish_reason: choice.finish_reason.clone(),
+            credits: None,
         })
     }
 

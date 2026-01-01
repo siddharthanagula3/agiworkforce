@@ -126,6 +126,7 @@ pub struct RouteCandidate {
     pub provider: Provider,
     pub model: String,
     pub reason: &'static str,
+    pub strategy: Option<RoutingStrategy>,
 }
 
 #[derive(Debug, Clone)]
@@ -420,6 +421,7 @@ impl LLMRouter {
         if let Some(preferred) = preferences.provider {
             if self.has_provider(preferred) {
                 order.push(RouteCandidate {
+                    strategy: None,
                     provider: preferred,
                     model: preferences
                         .model
@@ -449,6 +451,7 @@ impl LLMRouter {
         {
             let task_type = classify_request(request);
             order.push(RouteCandidate {
+                strategy: None,
                 provider: Provider::ManagedCloud,
                 model: self.default_model(Provider::ManagedCloud, task_type),
                 reason: "cloud-credits-preference",
@@ -463,6 +466,7 @@ impl LLMRouter {
                 .any(|existing| existing.provider == suggestion.provider)
             {
                 order.push(RouteCandidate {
+                    strategy: None,
                     provider: suggestion.provider,
                     model: suggestion.model,
                     reason: "context-signal",
@@ -490,6 +494,7 @@ impl LLMRouter {
             && self.has_provider(self.default_provider)
         {
             order.push(RouteCandidate {
+                strategy: None,
                 provider: self.default_provider,
                 model: self.default_model(self.default_provider, task_type),
                 reason: "default-provider",
@@ -511,6 +516,7 @@ impl LLMRouter {
             }
             if self.has_provider(provider) {
                 order.push(RouteCandidate {
+                    strategy: None,
                     provider,
                     model: self.default_model(provider, task_type),
                     reason: "fallback",
@@ -581,13 +587,59 @@ impl LLMRouter {
             .ok_or_else(|| anyhow!("Provider {:?} not configured", candidate.provider))?;
 
         let mut routed_request = request.clone();
-        // FIX: Handle "auto" selection
-        routed_request.model = if candidate.model == "auto" {
-            // Default "Auto" behavior: Use a smart/capable model
-            "claude-opus-4-5".to_string()
+
+        // Handle dynamic model resolution based on strategy
+        if let Some(strategy) = candidate.strategy {
+            let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
+
+            // Resolve logic based on strategy and tokens
+            let resolved_model = match strategy {
+                RoutingStrategy::AutoEconomy => {
+                    // Cost-optimized: simple queries use cheap models, complex use capable
+                    if token_count < 1000 {
+                        "gpt-4o-mini" // Cheap, fast, capable enough for short contexts
+                    } else if token_count < 8000 {
+                        "deepseek-v3.2" // Best value for medium context
+                    } else {
+                        "gemini-3-flash" // Long context value
+                    }
+                }
+                RoutingStrategy::AutoBalanced => {
+                    // Balance: gpt-4o-mini for very simple, claude-3.5-sonnet/gpt-4o for complex
+                    if token_count < 500 {
+                        "gpt-4o-mini"
+                    } else if token_count < 4000 {
+                        "claude-3-5-sonnet-20240620"
+                    } else {
+                        "gpt-4o"
+                    }
+                }
+                RoutingStrategy::AutoPremium => {
+                    // Premium: Always best models, switch based on context window needs
+                    if token_count < 16000 {
+                        "claude-3-5-sonnet-20240620"
+                    } else {
+                        "claude-3-opus-20240229" // Opus for heavy lifting, or Gemini 1.5 Pro for massive context
+                    }
+                }
+                _ => candidate.model.as_str(),
+            };
+
+            tracing::info!(
+                "Dynamic Routing [Strategy: {:?}] [Tokens: {}] -> Selected: {}",
+                strategy,
+                token_count,
+                resolved_model
+            );
+
+            routed_request.model = resolved_model.to_string();
+        } else if candidate.model == "auto" {
+            // Check if strategy is somehow missing but model is auto (fallback)
+            // Use a safe default
+            routed_request.model = "gpt-4o".to_string();
         } else {
-            candidate.model.clone()
-        };
+            routed_request.model = candidate.model.clone();
+        }
 
         let mut response = provider
             .send_message(&routed_request)
@@ -787,6 +839,7 @@ impl LLMRouter {
             RoutingStrategy::LocalFirst => {
                 // LocalFirst strategy removed - use ManagedCloud or cloud providers instead
                 vec![RouteCandidate {
+                    strategy: None,
                     provider: Provider::ManagedCloud,
                     model: "managed-cloud-auto".to_string(),
                     reason: "strategy-cloud-first",
@@ -795,16 +848,19 @@ impl LLMRouter {
             RoutingStrategy::CostOptimized => match task {
                 TaskCategory::Simple => vec![
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::Google,
                         model: "gemini-3-flash".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::OpenAI,
                         model: "gpt-5-nano".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::ManagedCloud,
                         model: "managed-cloud-auto".to_string(),
                         reason: "strategy-cost",
@@ -812,11 +868,13 @@ impl LLMRouter {
                 ],
                 TaskCategory::Complex => vec![
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::OpenAI,
                         model: "gpt-5.2".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::Anthropic,
                         model: "claude-sonnet-4-5".to_string(),
                         reason: "strategy-cost",
@@ -824,11 +882,13 @@ impl LLMRouter {
                 ],
                 TaskCategory::Creative => vec![
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::Google,
                         model: "gemini-3-pro".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
+                        strategy: None,
                         provider: Provider::OpenAI,
                         model: "gpt-5-nano".to_string(),
                         reason: "strategy-cost",
@@ -837,11 +897,13 @@ impl LLMRouter {
             },
             RoutingStrategy::LatencyOptimized => vec![
                 RouteCandidate {
+                    strategy: None,
                     provider: Provider::OpenAI,
                     model: "gpt-5-nano".to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
+                    strategy: None,
                     provider: Provider::Google,
                     model: "gemini-3-flash".to_string(),
                     reason: "strategy-latency",
@@ -865,27 +927,40 @@ impl LLMRouter {
                 match task {
                     TaskCategory::Simple => {
                         vec![
+                            // Dynamic Economy Strategy
                             RouteCandidate {
+                                strategy: Some(RoutingStrategy::AutoEconomy),
+                                provider: Provider::ManagedCloud,
+                                model: "auto-economy".to_string(),
+                                reason: "auto-economy-dynamic",
+                            },
+                            // Fallbacks
+                            RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "deepseek-v3.2".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
                                 reason: "auto-economy-best-value-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3.2".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench
                                 reason: "auto-economy-best-value",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
                                 reason: "auto-economy-best-chat-value",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(), // Fallback
                                 reason: "auto-economy-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-haiku-4-5".to_string(),
                                 reason: "auto-economy-quality",
@@ -895,41 +970,49 @@ impl LLMRouter {
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
                                 reason: "auto-economy-best-value-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME
                                 reason: "auto-economy-best-value",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "grok-4.1-fast-reasoning".to_string(), // Managed Cloud Reasoning
                                 reason: "auto-economy-xai-reasoning-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-economy-xai-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
                                 reason: "auto-economy-xai",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-3-mini".to_string(), // General purpose: $0.80/1M (legacy)
                                 reason: "auto-economy-xai-legacy",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
                                 reason: "auto-economy",
@@ -939,41 +1022,49 @@ impl LLMRouter {
                     TaskCategory::Creative => {
                         vec![
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-flash".to_string(), // Best value, multimodal: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "deepseek-v3".to_string(), // Managed Cloud supports DeepSeek V3 ($0.28/1M)
                                 reason: "auto-economy-deepseek-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M
                                 reason: "auto-economy-deepseek",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "gpt-5-nano".to_string(), // Managed Cloud fallback
                                 reason: "auto-economy-fast-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "gpt-5-nano".to_string(), // Fast budget: 2,667 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: $0.50/1M, ~1230 Elo, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-economy-xai-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast".to_string(), // $0.50/1M, ~1230 Elo, 2M context (non-reasoning)
                                 reason: "auto-economy-xai",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-3-mini".to_string(), // General purpose: $0.80/1M (legacy)
                                 reason: "auto-economy-xai-legacy",
@@ -993,26 +1084,31 @@ impl LLMRouter {
                     TaskCategory::Simple => {
                         vec![
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-balanced-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning
                                 reason: "auto-balanced-best-quality",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-sonnet-4-5".to_string(),
                                 reason: "auto-balanced-sonnet",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Moonshot,
                                 model: "kimi-k2-thinking".to_string(),
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3.2".to_string(),
                                 reason: "auto-balanced-deepseek",
@@ -1022,46 +1118,73 @@ impl LLMRouter {
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
+                                strategy: Some(RoutingStrategy::AutoBalanced),
+                                provider: Provider::ManagedCloud,
+                                model: "auto-balanced".to_string(),
+                                reason: "auto-balanced-dynamic",
+                            },
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::OpenAI,
+                                model: "gpt-4o".to_string(),
+                                reason: "auto-balanced-performance",
+                            },
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::Anthropic,
+                                model: "claude-sonnet-4-5".to_string(),
+                                reason: "auto-balanced-performance",
+                            },
+                            RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-balanced-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-sonnet-4-5".to_string(), // Excellent coding: 77.2% SWE-bench
                                 reason: "auto-balanced-coding",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Moonshot,
                                 model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Qwen,
                                 model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M, best open-source coding: 69.6% SWE-bench, 92.1% HumanEval
                                 reason: "auto-balanced-reasoning-coding",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "gpt-5.2".to_string(), // Fast inference: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-balanced-xai-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast".to_string(), // Fast, 2M context (non-reasoning)
                                 reason: "auto-balanced-xai",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3".to_string(), // Best cost efficiency: $0.28/1M
                                 reason: "auto-balanced-deepseek",
@@ -1071,41 +1194,49 @@ impl LLMRouter {
                     TaskCategory::Creative => {
                         vec![
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-balanced-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Moonshot,
                                 model: "kimi-k2-thinking".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Qwen,
                                 model: "qwen3-max".to_string(), // Reasoning model with thinking mode: $12.50/1M
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-pro".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA, multimodal ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "gpt-5.2".to_string(), // Fast inference: 187 tok/s, 88.1% GPQA
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-sonnet-4-5".to_string(), // Excellent coding: 77.2% SWE-bench
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast-reasoning".to_string(), // Reasoning variant: Fast, 2M context (prioritized - same price as non-reasoning)
                                 reason: "auto-balanced-xai-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1-fast".to_string(), // Fast, 2M context (non-reasoning)
                                 reason: "auto-balanced-xai",
@@ -1115,41 +1246,54 @@ impl LLMRouter {
                 }
             }
             RoutingStrategy::AutoPremium => {
-                // AutoPremium: Performance-optimized - Best models regardless of cost (Max plan focus)
-                // Focuses on highest quality and performance
-                //
-                // Reasoning Model Priority (December 2025):
-                // When same provider offers reasoning and non-reasoning at same price, prioritize reasoning.
-                // Example: grok-4.1-fast-reasoning ($0.50/1M) over grok-4.1-fast ($0.50/1M)
+                // AutoPremium: Performance optimized - Best possible models regardless of cost (Max plan)
                 match task {
                     TaskCategory::Simple => {
                         vec![
                             RouteCandidate {
+                                strategy: Some(RoutingStrategy::AutoPremium),
+                                provider: Provider::ManagedCloud,
+                                model: "auto-premium".to_string(),
+                                reason: "auto-premium-dynamic",
+                            },
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::OpenAI,
+                                model: "gpt-5.2".to_string(),
+                                reason: "auto-premium-quality",
+                            },
+                            RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-premium-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "gpt-5.2-pro".to_string(), // Best all-around: 1325 Elo
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-opus-4-5".to_string(), // Best reasoning/coding
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-pro".to_string(), // Best multimodal
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::XAI,
                                 model: "grok-4.1".to_string(),
                                 reason: "auto-premium-xai",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3.2".to_string(),
                                 reason: "auto-premium-deepseek", // Good backup
@@ -1159,31 +1303,49 @@ impl LLMRouter {
                     TaskCategory::Complex => {
                         vec![
                             RouteCandidate {
+                                strategy: Some(RoutingStrategy::AutoPremium),
+                                provider: Provider::ManagedCloud,
+                                model: "auto-premium".to_string(),
+                                reason: "auto-premium-dynamic",
+                            },
+                            RouteCandidate {
+                                strategy: None,
+                                provider: Provider::Anthropic,
+                                model: "claude-opus-4-5".to_string(),
+                                reason: "auto-premium-reasoning",
+                            },
+                            RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-premium-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-opus-4-5".to_string(), // Best coding: 80.9% SWE-bench
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "gpt-5.2-codex".to_string(), // Best code generation
                                 reason: "auto-premium-coding",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "o3".to_string(), // Reasoning specialist
                                 reason: "auto-premium-reasoning",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-pro".to_string(),
                                 reason: "auto-premium-complex",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::DeepSeek,
                                 model: "deepseek-v3.2".to_string(), // Strong code reasoning
                                 reason: "auto-premium-deepseek",
@@ -1193,21 +1355,25 @@ impl LLMRouter {
                     TaskCategory::Creative => {
                         vec![
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::ManagedCloud,
                                 model: "managed-cloud-auto".to_string(),
                                 reason: "auto-premium-cloud",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Google,
                                 model: "gemini-3-pro".to_string(), // Best multimodal/creative
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::OpenAI,
                                 model: "gpt-5.2-pro".to_string(), // High creativity
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
+                                strategy: None,
                                 provider: Provider::Anthropic,
                                 model: "claude-opus-4-5".to_string(),
                                 reason: "auto-premium-creative",

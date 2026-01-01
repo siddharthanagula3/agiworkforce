@@ -14,6 +14,7 @@ mod tests {
             cached: false,
             finish_reason: None,
             tool_calls: None,
+            credits: None,
         };
 
         assert!(!response.content.is_empty());
@@ -34,6 +35,7 @@ mod tests {
             cached: true,
             finish_reason: None,
             tool_calls: None,
+            credits: None,
         };
 
         assert!(response.cached);
@@ -60,6 +62,7 @@ mod tests {
             cached: false,
             finish_reason: None,
             tool_calls: None,
+            credits: None,
         };
 
         let serialized = serde_json::to_string(&response).unwrap();
@@ -111,6 +114,7 @@ mod tests {
             cached: false,
             finish_reason: None,
             tool_calls: None,
+            credits: None,
         };
 
         assert!(response.cost.is_none());

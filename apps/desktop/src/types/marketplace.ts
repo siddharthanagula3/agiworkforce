@@ -16,7 +16,7 @@ export interface PublishedWorkflow {
   creator_id: string;
   creator_name: string;
   creator_avatar?: string;
-  workflow_definition: string; 
+  workflow_definition: string;
   share_url: string;
   thumbnail_url?: string;
   clone_count: number;
@@ -26,8 +26,8 @@ export interface PublishedWorkflow {
   is_featured: boolean;
   is_trending: boolean;
   tags: string[];
-  estimated_time_saved: number; 
-  estimated_cost_saved: number; 
+  estimated_time_saved: number;
+  estimated_cost_saved: number;
   license: WorkflowLicense;
   created_at: number;
   updated_at: number;
@@ -39,7 +39,7 @@ export interface WorkflowReview {
   user_id: string;
   user_name: string;
   user_avatar?: string;
-  rating: number; 
+  rating: number;
   review_text?: string;
   helpful_count: number;
   created_at: number;
@@ -54,7 +54,7 @@ export interface WorkflowAnalytics {
   total_favorites: number;
   views_last_7_days: number;
   clones_last_7_days: number;
-  conversion_rate: number; 
+  conversion_rate: number;
   avg_rating: number;
   total_reviews: number;
   trending_score: number;

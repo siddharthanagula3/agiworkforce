@@ -22,7 +22,6 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  
   const language = useMemo(() => {
     if (!filePath) return 'plaintext';
 
@@ -60,7 +59,6 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
     return languageMap[ext || ''] || 'plaintext';
   }, [filePath]);
 
-  
   useEffect(() => {
     const loadFile = async () => {
       if (!contextId) {
@@ -71,11 +69,9 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
 
       setIsLoading(true);
       try {
-        
         const path = contextId;
         setFilePath(path);
 
-        
         const content = await invoke<string>('file_read', { path });
         setCode(content);
         setHasUnsavedChanges(false);
@@ -90,14 +86,12 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
     loadFile();
   }, [contextId]);
 
-  
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode);
     setHasUnsavedChanges(true);
     setSaveState({ status: 'idle' });
   }, []);
 
-  
   const handleSave = useCallback(async () => {
     if (!filePath) {
       setSaveState({
@@ -121,12 +115,10 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
       });
       setHasUnsavedChanges(false);
 
-      
       const timeoutId = setTimeout(() => {
         setSaveState({ status: 'idle' });
       }, 3000);
 
-      
       return () => clearTimeout(timeoutId);
     } catch (error) {
       setSaveState({
@@ -137,7 +129,6 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
     }
   }, [filePath, code]);
 
-  
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {

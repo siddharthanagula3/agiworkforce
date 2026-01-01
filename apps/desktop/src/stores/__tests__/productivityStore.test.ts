@@ -87,7 +87,7 @@ describe('useProductivityStore', () => {
             },
           ];
         case 'productivity_trello_list_boards':
-          return [{ id: 'board-1', name: 'Product Roadmap', url: 'https://trello.com/b/board-1' }];//trello.com/b/board-1' }];
+          return [{ id: 'board-1', name: 'Product Roadmap', url: 'https://trello.com/b/board-1' }]; //trello.com/b/board-1' }];
         default:
           throw new Error(`Unexpected invoke command: ${command}`);
       }
