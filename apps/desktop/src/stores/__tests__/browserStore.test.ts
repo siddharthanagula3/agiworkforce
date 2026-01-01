@@ -1,12 +1,9 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { useBrowserStore, cleanupBrowserStore } from '../browserStore';
-
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
-
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
@@ -27,7 +24,6 @@ describe('browserStore', () => {
     invokeMock = await getInvokeMock();
     invokeMock.mockReset();
 
-    
     useBrowserStore.setState({
       sessions: [],
       activeSessionId: null,
@@ -46,7 +42,6 @@ describe('browserStore', () => {
   });
 
   afterEach(() => {
-    
     cleanupBrowserStore();
   });
 
@@ -85,12 +80,10 @@ describe('browserStore', () => {
   });
 
   it('should open new tab in active session', async () => {
-    
     const sessionId = 'session-456';
     invokeMock.mockResolvedValueOnce(sessionId);
     await useBrowserStore.getState().launchBrowser('Firefox', true);
 
-    
     const tabId = 'tab-789';
     const url = 'https://google.com';
     invokeMock.mockResolvedValueOnce(tabId);
@@ -107,14 +100,12 @@ describe('browserStore', () => {
   });
 
   it('should close tab', async () => {
-    
     invokeMock.mockResolvedValueOnce('session-1');
     await useBrowserStore.getState().launchBrowser('Chromium', false);
 
     invokeMock.mockResolvedValueOnce('tab-1');
-    await useBrowserStore.getState().openTab('https://example.com');//example.com');//example.com');
+    await useBrowserStore.getState().openTab('https://example.com'); //example.com');//example.com');
 
-    
     invokeMock.mockResolvedValueOnce(undefined);
     await useBrowserStore.getState().closeTab('tab-1');
 
@@ -125,15 +116,13 @@ describe('browserStore', () => {
   });
 
   it('should navigate tab to new URL', async () => {
-    
     invokeMock.mockResolvedValueOnce('session-1');
     await useBrowserStore.getState().launchBrowser('Webkit', true);
 
     invokeMock.mockResolvedValueOnce('tab-1');
-    await useBrowserStore.getState().openTab('https://example.com');//example.com');//example.com');
+    await useBrowserStore.getState().openTab('https://example.com'); //example.com');//example.com');
 
-    
-    const newUrl = 'https://example.com/new';//example.com/new';
+    const newUrl = 'https://example.com/new'; //example.com/new';
     invokeMock.mockResolvedValueOnce(undefined);
     await useBrowserStore.getState().navigateTab('tab-1', newUrl);
 
@@ -144,7 +133,6 @@ describe('browserStore', () => {
   });
 
   it('should switch active session', () => {
-    
     useBrowserStore.setState({
       sessions: [
         { id: 'session-1', browserType: 'Chromium', headless: false, tabs: [], active: true },
@@ -203,7 +191,6 @@ describe('browserStore', () => {
   });
 
   it('should clear actions', () => {
-    
     useBrowserStore.setState({
       actions: [
         {
@@ -222,7 +209,6 @@ describe('browserStore', () => {
   });
 
   it('should clear screenshots', () => {
-    
     useBrowserStore.setState({
       screenshots: [
         {
@@ -242,7 +228,6 @@ describe('browserStore', () => {
   it('should limit screenshots to 50', () => {
     const { addScreenshot } = useBrowserStore.getState();
 
-    
     for (let i = 0; i < 60; i++) {
       addScreenshot({
         id: `ss-${i}`,
@@ -254,7 +239,7 @@ describe('browserStore', () => {
 
     const screenshots = useBrowserStore.getState().screenshots;
     expect(screenshots.length).toBe(50);
-    
+
     expect(screenshots[0]?.id).toBe('ss-10');
     expect(screenshots[49]?.id).toBe('ss-59');
   });

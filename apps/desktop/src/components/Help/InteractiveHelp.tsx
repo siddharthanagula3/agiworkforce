@@ -25,7 +25,6 @@ interface InteractiveHelpProps {
   onClose?: () => void;
 }
 
-
 export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [articles, setArticles] = useState<HelpArticle[]>([]);
@@ -36,7 +35,6 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
   const loadArticles = useCallback(async () => {
     setLoading(true);
     try {
-      
       const builtInArticles = getBuiltInArticles();
       setArticles(builtInArticles);
     } catch (error) {
@@ -49,7 +47,6 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
   const filterArticles = useCallback(() => {
     let filtered = articles;
 
-    
     if (context && !searchQuery) {
       filtered = articles.filter(
         (article) =>
@@ -59,7 +56,6 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
       );
     }
 
-    
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = articles.filter(
@@ -289,7 +285,6 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
     </div>
   );
 };
-
 
 function getBuiltInArticles(): HelpArticle[] {
   return [

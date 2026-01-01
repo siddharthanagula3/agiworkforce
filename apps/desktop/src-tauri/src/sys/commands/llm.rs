@@ -151,6 +151,7 @@ pub async fn llm_send_message(
                     .clone()
                     .unwrap_or_else(|| "gpt-5-nano".to_string()),
                 reason: "fallback-redirect-to-managed-cloud",
+                strategy: None,
             };
 
             // Need to drop the read lock before we can invoke (invoke might need locks internally?)
@@ -173,8 +174,19 @@ pub async fn llm_send_message(
                     return Ok(outcome.response);
                 }
                 Err(err) => {
-                    // If fallback also fails, return the original error logic but mention the fallback attempt
-                    tracing::error!("Managed Cloud fallback failed: {}", err);
+                    let error_msg = err.to_string();
+                    tracing::error!("Managed Cloud fallback failed: {}", error_msg);
+
+                    if error_msg.contains("402")
+                        || error_msg.contains("credit limit")
+                        || error_msg.contains("quota")
+                        || error_msg.contains("insufficient_quota")
+                    {
+                        return Err(format!(
+                            "[ERR_BILLING_QUOTA] {}",
+                            error_msg.replace("Network error: ", "")
+                        ));
+                    }
                     // Fall through to standard error handling
                 }
             }
@@ -208,23 +220,50 @@ pub async fn llm_send_message(
                 let error_msg = err.to_string();
                 error_messages.push(format!("{}: {}", candidate.provider.as_string(), error_msg));
 
+                // Map errors to standardized codes for frontend
+                if error_msg.contains("402")
+                    || error_msg.contains("credit limit")
+                    || error_msg.contains("quota")
+                    || error_msg.contains("insufficient_quota")
+                {
+                    return Err(format!(
+                        "[ERR_BILLING_QUOTA] {}",
+                        error_msg.replace("Network error: ", "")
+                    ));
+                }
+
                 if error_msg.contains("401")
                     || error_msg.contains("Unauthorized")
                     || error_msg.contains("invalid_api_key")
                 {
                     return Err(format!(
-                        "Authentication failed for {}. Please check your connection or sign in again.",
+                        "[ERR_AUTH_INVALID] Authentication failed for {}. Please check your API key or sign in again.",
                         candidate.provider.as_string()
                     ));
                 }
+
+                if error_msg.contains("429") || error_msg.contains("rate limit") {
+                    return Err(format!(
+                        "[ERR_RATE_LIMIT] Rate limit exceeded for {}. Please try again later.",
+                        candidate.provider.as_string()
+                    ));
+                }
+
                 if error_msg.contains("decode")
                     || error_msg.contains("deserialize")
                     || error_msg.contains("JSON")
                 {
                     return Err(format!(
-                        "Error decoding response from {}: {}. This may indicate an API issue or invalid response format.",
+                        "[ERR_PROVIDER_ERROR] Error decoding response from {}: {}. This may indicate an API issue.",
                         candidate.provider.as_string(),
                         error_msg
+                    ));
+                }
+
+                if error_msg.contains("timeout") || error_msg.contains("timed out") {
+                    return Err(format!(
+                        "[ERR_NETWORK_TIMEOUT] Request timed out for {}. Please check your connection.",
+                         candidate.provider.as_string()
                     ));
                 }
 

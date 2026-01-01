@@ -24,7 +24,6 @@ export function DragDropOverlay({
       e.preventDefault();
       e.stopPropagation();
 
-      
       if (e.dataTransfer?.types.includes('Files')) {
         setDragCounter((prev) => prev + 1);
         setIsDragging(true);

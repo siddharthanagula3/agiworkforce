@@ -143,6 +143,8 @@ rayon = "1.10"
 dashmap = "5.5"
 parking_lot = "0.12"
 sysinfo = "0.30"
+tiktoken-rs = "0.5.9"
+lazy_static = "1.4"
 
 
 flate2 = "1.0"

@@ -22,6 +22,7 @@ import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
+import { useBillingStore } from '../../stores/billingStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
@@ -155,28 +156,48 @@ export const UnifiedAgenticChat: React.FC<{
     );
 
     unlistenPromises.push(
-      listen<{ conversation_id: number; message_id: string | number; backend_message_id?: number }>(
-        'chat:stream-end',
-        ({ payload }) => {
-          const state = useUnifiedChatStore.getState();
-          const messageId = String(payload.message_id);
-          const currentStreamingId = state.currentStreamingMessageId;
+      listen<{
+        conversation_id: number;
+        message_id: string | number;
+        backend_message_id?: number;
+        usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+        credits?: {
+          cost_cents: number;
+          remaining_cents: number;
+          daily_limit?: number;
+          daily_used?: number;
+          daily_remaining?: number;
+          daily_reset_at?: string;
+        };
+      }>('chat:stream-end', ({ payload }) => {
+        const state = useUnifiedChatStore.getState();
+        const messageId = String(payload.message_id);
+        const currentStreamingId = state.currentStreamingMessageId;
 
-          // Update the message that was streaming
-          const targetId = state.messages.some((m) => m.id === messageId)
-            ? messageId
-            : currentStreamingId;
+        // Update the message that was streaming
+        const targetId = state.messages.some((m) => m.id === messageId)
+          ? messageId
+          : currentStreamingId;
 
-          if (targetId) {
-            state.updateMessage(targetId, {
-              metadata: { streaming: false },
-            });
-          }
+        if (targetId) {
+          state.updateMessage(targetId, {
+            metadata: {
+              streaming: false,
+              tokenCount: payload.usage?.total_tokens,
+              cost: payload.credits?.cost_cents ? payload.credits.cost_cents / 100 : undefined, // Convert cents to dollars if needed, or store as is. Metadata usually stores cost in dollars or cents? Existing code used tokens/cost.
+            },
+          });
+        }
 
-          state.setIsLoading(false);
-          state.setStreamingMessage(null);
-        },
-      ),
+        // Update billing store with new credit info
+        if (payload.credits) {
+          useBillingStore.getState().updateCredits(payload.credits);
+          console.log('[UnifiedAgenticChat] Updated credits from stream-end:', payload.credits);
+        }
+
+        state.setIsLoading(false);
+        state.setStreamingMessage(null);
+      }),
     );
 
     // Listen for stream errors
@@ -665,29 +686,53 @@ export const UnifiedAgenticChat: React.FC<{
         // All updates come from events (chat:stream-chunk, chat:stream-end, etc.)
         // The response is just an acknowledgment that streaming started
         // setIsLoading will be set to false by the chat:stream-end event handler
+
+        // However, for non-streaming fallback or future mixed modes, we check for credits here too
+        if (response.credits) {
+          console.log('[UnifiedAgenticChat] Updated credits from response:', response.credits);
+          useBillingStore.getState().updateCredits(response.credits);
+        }
       }
     } catch (error) {
       console.error('[UnifiedAgenticChat] Error sending message:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      // Generate contextual error message based on error type
+      // Parse backend standardized error codes
       let userMessage = `Error: ${errorMessage}`;
-      if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-        userMessage +=
-          '\n\nAuthentication failed. Please check your subscription status or contact support if the issue persists.';
-      } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
-        userMessage += "\n\nYou've hit a rate limit. Please try again in a few moments.";
-      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
-        userMessage +=
-          '\n\nThe request timed out. Please check your internet connection and try again.';
-      } else if (errorMessage.includes('network') || errorMessage.includes('ECONNREFUSED')) {
-        userMessage += '\n\nNetwork error. Please check your internet connection.';
-      } else if (errorMessage.includes('invalid') || errorMessage.includes('validation')) {
-        userMessage +=
-          '\n\nThe request was invalid. This may be due to unsupported content or format.';
+
+      if (errorMessage.includes('[ERR_BILLING_QUOTA]')) {
+        const detail =
+          errorMessage.split('[ERR_BILLING_QUOTA]')[1]?.trim() || 'Insufficient credits.';
+        userMessage = `⚠️ **Payment Required**\n\n${detail}\n\nPlease check your plan limits in the Settings or upgrade to continue.`;
+      } else if (errorMessage.includes('[ERR_AUTH_INVALID]')) {
+        userMessage = `🔒 **Authentication Failed**\n\nWe couldn't verify your credentials. Please sign out and sign in again to refresh your session.`;
+      } else if (errorMessage.includes('[ERR_RATE_LIMIT]')) {
+        userMessage = `⏳ **Rate Limit Exceeded**\n\nYou are sending requests too quickly. Please wait a moment before trying again.`;
+      } else if (errorMessage.includes('[ERR_NETWORK_TIMEOUT]')) {
+        userMessage = `📡 **Network Timeout**\n\nThe request to the AI models timed out. Please check your connection and try again.`;
+      } else if (errorMessage.includes('[ERR_PROVIDER_ERROR]')) {
+        const detail =
+          errorMessage.split('[ERR_PROVIDER_ERROR]')[1]?.trim() || 'Unknown provider error.';
+        userMessage = `❌ **Provider Error**\n\n${detail}`;
       } else {
-        userMessage +=
-          '\n\nPlease check your internet connection and try again. If the issue persists, contact support.';
+        // Legacy fallback
+        if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+          userMessage +=
+            '\n\nAuthentication failed. Please check your subscription status or contact support if the issue persists.';
+        } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+          userMessage += "\n\nYou've hit a rate limit. Please try again in a few moments.";
+        } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+          userMessage +=
+            '\n\nThe request timed out. Please check your internet connection and try again.';
+        } else if (errorMessage.includes('network') || errorMessage.includes('ECONNREFUSED')) {
+          userMessage += '\n\nNetwork error. Please check your internet connection.';
+        } else if (errorMessage.includes('invalid') || errorMessage.includes('validation')) {
+          userMessage +=
+            '\n\nThe request was invalid. This may be due to unsupported content or format.';
+        } else {
+          userMessage +=
+            '\n\nPlease check your internet connection and try again. If the issue persists, contact support.';
+        }
       }
 
       updateMessage(assistantMessageId, {

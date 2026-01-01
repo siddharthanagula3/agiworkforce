@@ -70,11 +70,22 @@ impl LLMProvider for ManagedCloudProvider {
                 let total_tokens = body["usage"]["total_tokens"].as_u64().map(|v| v as u32);
 
                 // Extract credit information if available
-                let credits_info = body.get("credits").and_then(|c| c.as_object());
-                let cost = credits_info
-                    .and_then(|c| c.get("cost_cents"))
-                    .and_then(|v| v.as_u64())
-                    .map(|cents| cents as f64 / 100.0);
+                let credits = body.get("credits").and_then(|c| {
+                    let obj = c.as_object()?;
+                    Some(crate::core::router::CreditsInfo {
+                        cost_cents: obj.get("cost_cents")?.as_f64()?,
+                        remaining_cents: obj.get("remaining_cents")?.as_f64()?,
+                        daily_limit: obj.get("daily_limit").and_then(|v| v.as_f64()),
+                        daily_used: obj.get("daily_used").and_then(|v| v.as_f64()),
+                        daily_remaining: obj.get("daily_remaining").and_then(|v| v.as_f64()),
+                        daily_reset_at: obj
+                            .get("daily_reset_at")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
+                    })
+                });
+
+                let cost = credits.as_ref().map(|c| c.cost_cents as f64 / 100.0);
 
                 Ok(LLMResponse {
                     content,
@@ -82,6 +93,7 @@ impl LLMProvider for ManagedCloudProvider {
                     prompt_tokens,
                     completion_tokens,
                     cost,
+                    credits,
                     model: body["model"].as_str().unwrap_or(&request.model).to_string(),
                     ..LLMResponse::default()
                 })

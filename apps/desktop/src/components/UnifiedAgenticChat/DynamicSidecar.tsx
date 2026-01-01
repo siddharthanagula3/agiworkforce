@@ -26,7 +26,6 @@ import { TerminalPanel } from '../Execution/TerminalPanel';
 import { MediaGallery } from '../Media/MediaGallery';
 import { ArtifactRenderer } from './ArtifactRenderer';
 
-
 export type DynamicPanelType =
   | 'terminal'
   | 'browser'
@@ -63,7 +62,6 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   canvas: <Braces className="h-4 w-4 text-pink-400" />,
   artifact: <Code2 className="h-4 w-4 text-amber-400" />,
 };
-
 
 const springConfig = {
   type: 'spring',
@@ -241,7 +239,6 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
     }
   };
 
-  
   if (isMinimized) {
     return (
       <motion.div

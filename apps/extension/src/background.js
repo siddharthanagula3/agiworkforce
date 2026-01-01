@@ -1,21 +1,15 @@
-
-
 console.log('AGI Workforce extension background script loaded');
 
-
 let _desktopConnection = null;
-
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('AGI Workforce extension installed');
 
-  
   chrome.storage.local.set({
     enabled: true,
     connectedToDesktop: false,
   });
 });
-
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background received message:', message);
@@ -27,7 +21,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'GET_COOKIES':
       handleGetCookies(message, sendResponse);
-      return true; 
+      return true;
 
     case 'SET_COOKIE':
       handleSetCookie(message, sendResponse);
@@ -54,7 +48,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-
 async function handleGetCookies(message, sendResponse) {
   try {
     const url = message.url || '<all_urls>';
@@ -65,7 +58,6 @@ async function handleGetCookies(message, sendResponse) {
     sendResponse({ success: false, error: error.message });
   }
 }
-
 
 async function handleSetCookie(message, sendResponse) {
   try {
@@ -86,7 +78,6 @@ async function handleSetCookie(message, sendResponse) {
   }
 }
 
-
 async function handleClearCookies(message, sendResponse) {
   try {
     const url = message.url || '<all_urls>';
@@ -106,14 +97,12 @@ async function handleClearCookies(message, sendResponse) {
   }
 }
 
-
 async function handleExecuteScript(message, sender, sendResponse) {
   sendResponse({
     success: false,
     error: 'EXECUTE_SCRIPT is disabled for security reasons',
   });
 }
-
 
 async function handleCaptureScreenshot(message, sender, sendResponse) {
   try {
@@ -136,7 +125,6 @@ async function handleCaptureScreenshot(message, sender, sendResponse) {
     sendResponse({ success: false, error: error.message });
   }
 }
-
 
 async function handleGetTabInfo(sender, sendResponse) {
   try {
@@ -164,35 +152,25 @@ async function handleGetTabInfo(sender, sendResponse) {
   }
 }
 
-
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete') {
     console.log('Tab loaded:', tab.url);
 
-    
     chrome.tabs
       .sendMessage(tabId, {
         type: 'TAB_READY',
         url: tab.url,
       })
-      .catch(() => {
-        
-      });
+      .catch(() => {});
   }
 });
-
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   console.log('Tab activated:', activeInfo.tabId);
 });
 
-
-
 function connectToDesktop() {
   try {
-    
-    
-
     console.log('Desktop connection would be established here');
 
     chrome.storage.local.set({ connectedToDesktop: true });
@@ -201,6 +179,5 @@ function connectToDesktop() {
     chrome.storage.local.set({ connectedToDesktop: false });
   }
 }
-
 
 connectToDesktop();

@@ -126,6 +126,18 @@ pub struct LLMResponse {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credits: Option<CreditsInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreditsInfo {
+    pub cost_cents: f64,
+    pub remaining_cents: f64,
+    pub daily_limit: Option<f64>,
+    pub daily_used: Option<f64>,
+    pub daily_remaining: Option<f64>,
+    pub daily_reset_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,6 +316,7 @@ pub trait LLMProvider: Send + Sync {
                     completion_tokens: response.completion_tokens,
                     total_tokens: response.tokens,
                 }),
+                credits: None,
             },
         )])))
     }

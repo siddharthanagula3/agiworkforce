@@ -14,6 +14,12 @@ interface BillingState {
   initialized: boolean;
 
   error: string | null;
+
+  // Credit tracking
+  creditBalance_cents: number;
+  dailyUsage_cents: number;
+  dailyLimit_cents: number;
+  dailyResetAt: string | null;
 }
 
 interface BillingActions {
@@ -28,6 +34,12 @@ interface BillingActions {
   isActive: () => boolean;
   isInGracePeriod: () => boolean;
   getCurrentPlan: () => string;
+  updateCredits: (info: {
+    remaining_cents: number;
+    daily_used?: number;
+    daily_limit?: number;
+    daily_reset_at?: string;
+  }) => void;
 
   setError: (error: string | null) => void;
   clearError: () => void;
@@ -44,6 +56,10 @@ export const useBillingStore = create<BillingStore>()(
         subscriptionLoading: false,
         initialized: false,
         error: null,
+        creditBalance_cents: 0,
+        dailyUsage_cents: 0,
+        dailyLimit_cents: 0,
+        dailyResetAt: null,
 
         initialize: async (stripeApiKey: string, webhookSecret: string) => {
           try {
@@ -104,6 +120,15 @@ export const useBillingStore = create<BillingStore>()(
           return subscription?.plan_name || 'free';
         },
 
+        updateCredits: (info) => {
+          set({
+            creditBalance_cents: info.remaining_cents,
+            dailyUsage_cents: info.daily_used ?? get().dailyUsage_cents,
+            dailyLimit_cents: info.daily_limit ?? get().dailyLimit_cents,
+            dailyResetAt: info.daily_reset_at ?? get().dailyResetAt,
+          });
+        },
+
         setError: (error) => set({ error }),
         clearError: () => set({ error: null }),
       }),
@@ -113,6 +138,7 @@ export const useBillingStore = create<BillingStore>()(
           customer: state.customer,
           subscription: state.subscription,
           initialized: state.initialized,
+          creditBalance_cents: state.creditBalance_cents, // Persist credits too? Yes, for offline/restart continuity
         }),
       },
     ),

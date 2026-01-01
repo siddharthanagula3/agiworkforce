@@ -1,5 +1,3 @@
-
-
 import type { Node, Edge } from 'reactflow';
 
 export type CapabilityCategory = 'data' | 'logic' | 'actions' | 'ai';
@@ -93,9 +91,7 @@ export interface CapabilityItem {
   onDragStart?: (event: React.DragEvent, capability: Capability) => void;
 }
 
-
 export const BUILT_IN_CAPABILITIES: Capability[] = [
-  
   {
     id: 'api_call',
     name: 'API Call',
@@ -118,7 +114,7 @@ export const BUILT_IN_CAPABILITIES: Capability[] = [
             { value: 'DELETE', label: 'DELETE' },
             { value: 'PATCH', label: 'PATCH' },
           ],
-          placeholder: 'https://example.com',//api.example.com',//api.example.com',
+          placeholder: 'https://example.com', //api.example.com',//api.example.com',
         },
         {
           name: 'headers',
@@ -150,7 +146,7 @@ export const BUILT_IN_CAPABILITIES: Capability[] = [
           label: 'Database Connection',
           type: 'select',
           required: true,
-          options: [], 
+          options: [],
         },
         {
           name: 'query',
@@ -214,7 +210,7 @@ export const BUILT_IN_CAPABILITIES: Capability[] = [
           label: 'URL',
           type: 'text',
           required: true,
-          placeholder: 'https://example.com',//api.example.com',
+          placeholder: 'https://example.com', //api.example.com',
         },
         {
           name: 'selector',
@@ -237,7 +233,6 @@ export const BUILT_IN_CAPABILITIES: Capability[] = [
     },
   },
 
-  
   {
     id: 'condition',
     name: 'Condition',
@@ -336,7 +331,6 @@ export const BUILT_IN_CAPABILITIES: Capability[] = [
     },
   },
 
-  
   {
     id: 'send_email',
     name: 'Send Email',
@@ -459,7 +453,6 @@ export const BUILT_IN_CAPABILITIES: Capability[] = [
     },
   },
 
-  
   {
     id: 'summarize',
     name: 'Summarize',

@@ -10,6 +10,7 @@ mod tests {
             finish_reason: None,
             model: Some("gpt-4".to_string()),
             usage: None,
+            credits: None,
         };
 
         assert_eq!(chunk.content, "Hello");
@@ -29,6 +30,7 @@ mod tests {
                 completion_tokens: Some(20),
                 total_tokens: Some(30),
             }),
+            credits: None,
         };
 
         assert!(chunk.done);
@@ -57,6 +59,7 @@ mod tests {
             finish_reason: None,
             model: None,
             usage: None,
+            credits: None,
         };
 
         let serialized = serde_json::to_string(&chunk).unwrap();
@@ -88,6 +91,7 @@ mod tests {
                 finish_reason: Some(reason.to_string()),
                 model: None,
                 usage: None,
+                credits: None,
             };
             assert!(chunk.finish_reason.is_some());
         }
@@ -102,6 +106,7 @@ mod tests {
                 finish_reason: None,
                 model: None,
                 usage: None,
+                credits: None,
             },
             StreamChunk {
                 content: " world".to_string(),
@@ -109,6 +114,7 @@ mod tests {
                 finish_reason: None,
                 model: None,
                 usage: None,
+                credits: None,
             },
             StreamChunk {
                 content: "!".to_string(),
@@ -116,6 +122,7 @@ mod tests {
                 finish_reason: Some("stop".to_string()),
                 model: None,
                 usage: None,
+                credits: None,
             },
         ];
 

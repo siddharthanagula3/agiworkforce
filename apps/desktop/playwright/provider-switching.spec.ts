@@ -1,7 +1,6 @@
 import { test, expect } from '../e2e/fixtures';
 import { SettingsSnapshot } from '../e2e/page-objects/SettingsPage';
 
-
 test.describe('Provider Switching E2E', () => {
   let providerSnapshot: SettingsSnapshot;
 
@@ -19,7 +18,6 @@ test.describe('Provider Switching E2E', () => {
   });
 
   test.afterEach(async ({ settingsPage }) => {
-    
     try {
       if (providerSnapshot && Object.keys(providerSnapshot).length > 0) {
         console.log('Restoring provider settings...');

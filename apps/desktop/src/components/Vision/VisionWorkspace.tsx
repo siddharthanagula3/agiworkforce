@@ -60,7 +60,6 @@ export const VisionWorkspace: React.FC = () => {
   };
 
   const handleAnalysisResult = (result: VisionResponse) => {
-    
     setHistory([{ images: [...images], result }, ...history]);
   };
 

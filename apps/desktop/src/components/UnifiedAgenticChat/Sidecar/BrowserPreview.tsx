@@ -30,16 +30,13 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
   const activeTab = activeSession?.tabs.find((t) => t.active);
   const tabId = activeTab?.id;
 
-  
   useEffect(() => {
     if (contextId) {
-      
       try {
         const parsedUrl = new URL(contextId);
         setUrl(parsedUrl.toString());
         setInputUrl(parsedUrl.toString());
       } catch {
-        
         const searchUrl = `https://api.agiworkforce.com`;
         setUrl(searchUrl);
         setInputUrl(searchUrl);
@@ -47,7 +44,6 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     }
   }, [contextId]);
 
-  
   const handleGoBack = useCallback(async () => {
     if (!tabId) return;
     try {
@@ -74,7 +70,6 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     }
   }, [tabId]);
 
-  
   const handleNavigate = useCallback(
     async (targetUrl: string) => {
       if (!tabId) {
@@ -86,9 +81,9 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
       setError(null);
 
       try {
-        
         let finalUrl = targetUrl.trim();
-        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {//') && !finalUrl.startsWith('https://')) {
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+          //') && !finalUrl.startsWith('https://')) {
           finalUrl = `https://api.agiworkforce.com`;
         }
 
@@ -108,7 +103,6 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     [tabId],
   );
 
-  
   const handleRefresh = useCallback(async () => {
     if (!tabId) return;
 
@@ -124,7 +118,6 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     }
   }, [tabId]);
 
-  
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -135,7 +128,6 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
     [inputUrl, handleNavigate],
   );
 
-  
   const handleOpenExternal = useCallback(() => {
     if (url) {
       window.open(url, '_blank');

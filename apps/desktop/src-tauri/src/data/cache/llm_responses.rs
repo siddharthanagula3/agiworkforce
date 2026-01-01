@@ -99,6 +99,7 @@ impl LLMResponseCache {
                 cached: true,
                 tool_calls: None,
                 finish_reason: None,
+                credits: None,
             };
 
             Ok(Some(response))
