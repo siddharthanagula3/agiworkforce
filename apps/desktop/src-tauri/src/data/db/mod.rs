@@ -188,11 +188,21 @@ mod tests {
             .create_conversation("Test Chat".to_string(), "test_user".to_string())
             .unwrap();
 
-        let msg1 = Message::new(conv_id, "test_user".to_string(), MessageRole::User, "Hello".to_string());
+        let msg1 = Message::new(
+            conv_id,
+            "test_user".to_string(),
+            MessageRole::User,
+            "Hello".to_string(),
+        );
         let msg1_id = db.create_message(&msg1).unwrap();
 
-        let msg2 = Message::new(conv_id, "test_user".to_string(), MessageRole::Assistant, "Hi there!".to_string())
-            .with_metrics(10, 0.001);
+        let msg2 = Message::new(
+            conv_id,
+            "test_user".to_string(),
+            MessageRole::Assistant,
+            "Hi there!".to_string(),
+        )
+        .with_metrics(10, 0.001);
         let msg2_id = db.create_message(&msg2).unwrap();
 
         let mut messages = db.list_messages(conv_id).unwrap();
