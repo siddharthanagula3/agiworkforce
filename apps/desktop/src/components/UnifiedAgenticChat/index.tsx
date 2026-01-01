@@ -22,7 +22,6 @@ import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
-import { useUsageStore } from '../../stores/usageStore';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
