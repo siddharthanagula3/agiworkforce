@@ -731,7 +731,10 @@ pub async fn chat_send_message(
         // but Managed Cloud IS available (authenticated user), redirect to Managed Cloud proxy.
         let router = _llm_state.router.read().await;
         if router.has_provider(Provider::ManagedCloud) {
-            let provider_name = request.provider_override.clone().or(request.provider.clone());
+            let provider_name = request
+                .provider_override
+                .clone()
+                .or(request.provider.clone());
             if let Some(name) = provider_name {
                 info!(
                     "[Chat] Redirecting request for unconfigured provider '{}' to Managed Cloud",
@@ -744,7 +747,9 @@ pub async fn chat_send_message(
                     reason: "fallback-redirect-to-managed-cloud",
                 };
 
-                let result = router.invoke_candidate(&fallback_candidate, &llm_request).await;
+                let result = router
+                    .invoke_candidate(&fallback_candidate, &llm_request)
+                    .await;
                 match result {
                     Ok(outcome) => {
                         let assistant_message = {
