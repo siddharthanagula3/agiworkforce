@@ -137,7 +137,7 @@ pub fn update_message_content(conn: &Connection, id: i64, content: String) -> Re
 }
 
 fn map_message(row: &Row) -> Result<Message> {
-    let role_str: String = row.get(2)?;
+    let role_str: String = row.get(3)?;
     let role = MessageRole::from_str(&role_str).ok_or_else(|| rusqlite::Error::InvalidQuery)?;
 
     Ok(Message {
