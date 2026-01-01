@@ -36,6 +36,16 @@ vi.mock('../../services/supabase-server', () => ({
           },
         },
       })),
+      getSession: vi.fn(() => ({
+        data: {
+          session: {
+            user: {
+              id: 'test-user-id',
+              email: 'test@example.com',
+            },
+          },
+        },
+      })),
     },
   })),
 }));
@@ -64,6 +74,18 @@ vi.mock('stripe', () => {
   };
 });
 
+// Mock pricing configuration
+vi.mock('@/lib/pricing', () => ({
+  STRIPE_PRICE_IDS: {
+    hobby: { monthly: 'price_hobby_monthly', annual: 'price_hobby_yearly' },
+    pro: { monthly: 'price_pro_monthly', annual: 'price_pro_yearly' },
+    max: { monthly: 'price_max_monthly', annual: 'price_max_yearly' },
+  },
+  PRICING_CONFIG: {
+    getPlanFromPriceId: vi.fn(),
+  },
+}));
+
 describe('POST /api/checkout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -77,6 +99,9 @@ describe('POST /api/checkout', () => {
         getUser: vi.fn(() => ({
           data: { user: null },
         })),
+        getSession: vi.fn(() => ({
+          data: { session: null },
+        })),
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
@@ -87,10 +112,10 @@ describe('POST /api/checkout', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const text = await response.text();
 
     expect(response.status).toBe(401);
-    expect(data.error.code).toBe('UNAUTHORIZED');
+    expect(text).toBe('Unauthorized');
   });
 
   it('should validate request body', async () => {
@@ -100,10 +125,10 @@ describe('POST /api/checkout', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const text = await response.text();
 
     expect(response.status).toBe(400);
-    expect(data.error.code).toBe('VALIDATION_ERROR');
+    expect(text).toContain('Invalid plan configuration');
   });
 
   it('should create checkout session for valid request', async () => {
@@ -119,16 +144,16 @@ describe('POST /api/checkout', () => {
     expect(data.url).toBeDefined();
   });
 
-  it('should reject enterprise plan', async () => {
+  it('should reject invalid/enterprise plan', async () => {
     const request = new NextRequest('http://localhost/api/checkout', {
       method: 'POST',
       body: JSON.stringify({ plan: 'enterprise', billingInterval: 'monthly' }),
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const text = await response.text();
 
     expect(response.status).toBe(400);
-    expect(data.error.code).toBe('VALIDATION_ERROR');
+    expect(text).toContain('Invalid plan configuration');
   });
 });

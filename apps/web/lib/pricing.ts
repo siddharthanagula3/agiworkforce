@@ -2,16 +2,16 @@
 
 export const STRIPE_PRICE_IDS = {
   hobby: {
-    monthly: process.env.STRIPE_PRICE_HOBBY_MONTHLY ?? 'price_1Sgwx10zEfO6BZMh7thtFU77',
-    annual: process.env.STRIPE_PRICE_HOBBY_YEARLY ?? 'price_1Sgwx20zEfO6BZMhbgpxL8TI',
+    monthly: process.env.STRIPE_PRICE_HOBBY_MONTHLY,
+    annual: process.env.STRIPE_PRICE_HOBBY_YEARLY,
   },
   pro: {
-    monthly: process.env.STRIPE_PRICE_PRO_MONTHLY ?? 'price_1Sgwx20zEfO6BZMh3ix7hivi',
-    annual: process.env.STRIPE_PRICE_PRO_YEARLY ?? 'price_1Sgwx30zEfO6BZMhJXsduOyl',
+    monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
+    annual: process.env.STRIPE_PRICE_PRO_YEARLY,
   },
   max: {
-    monthly: process.env.STRIPE_PRICE_MAX_MONTHLY ?? 'price_1Sgwx30zEfO6BZMhJqItFYKF',
-    annual: process.env.STRIPE_PRICE_MAX_YEARLY ?? 'price_1Sgwx40zEfO6BZMhYS63EnfW',
+    monthly: process.env.STRIPE_PRICE_MAX_MONTHLY,
+    annual: process.env.STRIPE_PRICE_MAX_YEARLY,
   },
 };
 
@@ -46,9 +46,12 @@ export const PRICING_CONFIG = {
     },
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
-    for (const plan of PRICING_CONFIG.plans) {
-      if (Object.values(plan.stripe_price_ids).includes(priceId)) {
-        return plan.id;
+    // Check all plans
+    const allPlans = ['hobby', 'pro', 'max'] as const;
+    for (const plan of allPlans) {
+      const prices = STRIPE_PRICE_IDS[plan];
+      if (prices.monthly === priceId || prices.annual === priceId) {
+        return plan;
       }
     }
     return null;
