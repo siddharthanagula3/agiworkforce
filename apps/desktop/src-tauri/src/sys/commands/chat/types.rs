@@ -7,11 +7,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
     pub title: String,
+    pub user_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMessageRequest {
     pub conversation_id: i64,
+    pub user_id: String,
     pub role: MessageRole,
     pub content: String,
     pub tokens: Option<i32>,
@@ -21,12 +23,15 @@ pub struct CreateMessageRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateConversationRequest {
     pub title: String,
+    pub user_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatSendMessageRequest {
     #[serde(default, alias = "conversationId")]
     pub conversation_id: Option<i64>,
+    #[serde(alias = "userId")]
+    pub user_id: String,
     pub content: String,
     #[serde(default)]
     pub provider: Option<String>,

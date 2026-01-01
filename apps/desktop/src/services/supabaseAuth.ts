@@ -13,6 +13,7 @@ import {
   type PlanTier,
   asPlanTier,
 } from '../lib/supabase';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface AuthState {
   user: User | null;
@@ -380,6 +381,15 @@ class SupabaseAuthService {
       console.error('[Auth] Sign out exception:', error);
       this.updateState({ error: String(error) });
     } finally {
+      // Clear local database to ensure strict data isolation
+      try {
+        await invoke('clear_local_database');
+        console.log('[Auth] Local database cleared on logout');
+      } catch (err) {
+        // Log but don't block sign out state update
+        console.error('[Auth] Failed to clear local database on logout:', err);
+      }
+
       // Ensure we clean up state even if the SIGNED_OUT event doesn't fire appropriately
       // or if there was an error.
       this.handleSignedOut();

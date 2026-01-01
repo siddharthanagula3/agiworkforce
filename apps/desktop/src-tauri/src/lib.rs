@@ -494,7 +494,9 @@ pub fn run() {
             crate::sys::commands::chat_get_conversation_stats,
             crate::sys::commands::chat_get_cost_overview,
             crate::sys::commands::chat_get_cost_analytics,
+
             crate::sys::commands::chat_set_monthly_budget,
+            crate::sys::commands::chat::clear_local_database,
 
 
             crate::sys::commands::checkpoint_create,

@@ -22,6 +22,7 @@ import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
+import { supabaseAuth } from '../../services/supabaseAuth';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
@@ -94,61 +95,63 @@ export const UnifiedAgenticChat: React.FC<{
     );
 
     unlistenPromises.push(
-      listen<{ conversation_id: number; message_id: string | number; delta: string; content: string }>(
-        'chat:stream-chunk',
-        ({ payload }) => {
-          const state = useUnifiedChatStore.getState();
+      listen<{
+        conversation_id: number;
+        message_id: string | number;
+        delta: string;
+        content: string;
+      }>('chat:stream-chunk', ({ payload }) => {
+        const state = useUnifiedChatStore.getState();
 
-          // Validate payload has required fields
-          if (!payload.message_id || typeof payload.content !== 'string') {
-            console.error('[UnifiedAgenticChat] Invalid stream payload', { payload });
-            return;
-          }
+        // Validate payload has required fields
+        if (!payload.message_id || typeof payload.content !== 'string') {
+          console.error('[UnifiedAgenticChat] Invalid stream payload', { payload });
+          return;
+        }
 
-          // Handle both string (UUID) and number (backend ID) message IDs
-          const targetMessageId = String(payload.message_id);
+        // Handle both string (UUID) and number (backend ID) message IDs
+        const targetMessageId = String(payload.message_id);
 
-          // First priority: verify message exists with this ID
-          const messageExists = state.messages.some((m) => m.id === targetMessageId);
+        // First priority: verify message exists with this ID
+        const messageExists = state.messages.some((m) => m.id === targetMessageId);
 
-          if (messageExists) {
-            state.updateMessage(targetMessageId, {
+        if (messageExists) {
+          state.updateMessage(targetMessageId, {
+            content: payload.content,
+            metadata: { streaming: true },
+          });
+        } else {
+          // Fallback: use currentStreamingMessageId if available
+          const currentStreamingId = state.currentStreamingMessageId;
+          if (currentStreamingId && state.messages.some((m) => m.id === currentStreamingId)) {
+            state.updateMessage(currentStreamingId, {
               content: payload.content,
               metadata: { streaming: true },
             });
           } else {
-            // Fallback: use currentStreamingMessageId if available
-            const currentStreamingId = state.currentStreamingMessageId;
-            if (currentStreamingId && state.messages.some((m) => m.id === currentStreamingId)) {
-              state.updateMessage(currentStreamingId, {
+            // Last resort fallback (should rarely happen)
+            const lastStreaming = state.messages
+              .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
+              .pop();
+
+            if (lastStreaming) {
+              state.updateMessage(lastStreaming.id, {
                 content: payload.content,
                 metadata: { streaming: true },
               });
             } else {
-              // Last resort fallback (should rarely happen)
-              const lastStreaming = state.messages
-                .filter((m) => m.role === 'assistant' && m.metadata?.streaming)
-                .pop();
-
-              if (lastStreaming) {
-                state.updateMessage(lastStreaming.id, {
-                  content: payload.content,
-                  metadata: { streaming: true },
-                });
-              } else {
-                console.error(
-                  '[UnifiedAgenticChat] No streaming message found to update. Payload message_id does not match any existing message.',
-                  {
-                    payloadMessageId: payload.message_id,
-                    currentStreamingId: state.currentStreamingMessageId,
-                    availableMessageIds: state.messages.map((m) => m.id),
-                  },
-                );
-              }
+              console.error(
+                '[UnifiedAgenticChat] No streaming message found to update. Payload message_id does not match any existing message.',
+                {
+                  payloadMessageId: payload.message_id,
+                  currentStreamingId: state.currentStreamingMessageId,
+                  availableMessageIds: state.messages.map((m) => m.id),
+                },
+              );
             }
           }
-        },
-      ),
+        }
+      }),
     );
 
     unlistenPromises.push(
@@ -160,8 +163,8 @@ export const UnifiedAgenticChat: React.FC<{
           const currentStreamingId = state.currentStreamingMessageId;
 
           // Update the message that was streaming
-          const targetId = state.messages.some((m) => m.id === messageId) 
-            ? messageId 
+          const targetId = state.messages.some((m) => m.id === messageId)
+            ? messageId
             : currentStreamingId;
 
           if (targetId) {
@@ -186,8 +189,8 @@ export const UnifiedAgenticChat: React.FC<{
           const currentStreamingId = state.currentStreamingMessageId;
 
           // Update the message that was streaming with error
-          const targetId = state.messages.some((m) => m.id === messageId) 
-            ? messageId 
+          const targetId = state.messages.some((m) => m.id === messageId)
+            ? messageId
             : currentStreamingId;
 
           if (targetId) {
@@ -621,9 +624,15 @@ export const UnifiedAgenticChat: React.FC<{
         // All LLM requests use cloud credits from subscription (except Ollama local)
         // For streaming mode, we pass the frontend message ID and don't wait for the response
         // Events will handle all updates
+        const userId = supabaseAuth.getUser()?.id;
+        if (!userId) {
+          throw new Error('User not authenticated');
+        }
+
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
+            userId,
             conversation_id: conversationDbId,
             attachments: enrichedOptions.attachments?.map((att) => ({
               id: att.id,

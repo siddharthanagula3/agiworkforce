@@ -6,47 +6,61 @@ use super::models::{
     MessageRole, OverlayEvent, OverlayEventType, ProviderCostBreakdown, Setting, TaskType,
 };
 
-pub fn create_conversation(conn: &Connection, title: String) -> Result<i64> {
+pub fn create_conversation(conn: &Connection, title: String, user_id: String) -> Result<i64> {
     conn.execute(
-        "INSERT INTO conversations (title) VALUES (?1)",
-        params![title],
+        "INSERT INTO conversations (title, user_id) VALUES (?1, ?2)",
+        params![title, user_id],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
-pub fn get_conversation(conn: &Connection, id: i64) -> Result<Conversation> {
+pub fn get_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<Conversation> {
     conn.query_row(
-        "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?1",
-        params![id],
+        "SELECT id, title, created_at, updated_at, user_id FROM conversations WHERE id = ?1 AND user_id = ?2",
+        params![id, user_id],
         map_conversation,
     )
 }
 
-pub fn list_conversations(conn: &Connection, limit: i64, offset: i64) -> Result<Vec<Conversation>> {
+pub fn list_conversations(
+    conn: &Connection,
+    limit: i64,
+    offset: i64,
+    user_id: &str,
+) -> Result<Vec<Conversation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_at
+        "SELECT id, title, created_at, updated_at, user_id
          FROM conversations
+         WHERE user_id = ?3
          ORDER BY updated_at DESC
          LIMIT ?1 OFFSET ?2",
     )?;
 
     let conversations = stmt
-        .query_map(params![limit, offset], map_conversation)?
+        .query_map(params![limit, offset, user_id], map_conversation)?
         .collect::<Result<Vec<_>>>()?;
 
     Ok(conversations)
 }
 
-pub fn update_conversation_title(conn: &Connection, id: i64, title: String) -> Result<()> {
+pub fn update_conversation_title(
+    conn: &Connection,
+    id: i64,
+    user_id: &str,
+    title: String,
+) -> Result<()> {
     conn.execute(
-        "UPDATE conversations SET title = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
-        params![title, id],
+        "UPDATE conversations SET title = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2 AND user_id = ?3",
+        params![title, id, user_id],
     )?;
     Ok(())
 }
 
-pub fn delete_conversation(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM conversations WHERE id = ?1", params![id])?;
+pub fn delete_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM conversations WHERE id = ?1 AND user_id = ?2",
+        params![id, user_id],
+    )?;
     Ok(())
 }
 
@@ -56,6 +70,7 @@ fn map_conversation(row: &Row) -> Result<Conversation> {
         title: row.get(1)?,
         created_at: parse_datetime(&row.get::<_, String>(2)?),
         updated_at: parse_datetime(&row.get::<_, String>(3)?),
+        user_id: row.get(4)?,
     })
 }
 
@@ -66,10 +81,11 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
     )?;
 
     conn.execute(
-        "INSERT INTO messages (conversation_id, role, content, tokens, cost, provider, model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             message.conversation_id,
+            message.user_id,
             message.role.as_str(),
             message.content,
             message.tokens,
@@ -83,7 +99,7 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
 
 pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
     conn.query_row(
-        "SELECT id, conversation_id, role, content, tokens, cost, provider, model, created_at
+        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at
          FROM messages
          WHERE id = ?1",
         params![id],
@@ -93,7 +109,7 @@ pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
 
 pub fn list_messages(conn: &Connection, conversation_id: i64) -> Result<Vec<Message>> {
     let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, role, content, tokens, cost, provider, model, created_at
+        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at
          FROM messages
          WHERE conversation_id = ?1
          ORDER BY created_at ASC",
@@ -127,24 +143,26 @@ fn map_message(row: &Row) -> Result<Message> {
     Ok(Message {
         id: row.get(0)?,
         conversation_id: row.get(1)?,
+        user_id: row.get(2)?,
         role,
-        content: row.get(3)?,
-        tokens: row.get(4)?,
-        cost: row.get(5)?,
-        provider: row.get(6)?,
-        model: row.get(7)?,
-        created_at: parse_datetime(&row.get::<_, String>(8)?),
+        content: row.get(4)?,
+        tokens: row.get(5)?,
+        cost: row.get(6)?,
+        provider: row.get(7)?,
+        model: row.get(8)?,
+        created_at: parse_datetime(&row.get::<_, String>(9)?),
     })
 }
 
-pub fn sum_cost_since(conn: &Connection, since: DateTime<Utc>) -> Result<f64> {
+pub fn sum_cost_since(conn: &Connection, since: DateTime<Utc>, user_id: &str) -> Result<f64> {
     conn.query_row(
         "SELECT COALESCE(SUM(cost), 0.0)
          FROM messages
          WHERE role = 'assistant'
            AND cost IS NOT NULL
-           AND created_at >= ?1",
-        params![to_sqlite_timestamp(since)],
+           AND created_at >= ?1
+           AND user_id = ?2",
+        params![to_sqlite_timestamp(since), user_id],
         |row| row.get(0),
     )
 }
@@ -154,6 +172,7 @@ pub fn list_cost_timeseries(
     days: i64,
     provider: Option<&str>,
     model: Option<&str>,
+    user_id: &str,
 ) -> Result<Vec<CostTimeseriesPoint>> {
     let span = days.max(1) - 1;
     let cutoff = start_of_day(Utc::now() - Duration::days(span));
@@ -164,10 +183,11 @@ pub fn list_cost_timeseries(
          FROM messages
          WHERE role = 'assistant'
            AND cost IS NOT NULL
-           AND created_at >= ?1",
+           AND created_at >= ?1
+           AND user_id = ?2",
     );
 
-    let mut params: Vec<String> = vec![to_sqlite_timestamp(cutoff)];
+    let mut params: Vec<String> = vec![to_sqlite_timestamp(cutoff), user_id.to_string()];
 
     if let Some(provider_value) = provider {
         let placeholder = params.len() + 1;
@@ -200,16 +220,18 @@ pub fn list_cost_by_provider(
     end: Option<DateTime<Utc>>,
     provider: Option<&str>,
     model: Option<&str>,
+    user_id: &str,
 ) -> Result<Vec<ProviderCostBreakdown>> {
     let mut sql = String::from(
         "SELECT COALESCE(provider, 'unknown') AS provider,
                        COALESCE(SUM(cost), 0.0) AS total_cost
                 FROM messages
                 WHERE role = 'assistant'
-                  AND cost IS NOT NULL",
+                  AND cost IS NOT NULL
+                  AND user_id = ?",
     );
 
-    let mut params: Vec<String> = Vec::new();
+    let mut params: Vec<String> = vec![user_id.to_string()];
 
     if let Some(start_dt) = start {
         let placeholder = params.len() + 1;
@@ -254,8 +276,9 @@ pub fn list_top_conversations_by_cost(
     limit: usize,
     start: Option<DateTime<Utc>>,
     end: Option<DateTime<Utc>>,
+    user_id: &str,
 ) -> Result<Vec<ConversationCostBreakdown>> {
-    list_top_conversations_by_cost_filtered(conn, limit, start, end, None, None)
+    list_top_conversations_by_cost_filtered(conn, limit, start, end, None, None, user_id)
 }
 
 pub fn list_top_conversations_by_cost_filtered(
@@ -265,6 +288,7 @@ pub fn list_top_conversations_by_cost_filtered(
     end: Option<DateTime<Utc>>,
     provider: Option<&str>,
     model: Option<&str>,
+    user_id: &str,
 ) -> Result<Vec<ConversationCostBreakdown>> {
     let base = "SELECT m.conversation_id,
                        c.title,
@@ -272,10 +296,11 @@ pub fn list_top_conversations_by_cost_filtered(
                 FROM messages m
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE m.role = 'assistant'
-                  AND m.cost IS NOT NULL";
+                  AND m.cost IS NOT NULL
+                  AND m.user_id = ?1";
 
     let mut sql = String::from(base);
-    let mut params: Vec<String> = Vec::new();
+    let mut params: Vec<String> = vec![user_id.to_string()];
 
     if let Some(start_dt) = start {
         let placeholder = params.len() + 1;
