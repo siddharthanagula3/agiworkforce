@@ -5,11 +5,12 @@ use crate::core::agi::{
 };
 use crate::core::router::Provider;
 use crate::sys::commands::llm::LLMState;
+use crate::sys::commands::AppDatabase;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -759,6 +760,7 @@ pub async fn start_agent_task(
     goal: String,
     _mode: String,
     llm_state: State<'_, LLMState>,
+    user_id: Option<String>,
 ) -> Result<String, String> {
     tracing::info!("[start_agent_task] Starting agent task with goal: {}", goal);
 
@@ -828,9 +830,25 @@ pub async fn start_agent_task(
         total_cost
     );
 
-    // TODO: Save `total_cost` to database here
-    // Example:
-    // save_token_usage(user_id, input_tokens, output_tokens, total_cost, model).await?;
+    // Save token usage to database
+    let user_id_val = user_id.unwrap_or_else(|| "unknown".to_string());
+    let token_usage = crate::data::db::models::TokenUsage::new(
+        user_id_val,
+        input_tokens as i32,
+        output_tokens as i32,
+        total_cost,
+        Some(model.to_string()),
+        Some(provider.as_string().to_string()),
+    );
+
+    let db_state = app.state::<AppDatabase>();
+    if let Ok(conn) = db_state.connection() {
+        if let Err(e) = crate::data::db::repository::create_token_usage(&conn, &token_usage) {
+            tracing::error!("[start_agent_task] Failed to save token usage: {}", e);
+        }
+    } else {
+        tracing::error!("[start_agent_task] Failed to get database connection");
+    }
 
     Ok(route_outcome.response.content)
 }
