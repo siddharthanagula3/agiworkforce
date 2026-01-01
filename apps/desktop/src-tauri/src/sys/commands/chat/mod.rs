@@ -74,7 +74,9 @@ pub struct AppDatabase {
 }
 
 impl AppDatabase {
-    pub fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {}
+    pub fn connection(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        self.conn.lock().map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -203,7 +205,7 @@ pub fn chat_update_conversation(
     let conn = db.connection()?;
     // Check existence/ownership first? Or just try update.
     // repository::update_conversation_title uses user_id in WHERE.
-    repository::update_conversation_title(&conn, id, trimmed_title.to_string(), request.user_id)
+    repository::update_conversation_title(&conn, id, &request.user_id, trimmed_title.to_string())
         .map_err(|e| format!("Failed to update conversation {}: {e}", id))
 }
 
@@ -1047,7 +1049,14 @@ pub async fn chat_send_message(
 }
 
 #[tauri::command]
-pub fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverviewResponse, String> {
+pub fn chat_get_cost_overview(
+    db: State<'_, AppDatabase>,
+    user_id: String,
+) -> Result<CostOverviewResponse, String> {
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+
     let conn = db.connection()?;
 
     let now = Utc::now();
@@ -1060,9 +1069,9 @@ pub fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverview
         .single()
         .ok_or_else(|| "Failed to compute start-of-month".to_string())?;
 
-    let today_total = repository::sum_cost_since(&conn, today_start)
+    let today_total = repository::sum_cost_since(&conn, today_start, &user_id)
         .map_err(|e| format!("Failed to compute today's cost: {e}"))?;
-    let month_total = repository::sum_cost_since(&conn, month_start)
+    let month_total = repository::sum_cost_since(&conn, month_start, &user_id)
         .map_err(|e| format!("Failed to compute monthly cost: {e}"))?;
 
     let monthly_budget = repository::get_setting(&conn, "billing.monthly_budget")
@@ -1081,10 +1090,14 @@ pub fn chat_get_cost_overview(db: State<'_, AppDatabase>) -> Result<CostOverview
 #[tauri::command]
 pub fn chat_get_cost_analytics(
     db: State<'_, AppDatabase>,
+    user_id: String,
     days: Option<i64>,
     provider: Option<String>,
     model: Option<String>,
 ) -> Result<CostAnalyticsResponse, String> {
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
     if let Some(d) = days {
         if d <= 0 {
             return Err(format!("Invalid days value: {}. Days must be positive", d));
@@ -1120,10 +1133,10 @@ pub fn chat_get_cost_analytics(
         end
     };
 
-    let timeseries = repository::list_cost_timeseries(&conn, window, provider_ref, model_ref)
+    let timeseries = repository::list_cost_timeseries(&conn, window, provider_ref, model_ref, &user_id)
         .map_err(|e| format!("Failed to load cost timeseries: {e}"))?;
     let providers =
-        repository::list_cost_by_provider(&conn, Some(start), Some(end), provider_ref, model_ref)
+        repository::list_cost_by_provider(&conn, Some(start), Some(end), provider_ref, model_ref, &user_id)
             .map_err(|e| format!("Failed to load provider breakdown: {e}"))?;
     let top_conversations = repository::list_top_conversations_by_cost_filtered(
         &conn,
@@ -1132,6 +1145,7 @@ pub fn chat_get_cost_analytics(
         Some(end),
         provider_ref,
         model_ref,
+        &user_id,
     )
     .map_err(|e| format!("Failed to load top conversations: {e}"))?;
 
