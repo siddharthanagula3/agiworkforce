@@ -287,6 +287,7 @@ impl LLMProvider for XAIProvider {
             cached: false,
             tool_calls,
             finish_reason: choice.finish_reason.clone(),
+            credits: None,
         })
     }
 

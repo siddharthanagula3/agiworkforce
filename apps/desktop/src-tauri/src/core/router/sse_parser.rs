@@ -11,6 +11,7 @@ pub struct StreamChunk {
     pub finish_reason: Option<String>,
     pub model: Option<String>,
     pub usage: Option<TokenUsage>,
+    pub credits: Option<crate::core::router::CreditsInfo>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -156,6 +157,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
     let mut finish_reason = None;
     let mut model = None;
     let mut usage = None;
+    let mut credits = None;
 
     for line in event.lines() {
         if let Some(data) = line.strip_prefix("data: ") {
@@ -200,6 +202,23 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                         .map(|t| t as u32),
                 });
             }
+
+            if let Some(c) = json.get("credits").and_then(|c| c.as_object()) {
+                credits = Some(crate::core::router::CreditsInfo {
+                    cost_cents: c.get("cost_cents").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    remaining_cents: c
+                        .get("remaining_cents")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    daily_limit: c.get("daily_limit").and_then(|v| v.as_f64()),
+                    daily_used: c.get("daily_used").and_then(|v| v.as_f64()),
+                    daily_remaining: c.get("daily_remaining").and_then(|v| v.as_f64()),
+                    daily_reset_at: c
+                        .get("daily_reset_at")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                });
+            }
         }
     }
 
@@ -209,6 +228,7 @@ fn parse_openai_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         finish_reason,
         model,
         usage,
+        credits,
     })
 }
 
@@ -284,6 +304,7 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
         finish_reason,
         model,
         usage,
+        credits: None,
     })
 }
 
@@ -345,6 +366,7 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         finish_reason,
         model,
         usage,
+        credits: None,
     })
 }
 
@@ -401,6 +423,7 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
         finish_reason: None,
         model,
         usage,
+        credits: None,
     })
 }
 

@@ -1,17 +1,73 @@
-use crate::core::router::{ChatMessage, Provider};
+use crate::core::router::{ChatMessage, ContentPart, Provider};
+use lazy_static::lazy_static;
+use tiktoken_rs::{cl100k_base, CoreBPE};
 
+lazy_static! {
+    static ref TOKENIZER: CoreBPE = cl100k_base().unwrap();
+}
+
+#[derive(Clone)]
 pub struct TokenCounter;
 
 impl TokenCounter {
-    pub fn estimate_prompt_tokens(messages: &[ChatMessage]) -> u32 {
-        messages
-            .iter()
-            .map(|message| Self::estimate_text_tokens(&message.content))
-            .sum()
+    pub fn new() -> Self {
+        Self
     }
 
-    pub fn estimate_completion_tokens(content: &str) -> u32 {
-        Self::estimate_text_tokens(content)
+    /// Estimate tokens for a single string using cl100k_base (GPT-4/3.5 standard)
+    pub fn estimate_text_tokens(text: &str) -> u32 {
+        if text.is_empty() {
+            return 0;
+        }
+
+        // Fast path for very short strings
+        if text.len() < 10 {
+            return (text.len() as f64 / 3.0).ceil() as u32;
+        }
+
+        // tiktoken's encode_with_special_tokens returns Vec<usize> directly, not Result
+        let tokens = TOKENIZER.encode_with_special_tokens(text);
+        tokens.len() as u32
+    }
+
+    /// Estimate tokens for a chat prompt typically used in OpenAI-like APIs
+    /// This is a rough approximation of the ChatML format overhead.
+    pub fn estimate_prompt_tokens(messages: &[ChatMessage]) -> u32 {
+        let mut total_tokens = 0;
+
+        // Per-message overhead (approximate for GPT-4)
+        // <|im_start|>role\ncontent<|im_end|>\n
+        let tokens_per_message = 3;
+
+        for message in messages {
+            total_tokens += tokens_per_message;
+            total_tokens += Self::estimate_text_tokens(&message.role);
+
+            if let Some(multimodal) = &message.multimodal_content {
+                for part in multimodal {
+                    match part {
+                        ContentPart::Text { text } => {
+                            total_tokens += Self::estimate_text_tokens(text);
+                        }
+                        ContentPart::Image { .. } => {
+                            total_tokens += 85; // Low-res estimate placeholder
+                        }
+                        ContentPart::Video { .. } => {
+                            total_tokens += 85; // Placeholder
+                        }
+                    }
+                }
+            } else {
+                total_tokens += Self::estimate_text_tokens(&message.content);
+            }
+        }
+
+        total_tokens += 3; // Reply primer: <|im_start|>assistant<|message|>
+        total_tokens
+    }
+
+    pub fn estimate_completion_tokens(text: &str) -> u32 {
+        Self::estimate_text_tokens(text)
     }
 
     pub fn estimate_total_tokens(messages: &[ChatMessage], completion: &str) -> u32 {
@@ -25,38 +81,22 @@ impl TokenCounter {
     ) -> (u32, u32) {
         let (prompt_multiplier, completion_multiplier) = match provider {
             Provider::OpenAI => (1.0, 1.0),
-            Provider::Anthropic => (1.05, 1.05),
-            Provider::Google => (0.95, 0.95),
-            Provider::Ollama => (1.10, 1.10),
+            Provider::Anthropic => (1.05, 1.05), // Higher due to different specialized tokenizer
+            Provider::Google => (0.95, 0.95),    // Gemini often uses fewer tokens
+            Provider::Ollama => (1.10, 1.10),    // Conservative for Llama types
             Provider::XAI => (1.0, 1.0),
             Provider::DeepSeek => (1.05, 1.05),
             Provider::Qwen => (1.0, 1.0),
             Provider::Moonshot => (1.0, 1.0),
-            Provider::ManagedCloud => (1.0, 1.0), // ManagedCloud uses OpenAI-compatible format
+            Provider::ManagedCloud => (1.0, 1.0),
         };
 
-        let prompt =
-            (Self::estimate_prompt_tokens(messages) as f32 * prompt_multiplier).ceil() as u32;
-        let completion = (Self::estimate_completion_tokens(completion) as f32
-            * completion_multiplier)
-            .ceil() as u32;
+        let prompt_base = Self::estimate_prompt_tokens(messages) as f64;
+        let completion_base = Self::estimate_completion_tokens(completion) as f64;
 
-        (prompt.max(1), completion.max(1))
-    }
-
-    fn estimate_text_tokens(text: &str) -> u32 {
-        if text.is_empty() {
-            return 0;
-        }
-
-        let char_count = text.chars().count() as f64;
-        let whitespace = text.chars().filter(|c| c.is_whitespace()).count() as f64;
-        let punctuation = text.chars().filter(|c| "!?,.;:\"'`~".contains(*c)).count() as f64;
-
-        let base = char_count / 4.0;
-        let whitespace_adjustment = whitespace / 10.0;
-        let punctuation_adjustment = punctuation / 15.0;
-
-        ((base + whitespace_adjustment + punctuation_adjustment).ceil() as u32).max(1)
+        (
+            (prompt_base * prompt_multiplier).ceil() as u32,
+            (completion_base * completion_multiplier).ceil() as u32,
+        )
     }
 }

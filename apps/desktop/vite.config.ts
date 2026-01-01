@@ -2,7 +2,6 @@ import net from 'node:net';
 import path from 'node:path';
 import { defineConfig, type UserConfig } from 'vite';
 
-
 const DEFAULT_DEV_PORT = Number(process.env['VITE_DEV_PORT'] ?? 5173);
 const host = process.env['TAURI_DEV_HOST'];
 
@@ -80,7 +79,7 @@ export default defineConfig(async () => {
               '@radix-ui/react-tabs',
               '@radix-ui/react-toast',
             ],
-            
+
             'terminal-vendor': ['@xterm/xterm'],
             'markdown-vendor': ['react-markdown', 'remark-gfm', 'rehype-highlight', 'katex'],
             'utility-vendor': ['framer-motion', 'date-fns', 'clsx'],
@@ -88,7 +87,7 @@ export default defineConfig(async () => {
           },
         },
       },
-      chunkSizeWarningLimit: 1500, 
+      chunkSizeWarningLimit: 1500,
     },
     resolve: {
       alias: {

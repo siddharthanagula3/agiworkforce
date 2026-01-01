@@ -132,6 +132,7 @@ mod tests {
             provider: Provider::OpenAI,
             model: "gpt-4".to_string(),
             reason: "Preferred provider",
+            strategy: None,
         };
 
         assert_eq!(candidate.provider, Provider::OpenAI);
