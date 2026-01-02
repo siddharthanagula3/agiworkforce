@@ -5,18 +5,10 @@ import { getEnv, requireEnv } from '@/utils/env';
 import { DevicePollRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { validateCsrfFromRequest } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 async function handleDevicePoll(request: NextRequest) {
-  // CSRF protection
-  const csrfValid = await validateCsrfFromRequest(request);
-  if (!csrfValid) {
-    logger.warn({}, 'CSRF validation failed for device/poll');
-    throw createError.forbidden('CSRF token validation failed');
-  }
-
   // Rate limiting - use device_id as identifier
   let deviceId: string | undefined;
   try {
