@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '@/services/supabase-server';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
-import { validateCsrfFromRequest } from '@/lib/csrf';
 
 import { requireEnv } from '@/utils/env';
 
@@ -26,19 +25,13 @@ export async function POST(req: Request) {
     } = await supabase.auth.getSession();
 
     if (!session) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
-
-    // CSRF validation
-    const csrfValid = await validateCsrfFromRequest(req, session.user.id);
-    if (!csrfValid) {
-      return new NextResponse('CSRF token validation failed', { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { plan, billingInterval } = await req.json();
 
     if (!plan || !billingInterval) {
-      return new NextResponse('Missing plan or billingInterval', { status: 400 });
+      return NextResponse.json({ error: 'Missing plan or billingInterval' }, { status: 400 });
     }
 
     // Lookup Price ID
@@ -46,7 +39,7 @@ export async function POST(req: Request) {
     const priceId = planPrices ? planPrices[billingInterval as 'monthly' | 'annual'] : null;
 
     if (!priceId) {
-      return new NextResponse('Invalid plan configuration', { status: 400 });
+      return NextResponse.json({ error: 'Invalid plan configuration' }, { status: 400 });
     }
 
     // Create Stripe Checkout Session

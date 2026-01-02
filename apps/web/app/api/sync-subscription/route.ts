@@ -8,7 +8,6 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { validateCsrfFromRequest } from '@/lib/csrf';
 
 /**
  * Manual sync endpoint to fix subscriptions with missing or out-of-date local records.
@@ -29,12 +28,6 @@ async function handleSyncSubscription(request: NextRequest) {
 
   if (!user) {
     throw createError.unauthorized();
-  }
-
-  // CSRF validation with verified user ID
-  const csrfValid = await validateCsrfFromRequest(request, user.id);
-  if (!csrfValid) {
-    throw createError.forbidden('Invalid or missing CSRF token');
   }
 
   if (!user.email) {
