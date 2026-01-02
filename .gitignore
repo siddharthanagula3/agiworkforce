@@ -120,6 +120,10 @@ $RECYCLE.BIN/
 # --- Temporary files ---
 *.tmp
 *.temp
+*.bak
+*.old
+*.orig
+*.rej
 .temp/
 .tmp/
 

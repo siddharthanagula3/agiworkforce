@@ -285,6 +285,19 @@ export class SubscriptionService {
         'Found valid subscription in Stripe',
       );
 
+      // Extract period timestamps (Stripe SDK v20 type changes)
+      const periodStart = (stripeSubscription as unknown as { current_period_start: number })
+        .current_period_start;
+      const periodEnd = (stripeSubscription as unknown as { current_period_end: number })
+        .current_period_end;
+
+      // Get coupon ID from discounts array (v20 API change: discount -> discounts)
+      const discounts = (
+        stripeSubscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> }
+      ).discounts;
+      const stripeCouponId =
+        discounts && discounts.length > 0 ? discounts[0]?.coupon?.id || null : null;
+
       const supabase = getSupabaseClient();
       const subData = {
         user_id: userId,
@@ -293,16 +306,14 @@ export class SubscriptionService {
         stripe_price_id: stripePriceId || null,
         status: stripeSubscription.status,
         plan_tier: planTier,
-        current_period_start: new Date(
-          stripeSubscription.current_period_start * 1000,
-        ).toISOString(),
-        current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
+        current_period_start: new Date(periodStart * 1000).toISOString(),
+        current_period_end: new Date(periodEnd * 1000).toISOString(),
         cancel_at_period_end: stripeSubscription.cancel_at_period_end,
         canceled_at: stripeSubscription.canceled_at
           ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
           : null,
         updated_at: new Date().toISOString(),
-        stripe_coupon_id: stripeSubscription.discount?.coupon?.id || null,
+        stripe_coupon_id: stripeCouponId,
       };
 
       let { data, error } = await supabase

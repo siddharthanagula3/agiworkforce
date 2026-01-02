@@ -6,6 +6,7 @@ import { createServer } from 'http';
 import { randomInt } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
+import { supabase } from './db.js';
 
 type Role = 'desktop' | 'mobile';
 
@@ -45,7 +46,23 @@ app.use(express.json());
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: wsPath });
 
-const sessions = new Map<string, Session>();
+// In-memory strictly for active socket lookup (transient)
+// Sessions are persisted in DB, but we keep a local map if needed?
+// No, let's trust the DB for existence, and only keep role mapping in memory.
+// Actually, for routing to work, we need to know which socket corresponds to which role in a session.
+// We can keep `clients` WeakMap, but `sessions` Map is dangerous if we want persistence.
+// BUT, if we restart, the sockets die anyway.
+// The benefit of DB is that if Mobile connects, and Desktop is waiting, and server restarts...
+// well, if server restarts, both disconnect. They reconnect.
+// If session data was in memory, it's gone. Desktop has a "code" it thinks is valid.
+// Mobile tries to join. Server says "unknown code". Desktop has to re-pair.
+// WITH DB: Server restarts. Desktop reconnects (or just stays on "bound" screen).
+// Mobile joins. Server checks DB. Code is valid. Session proceeds.
+// So we ONLY need DB for `code` validity and metadata. Routing is still transient.
+
+// We will keep `activeSessions` for routing active sockets.
+// But we will fetch from DB when a client registers.
+const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
 
 const pairingRequestSchema = z.object({
@@ -77,7 +94,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.post('/pairings', (req, res) => {
+app.post('/pairings', async (req, res) => {
   const parseResult = pairingRequestSchema.safeParse(req.body ?? {});
 
   if (!parseResult.success) {
@@ -86,17 +103,24 @@ app.post('/pairings', (req, res) => {
 
   const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata } = parseResult.data;
 
-  const code = generateUniqueCode();
+  const code = await generateUniqueCode();
   const now = Date.now();
   const expiresAt = now + ttlSeconds * 1000;
 
-  sessions.set(code, {
+  // Persist to DB
+  const { error } = await supabase.from('signaling_sessions').insert({
     code,
-    createdAt: now,
-    expiresAt,
-    participants: {},
-    metadata: metadata ?? null,
+    created_at: now,
+    expires_at: expiresAt,
+    metadata: metadata ?? {},
   });
+
+  if (error) {
+    console.error('DB Insert Error', error);
+    return res.status(500).json({ error: 'database_error' });
+  }
+
+  // We don't need to put it in activeSessions until someone connects.
 
   return res.json({
     code,
@@ -108,36 +132,53 @@ app.post('/pairings', (req, res) => {
   });
 });
 
-app.get('/pairings/:code', (req, res) => {
+app.get('/pairings/:code', async (req, res) => {
   const code = req.params['code'];
-  const session = sessions.get(code);
-  if (!session) {
+  // Check DB
+  const { data: sessionData } = await supabase
+    .from('signaling_sessions')
+    .select('*')
+    .eq('code', code)
+    .single();
+
+  if (!sessionData) {
     return res.status(404).json({ error: 'pairing_not_found' });
   }
-  if (isSessionExpired(session)) {
-    sessions.delete(code);
+
+  // Check active participants for the response status
+  const activeSession = activeSessions.get(code);
+
+  if (sessionData.expires_at <= Date.now()) {
     return res.status(410).json({ error: 'pairing_expired' });
   }
 
   return res.json({
-    code: session.code,
-    expiresAt: session.expiresAt,
+    code: sessionData.code,
+    expiresAt: sessionData.expires_at,
     roles: {
-      desktop: Boolean(session.participants.desktop),
-      mobile: Boolean(session.participants.mobile),
+      desktop: Boolean(activeSession?.participants.desktop),
+      mobile: Boolean(activeSession?.participants.mobile),
     },
   });
 });
 
-app.delete('/pairings/:code', (req, res) => {
+app.delete('/pairings/:code', async (req, res) => {
   const code = req.params['code'];
-  const session = sessions.get(code);
-  if (!session) {
-    return res.status(404).json({ error: 'pairing_not_found' });
+
+  // Cleanup active connections
+  const active = activeSessions.get(code);
+  if (active) {
+    disconnectParticipants(active);
+    activeSessions.delete(code);
   }
 
-  disconnectParticipants(session);
-  sessions.delete(code);
+  // Delete from DB
+  const { error } = await supabase.from('signaling_sessions').delete().eq('code', code);
+
+  if (error) {
+    return res.status(500).json({ error: 'db_delete_error' });
+  }
+
   return res.json({ success: true });
 });
 
@@ -181,7 +222,7 @@ wss.on('connection', (socket) => {
     }
     clients.delete(socket);
 
-    const session = sessions.get(client.code);
+    const session = activeSessions.get(client.code);
     if (!session) {
       return;
     }
@@ -191,30 +232,31 @@ wss.on('connection', (socket) => {
       notifyPeer(session, client.role, { type: 'peer_left', role: client.role });
     }
 
+    // Clean up session from memory if no participants and session is expired
     if (
       !session.participants.desktop &&
       !session.participants.mobile &&
-      session.expiresAt < Date.now() + DEFAULT_TTL_SECONDS * 500
+      session.expiresAt <= Date.now()
     ) {
-      sessions.delete(client.code);
+      activeSessions.delete(client.code);
     }
   });
 });
 
 const cleanupInterval = setInterval(() => {
   const now = Date.now();
-  for (const session of sessions.values()) {
+  // Cleanup active memory sessions that are expired
+  for (const session of activeSessions.values()) {
     if (session.expiresAt <= now) {
       disconnectParticipants(session, 'session_expired');
-      sessions.delete(session.code);
+      activeSessions.delete(session.code);
     }
   }
+  // Optional: Clean DB for old sessions? Supabase can handle this with a cron or we do it lazily.
 }, 30_000);
 
 server.listen(port, host, () => {
-  console.log(
-    `[signaling] listening on http://${host}:${port}//${host}:${port} (WS: ${publicWsUrl})`,
-  );
+  console.log(`[signaling] listening on http://${host}:${port} (WS: ${publicWsUrl})`);
 });
 
 process.on('SIGTERM', () => {
@@ -225,16 +267,43 @@ process.on('SIGTERM', () => {
   });
 });
 
-function handleRegister(socket: WebSocket, message: RegisterMessage) {
-  const session = sessions.get(message.code);
+async function handleRegister(socket: WebSocket, message: RegisterMessage) {
+  // Check active session first
+  let session = activeSessions.get(message.code);
+
   if (!session) {
-    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
-    socket.close();
-    return;
+    // Check DB
+    const { data: dbSession } = await supabase
+      .from('signaling_sessions')
+      .select('*')
+      .eq('code', message.code)
+      .single();
+
+    if (!dbSession) {
+      socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+      socket.close();
+      return;
+    }
+
+    if (dbSession.expires_at <= Date.now()) {
+      socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
+      socket.close();
+      return;
+    }
+
+    // Rehydrate session
+    session = {
+      code: dbSession.code,
+      createdAt: dbSession.created_at,
+      expiresAt: dbSession.expires_at,
+      participants: {},
+      metadata: dbSession.metadata,
+    };
+    activeSessions.set(message.code, session);
   }
 
   if (isSessionExpired(session)) {
-    sessions.delete(message.code);
+    activeSessions.delete(message.code);
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
     socket.close();
     return;
@@ -287,7 +356,7 @@ function handleSignal(socket: WebSocket, message: SignalMessage) {
     socket.send(JSON.stringify({ type: 'error', error: 'registration_required' }));
     return;
   }
-  const session = sessions.get(client.code);
+  const session = activeSessions.get(client.code);
   if (!session) {
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     return;
@@ -328,16 +397,31 @@ function isSessionExpired(session: Session): boolean {
   return session.expiresAt <= Date.now();
 }
 
-function generateUniqueCode(): string {
-  let attempts = 0;
-  while (attempts < 5) {
+// Generate a unique 6-digit code with collision detection
+async function generateUniqueCode(): Promise<string> {
+  const MAX_ATTEMPTS = 10;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
-    if (!sessions.has(code)) {
+
+    // Check if code already exists in active sessions
+    if (activeSessions.has(code)) {
+      continue;
+    }
+
+    // Check if code exists in database
+    const { data: existing } = await supabase
+      .from('signaling_sessions')
+      .select('code')
+      .eq('code', code)
+      .single();
+
+    if (!existing) {
       return code;
     }
-    attempts += 1;
   }
-  throw new Error('failed_to_generate_pairing_code');
+
+  throw new Error('Failed to generate unique pairing code after maximum attempts');
 }
 
 function disconnectParticipants(

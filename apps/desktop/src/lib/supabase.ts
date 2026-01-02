@@ -10,13 +10,41 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+import { invoke } from '@tauri-apps/api/core';
+
+// Custom secure storage adapter using system keyring
+const secureStorage = {
+  getItem: async (_key: string): Promise<string | null> => {
+    try {
+      return await invoke<string>('auth_retrieve_session');
+    } catch (error) {
+      // If error (e.g. item not found), return null
+      return null;
+    }
+  },
+  setItem: async (_key: string, value: string): Promise<void> => {
+    try {
+      await invoke('auth_store_session', { session: value });
+    } catch (error) {
+      console.error('Failed to store session securely:', error);
+    }
+  },
+  removeItem: async (_key: string): Promise<void> => {
+    try {
+      await invoke('auth_remove_session');
+    } catch (error) {
+      console.error('Failed to remove session securely:', error);
+    }
+  },
+};
+
 const supabaseClient = createClient<Database>(supabaseUrl || '', supabaseAnonKey || '', {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // Use PKCE flow for enhanced security
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    flowType: 'pkce',
+    storage: secureStorage,
   },
 });
 

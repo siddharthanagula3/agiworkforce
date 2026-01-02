@@ -152,10 +152,15 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   if (stripeSubId && stripe) {
     try {
-      const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+      const subscriptionResponse = await stripe.subscriptions.retrieve(stripeSubId);
+      const subscription = subscriptionResponse as unknown as Stripe.Subscription;
       status = subscription.status;
-      currentPeriodStart = new Date(subscription.current_period_start * 1000);
-      currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+      currentPeriodStart = new Date(
+        (subscription as unknown as { current_period_start: number }).current_period_start * 1000,
+      );
+      currentPeriodEnd = new Date(
+        (subscription as unknown as { current_period_end: number }).current_period_end * 1000,
+      );
       cancelAtPeriodEnd = subscription.cancel_at_period_end;
       canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
 
@@ -168,8 +173,12 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
         );
       }
 
-      if (subscription.discount?.coupon?.id) {
-        stripeCouponId = subscription.discount.coupon.id;
+      // Check discounts array (v20 API change: discount -> discounts)
+      const discounts = (
+        subscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> }
+      ).discounts;
+      if (discounts && discounts.length > 0 && discounts[0]?.coupon?.id) {
+        stripeCouponId = discounts[0].coupon.id;
       }
     } catch (error) {
       logger.error(
@@ -246,9 +255,12 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       });
 
       if (expandedSession.total_details?.breakdown?.discounts) {
-        const discount = expandedSession.total_details.breakdown.discounts[0];
-        if (discount?.discount?.coupon?.id) {
-          stripeCouponId = discount.discount.coupon.id;
+        const discountItem = expandedSession.total_details.breakdown.discounts[0];
+        // Access coupon ID through the discount object
+        const couponId = (discountItem as unknown as { discount?: { coupon?: { id?: string } } })
+          ?.discount?.coupon?.id;
+        if (couponId) {
+          stripeCouponId = couponId;
         }
       }
     } catch (error) {
@@ -376,6 +388,17 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     );
   }
 
+  // Extract period timestamps (Stripe SDK v20 type changes)
+  const periodStart = (subscription as unknown as { current_period_start: number })
+    .current_period_start;
+  const periodEnd = (subscription as unknown as { current_period_end: number }).current_period_end;
+
+  // Get coupon ID from discounts array (v20 API change: discount -> discounts)
+  const discounts = (subscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> })
+    .discounts;
+  const stripeCouponId =
+    discounts && discounts.length > 0 ? discounts[0]?.coupon?.id || null : null;
+
   // Force update plan tier if we found one
   const updateData: {
     status: string;
@@ -389,13 +412,13 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   } = {
     status: subscription.status,
     stripe_price_id: stripePriceId,
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+    current_period_start: new Date(periodStart * 1000).toISOString(),
+    current_period_end: new Date(periodEnd * 1000).toISOString(),
     cancel_at_period_end: subscription.cancel_at_period_end,
     canceled_at: subscription.canceled_at
       ? new Date(subscription.canceled_at * 1000).toISOString()
       : null,
-    stripe_coupon_id: subscription.discount?.coupon?.id || null,
+    stripe_coupon_id: stripeCouponId,
     plan_tier: planTier,
   };
 
@@ -728,7 +751,8 @@ export async function POST(request: Request) {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string | null;
-        const stripeSubId = invoice.subscription as string | null;
+        // Access subscription ID (v20 type change)
+        const stripeSubId = (invoice as unknown as { subscription?: string | null }).subscription;
 
         logger.info({ invoiceId: invoice.id }, 'Payment succeeded for invoice');
 
@@ -741,14 +765,15 @@ export async function POST(request: Request) {
 
           if (stripeSubId) {
             try {
-              const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+              const subscriptionResponse = await stripe.subscriptions.retrieve(stripeSubId);
+              const subscription = subscriptionResponse as unknown as Stripe.Subscription;
               updateData.status = subscription.status;
-              updateData.current_period_start = new Date(
-                subscription.current_period_start * 1000,
-              ).toISOString();
-              updateData.current_period_end = new Date(
-                subscription.current_period_end * 1000,
-              ).toISOString();
+              const periodStart = (subscription as unknown as { current_period_start: number })
+                .current_period_start;
+              const periodEnd = (subscription as unknown as { current_period_end: number })
+                .current_period_end;
+              updateData.current_period_start = new Date(periodStart * 1000).toISOString();
+              updateData.current_period_end = new Date(periodEnd * 1000).toISOString();
             } catch (error) {
               logger.error({ error, stripeSubId }, 'Failed to retrieve subscription for invoice');
             }
@@ -812,7 +837,8 @@ export async function POST(request: Request) {
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeCustomerId = invoice.customer as string | null;
-        const stripeSubId = invoice.subscription as string | null;
+        // Access subscription ID (v20 type change)
+        const stripeSubId = (invoice as unknown as { subscription?: string | null }).subscription;
         logger.warn({ invoiceId: invoice.id }, 'Payment failed for invoice');
 
         if (supabaseAdmin) {

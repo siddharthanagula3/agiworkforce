@@ -1,10 +1,9 @@
 export interface DeviceLinkResponse {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete?: string;
-  expires_in: number;
-  interval: number;
+  link_code: string;
+  device_id: string;
+  verify_url: string;
+  qr_code_url?: string;
+  expires_at: number;
 }
 
 export interface TokenResponse {
@@ -35,4 +34,31 @@ export interface UserProfile {
   name?: string;
   avatar_url?: string;
   credits?: CreditBalance | null;
+}
+
+/** Response from fetch_credit_balance command */
+export interface CreditBalanceResponse {
+  has_credits: boolean;
+  account_id: string | null;
+  credits_allocated_cents: number;
+  credits_used_cents: number;
+  credits_remaining_cents: number;
+  daily_limit_cents: number;
+  daily_used_cents: number;
+  daily_remaining_cents: number;
+  period_start: string | null;
+  period_end: string | null;
+  last_daily_reset_at?: string | null;
+}
+
+/** Response from report_llm_usage command */
+export interface DeductCreditsResponse {
+  success: boolean;
+  remaining_cents?: number;
+  error?: string;
+  code?: string; // 'DAILY_CREDIT_LIMIT_REACHED' | 'MONTHLY_CREDIT_LIMIT_REACHED' | 'NO_ACCOUNT'
+  daily_limit?: number;
+  daily_used?: number;
+  daily_remaining?: number;
+  reset_in_hours?: number;
 }

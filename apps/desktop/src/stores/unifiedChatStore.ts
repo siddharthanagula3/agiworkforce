@@ -1045,7 +1045,15 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           const applyUpdate = (list: EnhancedMessage[]) => {
             const idx = list.findIndex((m) => m.id === id);
             if (idx !== -1 && list[idx]) {
-              Object.assign(list[idx]!, updates);
+              const message = list[idx]!;
+              // Deep merge metadata to avoid losing existing keys
+              if (updates.metadata && message.metadata) {
+                updates = {
+                  ...updates,
+                  metadata: { ...message.metadata, ...updates.metadata },
+                };
+              }
+              Object.assign(message, updates);
             }
           };
           applyUpdate(state.messages);
@@ -1079,11 +1087,25 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       appendToStreamingMessage: (content) =>
         set((state) => {
-          const { currentStreamingMessageId } = state;
+          const { currentStreamingMessageId, activeConversationId } = state;
           if (currentStreamingMessageId) {
-            state.messages = state.messages.map((m) =>
-              m.id === currentStreamingMessageId ? { ...m, content: m.content + content } : m,
+            // Update the message in state.messages using Immer's direct mutation
+            const messageInMessages = state.messages.find(
+              (m) => m.id === currentStreamingMessageId,
             );
+            if (messageInMessages) {
+              messageInMessages.content += content;
+            }
+
+            // Also update the message in messagesByConversation to keep them in sync
+            if (activeConversationId && state.messagesByConversation[activeConversationId]) {
+              const messageInConvo = state.messagesByConversation[activeConversationId]!.find(
+                (m) => m.id === currentStreamingMessageId,
+              );
+              if (messageInConvo) {
+                messageInConvo.content += content;
+              }
+            }
           }
         }),
 
@@ -1506,6 +1528,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       toggleMessageBookmark: (messageId) =>
         set((state) => {
+          // Also update in state.messages for the active view
+          const messageInMessages = state.messages.find((m) => m.id === messageId);
+          if (messageInMessages) {
+            messageInMessages.bookmarked = !messageInMessages.bookmarked;
+          }
+
           // Search through all conversations for the message
           for (const convoId of Object.keys(state.messagesByConversation)) {
             const messages = state.messagesByConversation[convoId];
@@ -1521,21 +1549,30 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
 
       toggleMessageReaction: (messageId, reaction) =>
         set((state) => {
+          // Helper to toggle reaction on a message
+          const toggleReaction = (message: EnhancedMessage | undefined) => {
+            if (!message) return;
+            if (!message.reactions) {
+              message.reactions = [];
+            }
+            const index = message.reactions.indexOf(reaction);
+            if (index >= 0) {
+              message.reactions.splice(index, 1);
+            } else {
+              message.reactions.push(reaction);
+            }
+          };
+
+          // Update in state.messages for the active view
+          toggleReaction(state.messages.find((m) => m.id === messageId));
+
           // Search through all conversations for the message
           for (const convoId of Object.keys(state.messagesByConversation)) {
             const messages = state.messagesByConversation[convoId];
             if (messages) {
               const message = messages.find((m) => m.id === messageId);
               if (message) {
-                if (!message.reactions) {
-                  message.reactions = [];
-                }
-                const index = message.reactions.indexOf(reaction);
-                if (index >= 0) {
-                  message.reactions.splice(index, 1);
-                } else {
-                  message.reactions.push(reaction);
-                }
+                toggleReaction(message);
                 break;
               }
             }

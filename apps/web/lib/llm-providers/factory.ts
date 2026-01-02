@@ -9,6 +9,7 @@ import { XAIProvider } from './xai';
 import { QwenProvider } from './qwen';
 import { MoonshotProvider } from './moonshot';
 import { DeepSeekProvider } from './deepseek';
+import { PerplexityProvider } from './perplexity';
 import { logger } from '@/lib/logger';
 import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
 
@@ -42,6 +43,8 @@ export class LLMProviderFactory {
         return new MoonshotProvider(key, baseUrl);
       case 'deepseek':
         return new DeepSeekProvider(key, baseUrl);
+      case 'perplexity':
+        return new PerplexityProvider(key, baseUrl);
       default:
         logger.warn({ provider }, 'Unknown provider');
         return null;
@@ -57,6 +60,7 @@ export class LLMProviderFactory {
       xai: 'XAI_BASE_URL',
       moonshot: 'MOONSHOT_BASE_URL',
       deepseek: 'DEEPSEEK_BASE_URL',
+      perplexity: 'PERPLEXITY_BASE_URL',
     };
 
     const envKey = envKeyMap[provider.toLowerCase()];
@@ -76,6 +80,7 @@ export class LLMProviderFactory {
       qwen: 'QWEN_API_KEY',
       moonshot: 'MOONSHOT_API_KEY',
       deepseek: 'DEEPSEEK_API_KEY',
+      perplexity: 'PERPLEXITY_API_KEY',
     };
 
     const envKey = envKeyMap[provider.toLowerCase()];
@@ -112,6 +117,9 @@ export class LLMProviderFactory {
     }
     if (modelLower.includes('deepseek')) {
       return 'deepseek';
+    }
+    if (modelLower.includes('sonar')) {
+      return 'perplexity';
     }
 
     // Default to OpenAI
