@@ -202,8 +202,29 @@ impl CostCalculator {
         pricing.insert(
             (Provider::XAI, "grok-4.1"),
             Pricing {
-                input_per_million: 0.20,
-                output_per_million: 0.50,
+                input_per_million: 5.50,
+                output_per_million: 16.50,
+            },
+        );
+        pricing.insert(
+            (Provider::XAI, "grok-4.1-fast"),
+            Pricing {
+                input_per_million: 0.10,
+                output_per_million: 0.40,
+            },
+        );
+        pricing.insert(
+            (Provider::XAI, "grok-4.1-fast-reasoning"),
+            Pricing {
+                input_per_million: 0.10,
+                output_per_million: 0.40,
+            },
+        );
+        pricing.insert(
+            (Provider::XAI, "grok-4.1-mini"),
+            Pricing {
+                input_per_million: 0.05,
+                output_per_million: 0.20,
             },
         );
 

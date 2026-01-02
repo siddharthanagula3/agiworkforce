@@ -230,29 +230,29 @@ export const useTerminalStore = create<TerminalState>()(
       },
 
       removeOutputListener: (sessionId: string) => {
-        const state = get();
-        const unlisteners = state.listeners.get(sessionId);
-
-        if (!unlisteners || unlisteners.length === 0) {
-          return;
-        }
-
-        unlisteners.forEach((fn) => {
-          try {
-            fn();
-          } catch (error) {
-            console.warn('Failed to remove terminal listener', error);
-          }
-        });
+        // Atomically get and remove listeners to avoid race conditions
+        let unlisteners: UnlistenFn[] | undefined;
 
         set((state) => {
-          if (!state.listeners.has(sessionId)) {
+          unlisteners = state.listeners.get(sessionId);
+          if (!unlisteners || unlisteners.length === 0) {
             return state;
           }
           const newListeners = new Map(state.listeners);
           newListeners.delete(sessionId);
           return { listeners: newListeners };
         });
+
+        // Call unlisteners outside of set() to avoid side effects during state update
+        if (unlisteners && unlisteners.length > 0) {
+          unlisteners.forEach((fn) => {
+            try {
+              fn();
+            } catch (error) {
+              console.warn('Failed to remove terminal listener', error);
+            }
+          });
+        }
       },
 
       getSessionById: (sessionId: string) => {
@@ -261,6 +261,18 @@ export const useTerminalStore = create<TerminalState>()(
       },
 
       reset: () => {
+        // Clean up all listeners before resetting state
+        const currentListeners = get().listeners;
+        currentListeners.forEach((unlisteners) => {
+          unlisteners.forEach((fn) => {
+            try {
+              fn();
+            } catch (error) {
+              console.warn('Failed to remove terminal listener during reset', error);
+            }
+          });
+        });
+
         set({
           sessions: [],
           activeSessionId: null,

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ModelMetadata } from '../constants/llm';
-import { getAllModels, getModelMetadata } from '../constants/llm';
+import { getAllModels, getModelMetadata, PROVIDERS_IN_ORDER } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
 import type { Provider } from '../types/provider';
+import { useSettingsStore } from './settingsStore';
 
 export interface ProviderStatus {
   provider: Provider;
@@ -138,7 +139,6 @@ export const useModelStore = create<ModelState>()(
 
       selectModel: async (modelId: string, provider: Provider) => {
         try {
-          const { useSettingsStore } = await import('./settingsStore');
           useSettingsStore.getState().setDefaultModel(provider, modelId);
 
           set({
@@ -210,7 +210,6 @@ export const useModelStore = create<ModelState>()(
       checkAllProviders: async () => {
         set({ loading: true, error: null });
         try {
-          const { PROVIDERS_IN_ORDER } = await import('../constants/llm');
           await Promise.all(PROVIDERS_IN_ORDER.map((p) => get().checkProviderStatus(p)));
           set({ loading: false });
         } catch (error) {
@@ -330,16 +329,12 @@ export const initializeModelStoreFromSettings = async () => {
   }
 
   try {
-    const { useSettingsStore } = await import('./settingsStore');
     const settingsStore = useSettingsStore.getState();
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;
     const defaultModel = settingsStore.llmConfig.defaultModels[defaultProvider];
 
     if (defaultProvider && defaultModel) {
-      // access settings store directly to avoid circular dependency issues if possible,
-      // but here we are using the imported one.
-
       // If default is auto/managed_cloud, ensure we set the provider correctly in the store
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
         await modelStore.selectModel('auto', 'managed_cloud');

@@ -342,24 +342,31 @@ export const useAnalyticsStore = create<AnalyticsState>()(
   })),
 );
 
-let metricsRefreshInterval: number | null = null;
+let metricsRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let cleanupRegistered = false;
 
 export function startMetricsAutoRefresh() {
   if (metricsRefreshInterval !== null || typeof window === 'undefined') {
     return;
   }
 
-  metricsRefreshInterval = window.setInterval(() => {
+  metricsRefreshInterval = setInterval(() => {
     const store = useAnalyticsStore.getState();
     if (store.config.enabled) {
       store.refreshAllMetrics();
     }
   }, 30000);
+
+  // Register cleanup on window unload to prevent interval leaking
+  if (!cleanupRegistered && typeof window !== 'undefined') {
+    cleanupRegistered = true;
+    window.addEventListener('beforeunload', stopMetricsAutoRefresh);
+  }
 }
 
 export function stopMetricsAutoRefresh() {
   if (metricsRefreshInterval !== null) {
-    window.clearInterval(metricsRefreshInterval);
+    clearInterval(metricsRefreshInterval);
     metricsRefreshInterval = null;
   }
 }

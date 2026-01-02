@@ -47,20 +47,49 @@ let controlChannel: RTCDataChannel | null = null;
 
 export const useConnectionStore = create<MobileCompanionState>((set, get) => {
   const resetConnection = () => {
+    // Close signaling client
     if (signalingClient) {
-      signalingClient.close();
+      try {
+        signalingClient.close();
+      } catch (error) {
+        console.warn('[mobile-companion] Error closing signaling client:', error);
+      }
       signalingClient = null;
     }
+
+    // Close data channel
     if (controlChannel) {
-      controlChannel.close();
+      try {
+        controlChannel.close();
+      } catch (error) {
+        console.warn('[mobile-companion] Error closing control channel:', error);
+      }
       controlChannel = null;
     }
+
+    // Close peer connection
     if (peerConnection) {
-      peerConnection.close();
+      try {
+        peerConnection.close();
+      } catch (error) {
+        console.warn('[mobile-companion] Error closing peer connection:', error);
+      }
       peerConnection = null;
     }
+
+    // Stop all media tracks and release the stream
     if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
+      try {
+        localStream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch (error) {
+            console.warn('[mobile-companion] Error stopping track:', error);
+          }
+        });
+      } catch (error) {
+        console.warn('[mobile-companion] Error stopping media tracks:', error);
+      }
       localStream = null;
     }
   };

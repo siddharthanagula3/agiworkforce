@@ -7,18 +7,28 @@ use super::transport::StdioTransport;
 use crate::core::mcp::{McpError, McpResult, McpServerConfig};
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
+
+/// Default timeout for session initialization (10 seconds)
+const INITIALIZATION_TIMEOUT_SECS: u64 = 10;
 
 pub struct McpSession {
     name: String,
 
     transport: Arc<StdioTransport>,
 
-    server_info: Option<Implementation>,
+    /// Server info, protected by RwLock for thread-safe access
+    server_info: Arc<RwLock<Option<Implementation>>>,
 
-    capabilities: Option<super::protocol::ServerCapabilities>,
+    /// Server capabilities, protected by RwLock for thread-safe access
+    capabilities: Arc<RwLock<Option<super::protocol::ServerCapabilities>>>,
 
     tools: Arc<RwLock<Vec<McpToolDefinition>>>,
+
+    /// Guard to ensure initialize() is only called once
+    initialized: AtomicBool,
 }
 
 impl McpSession {
@@ -30,15 +40,27 @@ impl McpSession {
         let session = Self {
             name,
             transport: Arc::new(transport),
-            server_info: None,
-            capabilities: None,
+            server_info: Arc::new(RwLock::new(None)),
+            capabilities: Arc::new(RwLock::new(None)),
             tools: Arc::new(RwLock::new(Vec::new())),
+            initialized: AtomicBool::new(false),
         };
 
         Ok(session)
     }
 
-    pub async fn initialize(&mut self) -> McpResult<InitializeResult> {
+    pub async fn initialize(&self) -> McpResult<InitializeResult> {
+        // Guard to ensure initialize is only called once
+        if self
+            .initialized
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return Err(McpError::InvalidConfig(
+                "Session already initialized".to_string(),
+            ));
+        }
+
         tracing::info!("[MCP Session] Initializing session for '{}'", self.name);
 
         let params = InitializeParams {
@@ -50,18 +72,51 @@ impl McpSession {
             },
         };
 
-        let response = self
-            .transport
-            .send_request(
-                "initialize".to_string(),
-                Some(serde_json::to_value(params)?),
-            )
-            .await?;
+        // Wrap initialization in a timeout
+        let init_future = async {
+            let response = self
+                .transport
+                .send_request(
+                    "initialize".to_string(),
+                    Some(serde_json::to_value(params)?),
+                )
+                .await?;
 
-        let result: InitializeResult = serde_json::from_value(response.result)?;
+            let result: InitializeResult = serde_json::from_value(response.result)?;
+            Ok::<InitializeResult, McpError>(result)
+        };
 
-        self.server_info = Some(result.server_info.clone());
-        self.capabilities = Some(result.capabilities.clone());
+        let result = match tokio::time::timeout(
+            Duration::from_secs(INITIALIZATION_TIMEOUT_SECS),
+            init_future,
+        )
+        .await
+        {
+            Ok(Ok(result)) => result,
+            Ok(Err(e)) => {
+                // Reset initialized flag on failure
+                self.initialized.store(false, Ordering::SeqCst);
+                return Err(e);
+            }
+            Err(_) => {
+                // Reset initialized flag on timeout
+                self.initialized.store(false, Ordering::SeqCst);
+                return Err(McpError::InitializationTimeout(format!(
+                    "Session '{}' initialization timed out after {} seconds",
+                    self.name, INITIALIZATION_TIMEOUT_SECS
+                )));
+            }
+        };
+
+        // Update server info and capabilities with RwLock protection
+        {
+            let mut server_info = self.server_info.write();
+            *server_info = Some(result.server_info.clone());
+        }
+        {
+            let mut capabilities = self.capabilities.write();
+            *capabilities = Some(result.capabilities.clone());
+        }
 
         tracing::info!(
             "[MCP Session] Initialized server '{}' ({})",
@@ -69,8 +124,13 @@ impl McpSession {
             result.server_info.version
         );
 
+        // Send notification and log any errors (don't fail the initialization)
         self.transport
             .send_notification("notifications/initialized".to_string(), None);
+        tracing::debug!(
+            "[MCP Session] Sent initialized notification for '{}'",
+            self.name
+        );
 
         Ok(result)
     }
@@ -178,11 +238,16 @@ impl McpSession {
     }
 
     pub fn get_server_info(&self) -> Option<Implementation> {
-        self.server_info.clone()
+        self.server_info.read().clone()
     }
 
     pub fn get_capabilities(&self) -> Option<super::protocol::ServerCapabilities> {
-        self.capabilities.clone()
+        self.capabilities.read().clone()
+    }
+
+    /// Check if the session has been initialized
+    pub fn is_initialized(&self) -> bool {
+        self.initialized.load(Ordering::SeqCst)
     }
 
     pub fn get_cached_tools(&self) -> Vec<McpToolDefinition> {

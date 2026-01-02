@@ -11,6 +11,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import type { ContextItem } from '@agiworkforce/types';
 import { invoke, isTauri } from '../lib/tauri-mock';
 import type { Artifact } from '../types/chat';
 import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
@@ -343,14 +344,7 @@ export interface ApprovalRequest {
   actionSignature?: string;
 }
 
-export interface ContextItem {
-  id: string;
-  type: 'file' | 'folder' | 'url' | 'selection' | 'clipboard';
-  name: string;
-  path?: string;
-  size?: number;
-  icon?: string;
-}
+export type { ContextItem };
 
 export type SidecarSection =
   | 'operations'
@@ -1708,12 +1702,8 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           if (entry.fadeAfter) {
             const timerId = setTimeout(() => {
               try {
-                const current = get();
-
-                if (current.actionTrail.some((e) => e.id === newEntry.id)) {
-                  current.fadeTimers.delete(newEntry.id);
-                  current.removeActionTrailEntry(newEntry.id);
-                }
+                // removeActionTrailEntry handles timer cleanup internally
+                get().removeActionTrailEntry(newEntry.id);
               } catch (error) {
                 console.warn('[ActionTrail] Error during auto-remove:', error);
               }
@@ -1834,7 +1824,11 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
         return null;
       },
 
-      clearHistory: () =>
+      clearHistory: () => {
+        // Clean up fade timers before clearing action trail (access outside of set() to avoid Immer issues)
+        const currentFadeTimers = get().fadeTimers;
+        currentFadeTimers.forEach((timerId) => clearTimeout(timerId));
+
         set((state) => {
           const newId = crypto.randomUUID();
           const convo: ConversationSummary = {
@@ -1857,10 +1851,12 @@ export const useUnifiedChatStore = create<UnifiedChatState>()(
           state.isStreaming = false;
           state.currentStreamingMessageId = null;
 
+          state.fadeTimers = new Map();
           state.actionTrail = [];
           state.citations = [];
           state.focusMode = null;
-        }),
+        });
+      },
 
       linkConversationId: (uuid, dbId) => {
         if (!idMappings.uuidToDbId[uuid]) {

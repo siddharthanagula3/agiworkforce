@@ -141,10 +141,13 @@ impl GoogleProvider {
             .timeout(Duration::from_secs(300))
             .build()
             .expect("Failed to create HTTP client");
+        // Use environment variable for base URL, defaulting to official Google Generative AI API
+        let base_url = std::env::var("GOOGLE_API_BASE")
+            .unwrap_or_else(|_| "https://generativelanguage.googleapis.com/v1beta".to_string());
         Self {
             api_key,
             client,
-            base_url: "https://api.agiworkforce.com".to_string(),
+            base_url,
         }
     }
 

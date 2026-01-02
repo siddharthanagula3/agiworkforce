@@ -1,17 +1,22 @@
+use crate::core::router::sse_parser::{parse_sse_stream, StreamChunk};
 use crate::core::router::{
     LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice, ToolDefinition,
 };
 use async_trait::async_trait;
+use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::pin::Pin;
 use std::time::Duration;
 
-const DEEPSEEK_API_BASE: &str = "https://api.agiworkforce.com";
+/// Default DeepSeek API base URL - can be overridden via DEEPSEEK_API_BASE environment variable
+const DEEPSEEK_API_BASE_DEFAULT: &str = "https://api.deepseek.com/v1";
 
 pub struct DeepSeekProvider {
     api_key: Option<String>,
     client: Client,
+    base_url: String,
 }
 
 impl DeepSeekProvider {
@@ -21,7 +26,14 @@ impl DeepSeekProvider {
             .timeout(Duration::from_secs(300))
             .build()
             .expect("Failed to create HTTP client");
-        Self { api_key, client }
+        // Use environment variable for base URL, defaulting to official DeepSeek API
+        let base_url = std::env::var("DEEPSEEK_API_BASE")
+            .unwrap_or_else(|_| DEEPSEEK_API_BASE_DEFAULT.to_string());
+        Self {
+            api_key,
+            client,
+            base_url,
+        }
     }
 
     fn get_api_key(&self) -> Result<&str, Box<dyn Error + Send + Sync>> {
@@ -241,7 +253,7 @@ impl LLMProvider for DeepSeekProvider {
 
         let response = self
             .client
-            .post(format!("{}/chat/completions", DEEPSEEK_API_BASE))
+            .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&deepseek_request)
@@ -298,5 +310,104 @@ impl LLMProvider for DeepSeekProvider {
 
     fn supports_function_calling(&self) -> bool {
         true
+    }
+
+    async fn send_message_streaming(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
+        Box<dyn Error + Send + Sync>,
+    > {
+        let api_key = self.get_api_key()?;
+
+        let messages: Vec<DeepSeekMessage> = request
+            .messages
+            .iter()
+            .map(|m| {
+                let mut msg = DeepSeekMessage {
+                    role: m.role.clone(),
+                    content: if m.content.is_empty() {
+                        None
+                    } else {
+                        Some(m.content.clone())
+                    },
+                    tool_calls: None,
+                    tool_call_id: m.tool_call_id.clone(),
+                    name: None,
+                };
+
+                if let Some(calls) = &m.tool_calls {
+                    msg.tool_calls = Some(
+                        calls
+                            .iter()
+                            .map(|call| DeepSeekToolCall {
+                                id: call.id.clone(),
+                                call_type: "function".to_string(),
+                                function: DeepSeekFunctionCall {
+                                    name: call.name.clone(),
+                                    arguments: call.arguments.clone(),
+                                },
+                            })
+                            .collect(),
+                    );
+                }
+
+                if m.role == "tool" {
+                    msg.name = Some(
+                        m.tool_calls
+                            .as_ref()
+                            .and_then(|calls| calls.first())
+                            .map(|call| call.name.clone())
+                            .unwrap_or_default(),
+                    );
+                }
+
+                msg
+            })
+            .collect();
+
+        let deepseek_request = DeepSeekRequest {
+            model: request.model.clone(),
+            messages,
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            tools: request.tools.as_ref().map(|t| Self::convert_tools(t)),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .and_then(Self::convert_tool_choice),
+            stream: true,
+        };
+
+        tracing::debug!(
+            "Starting DeepSeek streaming request for model: {}",
+            request.model
+        );
+
+        let response = self
+            .client
+            .post(format!("{}/chat/completions", self.base_url))
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&deepseek_request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("DeepSeek API error {}: {}", status, error_text).into());
+        }
+
+        tracing::debug!("DeepSeek streaming response received, starting SSE parsing");
+
+        Ok(Box::pin(parse_sse_stream(
+            response,
+            crate::core::router::Provider::DeepSeek,
+        )))
     }
 }

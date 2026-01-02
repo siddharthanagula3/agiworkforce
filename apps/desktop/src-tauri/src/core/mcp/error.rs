@@ -14,6 +14,12 @@ pub enum McpError {
     #[error("Tool execution failed: {0}")]
     ToolExecutionError(String),
 
+    #[error("Tool execution timed out: {0}")]
+    ToolExecutionTimeout(String),
+
+    #[error("Initialization timed out: {0}")]
+    InitializationTimeout(String),
+
     #[error("Invalid server configuration: {0}")]
     InvalidConfig(String),
 
