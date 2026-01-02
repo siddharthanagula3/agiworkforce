@@ -85,7 +85,7 @@ impl LLMProvider for ManagedCloudProvider {
                     })
                 });
 
-                let cost = credits.as_ref().map(|c| c.cost_cents as f64 / 100.0);
+                let cost = credits.as_ref().map(|c| c.cost_cents / 100.0);
 
                 Ok(LLMResponse {
                     content,

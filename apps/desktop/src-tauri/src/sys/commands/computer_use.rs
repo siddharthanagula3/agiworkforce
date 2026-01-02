@@ -283,7 +283,7 @@ async fn record_action(state: &ComputerUseState, action: ComputerAction) {
 fn current_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_else(|_| std::time::Duration::ZERO)
+        .unwrap_or(std::time::Duration::ZERO)
         .as_secs()
 }
 

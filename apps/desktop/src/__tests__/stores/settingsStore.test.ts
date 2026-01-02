@@ -41,7 +41,7 @@ describe('settingsStore', () => {
 
     useSettingsStore.setState({
       llmConfig: {
-        defaultProvider: 'openai',
+        defaultProvider: 'managed_cloud',
         temperature: 0.7,
         maxTokens: 4096,
         defaultModels,
@@ -53,6 +53,10 @@ describe('settingsStore', () => {
         startupPosition: 'center',
         dockOnStartup: null,
       },
+      chatPreferences: {
+        promptCompletionEnabled: true,
+      },
+      allowedDirectories: [],
       loading: false,
       error: null,
     });
@@ -323,6 +327,7 @@ describe('settingsStore', () => {
         settings: {
           llmConfig: expect.any(Object),
           windowPreferences: expect.any(Object),
+          chatPreferences: expect.any(Object),
           allowedDirectories: expect.any(Array),
         },
       });
