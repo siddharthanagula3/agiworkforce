@@ -829,6 +829,7 @@ impl LLMRouter {
         Err(last_error.unwrap_or_else(|| anyhow!("All LLM providers failed")))
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn strategy_order(
         &self,
         task: TaskCategory,
