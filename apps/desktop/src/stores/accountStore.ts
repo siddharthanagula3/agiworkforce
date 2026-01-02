@@ -313,7 +313,6 @@ export function hasFeature(featureKey: string): boolean {
   }
 
   const featureMap: Record<string, keyof PlanFeatures> = {
-    unlimited_automations: 'automationsPerDay',
     browser_automation: 'browserAutomation',
     advanced_ui_automation: 'advancedUiAutomation',
     email_support: 'emailSupport',
@@ -422,25 +421,10 @@ export function initializeAccountStore(): () => void {
         (async () => {
           try {
             const { invoke } = await import('@tauri-apps/api/core');
-            // Store access token in keyring so ManagedCloud provider can use it
-            if (authState.session?.access_token) {
-              await invoke('account_store_access_token', {
-                access_token: authState.session.access_token,
-              });
-            }
-            if (authState.session?.refresh_token) {
-              await invoke('account_store_refresh_token', {
-                refresh_token: authState.session.refresh_token,
-              });
-            }
             // Now ensure ManagedCloud provider is initialized
             await invoke('llm_ensure_managed_cloud');
           } catch (error) {
-            console.warn(
-              '[Account] Failed to sync tokens and ensure ManagedCloud provider:',
-              error,
-            );
-            // Non-critical - provider will be checked when needed
+            console.warn('[Account] Failed to ensure ManagedCloud provider:', error);
           }
         })();
       }

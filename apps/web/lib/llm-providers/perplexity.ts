@@ -1,0 +1,133 @@
+import 'server-only';
+
+import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
+import { logger } from '@/lib/logger';
+
+/**
+ * Perplexity Sonar Provider
+ * Uses OpenAI-compatible API format
+ * Models: sonar, sonar-pro, sonar-deep-research
+ *
+ * Note: Perplexity also charges per-search fees not reflected in token costs
+ */
+export class PerplexityProvider extends BaseLLMProvider {
+  getDefaultBaseUrl(): string {
+    return 'https://api.perplexity.ai';
+  }
+
+  async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+    const url = `${this.baseUrl}/chat/completions`;
+
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: request.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
+    };
+
+    if (request.temperature !== undefined) {
+      body.temperature = request.temperature;
+    }
+    if (request.max_tokens !== undefined) {
+      body.max_tokens = request.max_tokens;
+    }
+    if (request.stream !== undefined) {
+      body.stream = request.stream;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let errorText: string;
+        let errorData: unknown;
+        try {
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorText = response.statusText;
+          errorData = { status: response.status };
+        }
+
+        logger.error(
+          {
+            status: response.status,
+            error: errorText,
+            errorData,
+            model: request.model,
+          },
+          'Perplexity API error',
+        );
+
+        if (response.status === 401) {
+          throw new Error('Perplexity API authentication failed. Please check your API key.');
+        } else if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after');
+          throw new Error(
+            `Perplexity API rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : 'Please try again later.'}`,
+          );
+        } else if (response.status === 500 || response.status === 502 || response.status === 503) {
+          throw new Error(
+            'Perplexity API service temporarily unavailable. Please try again later.',
+          );
+        } else {
+          throw new Error(`Perplexity API error: ${response.status} ${errorText}`);
+        }
+      }
+
+      const data = await response.json();
+      const message = data.choices[0]?.message;
+      const finishReason = data.choices[0]?.finish_reason;
+
+      return {
+        content: message?.content || '',
+        model: data.model || request.model,
+        promptTokens: data.usage?.prompt_tokens || 0,
+        completionTokens: data.usage?.completion_tokens || 0,
+        totalTokens: data.usage?.total_tokens || 0,
+        finishReason,
+      };
+    } catch (error) {
+      logger.error({ error, model: request.model }, 'Perplexity request failed');
+      throw error;
+    }
+  }
+
+  async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
+    const url = `${this.baseUrl}/chat/completions`;
+
+    const body: Record<string, unknown> = {
+      model: request.model,
+      messages: request.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
+      stream: true,
+    };
+
+    if (request.temperature !== undefined) body.temperature = request.temperature;
+    if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Perplexity API error: ${response.status} ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('No response body for streaming request');
+    }
+
+    return response.body;
+  }
+}

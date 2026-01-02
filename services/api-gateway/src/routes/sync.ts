@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
-import { asyncHandler, AppError } from '../middleware/errorHandler';
+import { AppError } from '../middleware/errorHandler';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router: Router = Router();
 
@@ -51,37 +52,43 @@ router.post(
   }),
 );
 
-router.get('/pull', (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
+router.get(
+  '/pull',
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
 
-  const sinceRaw = req.query['since'];
-  const since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
-  const deviceIdParam = req.query['deviceId'];
-  const deviceId = typeof deviceIdParam === 'string' ? deviceIdParam : undefined;
+    const sinceRaw = req.query['since'];
+    const since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
+    const deviceIdParam = req.query['deviceId'];
+    const deviceId = typeof deviceIdParam === 'string' ? deviceIdParam : undefined;
 
-  const userSyncData = syncStore.get(user.userId) || [];
-  const filteredData = userSyncData
-    .filter((d) => d.timestamp > since && (!deviceId || d.deviceId !== deviceId))
-    .sort((a, b) => a.timestamp - b.timestamp);
+    const userSyncData = syncStore.get(user.userId) || [];
+    const filteredData = userSyncData
+      .filter((d) => d.timestamp > since && (!deviceId || d.deviceId !== deviceId))
+      .sort((a, b) => a.timestamp - b.timestamp);
 
-  res.json({
-    data: filteredData,
-    timestamp: Date.now(),
-  });
-});
+    res.json({
+      data: filteredData,
+      timestamp: Date.now(),
+    });
+  }),
+);
 
-router.delete('/clear', (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
+router.delete(
+  '/clear',
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
 
-  syncStore.delete(user.userId);
+    syncStore.delete(user.userId);
 
-  res.json({ success: true });
-});
+    res.json({ success: true });
+  }),
+);
 
 export { router as syncRouter };
