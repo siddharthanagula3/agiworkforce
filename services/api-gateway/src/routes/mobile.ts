@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
-import { asyncHandler, AppError } from '../middleware/errorHandler';
+import { AppError } from '../middleware/errorHandler';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router: Router = Router();
 
@@ -147,23 +148,26 @@ router.post(
   }),
 );
 
-router.get('/', (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
+router.get(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
 
-  const result = Array.from(devices.values())
-    .filter((device) => device.userId === user.userId)
-    .map((device) => ({
-      id: device.id,
-      name: device.name,
-      platform: device.platform,
-      pushToken: device.pushToken,
-      updatedAt: device.updatedAt,
-    }));
+    const result = Array.from(devices.values())
+      .filter((device) => device.userId === user.userId)
+      .map((device) => ({
+        id: device.id,
+        name: device.name,
+        platform: device.platform,
+        pushToken: device.pushToken,
+        updatedAt: device.updatedAt,
+      }));
 
-  res.json({ devices: result });
-});
+    res.json({ devices: result });
+  }),
+);
 
 export { router as mobileRouter };
