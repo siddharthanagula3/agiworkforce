@@ -143,6 +143,7 @@ fn parse_sse_event(
         crate::core::router::Provider::Anthropic => parse_anthropic_sse(event),
         crate::core::router::Provider::Google => parse_google_sse(event),
         crate::core::router::Provider::Ollama => parse_ollama_sse(event),
+        crate::core::router::Provider::Perplexity => parse_openai_sse(event), // Perplexity uses OpenAI-compatible format
         crate::core::router::Provider::XAI => parse_openai_sse(event),
         crate::core::router::Provider::DeepSeek => parse_openai_sse(event),
         crate::core::router::Provider::Qwen => parse_openai_sse(event),

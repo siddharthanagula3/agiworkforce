@@ -197,7 +197,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
     try {
       recognitionRef.current.start();
-    } catch (err) {
+    } catch {
       setState((prev) => ({
         ...prev,
         error: 'Failed to start voice recognition',
