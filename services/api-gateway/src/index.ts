@@ -7,6 +7,7 @@ import { createServer } from 'http';
 import { authRouter } from './routes/auth';
 import { desktopRouter } from './routes/desktop';
 import { syncRouter } from './routes/sync';
+import { creditsRouter } from './routes/credits';
 import { setupWebSocket } from './websocket';
 import { mobileRouter } from './routes/mobile';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -17,6 +18,12 @@ if (!process.env['JWT_SECRET']) {
     'Please set JWT_SECRET in your deployment environment (e.g., Vercel, Railway, etc.)',
   );
   console.error('Example: JWT_SECRET=your-randomly-generated-secret-key-here');
+  process.exit(1);
+}
+
+if (!process.env['SUPABASE_URL'] || !process.env['SUPABASE_SERVICE_ROLE_KEY']) {
+  console.error('FATAL: Supabase configuration missing.');
+  console.error('Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.');
   process.exit(1);
 }
 
@@ -60,6 +67,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/desktop', desktopRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/mobile', mobileRouter);
+app.use('/api/credits', creditsRouter);
 
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: Date.now() });

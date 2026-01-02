@@ -36,30 +36,29 @@ export async function executeTerminalCommand(command: string): Promise<InlinePan
   };
 
   try {
-    // Invoke Tauri command to execute shell command
+    // Invoke Tauri command to execute terminal command
     const response = await invoke<{
       stdout: string;
-      stderr?: string;
-      exit_code?: number;
-      duration_ms?: number;
-      cwd?: string;
-    }>('execute_shell_command', { command });
+      stderr: string;
+      exitCode: number | null;
+      durationMs: number;
+    }>('execute_terminal_command', { command, cwd: null, shell: null });
 
-    const isSuccess = (response.exit_code ?? 0) === 0;
+    const isSuccess = (response.exitCode ?? 0) === 0;
 
     panel.content.terminal = {
       command,
-      cwd: response.cwd,
+      cwd: undefined,
       stdout: response.stdout,
       stderr: response.stderr,
-      exitCode: response.exit_code ?? 0,
-      duration: response.duration_ms,
+      exitCode: response.exitCode ?? 0,
+      duration: response.durationMs,
       status: isSuccess ? 'success' : 'error',
     };
 
     panel.metadata = {
       status: isSuccess ? 'success' : 'error',
-      duration: response.duration_ms,
+      duration: response.durationMs,
     };
   } catch (error) {
     panel.content.terminal = {
@@ -104,33 +103,31 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
   };
 
   try {
-    // Invoke Tauri command for browser automation
-    const response = await invoke<{
-      url: string;
-      title?: string;
-      screenshot?: string;
-      actions?: Array<{ type: string; timestamp: string }>;
-    }>('browser_automation_execute', {
-      request: {
-        url,
-        captureScreenshot: true,
-        viewport: { width: 1280, height: 720 },
-      },
+    // Launch browser, navigate to URL, get title and screenshot using individual commands
+    const browserId = await invoke<string>('browser_launch', {
+      options: { headless: false },
     });
 
+    // Navigate to the URL
+    await invoke<void>('browser_navigate', { url });
+
+    // Get page title
+    const title = await invoke<string>('browser_get_title', {});
+
+    // Take screenshot
+    const screenshot = await invoke<string>('browser_screenshot', { selector: null });
+
     panel.content.browser = {
-      url: response.url,
-      title: response.title,
-      screenshot: response.screenshot,
+      url,
+      title,
+      screenshot,
       status: 'success',
-      actions: response.actions?.map((a) => ({
-        type: a.type,
-        timestamp: new Date(a.timestamp),
-      })),
+      actions: [{ type: 'navigate', timestamp: new Date() }],
     };
 
     panel.metadata = {
       status: 'success',
+      browserId,
     };
   } catch (error) {
     panel.content.browser = {
@@ -140,6 +137,7 @@ export async function executeBrowserCommand(url: string): Promise<InlinePanel> {
 
     panel.metadata = {
       status: 'error',
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 

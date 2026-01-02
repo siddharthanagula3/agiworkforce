@@ -404,6 +404,10 @@ pub fn run() {
             crate::sys::commands::agi_cancel_goal,
             crate::sys::commands::start_agent_task,
 
+            crate::sys::commands::auth_store_session,
+            crate::sys::commands::auth_retrieve_session,
+            crate::sys::commands::auth_remove_session,
+
 
             crate::sys::commands::orchestrator_init,
             crate::sys::commands::orchestrator_init_default,
@@ -789,8 +793,8 @@ pub fn run() {
             crate::sys::account::device_link_poll,
             crate::sys::account::fetch_user_profile,
             crate::sys::account::oauth_refresh,
-            crate::sys::account::account_store_access_token,
-            crate::sys::account::account_store_refresh_token,
+            crate::sys::account::fetch_credit_balance,
+            crate::sys::account::report_llm_usage,
 
 
             crate::sys::commands::create_team,

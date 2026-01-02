@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
-import { asyncHandler, AppError } from '../middleware/errorHandler';
+import { AppError } from '../middleware/errorHandler';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 const router: Router = Router();
 
@@ -60,34 +61,37 @@ router.post(
   }),
 );
 
-router.get('/:desktopId/status', (req: Request<{ desktopId: string }>, res: Response) => {
-  const { desktopId } = req.params;
-  const desktop = desktops.get(desktopId);
+router.get(
+  '/:desktopId/status',
+  asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
+    const { desktopId } = req.params;
+    const desktop = desktops.get(desktopId);
 
-  if (!desktop) {
-    throw new AppError('Desktop not found', 404);
-  }
+    if (!desktop) {
+      throw new AppError('Desktop not found', 404);
+    }
 
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
 
-  if (desktop.userId !== user.userId) {
-    throw new AppError('Forbidden', 403);
-  }
+    if (desktop.userId !== user.userId) {
+      throw new AppError('Forbidden', 403);
+    }
 
-  const online = Date.now() - desktop.lastSeen < 60000;
+    const online = Date.now() - desktop.lastSeen < 60000;
 
-  res.json({
-    id: desktop.id,
-    name: desktop.name,
-    platform: desktop.platform,
-    version: desktop.version,
-    online,
-    lastSeen: desktop.lastSeen,
-  });
-});
+    res.json({
+      id: desktop.id,
+      name: desktop.name,
+      platform: desktop.platform,
+      version: desktop.version,
+      online,
+      lastSeen: desktop.lastSeen,
+    });
+  }),
+);
 
 router.post(
   '/:desktopId/command',
@@ -119,24 +123,27 @@ router.post(
   }),
 );
 
-router.get('/', (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
+router.get(
+  '/',
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
 
-  const userDesktops = Array.from(desktops.values())
-    .filter((d) => d.userId === user.userId)
-    .map((d) => ({
-      id: d.id,
-      name: d.name,
-      platform: d.platform,
-      version: d.version,
-      online: Date.now() - d.lastSeen < 60000,
-      lastSeen: d.lastSeen,
-    }));
+    const userDesktops = Array.from(desktops.values())
+      .filter((d) => d.userId === user.userId)
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        platform: d.platform,
+        version: d.version,
+        online: Date.now() - d.lastSeen < 60000,
+        lastSeen: d.lastSeen,
+      }));
 
-  res.json({ desktops: userDesktops });
-});
+    res.json({ desktops: userDesktops });
+  }),
+);
 
 export { router as desktopRouter };
