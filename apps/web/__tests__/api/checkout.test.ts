@@ -15,10 +15,6 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/csrf', () => ({
-  validateCsrfFromRequest: vi.fn(() => true),
-}));
-
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: {
     getSubscription: vi.fn(() => null),
@@ -112,10 +108,10 @@ describe('POST /api/checkout', () => {
     });
 
     const response = await POST(request);
-    const text = await response.text();
+    const data = await response.json();
 
     expect(response.status).toBe(401);
-    expect(text).toBe('Unauthorized');
+    expect(data.error).toBe('Unauthorized');
   });
 
   it('should validate request body', async () => {
