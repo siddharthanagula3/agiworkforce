@@ -7,9 +7,16 @@ import { validateCsrfFromRequest } from '@/lib/csrf';
 
 import { requireEnv } from '@/utils/env';
 
-const stripe = new Stripe(requireEnv('STRIPE_SECRET_KEY'), {
-  apiVersion: '2025-12-15.clover',
-});
+// Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
+let stripeClient: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), {
+      apiVersion: '2025-12-15.clover',
+    });
+  }
+  return stripeClient;
+}
 
 export async function POST(req: Request) {
   try {
@@ -43,7 +50,7 @@ export async function POST(req: Request) {
     }
 
     // Create Stripe Checkout Session
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const checkoutSession = await getStripe().checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
