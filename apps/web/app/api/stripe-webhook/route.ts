@@ -40,6 +40,46 @@ const supabaseAdmin =
 
 const { getPlanFromPriceId } = PRICING_CONFIG;
 
+/**
+ * Ensure a profile exists for the user (required for subscriptions FK constraint)
+ */
+async function ensureProfileExists(userId: string, email?: string | null): Promise<void> {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase admin client not initialized');
+  }
+
+  // Check if profile exists
+  const { data: existingProfile, error: fetchError } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (fetchError) {
+    logger.error({ error: fetchError, userId }, 'Error checking for existing profile');
+    throw fetchError;
+  }
+
+  if (!existingProfile) {
+    // Profile doesn't exist - create it
+    logger.info({ userId, email }, 'Creating missing profile for user in webhook');
+    const { error: insertError } = await supabaseAdmin
+      .from('profiles')
+      .insert({ id: userId, email: email || null } as Record<string, unknown>);
+
+    if (insertError) {
+      // Ignore duplicate key errors (profile might have been created concurrently)
+      if (insertError.code !== '23505') {
+        logger.error({ error: insertError, userId }, 'Failed to create profile');
+        throw insertError;
+      }
+      logger.info({ userId }, 'Profile already exists (concurrent creation)');
+    } else {
+      logger.info({ userId, email }, 'Profile created successfully in webhook');
+    }
+  }
+}
+
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   if (!supabaseAdmin || !stripe) {
     logger.error('upsertSubscriptionFromSession: missing dependencies');
@@ -48,7 +88,10 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   logger.info({ sessionId: session.id }, 'Processing checkout session');
 
-  let supabaseUserId = session.metadata?.['supabase_user_id'] || session.client_reference_id;
+  let supabaseUserId =
+    session.metadata?.['supabase_user_id'] ||
+    session.metadata?.['userId'] ||
+    session.client_reference_id;
 
   // If no user ID in metadata, try to find user by customer email
   // WARNING: Email-based lookup is a fallback and requires extra verification
@@ -95,6 +138,22 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     );
     throw new Error('Cannot determine user_id for subscription');
   }
+
+  // Get customer email for profile creation
+  let customerEmail: string | null = null;
+  if (session.customer && stripe) {
+    try {
+      const customer = await stripe.customers.retrieve(session.customer as string);
+      if (typeof customer !== 'string' && !customer.deleted) {
+        customerEmail = customer.email || null;
+      }
+    } catch (error) {
+      logger.warn({ error, sessionId: session.id }, 'Could not fetch customer email');
+    }
+  }
+
+  // Ensure profile exists before creating subscription (FK constraint)
+  await ensureProfileExists(supabaseUserId, customerEmail);
 
   // Get plan_tier from metadata or price ID using strict mapping
   const priceId = session.line_items?.data?.[0]?.price?.id;
@@ -564,6 +623,20 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
       }
 
       if (supabaseUserId) {
+        // Ensure profile exists before creating subscription (FK constraint)
+        let customerEmailForProfile: string | null = null;
+        if (stripeCustomerId) {
+          try {
+            const customer = await stripe.customers.retrieve(stripeCustomerId);
+            if (typeof customer !== 'string' && !customer.deleted) {
+              customerEmailForProfile = customer.email || null;
+            }
+          } catch {
+            // Ignore - we'll create profile without email
+          }
+        }
+        await ensureProfileExists(supabaseUserId, customerEmailForProfile);
+
         // Create new subscription
         const createData = {
           user_id: supabaseUserId,
