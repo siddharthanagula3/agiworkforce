@@ -135,8 +135,7 @@ pub async fn llm_send_message(
         let router = state.router.read().await;
         let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
 
-        if managed_cloud_available && provider_name.is_some() {
-            let requested = provider_name.as_ref().unwrap();
+        if let (true, Some(requested)) = (managed_cloud_available, provider_name.as_ref()) {
             tracing::info!(
                 "Redirecting request for unconfigured provider '{}' to Managed Cloud",
                 requested
