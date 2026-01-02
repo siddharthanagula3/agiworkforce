@@ -196,12 +196,51 @@ export class SubscriptionService {
   }
 
   /**
+   * Ensure a profile exists for the user (required for subscriptions FK constraint)
+   */
+  private static async ensureProfileExists(userId: string, email: string): Promise<void> {
+    const supabase = getSupabaseClient();
+
+    // Check if profile exists
+    const { data: existingProfile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (fetchError) {
+      logger.error({ error: fetchError, userId }, 'Error checking for existing profile');
+      throw fetchError;
+    }
+
+    if (!existingProfile) {
+      // Profile doesn't exist - create it
+      logger.info({ userId, email }, 'Creating missing profile for user');
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({ id: userId, email: email } as Record<string, unknown>);
+
+      if (insertError) {
+        // Ignore duplicate key errors (profile might have been created concurrently)
+        if (insertError.code !== '23505') {
+          logger.error({ error: insertError, userId }, 'Failed to create profile');
+          throw insertError;
+        }
+        logger.info({ userId }, 'Profile already exists (concurrent creation)');
+      } else {
+        logger.info({ userId, email }, 'Profile created successfully');
+      }
+    }
+  }
+
+  /**
    * Sync subscription from Stripe by email (Self-healing)
    * This is a critical function that ensures local subscription data matches Stripe.
    * It handles:
    * - Both 'active' and 'trialing' subscription statuses
    * - Missing or delayed webhook updates
    * - Plan tier inference from multiple sources
+   * - Creating missing profile records (required for FK constraint)
    */
   static async syncWithStripe(userId: string, email: string): Promise<SubscriptionInfo | null> {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -225,6 +264,7 @@ export class SubscriptionService {
       }
 
       const customerId = customers.data[0].id;
+      logger.info({ customerId, email }, 'Found Stripe customer');
 
       // Query for ALL subscription statuses that should grant access
       // This is critical - we need to catch 'trialing' subscriptions too!
@@ -299,6 +339,10 @@ export class SubscriptionService {
         discounts && discounts.length > 0 ? discounts[0]?.coupon?.id || null : null;
 
       const supabase = getSupabaseClient();
+
+      // Ensure profile exists before creating subscription (FK constraint)
+      await this.ensureProfileExists(userId, email);
+
       const subData = {
         user_id: userId,
         stripe_customer_id: customerId,
@@ -315,6 +359,8 @@ export class SubscriptionService {
         updated_at: new Date().toISOString(),
         stripe_coupon_id: stripeCouponId,
       };
+
+      logger.info({ subData }, 'Upserting subscription data');
 
       let { data, error } = await supabase
         .from('subscriptions')
