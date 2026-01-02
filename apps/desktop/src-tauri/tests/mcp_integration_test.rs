@@ -52,6 +52,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires MCP server to be installed and available
     async fn test_server_connection() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -79,6 +80,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires MCP server to be installed and available
     async fn test_tool_listing() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -110,6 +112,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires MCP server to be installed and available
     async fn test_tool_execution() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -138,6 +141,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires MCP server to be installed and available
     async fn test_tool_search() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
@@ -168,6 +172,7 @@ mod mcp_integration_tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires MCP server to be installed and available
     async fn test_server_disconnection() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
         use agiworkforce_desktop::core::mcp::config::McpServerConfig;
