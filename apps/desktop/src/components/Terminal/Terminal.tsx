@@ -85,7 +85,6 @@ export function Terminal({ sessionId, className }: TerminalProps) {
       allowTransparency: false,
       scrollback: 10000,
       convertEol: true,
-      windowsMode: true,
     });
 
     const fitAddon = new FitAddon();

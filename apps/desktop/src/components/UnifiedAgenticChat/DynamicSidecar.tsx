@@ -64,7 +64,7 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
 };
 
 const springConfig = {
-  type: 'spring',
+  type: 'spring' as const,
   damping: 25,
   stiffness: 300,
 };
@@ -82,11 +82,11 @@ const sidecarVariants = {
   },
   minimized: {
     width: 48,
-    transition: { duration: 0.2, ease: 'easeOut' },
+    transition: { duration: 0.2, ease: 'easeOut' as const },
   },
   expanded: {
     width: '100%',
-    transition: { duration: 0.2, ease: 'easeOut' },
+    transition: { duration: 0.2, ease: 'easeOut' as const },
   },
 };
 

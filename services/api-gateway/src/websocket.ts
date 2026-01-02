@@ -166,7 +166,7 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
     );
 
     console.log(`User ${userId} authenticated via WebSocket`);
-  } catch (error) {
+  } catch {
     ws.send(
       JSON.stringify({
         type: 'auth_error',

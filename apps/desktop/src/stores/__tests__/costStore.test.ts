@@ -1,18 +1,17 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { useCostStore } from '../costStore';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
-type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
+type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
 
 let invokeMock: InvokeMock;
 
 beforeEach(async () => {
   const { invoke } = await import('@tauri-apps/api/core');
-  invokeMock = invoke as InvokeMock;
+  invokeMock = invoke as unknown as InvokeMock;
   invokeMock.mockReset();
 
   useCostStore.setState({

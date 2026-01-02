@@ -150,7 +150,7 @@ export function Sidebar({
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 
   // Get archived conversations
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   const archivedConversations = useMemo(
     () => getArchivedConversations(),
     [getArchivedConversations],

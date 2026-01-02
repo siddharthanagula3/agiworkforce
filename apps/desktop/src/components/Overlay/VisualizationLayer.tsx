@@ -26,9 +26,9 @@ export function VisualizationLayer() {
   const [region, setRegion] = useState<RegionEffect | null>(null);
   const [flash, setFlash] = useState(false);
 
-  const typingTimer = useRef<ReturnType<typeof setTimeout>>();
-  const regionTimer = useRef<ReturnType<typeof setTimeout>>();
-  const flashTimer = useRef<ReturnType<typeof setTimeout>>();
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const regionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
