@@ -5,7 +5,6 @@ import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { ClaimOfferRequestSchema } from '@/lib/validations/claim-offer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { validateCsrfFromRequest } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -24,13 +23,6 @@ async function handleClaimOffer(request: NextRequest) {
 
   if (!user) {
     throw createError.unauthorized();
-  }
-
-  // CSRF protection (after authentication so we can use user.id)
-  const csrfValid = await validateCsrfFromRequest(request, user.id);
-  if (!csrfValid) {
-    logger.warn({ userId: user.id }, 'CSRF validation failed for claim-offer');
-    throw createError.forbidden('CSRF token validation failed');
   }
 
   // Parse and validate request body
