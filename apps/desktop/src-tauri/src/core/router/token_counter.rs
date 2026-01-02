@@ -84,6 +84,7 @@ impl TokenCounter {
             Provider::Anthropic => (1.05, 1.05), // Higher due to different specialized tokenizer
             Provider::Google => (0.95, 0.95),    // Gemini often uses fewer tokens
             Provider::Ollama => (1.10, 1.10),    // Conservative for Llama types
+            Provider::Perplexity => (1.0, 1.0),
             Provider::XAI => (1.0, 1.0),
             Provider::DeepSeek => (1.05, 1.05),
             Provider::Qwen => (1.0, 1.0),

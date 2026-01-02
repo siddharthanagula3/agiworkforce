@@ -347,7 +347,7 @@ export const useEditingStore = create<EditingState>()(
         };
 
         return diff;
-      } catch (error) {
+      } catch {
         const originalLines = originalContent.split('\n');
         const modifiedLines = modifiedContent.split('\n');
 

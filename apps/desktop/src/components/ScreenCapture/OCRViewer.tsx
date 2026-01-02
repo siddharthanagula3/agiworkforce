@@ -44,7 +44,7 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
       await processImage(captureId, imagePath, selectedLanguage);
       setHasProcessed(true);
       toast.success('OCR processing completed');
-    } catch (err) {
+    } catch {
       toast.error('OCR processing failed');
     }
   };
@@ -53,7 +53,7 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
     try {
       await navigator.clipboard.writeText(isEditing ? editedText : result?.text || '');
       toast.success('Text copied to clipboard');
-    } catch (err) {
+    } catch {
       toast.error('Failed to copy text');
     }
   };

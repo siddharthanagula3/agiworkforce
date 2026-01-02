@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import { useBrowserStore, cleanupBrowserStore } from '../browserStore';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -9,12 +9,11 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
-type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
+type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke as InvokeMock;
+  return invoke as unknown as InvokeMock;
 }
 
 describe('browserStore', () => {

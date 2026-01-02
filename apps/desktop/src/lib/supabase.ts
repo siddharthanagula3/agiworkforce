@@ -17,7 +17,7 @@ const secureStorage = {
   getItem: async (_key: string): Promise<string | null> => {
     try {
       return await invoke<string>('auth_retrieve_session');
-    } catch (error) {
+    } catch {
       // If error (e.g. item not found), return null
       return null;
     }

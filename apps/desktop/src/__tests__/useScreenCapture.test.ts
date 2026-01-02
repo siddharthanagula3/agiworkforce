@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useScreenCapture } from '../hooks/useScreenCapture';
 
@@ -6,12 +6,11 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-type TauriInvoke = (typeof import('@tauri-apps/api/core'))['invoke'];
-type InvokeMock = Mock<Parameters<TauriInvoke>, ReturnType<TauriInvoke>>;
+type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke as InvokeMock;
+  return invoke as unknown as InvokeMock;
 }
 
 describe('useScreenCapture', () => {

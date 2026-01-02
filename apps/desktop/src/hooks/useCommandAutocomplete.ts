@@ -2,9 +2,7 @@ import type { AutocompleteState, ContextItemType, ContextSuggestion } from '@agi
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '../lib/tauri-mock';
 
-const COMMAND_TRIGGERS = ['@file', '@folder', '@url', '@web'] as const;
-
-type CommandTrigger = (typeof COMMAND_TRIGGERS)[number];
+type CommandTrigger = '@file' | '@folder' | '@url' | '@web';
 
 function parseCommand(
   text: string,

@@ -1,7 +1,7 @@
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { vi } from 'vitest';
+import { vi, type MockInstance } from 'vitest';
 
 interface AllTheProvidersProps {
   children: React.ReactNode;
@@ -21,7 +21,7 @@ export { customRender as render };
 
 export const waitForNextUpdate = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-export function createMockInvokeResponse<T>(data: T) {
+export function createMockInvokeResponse<T>(data: T): MockInstance<() => Promise<T>> {
   return vi.fn().mockResolvedValue(data);
 }
 

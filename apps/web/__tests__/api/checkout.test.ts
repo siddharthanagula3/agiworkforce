@@ -51,20 +51,21 @@ vi.mock('../../services/supabase-server', () => ({
 }));
 
 vi.mock('stripe', () => {
+  class MockStripe {
+    checkout = {
+      sessions: {
+        create: vi.fn(() => ({
+          id: 'test-session-id',
+          url: 'https://checkout.stripe.com/test',
+        })),
+      },
+    };
+    customers = {
+      list: vi.fn(() => ({ data: [] })),
+    };
+  }
   return {
-    default: vi.fn(() => ({
-      checkout: {
-        sessions: {
-          create: vi.fn(() => ({
-            id: 'test-session-id',
-            url: 'https://checkout.stripe.com/test',
-          })),
-        },
-      },
-      customers: {
-        list: vi.fn(() => ({ data: [] })),
-      },
-    })),
+    default: MockStripe,
     errors: {
       StripeError: class StripeError extends Error {
         type = 'StripeError';
@@ -103,7 +104,6 @@ describe('POST /api/checkout', () => {
           data: { session: null },
         })),
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     const request = new NextRequest('http://localhost/api/checkout', {

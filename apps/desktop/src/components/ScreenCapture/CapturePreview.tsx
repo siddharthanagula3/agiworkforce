@@ -34,7 +34,7 @@ export function CapturePreview({
     try {
       await saveToClipboard(capture.id);
       toast.success('Image copied to clipboard');
-    } catch (error) {
+    } catch {
       toast.error('Failed to copy image');
     }
   };
@@ -48,7 +48,7 @@ export function CapturePreview({
       toast.success('Capture deleted');
       onDelete?.();
       onClose();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete capture');
     } finally {
       setIsDeleting(false);

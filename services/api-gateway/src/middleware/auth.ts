@@ -26,7 +26,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = authenticatedUserSchema.parse(payload);
     next();
-  } catch (error) {
+  } catch {
     throw new AppError('Invalid or expired token', 403);
   }
 }

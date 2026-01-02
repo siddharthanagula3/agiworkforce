@@ -1439,6 +1439,11 @@ impl LLMRouter {
                 TaskCategory::Complex => "kimi-k2-thinking".to_string(),
                 TaskCategory::Creative => "kimi-k2-thinking".to_string(),
             },
+            Provider::Perplexity => match task {
+                TaskCategory::Simple => "sonar".to_string(),
+                TaskCategory::Complex => "sonar-deep-research".to_string(),
+                TaskCategory::Creative => "sonar-pro".to_string(),
+            },
             Provider::ManagedCloud => match task {
                 TaskCategory::Simple => "gpt-5-nano".to_string(),
                 TaskCategory::Complex => "gpt-5".to_string(),

@@ -213,7 +213,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
     try {
       await saveAllFiles();
       toast.success(`Saved ${dirtyCount} file${dirtyCount !== 1 ? 's' : ''}`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to save all files');
     }
   };
@@ -352,7 +352,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
         if (!file) return;
         await navigator.clipboard.writeText(file.content);
         toast.success('Copied file contents to clipboard');
-      } catch (error) {
+      } catch {
         toast.error('Failed to copy file contents');
       } finally {
         setTabMenu(null);
