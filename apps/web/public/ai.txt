@@ -27,12 +27,18 @@ AGI Workforce is a comprehensive platform for deploying autonomous AI agents cap
 - Main Docs: https://agiworkforce.com/docs
 - API Documentation: https://agiworkforce.com/docs/api
 - Getting Started: https://agiworkforce.com/get-started
-- FAQ: https://agiworkforce.com/docs
+- FAQ: https://agiworkforce.com/faq
+- About Us: https://agiworkforce.com/about
 
 ## Contact & Support
 - Support Email: support@agiworkforce.com
-- Issues: GitHub issue tracker
-- Community: Discord (if applicable)
+- Contact Page: https://agiworkforce.com/contact
+- Location: Austin, TX, USA
+
+## Company
+- Name: AGI Automation LLC
+- Founded: 2025
+- Founder: Siddhartha Nagula (CEO)
 
 ## Technology Stack
 - Frontend: React 19, TypeScript, Tailwind CSS
