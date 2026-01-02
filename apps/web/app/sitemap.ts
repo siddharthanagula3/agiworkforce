@@ -15,16 +15,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
     // Key feature pages
     { path: '/pricing', priority: 0.9, changeFrequency: 'monthly' },
+    { path: '/about', priority: 0.8, changeFrequency: 'monthly' },
     { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/get-started', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/download', priority: 0.8, changeFrequency: 'weekly' },
 
+    // Support/Help pages
+    { path: '/faq', priority: 0.8, changeFrequency: 'monthly' },
+    { path: '/contact', priority: 0.7, changeFrequency: 'yearly' },
+    { path: '/diagnose', priority: 0.6, changeFrequency: 'weekly' },
+
     // Legal/Policy pages
     { path: '/privacy', priority: 0.7, changeFrequency: 'yearly' },
     { path: '/terms', priority: 0.7, changeFrequency: 'yearly' },
-
-    // Support/Help pages
-    { path: '/diagnose', priority: 0.6, changeFrequency: 'weekly' },
 
     // Auth pages (lower priority - users already logged in)
     { path: '/login', priority: 0.5, changeFrequency: 'yearly' },

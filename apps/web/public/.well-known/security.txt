@@ -1,0 +1,20 @@
+# AGI Automation LLC Security Policy
+# https://securitytxt.org/
+
+Contact: mailto:security@agiworkforce.com
+Contact: mailto:support@agiworkforce.com
+Expires: 2026-12-31T23:59:59.000Z
+Preferred-Languages: en
+Canonical: https://agiworkforce.com/.well-known/security.txt
+
+# Acknowledgments
+# We appreciate responsible disclosure of security vulnerabilities.
+# If you discover a security issue, please report it to us privately.
+
+# Policy
+Policy: https://agiworkforce.com/security-policy
+
+# Our Commitment
+# We take security seriously and will respond to verified vulnerabilities
+# within 48 hours. We will work with you to understand and address any
+# issues you report.
