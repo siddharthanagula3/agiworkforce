@@ -30,6 +30,9 @@ export function Header() {
     { name: 'Features', href: '/#features' },
     { name: 'Security', href: '/#security' },
     { name: 'Pricing', href: '/pricing' },
+    { name: 'About', href: '/about' },
+    { name: 'FAQ', href: '/faq' },
+    { name: 'Contact', href: '/contact' },
   ];
 
   return (
