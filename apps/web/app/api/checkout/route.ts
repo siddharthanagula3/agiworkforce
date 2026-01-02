@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     const checkoutSession = await getStripe().checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
+      locale: 'en', // Explicitly set locale to prevent i18n loading issues
       line_items: [
         {
           price: priceId,
@@ -54,8 +55,10 @@ export async function POST(req: Request) {
       ],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+      client_reference_id: session.user.id, // Primary identifier for webhook
       metadata: {
-        userId: session.user.id,
+        supabase_user_id: session.user.id, // Canonical key for webhook handler
+        userId: session.user.id, // Legacy key for backwards compatibility
         plan_tier: plan, // Useful for the webhook
       },
       allow_promotion_codes: true,
