@@ -3,7 +3,7 @@ import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import { createServer } from 'http';
-import { randomInt } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { supabase } from './db.js';
@@ -40,7 +40,25 @@ const publicWsUrl =
   `${publicHttpUrl.startsWith('https') ? 'wss' : 'ws'}://${host}:${port}${wsPath}`;
 
 const app = express();
-app.use(cors());
+
+// Configure CORS with allowed origins
+const allowedOrigins = (() => {
+  const configured = process.env['ALLOWED_ORIGINS'];
+  if (!configured) {
+    return ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:4000'];
+  }
+  return configured
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+})();
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 const server = createServer(app);
@@ -72,7 +90,7 @@ const pairingRequestSchema = z.object({
 
 const registerMessageSchema = z.object({
   type: z.literal('register'),
-  code: z.string().length(6),
+  code: z.string().length(8),
   role: z.union([z.literal('desktop'), z.literal('mobile')]),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
@@ -397,12 +415,15 @@ function isSessionExpired(session: Session): boolean {
   return session.expiresAt <= Date.now();
 }
 
-// Generate a unique 6-digit code with collision detection
+// Generate a unique 8-character alphanumeric code with cryptographically secure randomness
+// Uses base64url encoding for higher entropy (~48 bits vs ~20 bits for 6 digits)
 async function generateUniqueCode(): Promise<string> {
   const MAX_ATTEMPTS = 10;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    // Generate 6 random bytes and encode as base64url, take first 8 characters
+    // This provides ~48 bits of entropy (vs ~20 bits for 6 digits = 1M combinations)
+    const code = randomBytes(6).toString('base64url').substring(0, 8).toUpperCase();
 
     // Check if code already exists in active sessions
     if (activeSessions.has(code)) {

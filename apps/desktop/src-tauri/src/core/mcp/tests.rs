@@ -232,7 +232,7 @@ mod unit_tests {
             enabled: true,
         };
 
-        let mut session = McpSession::connect("filesystem".to_string(), config)
+        let session = McpSession::connect("filesystem".to_string(), config)
             .await
             .unwrap();
 

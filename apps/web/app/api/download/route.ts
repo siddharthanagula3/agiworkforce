@@ -5,6 +5,18 @@ export const runtime = 'edge';
 const REPO_OWNER = 'siddharthanagula3';
 const REPO_NAME = 'agiworkforce-desktop-app';
 
+/**
+ * PUBLIC ENDPOINT: Download route for desktop application installers.
+ *
+ * SECURITY NOTE: This endpoint is intentionally unauthenticated because:
+ * 1. Desktop app downloads should be publicly accessible to encourage adoption
+ * 2. The download files are already publicly hosted on GitHub releases
+ * 3. Authentication happens within the desktop app after installation
+ * 4. Rate limiting is handled by GitHub's API and CDN infrastructure
+ *
+ * If download access needs to be restricted in the future (e.g., for beta builds),
+ * add authentication by importing createSupabaseServerClient and checking user session.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get('platform');

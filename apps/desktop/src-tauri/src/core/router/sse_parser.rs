@@ -67,7 +67,26 @@ impl SseStreamParser {
                     self.pending_chunks.insert(0, Ok(chunk));
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to parse stream event: {}", e);
+                    let error_str = e.to_string();
+                    // Check if this is a critical error that should be propagated
+                    // Critical errors include: API errors, authentication failures, rate limits
+                    if error_str.contains("error")
+                        || error_str.contains("API")
+                        || error_str.contains("authentication")
+                        || error_str.contains("rate limit")
+                        || error_str.contains("401")
+                        || error_str.contains("403")
+                        || error_str.contains("429")
+                        || error_str.contains("500")
+                        || error_str.contains("502")
+                        || error_str.contains("503")
+                    {
+                        tracing::error!("Critical stream error: {}", e);
+                        self.pending_chunks.insert(0, Err(e));
+                    } else {
+                        // Non-critical parsing errors (e.g., partial data, comments) are logged but not propagated
+                        tracing::warn!("Failed to parse stream event: {}", e);
+                    }
                 }
             }
         }

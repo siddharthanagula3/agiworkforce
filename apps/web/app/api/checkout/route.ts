@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '@/services/supabase-server';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
+import { validateCsrfFromRequest } from '@/lib/csrf';
 
 import { requireEnv } from '@/utils/env';
 
@@ -19,6 +20,12 @@ export async function POST(req: Request) {
 
     if (!session) {
       return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // CSRF validation
+    const csrfValid = await validateCsrfFromRequest(req, session.user.id);
+    if (!csrfValid) {
+      return new NextResponse('CSRF token validation failed', { status: 403 });
     }
 
     const { plan, billingInterval } = await req.json();
@@ -57,7 +64,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
     console.error('Checkout error:', error);
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    // Sanitize error messages to prevent exposing internal details
+    // Only return safe, user-friendly error messages
+    let safeMessage = 'An error occurred during checkout. Please try again.';
+    let statusCode = 500;
+
+    if (error instanceof Stripe.errors.StripeCardError) {
+      // Card errors are safe to show to users
+      safeMessage = error.message;
+      statusCode = 400;
+    } else if (error instanceof Stripe.errors.StripeInvalidRequestError) {
+      // Invalid request - likely a configuration issue, keep generic
+      safeMessage = 'Invalid checkout configuration. Please contact support.';
+      statusCode = 400;
+    } else if (error instanceof Stripe.errors.StripeAuthenticationError) {
+      // Auth errors should not expose details
+      safeMessage = 'Payment service temporarily unavailable. Please try again later.';
+      statusCode = 503;
+    } else if (error instanceof Stripe.errors.StripeRateLimitError) {
+      safeMessage = 'Too many requests. Please wait a moment and try again.';
+      statusCode = 429;
+    } else if (error instanceof Stripe.errors.StripeConnectionError) {
+      safeMessage = 'Unable to connect to payment service. Please try again.';
+      statusCode = 503;
+    }
+    // For all other errors (including generic Error instances), use the default safe message
+    // Never expose raw error.message as it may contain stack traces or internal info
+
+    return NextResponse.json({ error: safeMessage }, { status: statusCode });
   }
 }

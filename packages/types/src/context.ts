@@ -1,4 +1,12 @@
-export type ContextItemType = 'file' | 'folder' | 'url' | 'web' | 'image' | 'code-snippet';
+export type ContextItemType =
+  | 'file'
+  | 'folder'
+  | 'url'
+  | 'web'
+  | 'image'
+  | 'code-snippet'
+  | 'selection'
+  | 'clipboard';
 
 export interface BaseContextItem {
   id: string;
@@ -7,6 +15,7 @@ export interface BaseContextItem {
   description?: string;
   tokens?: number;
   timestamp: Date;
+  icon?: string;
 }
 
 export interface FileContextItem extends BaseContextItem {
@@ -72,13 +81,29 @@ export interface CodeSnippetContextItem extends BaseContextItem {
   endLine?: number;
 }
 
+export interface SelectionContextItem extends BaseContextItem {
+  type: 'selection';
+  content?: string;
+  path?: string;
+  size?: number;
+}
+
+export interface ClipboardContextItem extends BaseContextItem {
+  type: 'clipboard';
+  content?: string;
+  path?: string;
+  size?: number;
+}
+
 export type ContextItem =
   | FileContextItem
   | FolderContextItem
   | UrlContextItem
   | WebContextItem
   | ImageContextItem
-  | CodeSnippetContextItem;
+  | CodeSnippetContextItem
+  | SelectionContextItem
+  | ClipboardContextItem;
 
 export interface CreateContextItemOptions {
   type: ContextItemType;

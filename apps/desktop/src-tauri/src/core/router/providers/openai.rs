@@ -140,10 +140,13 @@ impl OpenAIProvider {
             .timeout(Duration::from_secs(300))
             .build()
             .expect("Failed to create HTTP client");
+        // Use environment variable for base URL, defaulting to official OpenAI API
+        let base_url = std::env::var("OPENAI_API_BASE")
+            .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
         Self {
             api_key,
             client,
-            base_url: "https://api.agiworkforce.com".to_string(),
+            base_url,
         }
     }
 

@@ -21,7 +21,17 @@ interface MobileDevice {
   updatedAt: number;
 }
 
+// TODO: Migrate to Supabase for persistence. Currently, all mobile device registrations
+// are lost on server restart. This should store mobile devices in the database
+// with proper user association, push token management, and device lifecycle tracking.
+// See: https://github.com/your-org/agiworkforce/issues/XXX (create tracking issue)
 const devices = new Map<string, MobileDevice>();
+
+// Log warning on module load about in-memory state
+console.warn(
+  '[mobile] WARNING: Mobile device state is stored in-memory and will be lost on server restart. ' +
+    'Migrate to Supabase for production use.',
+);
 
 const registerSchema = z.object({
   clientId: z.string().optional(),

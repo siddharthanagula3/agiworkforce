@@ -6,6 +6,9 @@ import { requireEnv } from './env';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
+// Maximum message size in bytes (64KB default)
+const MAX_MESSAGE_SIZE = Number(process.env['WS_MAX_MESSAGE_SIZE'] ?? 65536);
+
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   deviceId?: string;
@@ -52,6 +55,29 @@ export function setupWebSocket(wss: WebSocketServer) {
 
     ws.on('message', (message: RawData) => {
       try {
+        // Check message size before processing
+        // RawData is Buffer | ArrayBuffer | Buffer[]
+        let messageSize: number;
+        if (Buffer.isBuffer(message)) {
+          messageSize = message.byteLength;
+        } else if (Array.isArray(message)) {
+          // Buffer[] - sum up all buffer sizes
+          messageSize = message.reduce((acc, buf) => acc + buf.byteLength, 0);
+        } else {
+          // ArrayBuffer
+          messageSize = message.byteLength;
+        }
+
+        if (messageSize > MAX_MESSAGE_SIZE) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              error: `Message too large. Maximum size is ${MAX_MESSAGE_SIZE} bytes`,
+            }),
+          );
+          return;
+        }
+
         const parsed = parseMessage(message);
         if (!parsed) {
           ws.send(
@@ -117,7 +143,16 @@ export function setupWebSocket(wss: WebSocketServer) {
 
 function parseMessage(message: RawData): GatewayMessage | null {
   try {
-    const text = typeof message === 'string' ? message : message.toString();
+    // RawData is Buffer | ArrayBuffer | Buffer[], convert to string
+    let text: string;
+    if (Buffer.isBuffer(message)) {
+      text = message.toString('utf-8');
+    } else if (Array.isArray(message)) {
+      text = Buffer.concat(message).toString('utf-8');
+    } else {
+      // ArrayBuffer
+      text = Buffer.from(message).toString('utf-8');
+    }
     const payload = JSON.parse(text);
     return gatewayMessageSchema.parse(payload);
   } catch (error) {

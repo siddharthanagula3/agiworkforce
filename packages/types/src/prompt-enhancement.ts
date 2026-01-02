@@ -1,3 +1,5 @@
+export type Complexity = 'Simple' | 'Moderate' | 'Complex';
+
 export enum UseCase {
   Automation = 'Automation',
   Coding = 'Coding',
@@ -35,7 +37,7 @@ export interface EnhancedPrompt {
     language?: string;
     framework?: string;
     domain?: string;
-    complexity?: 'simple' | 'moderate' | 'complex';
+    complexity?: Complexity;
   };
 
   metadata?: {
