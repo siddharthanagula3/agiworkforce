@@ -19,18 +19,61 @@ interface DesktopDevice {
   registeredAt: number;
 }
 
+// TODO: Migrate to Supabase for persistence. Currently, all desktop registrations
+// are lost on server restart. This should store desktop devices in the database
+// with proper user association and support for multiple desktops per user.
+// See: https://github.com/your-org/agiworkforce/issues/XXX (create tracking issue)
 const desktops = new Map<string, DesktopDevice>();
 
+// Log warning on module load about in-memory state
+console.warn(
+  '[desktop] WARNING: Desktop device state is stored in-memory and will be lost on server restart. ' +
+    'Migrate to Supabase for production use.',
+);
+
 const registerDesktopSchema = z.object({
-  name: z.string(),
-  platform: z.string(),
-  version: z.string(),
+  name: z.string().min(1).max(100),
+  platform: z.enum(['macos', 'windows', 'linux']),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/, 'Version must be in semver format (e.g., 1.0.0)'),
 });
 
-const commandSchema = z.object({
-  type: z.enum(['chat', 'automation', 'query']),
-  payload: z.record(z.any()),
+// Strict payload schemas for each command type using discriminatedUnion
+// This prevents arbitrary data injection and validates command-specific fields
+const chatPayloadSchema = z.object({
+  type: z.literal('chat'),
+  payload: z.object({
+    message: z.string().min(1).max(10000),
+    conversationId: z.string().uuid().optional(),
+    model: z.string().max(50).optional(),
+    temperature: z.number().min(0).max(2).optional(),
+  }),
 });
+
+const automationPayloadSchema = z.object({
+  type: z.literal('automation'),
+  payload: z.object({
+    action: z.enum(['run', 'stop', 'pause', 'resume']),
+    workflowId: z.string().uuid(),
+    parameters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+    timeout: z.number().int().min(1000).max(3600000).optional(), // 1s to 1h
+  }),
+});
+
+const queryPayloadSchema = z.object({
+  type: z.literal('query'),
+  payload: z.object({
+    query: z.string().min(1).max(5000),
+    collection: z.string().min(1).max(100).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).optional(),
+  }),
+});
+
+const commandSchema = z.discriminatedUnion('type', [
+  chatPayloadSchema,
+  automationPayloadSchema,
+  queryPayloadSchema,
+]);
 
 router.post(
   '/register',
@@ -64,20 +107,18 @@ router.post(
 router.get(
   '/:desktopId/status',
   asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
-    const { desktopId } = req.params;
-    const desktop = desktops.get(desktopId);
-
-    if (!desktop) {
-      throw new AppError('Desktop not found', 404);
-    }
-
+    // Check auth first (consistent order: auth -> ownership -> action)
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
 
-    if (desktop.userId !== user.userId) {
-      throw new AppError('Forbidden', 403);
+    const { desktopId } = req.params;
+    const desktop = desktops.get(desktopId);
+
+    // Return 404 for both "not found" and "not owned" to prevent enumeration attacks
+    if (!desktop || desktop.userId !== user.userId) {
+      throw new AppError('Desktop not found', 404);
     }
 
     const online = Date.now() - desktop.lastSeen < 60000;
@@ -96,21 +137,20 @@ router.get(
 router.post(
   '/:desktopId/command',
   asyncHandler(async (req: Request<{ desktopId: string }>, res: Response) => {
-    const { desktopId } = req.params;
-    const { type, payload } = commandSchema.parse(req.body);
-
-    const desktop = desktops.get(desktopId);
-    if (!desktop) {
-      throw new AppError('Desktop not found', 404);
-    }
-
+    // Check auth first (consistent order: auth -> ownership -> action)
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
 
-    if (desktop.userId !== user.userId) {
-      throw new AppError('Forbidden', 403);
+    const { desktopId } = req.params;
+    const { type, payload } = commandSchema.parse(req.body);
+
+    const desktop = desktops.get(desktopId);
+
+    // Return 404 for both "not found" and "not owned" to prevent enumeration attacks
+    if (!desktop || desktop.userId !== user.userId) {
+      throw new AppError('Desktop not found', 404);
     }
 
     res.json({

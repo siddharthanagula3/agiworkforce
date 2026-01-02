@@ -3,22 +3,38 @@ use crate::core::mcp::{McpError, McpResult};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
+
+/// Maximum age for pending requests before they are considered stale (5 minutes)
+const MAX_REQUEST_AGE_SECS: u64 = 300;
+
+/// Interval for cleaning up stale pending requests
+const CLEANUP_INTERVAL_SECS: u64 = 60;
+
+/// Holds a pending request with its creation timestamp for age-based cleanup
+struct PendingRequest {
+    sender: oneshot::Sender<McpResult<JsonRpcResponse>>,
+    created_at: Instant,
+}
 
 pub struct StdioTransport {
     child: Arc<Mutex<Option<Child>>>,
 
     request_id: Arc<AtomicU64>,
 
-    pending: Arc<Mutex<HashMap<RequestId, oneshot::Sender<McpResult<JsonRpcResponse>>>>>,
+    pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>>,
 
     tx: mpsc::UnboundedSender<JsonRpcRequest>,
 
     shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
+
+    /// Shared flag to signal shutdown to all tasks
+    is_shutdown: Arc<AtomicBool>,
 }
 
 impl StdioTransport {
@@ -56,12 +72,15 @@ impl StdioTransport {
         let (tx, mut rx) = mpsc::unbounded_channel::<JsonRpcRequest>();
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
 
-        let pending: Arc<Mutex<HashMap<RequestId, oneshot::Sender<McpResult<JsonRpcResponse>>>>> =
+        let pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
         let child_arc = Arc::new(Mutex::new(Some(child)));
+        let is_shutdown = Arc::new(AtomicBool::new(false));
 
+        // Writer task
         let pending_write = pending.clone();
+        let is_shutdown_write = is_shutdown.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -73,12 +92,23 @@ impl StdioTransport {
                                 if let Err(e) = stdin.write_all(line.as_bytes()).await {
                                     tracing::error!("[MCP Transport] Failed to write to stdin: {}", e);
 
+                                    // Notify the specific request about the failure
                                     let mut pending = pending_write.lock();
-                                    if let Some(sender) = pending.remove(&request.id) {
-                                        let _ = sender.send(Err(McpError::ConnectionError(
+                                    if let Some(pending_req) = pending.remove(&request.id) {
+                                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
                                             format!("Failed to write request: {}", e)
                                         )));
                                     }
+
+                                    // Notify all remaining pending requests about the connection failure
+                                    tracing::warn!("[MCP Transport] Notifying {} pending requests of connection failure", pending.len());
+                                    for (_, pending_req) in pending.drain() {
+                                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                                            "Transport connection lost".to_string()
+                                        )));
+                                    }
+
+                                    is_shutdown_write.store(true, Ordering::SeqCst);
                                     break;
                                 }
                                 if let Err(e) = stdin.flush().await {
@@ -92,13 +122,24 @@ impl StdioTransport {
                     }
                     _ = &mut shutdown_rx => {
                         tracing::info!("[MCP Transport] Shutdown signal received");
+                        is_shutdown_write.store(true, Ordering::SeqCst);
+
+                        // Clean up any remaining pending requests
+                        let mut pending = pending_write.lock();
+                        for (_, pending_req) in pending.drain() {
+                            let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                                "Transport shutting down".to_string()
+                            )));
+                        }
                         break;
                     }
                 }
             }
         });
 
+        // Reader task
         let pending_read = pending.clone();
+        let is_shutdown_read = is_shutdown.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
@@ -113,8 +154,8 @@ impl StdioTransport {
                 match McpMessage::from_str(&line) {
                     Ok(McpMessage::Response(response)) => {
                         let mut pending = pending_read.lock();
-                        if let Some(sender) = pending.remove(&response.id) {
-                            let _ = sender.send(Ok(response));
+                        if let Some(pending_req) = pending.remove(&response.id) {
+                            let _ = pending_req.sender.send(Ok(response));
                         } else {
                             tracing::warn!(
                                 "[MCP Transport] Received response for unknown request: {:?}",
@@ -124,8 +165,10 @@ impl StdioTransport {
                     }
                     Ok(McpMessage::Error(error)) => {
                         let mut pending = pending_read.lock();
-                        if let Some(sender) = pending.remove(&error.id) {
-                            let _ = sender.send(Err(McpError::RmcpError(error.error.message)));
+                        if let Some(pending_req) = pending.remove(&error.id) {
+                            let _ = pending_req
+                                .sender
+                                .send(Err(McpError::RmcpError(error.error.message)));
                         } else {
                             tracing::warn!(
                                 "[MCP Transport] Received error for unknown request: {:?}",
@@ -146,8 +189,24 @@ impl StdioTransport {
             }
 
             tracing::info!("[MCP Transport] stdout reader finished");
+
+            // Signal shutdown and clean up pending requests when reader exits
+            is_shutdown_read.store(true, Ordering::SeqCst);
+            let mut pending = pending_read.lock();
+            if !pending.is_empty() {
+                tracing::warn!(
+                    "[MCP Transport] Reader exited, notifying {} pending requests",
+                    pending.len()
+                );
+                for (_, pending_req) in pending.drain() {
+                    let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                        "Transport reader disconnected".to_string(),
+                    )));
+                }
+            }
         });
 
+        // Stderr reader task
         tokio::spawn(async move {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
@@ -157,12 +216,42 @@ impl StdioTransport {
             }
         });
 
+        // Periodic cleanup task for stale pending requests
+        let pending_cleanup = pending.clone();
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
+            loop {
+                interval.tick().await;
+
+                let mut pending = pending_cleanup.lock();
+                let now = Instant::now();
+                let stale_keys: Vec<RequestId> = pending
+                    .iter()
+                    .filter(|(_, req)| {
+                        now.duration_since(req.created_at).as_secs() > MAX_REQUEST_AGE_SECS
+                    })
+                    .map(|(id, _)| id.clone())
+                    .collect();
+
+                for key in stale_keys {
+                    if let Some(pending_req) = pending.remove(&key) {
+                        tracing::warn!("[MCP Transport] Cleaning up stale request: {:?}", key);
+                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
+                            "Request expired due to age".to_string(),
+                        )));
+                    }
+                }
+            }
+        });
+
         Ok(Self {
             child: child_arc,
             request_id: Arc::new(AtomicU64::new(1)),
             pending,
             tx,
             shutdown_tx: Mutex::new(Some(shutdown_tx)),
+            is_shutdown,
         })
     }
 
@@ -171,7 +260,25 @@ impl StdioTransport {
         method: String,
         params: Option<serde_json::Value>,
     ) -> McpResult<JsonRpcResponse> {
-        let id = RequestId::Number(self.request_id.fetch_add(1, Ordering::SeqCst) as i64);
+        // Check if transport is shutdown
+        if self.is_shutdown.load(Ordering::SeqCst) {
+            return Err(McpError::ConnectionError(
+                "Transport is shutdown".to_string(),
+            ));
+        }
+
+        // Generate a unique request ID with collision detection
+        let id = loop {
+            let next_id = self.request_id.fetch_add(1, Ordering::SeqCst);
+            // Handle potential wrap-around at u64::MAX
+            let candidate = RequestId::Number((next_id % i64::MAX as u64) as i64);
+            let pending = self.pending.lock();
+            if !pending.contains_key(&candidate) {
+                break candidate;
+            }
+            // If collision detected, try next ID
+            tracing::debug!("[MCP Transport] Request ID collision detected, trying next ID");
+        };
 
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -184,10 +291,18 @@ impl StdioTransport {
 
         {
             let mut pending = self.pending.lock();
-            pending.insert(id.clone(), response_tx);
+            pending.insert(
+                id.clone(),
+                PendingRequest {
+                    sender: response_tx,
+                    created_at: Instant::now(),
+                },
+            );
         }
 
         self.tx.send(request).map_err(|_| {
+            // Clean up pending request if send fails
+            self.pending.lock().remove(&id);
             McpError::ConnectionError("Failed to send request: channel closed".to_string())
         })?;
 
@@ -200,8 +315,11 @@ impl StdioTransport {
                 ))
             }
             Err(_) => {
+                // Remove timed out request and return error
                 self.pending.lock().remove(&id);
-                Err(McpError::ConnectionError("Request timeout".to_string()))
+                Err(McpError::ConnectionError(
+                    "Request timeout after 30 seconds".to_string(),
+                ))
             }
         }
     }
@@ -218,6 +336,9 @@ impl StdioTransport {
     }
 
     pub fn is_alive(&self) -> bool {
+        if self.is_shutdown.load(Ordering::SeqCst) {
+            return false;
+        }
         let child = self.child.lock();
         child.is_some()
     }

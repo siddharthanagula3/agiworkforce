@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -21,15 +22,67 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
-function getOrigin(request: Request) {
-  const headerOrigin = request.headers.get('origin');
-  if (headerOrigin) return headerOrigin;
+/**
+ * Get validated origin for Stripe redirect URL.
+ * Only allows origins from the whitelist defined in ALLOWED_ORIGINS env var.
+ * Falls back to NEXT_PUBLIC_APP_URL if no valid origin is found.
+ */
+function getValidatedOrigin(request: Request): string {
+  // Parse allowed origins from environment variable
+  // Format: comma-separated list, e.g., "https://agiworkforce.com,https://app.agiworkforce.com"
+  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_URL || '';
+  const allowedOrigins = allowedOriginsEnv
+    .split(',')
+    .map((origin) => origin.trim().toLowerCase())
+    .filter(Boolean);
 
-  const url = new URL(request.url);
-  return `${url.protocol}//${url.host}`;
+  // Add localhost for development
+  if (process.env.NODE_ENV === 'development') {
+    allowedOrigins.push('http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000');
+  }
+
+  // Get the origin from the request header
+  const headerOrigin = request.headers.get('origin')?.toLowerCase();
+
+  if (headerOrigin && allowedOrigins.includes(headerOrigin)) {
+    return headerOrigin;
+  }
+
+  // Fallback: Extract origin from request URL and validate
+  const requestUrl = new URL(request.url);
+  const requestOrigin = `${requestUrl.protocol}//${requestUrl.host}`.toLowerCase();
+
+  if (allowedOrigins.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  // If no valid origin found, use the first allowed origin or a safe default
+  const fallbackOrigin = process.env.NEXT_PUBLIC_APP_URL || allowedOrigins[0];
+  if (!fallbackOrigin) {
+    logger.error('No valid origin found and no fallback configured');
+    throw createError.validation('Invalid origin');
+  }
+
+  logger.warn(
+    {
+      headerOrigin,
+      requestOrigin,
+      allowedOrigins,
+      fallbackOrigin,
+    },
+    'Origin not in whitelist, using fallback',
+  );
+
+  return fallbackOrigin;
 }
 
 async function handlePortal(request: NextRequest) {
+  // Rate limiting: 10 requests per minute per user/IP
+  const rateLimitResponse = await withRateLimit(request, 'sync-subscription');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   if (!stripe) {
     throw createError.serviceUnavailable('Stripe is not configured. Please set STRIPE_SECRET_KEY.');
   }
@@ -63,7 +116,7 @@ async function handlePortal(request: NextRequest) {
         // Found customer, allow portal access
         // Ideally we should also trigger a sync here to fix the local state
         // We'll proceed with creating the session using this ID
-        const origin = getOrigin(request);
+        const origin = getValidatedOrigin(request);
         const session = await stripe.billingPortal.sessions.create({
           customer: customerId,
           return_url: `${origin}/pricing`,
@@ -167,7 +220,7 @@ async function handlePortal(request: NextRequest) {
     );
   }
 
-  const origin = getOrigin(request);
+  const origin = getValidatedOrigin(request);
 
   try {
     const session = await stripe.billingPortal.sessions.create({

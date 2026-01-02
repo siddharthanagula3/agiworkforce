@@ -37,7 +37,7 @@ impl McpClient {
     pub async fn connect_server(&self, name: String, config: McpServerConfig) -> McpResult<()> {
         tracing::info!("[MCP Client] Connecting to server '{}'", name);
 
-        let mut session = McpSession::connect(name.clone(), config).await?;
+        let session = McpSession::connect(name.clone(), config).await?;
 
         let init_result = session.initialize().await?;
         tracing::info!(

@@ -1,9 +1,13 @@
 use crate::core::agi::tools::{ParameterType, Tool, ToolCapability, ToolParameter};
 use crate::core::mcp::client::McpTool;
-use crate::core::mcp::{McpClient, McpResult};
+use crate::core::mcp::{McpClient, McpError, McpResult};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+/// Delimiter used to separate components in tool IDs
+/// Using double underscore to avoid conflicts with single underscores in server/tool names
+const TOOL_ID_DELIMITER: &str = "__";
 
 pub struct McpToolRegistry {
     mcp_client: Arc<McpClient>,
@@ -23,7 +27,11 @@ impl McpToolRegistry {
     }
 
     pub fn mcp_tool_to_schema(&self, server_name: &str, mcp_tool: &McpTool) -> Tool {
-        let tool_id = format!("mcp_{}_{}", server_name, mcp_tool.name);
+        // Use double underscore delimiter to avoid conflicts with single underscores in names
+        let tool_id = format!(
+            "mcp{}{}{}{}",
+            TOOL_ID_DELIMITER, server_name, TOOL_ID_DELIMITER, mcp_tool.name
+        );
 
         let parameters = self.extract_parameters(&mcp_tool.input_schema);
 
@@ -99,26 +107,58 @@ impl McpToolRegistry {
         parameters
     }
 
-    pub async fn execute_tool(
-        &self,
-        tool_id: &str,
-        arguments: HashMap<String, Value>,
-    ) -> McpResult<Value> {
-        let parts: Vec<&str> = tool_id.split('_').collect();
-        if parts.len() < 3 || parts[0] != "mcp" {
-            return Err(crate::core::mcp::McpError::ToolNotFound(format!(
-                "Invalid MCP tool ID: {}",
+    /// Parses a tool ID into (server_name, tool_name) components
+    /// Tool IDs are in the format: mcp__<server_name>__<tool_name>
+    fn parse_tool_id(tool_id: &str) -> McpResult<(String, String)> {
+        let parts: Vec<&str> = tool_id.split(TOOL_ID_DELIMITER).collect();
+
+        if parts.len() != 3 || parts[0] != "mcp" {
+            return Err(McpError::ToolNotFound(format!(
+                "Invalid MCP tool ID format '{}'. Expected format: mcp__<server>__<tool>",
                 tool_id
             )));
         }
 
         let server_name = parts[1];
-        let tool_name = parts[2..].join("_");
+        let tool_name = parts[2];
+
+        if server_name.is_empty() {
+            return Err(McpError::ToolNotFound(format!(
+                "Empty server name in tool ID: {}",
+                tool_id
+            )));
+        }
+
+        if tool_name.is_empty() {
+            return Err(McpError::ToolNotFound(format!(
+                "Empty tool name in tool ID: {}",
+                tool_id
+            )));
+        }
+
+        Ok((server_name.to_string(), tool_name.to_string()))
+    }
+
+    pub async fn execute_tool(
+        &self,
+        tool_id: &str,
+        arguments: HashMap<String, Value>,
+    ) -> McpResult<Value> {
+        let (server_name, tool_name) = Self::parse_tool_id(tool_id)?;
+
+        // Validate that the server exists before attempting to call the tool
+        let servers = self.mcp_client.list_servers();
+        if !servers.iter().any(|s| s == &server_name) {
+            return Err(McpError::ServerNotFound(format!(
+                "Server '{}' not found. Available servers: {:?}",
+                server_name, servers
+            )));
+        }
 
         let args_value = serde_json::to_value(arguments)?;
 
         self.mcp_client
-            .call_tool(server_name, &tool_name, args_value)
+            .call_tool(&server_name, &tool_name, args_value)
             .await
     }
 
@@ -131,29 +171,29 @@ impl McpToolRegistry {
     }
 
     pub fn get_tool(&self, tool_id: &str) -> McpResult<Tool> {
-        let parts: Vec<&str> = tool_id.split('_').collect();
-        if parts.len() < 3 || parts[0] != "mcp" {
-            return Err(crate::core::mcp::McpError::ToolNotFound(format!(
-                "Invalid tool ID format: {}",
-                tool_id
+        let (server_name, tool_name) = Self::parse_tool_id(tool_id)?;
+
+        // Validate that the server exists
+        let servers = self.mcp_client.list_servers();
+        if !servers.iter().any(|s| s == &server_name) {
+            return Err(McpError::ServerNotFound(format!(
+                "Server '{}' not found. Available servers: {:?}",
+                server_name, servers
             )));
         }
 
-        let server_name = parts[1];
-        let tool_name = parts[2..].join("_");
-
-        let tools = self.mcp_client.list_server_tools(server_name)?;
+        let tools = self.mcp_client.list_server_tools(&server_name)?;
         let tool = tools
             .into_iter()
             .find(|t| t.name == tool_name)
             .ok_or_else(|| {
-                crate::core::mcp::McpError::ToolNotFound(format!(
-                    "Tool {} not found on server {}",
+                McpError::ToolNotFound(format!(
+                    "Tool '{}' not found on server '{}'",
                     tool_name, server_name
                 ))
             })?;
 
-        Ok(self.mcp_tool_to_schema(server_name, &tool))
+        Ok(self.mcp_tool_to_schema(&server_name, &tool))
     }
 
     pub fn get_server_tools(&self, server_name: &str) -> McpResult<Vec<Tool>> {
@@ -170,7 +210,10 @@ impl McpToolRegistry {
         mcp_tool: &McpTool,
     ) -> crate::core::router::ToolDefinition {
         crate::core::router::ToolDefinition {
-            name: format!("mcp_{}_{}", server_name, mcp_tool.name),
+            name: format!(
+                "mcp{}{}{}{}",
+                TOOL_ID_DELIMITER, server_name, TOOL_ID_DELIMITER, mcp_tool.name
+            ),
             description: mcp_tool.description.clone().unwrap_or_default(),
             parameters: mcp_tool.input_schema.clone(),
         }
@@ -188,7 +231,7 @@ impl McpToolRegistry {
         serde_json::json!({
             "type": "function",
             "function": {
-                "name": format!("mcp_{}_{}", server_name, mcp_tool.name),
+                "name": format!("mcp{}{}{}{}", TOOL_ID_DELIMITER, server_name, TOOL_ID_DELIMITER, mcp_tool.name),
                 "description": mcp_tool.description.clone().unwrap_or_default(),
                 "parameters": mcp_tool.input_schema
             }

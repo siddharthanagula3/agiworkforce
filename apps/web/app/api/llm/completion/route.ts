@@ -188,11 +188,37 @@ async function handleLLMCompletion(request: NextRequest) {
   // Determine provider from model
   let provider = LLMProviderFactory.getProviderFromModel(llmRequest.model);
 
-  // Estimate cost before making request
-  const estimatedPromptTokens = llmRequest.messages.reduce(
-    (sum, msg) => sum + Math.ceil(msg.content.length / 4),
-    0,
-  );
+  // Validate message length to prevent abuse (max 1MB total content)
+  const MAX_MESSAGE_LENGTH = 100000; // 100k chars per message
+  const MAX_TOTAL_LENGTH = 1000000; // 1MB total
+  let totalLength = 0;
+
+  for (const msg of llmRequest.messages) {
+    if (msg.content.length > MAX_MESSAGE_LENGTH) {
+      throw createError.validation(
+        `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`,
+      );
+    }
+    totalLength += msg.content.length;
+  }
+
+  if (totalLength > MAX_TOTAL_LENGTH) {
+    throw createError.validation(
+      `Total message content exceeds maximum length of ${MAX_TOTAL_LENGTH} characters`,
+    );
+  }
+
+  // Estimate tokens using improved heuristic:
+  // - Average English word is ~5 chars, average token is ~4 chars
+  // - Add 10% buffer for special tokens, formatting, etc.
+  // - Use a more conservative 3.5 chars per token for safety
+  const estimatedPromptTokens = llmRequest.messages.reduce((sum, msg) => {
+    // Base estimation: ~3.5 chars per token (more conservative than 4)
+    const baseTokens = Math.ceil(msg.content.length / 3.5);
+    // Add overhead for message formatting tokens (role, delimiters, etc.)
+    const overheadTokens = 4;
+    return sum + baseTokens + overheadTokens;
+  }, 0);
   let estimatedCostCents = LLMCostCalculator.estimateCost(
     provider,
     llmRequest.model,
@@ -272,10 +298,54 @@ async function handleLLMCompletion(request: NextRequest) {
     }
   }
 
+  // CREDIT RESERVATION PATTERN: Reserve estimated credits BEFORE making the LLM request
+  // This prevents race conditions where concurrent requests could exceed limits
+  // After the request completes, we reconcile by adjusting for actual usage
+  const reservationDescription = `Credit reservation: ${provider}/${llmRequest.model}`;
+  const reserveResult = await CreditService.deductCredits(
+    user.id,
+    estimatedCostCents,
+    reservationDescription,
+    {
+      provider,
+      model: llmRequest.model,
+      type: 'reservation',
+      estimatedPromptTokens,
+      estimatedMaxTokens: llmRequest.max_tokens || 1000,
+    },
+  );
+
+  if (!reserveResult.success) {
+    logger.warn(
+      {
+        userId: user.id,
+        estimatedCostCents,
+        reserveResult,
+      },
+      'Failed to reserve credits before LLM request',
+    );
+
+    // Return appropriate error based on the failure reason
+    const balance = await CreditService.getBalance(user.id);
+    return handleCreditError(reserveResult, balance);
+  }
+
+  logger.info(
+    {
+      userId: user.id,
+      estimatedCostCents,
+      model: llmRequest.model,
+      provider,
+    },
+    'Credits reserved for LLM request',
+  );
+
   // Make LLM request
   if (llmRequest.stream) {
     try {
       const stream = await LLMProviderFactory.streamRequest(provider, llmRequest);
+      // Note: For streaming, we cannot easily reconcile credits after the fact
+      // The reservation covers the estimated cost; actual usage may vary slightly
       return new NextResponse(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
@@ -284,6 +354,17 @@ async function handleLLMCompletion(request: NextRequest) {
         },
       });
     } catch (error) {
+      // Refund the reserved credits on failure
+      logger.info(
+        { userId: user.id, estimatedCostCents },
+        'Refunding reserved credits after stream failure',
+      );
+      await CreditService.deductCredits(
+        user.id,
+        -estimatedCostCents, // Negative amount = refund
+        `Refund for failed streaming request: ${provider}/${llmRequest.model}`,
+        { type: 'refund', reason: 'streaming_failure' },
+      );
       logger.error(
         {
           error: error instanceof Error ? error.message : String(error),
@@ -303,6 +384,17 @@ async function handleLLMCompletion(request: NextRequest) {
   try {
     llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
   } catch (error) {
+    // Refund the reserved credits on failure
+    logger.info(
+      { userId: user.id, estimatedCostCents },
+      'Refunding reserved credits after request failure',
+    );
+    await CreditService.deductCredits(
+      user.id,
+      -estimatedCostCents, // Negative amount = refund
+      `Refund for failed request: ${provider}/${llmRequest.model}`,
+      { type: 'refund', reason: 'request_failure' },
+    );
     logger.error(
       {
         error: error instanceof Error ? error.message : String(error),
@@ -324,53 +416,59 @@ async function handleLLMCompletion(request: NextRequest) {
     totalTokens: llmResponse.totalTokens,
   });
 
-  // Deduct credits
-  const deductResult = await CreditService.deductCredits(
-    user.id,
-    actualCostCents,
-    `LLM request: ${provider}/${llmResponse.model}`,
-    {
-      provider,
-      model: llmResponse.model,
-      promptTokens: llmResponse.promptTokens,
-      completionTokens: llmResponse.completionTokens,
-      totalTokens: llmResponse.totalTokens,
-    },
-  );
+  // RECONCILIATION: Adjust for the difference between estimated and actual cost
+  const costDifference = actualCostCents - estimatedCostCents;
 
-  if (!deductResult.success) {
-    logger.error(
+  let deductResult = reserveResult; // Start with reservation result
+
+  if (costDifference !== 0) {
+    // If actual cost differs from estimate, adjust the balance
+    const adjustmentDescription =
+      costDifference > 0
+        ? `Additional charge: ${provider}/${llmResponse.model} (actual exceeded estimate)`
+        : `Credit adjustment: ${provider}/${llmResponse.model} (actual less than estimate)`;
+
+    const adjustmentResult = await CreditService.deductCredits(
+      user.id,
+      costDifference, // Positive = additional charge, negative = refund
+      adjustmentDescription,
       {
-        userId: user.id,
+        provider,
+        model: llmResponse.model,
+        type: 'reconciliation',
+        estimatedCostCents,
         actualCostCents,
-        deductResult,
+        promptTokens: llmResponse.promptTokens,
+        completionTokens: llmResponse.completionTokens,
+        totalTokens: llmResponse.totalTokens,
       },
-      'Failed to deduct credits after LLM request',
     );
 
-    // If daily limit was hit, return error
-    if (deductResult.code === 'DAILY_CREDIT_LIMIT_REACHED') {
-      const balance = await CreditService.getBalance(user.id);
-      const resetAt = balance?.daily_reset_at
-        ? new Date(balance.daily_reset_at)
-        : new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const hoursUntilReset = Math.max(0, (resetAt.getTime() - Date.now()) / (1000 * 60 * 60));
-
-      return NextResponse.json(
+    if (!adjustmentResult.success && costDifference > 0) {
+      // If we couldn't charge the additional amount, log it but don't fail the request
+      // The user already got the response, so we absorb the difference
+      logger.warn(
         {
-          error: `Daily credit limit reached. You can use $${((deductResult.daily_remaining || 0) / 100).toFixed(2)} more in ${Math.ceil(hoursUntilReset)} hours.`,
-          code: 'DAILY_CREDIT_LIMIT_REACHED',
-          daily_limit: deductResult.daily_limit,
-          daily_used: deductResult.daily_used,
-          daily_remaining: deductResult.daily_remaining,
-          reset_in_hours: hoursUntilReset,
+          userId: user.id,
+          costDifference,
+          adjustmentResult,
         },
-        { status: 402 },
+        'Failed to charge additional credits after LLM request (absorbed)',
       );
+    } else {
+      deductResult = adjustmentResult;
     }
 
-    // Note: For other errors, we still return the response, but log the error
-    // In production, you might want to handle this differently
+    logger.info(
+      {
+        userId: user.id,
+        estimatedCostCents,
+        actualCostCents,
+        costDifference,
+        adjustmentSuccess: adjustmentResult.success,
+      },
+      'Credit reconciliation completed',
+    );
   }
 
   // Get updated balance for response
