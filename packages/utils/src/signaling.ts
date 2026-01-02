@@ -1,28 +1,85 @@
-export type SignalingRole = 'desktop' | 'mobile';
+import type {
+  SignalingRole,
+  SignalingEvent,
+  SignalingClientOptions,
+  SignalKind,
+} from '@agiworkforce/types';
 
-export type SignalingEvent =
-  | { type: 'open' }
-  | { type: 'registered'; expiresAt: number; peerConnected: boolean }
-  | { type: 'peer_ready'; role: SignalingRole; metadata?: Record<string, unknown> | null }
-  | {
-      type: 'signal';
-      from: SignalingRole;
-      kind: 'offer' | 'answer' | 'ice' | 'control';
-      payload: unknown;
+// Re-export types for backwards compatibility
+export type { SignalingRole, SignalingEvent, SignalingClientOptions, SignalKind };
+
+// Helper functions for safe type coercion and validation
+
+/**
+ * Safely parse JSON string, returning null on failure
+ */
+function safeJsonParse(data: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(data);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
     }
-  | { type: 'peer_left'; role: SignalingRole }
-  | { type: 'session_expired' }
-  | { type: 'terminated' }
-  | { type: 'error'; error: string }
-  | { type: 'close' };
+    return null;
+  } catch {
+    return null;
+  }
+}
 
-export interface SignalingClientOptions {
-  wsUrl: string;
-  code: string;
-  role: SignalingRole;
-  metadata?: Record<string, unknown>;
-  onEvent: (event: SignalingEvent) => void;
-  heartbeatIntervalMs?: number;
+/**
+ * Safely convert a value to a number, with a fallback
+ */
+function safeToNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Validate if a value is a valid SignalingRole
+ */
+function isValidSignalingRole(value: unknown): value is SignalingRole {
+  return value === 'desktop' || value === 'mobile';
+}
+
+/**
+ * Validate if a value is a valid SignalKind
+ */
+function isValidSignalKind(value: unknown): value is SignalKind {
+  return value === 'offer' || value === 'answer' || value === 'ice' || value === 'control';
+}
+
+/**
+ * Safely extract a SignalingRole from a message, with fallback
+ */
+function safeToSignalingRole(value: unknown, fallback: SignalingRole): SignalingRole {
+  return isValidSignalingRole(value) ? value : fallback;
+}
+
+/**
+ * Safely extract a SignalKind from a message, with fallback
+ */
+function safeToSignalKind(value: unknown, fallback: SignalKind): SignalKind {
+  return isValidSignalKind(value) ? value : fallback;
+}
+
+/**
+ * Safely extract metadata from a message
+ */
+function safeToMetadata(value: unknown): Record<string, unknown> | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
 }
 
 export class SignalingClient {
@@ -34,7 +91,7 @@ export class SignalingClient {
     this.connect();
   }
 
-  sendSignal(kind: 'offer' | 'answer' | 'ice' | 'control', payload: unknown) {
+  sendSignal(kind: SignalKind, payload: unknown) {
     this.send({
       type: 'signal',
       kind,
@@ -77,12 +134,12 @@ export class SignalingClient {
     };
 
     socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(String(event.data));
-        this.handleIncoming(data);
-      } catch (error) {
-        console.warn('[signaling] failed to parse incoming message', error);
+      const data = safeJsonParse(String(event.data));
+      if (data === null) {
+        console.warn('[signaling] failed to parse incoming message as valid JSON object');
+        return;
       }
+      this.handleIncoming(data);
     };
 
     socket.onerror = () => {
@@ -121,7 +178,7 @@ export class SignalingClient {
       case 'registered': {
         this.options.onEvent({
           type: 'registered',
-          expiresAt: Number(message['expiresAt'] ?? 0),
+          expiresAt: safeToNumber(message['expiresAt'], 0),
           peerConnected: Boolean(message['peerConnected']),
         });
         break;
@@ -129,16 +186,16 @@ export class SignalingClient {
       case 'peer_ready': {
         this.options.onEvent({
           type: 'peer_ready',
-          role: (message['role'] as SignalingRole) ?? 'mobile',
-          metadata: (message['metadata'] as Record<string, unknown> | null | undefined) ?? null,
+          role: safeToSignalingRole(message['role'], 'mobile'),
+          metadata: safeToMetadata(message['metadata']),
         });
         break;
       }
       case 'signal': {
         this.options.onEvent({
           type: 'signal',
-          from: (message['from'] as SignalingRole) ?? 'mobile',
-          kind: (message['kind'] as 'offer' | 'answer' | 'ice' | 'control') ?? 'offer',
+          from: safeToSignalingRole(message['from'], 'mobile'),
+          kind: safeToSignalKind(message['kind'], 'offer'),
           payload: message['payload'],
         });
         break;
@@ -146,7 +203,7 @@ export class SignalingClient {
       case 'peer_left': {
         this.options.onEvent({
           type: 'peer_left',
-          role: (message['role'] as SignalingRole) ?? 'mobile',
+          role: safeToSignalingRole(message['role'], 'mobile'),
         });
         break;
       }

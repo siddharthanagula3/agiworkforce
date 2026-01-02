@@ -11,13 +11,6 @@ import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
 async function handleClaimOffer(request: NextRequest) {
-  // CSRF protection
-  const csrfValid = await validateCsrfFromRequest(request);
-  if (!csrfValid) {
-    logger.warn({}, 'CSRF validation failed for claim-offer');
-    throw createError.forbidden('CSRF token validation failed');
-  }
-
   // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'claim-offer');
   if (rateLimitResponse) {
@@ -31,6 +24,13 @@ async function handleClaimOffer(request: NextRequest) {
 
   if (!user) {
     throw createError.unauthorized();
+  }
+
+  // CSRF protection (after authentication so we can use user.id)
+  const csrfValid = await validateCsrfFromRequest(request, user.id);
+  if (!csrfValid) {
+    logger.warn({ userId: user.id }, 'CSRF validation failed for claim-offer');
+    throw createError.forbidden('CSRF token validation failed');
   }
 
   // Parse and validate request body

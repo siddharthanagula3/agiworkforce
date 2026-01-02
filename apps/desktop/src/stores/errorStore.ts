@@ -90,9 +90,8 @@ const useErrorStore = create<ErrorStore>()(
         if (errorData.severity === 'info' || errorData.severity === 'warning') {
           const duration = errorData.severity === 'info' ? 3000 : 5000;
           const timerId = setTimeout(() => {
-            const store = get();
-            store.dismissTimers.delete(newError.id);
-            store.dismissError(newError.id);
+            // dismissError handles timer cleanup internally
+            get().dismissError(newError.id);
           }, duration);
           get().dismissTimers.set(newError.id, timerId);
         }

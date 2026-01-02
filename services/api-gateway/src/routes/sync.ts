@@ -16,11 +16,56 @@ interface SyncData {
   deviceId: string;
 }
 
+// TTL configuration for sync data (1 hour default)
+const SYNC_DATA_TTL_MS = Number(process.env['SYNC_DATA_TTL_MS'] ?? 3600000);
+// Maximum entries per user to prevent unbounded growth
+const MAX_ENTRIES_PER_USER = Number(process.env['SYNC_MAX_ENTRIES_PER_USER'] ?? 1000);
+// Cleanup interval (5 minutes)
+const CLEANUP_INTERVAL_MS = 300000;
+
 const syncStore = new Map<string, SyncData[]>();
+
+// Periodic cleanup of expired sync data
+const cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  const cutoff = now - SYNC_DATA_TTL_MS;
+
+  for (const [userId, entries] of syncStore.entries()) {
+    const validEntries = entries.filter((entry) => entry.timestamp > cutoff);
+    if (validEntries.length === 0) {
+      syncStore.delete(userId);
+    } else if (validEntries.length !== entries.length) {
+      syncStore.set(userId, validEntries);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
+
+// Ensure cleanup interval doesn't prevent process exit
+cleanupInterval.unref();
+
+// Helper to add sync data with TTL enforcement and max-size limit
+function addSyncData(userId: string, data: SyncData): void {
+  const now = Date.now();
+  const cutoff = now - SYNC_DATA_TTL_MS;
+
+  // Get existing entries and filter out expired ones
+  let entries = syncStore.get(userId) ?? [];
+  entries = entries.filter((entry) => entry.timestamp > cutoff);
+
+  // Add new entry
+  entries.push(data);
+
+  // Enforce max entries per user (keep most recent)
+  if (entries.length > MAX_ENTRIES_PER_USER) {
+    entries = entries.slice(-MAX_ENTRIES_PER_USER);
+  }
+
+  syncStore.set(userId, entries);
+}
 
 const syncSchema = z.object({
   type: z.string(),
-  data: z.record(z.any()),
+  data: z.record(z.string(), z.any()),
   deviceId: z.string(),
 });
 
@@ -41,9 +86,8 @@ router.post(
       deviceId,
     };
 
-    const userSyncData = syncStore.get(user.userId) || [];
-    userSyncData.push(syncData);
-    syncStore.set(user.userId, userSyncData);
+    // Use helper that enforces TTL and max-size limits
+    addSyncData(user.userId, syncData);
 
     res.json({
       success: true,

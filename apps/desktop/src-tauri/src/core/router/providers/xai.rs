@@ -10,11 +10,13 @@ use std::error::Error;
 use std::pin::Pin;
 use std::time::Duration;
 
-const XAI_API_BASE: &str = "https://api.agiworkforce.com";
+/// Default XAI API base URL - can be overridden via XAI_API_BASE environment variable
+const XAI_API_BASE_DEFAULT: &str = "https://api.x.ai/v1";
 
 pub struct XAIProvider {
     api_key: Option<String>,
     client: Client,
+    base_url: String,
 }
 
 impl XAIProvider {
@@ -24,7 +26,14 @@ impl XAIProvider {
             .timeout(Duration::from_secs(300))
             .build()
             .expect("Failed to create HTTP client");
-        Self { api_key, client }
+        // Use environment variable for base URL, defaulting to official xAI API
+        let base_url =
+            std::env::var("XAI_API_BASE").unwrap_or_else(|_| XAI_API_BASE_DEFAULT.to_string());
+        Self {
+            api_key,
+            client,
+            base_url,
+        }
     }
 
     fn calculate_cost(model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
@@ -244,7 +253,7 @@ impl LLMProvider for XAIProvider {
 
         let response = self
             .client
-            .post(format!("{}/chat/completions", XAI_API_BASE))
+            .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&xai_request)
@@ -382,7 +391,7 @@ impl LLMProvider for XAIProvider {
 
         let response = self
             .client
-            .post(format!("{}/chat/completions", XAI_API_BASE))
+            .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&xai_request)

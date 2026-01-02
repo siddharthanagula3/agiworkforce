@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
@@ -13,6 +14,20 @@ const JWT_SECRET = requireEnv('JWT_SECRET');
 const JWT_EXPIRES_IN = '7d';
 
 import { supabase } from '../lib/supabase';
+
+// Dummy hash for timing attack prevention - generated with bcrypt.hash('dummy', 10)
+// This ensures we always run bcrypt.compare even when user doesn't exist,
+// preventing timing-based user enumeration attacks
+const DUMMY_PASSWORD_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+// Rate limiting for auth endpoints: 5 attempts per 15 minute window
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per window
+  message: { error: 'Too many authentication attempts, please try again after 15 minutes' },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // DB User interface
 interface DbUser {
@@ -35,6 +50,7 @@ const loginSchema = z.object({
 
 router.post(
   '/register',
+  authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = registerSchema.parse(req.body);
 
@@ -84,6 +100,7 @@ router.post(
 
 router.post(
   '/login',
+  authRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = loginSchema.parse(req.body);
 
@@ -93,17 +110,18 @@ router.post(
       .eq('email', email)
       .single();
 
-    if (!userRecord) {
+    // Always run bcrypt.compare to prevent timing attacks that could reveal user existence
+    // Use dummy hash when user doesn't exist so timing is consistent
+    const hashToCompare = userRecord ? (userRecord as DbUser).password_hash : DUMMY_PASSWORD_HASH;
+    const isValid = await bcrypt.compare(password, hashToCompare);
+
+    // Check both conditions after bcrypt to maintain consistent timing
+    if (!userRecord || !isValid) {
       throw new AppError('Invalid credentials', 401);
     }
 
-    // safe cast
+    // safe cast (we know userRecord exists at this point)
     const user = userRecord as DbUser;
-
-    const isValid = await bcrypt.compare(password, user.password_hash);
-    if (!isValid) {
-      throw new AppError('Invalid credentials', 401);
-    }
 
     const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,

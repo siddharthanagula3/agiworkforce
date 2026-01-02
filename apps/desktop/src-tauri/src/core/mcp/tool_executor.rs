@@ -1,9 +1,12 @@
 use crate::core::mcp::{McpClient, McpError, McpResult};
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// Delimiter used to separate components in tool IDs (must match registry.rs)
+const TOOL_ID_DELIMITER: &str = "__";
 
 #[derive(Debug, Clone)]
 pub struct ToolExecutionResult {
@@ -28,7 +31,7 @@ pub struct ToolStats {
 
 pub struct McpToolExecutor {
     client: Arc<McpClient>,
-    execution_history: Arc<RwLock<Vec<ToolExecutionResult>>>,
+    execution_history: Arc<RwLock<VecDeque<ToolExecutionResult>>>,
     tool_stats: Arc<RwLock<HashMap<String, ToolStats>>>,
     max_history_size: usize,
 }
@@ -37,7 +40,7 @@ impl McpToolExecutor {
     pub fn new(client: Arc<McpClient>) -> Self {
         Self {
             client,
-            execution_history: Arc::new(RwLock::new(Vec::new())),
+            execution_history: Arc::new(RwLock::new(VecDeque::with_capacity(1000))),
             tool_stats: Arc::new(RwLock::new(HashMap::new())),
             max_history_size: 1000,
         }
@@ -50,22 +53,30 @@ impl McpToolExecutor {
     ) -> McpResult<ToolExecutionResult> {
         let start_time = Instant::now();
 
-        let parts: Vec<&str> = tool_id.split('_').collect();
-        if parts.len() < 3 || parts[0] != "mcp" {
+        // Parse tool ID using double underscore delimiter (matches registry.rs)
+        let parts: Vec<&str> = tool_id.split(TOOL_ID_DELIMITER).collect();
+        if parts.len() != 3 || parts[0] != "mcp" {
             return Err(McpError::ToolNotFound(format!(
-                "Invalid MCP tool ID: {}",
+                "Invalid MCP tool ID format '{}'. Expected format: mcp__<server>__<tool>",
                 tool_id
             )));
         }
 
         let server_name = parts[1];
-        let tool_name = parts[2..].join("_");
+        let tool_name = parts[2];
+
+        if server_name.is_empty() || tool_name.is_empty() {
+            return Err(McpError::ToolNotFound(format!(
+                "Empty server or tool name in tool ID: {}",
+                tool_id
+            )));
+        }
 
         let args_value = serde_json::to_value(arguments)?;
 
         let result_value = self
             .client
-            .call_tool(server_name, &tool_name, args_value)
+            .call_tool(server_name, tool_name, args_value)
             .await;
 
         let duration = start_time.elapsed();
@@ -100,7 +111,7 @@ impl McpToolExecutor {
         if execution_result.success {
             Ok(execution_result)
         } else {
-            Err(McpError::ToolNotFound(
+            Err(McpError::ToolExecutionError(
                 execution_result.error.unwrap_or_default(),
             ))
         }
@@ -114,9 +125,9 @@ impl McpToolExecutor {
     ) -> McpResult<ToolExecutionResult> {
         match tokio::time::timeout(timeout, self.execute_tool(tool_id, arguments)).await {
             Ok(result) => result,
-            Err(_) => Err(McpError::ToolNotFound(format!(
-                "Tool execution timed out after {:?}",
-                timeout
+            Err(_) => Err(McpError::ToolExecutionTimeout(format!(
+                "Tool '{}' execution timed out after {:?}",
+                tool_id, timeout
             ))),
         }
     }
@@ -136,11 +147,11 @@ impl McpToolExecutor {
     fn record_execution(&self, result: &ToolExecutionResult) {
         {
             let mut history = self.execution_history.write();
-            history.push(result.clone());
-
-            if history.len() > self.max_history_size {
-                history.remove(0);
+            // Atomically check and remove oldest entry if at capacity before adding
+            while history.len() >= self.max_history_size {
+                history.pop_front();
             }
+            history.push_back(result.clone());
         }
 
         {
@@ -180,12 +191,9 @@ impl McpToolExecutor {
 
     pub fn get_recent_history(&self, limit: usize) -> Vec<ToolExecutionResult> {
         let history = self.execution_history.read();
-        let start = if history.len() > limit {
-            history.len() - limit
-        } else {
-            0
-        };
-        history[start..].to_vec()
+        let len = history.len();
+        let skip = len.saturating_sub(limit);
+        history.iter().skip(skip).cloned().collect()
     }
 
     pub fn get_tool_stats(&self, tool_id: &str) -> Option<ToolStats> {
@@ -290,8 +298,9 @@ mod tests {
         let client = Arc::new(McpClient::new());
         let executor = McpToolExecutor::new(client);
 
+        // Use the new delimiter format: mcp__server__tool
         let result1 = ToolExecutionResult {
-            tool_id: "mcp_test_tool".to_string(),
+            tool_id: "mcp__test__tool".to_string(),
             server_name: "test".to_string(),
             result: Value::Null,
             duration_ms: 100,
@@ -302,7 +311,7 @@ mod tests {
         executor.record_execution(&result1);
 
         let result2 = ToolExecutionResult {
-            tool_id: "mcp_test_tool".to_string(),
+            tool_id: "mcp__test__tool".to_string(),
             server_name: "test".to_string(),
             result: Value::Null,
             duration_ms: 200,
@@ -312,13 +321,13 @@ mod tests {
         };
         executor.record_execution(&result2);
 
-        let stats = executor.get_tool_stats("mcp_test_tool").unwrap();
+        let stats = executor.get_tool_stats("mcp__test__tool").unwrap();
         assert_eq!(stats.total_executions, 2);
         assert_eq!(stats.successful_executions, 1);
         assert_eq!(stats.failed_executions, 1);
         assert_eq!(stats.avg_duration_ms, 150.0);
 
-        let success_rate = executor.get_success_rate("mcp_test_tool").unwrap();
+        let success_rate = executor.get_success_rate("mcp__test__tool").unwrap();
         assert_eq!(success_rate, 50.0);
     }
 }
