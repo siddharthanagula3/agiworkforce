@@ -1,6 +1,4 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { VariableSizeList as List } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { MessageBubble } from './MessageBubble';
 import { Search, Download, Trash2, Brain } from 'lucide-react';
@@ -23,7 +21,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   const exportConversation = useUnifiedChatStore((state) => state.exportConversation);
   const clearHistory = useUnifiedChatStore((state) => state.clearHistory);
 
-  const listRef = useRef<List>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -53,31 +51,10 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   }, [messages, debouncedSearchQuery]);
 
   useEffect(() => {
-    if (autoScroll && listRef.current) {
-      listRef.current.scrollToItem(filteredMessages.length - 1, 'end');
+    if (autoScroll && listRef.current && filteredMessages.length > 0) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [filteredMessages.length, autoScroll]);
-
-  const getItemSize = (index: number) => {
-    const message = filteredMessages[index];
-    if (!message) return 100;
-
-    const baseHeight = 100; // Header, padding, etc.
-    const avatarHeight = 40;
-
-    let contentHeight = 60; // Minimum content area
-    if (message.content && typeof message.content === 'string') {
-      // Better heuristic: estimate lines based on average 80 chars per line
-      // Then multiply by line height of ~24px
-      const estimatedLines = Math.ceil(message.content.length / 80);
-      contentHeight = Math.max(60, Math.min(estimatedLines * 24, 600)); // Cap at 600px
-    }
-
-    const attachmentHeight = (message.attachments?.length || 0) * 120; // 120px per image/file
-    const artifactHeight = message.artifacts && message.artifacts.length > 0 ? 300 : 0; // Artifacts take more space
-
-    return baseHeight + avatarHeight + contentHeight + attachmentHeight + artifactHeight;
-  };
 
   const handleExport = useCallback(async () => {
     try {
@@ -99,28 +76,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       clearHistory();
     }
   }, [clearHistory]);
-
-  const Row = useCallback(
-    ({ index, style }: { index: number; style: React.CSSProperties }) => {
-      const message = filteredMessages[index];
-      if (!message) return null;
-
-      return (
-        <div style={style}>
-          <MessageBubble
-            message={message}
-            showAvatar={true}
-            showTimestamp={true}
-            enableActions={true}
-            onEdit={(content) => onMessageEdit?.(message.id, content)}
-            onDelete={() => onMessageDelete?.(message.id)}
-            onRegenerate={() => onMessageRegenerate?.(message.id)}
-          />
-        </div>
-      );
-    },
-    [filteredMessages, onMessageEdit, onMessageDelete, onMessageRegenerate],
-  );
 
   if (filteredMessages.length === 0 && !searchQuery) {
     return (
@@ -223,21 +178,19 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       )}
 
       {}
-      <div className="flex-1 overflow-hidden">
-        <AutoSizer>
-          {({ height, width }) => (
-            <List
-              ref={listRef}
-              height={height}
-              itemCount={filteredMessages.length}
-              itemSize={getItemSize}
-              width={width}
-              overscanCount={5}
-            >
-              {Row}
-            </List>
-          )}
-        </AutoSizer>
+      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+        {filteredMessages.map((message) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            showAvatar={true}
+            showTimestamp={true}
+            enableActions={true}
+            onEdit={(content) => onMessageEdit?.(message.id, content)}
+            onDelete={() => onMessageDelete?.(message.id)}
+            onRegenerate={() => onMessageRegenerate?.(message.id)}
+          />
+        ))}
       </div>
 
       {}

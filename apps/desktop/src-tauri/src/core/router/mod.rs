@@ -182,7 +182,7 @@ pub enum Provider {
     Anthropic,
     Google,
     Ollama,
-
+    Perplexity,
     XAI,
     DeepSeek,
     Qwen,
@@ -198,6 +198,7 @@ impl Provider {
             Provider::Anthropic => "anthropic",
             Provider::Google => "google",
             Provider::Ollama => "ollama",
+            Provider::Perplexity => "perplexity",
             Provider::XAI => "xai",
             Provider::DeepSeek => "deepseek",
             Provider::Qwen => "qwen",
@@ -213,6 +214,7 @@ impl Provider {
             "anthropic" => Some(Provider::Anthropic),
             "google" => Some(Provider::Google),
             "ollama" => Some(Provider::Ollama),
+            "perplexity" | "pplx" => Some(Provider::Perplexity),
             "xai" | "grok" => Some(Provider::XAI),
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
@@ -228,6 +230,7 @@ impl Provider {
             Provider::Anthropic => "claude-sonnet-4-5",
             Provider::Google => "gemini-3-pro",
             Provider::Ollama => "llama4-maverick",
+            Provider::Perplexity => "sonar-deep-research",
             Provider::XAI => "grok-4.1",
             Provider::DeepSeek => "deepseek-v3",
             Provider::Qwen => "qwen3-max",
@@ -273,6 +276,8 @@ impl Provider {
 
             (Provider::Moonshot, TaskType::ComplexReasoning) => "kimi-k2-thinking",
             (Provider::Moonshot, _) => "kimi-k2-thinking",
+
+            (Provider::Perplexity, _) => "sonar-deep-research",
 
             (Provider::ManagedCloud, TaskType::FastCompletion) => "gpt-5-nano",
             (Provider::ManagedCloud, TaskType::CodeGeneration) => "deepseek-coder",

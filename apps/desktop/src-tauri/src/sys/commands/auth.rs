@@ -1,11 +1,14 @@
+#[cfg(not(test))]
 use keyring::Entry;
 use tauri::command;
 
+#[cfg(not(test))]
 const SERVICE_NAME: &str = "AGI Workforce";
+#[cfg(not(test))]
 const SESSION_KEY: &str = "supabase_session";
 
 #[command]
-pub async fn auth_store_session(session: String) -> Result<(), String> {
+pub async fn auth_store_session(#[allow(unused_variables)] session: String) -> Result<(), String> {
     #[cfg(test)]
     return Ok(());
 

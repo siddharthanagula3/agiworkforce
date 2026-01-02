@@ -138,7 +138,7 @@ impl CostCalculator {
         pricing.insert(
             (Provider::Anthropic, "claude-opus-4-5"),
             Pricing {
-                input_per_million: 5.00, // Reduced from $15 (67% cut)
+                input_per_million: 5.00,   // Reduced from $15 (67% cut)
                 output_per_million: 25.00, // Reduced from $75
             },
         );

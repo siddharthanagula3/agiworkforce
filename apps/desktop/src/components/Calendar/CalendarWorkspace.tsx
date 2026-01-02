@@ -107,7 +107,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
 
     try {
       await beginConnect(connectConfig);
-    } catch (err) {
+    } catch {
       toast.error('Failed to start connection flow');
     }
   };
@@ -123,7 +123,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
       setConnectOpen(false);
       setAuthCode('');
       toast.success('Calendar connected successfully');
-    } catch (err) {
+    } catch {
       toast.error('Failed to complete connection');
     }
   };
@@ -144,7 +144,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
       setEventDialogOpen(false);
       setSelectedEvent(null);
       refreshEvents();
-    } catch (err) {
+    } catch {
       toast.error('Failed to save event');
     }
   };
@@ -171,7 +171,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
       } else {
         toast.error('No calendar selected to delete event from.');
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete event');
     }
   };

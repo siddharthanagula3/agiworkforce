@@ -77,8 +77,9 @@ pub async fn device_link_initiate(
     request: DeviceLinkRequest,
     state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
-    let api_base = std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
-    
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+
     let url = format!("{}/api/device/link", api_base);
 
     let body =
@@ -113,7 +114,8 @@ pub async fn device_link_poll(
     request: DevicePollRequest,
     state: State<'_, ApiState>,
 ) -> Result<DevicePollResponse, String> {
-    let api_base = std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
     let url = format!("{}/api/device/poll", api_base);
 
@@ -144,7 +146,7 @@ pub async fn device_link_poll(
     let resp: DevicePollResponse = serde_json::from_str(&response.body)
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    // Note: We no longer store tokens here. The frontend receives the response 
+    // Note: We no longer store tokens here. The frontend receives the response
     // and should update the Supabase session, which triggers auth_store_session.
 
     Ok(resp)
@@ -155,7 +157,8 @@ pub async fn fetch_user_profile(
     access_token: String,
     state: State<'_, ApiState>,
 ) -> Result<UserProfile, String> {
-    let api_base = std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
     let url = format!("{}/api/me", api_base);
 
@@ -186,7 +189,8 @@ pub async fn oauth_refresh(
     refresh_token: String,
     state: State<'_, ApiState>,
 ) -> Result<serde_json::Value, String> {
-    let api_base = std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
     let url = format!("{}/oauth/refresh", api_base);
 
@@ -232,8 +236,9 @@ const SESSION_KEY: &str = "supabase_session";
 pub fn get_access_token() -> Result<String, String> {
     let entry = Entry::new(SERVICE_NAME, SESSION_KEY).map_err(|e| e.to_string())?;
     let session_json = entry.get_password().map_err(|e| e.to_string())?;
-    let session: serde_json::Value = serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
-    
+    let session: serde_json::Value =
+        serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+
     session["access_token"]
         .as_str()
         .map(|s| s.to_string())
@@ -243,7 +248,8 @@ pub fn get_access_token() -> Result<String, String> {
 pub fn get_refresh_token() -> Result<String, String> {
     let entry = Entry::new(SERVICE_NAME, SESSION_KEY).map_err(|e| e.to_string())?;
     let session_json = entry.get_password().map_err(|e| e.to_string())?;
-    let session: serde_json::Value = serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
+    let session: serde_json::Value =
+        serde_json::from_str(&session_json).map_err(|e| e.to_string())?;
 
     session["refresh_token"]
         .as_str()
@@ -273,7 +279,8 @@ pub async fn fetch_credit_balance(
     state: State<'_, ApiState>,
 ) -> Result<CreditBalanceResponse, String> {
     let token = get_access_token()?;
-    let api_base = std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
     let url = format!("{}/api/credits/balance", api_base);
 
@@ -330,7 +337,8 @@ pub async fn report_llm_usage(
     state: State<'_, ApiState>,
 ) -> Result<DeductCreditsResponse, String> {
     let token = get_access_token()?;
-    let api_base = std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+    let api_base =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
 
     let url = format!("{}/api/credits/deduct", api_base);
 

@@ -63,7 +63,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
     try {
       await launchBrowser(browserType, headless);
       toast.success(`${browserType} browser launched`);
-    } catch (error) {
+    } catch {
       toast.error(`Failed to launch ${browserType}`);
     }
   };
@@ -77,7 +77,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
     try {
       await openTab(urlInput);
       toast.success('Tab opened');
-    } catch (error) {
+    } catch {
       toast.error('Failed to open tab');
     }
   };
@@ -88,7 +88,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
     try {
       await navigateTab(activeTab.id, urlInput);
       toast.success('Navigated to ' + urlInput);
-    } catch (error) {
+    } catch {
       toast.error('Failed to navigate');
     }
   };
@@ -102,7 +102,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
     try {
       await clickElement(activeTab.id, selectorInput);
       toast.success('Clicked element: ' + selectorInput);
-    } catch (error) {
+    } catch {
       toast.error('Failed to click element');
     }
   };
@@ -116,7 +116,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
     try {
       await typeText(activeTab.id, selectorInput, textInput);
       toast.success('Typed text into ' + selectorInput);
-    } catch (error) {
+    } catch {
       toast.error('Failed to type text');
     }
   };
@@ -128,7 +128,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
       const data = await screenshot(activeTab.id);
       setScreenshotData(data);
       toast.success('Screenshot captured');
-    } catch (error) {
+    } catch {
       toast.error('Failed to capture screenshot');
     }
   };
@@ -140,7 +140,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
       const content = await getPageContent(activeTab.id);
       setPageContent(content);
       toast.success('Page content retrieved');
-    } catch (error) {
+    } catch {
       toast.error('Failed to get page content');
     }
   };
@@ -154,7 +154,7 @@ export function BrowserWorkspace({ className }: { className?: string }) {
     try {
       const result = await executeScript(activeTab.id, scriptInput);
       toast.success('Script executed: ' + JSON.stringify(result));
-    } catch (error) {
+    } catch {
       toast.error('Failed to execute script');
     }
   };
