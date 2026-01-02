@@ -14,9 +14,9 @@ import type { NextConfig } from 'next';
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com https://challenges.cloudflare.com;
-  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
   img-src 'self' data: blob: https: http:;
-  font-src 'self' https://fonts.gstatic.com data:;
+  font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
   connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com;
   frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com;
   frame-ancestors 'self';
@@ -29,8 +29,8 @@ const ContentSecurityPolicy = `
   .trim();
 
 const nextConfig: NextConfig = {
-  // Middleware configuration for authentication
-  // Using middleware for request-level auth checks (Session & Subscription validation)
+  // Instrumentation is automatically enabled in Next.js 16+
+  // See: apps/web/instrumentation.ts
   experimental: {
     optimizePackageImports: ['@supabase/ssr'],
   },
