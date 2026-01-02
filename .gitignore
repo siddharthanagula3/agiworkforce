@@ -47,6 +47,10 @@ out/
 .parcel-cache/
 .vite/
 *.local
+*.tsbuildinfo
+
+# --- Distribution/Downloads ---
+**/public/downloads/
 
 # --- Vite specific ---
 vite.config.*.timestamp-*
@@ -162,3 +166,18 @@ ms-playwright/
 # --- Sentry ---
 .sentryclirc
 .env*.local
+
+# --- Build outputs ---
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.msi
+
+# --- Agent/AI temp files ---
+.agent/
+.claude/
+
+# --- Supabase temp files ---
+**/.temp/
