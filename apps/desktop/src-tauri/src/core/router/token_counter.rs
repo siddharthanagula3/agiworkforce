@@ -9,6 +9,12 @@ lazy_static! {
 #[derive(Clone)]
 pub struct TokenCounter;
 
+impl Default for TokenCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenCounter {
     pub fn new() -> Self {
         Self

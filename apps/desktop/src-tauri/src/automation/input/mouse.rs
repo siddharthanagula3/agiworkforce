@@ -43,7 +43,7 @@ impl MouseSimulator {
         const MAX_COORD: i32 = 32000;
         const MIN_COORD: i32 = -16000; // Allow for multi-monitor setups with negative coords
 
-        if x < MIN_COORD || x > MAX_COORD || y < MIN_COORD || y > MAX_COORD {
+        if !(MIN_COORD..=MAX_COORD).contains(&x) || !(MIN_COORD..=MAX_COORD).contains(&y) {
             return Err(anyhow!(
                 "Coordinates out of bounds: ({}, {}). Must be between {} and {}",
                 x,
