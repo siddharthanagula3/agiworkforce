@@ -99,25 +99,25 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     try {
       const customer = await stripe.customers.retrieve(session.customer as string);
       if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-        // Query subscriptions table to find user with this email instead of listing all users
-        const { data: subscriptions, error: subError } = await supabaseAdmin
-          .from('subscriptions')
-          .select('user_id')
+        // Query profiles table to find user with this email
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
           .eq('email', customer.email)
           .limit(1)
-          .single();
+          .maybeSingle();
 
-        if (!subError && subscriptions?.user_id) {
-          supabaseUserId = subscriptions.user_id;
+        if (!profileError && profile?.id) {
+          supabaseUserId = profile.id;
           logger.info(
             { sessionId: session.id, email: customer.email, userId: supabaseUserId },
-            'Resolved user_id from customer email via subscriptions table',
+            'Resolved user_id from customer email via profiles table',
           );
         } else {
-          // No existing subscription found - this might be a new customer
+          // No existing profile found - this might be a new customer
           logger.warn(
-            { sessionId: session.id, email: customer.email },
-            'No existing subscription found for customer email - user ID cannot be resolved',
+            { sessionId: session.id, email: customer.email, error: profileError },
+            'No existing profile found for customer email - user ID cannot be resolved',
           );
         }
       }
