@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     const checkoutSession = await getStripe().checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
-      locale: 'en', // Explicitly set locale to prevent i18n loading issues
+      locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
       line_items: [
         {
           price: priceId,
