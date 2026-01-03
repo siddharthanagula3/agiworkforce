@@ -1,10 +1,15 @@
 // apps/web/app/api/checkout/route.ts
-import { NextResponse } from 'next/server';
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '@/services/supabase-server';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
-
 import { requireEnv } from '@/utils/env';
+import { withErrorHandler } from '@/lib/error-handler';
+import { createError } from '@/lib/errors';
+import { withRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -17,43 +22,119 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-export async function POST(req: Request) {
+// Type-safe request body
+interface CheckoutRequest {
+  plan: string;
+  billingInterval: 'monthly' | 'annual';
+}
+
+async function handleCheckout(request: NextRequest): Promise<NextResponse> {
+  // Rate limiting: 10 checkouts per minute per user
+  const rateLimitResponse = await withRateLimit(request, 'checkout');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw createError.unauthorized('Please sign in to continue');
+  }
+
+  // Type-safe request body parsing
+  let body: CheckoutRequest;
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    body = await request.json();
+  } catch {
+    throw createError.validation('Invalid request body');
+  }
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { plan, billingInterval } = body;
+
+  if (!plan || !billingInterval) {
+    throw createError.validation('Missing required fields: plan and billingInterval');
+  }
+
+  if (billingInterval !== 'monthly' && billingInterval !== 'annual') {
+    throw createError.validation('billingInterval must be either "monthly" or "annual"');
+  }
+
+  // Lookup Price ID with type safety
+  const planPrices = STRIPE_PRICE_IDS[plan as keyof typeof STRIPE_PRICE_IDS];
+  if (!planPrices) {
+    throw createError.validation(`Invalid plan: ${plan}`);
+  }
+
+  const priceId = planPrices[billingInterval];
+  if (!priceId) {
+    throw createError.validation(`No price configured for ${plan} ${billingInterval}`);
+  }
+
+  // Get or create Stripe customer to prevent duplicate customers
+  let stripeCustomerId: string | null = null;
+  const stripe = getStripe();
+
+  // First, check if we have a customer ID stored in profiles
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  if (profile?.stripe_customer_id) {
+    stripeCustomerId = profile.stripe_customer_id;
+    logger.info(
+      { userId: session.user.id, customerId: stripeCustomerId },
+      'Using existing Stripe customer from profile',
+    );
+  } else {
+    // No customer ID stored - create a new Stripe customer
+    try {
+      const customer = await stripe.customers.create({
+        email: session.user.email,
+        metadata: {
+          supabase_user_id: session.user.id,
+        },
+      });
+      stripeCustomerId = customer.id;
+
+      // Store the customer ID in the profile for future use
+      await supabase
+        .from('profiles')
+        .update({ stripe_customer_id: stripeCustomerId })
+        .eq('id', session.user.id);
+
+      logger.info(
+        { userId: session.user.id, customerId: stripeCustomerId },
+        'Created new Stripe customer and stored in profile',
+      );
+    } catch (err) {
+      logger.error(
+        { error: err, userId: session.user.id },
+        'Failed to create Stripe customer, proceeding without customer ID',
+      );
+      // Continue without customer ID - Stripe will create one during checkout
     }
+  }
 
-    const { plan, billingInterval } = await req.json();
-
-    if (!plan || !billingInterval) {
-      return NextResponse.json({ error: 'Missing plan or billingInterval' }, { status: 400 });
-    }
-
-    // Lookup Price ID
-    const planPrices = STRIPE_PRICE_IDS[plan as keyof typeof STRIPE_PRICE_IDS];
-    const priceId = planPrices ? planPrices[billingInterval as 'monthly' | 'annual'] : null;
-
-    if (!priceId) {
-      return NextResponse.json({ error: 'Invalid plan configuration' }, { status: 400 });
-    }
-
-    // Create Stripe Checkout Session
-    const checkoutSession = await getStripe().checkout.sessions.create({
+  // Create Stripe Checkout Session
+  try {
+    const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
+      customer: stripeCustomerId || undefined, // Use existing customer if available
+      customer_email: stripeCustomerId ? undefined : session.user.email, // Only set if no customer
       line_items: [
         {
           price: priceId,
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
       client_reference_id: session.user.id, // Primary identifier for webhook
       metadata: {
@@ -64,37 +145,32 @@ export async function POST(req: Request) {
       allow_promotion_codes: true,
     });
 
+    if (!checkoutSession.url) {
+      throw createError.internal('Failed to generate checkout URL');
+    }
+
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
-    console.error('Checkout error:', error);
-
-    // Sanitize error messages to prevent exposing internal details
-    // Only return safe, user-friendly error messages
-    let safeMessage = 'An error occurred during checkout. Please try again.';
-    let statusCode = 500;
-
+    // Handle Stripe-specific errors
     if (error instanceof Stripe.errors.StripeCardError) {
-      // Card errors are safe to show to users
-      safeMessage = error.message;
-      statusCode = 400;
+      throw createError.validation(error.message);
     } else if (error instanceof Stripe.errors.StripeInvalidRequestError) {
-      // Invalid request - likely a configuration issue, keep generic
-      safeMessage = 'Invalid checkout configuration. Please contact support.';
-      statusCode = 400;
+      throw createError.validation('Invalid checkout configuration. Please contact support.');
     } else if (error instanceof Stripe.errors.StripeAuthenticationError) {
-      // Auth errors should not expose details
-      safeMessage = 'Payment service temporarily unavailable. Please try again later.';
-      statusCode = 503;
+      throw createError.serviceUnavailable(
+        'Payment service temporarily unavailable. Please try again later.',
+      );
     } else if (error instanceof Stripe.errors.StripeRateLimitError) {
-      safeMessage = 'Too many requests. Please wait a moment and try again.';
-      statusCode = 429;
+      throw createError.rateLimit('Too many requests. Please wait a moment and try again.');
     } else if (error instanceof Stripe.errors.StripeConnectionError) {
-      safeMessage = 'Unable to connect to payment service. Please try again.';
-      statusCode = 503;
+      throw createError.serviceUnavailable(
+        'Unable to connect to payment service. Please try again.',
+      );
     }
-    // For all other errors (including generic Error instances), use the default safe message
-    // Never expose raw error.message as it may contain stack traces or internal info
 
-    return NextResponse.json({ error: safeMessage }, { status: statusCode });
+    // Re-throw other errors to be handled by withErrorHandler
+    throw error;
   }
 }
+
+export const POST = withErrorHandler(handleCheckout);
