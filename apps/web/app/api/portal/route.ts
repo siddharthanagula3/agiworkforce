@@ -102,39 +102,71 @@ async function handlePortal(request: NextRequest) {
     .eq('user_id', user.id)
     .single();
 
-  // Self-healing: If no local subscription, try to find in Stripe by email
+  // Self-healing: If no local subscription, try to find in Stripe by customer_id (BEST PRACTICE)
   if (!subscription) {
-    if (!user.email) {
-      throw createError.validation('User has no email address');
-    }
-
     try {
-      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-      if (customers.data.length > 0) {
-        const customerId = customers.data[0].id;
+      // First, check if we have customer_id stored in profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('stripe_customer_id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-        // Found customer, allow portal access
-        // Ideally we should also trigger a sync here to fix the local state
-        // We'll proceed with creating the session using this ID
-        const origin = getValidatedOrigin(request);
-        const session = await stripe.billingPortal.sessions.create({
-          customer: customerId,
-          return_url: `${origin}/pricing`,
-        });
+      let customerId: string | null = profile?.stripe_customer_id || null;
 
+      if (customerId) {
         logger.info(
-          {
-            userId: user.id,
-            customerId: customerId,
-            sessionId: session.id,
-          },
-          'Portal session created via email lookup (self-healing)',
+          { userId: user.id, customerId },
+          'Found stripe_customer_id in profiles (BEST PRACTICE)',
         );
-
-        return NextResponse.json({ url: session.url }, { status: 200 });
       } else {
-        throw createError.notFound('No subscription or customer found in Stripe');
+        // FALLBACK: Try to find by email (for legacy data only)
+        if (!user.email) {
+          throw createError.validation('User has no email address and no customer_id stored');
+        }
+
+        logger.warn(
+          { email: user.email },
+          'FALLBACK: No stripe_customer_id found, searching by email',
+        );
+        const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+        if (customers.data.length > 0) {
+          customerId = customers.data[0].id;
+
+          // Store customer_id for future lookups
+          await supabase
+            .from('profiles')
+            .update({ stripe_customer_id: customerId })
+            .eq('id', user.id);
+
+          logger.info(
+            { customerId, email: user.email },
+            'Found customer by email and stored customer_id',
+          );
+        } else {
+          throw createError.notFound('No subscription or customer found in Stripe');
+        }
       }
+
+      // Found customer, allow portal access
+      // Ideally we should also trigger a sync here to fix the local state
+      // We'll proceed with creating the session using this ID
+      const origin = getValidatedOrigin(request);
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: `${origin}/pricing`,
+      });
+
+      logger.info(
+        {
+          userId: user.id,
+          customerId: customerId,
+          sessionId: session.id,
+        },
+        'Portal session created (self-healing)',
+      );
+
+      return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (err) {
       // If catching our own throw or stripe error, rethrow or log
       if (err instanceof Error && err.message.includes('No subscription')) {
