@@ -1,9 +1,10 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -24,7 +25,13 @@ interface HealthCheck {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limiting: 30 requests per minute per IP to prevent enumeration
+  const rateLimitResponse = await withRateLimit(request, 'health-check');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const checks: HealthCheck['checks'] = {
     database: { status: 'unhealthy' },
     stripe: { status: 'unhealthy' },

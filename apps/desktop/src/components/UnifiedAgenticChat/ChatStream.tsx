@@ -20,6 +20,7 @@ import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore'
 import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '../ui/Button';
 import { MessageBubble } from './MessageBubble';
+import { CurrentActionBadge } from './CurrentActionBadge';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
@@ -315,6 +316,11 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Current Action Indicator - shows at top when agent is working */}
+      <div className="sticky top-0 z-10 flex justify-center py-2">
+        <CurrentActionBadge />
+      </div>
 
       <div
         ref={scrollContainerRef}

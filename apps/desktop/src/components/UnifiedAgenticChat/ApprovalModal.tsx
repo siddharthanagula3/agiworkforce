@@ -1,5 +1,5 @@
-import { AlertTriangle, CheckCircle, Info, Shield, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, CheckCircle, Clock, Info, Shield, XCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useApprovalActions } from '../../hooks/useApprovalActions';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
@@ -14,6 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/Dialog';
+import { Progress } from '../ui/Progress';
+
+// Default timeout in seconds if not specified
+const DEFAULT_TIMEOUT_SECONDS = 120; // 2 minutes
 
 export const ApprovalModal = () => {
   const pendingApprovals = useUnifiedChatStore((s) => s.pendingApprovals);
@@ -23,8 +27,80 @@ export const ApprovalModal = () => {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [alwaysAllow, setAlwaysAllow] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
   const currentApproval = pendingApprovals.find((a) => a.status === 'pending');
+
+  // Calculate timeout
+  const timeoutSeconds = useMemo(() => {
+    if (!currentApproval) return null;
+    return currentApproval.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+  }, [currentApproval]);
+
+  // Initialize and run countdown timer
+  useEffect(() => {
+    if (!currentApproval || !timeoutSeconds) {
+      setRemainingSeconds(null);
+      return;
+    }
+
+    // Calculate remaining time from when approval was created
+    const createdAt = new Date(currentApproval.createdAt).getTime();
+    const elapsed = Math.floor((Date.now() - createdAt) / 1000);
+    const initial = Math.max(0, timeoutSeconds - elapsed);
+    setRemainingSeconds(initial);
+
+    // If already timed out, auto-reject
+    if (initial <= 0) {
+      handleTimeoutReject();
+      return;
+    }
+
+    // Countdown interval
+    const interval = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          // Trigger timeout rejection
+          handleTimeoutReject();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentApproval?.id, timeoutSeconds]);
+
+  // Handle timeout rejection
+  const handleTimeoutReject = async () => {
+    if (!currentApproval || isRejecting || isApproving) return;
+
+    setIsRejecting(true);
+    try {
+      await resolveApproval(currentApproval, 'reject', {
+        reason: 'Approval request timed out',
+      });
+    } catch (error) {
+      console.error('[ApprovalModal] Timeout rejection failed:', error);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  // Calculate progress percentage (remaining / total)
+  const progressPercent = useMemo(() => {
+    if (remainingSeconds === null || !timeoutSeconds) return 100;
+    return Math.max(0, (remainingSeconds / timeoutSeconds) * 100);
+  }, [remainingSeconds, timeoutSeconds]);
+
+  // Format time as MM:SS
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const handleApprove = async () => {
     if (!currentApproval) return;
@@ -156,6 +232,46 @@ export const ApprovalModal = () => {
               proceeding with this action.
             </p>
           </div>
+
+          {/* Timeout countdown */}
+          {remainingSeconds !== null && timeoutSeconds && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  Time remaining
+                </span>
+                <span
+                  className={cn(
+                    'font-mono font-semibold tabular-nums',
+                    remainingSeconds <= 30
+                      ? 'text-red-500 animate-pulse'
+                      : remainingSeconds <= 60
+                        ? 'text-yellow-500'
+                        : 'text-muted-foreground',
+                  )}
+                >
+                  {formatTime(remainingSeconds)}
+                </span>
+              </div>
+              <Progress
+                value={progressPercent}
+                className={cn(
+                  'h-1.5',
+                  remainingSeconds <= 30
+                    ? '[&>div]:bg-red-500'
+                    : remainingSeconds <= 60
+                      ? '[&>div]:bg-yellow-500'
+                      : '[&>div]:bg-blue-500',
+                )}
+              />
+              {remainingSeconds <= 30 && (
+                <p className="text-xs text-red-500 text-center">
+                  This request will be automatically rejected when the timer expires
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-3 rounded-lg border border-gray-200/80 p-3 text-sm dark:border-gray-800">
             <Checkbox

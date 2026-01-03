@@ -1020,6 +1020,7 @@ pub fn run() {
             crate::sys::commands::voice_get_settings,
             crate::sys::commands::voice_start_recording,
             crate::sys::commands::voice_stop_recording,
+            crate::sys::commands::voice_check_local_whisper,
 
 
             crate::sys::commands::shortcuts_register,

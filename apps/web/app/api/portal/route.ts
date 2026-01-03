@@ -78,7 +78,7 @@ function getValidatedOrigin(request: Request): string {
 
 async function handlePortal(request: NextRequest) {
   // Rate limiting: 10 requests per minute per user/IP
-  const rateLimitResponse = await withRateLimit(request, 'sync-subscription');
+  const rateLimitResponse = await withRateLimit(request, 'portal');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
@@ -120,32 +120,70 @@ async function handlePortal(request: NextRequest) {
           'Found stripe_customer_id in profiles (BEST PRACTICE)',
         );
       } else {
-        // FALLBACK: Try to find by email (for legacy data only)
+        // SECURITY: Email fallback for legacy data only
+        // This is safer for portal access than payment processing, but still risky
         if (!user.email) {
           throw createError.validation('User has no email address and no customer_id stored');
         }
 
         logger.warn(
-          { email: user.email },
-          'FALLBACK: No stripe_customer_id found, searching by email',
+          { userId: user.id, email: user.email },
+          'SECURITY WARNING: No stripe_customer_id in profile - using email fallback (legacy only)',
         );
-        const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-        if (customers.data.length > 0) {
-          customerId = customers.data[0].id;
 
-          // Store customer_id for future lookups
-          await supabase
-            .from('profiles')
-            .update({ stripe_customer_id: customerId })
-            .eq('id', user.id);
+        // List customers by email - could return multiple if email was reused
+        const customers = await stripe.customers.list({ email: user.email, limit: 10 });
 
-          logger.info(
-            { customerId, email: user.email },
-            'Found customer by email and stored customer_id',
-          );
-        } else {
+        if (customers.data.length === 0) {
           throw createError.notFound('No subscription or customer found in Stripe');
         }
+
+        // SECURITY: Check if multiple customers exist with this email
+        if (customers.data.length > 1) {
+          logger.warn(
+            { userId: user.id, email: user.email, count: customers.data.length },
+            'SECURITY WARNING: Multiple Stripe customers found with same email',
+          );
+
+          // Try to find the customer with an active subscription
+          const customersWithSubscriptions = await Promise.all(
+            customers.data.map(async (cust) => {
+              const subs = await stripe.subscriptions.list({
+                customer: cust.id,
+                limit: 1,
+                status: 'active',
+              });
+              return { customer: cust, hasActiveSub: subs.data.length > 0 };
+            }),
+          );
+
+          const activeCustomer = customersWithSubscriptions.find((c) => c.hasActiveSub);
+
+          if (!activeCustomer) {
+            throw createError.validation(
+              'Multiple customers found with this email - cannot determine which to use',
+            );
+          }
+
+          customerId = activeCustomer.customer.id;
+          logger.warn(
+            { userId: user.id, customerId, email: user.email },
+            'Selected customer with active subscription from multiple matches',
+          );
+        } else {
+          customerId = customers.data[0].id;
+        }
+
+        // CRITICAL: Store customer_id for future lookups
+        await supabase
+          .from('profiles')
+          .update({ stripe_customer_id: customerId })
+          .eq('id', user.id);
+
+        logger.info(
+          { userId: user.id, customerId, email: user.email },
+          'Stored stripe_customer_id in profile (migration from email fallback)',
+        );
       }
 
       // Found customer, allow portal access

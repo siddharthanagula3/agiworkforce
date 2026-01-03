@@ -9,14 +9,16 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 async function handleDevicePoll(request: NextRequest) {
-  // Rate limiting - use device_id as identifier
-  let deviceId: string | undefined;
+  // Parse body once and reuse - request.json() can only be called once
+  let parsedBody: unknown;
   try {
-    const body = await request.json().catch(() => ({}));
-    deviceId = body?.device_id;
+    parsedBody = await request.json();
   } catch {
-    // Will be caught by validation below
+    throw createError.validation('Invalid JSON in request body');
   }
+
+  // Rate limiting - use device_id as identifier
+  const deviceId = (parsedBody as Record<string, unknown>)?.device_id as string | undefined;
 
   const rateLimitResponse = await withRateLimit(
     request,
@@ -28,13 +30,8 @@ async function handleDevicePoll(request: NextRequest) {
   }
 
   try {
-    // Parse and validate request body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      throw createError.validation('Invalid JSON in request body');
-    }
+    // Validate the already-parsed request body
+    const body = parsedBody;
 
     const validationResult = DevicePollRequestSchema.safeParse(body);
     if (!validationResult.success) {

@@ -1,6 +1,7 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -71,7 +72,7 @@ pub async fn voice_transcribe_file(
         VoiceProvider::WebSpeech => {
             Err("Web Speech API transcription must be done from frontend".to_string())
         }
-        VoiceProvider::Local => Err("Local Whisper model not yet implemented".to_string()),
+        VoiceProvider::Local => transcribe_with_local_whisper(&audio_path, &settings).await,
     }
 }
 
@@ -223,4 +224,210 @@ struct WhisperResponse {
     language: Option<String>,
     #[serde(default)]
     duration: Option<f32>,
+}
+
+/// Local Whisper transcription using whisper.cpp CLI or Python whisper
+/// Falls back to available local whisper implementation
+async fn transcribe_with_local_whisper(
+    audio_path: &PathBuf,
+    settings: &VoiceSettings,
+) -> Result<VoiceTranscription, String> {
+    tracing::info!(
+        "Attempting local Whisper transcription for: {:?}",
+        audio_path
+    );
+
+    // Determine model size from settings (default to "base" for speed)
+    let model_size = if settings.model.contains("large") {
+        "large"
+    } else if settings.model.contains("medium") {
+        "medium"
+    } else if settings.model.contains("small") {
+        "small"
+    } else if settings.model.contains("tiny") {
+        "tiny"
+    } else {
+        "base"
+    };
+
+    // Try whisper.cpp first (faster, C++ implementation)
+    if let Ok(result) = try_whisper_cpp(audio_path, model_size, settings.language.as_deref()).await
+    {
+        return Ok(result);
+    }
+
+    // Fall back to Python whisper CLI
+    if let Ok(result) =
+        try_python_whisper(audio_path, model_size, settings.language.as_deref()).await
+    {
+        return Ok(result);
+    }
+
+    // Fall back to mlx-whisper (Apple Silicon optimized)
+    if let Ok(result) = try_mlx_whisper(audio_path, model_size, settings.language.as_deref()).await
+    {
+        return Ok(result);
+    }
+
+    Err("Local Whisper not available. Install one of:\n\
+         - whisper.cpp: brew install whisper-cpp\n\
+         - Python whisper: pip install openai-whisper\n\
+         - MLX whisper: pip install mlx-whisper (Apple Silicon)"
+        .to_string())
+}
+
+/// Try whisper.cpp CLI
+async fn try_whisper_cpp(
+    audio_path: &PathBuf,
+    model: &str,
+    language: Option<&str>,
+) -> Result<VoiceTranscription, String> {
+    let mut cmd = Command::new("whisper-cpp");
+    cmd.arg("-m")
+        .arg(format!("ggml-{}.bin", model))
+        .arg("-f")
+        .arg(audio_path)
+        .arg("--output-txt")
+        .arg("--no-timestamps");
+
+    if let Some(lang) = language {
+        cmd.arg("-l").arg(lang);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("whisper-cpp not found: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "whisper-cpp failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    Ok(VoiceTranscription {
+        text,
+        language: language.map(|s| s.to_string()),
+        duration: None,
+        confidence: Some(0.9), // Local models don't provide confidence
+    })
+}
+
+/// Try Python OpenAI Whisper CLI
+async fn try_python_whisper(
+    audio_path: &PathBuf,
+    model: &str,
+    language: Option<&str>,
+) -> Result<VoiceTranscription, String> {
+    let mut cmd = Command::new("whisper");
+    cmd.arg(audio_path)
+        .arg("--model")
+        .arg(model)
+        .arg("--output_format")
+        .arg("txt");
+
+    if let Some(lang) = language {
+        cmd.arg("--language").arg(lang);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Python whisper not found: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Python whisper failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    // Python whisper outputs to a .txt file with same name
+    let txt_path = audio_path.with_extension("txt");
+    let text = std::fs::read_to_string(&txt_path)
+        .map_err(|e| format!("Failed to read whisper output: {}", e))?;
+
+    // Clean up the output file
+    let _ = std::fs::remove_file(txt_path);
+
+    Ok(VoiceTranscription {
+        text: text.trim().to_string(),
+        language: language.map(|s| s.to_string()),
+        duration: None,
+        confidence: Some(0.9),
+    })
+}
+
+/// Try MLX Whisper (Apple Silicon optimized)
+async fn try_mlx_whisper(
+    audio_path: &PathBuf,
+    model: &str,
+    language: Option<&str>,
+) -> Result<VoiceTranscription, String> {
+    let mut cmd = Command::new("mlx_whisper");
+    cmd.arg(audio_path)
+        .arg("--model")
+        .arg(format!("mlx-community/whisper-{}-mlx", model));
+
+    if let Some(lang) = language {
+        cmd.arg("--language").arg(lang);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("mlx_whisper not found: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "mlx_whisper failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    Ok(VoiceTranscription {
+        text,
+        language: language.map(|s| s.to_string()),
+        duration: None,
+        confidence: Some(0.9),
+    })
+}
+
+#[tauri::command]
+pub async fn voice_check_local_whisper() -> Result<Vec<String>, String> {
+    let mut available = Vec::new();
+
+    // Check whisper.cpp
+    if Command::new("whisper-cpp")
+        .arg("--help")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        available.push("whisper-cpp".to_string());
+    }
+
+    // Check Python whisper
+    if Command::new("whisper")
+        .arg("--help")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        available.push("python-whisper".to_string());
+    }
+
+    // Check MLX whisper
+    if Command::new("mlx_whisper")
+        .arg("--help")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        available.push("mlx-whisper".to_string());
+    }
+
+    Ok(available)
 }

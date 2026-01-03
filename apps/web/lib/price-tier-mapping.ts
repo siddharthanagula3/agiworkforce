@@ -13,18 +13,19 @@
 
 // Valid price IDs mapped to plan tiers
 // These should match your actual Stripe price IDs
+// NOTE: Keys are lowercase for case-insensitive matching
 const PRICE_ID_TO_TIER: Record<string, string> = {
   // Hobby tier (monthly and annual)
-  price_1Sgwx10zEfO6BZMh7thtFU77: 'hobby', // monthly
-  price_1Sgwx20zEfO6BZMhbgpxL8TI: 'hobby', // annual
+  price_1sgwx10zefo6bzmh7thtfu77: 'hobby', // monthly
+  price_1sgwx20zefo6bzmhbgpxl8ti: 'hobby', // annual
 
   // Pro tier (monthly and annual)
-  price_1Sgwx20zEfO6BZMh3ix7hivi: 'pro', // monthly
-  price_1Sgwx30zEfO6BZMhJXsduOyl: 'pro', // annual
+  price_1sgwx20zefo6bzmh3ix7hivi: 'pro', // monthly
+  price_1sgwx30zefo6bzmhjxsduoyl: 'pro', // annual
 
   // Max tier (monthly and annual)
-  price_1Sgwx30zEfO6BZMhJqItFYKF: 'max', // monthly
-  price_1Sgwx40zEfO6BZMhYS63EnfW: 'max', // annual
+  price_1sgwx30zefo6bzmhjqitfykf: 'max', // monthly
+  price_1sgwx40zefo6bzmhys63enfw: 'max', // annual
 
   // Enterprise - add as needed
   // 'price_xxx': 'enterprise',
