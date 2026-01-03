@@ -43,6 +43,18 @@ vi.mock('../../services/supabase-server', () => ({
         },
       })),
     },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn(() => ({
+            data: { stripe_customer_id: 'cus_test123' },
+          })),
+        })),
+      })),
+      update: vi.fn(() => ({
+        eq: vi.fn(() => ({ data: null, error: null })),
+      })),
+    })),
   })),
 }));
 
@@ -100,6 +112,13 @@ describe('POST /api/checkout', () => {
           data: { session: null },
         })),
       },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(() => ({ data: null })),
+          })),
+        })),
+      })),
     } as any);
 
     const request = new NextRequest('http://localhost/api/checkout', {
@@ -111,7 +130,8 @@ describe('POST /api/checkout', () => {
     const data = await response.json();
 
     expect(response.status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error.code).toBe('UNAUTHORIZED');
+    expect(data.error.message).toBe('Please sign in to continue');
   });
 
   it('should validate request body', async () => {
@@ -121,10 +141,11 @@ describe('POST /api/checkout', () => {
     });
 
     const response = await POST(request);
-    const text = await response.text();
+    const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(text).toContain('Invalid plan configuration');
+    expect(data.error.code).toBe('VALIDATION_ERROR');
+    expect(data.error.message).toContain('Invalid plan');
   });
 
   it('should create checkout session for valid request', async () => {
@@ -147,9 +168,10 @@ describe('POST /api/checkout', () => {
     });
 
     const response = await POST(request);
-    const text = await response.text();
+    const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(text).toContain('Invalid plan configuration');
+    expect(data.error.code).toBe('VALIDATION_ERROR');
+    expect(data.error.message).toContain('Invalid plan');
   });
 });

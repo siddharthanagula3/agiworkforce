@@ -17,6 +17,11 @@ import type {
   ToolExecution,
 } from '../stores/unifiedChatStore';
 import { useUnifiedChatStore } from '../stores/unifiedChatStore';
+import type {
+  McpToolExecutionStartedPayload,
+  McpToolExecutionCompletedPayload,
+  McpConnectionChangedPayload,
+} from '../types/mcp';
 
 export interface FileOperationEvent {
   operation: FileOperation;
@@ -616,6 +621,88 @@ export function useAgenticEvents() {
         },
       );
       push(unlistenGoalCompleted);
+
+      // MCP Tool Execution Events - show tool usage in action trail
+      const unlistenMcpToolStarted = await listen<McpToolExecutionStartedPayload>(
+        'mcp:tool_execution_started',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { tool_id, server_name } = event.payload;
+          // Extract readable tool name from tool_id (format: mcp_server_toolname)
+          const toolName = tool_id.replace(/^mcp_[^_]+_/, '').replace(/_/g, ' ');
+
+          upsertActionLogEntry({
+            id: `mcp-${tool_id}-${Date.now()}`,
+            actionId: tool_id,
+            type: 'mcp',
+            title: `Using ${toolName}`,
+            description: `Executing MCP tool from ${server_name}`,
+            status: 'running',
+            metadata: { tool_id, server_name },
+          });
+
+          // Also add to action trail for real-time visibility
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: 'running',
+            message: `Using ${toolName}...`,
+          });
+
+          focusSidecar('mcp');
+        },
+      );
+      push(unlistenMcpToolStarted);
+
+      const unlistenMcpToolCompleted = await listen<McpToolExecutionCompletedPayload>(
+        'mcp:tool_execution_completed',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { tool_id, success, duration_ms } = event.payload;
+          const toolName = tool_id.replace(/^mcp_[^_]+_/, '').replace(/_/g, ' ');
+
+          // Find and update the existing entry
+          const state = useUnifiedChatStore.getState();
+          const existingEntry = state.actionLog.find(
+            (log) => log.actionId === tool_id && log.status === 'running',
+          );
+
+          if (existingEntry) {
+            handlersRef.current.updateActionLogEntry(existingEntry.id, {
+              status: success ? 'success' : 'failed',
+              description: success
+                ? `Completed in ${duration_ms}ms`
+                : `Failed after ${duration_ms}ms`,
+              metadata: { ...existingEntry.metadata, duration_ms, success },
+            });
+          }
+
+          // Update action trail
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: success ? 'completed' : 'error',
+            message: success ? `${toolName} completed (${duration_ms}ms)` : `${toolName} failed`,
+          });
+        },
+      );
+      push(unlistenMcpToolCompleted);
+
+      const unlistenMcpConnection = await listen<McpConnectionChangedPayload>(
+        'mcp:connection_changed',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { server_name, connected, error } = event.payload;
+
+          upsertActionLogEntry({
+            id: `mcp-conn-${server_name}-${Date.now()}`,
+            type: 'mcp',
+            title: connected ? `Connected to ${server_name}` : `Disconnected from ${server_name}`,
+            description: error ?? (connected ? 'MCP server connected' : 'MCP server disconnected'),
+            status: connected ? 'success' : error ? 'failed' : 'success',
+            metadata: { server_name, connected, error },
+          });
+        },
+      );
+      push(unlistenMcpConnection);
 
       setupInProgressRef.current = false;
     };

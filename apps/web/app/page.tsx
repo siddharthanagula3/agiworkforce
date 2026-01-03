@@ -80,7 +80,7 @@ export default function Home() {
                 {
                   icon: Bot,
                   title: 'Multi-LLM Support',
-                  desc: 'Switch instantly between GPT-4, Claude, Gemini, or local Llama models.',
+                  desc: 'Switch instantly between GPT-5.2, Claude 4.5, Gemini 3, Grok 4.1, DeepSeek V3.2, or local Llama 3.3 models.',
                 },
                 {
                   icon: ArrowRight,

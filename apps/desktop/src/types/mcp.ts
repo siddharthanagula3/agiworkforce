@@ -104,3 +104,52 @@ export interface McpError {
   toolId?: string;
   details?: unknown;
 }
+
+// MCP Event types from Rust backend
+export type McpEventType =
+  | 'mcp:connection_changed'
+  | 'mcp:tools_updated'
+  | 'mcp:tool_execution_started'
+  | 'mcp:tool_execution_completed'
+  | 'mcp:system_initialized'
+  | 'mcp:configuration_updated';
+
+export interface McpToolExecutionStartedPayload {
+  type: 'tool_execution_started';
+  tool_id: string;
+  server_name: string;
+}
+
+export interface McpToolExecutionCompletedPayload {
+  type: 'tool_execution_completed';
+  tool_id: string;
+  server_name: string;
+  success: boolean;
+  duration_ms: number;
+}
+
+export interface McpConnectionChangedPayload {
+  type: 'server_connection_changed';
+  server_name: string;
+  connected: boolean;
+  error?: string;
+}
+
+export interface McpToolsUpdatedPayload {
+  type: 'tools_updated';
+  server_name: string;
+  tool_count: number;
+}
+
+export interface McpSystemInitializedPayload {
+  type: 'system_initialized';
+  server_count: number;
+  tool_count: number;
+}
+
+export type McpEventPayload =
+  | McpToolExecutionStartedPayload
+  | McpToolExecutionCompletedPayload
+  | McpConnectionChangedPayload
+  | McpToolsUpdatedPayload
+  | McpSystemInitializedPayload;

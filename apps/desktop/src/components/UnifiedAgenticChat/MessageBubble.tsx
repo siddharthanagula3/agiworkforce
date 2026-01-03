@@ -37,6 +37,7 @@ import {
 } from '../../stores/unifiedChatStore';
 import { parseCitations } from './CitationBadge';
 import { ReasoningAccordion } from './ReasoningAccordion';
+import { SourcesFooter } from './SourcesFooter';
 import { StatusTrail } from './StatusTrail';
 
 import { useExecutionStore } from '../../stores/executionStore';
@@ -540,6 +541,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 >
                   {remainingContent}
                 </ReactMarkdown>
+
+                {/* Sources footer for messages with citations */}
+                {!message.metadata?.streaming && <SourcesFooter content={remainingContent} />}
               </div>
             )}
 
@@ -843,6 +847,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                   className="inline-block w-2 h-4 ml-0.5 bg-purple-400 animate-pulse rounded-sm"
                   style={{ animationDuration: '0.5s' }}
                 />
+              )}
+
+              {/* Sources footer for assistant messages with citations */}
+              {!isUser && !message.metadata?.streaming && (
+                <SourcesFooter content={message.content} />
               )}
             </div>
           </div>
