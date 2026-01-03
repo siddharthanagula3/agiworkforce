@@ -2,6 +2,7 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from './logger';
+import { logRateLimitExceeded } from './security-audit';
 
 // Initialize Redis client (falls back to in-memory if not configured)
 const redis =
@@ -42,6 +43,16 @@ export const rateLimitConfigs = {
   'sync-subscription': {
     limit: 10,
     window: '1 m', // 10 requests per minute (increased for payment success polling)
+    failClosed: false,
+  },
+  portal: {
+    limit: 10,
+    window: '1 m', // 10 portal requests per minute
+    failClosed: false,
+  },
+  'health-check': {
+    limit: 30,
+    window: '1 m', // 30 requests per minute to prevent enumeration
     failClosed: false,
   },
   default: {
@@ -283,6 +294,10 @@ export async function withRateLimit(
       },
       'Rate limit exceeded',
     );
+
+    // Log to security audit table
+    const userId = request.headers.get('x-user-id') || undefined;
+    await logRateLimitExceeded(request, identifier || key, userId);
 
     return NextResponse.json(
       {

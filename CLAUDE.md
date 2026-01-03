@@ -59,6 +59,10 @@ pnpm test
 
 # Run specific app tests
 pnpm --filter @agiworkforce/desktop test
+pnpm --filter web test
+
+# Run a single test file (web)
+cd apps/web && pnpm vitest run __tests__/api/checkout.test.ts
 
 # Run E2E tests (desktop)
 pnpm --filter @agiworkforce/desktop test:e2e
@@ -68,6 +72,7 @@ pnpm --filter @agiworkforce/desktop test:e2e -- --ui
 
 # Run tests with coverage
 pnpm --filter @agiworkforce/desktop test:coverage
+pnpm --filter web test:coverage
 ```
 
 ### Building
@@ -110,7 +115,10 @@ agiworkforce/
 │   │   └── vite.config.ts  # Frontend build configuration
 │   ├── web/                # Next.js 15 SaaS platform
 │   │   ├── app/            # React 19 Server Components
-│   │   ├── lib/services/   # API key, audit, credit, LLM cost services
+│   │   ├── app/api/        # API routes (Stripe webhook, checkout, device linking)
+│   │   ├── lib/services/   # Business logic (subscription, credit, audit, API key)
+│   │   ├── lib/            # Rate limiting, security, price mapping utilities
+│   │   ├── __tests__/      # Vitest unit/integration tests
 │   │   └── middleware.ts   # Auth and request processing
 │   └── extension/          # Browser extension
 ├── services/
@@ -245,9 +253,40 @@ agiworkforce/
 - Supports Deep Linking
 - CSP allows: OpenAI, Anthropic, Google APIs, Supabase
 
+## Stripe Integration Patterns
+
+**Customer-to-User Mapping (CRITICAL):**
+
+- Store `stripe_customer_id` in `profiles` table for reliable user lookup
+- Use customer ID lookup first, email fallback only for legacy migration
+- Pass `supabase_user_id` in checkout session metadata
+
+**Price ID Mapping:**
+
+- Use `lib/price-tier-mapping.ts` for strict price-to-tier mapping
+- Never use substring matching on price IDs (e.g., `priceId.includes('hobby')`)
+- Add new price IDs to `PRICE_ID_TO_TIER` or use `PRICE_ID_OVERRIDES` env var
+
+**Webhook Idempotency:**
+
+- Use `process_stripe_event_idempotent` database function
+- Events tracked in `processed_stripe_events` table
+
+**Rate Limiting:**
+
+- Configured in `lib/rate-limit.ts` with per-endpoint limits
+- Security-sensitive endpoints use `failClosed: true` (block on Redis failure)
+- Uses Upstash Redis in production, in-memory fallback for development
+
 ## Database Schema
 
 ### Core Tables (Supabase PostgreSQL)
+
+**profiles:**
+
+- Links auth users to app data
+- Stores `stripe_customer_id` for Stripe integration
+- Required FK for subscriptions
 
 **subscriptions:**
 
@@ -358,7 +397,7 @@ agiworkforce/
 - **Database migrations:** Write in SQL; Supabase handles deployment
 - **Pre-commit hooks** enforce formatting/linting; let them auto-fix when possible
 - **Monorepo:** Use `--filter` flag for targeted commands; `pnpm -r` for all packages
-- **Versioning:** pnpm 9.15.3, Node 22.x, Rust 1.90.0 are pinned
+- **Versioning:** pnpm 9.15.3+, Node 22.12.0+, TypeScript 5.9.3, Rust 1.90.0 are pinned
 
 ## When Starting Work
 

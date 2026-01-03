@@ -2,6 +2,7 @@ import { convertFileSrc, invoke } from '@/lib/tauri-mock';
 import { Download, Eye, FileText, Image as ImageIcon, X } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import type { DownloadableFile } from './FileDownloadButton';
+import { PDFViewer } from './PDFViewer';
 
 interface FilePreviewModalProps {
   file: DownloadableFile | null;
@@ -47,7 +48,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           setPreviewContent(file.content);
         }
       } else if (file.type === 'application/pdf') {
-        setError('PDF preview not available. Please download to view.');
+        // PDF will be handled by the PDFViewer component
+        if (file.path) {
+          setPreviewContent(convertFileSrc(file.path));
+        } else if (file.content) {
+          setPreviewContent(file.content);
+        }
       } else {
         setError('Preview not available for this file type.');
       }
@@ -123,6 +129,20 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             {previewContent}
           </pre>
         </div>
+      );
+    }
+
+    if (file.type === 'application/pdf' && previewContent) {
+      return (
+        <PDFViewer
+          src={previewContent}
+          filePath={file.path}
+          className="max-h-[70vh]"
+          onError={(err) => {
+            console.error('PDF viewer error:', err);
+            setError('Failed to load PDF. Please download to view.');
+          }}
+        />
       );
     }
 
