@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { PRICING_CONFIG } from '@/lib/pricing';
 import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
+import { logInvalidSignature } from '@/lib/security-audit';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -113,27 +114,62 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
           'Resolved user_id from stripe_customer_id in profiles table (BEST PRACTICE)',
         );
       } else {
-        // Fallback to email only if customer ID lookup fails (for legacy data)
+        // SECURITY: Email fallback is risky and only for legacy data migration
+        // Do NOT use email fallback for new integrations
+        logger.warn(
+          { sessionId: session.id, customerId: stripeCustomerId },
+          'SECURITY WARNING: stripe_customer_id not found in profiles - attempting email fallback (legacy only)',
+        );
+
         const customer = await stripe.customers.retrieve(stripeCustomerId);
         if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-          const { data: emailProfile, error: emailError } = await supabaseAdmin
-            .from('profiles')
-            .select('id')
-            .eq('email', customer.email)
-            .limit(1)
-            .maybeSingle();
+          // Additional safety: Get the user from auth.users to verify email match
+          const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers();
 
-          if (!emailError && emailProfile?.id) {
-            supabaseUserId = emailProfile.id;
-            logger.warn(
-              { sessionId: session.id, email: customer.email, userId: supabaseUserId },
-              'FALLBACK: Resolved user_id from email (should store customer_id for future)',
-            );
-          } else {
-            logger.warn(
-              { sessionId: session.id, email: customer.email, error: emailError },
-              'No existing profile found for customer - user ID cannot be resolved',
-            );
+          if (!authError && authUsers.users) {
+            const matchingUser = authUsers.users.find((u) => u.email === customer.email);
+
+            if (matchingUser) {
+              // Verify this email isn't being reused by checking for existing subscriptions
+              const { data: existingStripeCustomers } = await supabaseAdmin
+                .from('profiles')
+                .select('id, email, stripe_customer_id')
+                .eq('email', customer.email);
+
+              if (existingStripeCustomers && existingStripeCustomers.length > 1) {
+                logger.error(
+                  {
+                    sessionId: session.id,
+                    email: customer.email,
+                    count: existingStripeCustomers.length,
+                  },
+                  'SECURITY: Multiple profiles found with same email - cannot safely assign subscription',
+                );
+                throw new Error('Email reuse detected - cannot safely assign subscription');
+              }
+
+              supabaseUserId = matchingUser.id;
+              logger.warn(
+                { sessionId: session.id, email: customer.email, userId: supabaseUserId },
+                'FALLBACK: Resolved user_id from email - storing customer_id for future',
+              );
+
+              // CRITICAL: Immediately store customer_id to prevent future fallbacks
+              await supabaseAdmin
+                .from('profiles')
+                .update({ stripe_customer_id: stripeCustomerId })
+                .eq('id', supabaseUserId);
+
+              logger.info(
+                { userId: supabaseUserId, customerId: stripeCustomerId },
+                'Stored stripe_customer_id in profile (migration from email fallback)',
+              );
+            } else {
+              logger.error(
+                { sessionId: session.id, email: customer.email },
+                'No auth user found matching customer email',
+              );
+            }
           }
         }
       }
@@ -553,7 +589,9 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   let error;
   let supabaseUserId: string | null = null;
 
+  // First, try to find user_id for this subscription
   if (stripeSubId) {
+    // Check if subscription already exists
     const { data: existingSub, error: fetchError } = await supabaseAdmin
       .from('subscriptions')
       .select('id, user_id')
@@ -565,7 +603,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     }
 
     if (existingSub) {
-      // Normal path: update by stripe_subscription_id
+      // Subscription exists - normal update path
       supabaseUserId = existingSub.user_id;
 
       // Fetch current subscription to check period
@@ -645,13 +683,13 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
         }
       }
     } else {
-      // Subscription doesn't exist - try to find user and create it
+      // Subscription doesn't exist - need to find user_id and create it
       // First, try metadata (most reliable)
       const metadataUserId = subscription.metadata?.supabase_user_id;
       if (metadataUserId) {
         logger.info(
           { stripeSubId, metadataUserId },
-          'Subscription not found. Creating via metadata user_id',
+          'Subscription not found. Will create via metadata user_id',
         );
         supabaseUserId = metadataUserId;
       } else if (stripeCustomerId) {
@@ -687,7 +725,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
               if (!emailError && emailProfile?.id) {
                 logger.warn(
                   { userId: emailProfile.id, email: customerEmail },
-                  'FALLBACK: Found user by email (should store customer_id for future)',
+                  'FALLBACK: Found user by email (will store customer_id for future)',
                 );
                 supabaseUserId = emailProfile.id;
 
@@ -697,16 +735,22 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
                   .update({ stripe_customer_id: stripeCustomerId })
                   .eq('id', emailProfile.id);
               } else {
-                logger.warn(
-                  { email: customerEmail },
-                  'No existing profile found for customer - cannot create subscription without user ID',
+                logger.error(
+                  { email: customerEmail, stripeSubId },
+                  'CRITICAL: No existing profile found for customer - cannot create subscription',
                 );
               }
             } else {
-              logger.warn({ stripeCustomerId }, 'Customer has no email address');
+              logger.error(
+                { stripeCustomerId, stripeSubId },
+                'CRITICAL: Customer has no email address',
+              );
             }
           } catch (customerError) {
-            logger.error({ error: customerError }, 'Failed to retrieve customer');
+            logger.error(
+              { error: customerError, stripeSubId },
+              'CRITICAL: Failed to retrieve customer',
+            );
           }
         }
       }
@@ -746,22 +790,38 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           }
         }
 
-        // Create new subscription
+        // CRITICAL FIX: Use upsert with proper conflict resolution
+        // This handles both INSERT (new subscription) and UPDATE (existing subscription)
         const createData = {
           user_id: supabaseUserId,
           ...updateData,
           stripe_subscription_id: stripeSubId,
           stripe_customer_id: stripeCustomerId,
         };
-        logger.info({ createData }, 'Creating new subscription');
+        logger.info({ createData }, 'Upserting subscription (will INSERT or UPDATE as needed)');
+
+        // Use upsert to handle both creation and update cases
         const res = await supabaseAdmin
           .from('subscriptions')
           .upsert(createData, {
             onConflict: 'user_id',
+            ignoreDuplicates: false, // Always update if exists
           })
           .select()
           .single();
         error = res.error;
+
+        if (error) {
+          logger.error(
+            { error, createData, errorCode: error.code },
+            'CRITICAL: Failed to upsert subscription',
+          );
+        } else {
+          logger.info(
+            { subscriptionId: res.data?.id, userId: supabaseUserId },
+            'Successfully upserted subscription',
+          );
+        }
 
         // Allocate credits for new subscription
         if (
@@ -801,30 +861,32 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           }
         }
       } else {
-        // Last resort: try to update by customer ID (might work if subscription exists)
-        logger.warn(
-          { stripeSubId },
-          'Subscription not found and cannot determine user_id. Attempting customer ID update.',
+        // CRITICAL: Cannot create subscription without user_id
+        logger.error(
+          { stripeSubId, stripeCustomerId },
+          'CRITICAL: Cannot create subscription - no user_id found via metadata, customer_id, or email',
         );
-        const res = await supabaseAdmin
-          .from('subscriptions')
-          .update(updateData)
-          .eq('stripe_customer_id', stripeCustomerId);
-        error = res.error;
-        if (error) {
-          logger.error(
-            { error, stripeSubId },
-            'Cannot create or update subscription: No user_id found and customer ID update failed.',
-          );
-        }
+        throw new Error(`Cannot create subscription ${stripeSubId}: no user_id found`);
       }
     }
   } else if (stripeCustomerId) {
+    // No subscription ID - try to update by customer ID (edge case)
+    logger.warn(
+      { stripeCustomerId },
+      'No stripe_subscription_id provided, attempting update by customer_id',
+    );
     const res = await supabaseAdmin
       .from('subscriptions')
       .update(updateData)
       .eq('stripe_customer_id', stripeCustomerId);
     error = res.error;
+
+    if (error) {
+      logger.error({ error, stripeCustomerId }, 'Failed to update subscription by customer_id');
+    }
+  } else {
+    logger.error('CRITICAL: No stripe_subscription_id or stripe_customer_id provided');
+    throw new Error('Cannot update subscription: missing identifiers');
   }
 
   if (error) {
@@ -861,16 +923,28 @@ export async function POST(request: Request) {
       { error: err instanceof Error ? err.message : String(err) },
       'Stripe webhook signature verification failed',
     );
+    // Log security event for invalid webhook signature
+    await logInvalidSignature(request, 'stripe_webhook');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  const { count } = await supabaseAdmin
-    .from('processed_stripe_events')
-    .select('event_id', { count: 'exact', head: true })
-    .eq('event_id', event.id);
+  // Atomic idempotency check using database function
+  // This prevents race conditions by using INSERT ... ON CONFLICT
+  const { data: shouldProcess, error: idempotencyError } = await supabaseAdmin.rpc(
+    'process_stripe_event_idempotent',
+    { p_event_id: event.id },
+  );
 
-  if (count && count > 0) {
-    logger.warn({ eventId: event.id }, 'Stripe event already processed');
+  if (idempotencyError) {
+    logger.error(
+      { eventId: event.id, error: idempotencyError },
+      'Failed to check event idempotency',
+    );
+    return NextResponse.json({ error: 'Idempotency check failed' }, { status: 500 });
+  }
+
+  if (!shouldProcess) {
+    logger.warn({ eventId: event.id }, 'Stripe event already processed (idempotent skip)');
     return NextResponse.json({ received: true, message: 'Event already processed' });
   }
 
@@ -997,11 +1071,16 @@ export async function POST(request: Request) {
         logger.info({ stripeSubId }, 'Subscription deleted');
         if (supabaseAdmin) {
           try {
+            // Use Stripe's canceled_at timestamp for accuracy, fallback to now
+            const canceledAt = subscription.canceled_at
+              ? new Date(subscription.canceled_at * 1000).toISOString()
+              : new Date().toISOString();
+
             const { error: updateError } = await supabaseAdmin
               .from('subscriptions')
               .update({
                 status: 'canceled',
-                canceled_at: new Date().toISOString(),
+                canceled_at: canceledAt,
               })
               .eq('stripe_subscription_id', stripeSubId);
             if (updateError) {
@@ -1021,32 +1100,48 @@ export async function POST(request: Request) {
         const stripeCustomerId = invoice.customer as string | null;
         // Access subscription ID (v20 type change)
         const stripeSubId = (invoice as unknown as { subscription?: string | null }).subscription;
-        logger.warn({ invoiceId: invoice.id }, 'Payment failed for invoice');
+        logger.warn({ invoiceId: invoice.id, stripeSubId }, 'Payment failed for invoice');
 
-        if (supabaseAdmin) {
+        if (supabaseAdmin && stripeSubId) {
           try {
-            if (stripeSubId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('subscriptions')
-                .update({ status: 'past_due' })
-                .eq('stripe_subscription_id', stripeSubId);
-              if (updateError) {
-                logger.error(
-                  { error: updateError, stripeSubId },
-                  'Failed to update subscription for payment failed',
-                );
-              }
-            } else if (stripeCustomerId) {
-              const { error: updateError } = await supabaseAdmin
-                .from('subscriptions')
-                .update({ status: 'past_due' })
-                .eq('stripe_customer_id', stripeCustomerId);
-              if (updateError) {
-                logger.error(
-                  { error: updateError, stripeCustomerId },
-                  'Failed to update subscription by customer ID for payment failed',
-                );
-              }
+            // Fetch actual subscription status from Stripe instead of assuming past_due
+            const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubId);
+            const actualStatus = stripeSubscription.status;
+
+            logger.info(
+              { stripeSubId, actualStatus },
+              'Retrieved actual subscription status from Stripe after payment failure',
+            );
+
+            const { error: updateError } = await supabaseAdmin
+              .from('subscriptions')
+              .update({ status: actualStatus })
+              .eq('stripe_subscription_id', stripeSubId);
+
+            if (updateError) {
+              logger.error(
+                { error: updateError, stripeSubId, actualStatus },
+                'Failed to update subscription for payment failed',
+              );
+            }
+          } catch (error) {
+            logger.error(
+              { error, stripeSubId },
+              'Error fetching/updating subscription for payment failed',
+            );
+          }
+        } else if (supabaseAdmin && stripeCustomerId) {
+          // Fallback: update by customer ID if no subscription ID available
+          try {
+            const { error: updateError } = await supabaseAdmin
+              .from('subscriptions')
+              .update({ status: 'past_due' })
+              .eq('stripe_customer_id', stripeCustomerId);
+            if (updateError) {
+              logger.error(
+                { error: updateError, stripeCustomerId },
+                'Failed to update subscription by customer ID for payment failed',
+              );
             }
           } catch (error) {
             logger.error({ error }, 'Error updating subscription for payment failed');
@@ -1058,15 +1153,8 @@ export async function POST(request: Request) {
         logger.warn({ eventType: event.type }, 'Unhandled Stripe event type');
     }
 
-    // Add event to processed table
-    const { error: insertError } = await supabaseAdmin
-      .from('processed_stripe_events')
-      .insert({ event_id: event.id });
-
-    if (insertError) {
-      logger.error({ eventId: event.id, error: insertError }, 'Failed to insert processed event');
-      throw new Error(`Failed to insert processed event ID: ${insertError.message}`);
-    }
+    // Event already marked as processed by the idempotency function
+    // No need to insert again
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     logger.error(
