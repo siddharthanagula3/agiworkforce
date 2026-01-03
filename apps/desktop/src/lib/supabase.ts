@@ -83,7 +83,7 @@ export function asPlanTier(value: string | null | undefined): PlanTier {
   if (normalized && VALID_PLAN_TIERS.includes(normalized as PlanTier)) {
     return normalized as PlanTier;
   }
-  return 'hobby';
+  return 'free';
 }
 
 export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {

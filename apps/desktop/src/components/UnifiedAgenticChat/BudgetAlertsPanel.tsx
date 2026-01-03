@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { AlertCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useTokenBudgetStore, selectActiveAlerts } from '../../stores/tokenBudgetStore';
+import { useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 
 export function BudgetAlertsPanel() {
-  const alerts = useTokenBudgetStore(selectActiveAlerts);
+  const allAlerts = useTokenBudgetStore((state) => state.alerts);
+  const alerts = useMemo(() => allAlerts.filter((a) => !a.dismissed), [allAlerts]);
   const dismissAlert = useTokenBudgetStore((state) => state.dismissAlert);
 
   if (alerts.length === 0) {

@@ -234,13 +234,16 @@ export class SubscriptionService {
   }
 
   /**
-   * Sync subscription from Stripe by email (Self-healing)
+   * Sync subscription from Stripe using customer ID (BEST PRACTICE)
    * This is a critical function that ensures local subscription data matches Stripe.
    * It handles:
    * - Both 'active' and 'trialing' subscription statuses
    * - Missing or delayed webhook updates
    * - Plan tier inference from multiple sources
    * - Creating missing profile records (required for FK constraint)
+   *
+   * IMPORTANT: Uses customer_id lookup instead of email (Stripe best practice)
+   * Falls back to email only for legacy data
    */
   static async syncWithStripe(userId: string, email: string): Promise<SubscriptionInfo | null> {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -256,14 +259,40 @@ export class SubscriptionService {
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
 
-      // Find customer by email
-      const customers = await stripe.customers.list({ email: email, limit: 1 });
-      if (customers.data.length === 0) {
-        logger.info({ email }, 'No Stripe customer found for email');
-        return null;
-      }
+      // BEST PRACTICE: First, try to get customer_id from profiles table
+      const supabase = getSupabaseClient();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('stripe_customer_id')
+        .eq('id', userId)
+        .maybeSingle();
 
-      const customerId = customers.data[0].id;
+      let customerId: string | null = profile?.stripe_customer_id || null;
+
+      if (customerId) {
+        logger.info({ customerId, userId }, 'Found stripe_customer_id in profiles (BEST PRACTICE)');
+      } else {
+        // FALLBACK: Find customer by email (for legacy data only)
+        logger.warn(
+          { email },
+          'FALLBACK: No stripe_customer_id found, searching by email (should be avoided)',
+        );
+        const customers = await stripe.customers.list({ email: email, limit: 1 });
+        if (customers.data.length === 0) {
+          logger.info({ email }, 'No Stripe customer found for email');
+          return null;
+        }
+
+        customerId = customers.data[0].id;
+
+        // Store customer_id for future lookups
+        await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
+
+        logger.info(
+          { customerId, email },
+          'Found Stripe customer by email and stored customer_id for future',
+        );
+      }
       logger.info({ customerId, email }, 'Found Stripe customer');
 
       // Query for ALL subscription statuses that should grant access
@@ -337,8 +366,6 @@ export class SubscriptionService {
       ).discounts;
       const stripeCouponId =
         discounts && discounts.length > 0 ? discounts[0]?.coupon?.id || null : null;
-
-      const supabase = getSupabaseClient();
 
       // Ensure profile exists before creating subscription (FK constraint)
       await this.ensureProfileExists(userId, email);
