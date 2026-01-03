@@ -93,32 +93,48 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     session.metadata?.['userId'] ||
     session.client_reference_id;
 
-  // If no user ID in metadata, try to find user by customer email
-  // WARNING: Email-based lookup is a fallback and requires extra verification
+  // If no user ID in metadata, try to find user by Stripe customer ID (BEST PRACTICE)
   if (!supabaseUserId && session.customer) {
     try {
-      const customer = await stripe.customers.retrieve(session.customer as string);
-      if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-        // Query profiles table to find user with this email
-        const { data: profile, error: profileError } = await supabaseAdmin
-          .from('profiles')
-          .select('id')
-          .eq('email', customer.email)
-          .limit(1)
-          .maybeSingle();
+      const stripeCustomerId = session.customer as string;
 
-        if (!profileError && profile?.id) {
-          supabaseUserId = profile.id;
-          logger.info(
-            { sessionId: session.id, email: customer.email, userId: supabaseUserId },
-            'Resolved user_id from customer email via profiles table',
-          );
-        } else {
-          // No existing profile found - this might be a new customer
-          logger.warn(
-            { sessionId: session.id, email: customer.email, error: profileError },
-            'No existing profile found for customer email - user ID cannot be resolved',
-          );
+      // First, try to find user by customer ID in profiles table
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('stripe_customer_id', stripeCustomerId)
+        .limit(1)
+        .maybeSingle();
+
+      if (!profileError && profile?.id) {
+        supabaseUserId = profile.id;
+        logger.info(
+          { sessionId: session.id, customerId: stripeCustomerId, userId: supabaseUserId },
+          'Resolved user_id from stripe_customer_id in profiles table (BEST PRACTICE)',
+        );
+      } else {
+        // Fallback to email only if customer ID lookup fails (for legacy data)
+        const customer = await stripe.customers.retrieve(stripeCustomerId);
+        if (typeof customer !== 'string' && !customer.deleted && customer.email) {
+          const { data: emailProfile, error: emailError } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .eq('email', customer.email)
+            .limit(1)
+            .maybeSingle();
+
+          if (!emailError && emailProfile?.id) {
+            supabaseUserId = emailProfile.id;
+            logger.warn(
+              { sessionId: session.id, email: customer.email, userId: supabaseUserId },
+              'FALLBACK: Resolved user_id from email (should store customer_id for future)',
+            );
+          } else {
+            logger.warn(
+              { sessionId: session.id, email: customer.email, error: emailError },
+              'No existing profile found for customer - user ID cannot be resolved',
+            );
+          }
         }
       }
     } catch (error) {
@@ -154,6 +170,27 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
 
   // Ensure profile exists before creating subscription (FK constraint)
   await ensureProfileExists(supabaseUserId, customerEmail);
+
+  // Store Stripe customer_id in profiles table (CRITICAL for proper customer-to-user mapping)
+  const stripeCustomerId = session.customer as string | null;
+  if (stripeCustomerId) {
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ stripe_customer_id: stripeCustomerId })
+      .eq('id', supabaseUserId);
+
+    if (updateError) {
+      logger.error(
+        { error: updateError, userId: supabaseUserId, customerId: stripeCustomerId },
+        'Failed to store stripe_customer_id in profiles table',
+      );
+    } else {
+      logger.info(
+        { userId: supabaseUserId, customerId: stripeCustomerId },
+        'Stored stripe_customer_id in profiles table (enables proper customer lookup)',
+      );
+    }
+  }
 
   // Warn about email mismatches (common issue causing subscription assignment problems)
   if (customerEmail) {
@@ -192,7 +229,6 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     );
     throw new Error(`Cannot determine valid plan_tier for subscription (price: ${priceId})`);
   }
-  const stripeCustomerId = session.customer as string | null;
   const stripeSubId = session.subscription as string | null;
 
   logger.debug(
@@ -610,7 +646,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
       }
     } else {
       // Subscription doesn't exist - try to find user and create it
-      // First, try metadata
+      // First, try metadata (most reliable)
       const metadataUserId = subscription.metadata?.supabase_user_id;
       if (metadataUserId) {
         logger.info(
@@ -619,37 +655,59 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
         );
         supabaseUserId = metadataUserId;
       } else if (stripeCustomerId) {
-        // Fallback: Try to find user by customer email
-        try {
-          const customer = await stripe.customers.retrieve(stripeCustomerId);
-          if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-            const customerEmail = customer.email;
-            logger.info({ customerEmail }, 'Attempting to find user by customer email');
-            // Query profiles table to find user with this email
-            const { data: profile, error: profileError } = await supabaseAdmin
-              .from('profiles')
-              .select('id')
-              .eq('email', customerEmail)
-              .limit(1)
-              .maybeSingle();
+        // Second, try to find by customer ID (BEST PRACTICE)
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('stripe_customer_id', stripeCustomerId)
+          .limit(1)
+          .maybeSingle();
 
-            if (!profileError && profile?.id) {
-              logger.info(
-                { userId: profile.id, email: customerEmail },
-                'Found user by email in profiles table',
-              );
-              supabaseUserId = profile.id;
+        if (!profileError && profile?.id) {
+          logger.info(
+            { userId: profile.id, customerId: stripeCustomerId },
+            'Found user by stripe_customer_id in profiles table (BEST PRACTICE)',
+          );
+          supabaseUserId = profile.id;
+        } else {
+          // Last resort: Try to find user by customer email (for legacy data only)
+          try {
+            const customer = await stripe.customers.retrieve(stripeCustomerId);
+            if (typeof customer !== 'string' && !customer.deleted && customer.email) {
+              const customerEmail = customer.email;
+              logger.warn({ customerEmail }, 'FALLBACK: Attempting to find user by customer email');
+
+              const { data: emailProfile, error: emailError } = await supabaseAdmin
+                .from('profiles')
+                .select('id')
+                .eq('email', customerEmail)
+                .limit(1)
+                .maybeSingle();
+
+              if (!emailError && emailProfile?.id) {
+                logger.warn(
+                  { userId: emailProfile.id, email: customerEmail },
+                  'FALLBACK: Found user by email (should store customer_id for future)',
+                );
+                supabaseUserId = emailProfile.id;
+
+                // Store customer_id for future lookups
+                await supabaseAdmin
+                  .from('profiles')
+                  .update({ stripe_customer_id: stripeCustomerId })
+                  .eq('id', emailProfile.id);
+              } else {
+                logger.warn(
+                  { email: customerEmail },
+                  'No existing profile found for customer - cannot create subscription without user ID',
+                );
+              }
             } else {
-              logger.warn(
-                { email: customerEmail },
-                'No existing subscription found for customer email - cannot create new subscription without user ID',
-              );
+              logger.warn({ stripeCustomerId }, 'Customer has no email address');
             }
-          } else {
-            logger.warn({ stripeCustomerId }, 'Customer has no email address');
+          } catch (customerError) {
+            logger.error({ error: customerError }, 'Failed to retrieve customer');
           }
-        } catch (customerError) {
-          logger.error({ error: customerError }, 'Failed to retrieve customer');
         }
       }
 
@@ -667,6 +725,26 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           }
         }
         await ensureProfileExists(supabaseUserId, customerEmailForProfile);
+
+        // Store Stripe customer_id in profiles table (CRITICAL for proper customer-to-user mapping)
+        if (stripeCustomerId) {
+          const { error: updateError } = await supabaseAdmin
+            .from('profiles')
+            .update({ stripe_customer_id: stripeCustomerId })
+            .eq('id', supabaseUserId);
+
+          if (updateError) {
+            logger.error(
+              { error: updateError, userId: supabaseUserId, customerId: stripeCustomerId },
+              'Failed to store stripe_customer_id in profiles table',
+            );
+          } else {
+            logger.info(
+              { userId: supabaseUserId, customerId: stripeCustomerId },
+              'Stored stripe_customer_id in profiles table',
+            );
+          }
+        }
 
         // Create new subscription
         const createData = {
