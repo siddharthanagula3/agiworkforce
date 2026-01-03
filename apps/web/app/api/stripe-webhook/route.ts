@@ -155,6 +155,27 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   // Ensure profile exists before creating subscription (FK constraint)
   await ensureProfileExists(supabaseUserId, customerEmail);
 
+  // Warn about email mismatches (common issue causing subscription assignment problems)
+  if (customerEmail) {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('email')
+      .eq('id', supabaseUserId)
+      .single();
+
+    if (profile?.email && profile.email !== customerEmail) {
+      logger.warn(
+        {
+          supabaseUserId,
+          profileEmail: profile.email,
+          stripeCustomerEmail: customerEmail,
+          sessionId: session.id,
+        },
+        'WARNING: Stripe customer email does not match Supabase profile email - subscription will be created for the logged-in user but emails differ',
+      );
+    }
+  }
+
   // Get plan_tier from metadata or price ID using strict mapping
   const priceId = session.line_items?.data?.[0]?.price?.id;
   const planTier = resolvePlanTier(session.metadata as Record<string, string> | null, priceId);
@@ -352,7 +373,17 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
     .single();
 
   if (error) {
-    logger.error({ error, subscriptionData: subData }, 'Failed to upsert subscription');
+    logger.error(
+      {
+        error,
+        subscriptionData: subData,
+        errorCode: error.code,
+        errorDetails: error.details,
+        errorHint: error.hint,
+        errorMessage: error.message,
+      },
+      'CRITICAL: Failed to upsert subscription - subscription will not be created',
+    );
     throw error;
   }
 
