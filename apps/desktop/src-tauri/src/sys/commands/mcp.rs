@@ -437,16 +437,43 @@ pub async fn mcp_search_tools(
 #[tauri::command]
 pub async fn mcp_call_tool(
     state: State<'_, McpState>,
+    app: tauri::AppHandle,
     tool_id: String,
     arguments: HashMap<String, Value>,
 ) -> Result<Value, String> {
-    let result = state
-        .registry
-        .execute_tool(&tool_id, arguments)
-        .await
-        .map_err(|e| format!("Tool execution failed: {}", e))?;
+    // Extract server name from tool_id (format: mcp_servername_toolname)
+    let server_name = tool_id
+        .strip_prefix("mcp_")
+        .and_then(|s| s.split('_').next())
+        .unwrap_or("unknown")
+        .to_string();
 
-    Ok(result)
+    // Emit tool execution started event
+    emit_mcp_event(
+        &app,
+        McpEvent::ToolExecutionStarted {
+            tool_id: tool_id.clone(),
+            server_name: server_name.clone(),
+        },
+    );
+
+    let start_time = std::time::Instant::now();
+    let result = state.registry.execute_tool(&tool_id, arguments).await;
+
+    let duration_ms = start_time.elapsed().as_millis() as u64;
+
+    // Emit tool execution completed event
+    emit_mcp_event(
+        &app,
+        McpEvent::ToolExecutionCompleted {
+            tool_id: tool_id.clone(),
+            server_name,
+            success: result.is_ok(),
+            duration_ms,
+        },
+    );
+
+    result.map_err(|e| format!("Tool execution failed: {}", e))
 }
 
 #[tauri::command]

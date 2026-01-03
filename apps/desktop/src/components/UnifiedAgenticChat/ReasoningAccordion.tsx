@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, ChevronDown, Clock, Layers, Loader2, Sparkles } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -15,6 +15,10 @@ interface ReasoningAccordionProps {
   };
   className?: string;
   isStreaming?: boolean;
+  /** Auto-expand when streaming starts */
+  autoExpandOnStream?: boolean;
+  /** Show preview of content in header when collapsed */
+  showPreview?: boolean;
 }
 
 export function ReasoningAccordion({
@@ -23,8 +27,37 @@ export function ReasoningAccordion({
   metadata,
   className,
   isStreaming = false,
+  autoExpandOnStream = true,
+  showPreview = true,
 }: ReasoningAccordionProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [hasUserCollapsed, setHasUserCollapsed] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const prevStreamingRef = useRef(isStreaming);
+
+  // Auto-expand when streaming starts (unless user manually collapsed)
+  useEffect(() => {
+    if (autoExpandOnStream && isStreaming && !prevStreamingRef.current && !hasUserCollapsed) {
+      setIsOpen(true);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming, autoExpandOnStream, hasUserCollapsed]);
+
+  // Auto-scroll to bottom when content updates during streaming
+  useEffect(() => {
+    if (isStreaming && isOpen && contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    }
+  }, [content, isStreaming, isOpen]);
+
+  // Handle user toggle
+  const handleToggle = () => {
+    const newState = !isOpen;
+    setIsOpen(newState);
+    if (!newState && isStreaming) {
+      setHasUserCollapsed(true);
+    }
+  };
 
   // Generate an intelligent summary from thinking content
   const displaySummary = useMemo(() => {
@@ -77,6 +110,14 @@ export function ReasoningAccordion({
     return { lines: lines.length, words, duration, steps };
   }, [content, metadata]);
 
+  // Get last few lines for streaming preview
+  const streamingPreview = useMemo(() => {
+    if (!isStreaming || !showPreview || isOpen) return null;
+    const lines = content.split('\n').filter((l) => l.trim());
+    const lastLines = lines.slice(-3).join('\n');
+    return lastLines.length > 150 ? '...' + lastLines.slice(-147) : lastLines;
+  }, [content, isStreaming, showPreview, isOpen]);
+
   return (
     <div
       className={cn(
@@ -90,7 +131,7 @@ export function ReasoningAccordion({
     >
       {/* Header */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         className={cn(
           'w-full flex items-center justify-between gap-3',
           'px-4 py-3',
@@ -146,6 +187,13 @@ export function ReasoningAccordion({
                 </>
               )}
             </div>
+            {/* Streaming preview when collapsed */}
+            {streamingPreview && !isOpen && (
+              <div className="mt-1.5 text-xs text-zinc-500 font-mono truncate max-w-md opacity-70">
+                {streamingPreview}
+                <span className="inline-block w-1.5 h-3 bg-agent-thinking/70 ml-0.5 animate-pulse" />
+              </div>
+            )}
           </div>
         </div>
 
@@ -172,26 +220,31 @@ export function ReasoningAccordion({
             className="overflow-hidden"
           >
             <div className="border-t border-zinc-800">
-              <div className="max-h-96 overflow-y-auto custom-scrollbar">
-                {}
-                <SyntaxHighlighter
-                  language="markdown"
-                  style={vscDarkPlus}
-                  customStyle={{
-                    margin: 0,
-                    padding: '1rem',
-                    background: 'transparent',
-                    fontSize: '0.75rem',
-                    lineHeight: '1.6',
-                  }}
-                  codeTagProps={{
-                    style: {
-                      fontFamily: 'Söhne Mono, Monaco, Cascadia Code, Consolas, monospace',
-                    },
-                  }}
-                >
-                  {content}
-                </SyntaxHighlighter>
+              <div ref={contentRef} className="max-h-96 overflow-y-auto custom-scrollbar">
+                <div className="relative">
+                  <SyntaxHighlighter
+                    language="markdown"
+                    style={vscDarkPlus}
+                    customStyle={{
+                      margin: 0,
+                      padding: '1rem',
+                      background: 'transparent',
+                      fontSize: '0.75rem',
+                      lineHeight: '1.6',
+                    }}
+                    codeTagProps={{
+                      style: {
+                        fontFamily: 'Söhne Mono, Monaco, Cascadia Code, Consolas, monospace',
+                      },
+                    }}
+                  >
+                    {content}
+                  </SyntaxHighlighter>
+                  {/* Blinking cursor at end of streaming content */}
+                  {isStreaming && (
+                    <span className="inline-block w-2 h-4 bg-agent-thinking ml-1 animate-pulse absolute bottom-4 right-4" />
+                  )}
+                </div>
               </div>
             </div>
           </motion.div>
