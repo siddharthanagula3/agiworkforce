@@ -625,20 +625,20 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
           if (typeof customer !== 'string' && !customer.deleted && customer.email) {
             const customerEmail = customer.email;
             logger.info({ customerEmail }, 'Attempting to find user by customer email');
-            // Query subscriptions table instead of listing all auth users
-            const { data: subscriptions, error: subError } = await supabaseAdmin
-              .from('subscriptions')
-              .select('user_id')
+            // Query profiles table to find user with this email
+            const { data: profile, error: profileError } = await supabaseAdmin
+              .from('profiles')
+              .select('id')
               .eq('email', customerEmail)
               .limit(1)
-              .single();
+              .maybeSingle();
 
-            if (!subError && subscriptions?.user_id) {
+            if (!profileError && profile?.id) {
               logger.info(
-                { userId: subscriptions.user_id, email: customerEmail },
-                'Found user by email in subscriptions table',
+                { userId: profile.id, email: customerEmail },
+                'Found user by email in profiles table',
               );
-              supabaseUserId = subscriptions.user_id;
+              supabaseUserId = profile.id;
             } else {
               logger.warn(
                 { email: customerEmail },
