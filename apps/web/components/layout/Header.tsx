@@ -10,14 +10,22 @@ export function Header() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     async function getUser() {
       const supabase = getSupabaseClient();
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      setUserEmail(session?.user?.email || null);
+      if (mounted) {
+        setUserEmail(session?.user?.email || null);
+      }
     }
     getUser();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleSignOut = async () => {

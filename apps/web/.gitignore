@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# E2E Test artifacts
+e2e/test-results/
+e2e/playwright-report/
+e2e/.auth/

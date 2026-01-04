@@ -78,6 +78,9 @@ export function validateRequiredEnvVars(): ValidationResult {
 /**
  * Validate that environment variable price IDs match hardcoded mapping
  * This catches configuration drift between pricing.ts and price-tier-mapping.ts
+ *
+ * NOTE: With dynamic env-based mapping in price-tier-mapping.ts, this check
+ * is informational only and won't fail the build.
  */
 export function validatePriceIdConsistency(): ValidationResult {
   const errors: string[] = [];
@@ -89,17 +92,15 @@ export function validatePriceIdConsistency(): ValidationResult {
       Object.values(plan).filter((id): id is string => typeof id === 'string' && id.length > 0),
     );
 
-    // Get all registered price IDs from hardcoded mapping
+    // Get all registered price IDs from dynamic env-based mapping
     const registeredPriceIds = getAllRegisteredPriceIds();
 
-    // Check if env price IDs are registered in mapping
+    // Check if env price IDs are registered in mapping (warning only, not error)
     const unregisteredIds = envPriceIds.filter((id) => !registeredPriceIds.includes(id));
 
     if (unregisteredIds.length > 0) {
-      errors.push(
-        `Price IDs in environment variables but not in hardcoded mapping: ${unregisteredIds.join(', ')}`,
-      );
-      errors.push('Update apps/web/lib/price-tier-mapping.ts to include these price IDs');
+      warnings.push(`Price IDs in environment variables: ${unregisteredIds.join(', ')}`);
+      warnings.push('These are loaded dynamically from STRIPE_PRICE_* environment variables');
     }
 
     // Check if registered price IDs are in env (might be outdated mapping)

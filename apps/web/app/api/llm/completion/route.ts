@@ -8,7 +8,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { CreditService } from '@/lib/services/credit-service';
+import { CreditService, type CreditBalance } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
@@ -78,12 +78,12 @@ function handleCreditError(
     daily_limit?: number;
     daily_used?: number;
   },
-  balance: { daily_reset_at?: string; allocated_cents?: number; remaining_cents?: number } | null,
+  balance: CreditBalance | null,
 ): NextResponse {
   // Check if it's a daily limit issue
   if (deductResult.code === 'DAILY_CREDIT_LIMIT_REACHED') {
-    const resetAt = balance?.daily_reset_at
-      ? new Date(balance.daily_reset_at)
+    const resetAt = balance?.last_daily_reset_at
+      ? new Date(balance.last_daily_reset_at)
       : new Date(Date.now() + 24 * 60 * 60 * 1000);
     const hoursUntilReset = Math.max(0, (resetAt.getTime() - Date.now()) / (1000 * 60 * 60));
 
@@ -95,8 +95,8 @@ function handleCreditError(
         daily_used: deductResult.daily_used,
         daily_remaining: deductResult.daily_remaining,
         reset_in_hours: hoursUntilReset,
-        monthly_limit: balance?.allocated_cents,
-        monthly_remaining: balance?.remaining_cents,
+        monthly_limit: balance?.credits_allocated_cents,
+        monthly_remaining: balance?.credits_remaining_cents,
         balance,
       },
       { status: 402 },
@@ -518,7 +518,7 @@ async function handleLLMCompletion(request: NextRequest) {
       daily_limit: updatedBalance?.daily_limit_cents,
       daily_used: updatedBalance?.daily_used_cents,
       daily_remaining: updatedBalance?.daily_remaining_cents,
-      daily_reset_at: updatedBalance?.daily_reset_at,
+      daily_reset_at: updatedBalance?.last_daily_reset_at,
     },
     cache: {
       cached_input_tokens: llmResponse.cachedInputTokens || 0,

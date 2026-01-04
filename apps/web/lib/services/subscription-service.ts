@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
+import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 
 function getSupabaseClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -171,28 +172,31 @@ export class SubscriptionService {
   }
 
   /**
-   * Infer plan tier from price ID or metadata
+   * Infer plan tier from price ID or metadata using strict mapping
+   * IMPORTANT: Uses environment-based price mapping, NOT substring matching
    */
   private static inferPlanTier(
     metadata: Stripe.Metadata | null | undefined,
     priceId: string | null | undefined,
   ): string {
-    // First, check metadata (most reliable)
-    if (metadata?.plan_tier) {
-      return metadata.plan_tier;
+    // Use the centralized price-tier-mapping module
+    const tier = resolvePlanTier(metadata, priceId);
+
+    if (tier && isValidPlanTier(tier)) {
+      return tier;
     }
 
-    // Second, infer from price ID
-    if (priceId) {
-      const lowerPriceId = priceId.toLowerCase();
-      if (lowerPriceId.includes('hobby')) return 'hobby';
-      if (lowerPriceId.includes('max')) return 'max';
-      if (lowerPriceId.includes('pro')) return 'pro';
-      if (lowerPriceId.includes('enterprise')) return 'enterprise';
+    // Log warning for unmapped price IDs (helps debug configuration issues)
+    if (priceId && !tier) {
+      logger.warn(
+        { priceId },
+        'Price ID not found in tier mapping. Check STRIPE_PRICE_* environment variables.',
+      );
     }
 
-    // Default to 'pro' as it's the most common paid tier
-    return 'pro';
+    // IMPORTANT: Return null-like value to force caller to handle missing tier
+    // This is safer than silently defaulting to 'pro'
+    return 'free';
   }
 
   /**

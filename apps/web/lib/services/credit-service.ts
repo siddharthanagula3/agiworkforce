@@ -16,14 +16,14 @@ export interface CreditBalance {
   account_id: string;
   period_start: string;
   period_end: string;
-  allocated_cents: number;
-  used_cents: number;
-  remaining_cents: number;
-  percentage_used: number;
+  credits_allocated_cents: number;
+  credits_used_cents: number;
+  credits_remaining_cents: number;
+  percentage_used?: number;
   daily_limit_cents?: number;
   daily_used_cents?: number;
   daily_remaining_cents?: number;
-  daily_reset_at?: string; // ISO timestamp
+  last_daily_reset_at?: string; // ISO timestamp
 }
 
 export interface DeductCreditsResult {
@@ -62,11 +62,12 @@ export class CreditService {
         throw error;
       }
 
-      if (!data || Object.keys(data).length === 0) {
+      if (!data || !Array.isArray(data) || data.length === 0) {
         return null;
       }
 
-      return data as CreditBalance;
+      // RPC functions that return TABLE return an array, get the first row
+      return data[0] as CreditBalance;
     } catch (error) {
       logger.error({ error, userId }, 'Error in getBalance');
       throw error;
