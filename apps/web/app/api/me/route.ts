@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
@@ -7,6 +8,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+import type { User } from '@supabase/supabase-js';
 
 async function handleGetMe(request: NextRequest) {
   // Rate limiting
@@ -16,57 +19,82 @@ async function handleGetMe(request: NextRequest) {
   }
 
   try {
-    const cookieStore = await cookies();
-
-    // Safe environment variable access
     const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
     const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        flowType: 'pkce', // Use PKCE flow for enhanced security
-      },
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
+    let user: User | null = null;
 
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch {
-            // ignore cookie setting errors
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...options });
-          } catch {
-            // ignore cookie removal errors
-          }
-        },
-      },
-    });
+    // Check for Bearer token in Authorization header (desktop/mobile app)
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      // Create a regular Supabase client to verify the JWT token
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          flowType: 'pkce',
+        },
+      });
 
-    if (!session) {
+      const { data, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError || !data.user) {
+        logger.warn({ error: authError }, 'Bearer token authentication failed');
+        throw createError.unauthorized('Invalid authentication token');
+      }
+
+      user = data.user;
+    } else {
+      // Fall back to cookie-based authentication (web app)
+      const cookieStore = await cookies();
+
+      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          flowType: 'pkce',
+        },
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+
+          set(name: string, value: string, options: CookieOptions) {
+            try {
+              cookieStore.set({ name, value, ...options });
+            } catch {
+              // ignore cookie setting errors
+            }
+          },
+          remove(name: string, options: CookieOptions) {
+            try {
+              cookieStore.set({ name, value: '', ...options });
+            } catch {
+              // ignore cookie removal errors
+            }
+          },
+        },
+      });
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw createError.unauthorized();
+      }
+
+      user = session.user;
+    }
+
+    if (!user) {
       throw createError.unauthorized();
     }
 
-    const user = session.user;
-
-    const { data: subscription, error: subscriptionError } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    // Log subscription fetch errors but don't fail the request
-    if (subscriptionError && subscriptionError.code !== 'PGRST116') {
-      // PGRST116 is "not found" which is acceptable
+    // Fetch subscription using SubscriptionService (uses service role, works for both auth methods)
+    let subscription = null;
+    try {
+      subscription = await SubscriptionService.getSubscription(user.id);
+    } catch (subscriptionError) {
       logger.warn(
         {
           userId: user.id,
