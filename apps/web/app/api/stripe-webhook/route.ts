@@ -5,8 +5,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { PRICING_CONFIG } from '@/lib/pricing';
-import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
+import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
 import { logInvalidSignature } from '@/lib/security-audit';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -38,8 +37,6 @@ const supabaseAdmin =
         auth: { persistSession: false },
       })
     : null;
-
-const { getPlanFromPriceId } = PRICING_CONFIG;
 
 /**
  * Ensure a profile exists for the user (required for subscriptions FK constraint)
@@ -260,10 +257,20 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
         priceId,
         hasMetadata: !!session.metadata?.plan_tier,
         inferredFromPrice: priceId ? 'attempted' : 'no-price-id',
+        registeredPriceIds: Object.keys(getTierMapping()),
+        envVarHint:
+          'Ensure STRIPE_PRICE_HOBBY_MONTHLY, STRIPE_PRICE_PRO_MONTHLY, etc. are set in Vercel environment variables',
       },
-      'CRITICAL: Cannot determine valid plan_tier for subscription',
+      'CRITICAL: Cannot determine valid plan_tier for subscription - check if Stripe price IDs are registered in environment variables',
     );
-    throw new Error(`Cannot determine valid plan_tier for subscription (price: ${priceId})`);
+    // Return 400 instead of 500 - this is a configuration issue, not a temporary failure
+    return NextResponse.json(
+      {
+        error:
+          'Cannot determine subscription plan tier. Check that STRIPE_PRICE_* environment variables are configured.',
+      },
+      { status: 400 },
+    );
   }
   const stripeSubId = session.subscription as string | null;
 
@@ -536,17 +543,44 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
     stripePriceId = subscription.items.data[0].price.id;
   }
 
-  const planTier =
-    subscription.metadata?.plan_tier ??
-    (stripePriceId ? getPlanFromPriceId(stripePriceId) : null) ??
-    'pro';
+  // Use centralized price-tier-mapping for consistent plan resolution
+  const resolvedTier = resolvePlanTier(
+    subscription.metadata as Record<string, string> | null,
+    stripePriceId,
+  );
+
+  // Validate the resolved tier
+  const planTier = resolvedTier && isValidPlanTier(resolvedTier) ? resolvedTier : null;
+
+  if (!planTier) {
+    logger.error(
+      {
+        subscriptionId: subscription.id,
+        priceId: stripePriceId,
+        hasMetadata: !!subscription.metadata?.plan_tier,
+        registeredPriceIds: Object.keys(getTierMapping()),
+        envVarHint:
+          'Ensure STRIPE_PRICE_HOBBY_MONTHLY, STRIPE_PRICE_PRO_MONTHLY, etc. are set in Vercel environment variables',
+      },
+      'CRITICAL: Cannot determine valid plan_tier for subscription update - check if Stripe price IDs are registered in environment variables',
+    );
+    // For updates, if we can't resolve the tier, return early without updating
+    // This prevents losing existing subscription data
+    logger.warn(
+      { subscriptionId: subscription.id },
+      'Skipping subscription update due to unmapped price ID. Existing subscription data preserved.',
+    );
+    return;
+  }
+
   if (!subscription.metadata?.plan_tier) {
     logger.warn(
       {
         subscriptionId: subscription.id,
         inferredPlan: planTier,
+        priceId: stripePriceId,
       },
-      'plan_tier missing from subscription metadata. Inferred from price_id.',
+      'plan_tier missing from subscription metadata. Inferred from price_id using centralized mapping.',
     );
   }
 
