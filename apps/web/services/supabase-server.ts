@@ -11,6 +11,12 @@ export async function createSupabaseServerClient() {
       auth: {
         flowType: 'pkce', // Use PKCE flow for enhanced security
       },
+      global: {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;
