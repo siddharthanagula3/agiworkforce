@@ -11,30 +11,53 @@
  * - It's unclear which prices are actually valid
  */
 
-// Valid price IDs mapped to plan tiers
-// These should match your actual Stripe price IDs
-// NOTE: Keys are lowercase for case-insensitive matching
-const PRICE_ID_TO_TIER: Record<string, string> = {
-  // Hobby tier (monthly and annual)
-  price_1sgwx10zefo6bzmh7thtfu77: 'hobby', // monthly
-  price_1sgwx20zefo6bzmhbgpxl8ti: 'hobby', // annual
+// Build price ID mapping from environment variables (single source of truth)
+// This ensures checkout and webhook use the same price IDs
+function buildPriceIdMapping(): Record<string, string> {
+  const mapping: Record<string, string> = {};
 
-  // Pro tier (monthly and annual)
-  price_1sgwx20zefo6bzmh3ix7hivi: 'pro', // monthly
-  price_1sgwx30zefo6bzmhjxsduoyl: 'pro', // annual
+  // Hobby tier
+  const hobbyMonthly = process.env.STRIPE_PRICE_HOBBY_MONTHLY;
+  const hobbyYearly = process.env.STRIPE_PRICE_HOBBY_YEARLY;
+  if (hobbyMonthly) mapping[hobbyMonthly.toLowerCase()] = 'hobby';
+  if (hobbyYearly) mapping[hobbyYearly.toLowerCase()] = 'hobby';
 
-  // Max tier (monthly and annual)
-  price_1sgwx30zefo6bzmhjqitfykf: 'max', // monthly
-  price_1sgwx40zefo6bzmhys63enfw: 'max', // annual
+  // Pro tier
+  const proMonthly = process.env.STRIPE_PRICE_PRO_MONTHLY;
+  const proYearly = process.env.STRIPE_PRICE_PRO_YEARLY;
+  if (proMonthly) mapping[proMonthly.toLowerCase()] = 'pro';
+  if (proYearly) mapping[proYearly.toLowerCase()] = 'pro';
 
-  // Enterprise - add as needed
-  // 'price_xxx': 'enterprise',
-};
+  // Max tier
+  const maxMonthly = process.env.STRIPE_PRICE_MAX_MONTHLY;
+  const maxYearly = process.env.STRIPE_PRICE_MAX_YEARLY;
+  if (maxMonthly) mapping[maxMonthly.toLowerCase()] = 'max';
+  if (maxYearly) mapping[maxYearly.toLowerCase()] = 'max';
 
-// Allow environment variable overrides for flexibility
+  // Enterprise tier (if configured)
+  const enterpriseMonthly = process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY;
+  const enterpriseYearly = process.env.STRIPE_PRICE_ENTERPRISE_YEARLY;
+  if (enterpriseMonthly) mapping[enterpriseMonthly.toLowerCase()] = 'enterprise';
+  if (enterpriseYearly) mapping[enterpriseYearly.toLowerCase()] = 'enterprise';
+
+  return mapping;
+}
+
+// Lazily initialized mapping (built on first use to ensure env vars are loaded)
+let _priceIdMapping: Record<string, string> | null = null;
+
+function getPriceIdMapping(): Record<string, string> {
+  if (!_priceIdMapping) {
+    _priceIdMapping = buildPriceIdMapping();
+  }
+  return _priceIdMapping;
+}
+
+// Allow additional overrides via PRICE_ID_OVERRIDES env var
 // Format: PRICE_ID_OVERRIDES=price_1,hobby:price_2,pro
 function loadOverrides(): Record<string, string> {
-  const overrides: Record<string, string> = { ...PRICE_ID_TO_TIER };
+  const baseMapping = getPriceIdMapping();
+  const overrides: Record<string, string> = { ...baseMapping };
   const envOverrides = process.env.PRICE_ID_OVERRIDES;
 
   if (envOverrides) {
@@ -50,7 +73,15 @@ function loadOverrides(): Record<string, string> {
   return overrides;
 }
 
-const tierMapping = loadOverrides();
+// Lazily initialized tier mapping with overrides
+let _tierMapping: Record<string, string> | null = null;
+
+export function getTierMapping(): Record<string, string> {
+  if (!_tierMapping) {
+    _tierMapping = loadOverrides();
+  }
+  return _tierMapping;
+}
 
 /**
  * Get plan tier from price ID using strict mapping
@@ -65,7 +96,7 @@ export function getPlanTierFromPriceId(priceId: string | null | undefined): stri
   }
 
   const normalizedId = priceId.toLowerCase().trim();
-  const tier = tierMapping[normalizedId];
+  const tier = getTierMapping()[normalizedId];
 
   if (!tier) {
     return null; // Unknown price ID - caller should handle
@@ -113,7 +144,7 @@ export function isValidPlanTier(tier: string | null | undefined): tier is string
  * Get all registered price IDs
  */
 export function getAllRegisteredPriceIds(): string[] {
-  return Object.keys(tierMapping);
+  return Object.keys(getTierMapping());
 }
 
 /**
@@ -121,7 +152,7 @@ export function getAllRegisteredPriceIds(): string[] {
  */
 export function isPriceIdRegistered(priceId: string | null | undefined): boolean {
   if (!priceId) return false;
-  return priceId in tierMapping;
+  return priceId.toLowerCase() in getTierMapping();
 }
 
 /**
@@ -131,6 +162,7 @@ export function getMappingStatus(): {
   totalMapped: number;
   tiers: Record<string, string[]>;
 } {
+  const mapping = getTierMapping();
   const tiers: Record<string, string[]> = {
     hobby: [],
     pro: [],
@@ -138,7 +170,7 @@ export function getMappingStatus(): {
     enterprise: [],
   };
 
-  for (const [priceId, tier] of Object.entries(tierMapping)) {
+  for (const [priceId, tier] of Object.entries(mapping)) {
     if (!tiers[tier]) {
       tiers[tier] = [];
     }
@@ -146,7 +178,7 @@ export function getMappingStatus(): {
   }
 
   return {
-    totalMapped: Object.keys(tierMapping).length,
+    totalMapped: Object.keys(mapping).length,
     tiers,
   };
 }
