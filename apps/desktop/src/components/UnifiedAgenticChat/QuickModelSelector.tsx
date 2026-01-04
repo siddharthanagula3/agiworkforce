@@ -1,6 +1,6 @@
-import { invoke } from '@/lib/tauri-mock';
 import { Brain, Check, Search, Sparkles, Wand2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   getModelMetadata,
   PROVIDER_LABELS,
@@ -9,12 +9,10 @@ import {
   type ModelMetadata,
 } from '../../constants/llm';
 import { canUseModel } from '../../constants/planModels';
-import { deriveTaskMetadata } from '../../lib/taskMetadata';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { Button } from '../ui/Button';
 
 type QuickModelSelectorProps = {
@@ -50,48 +48,46 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     thinkingModeEnabled,
     toggleThinkingMode,
     getAvailableModels,
-  } = useModelStore((state) => ({
-    selectedModel: state.selectedModel,
-    availableModels: state.availableModels,
-    favorites: state.favorites,
-    recentModels: state.recentModels,
-    selectModel: state.selectModel,
-    thinkingModeEnabled: state.thinkingModeEnabled,
-    toggleThinkingMode: state.toggleThinkingMode,
-    getAvailableModels: state.getAvailableModels,
-  }));
+  } = useModelStore(
+    useShallow((state) => ({
+      selectedModel: state.selectedModel,
+      availableModels: state.availableModels,
+      selectModel: state.selectModel,
+      thinkingModeEnabled: state.thinkingModeEnabled,
+      toggleThinkingMode: state.toggleThinkingMode,
+      getAvailableModels: state.getAvailableModels,
+    })),
+  );
 
-  const { account } = useAccountStore((state) => ({
-    account: state.account,
-  }));
+  const { account } = useAccountStore(
+    useShallow((state) => ({
+      account: state.account,
+    })),
+  );
 
   // Get user's plan tier (defaults to 'free' if not subscribed)
   const userPlanTier = account.plan || 'free';
 
-  useEffect(() => {
-    if (availableModels.length <= 15) {
-      void getAvailableModels();
-    }
-  }, [getAvailableModels, availableModels.length]);
+  const modelsLoaded = useRef(false);
 
-  const messages = useUnifiedChatStore((state) => state.messages);
-  const [suggestion, setSuggestion] = useState<RouterSuggestion | null>(null);
-  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  useEffect(() => {
+    // Delay the model fetch to avoid race conditions during popover mount
+    const timer = setTimeout(() => {
+      if (!modelsLoaded.current && availableModels.length === 0) {
+        modelsLoaded.current = true;
+        void getAvailableModels();
+      }
+    }, 50);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Router suggestion feature is disabled - keeping state for potential future re-enablement
+  const [suggestion] = useState<RouterSuggestion | null>(null);
+  const [suggestionLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  const latestUserMessage = useMemo(
-    () => [...messages].reverse().find((msg) => msg.role === 'user'),
-    [messages],
-  );
-
-  const suggestionContext = useMemo(() => {
-    return deriveTaskMetadata(
-      latestUserMessage?.content ?? '',
-      latestUserMessage?.attachments,
-      'balanced',
-    );
-  }, [latestUserMessage]);
 
   const modelGroups = useMemo(() => {
     const groups: Record<string, ModelMetadata[]> = {};
@@ -163,40 +159,12 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     return groups;
   }, [availableModels, userPlanTier, searchQuery]);
 
+  // Fetch suggestion with debounce to prevent excessive API calls
+  // TEMPORARILY DISABLED - investigating infinite loop issue
   useEffect(() => {
-    let cancelled = false;
-    const fetchSuggestion = async () => {
-      setSuggestionLoading(true);
-      try {
-        const response = await invoke<RouterSuggestion>('router_suggestions', {
-          context: {
-            intents: suggestionContext.intents,
-            requiresVision: suggestionContext.requiresVision,
-            tokenEstimate: suggestionContext.tokenEstimate,
-            costPriority: suggestionContext.costPriority,
-            planTier: userPlanTier,
-          },
-        });
-        if (!cancelled) {
-          setSuggestion(response);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('[QuickModelSelector] Failed to load suggestion', error);
-          setSuggestion(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setSuggestionLoading(false);
-        }
-      }
-    };
-
-    fetchSuggestion();
-    return () => {
-      cancelled = true;
-    };
-  }, [suggestionContext, userPlanTier]);
+    // Disabled to isolate the infinite loop issue
+    return () => {};
+  }, []);
 
   const handleModelChange = (modelId: string) => {
     if (

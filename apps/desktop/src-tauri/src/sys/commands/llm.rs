@@ -406,7 +406,14 @@ pub async fn llm_get_available_models(
     let router = state.router.read().await;
 
     let all_models = vec![
-        // OpenAI
+        // OpenAI - Fast/Cheap
+        ModelInfo {
+            id: "gpt-5-nano".to_string(),
+            name: "GPT-5 Nano".to_string(),
+            provider: "openai".to_string(),
+            available: false,
+        },
+        // OpenAI - Premium
         ModelInfo {
             id: "gpt-5.2".to_string(),
             name: "GPT-5.2".to_string(),
@@ -506,6 +513,25 @@ pub async fn llm_get_available_models(
             provider: "xai".to_string(),
             available: false,
         },
+        // DeepSeek - Value coding models
+        ModelInfo {
+            id: "deepseek-v3".to_string(),
+            name: "DeepSeek V3".to_string(),
+            provider: "deepseek".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "deepseek-reasoner".to_string(),
+            name: "DeepSeek Reasoner".to_string(),
+            provider: "deepseek".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "deepseek-coder".to_string(),
+            name: "DeepSeek Coder".to_string(),
+            provider: "deepseek".to_string(),
+            available: false,
+        },
         // Qwen
         ModelInfo {
             id: "qwen3-max".to_string(),
@@ -520,6 +546,19 @@ pub async fn llm_get_available_models(
             provider: "moonshot".to_string(),
             available: false,
         },
+        // xAI - Grok 3 Mini for Hobby tier
+        ModelInfo {
+            id: "grok-3-mini".to_string(),
+            name: "Grok 3 Mini".to_string(),
+            provider: "xai".to_string(),
+            available: false,
+        },
+        ModelInfo {
+            id: "grok-4.1-fast-reasoning".to_string(),
+            name: "Grok 4.1 Fast Reasoning".to_string(),
+            provider: "xai".to_string(),
+            available: false,
+        },
     ];
 
     let mut available_models = Vec::new();
@@ -532,6 +571,7 @@ pub async fn llm_get_available_models(
             "anthropic" => Provider::Anthropic,
             "google" => Provider::Google,
             "xai" => Provider::XAI,
+            "deepseek" => Provider::DeepSeek,
             "qwen" => Provider::Qwen,
             "moonshot" => Provider::Moonshot,
             _ => continue,
@@ -546,17 +586,15 @@ pub async fn llm_get_available_models(
     if router.has_provider(Provider::Ollama) {
         match llm_list_ollama_models().await {
             Ok(ollama_models) => {
-                available_models.extend(ollama_models);
+                // Only add Ollama models if we actually found some
+                if !ollama_models.is_empty() {
+                    available_models.extend(ollama_models);
+                }
+                // If Ollama is running but no models installed, don't show anything
             }
             Err(e) => {
-                tracing::warn!("Failed to fetch Ollama models: {}", e);
-
-                available_models.push(ModelInfo {
-                    id: "llama4-70b-instruct".to_string(),
-                    name: "Llama 4 70B Instruct (Offline)".to_string(),
-                    provider: "ollama".to_string(),
-                    available: false,
-                });
+                // Ollama server not running or not accessible - don't show fallback models
+                tracing::debug!("Ollama not available: {}", e);
             }
         }
     }

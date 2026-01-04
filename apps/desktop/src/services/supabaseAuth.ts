@@ -127,6 +127,19 @@ class SupabaseAuthService {
     this.updateState({ user, session, isLoading: true, error: null });
 
     try {
+      // Ensure the session is properly set in the Supabase client
+      const supabase = getSupabase();
+      console.log('[Auth] Ensuring session is set in Supabase client...');
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+      if (setSessionError) {
+        console.error('[Auth] Failed to set session:', setSessionError);
+      } else {
+        console.log('[Auth] Session set successfully');
+      }
+
       const [profile, subscription, featureFlags] = await Promise.all([
         this.fetchProfile(user.id),
         this.fetchSubscription(user.id),
@@ -206,18 +219,54 @@ class SupabaseAuthService {
 
   private async fetchSubscription(userId: string): Promise<Subscription | null> {
     const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    console.log('[Auth] Fetching subscription for user:', userId);
 
-    if (error) {
-      console.error('[Auth] Error fetching subscription:', error);
+    try {
+      // First, check if we have a valid session
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log('[Auth] Current session check:', {
+        hasSession: !!sessionData?.session,
+        userId: sessionData?.session?.user?.id,
+        expiresAt: sessionData?.session?.expires_at,
+      });
+
+      if (!sessionData?.session) {
+        console.error('[Auth] No session available for subscription query');
+        return null;
+      }
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => {
+          console.error('[Auth] Subscription fetch TIMED OUT after 5s');
+          resolve({ data: null, error: { message: 'Subscription fetch timed out after 5s' } });
+        }, 5000),
+      );
+
+      console.log('[Auth] Creating Supabase query...');
+      const queryPromise = supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      console.log('[Auth] Waiting for query result...');
+      const result = await Promise.race([queryPromise, timeoutPromise]);
+      console.log('[Auth] Query result received:', result);
+
+      const { data, error } = result;
+
+      if (error) {
+        console.error('[Auth] Error fetching subscription:', error);
+        return null;
+      }
+
+      console.log('[Auth] Fetched subscription successfully:', data);
+      return data;
+    } catch (err) {
+      console.error('[Auth] Exception fetching subscription:', err);
       return null;
     }
-
-    return data;
   }
 
   private async fetchFeatureFlags(userId: string): Promise<Record<string, boolean>> {

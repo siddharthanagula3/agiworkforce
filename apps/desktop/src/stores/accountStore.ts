@@ -216,17 +216,25 @@ export const useAccountStore = create<AccountState>()(
       },
 
       syncWithBackend: async () => {
+        console.log('[Account] Starting syncWithBackend...');
         await supabaseAuth.refreshUserData();
 
         const authState = supabaseAuth.getState();
+        console.log('[Account] Auth state after refresh:', {
+          hasUser: !!authState.user,
+          hasSession: !!authState.session,
+          subscription: authState.subscription,
+          planTier: authState.subscription?.plan_tier,
+        });
 
         if (!authState.user) {
-          console.warn('No authenticated user - skipping sync');
+          console.warn('[Account] No authenticated user - skipping sync');
           return;
         }
 
         try {
           const planTier = asPlanTier(authState.subscription?.plan_tier);
+          console.log('[Account] Resolved plan tier:', planTier);
 
           // Fetch credits from API if we have a session
           let credits: CreditBalance | null = null;

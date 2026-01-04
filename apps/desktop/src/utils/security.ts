@@ -415,7 +415,8 @@ export const CSP_CONFIG = {
   'img-src': ["'self'", 'data:', 'https://*', 'blob:'],
   'connect-src': [
     "'self'",
-    'https://api.agiworkforce.com',
+    'https://agiworkforce.com',
+    'https://*.agiworkforce.com',
     'https://api.openai.com',
     'https://api.anthropic.com',
     'http://localhost:*',

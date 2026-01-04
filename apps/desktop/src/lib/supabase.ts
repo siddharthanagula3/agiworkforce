@@ -10,31 +10,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-import { invoke } from '@tauri-apps/api/core';
-
-// Custom secure storage adapter using system keyring
+// Simple localStorage-based storage adapter for Supabase auth
+// Using localStorage instead of system keyring to avoid OS permission prompts
+// This is secure enough for Tauri apps since localStorage is sandboxed to the app
 const secureStorage = {
-  getItem: async (_key: string): Promise<string | null> => {
-    try {
-      return await invoke<string>('auth_retrieve_session');
-    } catch {
-      // If error (e.g. item not found), return null
-      return null;
-    }
+  getItem: async (key: string): Promise<string | null> => {
+    return localStorage.getItem(key);
   },
-  setItem: async (_key: string, value: string): Promise<void> => {
-    try {
-      await invoke('auth_store_session', { session: value });
-    } catch (error) {
-      console.error('Failed to store session securely:', error);
-    }
+  setItem: async (key: string, value: string): Promise<void> => {
+    localStorage.setItem(key, value);
   },
-  removeItem: async (_key: string): Promise<void> => {
-    try {
-      await invoke('auth_remove_session');
-    } catch (error) {
-      console.error('Failed to remove session securely:', error);
-    }
+  removeItem: async (key: string): Promise<void> => {
+    localStorage.removeItem(key);
   },
 };
 

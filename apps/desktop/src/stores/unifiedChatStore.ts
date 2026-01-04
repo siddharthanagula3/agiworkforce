@@ -1935,8 +1935,14 @@ async function bootstrapAgentStatuses() {
   try {
     const agents = await invoke<AgentStatusPayload[]>('refresh_agent_status');
     applyAgentStatusSnapshot(Array.isArray(agents) ? agents : []);
-  } catch (error) {
-    console.error('[UnifiedChatStore] Failed to bootstrap agent statuses:', error);
+  } catch {
+    // Initialize with empty state on error - this is expected during app startup
+    // before the Orchestrator is initialized (user hasn't used AGI features yet)
+    applyAgentStatusSnapshot([]);
+    // Only log as debug since this is expected behavior during startup
+    console.debug(
+      '[UnifiedChatStore] Agent status bootstrap returned empty (orchestrator not yet initialized)',
+    );
   }
 }
 
