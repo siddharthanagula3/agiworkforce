@@ -129,10 +129,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     (state) => state.chatPreferences?.promptCompletionEnabled ?? true,
   );
 
-  // Get AI-powered prompt completion (ghost text) - similar to Gemini CLI
-  const promptCompletion = useApiPromptCompletion(content, {
-    enabled: promptCompletionEnabled,
-    onSuggestionChange: (suggestion) => {
+  // Memoize the suggestion change handler to prevent infinite re-renders
+  const handleSuggestionChange = useCallback(
+    (suggestion: string) => {
       // Only update inline suggestion when not showing slash autocomplete
       if (!showSlashAutocomplete && suggestion) {
         setInlineSuggestion(' ' + suggestion);
@@ -140,6 +139,13 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         setInlineSuggestion('');
       }
     },
+    [showSlashAutocomplete],
+  );
+
+  // Get AI-powered prompt completion (ghost text) - similar to Gemini CLI
+  const promptCompletion = useApiPromptCompletion(content, {
+    enabled: promptCompletionEnabled,
+    onSuggestionChange: handleSuggestionChange,
   });
 
   const activeContext = useUnifiedChatStore((state) => state.activeContext) || [];
@@ -233,10 +239,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
-
-  useEffect(() => {
-    setShowModelSelector(false);
-  }, [selectedModel]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

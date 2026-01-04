@@ -1,45 +1,26 @@
-#[cfg(not(test))]
-use keyring::Entry;
+use std::sync::RwLock;
 use tauri::command;
 
-#[cfg(not(test))]
-const SERVICE_NAME: &str = "AGI Workforce";
-#[cfg(not(test))]
-const SESSION_KEY: &str = "supabase_session";
+// In-memory session storage - avoids OS keychain permission prompts
+// The session is stored in localStorage on the frontend and synced here for Rust API calls
+static SESSION_STORE: RwLock<Option<String>> = RwLock::new(None);
 
 #[command]
-pub async fn auth_store_session(#[allow(unused_variables)] session: String) -> Result<(), String> {
-    #[cfg(test)]
-    return Ok(());
-
-    #[cfg(not(test))]
-    {
-        let entry = Entry::new(SERVICE_NAME, SESSION_KEY).map_err(|e| e.to_string())?;
-        entry.set_password(&session).map_err(|e| e.to_string())?;
-        Ok(())
-    }
+pub async fn auth_store_session(session: String) -> Result<(), String> {
+    let mut store = SESSION_STORE.write().map_err(|e| e.to_string())?;
+    *store = Some(session);
+    Ok(())
 }
 
 #[command]
 pub async fn auth_retrieve_session() -> Result<String, String> {
-    #[cfg(test)]
-    return Ok("".to_string());
-
-    #[cfg(not(test))]
-    {
-        let entry = Entry::new(SERVICE_NAME, SESSION_KEY).map_err(|e| e.to_string())?;
-        entry.get_password().map_err(|e| e.to_string())
-    }
+    let store = SESSION_STORE.read().map_err(|e| e.to_string())?;
+    store.clone().ok_or_else(|| "No session stored".to_string())
 }
 
 #[command]
 pub async fn auth_remove_session() -> Result<(), String> {
-    #[cfg(test)]
-    return Ok(());
-
-    #[cfg(not(test))]
-    {
-        let entry = Entry::new(SERVICE_NAME, SESSION_KEY).map_err(|e| e.to_string())?;
-        entry.delete_password().map_err(|e| e.to_string())
-    }
+    let mut store = SESSION_STORE.write().map_err(|e| e.to_string())?;
+    *store = None;
+    Ok(())
 }

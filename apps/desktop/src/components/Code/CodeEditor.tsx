@@ -4,7 +4,7 @@ import { Check, Copy, Download, RotateCcw, Save } from 'lucide-react';
 import type { editor } from 'monaco-editor';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { useTheme } from '../../hooks/useTheme';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 
@@ -34,7 +34,7 @@ export function CodeEditor({
   const monacoRef = useRef<Monaco | null>(null);
   const valueRef = useRef(defaultValue);
   const originalRef = useRef(defaultValue);
-  const { theme } = useTheme();
+  const { theme } = useThemeContext();
 
   const isDirty = value !== originalValue;
 

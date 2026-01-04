@@ -18,7 +18,7 @@ pub struct CloudSyncConfig {
 impl Default for CloudSyncConfig {
     fn default() -> Self {
         Self {
-            api_endpoint: "https://api.agiworkforce.com".to_string(),
+            api_endpoint: "https://agiworkforce.com".to_string(),
 
             api_key: String::new(),
             sync_interval_seconds: 30,

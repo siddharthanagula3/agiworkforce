@@ -31,8 +31,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.agiworkforce.com https://*.supabase.co; media-src 'self' data: blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com https://api.github.com https://github.com https://*.slack.com https://releases.agiworkforce.com https://*.agiworkforce.com https://*.supabase.co https://api.stripe.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'",
-      "dangerousDisableAssetCspModification": false
+      "csp": null
     }
   },
   "bundle": {

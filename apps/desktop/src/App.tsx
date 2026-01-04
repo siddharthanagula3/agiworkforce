@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
-import { useTheme } from './hooks/useTheme';
+import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import { initializeAgentStatusListener, useUnifiedChatStore } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
@@ -57,7 +57,12 @@ const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useThemeContext();
+
+  const toggleTheme = useCallback(() => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+  }, [theme, setTheme]);
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
@@ -138,11 +143,11 @@ const DesktopShell = () => {
           if (authState.session?.access_token) {
             const { invoke } = await import('@tauri-apps/api/core');
             await invoke('account_store_access_token', {
-              access_token: authState.session.access_token,
+              accessToken: authState.session.access_token,
             });
             if (authState.session.refresh_token) {
               await invoke('account_store_refresh_token', {
-                refresh_token: authState.session.refresh_token,
+                refreshToken: authState.session.refresh_token,
               });
             }
             await invoke('llm_ensure_managed_cloud');
@@ -366,7 +371,19 @@ const App = () => {
     const unsubscribeAccount = initializeAccountStore();
     const unsubscribeBilling = initializeBillingStore();
     const unsubscribeUsage = initializeUsageStore();
+
+    // Force sync account data after auth is ready to ensure subscription is up-to-date
+    const syncTimer = setTimeout(async () => {
+      const { useAccountStore } = await import('./stores/accountStore');
+      const { supabaseAuth } = await import('./services/supabaseAuth');
+      if (supabaseAuth.isAuthenticated()) {
+        console.log('[App] Forcing account sync with backend...');
+        await useAccountStore.getState().syncWithBackend();
+      }
+    }, 1000);
+
     return () => {
+      clearTimeout(syncTimer);
       if (typeof unsubscribeAuth === 'function') {
         unsubscribeAuth();
       }

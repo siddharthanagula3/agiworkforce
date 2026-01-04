@@ -34,7 +34,7 @@ import {
   YAxis,
 } from 'recharts';
 import { toast } from 'sonner';
-import { useTheme } from '../../hooks/useTheme';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
 import { useCodeStore } from '../../stores/codeStore';
 import { sanitizeHtml } from '../../utils/security';
@@ -61,7 +61,7 @@ interface ArtifactRendererProps {
 
 export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps) {
   const [copied, setCopied] = useState(false);
-  const { theme } = useTheme();
+  const { theme } = useThemeContext();
   const rootPath = useCodeStore((state) => state.rootPath);
   const openFile = useCodeStore((state) => state.openFile);
   const setActiveFile = useCodeStore((state) => state.setActiveFile);

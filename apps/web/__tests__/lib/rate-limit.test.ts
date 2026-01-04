@@ -22,7 +22,7 @@ const mockRateLimitInstance = {
 };
 
 vi.mock('@upstash/ratelimit', () => {
-  const MockRatelimit = vi.fn().mockImplementation(() => mockRateLimitInstance);
+  const MockRatelimit = vi.fn().mockImplementation(() => mockRateLimitInstance) as any;
   // Add static methods
   MockRatelimit.slidingWindow = vi.fn().mockReturnValue({});
   return {
