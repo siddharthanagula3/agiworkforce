@@ -20,29 +20,27 @@ export default async function DashboardPage() {
 
   // Fetch subscription data with no-store cache for dynamic data
   // This ensures fresh data on every request (similar to getServerSideProps)
+  // Use maybeSingle() to avoid errors when no subscription exists (new users)
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('*')
     .eq('user_id', session.user.id)
-    .single();
+    .maybeSingle();
 
-  const activeStatuses = ['active', 'trialing'];
-  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
+  // Allow free tier users to access the dashboard
+  // Only sync with Stripe if they have a subscription record but it appears inactive
+  let effectiveSubscription = subscription;
 
-  if (!hasActiveSubscription) {
-    // Attempt self-healing sync
+  if (subscription && !['active', 'trialing'].includes(subscription.status)) {
+    // Attempt self-healing sync for inactive subscriptions
     if (session.user.email) {
       const syncedSub = await SubscriptionService.syncWithStripe(
         session.user.id,
         session.user.email,
       );
-      if (syncedSub && activeStatuses.includes(syncedSub.status)) {
-        // Sync successful and active, do not redirect
-      } else {
-        redirect('/pricing?reason=subscription_required');
+      if (syncedSub) {
+        effectiveSubscription = syncedSub;
       }
-    } else {
-      redirect('/pricing?reason=subscription_required');
     }
   }
 
@@ -68,12 +66,12 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white capitalize">
-              {subscription?.plan_tier || 'Free'}
+              {effectiveSubscription?.plan_tier || 'Free'}
             </div>
             <p className="text-xs text-zinc-500">
-              {['active', 'trialing'].includes(subscription?.status || '')
+              {['active', 'trialing'].includes(effectiveSubscription?.status || '')
                 ? 'Active subscription'
-                : 'No active subscription'}
+                : 'Free tier'}
             </p>
           </CardContent>
         </Card>
