@@ -1,10 +1,11 @@
+'use client';
+
 import { Bot } from 'lucide-react';
 import Link from 'next/link';
 import { DownloadSection } from '../../components/DownloadSection';
 import { DirectDownloadButtons } from '../../components/DirectDownloadButtons';
-import { createSupabaseServerClient } from '../../services/supabase-server';
-
-export const dynamic = 'force-dynamic';
+import { useEffect, useState } from 'react';
+import { getSupabaseClient } from '../../services/supabase';
 
 function getDownloadUrls() {
   return {
@@ -14,14 +15,20 @@ function getDownloadUrls() {
   };
 }
 
-export default async function DownloadPage() {
-  const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
+export default function DownloadPage() {
+  const [hasSession, setHasSession] = useState<boolean>(false);
   const downloads = getDownloadUrls();
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const supabase = getSupabaseClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setHasSession(!!session?.user);
+    };
+    checkSession();
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
@@ -32,7 +39,7 @@ export default async function DownloadPage() {
             <span>AGI Workforce</span>
           </Link>
           <div className="flex items-center gap-4">
-            {session?.user ? (
+            {hasSession ? (
               <Link
                 href="/dashboard"
                 className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
