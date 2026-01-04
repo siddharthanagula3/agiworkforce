@@ -1,6 +1,5 @@
 import { Bot } from 'lucide-react';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { DownloadSection } from '../../components/DownloadSection';
 import { DirectDownloadButtons } from '../../components/DirectDownloadButtons';
 import { createSupabaseServerClient } from '../../services/supabase-server';
@@ -38,10 +37,6 @@ export default async function DownloadPage() {
     );
   }
 
-  if (!session?.user) {
-    redirect('/login?redirectTo=/download');
-  }
-
   const downloads = getDownloadUrls();
 
   return (
@@ -52,12 +47,29 @@ export default async function DownloadPage() {
             <Bot className="h-6 w-6 text-blue-500" />
             <span>AGI Workforce</span>
           </Link>
-          <Link
-            href="/"
-            className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-          >
-            Back to Home
-          </Link>
+          <div className="flex items-center gap-4">
+            {!session?.user ? (
+              <Link
+                href="/login?redirectTo=/download"
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Sign In
+              </Link>
+            ) : (
+              <Link
+                href="/dashboard"
+                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            <Link
+              href="/"
+              className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -73,10 +85,26 @@ export default async function DownloadPage() {
             </p>
           </div>
 
-          <DownloadSection downloads={downloads} />
-
-          {}
-          <DirectDownloadButtons />
+          {!session?.user ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center space-y-4">
+              <h2 className="text-xl font-semibold text-white">Sign In Required</h2>
+              <p className="text-zinc-400">
+                Please sign in to download AGI Workforce and start automating your workflows.
+              </p>
+              <Link
+                href="/login?redirectTo=/download"
+                className="inline-block bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+              >
+                Sign In to Download
+              </Link>
+            </div>
+          ) : (
+            <>
+              <DownloadSection downloads={downloads} />
+              {}
+              <DirectDownloadButtons />
+            </>
+          )}
 
           <div className="text-center text-sm text-zinc-500">
             <p>By downloading, you agree to our Terms of Service and Privacy Policy.</p>
