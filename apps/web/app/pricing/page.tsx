@@ -10,7 +10,7 @@ import { getSupabaseClient } from '../../services/supabase';
 
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('annual');
   const searchParams = useSearchParams();
   const showSubscriptionRequired = searchParams?.get('reason') === 'subscription_required';
 
@@ -293,19 +293,23 @@ function PricingContent() {
                     <div className="text-3xl font-bold text-emerald-100">
                       ${billingInterval === 'annual' ? '4.99' : '10'}
                     </div>
-                    <div className="text-zinc-400 text-sm line-through">
-                      ${billingInterval === 'annual' ? '9.98' : '10'}
-                    </div>
-                    <div className="text-zinc-300 text-sm">
-                      {billingInterval === 'annual' ? '/year' : '/month'}
-                    </div>
+                    {billingInterval === 'annual' && (
+                      <div className="text-zinc-400 text-sm line-through">$10</div>
+                    )}
+                    <div className="text-zinc-300 text-sm">/month</div>
                   </div>
                   <div className="text-xs text-zinc-500 mb-6 font-medium">
-                    Billed $
-                    <span className="text-zinc-300">
-                      {billingInterval === 'annual' ? '59.88/year' : '10/month'}
-                    </span>{' '}
-                    after trial
+                    {billingInterval === 'annual' ? (
+                      <>
+                        <span className="text-emerald-400 font-semibold">
+                          Special limited time offer for first time users
+                        </span>
+                        <br />
+                        <span className="text-zinc-300">$59.88 billed yearly</span>
+                      </>
+                    ) : (
+                      <span className="text-zinc-300">$10/month billed monthly</span>
+                    )}
                   </div>
                 </div>
 
