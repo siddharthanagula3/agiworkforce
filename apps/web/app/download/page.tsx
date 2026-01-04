@@ -20,14 +20,22 @@ export default function DownloadPage() {
   const downloads = getDownloadUrls();
 
   useEffect(() => {
+    let mounted = true;
+
     const checkSession = async () => {
       const supabase = getSupabaseClient();
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      setHasSession(!!session?.user);
+      if (mounted) {
+        setHasSession(!!session?.user);
+      }
     };
     checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (

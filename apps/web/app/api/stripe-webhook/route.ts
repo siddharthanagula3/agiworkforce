@@ -78,6 +78,89 @@ async function ensureProfileExists(userId: string, email?: string | null): Promi
   }
 }
 
+/**
+ * Handle credit top-up purchases (one-time payments for additional credits)
+ */
+async function handleCreditTopUp(session: Stripe.Checkout.Session) {
+  if (!supabaseAdmin) {
+    logger.error('handleCreditTopUp: missing Supabase admin client');
+    throw new Error('Missing Supabase admin client');
+  }
+
+  const userId = session.metadata?.['user_id'];
+  const creditAmountCents = parseInt(session.metadata?.['credit_amount_cents'] || '0', 10);
+
+  if (!userId || !creditAmountCents) {
+    logger.error(
+      { sessionId: session.id, userId, creditAmountCents },
+      'Missing required metadata for credit top-up',
+    );
+    throw new Error('Missing user_id or credit_amount_cents in session metadata');
+  }
+
+  logger.info(
+    { sessionId: session.id, userId, creditAmountCents },
+    'Processing credit top-up purchase',
+  );
+
+  try {
+    // Get current subscription to determine the period
+    const { data: subscription } = await supabaseAdmin
+      .from('subscriptions')
+      .select('id, current_period_start, current_period_end')
+      .eq('user_id', userId)
+      .single();
+
+    if (!subscription) {
+      logger.error({ userId }, 'No subscription found for credit top-up user');
+      throw new Error('No subscription found for user');
+    }
+
+    // Get the user's credit account (token_credits) for this subscription period
+    const { data: creditAccount } = await supabaseAdmin
+      .from('token_credits')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('subscription_id', subscription.id)
+      .single();
+
+    if (!creditAccount) {
+      logger.error({ userId, subscriptionId: subscription.id }, 'No credit account found for user');
+      throw new Error('No credit account found for user');
+    }
+
+    // Add credits to the user's account using the correct credit account ID
+    const { error: creditError } = await supabaseAdmin.rpc('add_credits', {
+      p_user_id: userId,
+      p_account_id: creditAccount.id, // Use credit account ID, not subscription ID
+      p_amount_cents: creditAmountCents,
+      p_description: 'Credit top-up purchase',
+      p_transaction_type: 'purchase',
+    });
+
+    if (creditError) {
+      logger.error(
+        { error: creditError, userId, creditAmountCents, creditAccountId: creditAccount.id },
+        'Failed to add credits from top-up',
+      );
+      throw creditError;
+    }
+
+    logger.info(
+      {
+        userId,
+        creditAmountCents,
+        subscriptionId: subscription.id,
+        creditAccountId: creditAccount.id,
+      },
+      'Credit top-up processed successfully',
+    );
+  } catch (error) {
+    logger.error({ error, userId, creditAmountCents }, 'Error processing credit top-up');
+    throw error;
+  }
+}
+
 async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
   if (!supabaseAdmin || !stripe) {
     logger.error('upsertSubscriptionFromSession: missing dependencies');
@@ -314,12 +397,33 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       const subscriptionResponse = await stripe.subscriptions.retrieve(stripeSubId);
       const subscription = subscriptionResponse as unknown as Stripe.Subscription;
       status = subscription.status;
-      currentPeriodStart = new Date(
-        (subscription as unknown as { current_period_start: number }).current_period_start * 1000,
-      );
-      currentPeriodEnd = new Date(
-        (subscription as unknown as { current_period_end: number }).current_period_end * 1000,
-      );
+
+      // Handle both top-level and items-level period dates (Stripe v20+ flexible billing)
+      const subAsAny = subscription as unknown as { current_period_start?: number };
+      const periodStart = subAsAny.current_period_start;
+      const periodEnd = (subscription as unknown as { current_period_end?: number })
+        .current_period_end;
+
+      if (periodStart && periodEnd) {
+        // Top-level fields exist (standard billing)
+        currentPeriodStart = new Date(periodStart * 1000);
+        currentPeriodEnd = new Date(periodEnd * 1000);
+      } else if (subscription.items?.data?.length > 0) {
+        // Fallback to items array (flexible billing - Stripe v20+)
+        const item = subscription.items.data[0] as unknown as {
+          current_period_start?: number;
+          current_period_end?: number;
+        };
+        if (item.current_period_start && item.current_period_end) {
+          currentPeriodStart = new Date(item.current_period_start * 1000);
+          currentPeriodEnd = new Date(item.current_period_end * 1000);
+          logger.debug(
+            { subscriptionId: stripeSubId, periodStart: item.current_period_start },
+            'Using period dates from subscription items (flexible billing)',
+          );
+        }
+      }
+
       cancelAtPeriodEnd = subscription.cancel_at_period_end;
       canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
 
@@ -585,9 +689,28 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   }
 
   // Extract period timestamps (Stripe SDK v20 type changes)
-  const periodStart = (subscription as unknown as { current_period_start: number })
-    .current_period_start;
-  const periodEnd = (subscription as unknown as { current_period_end: number }).current_period_end;
+  // Handle both top-level and items-level period dates (Stripe v20+ flexible billing)
+  const subAsAny = subscription as unknown as { current_period_start?: number };
+  let periodStart = subAsAny.current_period_start;
+  let periodEnd = (subscription as unknown as { current_period_end?: number }).current_period_end;
+
+  // Fallback to items array if top-level fields don't exist (flexible billing - Stripe v20+)
+  if (!periodStart || !periodEnd) {
+    if (subscription.items?.data?.length > 0) {
+      const item = subscription.items.data[0] as unknown as {
+        current_period_start?: number;
+        current_period_end?: number;
+      };
+      if (item.current_period_start && item.current_period_end) {
+        periodStart = item.current_period_start;
+        periodEnd = item.current_period_end;
+        logger.debug(
+          { subscriptionId: subscription.id, periodStart },
+          'Using period dates from subscription items (flexible billing)',
+        );
+      }
+    }
+  }
 
   // Get coupon ID from discounts array (v20 API change: discount -> discounts)
   const discounts = (subscription as unknown as { discounts?: Array<{ coupon?: { id?: string } }> })
@@ -608,8 +731,8 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   } = {
     status: subscription.status,
     stripe_price_id: stripePriceId,
-    current_period_start: new Date(periodStart * 1000).toISOString(),
-    current_period_end: new Date(periodEnd * 1000).toISOString(),
+    current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+    current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
     cancel_at_period_end: subscription.cancel_at_period_end,
     canceled_at: subscription.canceled_at
       ? new Date(subscription.canceled_at * 1000).toISOString()
@@ -986,7 +1109,15 @@ export async function POST(request: Request) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        await upsertSubscriptionFromSession(session);
+
+        // Check if this is a credit top-up or a subscription
+        if (session.metadata?.['type'] === 'credit_topup') {
+          logger.info({ sessionId: session.id }, 'Processing credit top-up checkout');
+          await handleCreditTopUp(session);
+        } else {
+          // Regular subscription checkout
+          await upsertSubscriptionFromSession(session);
+        }
         break;
       }
       case 'checkout.session.async_payment_succeeded': {

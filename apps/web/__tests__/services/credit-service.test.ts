@@ -72,7 +72,7 @@ describe('CreditService', () => {
         daily_limit_cents: 1500,
         daily_used_cents: 500,
         daily_remaining_cents: 1000,
-        daily_reset_at: '2025-01-02T00:00:00Z',
+        last_daily_reset_at: '2025-01-02T00:00:00Z',
       };
 
       mockRpc.mockResolvedValue({ data: mockBalance, error: null });
@@ -122,7 +122,7 @@ describe('CreditService', () => {
         daily_limit_cents: 1500,
         daily_used_cents: 1400,
         daily_remaining_cents: 100,
-        daily_reset_at: '2025-01-02T05:00:00Z',
+        last_daily_reset_at: '2025-01-02T05:00:00Z',
       };
 
       mockRpc.mockResolvedValue({ data: mockBalance, error: null });
@@ -132,7 +132,7 @@ describe('CreditService', () => {
       expect(result?.daily_limit_cents).toBe(1500);
       expect(result?.daily_used_cents).toBe(1400);
       expect(result?.daily_remaining_cents).toBe(100);
-      expect(result?.daily_reset_at).toBe('2025-01-02T05:00:00Z');
+      expect(result?.last_daily_reset_at).toBe('2025-01-02T05:00:00Z');
     });
   });
 

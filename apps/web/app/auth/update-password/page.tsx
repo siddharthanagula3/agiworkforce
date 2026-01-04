@@ -16,17 +16,23 @@ export default function UpdatePasswordPage() {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
 
   useEffect(() => {
+    let mounted = true;
+
     const checkSession = async () => {
       const supabase = getSupabaseClient();
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) {
+      if (!session && mounted) {
         // Redirect to login if no session
         window.location.href = '/login';
       }
     };
     checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Validate password on change

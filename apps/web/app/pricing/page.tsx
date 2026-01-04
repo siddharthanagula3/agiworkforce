@@ -10,7 +10,7 @@ import { getSupabaseClient } from '../../services/supabase';
 
 function PricingContent() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('annual');
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
   const searchParams = useSearchParams();
   const showSubscriptionRequired = searchParams?.get('reason') === 'subscription_required';
 
@@ -125,24 +125,86 @@ function PricingContent() {
     }
   };
 
+  // Define plan hierarchy for upgrade/downgrade logic
+  const planHierarchy: Record<string, number> = {
+    free: 0,
+    hobby: 1,
+    pro: 2,
+    max: 3,
+  };
+
+  const getPlanLevel = (plan: string): number => {
+    return planHierarchy[plan.toLowerCase()] || 0;
+  };
+
   const getButtonText = (plan: string, label: string) => {
     if (loadingSubscription) return 'Loading...';
-    if (isSubscribed) {
-      // If we have a matching plan tier, show that.
-      if (subscription?.plan_tier === plan) return 'Current Plan';
-      // Otherwise, generic manage/switch message
-      return 'Manage Subscription';
-    }
     if (loadingPlan === plan) return 'Redirecting...';
     if (loadingPlan === 'manage') return 'Loading...';
+
+    if (isSubscribed && subscription?.plan_tier) {
+      const currentLevel = getPlanLevel(subscription.plan_tier);
+      const targetLevel = getPlanLevel(plan);
+
+      // Same plan, allow billing interval changes
+      if (subscription.plan_tier === plan) {
+        return `Update to ${plan.charAt(0).toUpperCase() + plan.slice(1)} ${billingInterval === 'annual' ? 'Yearly' : 'Monthly'}`;
+      }
+
+      // Higher plan - show upgrade
+      if (targetLevel > currentLevel) {
+        return `Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}`;
+      }
+
+      // Lower plan - show manage subscription
+      if (targetLevel < currentLevel) {
+        return 'Manage Subscription';
+      }
+    }
+
+    // Not subscribed or free tier
     return label;
   };
 
   const isButtonDisabled = (plan: string) => {
     if (loadingSubscription || loadingPlan === plan || loadingPlan === 'manage') return true;
-    // Disable if this IS the current plan
-    if (isSubscribed && subscription?.plan_tier === plan) return true;
+    // Only disable if same plan AND subscription doesn't exist
+    // Allow billing interval changes even for same tier
     return false;
+  };
+
+  const handleButtonClick = (plan: string) => {
+    if (!isSubscribed) {
+      // Not subscribed - go to checkout
+      handleUpgrade(plan);
+      return;
+    }
+
+    if (subscription?.plan_tier) {
+      const currentLevel = getPlanLevel(subscription.plan_tier);
+      const targetLevel = getPlanLevel(plan);
+
+      // Upgrading to higher plan
+      if (targetLevel > currentLevel) {
+        handleUpgrade(plan);
+        return;
+      }
+
+      // Same plan - could be billing interval change, go to checkout
+      if (targetLevel === currentLevel) {
+        handleUpgrade(plan);
+        return;
+      }
+
+      // Downgrading - go to portal
+      if (targetLevel < currentLevel) {
+        handleManage();
+        return;
+      }
+    }
+
+    // Fallback to manage
+    handleManage();
   };
 
   return (
@@ -232,9 +294,11 @@ function PricingContent() {
                       ${billingInterval === 'annual' ? '4.99' : '10'}
                     </div>
                     <div className="text-zinc-400 text-sm line-through">
-                      ${billingInterval === 'annual' ? '10' : '20'}
+                      ${billingInterval === 'annual' ? '9.98' : '10'}
                     </div>
-                    <div className="text-zinc-300 text-sm">/month</div>
+                    <div className="text-zinc-300 text-sm">
+                      {billingInterval === 'annual' ? '/year' : '/month'}
+                    </div>
                   </div>
                   <div className="text-xs text-zinc-500 mb-6 font-medium">
                     Billed $
@@ -273,7 +337,7 @@ function PricingContent() {
                 </ul>
                 <Button
                   className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20 border-0"
-                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('hobby'))}
+                  onClick={() => handleButtonClick('hobby')}
                   disabled={isButtonDisabled('hobby')}
                 >
                   {getButtonText('hobby', 'Subscribe')}
@@ -332,7 +396,7 @@ function PricingContent() {
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2"
-                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('pro'))}
+                  onClick={() => handleButtonClick('pro')}
                   disabled={isButtonDisabled('pro')}
                 >
                   {getButtonText('pro', 'Upgrade to Pro')}
@@ -392,7 +456,7 @@ function PricingContent() {
                 <p className="text-xs text-zinc-500 mt-3 italic">* Limits apply to prevent abuse</p>
                 <Button
                   className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
-                  onClick={() => (isSubscribed ? handleManage() : handleUpgrade('max'))}
+                  onClick={() => handleButtonClick('max')}
                   disabled={isButtonDisabled('max')}
                 >
                   {getButtonText('max', 'Upgrade to Max')}

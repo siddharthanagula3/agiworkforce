@@ -1,9 +1,11 @@
 import { createSupabaseServerClient } from '../../services/supabase-server';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { CreditService } from '@/lib/services/credit-service';
 import { redirect } from 'next/navigation';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
+import { CreditMonitor } from '../../components/dashboard/CreditMonitor';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Activity, CreditCard, Download, Users } from 'lucide-react';
+import { CreditCard, Download, Users, Zap } from 'lucide-react';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +51,25 @@ export default async function DashboardPage() {
     }
   }
 
+  // Fetch credit balance
+  let creditBalance = null;
+  let creditUsagePercentage = 0;
+  try {
+    const balance = await CreditService.getBalance(session.user.id);
+    // Only set creditBalance if there's an actual account (account_id is not null)
+    if (balance && balance.account_id) {
+      creditBalance = balance;
+      if (creditBalance.credits_allocated_cents > 0) {
+        creditUsagePercentage =
+          ((creditBalance.credits_allocated_cents - creditBalance.credits_remaining_cents) /
+            creditBalance.credits_allocated_cents) *
+          100;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch credit balance:', error);
+  }
+
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between">
@@ -83,12 +104,45 @@ export default async function DashboardPage() {
 
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">API Usage</CardTitle>
-            <Activity className="h-4 w-4 text-zinc-400" />
+            <CardTitle className="text-sm font-medium text-zinc-200">Credit Usage</CardTitle>
+            <Zap className="h-4 w-4 text-zinc-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">0</div>
-            <p className="text-xs text-zinc-500">Requests this month</p>
+            {creditBalance ? (
+              <>
+                <div className="text-2xl font-bold text-white">
+                  $
+                  {(
+                    (creditBalance.credits_allocated_cents -
+                      creditBalance.credits_remaining_cents) /
+                    100
+                  ).toFixed(2)}
+                </div>
+                <p className="text-xs text-zinc-500 mb-2">
+                  of ${(creditBalance.credits_allocated_cents / 100).toFixed(2)} used
+                </p>
+                <div className="w-full bg-zinc-700 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      creditUsagePercentage >= 100
+                        ? 'bg-red-500'
+                        : creditUsagePercentage >= 80
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(creditUsagePercentage, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {creditUsagePercentage.toFixed(1)}% used this period
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-white">$0.00</div>
+                <p className="text-xs text-zinc-500">No active subscription</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -144,6 +198,17 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Credit monitoring and alert modal */}
+      {creditBalance && (
+        <CreditMonitor
+          userId={session.user.id}
+          currentPlan={effectiveSubscription?.plan_tier || 'free'}
+          remainingCents={creditBalance.credits_remaining_cents}
+          allocatedCents={creditBalance.credits_allocated_cents}
+          usagePercentage={creditUsagePercentage}
+        />
+      )}
     </DashboardLayout>
   );
 }
