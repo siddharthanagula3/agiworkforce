@@ -34,12 +34,17 @@ export default async function DashboardPage() {
   if (subscription && !['active', 'trialing'].includes(subscription.status)) {
     // Attempt self-healing sync for inactive subscriptions
     if (session.user.email) {
-      const syncedSub = await SubscriptionService.syncWithStripe(
-        session.user.id,
-        session.user.email,
-      );
-      if (syncedSub) {
-        effectiveSubscription = syncedSub;
+      try {
+        const syncedSub = await SubscriptionService.syncWithStripe(
+          session.user.id,
+          session.user.email,
+        );
+        if (syncedSub) {
+          effectiveSubscription = syncedSub;
+        }
+      } catch (error) {
+        console.error('Failed to sync subscription with Stripe:', error);
+        // Continue with existing subscription data
       }
     }
   }
