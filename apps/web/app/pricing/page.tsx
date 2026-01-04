@@ -270,10 +270,16 @@ function PricingContent() {
                 <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
 
                 <div className="relative">
+                  {/* Top badges */}
                   <div className="flex flex-wrap items-center gap-2 mb-4">
-                    {!isSubscribed && (
-                      <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide">
-                        Limited Time Launch Offer
+                    {!isSubscribed && billingInterval === 'annual' && (
+                      <div className="inline-flex items-center rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide animate-pulse">
+                        Special Offer for First Time Users
+                      </div>
+                    )}
+                    {!isSubscribed && billingInterval === 'monthly' && (
+                      <div className="inline-flex items-center rounded-full bg-emerald-500/80 px-3 py-1 text-xs font-bold text-black uppercase tracking-wide">
+                        Launch Offer
                       </div>
                     )}
                     {billingInterval === 'annual' && (
@@ -299,17 +305,11 @@ function PricingContent() {
                     <div className="text-zinc-300 text-sm">/month</div>
                   </div>
                   <div className="text-xs text-zinc-500 mb-6 font-medium">
-                    {billingInterval === 'annual' ? (
-                      <>
-                        <span className="text-emerald-400 font-semibold">
-                          Special limited time offer for first time users
-                        </span>
-                        <br />
-                        <span className="text-zinc-300">$59.88 billed yearly</span>
-                      </>
-                    ) : (
-                      <span className="text-zinc-300">$10/month billed monthly</span>
-                    )}
+                    <span className="text-zinc-300">
+                      {billingInterval === 'annual'
+                        ? '$59.88 billed yearly'
+                        : '$10/month billed monthly'}
+                    </span>
                   </div>
                 </div>
 
