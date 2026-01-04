@@ -59,6 +59,8 @@ function PricingContent() {
   const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchSubscription = async () => {
       try {
         const supabase = getSupabaseClient();
@@ -66,41 +68,35 @@ function PricingContent() {
           data: { user },
         } = await supabase.auth.getUser();
 
-        if (user) {
+        if (user && mounted) {
           const { data } = await supabase
             .from('subscriptions')
             .select('status, stripe_price_id, plan_tier')
             .eq('user_id', user.id)
             .maybeSingle();
 
-          if (data) {
+          if (data && mounted) {
             setSubscription(data);
-          } else {
-            // Self-healing: If no local subscription, try to sync from Stripe
-            try {
-              const syncRes = await fetch('/api/sync-subscription', { method: 'POST' });
-              if (syncRes.ok) {
-                // Retry fetch
-                const { data: retryData } = await supabase
-                  .from('subscriptions')
-                  .select('status, stripe_price_id, plan_tier')
-                  .eq('user_id', user.id)
-                  .maybeSingle();
-                setSubscription(retryData);
-              }
-            } catch (syncError) {
-              console.warn('Sync attempt failed:', syncError);
-            }
+          } else if (mounted) {
+            // No subscription found - user is on free tier
+            // The webhook will create the subscription when they complete purchase
+            setSubscription(null);
           }
         }
       } catch (error) {
         console.error('Error fetching subscription:', error);
       } finally {
-        setLoadingSubscription(false);
+        if (mounted) {
+          setLoadingSubscription(false);
+        }
       }
     };
 
     fetchSubscription();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const isSubscribed =
