@@ -5,7 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
-import { useTheme } from '../../hooks/useTheme';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
 import { useTerminalStore } from '../../stores/terminalStore';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ export function Terminal({ sessionId, className }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const { theme } = useTheme();
+  const { theme } = useThemeContext();
   const { sendInput, resizeTerminal, setupOutputListener, removeOutputListener } =
     useTerminalStore();
   const [isReady, setIsReady] = useState(false);

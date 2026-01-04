@@ -2,7 +2,7 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
 import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { useTheme } from '../../hooks/useTheme';
+import { useThemeContext } from '../../providers/ThemeProvider';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 
@@ -31,7 +31,7 @@ export function DiffViewer({
   onClose,
   className,
 }: DiffViewerProps) {
-  const { theme } = useTheme();
+  const { theme } = useThemeContext();
   const [diffStats, setDiffStats] = useState<{
     additions: number;
     deletions: number;

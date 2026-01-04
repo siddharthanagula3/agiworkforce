@@ -65,9 +65,9 @@ describe('CreditService', () => {
         account_id: 'acc_123',
         period_start: '2025-01-01T00:00:00Z',
         period_end: '2025-02-01T00:00:00Z',
-        allocated_cents: 5000,
-        used_cents: 1000,
-        remaining_cents: 4000,
+        credits_allocated_cents: 5000,
+        credits_used_cents: 1000,
+        credits_remaining_cents: 4000,
         percentage_used: 20,
         daily_limit_cents: 1500,
         daily_used_cents: 500,
@@ -75,7 +75,7 @@ describe('CreditService', () => {
         last_daily_reset_at: '2025-01-02T00:00:00Z',
       };
 
-      mockRpc.mockResolvedValue({ data: mockBalance, error: null });
+      mockRpc.mockResolvedValue({ data: [mockBalance], error: null });
 
       const result = await CreditService.getBalance('user-123');
 
@@ -115,9 +115,9 @@ describe('CreditService', () => {
         account_id: 'acc_123',
         period_start: '2025-01-01T00:00:00Z',
         period_end: '2025-02-01T00:00:00Z',
-        allocated_cents: 5000,
-        used_cents: 1000,
-        remaining_cents: 4000,
+        credits_allocated_cents: 5000,
+        credits_used_cents: 1000,
+        credits_remaining_cents: 4000,
         percentage_used: 20,
         daily_limit_cents: 1500,
         daily_used_cents: 1400,
@@ -125,7 +125,7 @@ describe('CreditService', () => {
         last_daily_reset_at: '2025-01-02T05:00:00Z',
       };
 
-      mockRpc.mockResolvedValue({ data: mockBalance, error: null });
+      mockRpc.mockResolvedValue({ data: [mockBalance], error: null });
 
       const result = await CreditService.getBalance('user-123');
 

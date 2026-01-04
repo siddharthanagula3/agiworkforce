@@ -795,6 +795,9 @@ pub fn run() {
             crate::sys::account::oauth_refresh,
             crate::sys::account::fetch_credit_balance,
             crate::sys::account::report_llm_usage,
+            crate::sys::account::account_store_access_token,
+            crate::sys::account::account_store_refresh_token,
+            crate::sys::account::account_clear_tokens,
 
 
             crate::sys::commands::create_team,

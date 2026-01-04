@@ -610,10 +610,14 @@ pub async fn cancel_agent(agent_id: String) -> Result<(), String> {
 pub async fn refresh_agent_status() -> Result<Vec<AgentStatus>, String> {
     let orchestrator_arc = {
         let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
+        match guard.as_ref() {
+            Some(arc) => arc.clone(),
+            None => {
+                // Orchestrator not yet initialized - return empty list instead of error
+                // This is normal during app startup before AGI features are used
+                return Ok(vec![]);
+            }
+        }
     };
 
     let orchestrator = orchestrator_arc.lock().await;
