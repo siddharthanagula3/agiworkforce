@@ -18,18 +18,13 @@ export default async function BillingPage() {
     redirect('/login');
   }
 
+  // Use maybeSingle() to avoid errors when no subscription exists (new users)
+  // Free tier users can view billing page to see upgrade options
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('*')
     .eq('user_id', session.user.id)
-    .single();
-
-  const activeStatuses = ['active', 'trialing'];
-  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
-
-  if (!hasActiveSubscription) {
-    redirect('/pricing?reason=subscription_required');
-  }
+    .maybeSingle();
 
   const isSubscribed = subscription?.status === 'active' || subscription?.status === 'trialing';
 
