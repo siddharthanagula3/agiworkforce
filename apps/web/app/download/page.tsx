@@ -19,23 +19,7 @@ export default async function DownloadPage() {
 
   const {
     data: { session },
-    error: sessionError,
   } = await supabase.auth.getSession();
-
-  if (sessionError) {
-    console.error('Session error:', sessionError);
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold">Service Temporarily Unavailable</h1>
-          <p className="text-zinc-400">Please try again later or contact support.</p>
-          <Link href="/" className="text-blue-400 hover:underline">
-            Return to Home
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const downloads = getDownloadUrls();
 
@@ -48,19 +32,19 @@ export default async function DownloadPage() {
             <span>AGI Workforce</span>
           </Link>
           <div className="flex items-center gap-4">
-            {!session?.user ? (
-              <Link
-                href="/login?redirectTo=/download"
-                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Sign In
-              </Link>
-            ) : (
+            {session?.user ? (
               <Link
                 href="/dashboard"
                 className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
               >
                 Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Sign In
               </Link>
             )}
             <Link
@@ -85,26 +69,10 @@ export default async function DownloadPage() {
             </p>
           </div>
 
-          {!session?.user ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center space-y-4">
-              <h2 className="text-xl font-semibold text-white">Sign In Required</h2>
-              <p className="text-zinc-400">
-                Please sign in to download AGI Workforce and start automating your workflows.
-              </p>
-              <Link
-                href="/login?redirectTo=/download"
-                className="inline-block bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                Sign In to Download
-              </Link>
-            </div>
-          ) : (
-            <>
-              <DownloadSection downloads={downloads} />
-              {}
-              <DirectDownloadButtons />
-            </>
-          )}
+          <DownloadSection downloads={downloads} />
+
+          {}
+          <DirectDownloadButtons />
 
           <div className="text-center text-sm text-zinc-500">
             <p>By downloading, you agree to our Terms of Service and Privacy Policy.</p>
