@@ -40,7 +40,7 @@ export async function GET(request: Request) {
             ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
             : {}),
         },
-        next: { revalidate: 60 }, // Cache for 1 minute
+        next: { revalidate: 0 }, // No cache - always fetch latest release
       },
     );
 
