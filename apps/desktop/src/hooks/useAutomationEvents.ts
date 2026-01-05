@@ -1,5 +1,5 @@
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useRef } from 'react';
+import { listen, type UnlistenFn } from '../lib/tauri-mock';
 import { useAutomationStore } from '../stores/automationStore';
 import type { RecordedAction, Recording } from '../types/automationEnhanced';
 

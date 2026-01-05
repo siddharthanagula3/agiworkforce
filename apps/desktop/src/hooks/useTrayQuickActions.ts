@@ -1,6 +1,5 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useRef } from 'react';
-import { invoke } from '../lib/tauri-mock';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
 interface TrayQuickActionsOptions {
   onNewConversation: () => void | Promise<void>;

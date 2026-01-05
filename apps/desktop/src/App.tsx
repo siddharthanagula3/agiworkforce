@@ -373,18 +373,25 @@ const App = () => {
     const unsubscribeBilling = initializeBillingStore();
     const unsubscribeUsage = initializeUsageStore();
 
-    // Force sync account data after auth is ready to ensure subscription is up-to-date
-    const syncTimer = setTimeout(async () => {
-      const { useAccountStore } = await import('./stores/accountStore');
+    // Force sync account data after store hydration is complete
+    let cancelled = false;
+    (async () => {
+      const { useAccountStore, waitForHydration } = await import('./stores/accountStore');
       const { supabaseAuth } = await import('./services/supabaseAuth');
+
+      // Wait for store hydration from localStorage before syncing
+      await waitForHydration();
+
+      if (cancelled) return;
+
       if (supabaseAuth.isAuthenticated()) {
-        console.log('[App] Forcing account sync with backend...');
+        console.log('[App] Store hydrated, forcing account sync with backend...');
         await useAccountStore.getState().syncWithBackend();
       }
-    }, 1000);
+    })();
 
     return () => {
-      clearTimeout(syncTimer);
+      cancelled = true;
       if (typeof unsubscribeAuth === 'function') {
         unsubscribeAuth();
       }
