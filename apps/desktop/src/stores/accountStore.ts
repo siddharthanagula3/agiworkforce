@@ -127,7 +127,7 @@ export const useAccountStore = create<AccountState>()(
           const plan = updatedAccount.plan;
           return {
             account: updatedAccount,
-            isPro: plan === 'pro' || plan === 'max' || plan === 'enterprise',
+            isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
             isEnterprise: plan === 'enterprise',
           };
         });
@@ -149,7 +149,7 @@ export const useAccountStore = create<AccountState>()(
             planDisplayName: planDisplayNames[plan],
             subscriptionStatus: plan === 'free' || plan === ('none' as any) ? 'none' : 'active',
           },
-          isPro: plan === 'pro' || plan === 'max' || plan === 'enterprise',
+          isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
           isEnterprise: plan === 'enterprise',
         }));
       },
@@ -233,8 +233,27 @@ export const useAccountStore = create<AccountState>()(
         }
 
         try {
-          const planTier = asPlanTier(authState.subscription?.plan_tier);
-          console.log('[Account] Resolved plan tier:', planTier);
+          // Determine plan tier - prefer fetched subscription data, but preserve valid non-free plan if fetch failed
+          let planTier: PlanTier;
+          const currentState = get();
+          if (authState.subscription?.plan_tier) {
+            planTier = asPlanTier(authState.subscription.plan_tier);
+            console.log('[Account] syncWithBackend - Using fetched plan tier:', planTier);
+          } else {
+            // Subscription fetch returned null - preserve non-free plan if same user
+            const currentPlan = currentState.account.plan;
+            const currentUserId = currentState.account.id;
+            if (currentUserId === authState.user.id && currentPlan && currentPlan !== 'free') {
+              planTier = currentPlan;
+              console.log(
+                '[Account] syncWithBackend - Preserving existing non-free plan:',
+                planTier,
+              );
+            } else {
+              planTier = 'free';
+              console.log('[Account] syncWithBackend - Setting plan to free');
+            }
+          }
 
           // Fetch credits from API if we have a session
           let credits: CreditBalance | null = null;
@@ -267,7 +286,11 @@ export const useAccountStore = create<AccountState>()(
               lastSyncedAt: Date.now(),
             },
             isAuthenticated: true,
-            isPro: planTier === 'pro' || planTier === 'max' || planTier === 'enterprise',
+            isPro:
+              planTier === 'pro' ||
+              planTier === 'max' ||
+              planTier === 'enterprise' ||
+              planTier === 'hobby',
             isEnterprise: planTier === 'enterprise',
           }));
         } catch (error) {
@@ -383,8 +406,38 @@ export function initializeAccountStore(): () => void {
   const unsubscribe = supabaseAuth.onAuthStateChange(async (authState: AuthState) => {
     const store = useAccountStore.getState();
 
+    // Skip updates while auth is still loading - subscription data may not be fetched yet
+    if (authState.isLoading) {
+      console.log('[Account] Auth state is loading, skipping update...');
+      return;
+    }
+
     if (authState.user && authState.session) {
-      const planTier = asPlanTier(authState.subscription?.plan_tier);
+      // Determine plan tier - prefer fetched subscription data, but preserve valid non-free plan if fetch failed
+      let planTier: PlanTier;
+      if (authState.subscription?.plan_tier) {
+        // We have fresh subscription data from Supabase
+        planTier = asPlanTier(authState.subscription.plan_tier);
+        console.log('[Account] Using fetched plan tier:', planTier);
+      } else {
+        // Subscription fetch returned null - could be free user OR fetch failure
+        const currentPlan = store.account.plan;
+        const currentUserId = store.account.id;
+
+        // If same user and has a non-free plan, preserve it (likely a fetch failure)
+        // This prevents downgrading a paid user to free on temporary network issues
+        if (currentUserId === authState.user.id && currentPlan && currentPlan !== 'free') {
+          planTier = currentPlan;
+          console.log(
+            '[Account] Preserving existing non-free plan:',
+            planTier,
+            '(subscription fetch returned null)',
+          );
+        } else {
+          planTier = 'free';
+          console.log('[Account] Setting plan to free (no subscription found)');
+        }
+      }
 
       // Fetch credits from API if we have a session
       let credits: CreditBalance | null = null;
