@@ -171,7 +171,7 @@ tesseract = { version = "0.15", optional = true }
 llama-cpp-2 = { version = "0.1", optional = true }
 
 
-async-imap = "0.9"
+async-imap = "0.11"
 tokio-native-tls = "0.3"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
 mailparse = "0.15"
