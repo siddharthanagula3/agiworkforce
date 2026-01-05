@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useTerminalStore } from '../terminalStore';
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-}));
-
 const listeners: Record<string, (event: { payload: string }) => void> = {};
 const unlistenSpies: Mock[] = [];
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('../../lib/tauri-mock', () => ({
+  invoke: vi.fn(),
   listen: vi.fn((event: string, handler: (event: { payload: string }) => void) => {
     listeners[event] = handler;
     const unlisten = vi.fn(() => {
@@ -17,6 +14,7 @@ vi.mock('@tauri-apps/api/event', () => ({
     unlistenSpies.push(unlisten);
     return Promise.resolve(unlisten as unknown as () => void);
   }),
+  isTauri: true,
 }));
 
 const sessionId = 'session-123';
@@ -48,7 +46,7 @@ describe('useTerminalStore setupOutputListener', () => {
 
     await useTerminalStore.getState().setupOutputListener(sessionId, outputSpy, exitSpy);
 
-    const { listen } = await import('@tauri-apps/api/event');
+    const { listen } = await import('../../lib/tauri-mock');
     const listenMock = listen as unknown as Mock;
     expect(listenMock).toHaveBeenCalledWith(`terminal-output-${sessionId}`, expect.any(Function));
     expect(listenMock).toHaveBeenCalledWith(`terminal-exit-${sessionId}`, expect.any(Function));

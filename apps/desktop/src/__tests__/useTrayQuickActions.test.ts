@@ -1,24 +1,22 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { listen, type EventCallback } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import { useTrayQuickActions } from '../hooks/useTrayQuickActions';
 
+type EventCallback<T> = (event: { payload: T }) => void;
 const listeners: Record<string, EventCallback<any>> = {};
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('../lib/tauri-mock', () => ({
   listen: vi.fn((event: string, handler: EventCallback<any>) => {
     listeners[event] = handler;
     return Promise.resolve(() => {
       delete listeners[event];
     });
   }),
-}));
-
-vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
+  isTauri: true,
 }));
 
+const { listen, invoke } = await import('../lib/tauri-mock');
 const listenMock = vi.mocked(listen);
 const invokeMock = vi.mocked(invoke);
 

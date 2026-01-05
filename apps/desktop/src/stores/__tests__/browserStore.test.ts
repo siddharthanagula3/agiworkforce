@@ -1,18 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import { useBrowserStore, cleanupBrowserStore } from '../browserStore';
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
-}));
-
-vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
+  isTauri: true,
 }));
 
 type InvokeMock = MockInstance<(cmd: string, args?: unknown) => Promise<unknown>>;
 
 async function getInvokeMock(): Promise<InvokeMock> {
-  const { invoke } = await import('@tauri-apps/api/core');
+  const { invoke } = await import('../../lib/tauri-mock');
   return invoke as unknown as InvokeMock;
 }
 
