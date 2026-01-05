@@ -13,7 +13,18 @@ import {
   type PlanTier,
   asPlanTier,
 } from '../lib/supabase';
-import { invoke } from '@tauri-apps/api/core';
+
+// Check if running in Tauri environment
+const isTauri = !!(window as any).__TAURI_INTERNALS__;
+
+// Dynamic import of invoke to handle web development mode
+const getInvoke = async () => {
+  if (!isTauri) {
+    return null; // Return null in web mode, caller should check
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke;
+};
 
 export interface AuthState {
   user: User | null;
@@ -50,6 +61,7 @@ class SupabaseAuthService {
     isLoading: true,
     error: null,
   };
+  private isHandlingSignIn = false; // Prevent re-entry during handleSignedIn
 
   private constructor() {
     this.initializeAuthListener();
@@ -123,8 +135,17 @@ class SupabaseAuthService {
   private subscriptionChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
 
   private async handleSignedIn(session: Session): Promise<void> {
+    // Prevent re-entry - setSession below can trigger another auth state change
+    if (this.isHandlingSignIn) {
+      console.log('[Auth] Already handling sign-in, skipping re-entry');
+      return;
+    }
+    this.isHandlingSignIn = true;
+
     const user = session.user;
-    this.updateState({ user, session, isLoading: true, error: null });
+    // Don't notify listeners yet - we'll batch all updates at the end
+    // This prevents race conditions where listeners see incomplete state
+    this.currentState = { ...this.currentState, user, session, isLoading: true, error: null };
 
     try {
       // Ensure the session is properly set in the Supabase client
@@ -146,17 +167,25 @@ class SupabaseAuthService {
         this.fetchFeatureFlags(user.id),
       ]);
 
+      console.log('[Auth] All user data fetched, subscription:', subscription?.plan_tier);
+
+      // NOW notify listeners with the complete state (including subscription)
       this.updateState({
+        user,
+        session,
         profile,
         subscription,
         featureFlags,
         isLoading: false,
+        error: null,
       });
 
       this.subscribeToSubscriptionChanges(user.id);
     } catch (error) {
       console.error('[Auth] Error fetching user data:', error);
       this.updateState({ isLoading: false });
+    } finally {
+      this.isHandlingSignIn = false;
     }
   }
 
@@ -217,9 +246,16 @@ class SupabaseAuthService {
     return data;
   }
 
-  private async fetchSubscription(userId: string): Promise<Subscription | null> {
+  private async fetchSubscription(userId: string, retryCount = 0): Promise<Subscription | null> {
     const supabase = getSupabase();
-    console.log('[Auth] Fetching subscription for user:', userId);
+    const maxRetries = 3;
+    const timeoutMs = 15000; // Increased to 15s for better reliability
+
+    console.log(
+      '[Auth] Fetching subscription for user:',
+      userId,
+      retryCount > 0 ? `(retry ${retryCount})` : '',
+    );
 
     try {
       // First, check if we have a valid session
@@ -238,9 +274,12 @@ class SupabaseAuthService {
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
         setTimeout(() => {
-          console.error('[Auth] Subscription fetch TIMED OUT after 5s');
-          resolve({ data: null, error: { message: 'Subscription fetch timed out after 5s' } });
-        }, 5000),
+          console.error(`[Auth] Subscription fetch TIMED OUT after ${timeoutMs / 1000}s`);
+          resolve({
+            data: null,
+            error: { message: `Subscription fetch timed out after ${timeoutMs / 1000}s` },
+          });
+        }, timeoutMs),
       );
 
       console.log('[Auth] Creating Supabase query...');
@@ -257,7 +296,25 @@ class SupabaseAuthService {
       const { data, error } = result;
 
       if (error) {
+        // Check if it's a "no rows" error (user has no subscription yet) - this is expected for free users
+        if (error.message?.includes('no rows') || (error as any).code === 'PGRST116') {
+          console.log('[Auth] No subscription found for user (free tier)');
+          return null;
+        }
+
         console.error('[Auth] Error fetching subscription:', error);
+
+        // Retry on timeout or temporary errors
+        if (
+          retryCount < maxRetries &&
+          (error.message?.includes('timed out') || error.message?.includes('network'))
+        ) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff: 1s, 2s, 4s (max 5s)
+          console.log(`[Auth] Retrying subscription fetch in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return this.fetchSubscription(userId, retryCount + 1);
+        }
+
         return null;
       }
 
@@ -265,6 +322,15 @@ class SupabaseAuthService {
       return data;
     } catch (err) {
       console.error('[Auth] Exception fetching subscription:', err);
+
+      // Retry on exceptions
+      if (retryCount < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+        console.log(`[Auth] Retrying subscription fetch in ${delay}ms after exception...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this.fetchSubscription(userId, retryCount + 1);
+      }
+
       return null;
     }
   }
@@ -430,13 +496,18 @@ class SupabaseAuthService {
       console.error('[Auth] Sign out exception:', error);
       this.updateState({ error: String(error) });
     } finally {
-      // Clear local database to ensure strict data isolation
-      try {
-        await invoke('clear_local_database');
-        console.log('[Auth] Local database cleared on logout');
-      } catch (err) {
-        // Log but don't block sign out state update
-        console.error('[Auth] Failed to clear local database on logout:', err);
+      // Clear local database to ensure strict data isolation (only in Tauri)
+      if (isTauri) {
+        try {
+          const invoke = await getInvoke();
+          if (invoke) {
+            await invoke('clear_local_database');
+            console.log('[Auth] Local database cleared on logout');
+          }
+        } catch (err) {
+          // Log but don't block sign out state update
+          console.error('[Auth] Failed to clear local database on logout:', err);
+        }
       }
 
       // Ensure we clean up state even if the SIGNED_OUT event doesn't fire appropriately

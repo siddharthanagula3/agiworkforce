@@ -169,7 +169,8 @@ const DesktopShell = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
+      const key = event.key?.toLowerCase();
+      if (!key) return; // Guard against undefined event.key
       if ((event.metaKey || event.ctrlKey) && key === 'k') {
         event.preventDefault();
         setCommandPaletteOpen((open) => !open);
