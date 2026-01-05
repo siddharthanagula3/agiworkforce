@@ -152,7 +152,7 @@ zip = "0.6"
 
 
 pdf-extract = "0.5"
-lopdf = "0.32"
+lopdf = "0.38"
 roxmltree = "0.20"
 calamine = "0.21"
 
