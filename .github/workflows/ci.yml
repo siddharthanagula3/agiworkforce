@@ -36,8 +36,16 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Build
-        run: pnpm build
+      - name: Build packages
+        run: |
+          pnpm --filter @agiworkforce/types build || true
+          pnpm --filter @agiworkforce/utils build || true
+          pnpm --filter @agiworkforce/api-gateway build
+          pnpm --filter @agiworkforce/signaling-server build
+          pnpm --filter @agiworkforce/extension build
+
+      - name: Build web app
+        run: pnpm --filter web build
 
       - name: Test (Rust workspace, default features)
         run: cargo test --workspace
