@@ -30,11 +30,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Lint, test, and build (JS/TS workspace)
-        run: |
-          pnpm lint
-          pnpm test
-          pnpm build
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
 
       - name: Test (Rust workspace, default features)
         run: cargo test --workspace
