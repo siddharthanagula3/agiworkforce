@@ -26,6 +26,8 @@ const getInvoke = async () => {
   return invoke;
 };
 
+export type SubscriptionFetchStatus = 'idle' | 'fetching' | 'succeeded' | 'failed';
+
 export interface AuthState {
   user: User | null;
   session: Session | null;
@@ -34,6 +36,7 @@ export interface AuthState {
   featureFlags: Record<string, boolean>;
   isLoading: boolean;
   error: string | null;
+  subscriptionFetchStatus: SubscriptionFetchStatus;
 }
 
 export type AuthProvider = 'google' | 'github' | 'apple' | 'discord';
@@ -60,6 +63,7 @@ class SupabaseAuthService {
     featureFlags: {},
     isLoading: true,
     error: null,
+    subscriptionFetchStatus: 'idle',
   };
   private isHandlingSignIn = false; // Prevent re-entry during handleSignedIn
 
@@ -145,25 +149,44 @@ class SupabaseAuthService {
     const user = session.user;
     // Don't notify listeners yet - we'll batch all updates at the end
     // This prevents race conditions where listeners see incomplete state
-    this.currentState = { ...this.currentState, user, session, isLoading: true, error: null };
+    // Mark subscription as 'fetching' so listeners know data is being loaded
+    this.currentState = {
+      ...this.currentState,
+      user,
+      session,
+      isLoading: true,
+      error: null,
+      subscriptionFetchStatus: 'fetching',
+    };
 
     try {
       // Ensure the session is properly set in the Supabase client
+      // Add timeout to prevent hanging in web dev mode
       const supabase = getSupabase();
       console.log('[Auth] Ensuring session is set in Supabase client...');
-      const { error: setSessionError } = await supabase.auth.setSession({
+
+      const setSessionPromise = supabase.auth.setSession({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       });
-      if (setSessionError) {
-        console.error('[Auth] Failed to set session:', setSessionError);
-      } else {
+
+      const setSessionTimeout = new Promise<{ error: { message: string } }>((resolve) =>
+        setTimeout(() => {
+          console.warn('[Auth] setSession timed out after 5s, proceeding anyway...');
+          resolve({ error: { message: 'setSession timed out' } });
+        }, 5000),
+      );
+
+      const setSessionResult = await Promise.race([setSessionPromise, setSessionTimeout]);
+      if (setSessionResult.error && !setSessionResult.error.message.includes('timed out')) {
+        console.error('[Auth] Failed to set session:', setSessionResult.error);
+      } else if (!setSessionResult.error) {
         console.log('[Auth] Session set successfully');
       }
 
       const [profile, subscription, featureFlags] = await Promise.all([
         this.fetchProfile(user.id),
-        this.fetchSubscription(user.id),
+        this.fetchSubscription(user.id, session), // Pass session to avoid getSession() call
         this.fetchFeatureFlags(user.id),
       ]);
 
@@ -178,12 +201,13 @@ class SupabaseAuthService {
         featureFlags,
         isLoading: false,
         error: null,
+        subscriptionFetchStatus: 'succeeded',
       });
 
       this.subscribeToSubscriptionChanges(user.id);
     } catch (error) {
       console.error('[Auth] Error fetching user data:', error);
-      this.updateState({ isLoading: false });
+      this.updateState({ isLoading: false, subscriptionFetchStatus: 'failed' });
     } finally {
       this.isHandlingSignIn = false;
     }
@@ -203,6 +227,7 @@ class SupabaseAuthService {
       featureFlags: {},
       isLoading: false,
       error: null,
+      subscriptionFetchStatus: 'idle',
     });
   }
 
@@ -246,10 +271,14 @@ class SupabaseAuthService {
     return data;
   }
 
-  private async fetchSubscription(userId: string, retryCount = 0): Promise<Subscription | null> {
+  private async fetchSubscription(
+    userId: string,
+    session?: Session | null,
+    retryCount = 0,
+  ): Promise<Subscription | null> {
     const supabase = getSupabase();
     const maxRetries = 3;
-    const timeoutMs = 15000; // Increased to 15s for better reliability
+    const timeoutMs = 10000; // 10s timeout for better UX
 
     console.log(
       '[Auth] Fetching subscription for user:',
@@ -258,17 +287,29 @@ class SupabaseAuthService {
     );
 
     try {
-      // First, check if we have a valid session
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log('[Auth] Current session check:', {
-        hasSession: !!sessionData?.session,
-        userId: sessionData?.session?.user?.id,
-        expiresAt: sessionData?.session?.expires_at,
-      });
+      // Skip session check if session was passed (avoids hanging getSession() call)
+      if (!session) {
+        // Only check session if not passed - with timeout to prevent hanging
+        const sessionCheckPromise = supabase.auth.getSession();
+        const sessionTimeout = new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => {
+            console.warn('[Auth] getSession timed out after 3s');
+            resolve({ data: { session: null } });
+          }, 3000),
+        );
 
-      if (!sessionData?.session) {
-        console.error('[Auth] No session available for subscription query');
-        return null;
+        const { data: sessionData } = await Promise.race([sessionCheckPromise, sessionTimeout]);
+        console.log('[Auth] Current session check:', {
+          hasSession: !!sessionData?.session,
+          userId: sessionData?.session?.user?.id,
+        });
+
+        if (!sessionData?.session) {
+          console.error('[Auth] No session available for subscription query');
+          return null;
+        }
+      } else {
+        console.log('[Auth] Using passed session, skipping getSession() call');
       }
 
       // Add timeout to prevent hanging
@@ -312,7 +353,7 @@ class SupabaseAuthService {
           const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff: 1s, 2s, 4s (max 5s)
           console.log(`[Auth] Retrying subscription fetch in ${delay}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
-          return this.fetchSubscription(userId, retryCount + 1);
+          return this.fetchSubscription(userId, session, retryCount + 1);
         }
 
         return null;
@@ -328,7 +369,7 @@ class SupabaseAuthService {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
         console.log(`[Auth] Retrying subscription fetch in ${delay}ms after exception...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.fetchSubscription(userId, retryCount + 1);
+        return this.fetchSubscription(userId, session, retryCount + 1);
       }
 
       return null;
@@ -659,6 +700,9 @@ class SupabaseAuthService {
     const userId = this.currentState.user?.id;
     if (!userId) return;
 
+    // Mark as fetching before starting
+    this.updateState({ subscriptionFetchStatus: 'fetching' });
+
     try {
       const [profile, subscription, featureFlags] = await Promise.all([
         this.fetchProfile(userId),
@@ -670,9 +714,11 @@ class SupabaseAuthService {
         profile,
         subscription,
         featureFlags,
+        subscriptionFetchStatus: 'succeeded',
       });
     } catch (error) {
       console.error('[Auth] Error refreshing user data:', error);
+      this.updateState({ subscriptionFetchStatus: 'failed' });
     }
   }
 }

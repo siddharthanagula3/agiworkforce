@@ -63,6 +63,7 @@ interface AccountState {
   isAuthenticated: boolean;
   isPro: boolean;
   isEnterprise: boolean;
+  _hasHydrated: boolean;
 
   setAccount: (account: Partial<DesktopAccount>) => void;
   setPlan: (plan: PlanTier) => void;
@@ -120,6 +121,7 @@ export const useAccountStore = create<AccountState>()(
       isAuthenticated: false,
       isPro: false,
       isEnterprise: false,
+      _hasHydrated: false,
 
       setAccount: (updates: Partial<DesktopAccount>) => {
         set((state) => {
@@ -314,16 +316,55 @@ export const useAccountStore = create<AccountState>()(
     {
       name: 'account-storage',
       partialize: (state) => ({
+        // Only persist non-subscription fields to avoid stale plan data on reload
+        // Plan/subscription data should always be fetched fresh from backend
         account: {
-          ...state.account,
-
-          accessToken: null,
-          refreshToken: null,
+          id: state.account.id,
+          email: state.account.email,
+          displayName: state.account.displayName,
+          avatar: state.account.avatar,
+          featureFlags: state.account.featureFlags,
+          lastSyncedAt: state.account.lastSyncedAt,
+          // DO NOT persist: plan, planDisplayName, subscriptionStatus, currentPeriodEnd,
+          // stripeCustomerId, credits, accessToken, refreshToken
+          // These must be fetched fresh from the backend on each app start
         },
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state._hasHydrated = true;
+        }
+      },
     },
   ),
 );
+
+// Helper to wait for store hydration from localStorage
+export function waitForHydration(): Promise<void> {
+  return new Promise((resolve) => {
+    if (useAccountStore.getState()._hasHydrated) {
+      resolve();
+      return;
+    }
+    const unsub = useAccountStore.subscribe((state) => {
+      if (state._hasHydrated) {
+        unsub();
+        resolve();
+      }
+    });
+  });
+}
+
+// Retry mechanism for failed subscription fetches
+let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSubscriptionRetry(userId: string): void {
+  if (retryTimeout) clearTimeout(retryTimeout);
+  retryTimeout = setTimeout(async () => {
+    console.log('[Account] Retrying subscription fetch for user:', userId);
+    await supabaseAuth.refreshUserData();
+  }, 3000);
+}
 
 export const selectAccount = (state: AccountState) => state.account;
 export const selectPlan = (state: AccountState) => state.account.plan;
@@ -404,39 +445,55 @@ export function getPlanDescription(plan: PlanTier): string {
 
 export function initializeAccountStore(): () => void {
   const unsubscribe = supabaseAuth.onAuthStateChange(async (authState: AuthState) => {
-    const store = useAccountStore.getState();
-
     // Skip updates while auth is still loading - subscription data may not be fetched yet
     if (authState.isLoading) {
       console.log('[Account] Auth state is loading, skipping update...');
       return;
     }
 
+    // Skip updates while subscription is still being fetched
+    if (authState.subscriptionFetchStatus === 'fetching') {
+      console.log('[Account] Subscription is still being fetched, waiting...');
+      return;
+    }
+
+    // Wait for store hydration from localStorage before making plan decisions
+    await waitForHydration();
+
+    const store = useAccountStore.getState();
+
     if (authState.user && authState.session) {
-      // Determine plan tier - prefer fetched subscription data, but preserve valid non-free plan if fetch failed
+      // Determine plan tier based on subscription fetch status
       let planTier: PlanTier;
+      const { subscriptionFetchStatus } = authState;
+
       if (authState.subscription?.plan_tier) {
         // We have fresh subscription data from Supabase
         planTier = asPlanTier(authState.subscription.plan_tier);
-        console.log('[Account] Using fetched plan tier:', planTier);
-      } else {
-        // Subscription fetch returned null - could be free user OR fetch failure
+        console.log(
+          '[Account] Using fetched plan tier:',
+          planTier,
+          '(status:',
+          subscriptionFetchStatus,
+          ')',
+        );
+      } else if (subscriptionFetchStatus === 'failed') {
+        // Fetch failed - preserve non-free plan if same user, else schedule retry
         const currentPlan = store.account.plan;
         const currentUserId = store.account.id;
 
-        // If same user and has a non-free plan, preserve it (likely a fetch failure)
-        // This prevents downgrading a paid user to free on temporary network issues
         if (currentUserId === authState.user.id && currentPlan && currentPlan !== 'free') {
           planTier = currentPlan;
-          console.log(
-            '[Account] Preserving existing non-free plan:',
-            planTier,
-            '(subscription fetch returned null)',
-          );
+          console.log('[Account] Preserving existing non-free plan:', planTier, '(fetch failed)');
         } else {
           planTier = 'free';
-          console.log('[Account] Setting plan to free (no subscription found)');
+          console.log('[Account] Setting plan to free (fetch failed, scheduling retry)');
+          scheduleSubscriptionRetry(authState.user.id);
         }
+      } else {
+        // subscriptionFetchStatus === 'succeeded' but no subscription data = genuinely free tier
+        planTier = 'free';
+        console.log('[Account] Setting plan to free (no subscription found, user is on free tier)');
       }
 
       // Fetch credits from API if we have a session
@@ -478,14 +535,25 @@ export function initializeAccountStore(): () => void {
       // Sync access token to Rust backend keyring for ManagedCloud provider
       // Auto-initialize ManagedCloud provider if user is authenticated
       // This ensures it's available for Pro/Max users who prefer cloud credits
-      if (isTauri) {
+      if (isTauri && authState.session) {
         (async () => {
           try {
             const { invoke } = await import('@tauri-apps/api/core');
+            // First sync the access token to the Rust backend
+            await invoke('account_store_access_token', {
+              accessToken: authState.session!.access_token,
+            });
+            // Sync refresh token if available
+            if (authState.session!.refresh_token) {
+              await invoke('account_store_refresh_token', {
+                refreshToken: authState.session!.refresh_token,
+              });
+            }
             // Now ensure ManagedCloud provider is initialized
             await invoke('llm_ensure_managed_cloud');
+            console.log('[Account] Access token synced and ManagedCloud provider initialized');
           } catch (error) {
-            console.warn('[Account] Failed to ensure ManagedCloud provider:', error);
+            console.warn('[Account] Failed to sync token or ensure ManagedCloud provider:', error);
           }
         })();
       }
