@@ -3,9 +3,16 @@ import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { logger } from '@/lib/logger';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
-});
+// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
+function getStripeClient(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(key, {
+    apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
+  });
+}
 
 /**
  * POST /api/credit-topup
@@ -14,6 +21,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
  */
 export async function POST(request: Request) {
   try {
+    const stripe = getStripeClient();
     const supabase = await createSupabaseServerClient();
     const {
       data: { session },
