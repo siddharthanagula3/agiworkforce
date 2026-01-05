@@ -52,13 +52,9 @@ describe('useTrayQuickActions', () => {
 
     await act(async () => {
       await listeners['tray:new_conversation']?.({
-        event: 'tray:new_conversation',
-        id: 1,
         payload: null,
       });
       await listeners['tray:open_settings']?.({
-        event: 'tray:open_settings',
-        id: 2,
         payload: null,
       });
     });
