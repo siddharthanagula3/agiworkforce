@@ -135,3 +135,37 @@ export async function once<T>(event: string, handler: EventCallback<T>): Promise
     console.debug(`[Tauri Mock] Unregistered one-time listener for event: ${event}`);
   };
 }
+
+// Shell plugin - open URL in default browser
+export async function openUrl(url: string): Promise<void> {
+  if (isTauri) {
+    const { open } = await import('@tauri-apps/plugin-shell');
+    return open(url);
+  }
+
+  // Fallback for web: open in new tab
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+// Updater plugin - check for updates
+export async function checkForUpdates(): Promise<any> {
+  if (isTauri) {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    return check();
+  }
+
+  // Web mode: no updates available
+  console.debug('[Tauri Mock] Update check not available in web mode');
+  return null;
+}
+
+// Process plugin - relaunch app
+export async function relaunchApp(): Promise<void> {
+  if (isTauri) {
+    const { relaunch } = await import('@tauri-apps/plugin-process');
+    return relaunch();
+  }
+
+  // Fallback for web: reload page
+  window.location.reload();
+}

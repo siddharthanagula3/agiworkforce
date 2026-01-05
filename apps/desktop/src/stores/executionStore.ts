@@ -1,4 +1,4 @@
-import { listen } from '@tauri-apps/api/event';
+import { listen, isTauri } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { ResearchTask } from '../types/chat';
@@ -301,6 +301,12 @@ export async function initializeExecutionListeners() {
     return;
   }
   listenersInitialized = true;
+
+  // Skip listener setup in web mode
+  if (!isTauri) {
+    console.debug('[ExecutionStore] Skipping event listeners in web mode');
+    return;
+  }
 
   try {
     await listen<{ goal_id: string; description: string }>('agi:goal:submitted', ({ payload }) => {

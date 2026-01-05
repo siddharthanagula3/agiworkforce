@@ -1,6 +1,5 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { create } from 'zustand';
-import { invoke } from '../lib/tauri-mock';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
 export interface BrowserTab {
   id: string;
