@@ -110,7 +110,7 @@ tracing-appender = "0.2"
 sentry = { version = "0.33", optional = true }
 
 
-webrtc = { version = "0.9", optional = true }
+webrtc = { version = "0.14", optional = true }
 tokio-tungstenite = "0.21"
 
 
