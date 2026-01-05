@@ -86,7 +86,7 @@
     "react": "^19.2.3",
     "react-diff-viewer-continued": "^3.4.0",
     "react-dom": "^19.2.3",
-    "react-hook-form": "^7.69.0",
+    "react-hook-form": "^7.70.0",
     "react-image-crop": "^11.0.10",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.11.0",
