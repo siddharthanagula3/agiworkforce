@@ -1,7 +1,5 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-shell';
 import { create } from 'zustand';
-import { invoke } from '../lib/tauri-mock';
+import { invoke, listen, openUrl, type UnlistenFn } from '../lib/tauri-mock';
 import type {
   CloudFile,
   CloudProvider,
@@ -209,7 +207,7 @@ export const useCloudStore = create<CloudState>((set, get) => {
         };
 
         set({ pendingAuth: pending });
-        await open(response.auth_url);
+        await openUrl(response.auth_url);
       } catch (error) {
         console.error('[cloud] failed to initiate connection', error);
         set({ error: (error as Error).message });

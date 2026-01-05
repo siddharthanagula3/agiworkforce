@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { check } from '@tauri-apps/plugin-updater';
+import { checkForUpdates, isTauri } from '../../lib/tauri-mock';
 import { useToast } from '../../hooks/useToast';
 import { ToastAction } from '../ui/Toast';
 
@@ -14,9 +14,14 @@ export function UpdateNotifier({ onOpenSettings }: UpdateNotifierProps) {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Skip update check in web mode
+    if (!isTauri) {
+      return;
+    }
+
     let mounted = true;
 
-    const checkForUpdates = async () => {
+    const doCheckForUpdates = async () => {
       try {
         const lastReminded = localStorage.getItem(UPDATE_REMINDER_KEY);
         if (lastReminded) {
@@ -30,7 +35,7 @@ export function UpdateNotifier({ onOpenSettings }: UpdateNotifierProps) {
           }
         }
 
-        const update = await check();
+        const update = await checkForUpdates();
         if (mounted && update?.available) {
           toast({
             title: 'Update Available',
@@ -65,7 +70,7 @@ export function UpdateNotifier({ onOpenSettings }: UpdateNotifierProps) {
 
     // Check after a short delay to allow app to settle
     const timer = setTimeout(() => {
-      void checkForUpdates();
+      void doCheckForUpdates();
     }, 5000);
 
     return () => {
