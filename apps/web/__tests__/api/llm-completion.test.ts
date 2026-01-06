@@ -95,7 +95,7 @@ describe('POST /api/llm/completion', () => {
     mockGetSubscription.mockResolvedValue({
       id: 'sub_123',
       status: 'active',
-      plan: 'pro',
+      plan_tier: 'pro',
     });
     mockCheckAvailable.mockResolvedValue(true);
     mockDeductCredits.mockResolvedValue({
@@ -224,7 +224,7 @@ describe('POST /api/llm/completion', () => {
       mockGetSubscription.mockResolvedValue({
         id: 'sub_123',
         status: 'past_due',
-        plan: 'pro',
+        plan_tier: 'pro',
       });
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
@@ -250,7 +250,7 @@ describe('POST /api/llm/completion', () => {
       mockGetSubscription.mockResolvedValue({
         id: 'sub_123',
         status: 'trialing',
-        plan: 'pro',
+        plan_tier: 'pro',
       });
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
@@ -298,6 +298,12 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect OpenAI provider from gpt model', async () => {
+      // Use max tier since gpt-5 requires max or enterprise tier
+      mockGetSubscription.mockResolvedValue({
+        id: 'sub_123',
+        status: 'active',
+        plan_tier: 'max',
+      });
       mockGetProviderFromModel.mockReturnValue('openai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from GPT',
@@ -427,6 +433,12 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Fallback Model Selection', () => {
     it('should return 402 when credits are insufficient and no fallback available', async () => {
+      // Use max tier since claude-opus-4-5 requires max or enterprise tier
+      mockGetSubscription.mockResolvedValue({
+        id: 'sub_123',
+        status: 'active',
+        plan_tier: 'max',
+      });
       mockCheckAvailable.mockResolvedValue(false);
       mockDeductCredits.mockResolvedValue({
         success: false,
