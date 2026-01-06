@@ -350,8 +350,9 @@ describe('settingsStore', () => {
 
   describe('Provider Configuration', () => {
     it('should configure Ollama provider during load', async () => {
+      // Mock settings_load_from_disk (the primary method)
       vi.mocked(invoke).mockImplementation((cmd: string) => {
-        if (cmd === 'settings_load') {
+        if (cmd === 'settings_load_from_disk') {
           return Promise.resolve({
             llmConfig: {
               defaultProvider: 'openai' as Provider,
