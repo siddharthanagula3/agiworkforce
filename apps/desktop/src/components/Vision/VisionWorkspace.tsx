@@ -117,7 +117,7 @@ export const VisionWorkspace: React.FC = () => {
                   >
                     <div className="flex items-start gap-4">
                       {}
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <img
                           src={item.images[0]?.preview}
                           alt="Analysis preview"

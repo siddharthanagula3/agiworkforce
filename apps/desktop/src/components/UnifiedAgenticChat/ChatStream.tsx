@@ -21,6 +21,8 @@ import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '../ui/Button';
 import { MessageBubble } from './MessageBubble';
 import { CurrentActionBadge } from './CurrentActionBadge';
+import { ActiveToolStreams } from './Cards/ActiveToolStreams';
+import { IterationProgressPanel } from '../AGI';
 
 interface ChatStreamProps {
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
@@ -41,6 +43,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const startEditingMessage = useUnifiedChatStore((state) => state.startEditingMessage);
   const showMessageTimestamps = useUnifiedChatStore((state) => state.showMessageTimestamps);
+  const editAndRegenerateFromMessage = useUnifiedChatStore(
+    (state) => state.editAndRegenerateFromMessage,
+  );
 
   const items = useMemo(() => messages ?? [], [messages]);
 
@@ -182,6 +187,17 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
     startEditingMessage(id, content);
   };
 
+  const handleEditSave = useCallback(
+    (messageId: string, newContent: string) => {
+      // Edit the message and remove subsequent messages for regeneration
+      editAndRegenerateFromMessage(messageId, newContent);
+      // Trigger regeneration by starting an edit with the new content
+      // This will populate the input and allow the user to send
+      startEditingMessage(messageId, newContent);
+    },
+    [editAndRegenerateFromMessage, startEditingMessage],
+  );
+
   const renderThought = (messageId: string, title: string, body: string) => (
     <details className={card} key={messageId} open>
       <summary className="flex items-center gap-2 cursor-pointer text-sm text-zinc-200">
@@ -273,7 +289,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
                     }
                   }}
                   placeholder="Search messages..."
-                  className="w-full pl-10 pr-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                  className="w-full pl-10 pr-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-hidden focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
                 />
               </div>
               {searchQuery && (
@@ -322,6 +338,16 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
         <CurrentActionBadge />
       </div>
 
+      {/* Active Tool Streams - shows real-time progress for running tools */}
+      <ActiveToolStreams showCompleted={false} maxStreams={3} className="px-4 mb-2" />
+
+      {/* AGI Iteration Progress Panel - shows reasoning loop progress */}
+      {(isLoading || agentStatus?.status === 'running') && (
+        <div className="px-4 mb-2">
+          <IterationProgressPanel goalDescription={agentStatus?.currentGoal || 'Processing...'} />
+        </div>
+      )}
+
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -338,7 +364,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
               exit={{ opacity: 0, y: -10 }}
             >
               {/* Avatar */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               {/* Typing bubble */}
@@ -372,7 +398,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
               exit={{ opacity: 0, y: -10 }}
             >
               {/* Avatar */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-linear-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shrink-0">
                 <Activity className="h-4 w-4 text-white animate-pulse" />
               </div>
               {/* Status bubble */}
@@ -476,6 +502,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar }) => {
                     onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
                     onRegenerate={() => handleRetry(message.id, message.content)}
                     onEdit={(content) => handleRetry(message.id, content)}
+                    onEditSave={handleEditSave}
                   />
                   {(message.artifacts || (message.metadata as any)?.artifacts)?.length ? (
                     <div className="grid grid-cols-1 gap-2">

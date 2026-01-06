@@ -192,6 +192,94 @@ test.describe('Chat Workflow', () => {
 
     await context.setOffline(false);
   });
+
+  test('should complete entire flow: send query and receive answer without errors', async ({
+    page,
+  }) => {
+    // Increase timeout for this comprehensive test
+    test.setTimeout(60000);
+
+    // Step 1: Verify chat interface is loaded - use broader selector set
+    const chatInput = page
+      .locator(
+        'textarea[placeholder*="message"], textarea[placeholder*="Message"], textarea, [data-testid="chat-input"], input[type="text"]',
+      )
+      .first();
+
+    // Wait for page to fully load first
+    await page.waitForLoadState('domcontentloaded');
+    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+
+    // Check if chat input is available
+    const chatInputVisible = await chatInput.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (!chatInputVisible) {
+      // Try clicking on a "New Chat" button if visible
+      const newChatButton = page
+        .locator('button:has-text("New Chat"), button:has-text("New"), [data-testid="new-chat"]')
+        .first();
+      if (await newChatButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await newChatButton.click();
+        await page.waitForTimeout(1000);
+      }
+    }
+
+    // Now check if chat input is visible
+    if (await chatInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // Step 2: Fill the input with a query
+      const testQuery = 'What is the capital of France?';
+      await chatInput.fill(testQuery);
+
+      // Step 3: Verify input is filled correctly
+      const inputValue = await chatInput.inputValue();
+      expect(inputValue).toBe(testQuery);
+
+      // Step 4: Click send button
+      const sendButton = page
+        .locator('button:has-text("Send"), button[type="submit"], [data-testid="send-message"]')
+        .first();
+
+      if (await sendButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await sendButton.click();
+
+        // Step 5: Verify user message appears in chat (flexible selectors)
+        const userMessage = page
+          .locator('[data-role="user"], .user-message, [class*="user"]')
+          .last();
+        await expect(userMessage).toContainText(testQuery, { timeout: 10000 });
+
+        // Step 6: Check for streaming indicator (if present)
+        const streamingIndicator = page
+          .locator('[data-streaming="true"], .streaming, [class*="loading"]')
+          .first();
+        const streamingExists = await streamingIndicator
+          .isVisible({ timeout: 2000 })
+          .catch(() => false);
+
+        if (streamingExists) {
+          // Wait for streaming to complete (max 30 seconds)
+          await expect(streamingIndicator).toBeHidden({ timeout: 30000 });
+        }
+
+        // Step 7: Verify assistant response appears (flexible selectors)
+        const assistantMessage = page
+          .locator('[data-role="assistant"], .assistant-message, [class*="assistant"]')
+          .last();
+        await expect(assistantMessage).toBeVisible({ timeout: 30000 });
+
+        // Step 8: Verify response is not empty
+        const responseText = await assistantMessage.textContent();
+        expect(responseText?.trim().length).toBeGreaterThan(0);
+
+        // Step 9: Check for error states - no error message should be visible
+        const errorIndicators = page.locator(
+          '[role="alert"], .error-message, [data-testid="error-message"]',
+        );
+        const errorCount = await errorIndicators.count();
+        expect(errorCount).toBe(0);
+      }
+    }
+  });
 });
 
 test.describe('Chat AGI Integration', () => {

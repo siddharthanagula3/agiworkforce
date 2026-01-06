@@ -75,7 +75,7 @@ export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result }) => {
       rel="noopener noreferrer"
       className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/50 hover:border-blue-500/30 transition"
     >
-      <GitPullRequest className={cn('h-5 w-5 flex-shrink-0 mt-0.5', stateColor)} />
+      <GitPullRequest className={cn('h-5 w-5 shrink-0 mt-0.5', stateColor)} />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
@@ -121,7 +121,7 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result }) => {
       rel="noopener noreferrer"
       className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/50 hover:border-blue-500/30 transition"
     >
-      <AlertCircle className={cn('h-5 w-5 flex-shrink-0 mt-0.5', stateColor)} />
+      <AlertCircle className={cn('h-5 w-5 shrink-0 mt-0.5', stateColor)} />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-2">
@@ -176,7 +176,7 @@ export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result }) => {
       rel="noopener noreferrer"
       className="mt-3 flex items-start gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border/50 hover:border-blue-500/30 transition"
     >
-      <GitCommit className="h-5 w-5 flex-shrink-0 text-blue-400 mt-0.5" />
+      <GitCommit className="h-5 w-5 shrink-0 text-blue-400 mt-0.5" />
 
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm group-hover:text-blue-300 transition line-clamp-2">

@@ -71,22 +71,33 @@ pub async fn db_execute_query(
         ));
     }
 
-    let dangerous_keywords = [
+    // SECURITY: Block dangerous SQL operations - only SELECT queries are allowed by default
+    let blocked_keywords = [
         "DROP",
         "TRUNCATE",
-        "DELETE FROM",
-        "ALTER",
+        "DELETE",
+        "ALTER TABLE",
         "CREATE USER",
         "GRANT",
+        "REVOKE",
+        "INSERT",
+        "UPDATE",
     ];
     let sql_upper = sql.to_uppercase();
-    for keyword in &dangerous_keywords {
+    for keyword in &blocked_keywords {
         if sql_upper.contains(keyword) {
-            tracing::warn!(
-                "Executing potentially dangerous SQL query with keyword: {}",
+            tracing::error!("Blocked dangerous SQL query with keyword: {}", keyword);
+            return Err(format!(
+                "SQL operation '{}' is not allowed. Only SELECT queries are permitted for security.",
                 keyword
-            );
+            ));
         }
+    }
+
+    // Verify query starts with SELECT (after trimming whitespace)
+    let trimmed_upper = sql_upper.trim();
+    if !trimmed_upper.starts_with("SELECT") && !trimmed_upper.starts_with("WITH") {
+        return Err("Only SELECT queries are allowed. Use specific mutation commands for data modifications.".to_string());
     }
 
     let state = state.lock().await;

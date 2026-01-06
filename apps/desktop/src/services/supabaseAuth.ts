@@ -1,3 +1,4 @@
+// Updated: 2026-01-05 - Increased RLS query timeouts to 20s
 import {
   AuthError,
   type AuthResponse,
@@ -16,6 +17,21 @@ import {
 
 // Check if running in Tauri environment
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
+
+// Deep link protocol for Tauri desktop app auth redirects
+const TAURI_DEEP_LINK_PROTOCOL = 'agiworkforce://';
+// Web fallback URL for development mode
+const WEB_APP_URL = import.meta.env['VITE_WEB_APP_URL'] || 'https://agiworkforce.com';
+
+// Get the appropriate redirect URL based on environment
+const getAuthRedirectUrl = (path: string = ''): string => {
+  if (isTauri) {
+    // Use deep link protocol for desktop app
+    return `${TAURI_DEEP_LINK_PROTOCOL}auth${path}`;
+  }
+  // Use web URL for browser development
+  return `${window.location.origin}${path}`;
+};
 
 // Dynamic import of invoke to handle web development mode
 const getInvoke = async () => {
@@ -66,6 +82,7 @@ class SupabaseAuthService {
     subscriptionFetchStatus: 'idle',
   };
   private isHandlingSignIn = false; // Prevent re-entry during handleSignedIn
+  private handlingSignInForUser: string | null = null; // Track which user we're handling
 
   private constructor() {
     this.initializeAuthListener();
@@ -90,6 +107,27 @@ class SupabaseAuthService {
         this.handleSignedOut();
       } else if (event === 'TOKEN_REFRESHED' && session) {
         this.updateState({ session });
+        // Sync refreshed tokens to Rust backend for ManagedCloud provider
+        if (isTauri) {
+          (async () => {
+            try {
+              const invoke = await getInvoke();
+              if (invoke) {
+                await invoke('account_store_access_token', {
+                  accessToken: session.access_token,
+                });
+                if (session.refresh_token) {
+                  await invoke('account_store_refresh_token', {
+                    refreshToken: session.refresh_token,
+                  });
+                }
+                console.log('[Auth] Refreshed tokens synced to Rust backend');
+              }
+            } catch (error) {
+              console.warn('[Auth] Failed to sync refreshed tokens to Rust backend:', error);
+            }
+          })();
+        }
       } else if (event === 'USER_UPDATED' && session) {
         await this.handleSignedIn(session);
       }
@@ -139,14 +177,21 @@ class SupabaseAuthService {
   private subscriptionChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
 
   private async handleSignedIn(session: Session): Promise<void> {
-    // Prevent re-entry - setSession below can trigger another auth state change
+    const user = session.user;
+
+    // Prevent re-entry for the SAME user - setSession below can trigger another auth state change
+    // But allow different users to interrupt (for account switching)
     if (this.isHandlingSignIn) {
-      console.log('[Auth] Already handling sign-in, skipping re-entry');
-      return;
+      if (this.handlingSignInForUser === user.id) {
+        console.log('[Auth] Already handling sign-in for this user, skipping re-entry');
+        return;
+      } else {
+        console.log('[Auth] Different user signing in, resetting previous sign-in handler');
+        // Reset for the new user
+      }
     }
     this.isHandlingSignIn = true;
-
-    const user = session.user;
+    this.handlingSignInForUser = user.id;
     // Don't notify listeners yet - we'll batch all updates at the end
     // This prevents race conditions where listeners see incomplete state
     // Mark subscription as 'fetching' so listeners know data is being loaded
@@ -201,7 +246,7 @@ class SupabaseAuthService {
         featureFlags,
         isLoading: false,
         error: null,
-        subscriptionFetchStatus: 'succeeded',
+        subscriptionFetchStatus: subscription ? 'succeeded' : 'failed',
       });
 
       this.subscribeToSubscriptionChanges(user.id);
@@ -210,6 +255,7 @@ class SupabaseAuthService {
       this.updateState({ isLoading: false, subscriptionFetchStatus: 'failed' });
     } finally {
       this.isHandlingSignIn = false;
+      this.handlingSignInForUser = null;
     }
   }
 
@@ -261,14 +307,35 @@ class SupabaseAuthService {
 
   private async fetchProfile(userId: string): Promise<Profile | null> {
     const supabase = getSupabase();
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const timeoutMs = 20000; // 20s timeout - RLS policy evaluation can be slow
 
-    if (error) {
-      console.error('[Auth] Error fetching profile:', error);
+    try {
+      // Select specific columns for better performance
+      // Use maybeSingle() to return null instead of 406 error when no profile exists
+      const queryPromise = supabase
+        .from('profiles')
+        .select('id,email,display_name,avatar_url,created_at,updated_at,stripe_customer_id')
+        .eq('id', userId)
+        .maybeSingle();
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => {
+          console.warn('[Auth] fetchProfile timed out after 20s');
+          resolve({ data: null, error: { message: 'Profile fetch timed out' } });
+        }, timeoutMs),
+      );
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+      if (error) {
+        console.error('[Auth] Error fetching profile:', error);
+        return null;
+      }
+
+      return data;
+    } catch (err) {
+      console.error('[Auth] Exception fetching profile:', err);
       return null;
     }
-
-    return data;
   }
 
   private async fetchSubscription(
@@ -278,7 +345,7 @@ class SupabaseAuthService {
   ): Promise<Subscription | null> {
     const supabase = getSupabase();
     const maxRetries = 3;
-    const timeoutMs = 10000; // 10s timeout for better UX
+    const timeoutMs = 20000; // 20s timeout - RLS policy evaluation can be slow on first connection
 
     console.log(
       '[Auth] Fetching subscription for user:',
@@ -291,11 +358,12 @@ class SupabaseAuthService {
       if (!session) {
         // Only check session if not passed - with timeout to prevent hanging
         const sessionCheckPromise = supabase.auth.getSession();
-        const sessionTimeout = new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => {
-            console.warn('[Auth] getSession timed out after 3s');
-            resolve({ data: { session: null } });
-          }, 3000),
+        const sessionTimeout = new Promise<{ data: { session: null } }>(
+          (resolve) =>
+            setTimeout(() => {
+              console.warn('[Auth] getSession timed out after 10s');
+              resolve({ data: { session: null } });
+            }, 10000), // Increased from 3s to 10s - session checks can be slow
         );
 
         const { data: sessionData } = await Promise.race([sessionCheckPromise, sessionTimeout]);
@@ -324,11 +392,15 @@ class SupabaseAuthService {
       );
 
       console.log('[Auth] Creating Supabase query...');
+      // Select specific columns instead of * for better performance (Supabase best practice)
+      // Use maybeSingle() to return null instead of 406 error when no subscription exists (free users)
       const queryPromise = supabase
         .from('subscriptions')
-        .select('*')
+        .select(
+          'id,user_id,stripe_customer_id,stripe_subscription_id,stripe_price_id,plan_tier,status,current_period_start,current_period_end,cancel_at_period_end,canceled_at,created_at,updated_at',
+        )
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       console.log('[Auth] Waiting for query result...');
       const result = await Promise.race([queryPromise, timeoutPromise]);
@@ -378,23 +450,39 @@ class SupabaseAuthService {
 
   private async fetchFeatureFlags(userId: string): Promise<Record<string, boolean>> {
     const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('feature_flags')
-      .select('flag_name, enabled')
-      .eq('user_id', userId);
+    const timeoutMs = 20000; // 20s timeout - RLS policy evaluation can be slow
 
-    if (error) {
-      console.error('[Auth] Error fetching feature flags:', error);
+    try {
+      const queryPromise = supabase
+        .from('feature_flags')
+        .select('flag_name, enabled')
+        .eq('user_id', userId);
+
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => {
+          console.warn('[Auth] fetchFeatureFlags timed out after 20s');
+          resolve({ data: null, error: { message: 'Feature flags fetch timed out' } });
+        }, timeoutMs),
+      );
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+      if (error) {
+        console.error('[Auth] Error fetching feature flags:', error);
+        return {};
+      }
+
+      return (data || []).reduce(
+        (acc, flag) => {
+          acc[flag.flag_name] = flag.enabled ?? false;
+          return acc;
+        },
+        {} as Record<string, boolean>,
+      );
+    } catch (err) {
+      console.error('[Auth] Exception fetching feature flags:', err);
       return {};
     }
-
-    return (data || []).reduce(
-      (acc, flag) => {
-        acc[flag.flag_name] = flag.enabled ?? false;
-        return acc;
-      },
-      {} as Record<string, boolean>,
-    );
   }
 
   async signUp({ email, password, displayName }: SignUpData): Promise<AuthResponse> {
@@ -466,10 +554,15 @@ class SupabaseAuthService {
     const supabase = getSupabase();
     this.updateState({ isLoading: true, error: null });
 
+    // Use deep link for Tauri, web origin for browser dev
+    const redirectUrl = getAuthRedirectUrl('/callback');
+    console.log('[Auth] Magic link redirect URL:', redirectUrl);
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
+        emailRedirectTo: redirectUrl,
       },
     });
 
@@ -503,10 +596,14 @@ class SupabaseAuthService {
     const supabase = getSupabase();
     this.updateState({ isLoading: true, error: null });
 
+    // Use deep link for Tauri, web origin for browser dev
+    const redirectUrl = getAuthRedirectUrl('/callback');
+    console.log('[Auth] OAuth redirect URL:', redirectUrl);
+
     const response = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: redirectUrl,
       },
     });
 
@@ -522,6 +619,24 @@ class SupabaseAuthService {
     this.updateState({ isLoading: true });
 
     try {
+      // SECURITY: Clear tokens from secure storage FIRST before sign out
+      if (isTauri) {
+        try {
+          const invoke = await getInvoke();
+          if (invoke) {
+            // Clear auth tokens from OS keyring
+            await invoke('account_clear_tokens').catch(() => {});
+            console.log('[Auth] Auth tokens cleared from secure storage');
+          }
+        } catch (err) {
+          console.error('[Auth] Failed to clear auth tokens:', err);
+        }
+      }
+
+      // Clear any localStorage/sessionStorage tokens
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.clear();
+
       const signOutPromise = supabase.auth.signOut();
       const timeoutPromise = new Promise<{ error: { message: string } | null }>((resolve) =>
         setTimeout(() => resolve({ error: { message: 'Sign out timed out' } }), 2000),
@@ -561,8 +676,16 @@ class SupabaseAuthService {
     const supabase = getSupabase();
     this.updateState({ isLoading: true, error: null });
 
+    // For desktop app, redirect to web app's password reset page since
+    // deep links with hash fragments don't work well for password reset flow.
+    // The web app will handle the token and allow password update.
+    const redirectUrl = isTauri
+      ? `${WEB_APP_URL}/auth/update-password`
+      : `${window.location.origin}/reset-password`;
+    console.log('[Auth] Password reset redirect URL:', redirectUrl);
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: redirectUrl,
     });
 
     this.updateState({ isLoading: false, error: error?.message || null });
@@ -662,8 +785,17 @@ class SupabaseAuthService {
 
   hasPlan(tier: PlanTier): boolean {
     const currentTier = this.getPlanTier();
-    const tierHierarchy: PlanTier[] = ['free', 'pro', 'enterprise'];
-    return tierHierarchy.indexOf(currentTier) >= tierHierarchy.indexOf(tier);
+    // Complete plan hierarchy from lowest to highest
+    const tierHierarchy: Record<PlanTier, number> = {
+      free: 0,
+      hobby: 1,
+      pro: 2,
+      max: 3,
+      enterprise: 4,
+    };
+    const currentLevel = tierHierarchy[currentTier] ?? 0;
+    const requiredLevel = tierHierarchy[tier] ?? 0;
+    return currentLevel >= requiredLevel;
   }
 
   hasFeature(flagName: string): boolean {

@@ -102,7 +102,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -272,7 +272,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       </div>
 
       {}
-      <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+      <div className="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
           Showing {filteredModels.length} of {allModels.length} models
           {selectedModel && (

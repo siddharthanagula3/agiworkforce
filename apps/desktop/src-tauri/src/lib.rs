@@ -16,9 +16,9 @@ use crate::sys::commands::{
     security::AuthManagerState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
     ComputerUseState, DatabaseState, DocumentState, EmbeddingServiceState, FileWatcherState,
-    GitHubState, LLMState, LSPState, McpState, ProductivityState, SettingsServiceState,
-    SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState,
-    WorkflowEngineState, WorkspaceIndexState,
+    GitHubState, LLMState, LSPState, McpState, McpbState, NativeMessagingStateWrapper,
+    ProductivityState, SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState,
+    TemplateManagerState, VoiceState, WorkflowEngineState, WorkspaceIndexState,
 };
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
@@ -99,6 +99,14 @@ pub fn run() {
 
             let conn = Connection::open(&db_path).context("Failed to open database")?;
 
+            // Configure SQLite for better performance and reliability
+            conn.execute_batch("
+                PRAGMA busy_timeout = 5000;
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA foreign_keys = ON;
+                PRAGMA cache_size = -64000;
+            ").context("Failed to set database pragmas")?;
 
             if let Err(e) = migrations::run_migrations(&conn) {
                 tracing::error!("Failed to run migrations: {}", e);
@@ -156,6 +164,9 @@ pub fn run() {
                 }
             }
 
+            // Native Messaging state for browser extension communication
+            app.manage(NativeMessagingStateWrapper::new());
+            tracing::info!("NativeMessagingStateWrapper initialized");
 
             app.manage(SettingsState::new());
 
@@ -236,6 +247,9 @@ pub fn run() {
 
             let mcp_state = McpState::new();
             app.manage(mcp_state);
+
+            // MCP Bundle (MCPB) state for bundle management
+            app.manage(McpbState::new());
 
 
             app.manage(ContextManagerState(Arc::new(TokioMutex::new(()))));
@@ -782,12 +796,16 @@ pub fn run() {
 
             crate::sys::commands::settings_load,
             crate::sys::commands::settings_save,
+            crate::sys::commands::settings_load_from_disk,
             crate::sys::commands::settings_v2_get,
             crate::sys::commands::settings_v2_set,
             crate::sys::commands::settings_v2_get_batch,
             crate::sys::commands::settings_v2_delete,
             crate::sys::commands::settings_v2_get_category,
 
+            // Custom Instructions
+            crate::sys::commands::save_custom_instructions,
+            crate::sys::commands::load_custom_instructions,
 
             crate::sys::account::device_link_initiate,
             crate::sys::account::device_link_poll,
@@ -861,6 +879,12 @@ pub fn run() {
             crate::sys::commands::vision_describe_ui_elements,
             crate::sys::commands::vision_answer_question,
 
+            // Native Messaging (browser extension communication)
+            crate::sys::commands::native_messaging_check_status,
+            crate::sys::commands::native_messaging_install,
+            crate::sys::commands::native_messaging_uninstall,
+            crate::sys::commands::native_messaging_set_extension_id,
+            crate::sys::commands::native_messaging_get_connection_state,
 
             crate::sys::commands::file_read,
             crate::sys::commands::file_write,
@@ -985,6 +1009,20 @@ pub fn run() {
             crate::sys::commands::mcp_get_tool_schemas,
             crate::sys::commands::mcp_get_health,
             crate::sys::commands::mcp_check_server_health,
+            crate::sys::commands::mcp_set_credential,
+            crate::sys::commands::mcp_delete_credential,
+
+            // MCPB (MCP Bundles)
+            crate::sys::commands::mcpb_fetch_registry,
+            crate::sys::commands::mcpb_search_bundles,
+            crate::sys::commands::mcpb_get_bundle_details,
+            crate::sys::commands::mcpb_install_bundle,
+            crate::sys::commands::mcpb_uninstall_bundle,
+            crate::sys::commands::mcpb_get_installed_bundles,
+            crate::sys::commands::mcpb_check_updates,
+            crate::sys::commands::mcpb_update_bundle,
+            crate::sys::commands::mcpb_get_categories,
+            crate::sys::commands::mcpb_get_featured,
 
 
             crate::sys::commands::github_clone_repo,
@@ -1112,6 +1150,14 @@ pub fn run() {
             crate::sys::commands::get_pricing_plans,
             crate::sys::commands::get_current_plan,
 
+            // Projects
+            crate::sys::commands::project_create,
+            crate::sys::commands::project_list,
+            crate::sys::commands::project_get,
+            crate::sys::commands::project_update,
+            crate::sys::commands::project_delete,
+            crate::sys::commands::project_get_settings,
+            crate::sys::commands::project_update_settings,
 
             crate::sys::commands::create_workflow,
             crate::sys::commands::update_workflow,
@@ -1320,6 +1366,9 @@ pub fn run() {
             crate::sys::commands::messaging::get_messaging_history,
             crate::sys::commands::messaging::disconnect_platform,
             crate::sys::commands::messaging::list_messaging_connections,
+
+            // Privacy
+            crate::sys::commands::privacy::privacy_delete_account,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

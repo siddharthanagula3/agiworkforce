@@ -384,7 +384,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                     value={currentQuery}
                     onChange={(e) => setCurrentQuery(e.target.value)}
                     placeholder="Enter SQL query..."
-                    className="w-full h-full p-3 border border-border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full h-full p-3 border border-border rounded-md font-mono text-sm resize-none focus:outline-hidden focus:ring-2 focus:ring-primary"
                   />
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2 border-t border-border">

@@ -1,14 +1,16 @@
 use super::llm::LLMState;
 
+use crate::core::router::{ContentPart, ImageDetail, ImageFormat, ImageInput};
 use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
+use base64::Engine;
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use rusqlite::Connection;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 pub mod types;
 pub use types::*;
@@ -66,6 +68,142 @@ fn detect_agentic_intent(content: &str) -> bool {
     agentic_patterns
         .iter()
         .any(|pattern| content_lower.contains(pattern))
+}
+
+/// Convert ChatAttachments to ContentPart for multimodal messages.
+/// Returns a Vec of ContentPart if any valid image attachments are found.
+fn convert_attachments_to_content_parts(attachments: &[ChatAttachment]) -> Vec<ContentPart> {
+    let mut parts = Vec::new();
+
+    for attachment in attachments {
+        // Only process image attachments with content
+        if attachment.attachment_type != "image" {
+            debug!(
+                "[Chat] Skipping non-image attachment: {} (type: {})",
+                attachment.name, attachment.attachment_type
+            );
+            continue;
+        }
+
+        let content = match &attachment.content {
+            Some(c) if !c.is_empty() => c,
+            _ => {
+                warn!(
+                    "[Chat] Skipping image attachment '{}' - no content provided",
+                    attachment.name
+                );
+                continue;
+            }
+        };
+
+        // Determine the image format from mime_type
+        let format = match attachment.mime_type.as_deref() {
+            Some("image/png") => ImageFormat::Png,
+            Some("image/jpeg") | Some("image/jpg") => ImageFormat::Jpeg,
+            Some("image/webp") => ImageFormat::Webp,
+            Some(other) => {
+                warn!(
+                    "[Chat] Unsupported image mime type '{}' for attachment '{}', defaulting to PNG",
+                    other, attachment.name
+                );
+                ImageFormat::Png
+            }
+            None => {
+                // Try to infer from file extension
+                let name_lower = attachment.name.to_lowercase();
+                if name_lower.ends_with(".png") {
+                    ImageFormat::Png
+                } else if name_lower.ends_with(".jpg") || name_lower.ends_with(".jpeg") {
+                    ImageFormat::Jpeg
+                } else if name_lower.ends_with(".webp") {
+                    ImageFormat::Webp
+                } else {
+                    debug!(
+                        "[Chat] Could not determine image format for '{}', defaulting to PNG",
+                        attachment.name
+                    );
+                    ImageFormat::Png
+                }
+            }
+        };
+
+        // Decode base64 content
+        // Handle both with and without data URL prefix
+        let base64_data = if content.starts_with("data:") {
+            // Extract base64 part after the comma
+            content.split(',').nth(1).unwrap_or(content)
+        } else {
+            content
+        };
+
+        match base64::engine::general_purpose::STANDARD.decode(base64_data) {
+            Ok(image_data) => {
+                debug!(
+                    "[Chat] Successfully decoded image attachment '{}' ({} bytes, format: {:?})",
+                    attachment.name,
+                    image_data.len(),
+                    format
+                );
+
+                parts.push(ContentPart::Image {
+                    image: ImageInput {
+                        data: image_data,
+                        format,
+                        detail: ImageDetail::Auto,
+                    },
+                });
+            }
+            Err(e) => {
+                warn!(
+                    "[Chat] Failed to decode base64 content for attachment '{}': {}",
+                    attachment.name, e
+                );
+            }
+        }
+    }
+
+    if !parts.is_empty() {
+        info!(
+            "[Chat] Converted {} image attachment(s) to multimodal content",
+            parts.len()
+        );
+    }
+
+    parts
+}
+
+/// Check if a model is likely to support vision based on its name.
+/// This is a heuristic check - providers should also implement supports_vision().
+fn model_likely_supports_vision(model: &str) -> bool {
+    let model_lower = model.to_lowercase();
+
+    // Models that typically support vision
+    let vision_models = [
+        // OpenAI GPT-4+ models support vision
+        "gpt-4",
+        "gpt-5",
+        "o1",
+        "o3",
+        // Anthropic Claude 3+ models support vision
+        "claude-3",
+        "claude-sonnet",
+        "claude-opus",
+        "claude-haiku",
+        // Google Gemini models support vision
+        "gemini",
+        // Other vision-capable models
+        "llava",
+        "bakllava",
+        "cogvlm",
+        "qwen-vl",
+        "qwen2-vl",
+        "vision",
+    ];
+
+    // Check if the model contains any vision-supporting pattern
+    vision_models
+        .iter()
+        .any(|pattern| model_lower.contains(pattern))
 }
 
 #[derive(Clone)]
@@ -227,6 +365,7 @@ pub fn chat_delete_conversation(
 
     let conn = db.connection()?;
     repository::delete_conversation(&conn, id, &user_id)
+        .map(|_| ())
         .map_err(|e| format!("Failed to delete conversation {}: {e}", id))
 }
 
@@ -400,6 +539,21 @@ pub async fn chat_send_message(
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
+    // Log request details including attachments
+    let attachment_count = request.attachments.as_ref().map_or(0, |a| a.len());
+    if attachment_count > 0 {
+        let attachment_names: Vec<&str> = request
+            .attachments
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|a| a.name.as_str())
+            .collect();
+        info!(
+            "[Chat] Received message with {} attachment(s): {:?}",
+            attachment_count, attachment_names
+        );
+    }
     info!(
         "[Chat] Received message for processing: {}",
         request.content
@@ -623,9 +777,75 @@ pub async fn chat_send_message(
             .map_err(|e| format!("Failed to load message history: {e}"))?
     };
 
-    let llm_messages: Vec<ChatMessage> = history
-        .iter()
-        .map(|m| ChatMessage {
+    // Build conversation messages, prepending custom instructions as system message if provided
+    let mut llm_messages: Vec<ChatMessage> = Vec::new();
+
+    // Add custom instructions as system message if provided
+    if let Some(ref custom_instructions) = request.custom_instructions {
+        if !custom_instructions.trim().is_empty() {
+            llm_messages.push(ChatMessage {
+                role: "system".to_string(),
+                content: custom_instructions.clone(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            });
+            debug!(
+                "[Chat] Added custom instructions to system prompt ({} chars)",
+                custom_instructions.len()
+            );
+        }
+    }
+
+    // Process attachments for multimodal content if present
+    let multimodal_parts: Option<Vec<ContentPart>> =
+        if let Some(ref attachments) = request.attachments {
+            if !attachments.is_empty() {
+                // Check if the model supports vision
+                if model_likely_supports_vision(&model) {
+                    let parts = convert_attachments_to_content_parts(attachments);
+                    if parts.is_empty() {
+                        debug!("[Chat] No valid image attachments found after conversion");
+                        None
+                    } else {
+                        info!(
+                            "[Chat] Including {} image(s) in multimodal message for model '{}'",
+                            parts.len(),
+                            model
+                        );
+                        Some(parts)
+                    }
+                } else {
+                    warn!(
+                    "[Chat] Model '{}' may not support vision - image attachments will be skipped. \
+                    Consider using a vision-capable model like GPT-4, Claude 3+, or Gemini.",
+                    model
+                );
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+    // Add conversation history (all messages except the last user message)
+    // We'll add the current user message separately with multimodal content
+    let history_len = history.len();
+    for (idx, m) in history.iter().enumerate() {
+        // The last message is the current user message we just created
+        // Add multimodal content to it if we have attachments
+        let is_current_user_message =
+            idx == history_len - 1 && m.role == MessageRole::User && m.id == user_message.id;
+
+        let multimodal = if is_current_user_message {
+            multimodal_parts.clone()
+        } else {
+            None
+        };
+
+        llm_messages.push(ChatMessage {
             role: match m.role {
                 MessageRole::User => "user".to_string(),
                 MessageRole::Assistant => "assistant".to_string(),
@@ -634,9 +854,19 @@ pub async fn chat_send_message(
             content: m.content.clone(),
             tool_calls: None,
             tool_call_id: None,
-            multimodal_content: None,
-        })
-        .collect();
+            multimodal_content: multimodal,
+        });
+    }
+
+    // Log debug info about the message being sent
+    if let Some(ref parts) = multimodal_parts {
+        debug!(
+            "[Chat] Sending message with {} text chars and {} image(s) to model '{}'",
+            request.content.len(),
+            parts.len(),
+            model
+        );
+    }
 
     let llm_request = LLMRequest {
         messages: llm_messages,

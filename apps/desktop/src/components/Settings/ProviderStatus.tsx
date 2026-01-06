@@ -76,7 +76,7 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({ onConfigure, cla
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <Server className="h-5 w-5" />

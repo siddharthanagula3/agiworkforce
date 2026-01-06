@@ -182,7 +182,7 @@ export function SpreadsheetArtifact({
                         <input
                           autoFocus
                           type="text"
-                          className="w-full h-full px-2 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                          className="w-full h-full px-2 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-hidden text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
                           value={editValue || ''}
                           onChange={(e) => setEditValue(e.target.value)}
                           onBlur={handleCellBlur}

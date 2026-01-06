@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { CustomInstructionsDialog } from '../CustomInstructionsDialog';
 import { FeedbackDialog } from '../Feedback';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { CommandPalette } from './CommandPalette';
@@ -17,6 +18,15 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
+  const [customInstructionsOpen, setCustomInstructionsOpen] = useState(false);
+  const [customInstructionsConversationId, setCustomInstructionsConversationId] = useState<
+    string | undefined
+  >(undefined);
+
+  const handleOpenCustomInstructions = useCallback((conversationId: string) => {
+    setCustomInstructionsConversationId(conversationId);
+    setCustomInstructionsOpen(true);
+  }, []);
 
   const sidecarState = useUnifiedChatStore((state) => state.sidecar);
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
@@ -121,16 +131,17 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
       {}
       {messages.length === 0 && (
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-terra-cotta-500/5" />
+          <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-terra-cotta-500/5" />
         </div>
       )}
 
-      {}
+      {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
         onOpenFeedback={() => setFeedbackOpen(true)}
+        onOpenCustomInstructions={handleOpenCustomInstructions}
         width={sidebarCollapsed ? 64 : sidebarWidth}
         onResize={setSidebarWidth}
       />
@@ -189,9 +200,14 @@ export function AppLayout({ children, onOpenSettings }: AppLayoutProps) {
         isOpen={shortcutsDialogOpen}
         onClose={() => setShortcutsDialogOpen(false)}
       />
+      <CustomInstructionsDialog
+        open={customInstructionsOpen}
+        onOpenChange={setCustomInstructionsOpen}
+        conversationId={customInstructionsConversationId}
+      />
 
       {}
-      <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-cream-50 via-cream-50/80 to-transparent dark:from-charcoal-900 dark:via-charcoal-900/80 pointer-events-none z-10" />
+      <div className="fixed bottom-0 left-0 right-0 h-32 bg-linear-to-t from-cream-50 via-cream-50/80 to-transparent dark:from-charcoal-900 dark:via-charcoal-900/80 pointer-events-none z-10" />
     </div>
   );
 }

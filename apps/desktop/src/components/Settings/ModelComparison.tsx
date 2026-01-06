@@ -109,7 +109,7 @@ export const ModelComparison: React.FC<ModelComparisonProps> = ({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Model Comparison
         </h2>

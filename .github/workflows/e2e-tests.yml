@@ -1,0 +1,133 @@
+name: E2E Tests - Comprehensive Flow Testing
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/desktop/**'
+  workflow_dispatch:
+  schedule:
+    # Run nightly tests at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: apps/desktop
+
+      - name: Build desktop app
+        run: pnpm build:desktop
+        working-directory: apps/desktop
+        env:
+          CI: true
+
+      - name: Start app server (background)
+        run: |
+          pnpm dev:desktop > app.log 2>&1 &
+          echo $! > app.pid
+          sleep 10
+        working-directory: apps/desktop
+        timeout-minutes: 2
+
+      - name: Wait for app to be ready
+        run: |
+          for i in {1..20}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "App is ready"
+              exit 0
+            fi
+            echo "Waiting for app... attempt $i/20"
+            sleep 2
+          done
+          echo "App failed to start"
+          exit 1
+
+      - name: Run comprehensive E2E tests
+        run: |
+          pnpm exec playwright test e2e/comprehensive-flows.spec.ts \
+            --reporter=html,json \
+            --retries=2 \
+            --workers=1
+        working-directory: apps/desktop
+
+      - name: Run advanced integration E2E tests
+        if: always()
+        run: |
+          pnpm exec playwright test e2e/advanced-integration-flows.spec.ts \
+            --reporter=html,json \
+            --retries=2 \
+            --workers=1
+        working-directory: apps/desktop
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/desktop/test-results/
+          retention-days: 30
+
+      - name: Upload test videos on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-videos
+          path: apps/desktop/test-results/**/*.webm
+          retention-days: 7
+
+      - name: Upload app logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-logs
+          path: apps/desktop/app.log
+          retention-days: 7
+
+      - name: Check test results
+        if: always()
+        run: |
+          if [ -f apps/desktop/test-results/results.json ]; then
+            FAILED=$(grep -o '"status":"failed"' apps/desktop/test-results/results.json | wc -l)
+            if [ "$FAILED" -gt 0 ]; then
+              echo "❌ Tests failed: $FAILED failures detected"
+              exit 1
+            else
+              echo "✅ All tests passed"
+            fi
+          fi
+
+      - name: Stop app server
+        if: always()
+        run: |
+          if [ -f apps/desktop/app.pid ]; then
+            kill $(cat apps/desktop/app.pid) 2>/dev/null || true
+          fi
+        working-directory: apps/desktop

@@ -170,7 +170,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
       <div className="flex items-start justify-between p-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {}
-          <div className={`p-2 rounded-lg ${riskConfig.color} flex-shrink-0`}>
+          <div className={`p-2 rounded-lg ${riskConfig.color} shrink-0`}>
             <TypeIcon size={20} />
           </div>
 
@@ -203,7 +203,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
             {}
             {approval.impact && (
               <div className="flex items-start gap-2 p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded text-xs text-yellow-800 dark:text-yellow-200 mb-2">
-                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                 <span>{approval.impact}</span>
               </div>
             )}
@@ -275,7 +275,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Reason for rejection (optional)"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
               />
               <div className="flex gap-2">
                 <button

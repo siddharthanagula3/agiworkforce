@@ -251,7 +251,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             'w-full pl-7 pr-7 py-1.5 text-xs rounded-lg border transition-colors',
             'bg-gray-50 dark:bg-charcoal-800 border-gray-200 dark:border-gray-700',
             'placeholder:text-gray-400 dark:placeholder:text-gray-500',
-            'focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
+            'focus:outline-hidden focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
           )}
         />
         {searchQuery && (
@@ -281,7 +281,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               className={cn(
                 'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors',
                 isSelected
-                  ? 'border-primary bg-gradient-to-r from-primary/10 to-purple-500/10 text-primary shadow-sm dark:border-primary/50 dark:from-primary/20 dark:to-purple-500/20 dark:text-primary-foreground'
+                  ? 'border-primary bg-linear-to-r from-primary/10 to-purple-500/10 text-primary shadow-sm dark:border-primary/50 dark:from-primary/20 dark:to-purple-500/20 dark:text-primary-foreground'
                   : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-charcoal-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-charcoal-700',
               )}
             >
@@ -405,7 +405,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                         {tierTag && !isActive && (
                           <span
                             className={cn(
-                              'text-[8px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0',
+                              'text-[8px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0',
                               tierTag === 'Max Only'
                                 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                                 : tierTag === 'Pro+'
@@ -418,11 +418,11 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                         )}
                       </div>
                       {isActive ? (
-                        <Check size={14} className="text-primary flex-shrink-0" />
+                        <Check size={14} className="text-primary shrink-0" />
                       ) : (
                         <span
                           className={cn(
-                            'text-[10px] font-medium flex-shrink-0',
+                            'text-[10px] font-medium shrink-0',
                             getQualityTierLabel(model.qualityTier).className,
                           )}
                         >

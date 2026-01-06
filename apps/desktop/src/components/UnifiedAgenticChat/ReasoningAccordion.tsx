@@ -137,7 +137,7 @@ export function ReasoningAccordion({
           'px-4 py-3',
           'text-left',
           'hover:bg-zinc-900/50 transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-agent-thinking/50',
+          'focus:outline-hidden focus:ring-2 focus:ring-agent-thinking/50',
         )}
         aria-expanded={isOpen}
         aria-label={`${isOpen ? 'Hide' : 'Show'} thinking process`}
