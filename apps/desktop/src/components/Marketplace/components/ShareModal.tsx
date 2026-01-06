@@ -100,12 +100,7 @@ export function ShareModal() {
             <label className="text-sm font-medium">Share Link</label>
             <div className="flex gap-2">
               <Input value={shareUrl} readOnly className="font-mono text-sm" />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleCopyUrl}
-                className="flex-shrink-0"
-              >
+              <Button variant="outline" size="icon" onClick={handleCopyUrl} className="shrink-0">
                 {copied ? (
                   <Check className="h-4 w-4 text-green-500" />
                 ) : (
@@ -182,7 +177,7 @@ export function ShareModal() {
           {}
           <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
             <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-1">
+              <div className="shrink-0 mt-1">
                 <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <MessageSquare className="h-5 w-5 text-primary" />
                 </div>

@@ -80,7 +80,7 @@ impl Database {
     }
 
     pub fn delete_conversation(&self, id: i64, user_id: &str) -> Result<()> {
-        self.with_connection(|conn| repository::delete_conversation(conn, id, user_id))
+        self.with_connection(|conn| repository::delete_conversation(conn, id, user_id).map(|_| ()))
     }
 
     pub fn create_message(&self, message: &Message) -> Result<i64> {

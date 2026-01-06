@@ -214,7 +214,7 @@ const useErrorStore = create<ErrorStore>()(
         }
       },
     }),
-    { name: 'ErrorStore' },
+    { name: 'ErrorStore', enabled: import.meta.env.DEV },
   ),
 );
 

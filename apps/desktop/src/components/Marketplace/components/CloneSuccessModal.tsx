@@ -40,7 +40,7 @@ export function CloneSuccessModal() {
             <div className="absolute inset-0 animate-ping">
               <div className="h-20 w-20 rounded-full bg-green-500/20" />
             </div>
-            <div className="relative h-20 w-20 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+            <div className="relative h-20 w-20 rounded-full bg-linear-to-br from-green-400 to-green-600 flex items-center justify-center">
               <CheckCircle className="h-12 w-12 text-white" />
             </div>
           </div>
@@ -52,7 +52,7 @@ export function CloneSuccessModal() {
         </div>
 
         {}
-        <Card className="p-4 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20 mb-6">
+        <Card className="p-4 bg-linear-to-br from-primary/5 to-primary/10 border-primary/20 mb-6">
           <div className="flex items-start gap-4">
             {clonedWorkflow.thumbnail_url ? (
               <img
@@ -61,7 +61,7 @@ export function CloneSuccessModal() {
                 className="w-24 h-24 rounded-lg object-cover"
               />
             ) : (
-              <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-4xl">
+              <div className="w-24 h-24 rounded-lg bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-4xl">
                 ⚙️
               </div>
             )}
@@ -103,10 +103,10 @@ export function CloneSuccessModal() {
         </div>
 
         {}
-        <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+        <Card className="p-4 bg-linear-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="shrink-0">
+              <div className="h-12 w-12 rounded-full bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-white" />
               </div>
             </div>

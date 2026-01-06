@@ -14,6 +14,7 @@ pub mod outcome_tracker;
 pub mod planner;
 pub mod process_ontology;
 pub mod process_reasoning;
+pub mod reflection;
 pub mod resources;
 pub mod sandbox;
 pub mod templates;
@@ -37,8 +38,12 @@ pub use outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
 pub use planner::AGIPlanner;
 pub use process_ontology::{ProcessOntology, ProcessTemplate};
 pub use process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
+pub use reflection::{
+    Correction, CorrectionType, ExecutionAssessment, FailedStep, FailureCategory, FailurePattern,
+    PlanCritique, PlanRisk, ReflectionEngine, ReflectionInsight, SubGoal,
+};
 pub use resources::ResourceManager;
-pub use sandbox::{Sandbox, SandboxManager};
+pub use sandbox::{CodeExecutionResult, ExecutionConfig, Sandbox, SandboxManager};
 pub use templates::{
     get_builtin_templates, AgentTemplate, DifficultyLevel, TemplateCategory, TemplateManager,
     WorkflowDefinition, WorkflowStep,

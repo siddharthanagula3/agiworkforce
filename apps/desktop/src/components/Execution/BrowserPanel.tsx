@@ -82,7 +82,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
                   className="flex items-center gap-1 text-xs text-primary hover:underline"
                 >
                   <span className="truncate">{currentUrl}</span>
-                  <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               </div>
             )}
@@ -166,7 +166,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
         onClick={onToggleExpand}
       >
         {}
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <div
             className={cn(
               'flex h-6 w-6 items-center justify-center rounded-full',
@@ -207,7 +207,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
             {hasDetails && (
               <button
                 type="button"
-                className="flex-shrink-0 text-muted-foreground transition-transform hover:text-foreground"
+                className="shrink-0 text-muted-foreground transition-transform hover:text-foreground"
                 style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
               >
                 <ChevronDown className="h-4 w-4" />

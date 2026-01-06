@@ -4,34 +4,57 @@ import {
   ArchiveRestore,
   BarChart3,
   Calendar,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
   Coins,
   Download,
+  FolderOpen,
   Layers,
   MessageSquare,
   Pin,
   PinOff,
   Plus,
   Search,
+  Sparkles,
   Trash2,
+  X,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
+import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
 import { UserProfile } from '../Layout/UserProfile';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { ScrollArea } from '../ui/ScrollArea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/DropdownMenu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 
 interface SidebarProps {
   className?: string;
   onOpenSettings?: () => void;
   onOpenFeedback?: () => void;
+  onOpenCustomInstructions?: (conversationId: string) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   isMobile?: boolean;
@@ -84,6 +107,7 @@ export function Sidebar({
   className,
   onOpenSettings,
   onOpenFeedback,
+  onOpenCustomInstructions,
   collapsed = false,
   onToggleCollapse,
   isMobile = false,
@@ -144,10 +168,27 @@ export function Sidebar({
   const [editingTitle, setEditingTitle] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<TemporalGroup>>(
     new Set(['today', 'yesterday', 'thisWeek']),
   );
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    open: boolean;
+    conversationId: string;
+    conversationTitle: string;
+  }>({ open: false, conversationId: '', conversationTitle: '' });
+
+  // Get projects for filtering
+  const projects = useProjectStore(selectActiveProjects);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+
+  // Sync with active project from project store
+  useEffect(() => {
+    if (activeProjectId && !selectedProjectFilter) {
+      setSelectedProjectFilter(activeProjectId);
+    }
+  }, [activeProjectId, selectedProjectFilter]);
 
   // Get archived conversations
 
@@ -167,12 +208,23 @@ export function Sidebar({
       ? conversations.filter((c) => c.archived === true)
       : conversations.filter((c) => !c.archived);
 
+    // Filter by project if selected
+    if (selectedProjectFilter) {
+      baseList = baseList.filter((c) => c.projectId === selectedProjectFilter);
+    }
+
     if (!term) return baseList;
     return baseList.filter((conv) => {
       const haystack = `${conv.title ?? ''} ${conv.lastMessage ?? ''}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [conversations, searchQuery, showArchived]);
+  }, [conversations, searchQuery, showArchived, selectedProjectFilter]);
+
+  // Get selected project details
+  const selectedProject = useMemo(
+    () => (selectedProjectFilter ? projects.find((p) => p.id === selectedProjectFilter) : null),
+    [projects, selectedProjectFilter],
+  );
 
   const pinnedConversations = useMemo(
     () =>
@@ -260,6 +312,18 @@ export function Sidebar({
       return next;
     });
   }, []);
+
+  const openDeleteConfirmDialog = useCallback((id: string, title: string) => {
+    setDeleteConfirmDialog({ open: true, conversationId: id, conversationTitle: title });
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    const { conversationId } = deleteConfirmDialog;
+    setDeleteConfirmDialog((prev) => ({ ...prev, open: false }));
+    if (conversationId) {
+      deleteConversation(conversationId);
+    }
+  }, [deleteConfirmDialog, deleteConversation]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -349,8 +413,25 @@ export function Sidebar({
             )}
           </button>
 
-          {}
+          {/* Conversation action buttons */}
           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenCustomInstructions?.(conv.id);
+              }}
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-6 w-6 text-gray-400 hover:text-purple-500',
+                conv.customInstructions && 'text-purple-500',
+              )}
+              title={
+                conv.customInstructions ? 'Edit custom instructions' : 'Add custom instructions'
+              }
+            >
+              <Sparkles className="h-3 w-3" />
+            </Button>
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -407,7 +488,7 @@ export function Sidebar({
             <Button
               onClick={(e) => {
                 e.stopPropagation();
-                deleteConversation(conv.id);
+                openDeleteConfirmDialog(conv.id, conv.title || 'Untitled');
               }}
               variant="ghost"
               size="icon"
@@ -457,6 +538,31 @@ export function Sidebar({
 
   return (
     <>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={deleteConfirmDialog.open}
+        onOpenChange={(open) => setDeleteConfirmDialog((prev) => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete &quot;
+              {deleteConfirmDialog.conversationTitle}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {}
       <AnimatePresence>
         {showSearch && (
@@ -584,6 +690,87 @@ export function Sidebar({
               </span>
               Projects
             </button>
+
+            {/* Project filter dropdown */}
+            {projects.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                      selectedProjectFilter
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        : 'text-muted-foreground hover:bg-surface-hover',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'w-5 h-5 flex items-center justify-center rounded',
+                        selectedProjectFilter
+                          ? 'text-blue-500'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-500',
+                      )}
+                      style={
+                        selectedProject?.color
+                          ? {
+                              backgroundColor: `${selectedProject.color}20`,
+                              color: selectedProject.color,
+                            }
+                          : undefined
+                      }
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="flex-1 text-left truncate">
+                      {selectedProject?.name || 'Filter by Project'}
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56 bg-zinc-900 border-zinc-700">
+                  <DropdownMenuItem
+                    onClick={() => setSelectedProjectFilter(null)}
+                    className={cn('text-zinc-300', !selectedProjectFilter && 'bg-zinc-800')}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    All Conversations
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-zinc-700" />
+                  {projects.map((project) => (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={() => setSelectedProjectFilter(project.id)}
+                      className={cn(
+                        'text-zinc-300',
+                        selectedProjectFilter === project.id && 'bg-zinc-800',
+                      )}
+                    >
+                      <span
+                        className="w-4 h-4 rounded mr-2 flex items-center justify-center"
+                        style={{ backgroundColor: project.color || '#3b82f6' }}
+                      >
+                        <Layers className="w-2.5 h-2.5 text-white" />
+                      </span>
+                      <span className="truncate">{project.name}</span>
+                      <span className="ml-auto text-xs text-zinc-500">
+                        {conversations.filter((c) => c.projectId === project.id).length}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Clear project filter indicator */}
+            {selectedProjectFilter && (
+              <button
+                onClick={() => setSelectedProjectFilter(null)}
+                className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+              >
+                <X className="w-3 h-3" />
+                Clear filter
+              </button>
+            )}
           </div>
         )}
 

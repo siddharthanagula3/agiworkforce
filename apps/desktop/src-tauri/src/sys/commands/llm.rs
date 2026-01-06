@@ -87,6 +87,23 @@ pub async fn llm_send_message(
         }
     }
 
+    // Pre-flight authentication check for cloud credits
+    // If user prefers cloud credits or requests ManagedCloud, verify they're authenticated
+    let is_managed_cloud_request = request
+        .provider
+        .as_ref()
+        .map(|p| matches!(p.as_str(), "managed_cloud" | "managedcloud" | "cloud"))
+        .unwrap_or(false);
+
+    if request.prefer_cloud_credits || is_managed_cloud_request {
+        use crate::sys::account::get_access_token;
+        if get_access_token().is_err() {
+            return Err(
+                "[ERR_AUTH_REQUIRED] Please sign in to use cloud credits. Your session may have expired.".to_string()
+            );
+        }
+    }
+
     let provider_name = request.provider.clone();
     let provider = request.provider.as_deref().and_then(|p| match p {
         "openai" => Some(Provider::OpenAI),

@@ -11,6 +11,7 @@ import {
   Monitor,
   Settings2,
   Shield,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -32,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
 import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
+import { CustomInstructionsSettings } from './CustomInstructionsSettings';
 import { UpdateSettings } from './UpdateSettings';
 import { GitHubTokenConfig } from './GitHubTokenConfig';
 
@@ -100,10 +102,14 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
             </div>
           ) : (
             <Tabs defaultValue="llm-config" className="mt-6 px-6">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="llm-config" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
                   Models
+                </TabsTrigger>
+                <TabsTrigger value="instructions" className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Instructions
                 </TabsTrigger>
                 <TabsTrigger value="filesystem" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
@@ -295,7 +301,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                 </div>
               </TabsContent>
 
-              {}
+              <TabsContent value="instructions" className="space-y-6 pt-6">
+                <CustomInstructionsSettings />
+              </TabsContent>
 
               <TabsContent value="filesystem" className="space-y-6 pt-6">
                 <AllowedDirectoriesSettings />
@@ -663,7 +671,7 @@ function DataPrivacyTab() {
                   disabled={savingCrashReporting}
                   onChange={(e) => void handleToggleCrashReporting(e.target.checked)}
                 />
-                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary peer-focus:ring-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700"></div>
+                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-primary peer-focus:ring-offset-2 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700"></div>
               </label>
             </div>
           </div>

@@ -146,7 +146,7 @@ export function CommandSuggestion({
             <textarea
               value={editedCommand}
               onChange={(e) => setEditedCommand(e.target.value)}
-              className="w-full p-2 font-mono text-sm bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none"
+              className="w-full p-2 font-mono text-sm bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50 resize-none"
               rows={Math.min(editedCommand.split('\n').length + 1, 5)}
               autoFocus
             />

@@ -262,24 +262,40 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "search_web".to_string(),
             name: "Web Search".to_string(),
-            description: "Search the web for information".to_string(),
+            description: "Search the web for information and return structured results with titles, URLs, snippets, and favicons. Uses Brave Search (if API key available) or DuckDuckGo as fallback.".to_string(),
             capabilities: vec![
                 ToolCapability::NetworkOperation,
                 ToolCapability::DataAnalysis,
             ],
-            parameters: vec![ToolParameter {
-                name: "query".to_string(),
-                parameter_type: ParameterType::String,
-                required: true,
-                description: "Search query".to_string(),
-                default: None,
-            }],
+            parameters: vec![
+                ToolParameter {
+                    name: "query".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Search query".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "num_results".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum number of results to return (default: 10, max: 20)".to_string(),
+                    default: Some(serde_json::json!(10)),
+                },
+                ToolParameter {
+                    name: "search_type".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Type of search: 'web' (default), 'news', or 'images'".to_string(),
+                    default: Some(serde_json::json!("web")),
+                },
+            ],
             estimated_resources: ResourceUsage {
                 cpu_percent: 5.0,
                 memory_mb: 50,
                 network_mb: 2.0,
             },
-            dependencies: vec!["browser_navigate".to_string()],
+            dependencies: vec![],
         })?;
 
         self.register_tool(Tool {

@@ -17,12 +17,12 @@ import { ScrollArea } from '../ui/ScrollArea';
 
 interface ServerHealth {
   server_name: string;
-  status: 'healthy' | 'unhealthy' | 'unknown';
-  last_check: number;
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  last_check: string; // ISO date string from Rust DateTime<Utc>
   error_message: string | null;
-  latency_ms: number | null;
-  uptime_seconds: number | null;
-  requests_handled: number;
+  response_time_ms: number | null;
+  tool_count: number;
+  consecutive_failures: number;
 }
 
 export function MCPConnectionStatus() {
@@ -52,7 +52,7 @@ export function MCPConnectionStatus() {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
-  const getStatusBadge = (status: 'healthy' | 'unhealthy' | 'unknown') => {
+  const getStatusBadge = (status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown') => {
     switch (status) {
       case 'healthy':
         return (
@@ -62,6 +62,16 @@ export function MCPConnectionStatus() {
           >
             <CheckCircle className="w-3 h-3" />
             Healthy
+          </Badge>
+        );
+      case 'degraded':
+        return (
+          <Badge
+            variant="secondary"
+            className="flex items-center gap-1 bg-yellow-100 text-yellow-800"
+          >
+            <AlertTriangle className="w-3 h-3" />
+            Degraded
           </Badge>
         );
       case 'unhealthy':
@@ -81,37 +91,23 @@ export function MCPConnectionStatus() {
     }
   };
 
-  const formatUptime = (seconds: number | null) => {
-    if (seconds === null) return 'N/A';
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${secs}s`;
-    } else {
-      return `${secs}s`;
-    }
+  const formatResponseTime = (ms: number | null) => {
+    if (ms === null) return 'N/A';
+    return `${ms}ms`;
   };
 
-  const formatLatency = (latency: number | null) => {
-    if (latency === null) return 'N/A';
-    return `${latency}ms`;
-  };
-
-  const getLatencyColor = (latency: number | null) => {
-    if (latency === null) return 'text-gray-500';
-    if (latency < 100) return 'text-green-600';
-    if (latency < 500) return 'text-yellow-600';
+  const getResponseTimeColor = (ms: number | null) => {
+    if (ms === null) return 'text-gray-500';
+    if (ms < 100) return 'text-green-600';
+    if (ms < 500) return 'text-yellow-600';
     return 'text-red-600';
   };
 
   const healthyCount = healthData.filter((h) => h.status === 'healthy').length;
-  const unhealthyCount = healthData.filter((h) => h.status === 'unhealthy').length;
-  const totalRequests = healthData.reduce((sum, h) => sum + h.requests_handled, 0);
+  const unhealthyCount = healthData.filter(
+    (h) => h.status === 'unhealthy' || h.status === 'degraded',
+  ).length;
+  const totalTools = healthData.reduce((sum, h) => sum + h.tool_count, 0);
 
   return (
     <div className="space-y-4">
@@ -174,9 +170,9 @@ export function MCPConnectionStatus() {
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-5 h-5 text-purple-500" />
-            <span className="text-sm text-gray-600">Total Requests</span>
+            <span className="text-sm text-gray-600">Total Tools</span>
           </div>
-          <div className="text-2xl font-bold">{totalRequests.toLocaleString()}</div>
+          <div className="text-2xl font-bold">{totalTools.toLocaleString()}</div>
         </Card>
       </div>
 
@@ -206,7 +202,7 @@ export function MCPConnectionStatus() {
 
                       {health.error_message && (
                         <div className="text-sm text-red-600 mt-2 flex items-start gap-1">
-                          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                           <span>{health.error_message}</span>
                         </div>
                       )}
@@ -217,35 +213,42 @@ export function MCPConnectionStatus() {
                     <div>
                       <div className="text-gray-600 mb-1 flex items-center gap-1">
                         <Zap className="w-3 h-3" />
-                        Latency
+                        Response Time
                       </div>
-                      <div className={`font-semibold ${getLatencyColor(health.latency_ms)}`}>
-                        {formatLatency(health.latency_ms)}
+                      <div
+                        className={`font-semibold ${getResponseTimeColor(health.response_time_ms)}`}
+                      >
+                        {formatResponseTime(health.response_time_ms)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-gray-600 mb-1 flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" />
+                        Tools
+                      </div>
+                      <div className="font-semibold">{health.tool_count}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-gray-600 mb-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        Failures
+                      </div>
+                      <div
+                        className={`font-semibold ${health.consecutive_failures > 0 ? 'text-red-600' : 'text-green-600'}`}
+                      >
+                        {health.consecutive_failures}
                       </div>
                     </div>
 
                     <div>
                       <div className="text-gray-600 mb-1 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        Uptime
+                        Last Check
                       </div>
-                      <div className="font-semibold">{formatUptime(health.uptime_seconds)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 mb-1 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        Requests
-                      </div>
-                      <div className="font-semibold">
-                        {health.requests_handled.toLocaleString()}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 mb-1">Last Check</div>
                       <div className="font-semibold text-xs">
-                        {new Date(health.last_check * 1000).toLocaleTimeString()}
+                        {new Date(health.last_check).toLocaleTimeString()}
                       </div>
                     </div>
                   </div>

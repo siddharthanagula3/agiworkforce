@@ -98,7 +98,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-background">
+    <div className="min-h-screen bg-linear-to-br from-background via-primary/5 to-background">
       {}
       {currentStep > 0 && (
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border px-8 py-4">
@@ -122,7 +122,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
             <Card className="border-2 border-primary/20 shadow-xl">
               <CardHeader className="text-center space-y-4 pb-4">
                 <div className="flex justify-center">
-                  <div className="bg-gradient-to-br from-primary to-primary/70 rounded-full p-4">
+                  <div className="bg-linear-to-br from-primary to-primary/70 rounded-full p-4">
                     <Sparkles className="h-12 w-12 text-primary-foreground" />
                   </div>
                 </div>
@@ -138,7 +138,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
               <CardContent className="space-y-8">
                 {}
                 <div className="grid md:grid-cols-3 gap-6">
-                  <div className="text-center space-y-3 p-6 rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
+                  <div className="text-center space-y-3 p-6 rounded-lg bg-linear-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
                     <div className="flex justify-center">
                       <Rocket className="h-10 w-10 text-blue-500" />
                     </div>
@@ -148,7 +148,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
                     </p>
                   </div>
 
-                  <div className="text-center space-y-3 p-6 rounded-lg bg-gradient-to-br from-purple-500/10 to-purple-500/5 border border-purple-500/20">
+                  <div className="text-center space-y-3 p-6 rounded-lg bg-linear-to-br from-purple-500/10 to-purple-500/5 border border-purple-500/20">
                     <div className="flex justify-center">
                       <Target className="h-10 w-10 text-purple-500" />
                     </div>
@@ -158,7 +158,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
                     </p>
                   </div>
 
-                  <div className="text-center space-y-3 p-6 rounded-lg bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/20">
+                  <div className="text-center space-y-3 p-6 rounded-lg bg-linear-to-br from-green-500/10 to-green-500/5 border border-green-500/20">
                     <div className="flex justify-center">
                       <DollarSign className="h-10 w-10 text-green-500" />
                     </div>
@@ -185,7 +185,7 @@ export const OnboardingWizardNew: React.FC<OnboardingWizardNewProps> = ({ onComp
                         'Choose your settings and start automating!',
                       ].map((step, index) => (
                         <li key={index} className="flex items-start gap-3">
-                          <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                          <div className="shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                             {index + 1}
                           </div>
                           <span className="text-sm pt-1">{step}</span>

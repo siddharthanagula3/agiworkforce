@@ -13,6 +13,16 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
 import { Input } from '../ui/Input';
@@ -50,6 +60,12 @@ export function CheckpointManager({
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newCheckpointName, setNewCheckpointName] = useState('');
   const [newCheckpointDescription, setNewCheckpointDescription] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    type: 'restore' | 'delete';
+    checkpointId: string;
+    checkpointName: string;
+  }>({ open: false, type: 'restore', checkpointId: '', checkpointName: '' });
 
   const loadCheckpoints = useCallback(async () => {
     setLoading(true);
@@ -101,54 +117,49 @@ export function CheckpointManager({
     }
   };
 
-  const handleRestoreCheckpoint = async (checkpointId: string, checkpointName: string) => {
-    const confirmed = confirm(
-      `Restore to checkpoint "${checkpointName}"?\n\nThis will replace all messages in the current conversation with the checkpoint state.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setRestoring(true);
-    try {
-      await invoke('checkpoint_restore', {
-        request: {
-          checkpoint_id: checkpointId,
-          conversation_id: conversationId,
-        },
-      });
-
-      toast.success(`Restored to checkpoint: ${checkpointName}`);
-      onRestoreComplete?.();
-      await loadCheckpoints();
-    } catch (error) {
-      console.error('Failed to restore checkpoint:', error);
-      toast.error('Failed to restore checkpoint');
-    } finally {
-      setRestoring(false);
-    }
+  const openRestoreDialog = (checkpointId: string, checkpointName: string) => {
+    setConfirmDialog({ open: true, type: 'restore', checkpointId, checkpointName });
   };
 
-  const handleDeleteCheckpoint = async (checkpointId: string, checkpointName: string) => {
-    const confirmed = confirm(
-      `Delete checkpoint "${checkpointName}"?\n\nThis action cannot be undone.`,
-    );
+  const openDeleteDialog = (checkpointId: string, checkpointName: string) => {
+    setConfirmDialog({ open: true, type: 'delete', checkpointId, checkpointName });
+  };
 
-    if (!confirmed) {
-      return;
-    }
+  const handleConfirmAction = async () => {
+    const { type, checkpointId, checkpointName } = confirmDialog;
+    setConfirmDialog((prev) => ({ ...prev, open: false }));
 
-    try {
-      await invoke('checkpoint_delete', {
-        checkpointId,
-      });
+    if (type === 'restore') {
+      setRestoring(true);
+      try {
+        await invoke('checkpoint_restore', {
+          request: {
+            checkpoint_id: checkpointId,
+            conversation_id: conversationId,
+          },
+        });
 
-      toast.success('Checkpoint deleted');
-      await loadCheckpoints();
-    } catch (error) {
-      console.error('Failed to delete checkpoint:', error);
-      toast.error('Failed to delete checkpoint');
+        toast.success(`Restored to checkpoint: ${checkpointName}`);
+        onRestoreComplete?.();
+        await loadCheckpoints();
+      } catch (error) {
+        console.error('Failed to restore checkpoint:', error);
+        toast.error('Failed to restore checkpoint');
+      } finally {
+        setRestoring(false);
+      }
+    } else if (type === 'delete') {
+      try {
+        await invoke('checkpoint_delete', {
+          checkpointId,
+        });
+
+        toast.success('Checkpoint deleted');
+        await loadCheckpoints();
+      } catch (error) {
+        console.error('Failed to delete checkpoint:', error);
+        toast.error('Failed to delete checkpoint');
+      }
     }
   };
 
@@ -173,6 +184,36 @@ export function CheckpointManager({
 
   return (
     <div className={cn('space-y-4', className)}>
+      {/* Confirmation Dialog */}
+      <AlertDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog.type === 'restore' ? 'Restore Checkpoint' : 'Delete Checkpoint'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog.type === 'restore'
+                ? `Restore to checkpoint "${confirmDialog.checkpointName}"? This will replace all messages in the current conversation with the checkpoint state.`
+                : `Delete checkpoint "${confirmDialog.checkpointName}"? This action cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmAction}
+              className={
+                confirmDialog.type === 'delete' ? 'bg-destructive hover:bg-destructive/90' : ''
+              }
+            >
+              {confirmDialog.type === 'restore' ? 'Restore' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -273,7 +314,7 @@ export function CheckpointManager({
 
               <div className="flex items-start gap-3">
                 {}
-                <div className="relative flex-shrink-0">
+                <div className="relative shrink-0">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Check className="h-4 w-4" />
                   </div>
@@ -293,14 +334,12 @@ export function CheckpointManager({
                       )}
                     </div>
 
-                    {}
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() =>
-                          handleRestoreCheckpoint(checkpoint.id, checkpoint.checkpoint_name)
-                        }
+                        onClick={() => openRestoreDialog(checkpoint.id, checkpoint.checkpoint_name)}
                         disabled={restoring}
                       >
                         <RotateCcw className="h-4 w-4" />
@@ -308,9 +347,7 @@ export function CheckpointManager({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() =>
-                          handleDeleteCheckpoint(checkpoint.id, checkpoint.checkpoint_name)
-                        }
+                        onClick={() => openDeleteDialog(checkpoint.id, checkpoint.checkpoint_name)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

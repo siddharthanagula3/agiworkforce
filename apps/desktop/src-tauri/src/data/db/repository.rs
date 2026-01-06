@@ -57,12 +57,12 @@ pub fn update_conversation_title(
     Ok(())
 }
 
-pub fn delete_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<()> {
-    conn.execute(
+pub fn delete_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<usize> {
+    let rows_affected = conn.execute(
         "DELETE FROM conversations WHERE id = ?1 AND user_id = ?2",
         params![id, user_id],
     )?;
-    Ok(())
+    Ok(rows_affected)
 }
 
 fn map_conversation(row: &Row) -> Result<Conversation> {
@@ -76,12 +76,15 @@ fn map_conversation(row: &Row) -> Result<Conversation> {
 }
 
 pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
-    conn.execute(
+    // Use a transaction to ensure atomicity of update + insert
+    let tx = conn.unchecked_transaction()?;
+
+    tx.execute(
         "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND user_id = ?2",
         params![message.conversation_id, message.user_id],
     )?;
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
@@ -95,7 +98,10 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
             message.model,
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+
+    let last_id = tx.last_insert_rowid();
+    tx.commit()?;
+    Ok(last_id)
 }
 
 pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {

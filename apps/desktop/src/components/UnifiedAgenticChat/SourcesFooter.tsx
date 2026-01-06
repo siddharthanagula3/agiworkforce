@@ -112,7 +112,7 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
               )}
             >
               {/* Citation number */}
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-terra-cotta/80 flex items-center justify-center">
+              <div className="shrink-0 w-6 h-6 rounded-full bg-terra-cotta/80 flex items-center justify-center">
                 <span className="text-[10px] font-bold text-white">{citation.index}</span>
               </div>
 
@@ -122,13 +122,13 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
                   <img
                     src={citation.favicon}
                     alt=""
-                    className="w-4 h-4 rounded flex-shrink-0"
+                    className="w-4 h-4 rounded shrink-0"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
                     }}
                   />
                 ) : (
-                  <Globe className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                  <Globe className="w-4 h-4 text-zinc-500 shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-teal transition-colors">
@@ -141,7 +141,7 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
               </div>
 
               {/* External link icon */}
-              <ExternalLink className="h-3 w-3 text-zinc-500 group-hover:text-teal flex-shrink-0 transition-colors" />
+              <ExternalLink className="h-3 w-3 text-zinc-500 group-hover:text-teal shrink-0 transition-colors" />
             </motion.button>
           ))}
         </AnimatePresence>

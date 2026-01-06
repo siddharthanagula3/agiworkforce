@@ -146,7 +146,7 @@ function StepCard({ step, isLast, isExpanded, onToggleExpand }: StepCardProps) {
         onClick={onToggleExpand}
       >
         {}
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <div
             className={cn(
               'flex h-6 w-6 items-center justify-center rounded-full',
@@ -166,7 +166,7 @@ function StepCard({ step, isLast, isExpanded, onToggleExpand }: StepCardProps) {
             {hasReasoning && (
               <button
                 type="button"
-                className="flex-shrink-0 text-muted-foreground transition-transform hover:text-foreground"
+                className="shrink-0 text-muted-foreground transition-transform hover:text-foreground"
                 style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
               >
                 <ChevronDown className="h-4 w-4" />

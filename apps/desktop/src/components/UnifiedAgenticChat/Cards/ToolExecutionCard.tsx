@@ -78,7 +78,7 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
               execution.success
                 ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20'
                 : 'text-red-500 bg-red-50 dark:bg-red-900/20'
-            } flex-shrink-0`}
+            } shrink-0`}
           >
             <Wrench size={20} />
           </div>
@@ -123,7 +123,7 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
         </div>
 
         {}
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+        <div className="flex items-center gap-1 shrink-0 ml-2">
           {enableRetry && onRetry && (
             <button
               onClick={onRetry}

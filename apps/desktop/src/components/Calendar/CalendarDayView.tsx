@@ -72,7 +72,7 @@ export function CalendarDayView({
       <div className="flex-1 overflow-y-auto">
         <div className="flex relative min-h-[1440px]">
           {}
-          <div className="w-16 flex-shrink-0 border-r border-border bg-muted/5 flex flex-col text-xs text-muted-foreground">
+          <div className="w-16 shrink-0 border-r border-border bg-muted/5 flex flex-col text-xs text-muted-foreground">
             {HOURS.map((hour) => (
               <div key={hour} className="h-[60px] border-b border-border/50 px-2 py-1 text-right">
                 {format(new Date().setHours(hour, 0), 'h a')}

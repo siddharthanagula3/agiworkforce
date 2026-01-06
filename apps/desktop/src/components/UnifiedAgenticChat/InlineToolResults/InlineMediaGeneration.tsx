@@ -49,7 +49,7 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
         <div className="flex items-start gap-2">
-          <ImageIcon className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <ImageIcon className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">Image generation failed</p>
             {error && <p className="text-xs text-muted-foreground mt-1">{error}</p>}
@@ -139,7 +139,7 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
         <div className="flex items-start gap-2">
-          <Video className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <Video className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-red-300 font-medium">Video generation failed</p>
             {error && <p className="text-xs text-muted-foreground mt-1">{error}</p>}

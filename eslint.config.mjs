@@ -33,6 +33,9 @@ export default [
       'scripts/**',
       'coverage/**',
       '**/coverage/**',
+      // Root-level utility/test scripts
+      'create-account.js',
+      'test-*.js',
     ],
   },
 
@@ -140,6 +143,7 @@ export default [
         HTMLTableCaptionElement: 'readonly',
         HTMLIFrameElement: 'readonly',
         HTMLLabelElement: 'readonly',
+        HTMLPreElement: 'readonly',
         SVGElement: 'readonly',
         SVGSVGElement: 'readonly',
         Node: 'readonly',

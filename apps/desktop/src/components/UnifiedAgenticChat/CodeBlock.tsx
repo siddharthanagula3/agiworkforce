@@ -194,7 +194,7 @@ export function CodeBlock({
                   {prefix && (
                     <span
                       className={cn(
-                        'w-4 flex-shrink-0',
+                        'w-4 shrink-0',
                         prefix === '+' ? 'text-emerald-400' : 'text-red-400',
                       )}
                     >

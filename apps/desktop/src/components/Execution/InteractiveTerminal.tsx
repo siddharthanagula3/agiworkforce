@@ -161,6 +161,7 @@ export function InteractiveTerminal({
         terminal.write(suggestion);
         setCurrentCommand(suggestion);
       }
+      setIsGettingSuggestion(false);
     } catch (error) {
       toast.error(`Failed to get suggestion: ${error}`);
       setIsGettingSuggestion(false);
@@ -324,7 +325,7 @@ export function InteractiveTerminal({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2 bg-gradient-to-r from-gray-900 to-gray-950">
+      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2 bg-linear-to-r from-gray-900 to-gray-950">
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-4 w-4 text-emerald-400" />
           <h3 className="text-sm font-semibold text-gray-200">Interactive Terminal</h3>
@@ -429,7 +430,7 @@ export function InteractiveTerminal({
                 }
               }}
               placeholder="Search terminal output..."
-              className="flex-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="flex-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50"
             />
             <Button
               size="sm"

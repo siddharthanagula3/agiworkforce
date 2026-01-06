@@ -164,7 +164,7 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search in output..."
-            className="w-full px-3 py-1.5 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full px-3 py-1.5 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 placeholder-gray-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
             autoFocus
           />
         </div>

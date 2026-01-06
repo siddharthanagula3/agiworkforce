@@ -52,7 +52,7 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status: _s
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
         <div className="flex items-start gap-2">
-          <Camera className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <Camera className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-red-300">Screenshot failed</p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -101,7 +101,7 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status: _s
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 bg-surface-overlay/30 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
-          <Camera className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="text-xs font-medium text-foreground">Screenshot</span>
           {width && height && (
             <span className="text-xs text-muted-foreground">
@@ -124,7 +124,7 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status: _s
           )}
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {ocrText && (
             <Button
               size="xs"
@@ -169,7 +169,7 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status: _s
           style={{ backgroundColor: '#1a1a1a' }}
         />
         {!expanded && (
-          <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-surface-elevated to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 right-0 h-8 bg-linear-to-t from-surface-elevated to-transparent pointer-events-none" />
         )}
       </div>
 

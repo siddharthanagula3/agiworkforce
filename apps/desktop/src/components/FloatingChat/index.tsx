@@ -110,7 +110,7 @@ export const FloatingChat = () => {
       {/* Header */}
       <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center">
             <span className="text-xs font-bold">A</span>
           </div>
           <span className="text-sm font-medium text-zinc-300">Quick Chat</span>
@@ -190,7 +190,7 @@ export const FloatingChat = () => {
             rows={1}
             className={cn(
               'flex-1 resize-none bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm',
-              'placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500',
+              'placeholder:text-zinc-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500',
               'max-h-24 min-h-[36px]',
               isProcessing && 'opacity-50 cursor-not-allowed',
             )}

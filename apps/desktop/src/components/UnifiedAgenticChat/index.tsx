@@ -9,8 +9,7 @@
  * - Approval workflows
  * - Layout management (sidebar, main content, sidecar)
  */
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { invoke, listen } from '../../lib/tauri-mock';
 import React, { useEffect, useRef } from 'react';
 
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
@@ -23,6 +22,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { selectBudget, useTokenBudgetStore } from '../../stores/tokenBudgetStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useBillingStore } from '../../stores/billingStore';
+import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import { AppLayout } from './AppLayout';
 import { ApprovalModal } from './ApprovalModal';
@@ -288,7 +288,11 @@ export const UnifiedAgenticChat: React.FC<{
 
         // Auto-process pending messages by sending them as follow-up
         // This creates a seamless experience where queued messages are automatically sent
-        for (const pending of payload.pending_messages) {
+        // Process messages sequentially with delays to avoid race conditions
+        for (let i = 0; i < payload.pending_messages.length; i++) {
+          const pending = payload.pending_messages[i];
+          if (!pending) continue;
+
           console.log(
             '[UnifiedAgenticChat] Processing pending message:',
             pending.content.slice(0, 50),
@@ -303,6 +307,23 @@ export const UnifiedAgenticChat: React.FC<{
           } catch (err) {
             console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
           }
+
+          // Actually send the pending message as a follow-up
+          // Add delay between messages to avoid race conditions
+          if (i > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+
+          try {
+            // Dispatch a custom event that ChatInputArea listens to for auto-send
+            window.dispatchEvent(
+              new CustomEvent('chat:auto-send-pending', {
+                detail: { content: pending.content, pendingId: pending.id },
+              }),
+            );
+          } catch (err) {
+            console.error('[UnifiedAgenticChat] Failed to send pending message:', err);
+          }
         }
 
         // Notify user that pending messages have been processed
@@ -312,9 +333,65 @@ export const UnifiedAgenticChat: React.FC<{
       }),
     );
 
+    // Listen for agent thinking state
+    unlistenPromises.push(
+      listen<{ agent_id?: string; thinking: boolean; phase?: string; message?: string }>(
+        'agent:thinking',
+        ({ payload }) => {
+          console.log('[UnifiedAgenticChat] Agent thinking:', payload);
+          // Update action trail with thinking status
+          if (payload.thinking) {
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'thinking',
+              message: payload.message || payload.phase || 'Thinking...',
+              fadeAfter: 30000, // Fade after 30 seconds if not cleared
+            });
+          }
+        },
+      ),
+    );
+
+    // Listen for agent finished state
+    unlistenPromises.push(
+      listen<{
+        agent_id?: string;
+        success: boolean;
+        result?: string;
+        error?: string;
+        duration_ms?: number;
+      }>('agent:finished', ({ payload }) => {
+        console.log('[UnifiedAgenticChat] Agent finished:', payload);
+        // Update action trail with completion status
+        useUnifiedChatStore.getState().addActionTrailEntry({
+          type: payload.success ? 'completed' : 'error',
+          message: payload.success
+            ? payload.result || 'Task completed successfully'
+            : payload.error || 'Task failed',
+          fadeAfter: 5000, // Fade after 5 seconds
+          metadata: { duration_ms: payload.duration_ms },
+        });
+
+        // Clear any running agent status
+        const currentAgent = useUnifiedChatStore.getState().agentStatus;
+        if (currentAgent && (!payload.agent_id || currentAgent.id === payload.agent_id)) {
+          useUnifiedChatStore.getState().setAgentStatus({
+            ...currentAgent,
+            status: payload.success ? 'completed' : 'failed',
+            completedAt: new Date(),
+            error: payload.error,
+          });
+        }
+      }),
+    );
+
     return () => {
-      Promise.all(unlistenPromises).then((unlisteners) => {
-        unlisteners.forEach((unlisten) => unlisten());
+      // Use Promise.allSettled to ensure all cleanup runs even if some fail
+      Promise.allSettled(unlistenPromises).then((results) => {
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            result.value();
+          }
+        });
       });
     };
   }, [updateMessage, setStreamingMessage]);
@@ -650,6 +727,14 @@ export const UnifiedAgenticChat: React.FC<{
           throw new Error('User not authenticated');
         }
 
+        // Get merged custom instructions (project > conversation > global)
+        const conversationInstructions = useUnifiedChatStore
+          .getState()
+          .getConversationCustomInstructions(activeConversationId ?? undefined);
+        const mergedCustomInstructions = useCustomInstructionsStore
+          .getState()
+          .getMergedInstructions(conversationInstructions);
+
         const response = await invoke<any>('chat_send_message', {
           request: {
             content,
@@ -672,6 +757,7 @@ export const UnifiedAgenticChat: React.FC<{
             thinkingMode: useModelStore.getState().thinkingModeEnabled,
             preferCloudCredits: true,
             frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination
+            customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
           },
         });
 

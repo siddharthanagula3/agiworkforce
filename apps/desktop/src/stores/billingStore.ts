@@ -1,9 +1,22 @@
+/**
+ * Billing Store
+ *
+ * Manages billing state including customer info, subscription, and credits.
+ *
+ * Updated to Zustand v5 best practices:
+ * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
+ * - TypeScript: Using create<State>()() pattern for type inference
+ * - Persist middleware: Using createJSONStorage, partialize, version
+ * - Better devtools integration with store name
+ * - subscribeWithSelector for granular subscriptions
+ */
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
 import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
 import { asPlanTier } from '../lib/supabase';
+import { useAccountStore } from './accountStore';
 
 interface BillingState {
   customer: CustomerInfo | null;
@@ -16,9 +29,11 @@ interface BillingState {
   error: string | null;
 
   // Credit tracking
-  creditBalance_cents: number;
-  dailyUsage_cents: number;
-  dailyLimit_cents: number;
+  // `null` means credits not yet loaded (don't block on pre-flight check)
+  // `0` means credits are confirmed to be zero (block on pre-flight check)
+  creditBalance_cents: number | null;
+  dailyUsage_cents: number | null;
+  dailyLimit_cents: number | null;
   dailyResetAt: string | null;
 }
 
@@ -47,18 +62,34 @@ interface BillingActions {
 
 type BillingStore = BillingState & BillingActions;
 
+// Storage fallback for SSR/non-browser environments
+const storageFallback: Storage = {
+  get length() {
+    return 0;
+  },
+  clear: () => undefined,
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
+
+// Version for storage migration
+const BILLING_STORE_VERSION = 1;
+
 export const useBillingStore = create<BillingStore>()(
   devtools(
     persist(
-      (set, get) => ({
+      subscribeWithSelector((set, get) => ({
         customer: null,
         subscription: null,
         subscriptionLoading: false,
         initialized: false,
         error: null,
-        creditBalance_cents: 0,
-        dailyUsage_cents: 0,
-        dailyLimit_cents: 0,
+        // Initialize to null to indicate "not yet loaded" vs "confirmed zero"
+        creditBalance_cents: null,
+        dailyUsage_cents: null,
+        dailyLimit_cents: null,
         dailyResetAt: null,
 
         initialize: async (stripeApiKey: string, webhookSecret: string) => {
@@ -123,26 +154,38 @@ export const useBillingStore = create<BillingStore>()(
         updateCredits: (info) => {
           set({
             creditBalance_cents: info.remaining_cents,
-            dailyUsage_cents: info.daily_used ?? get().dailyUsage_cents,
-            dailyLimit_cents: info.daily_limit ?? get().dailyLimit_cents,
+            dailyUsage_cents: info.daily_used ?? get().dailyUsage_cents ?? 0,
+            dailyLimit_cents: info.daily_limit ?? get().dailyLimit_cents ?? 0,
             dailyResetAt: info.daily_reset_at ?? get().dailyResetAt,
           });
         },
 
         setError: (error) => set({ error }),
         clearError: () => set({ error: null }),
-      }),
+      })),
       {
         name: 'billing-storage',
+        version: BILLING_STORE_VERSION,
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
+        ),
         partialize: (state) => ({
           customer: state.customer,
           subscription: state.subscription,
-          initialized: state.initialized,
-          creditBalance_cents: state.creditBalance_cents, // Persist credits too? Yes, for offline/restart continuity
+          // Note: `initialized` is intentionally NOT persisted - it must be false on cold start
+          // to ensure proper re-initialization of the Stripe service
+          creditBalance_cents: state.creditBalance_cents, // Persist credits for offline/restart continuity
         }),
+        migrate: (persistedState: unknown, version: number) => {
+          // Migration logic for future schema changes
+          if (version === 0) {
+            return persistedState as BillingStore;
+          }
+          return persistedState as BillingStore;
+        },
       },
     ),
-    { name: 'BillingStore' },
+    { name: 'BillingStore', enabled: process.env['NODE_ENV'] === 'development' },
   ),
 );
 
@@ -193,9 +236,30 @@ export function initializeBillingStore(): () => void {
       } else {
         store.setSubscription(null);
       }
+
+      // Sync credits from account store if available
+      // This ensures credits fetched via /api/me are reflected in billing store
+      const accountState = useAccountStore.getState();
+      if (accountState.account?.credits) {
+        const credits = accountState.account.credits;
+        store.updateCredits({
+          remaining_cents: credits.remaining_cents ?? 0,
+          daily_used: credits.daily_used_cents,
+          daily_limit: credits.daily_limit_cents,
+          daily_reset_at: credits.daily_reset_at,
+        });
+        console.log('[BillingStore] Synced credits from account store:', credits);
+      }
     } else if (!authState.user && !authState.isLoading) {
       store.setCustomer(null);
       store.setSubscription(null);
+      // Reset credits to null when user logs out (not 0, since 0 would block messages)
+      useBillingStore.setState({
+        creditBalance_cents: null,
+        dailyUsage_cents: null,
+        dailyLimit_cents: null,
+        dailyResetAt: null,
+      });
     }
   });
 

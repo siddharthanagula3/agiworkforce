@@ -72,7 +72,7 @@ export function DiscoverTab() {
           <ScrollArea className="w-full">
             <div className="flex gap-6 pb-4">
               {trendingWorkflows.map((workflow) => (
-                <div key={workflow.id} className="w-[350px] flex-shrink-0">
+                <div key={workflow.id} className="w-[350px] shrink-0">
                   <WorkflowCard workflow={workflow} />
                 </div>
               ))}

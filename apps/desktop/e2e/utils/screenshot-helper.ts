@@ -61,15 +61,20 @@ export class ScreenshotHelper {
         return;
       }
 
-      const file = fs.createReadStream(filePath);
-      const png = new PNG();
-
-      png.parse(file, (err, data) => {
+      fs.readFile(filePath, (err, data) => {
         if (err) {
-          reject(new Error(`Failed to parse PNG file ${filePath}: ${err.message}`));
-        } else {
-          resolve(data);
+          reject(new Error(`Failed to read file ${filePath}: ${err.message}`));
+          return;
         }
+
+        const png = new PNG();
+        png.parse(data, (parseErr, parsedData) => {
+          if (parseErr) {
+            reject(new Error(`Failed to parse PNG file ${filePath}: ${parseErr.message}`));
+          } else {
+            resolve(parsedData);
+          }
+        });
       });
     });
   }

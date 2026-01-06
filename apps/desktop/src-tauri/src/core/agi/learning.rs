@@ -2,13 +2,13 @@ use super::*;
 use crate::core::agi::planner::PlanStep;
 use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use tokio::sync::RwLock;
 
 pub struct LearningSystem {
     enabled: bool,
     self_improvement_enabled: bool,
-    experiences: Mutex<Vec<Experience>>,
-    strategies: Mutex<HashMap<String, Strategy>>,
+    experiences: RwLock<Vec<Experience>>,
+    strategies: RwLock<HashMap<String, Strategy>>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,8 +35,8 @@ impl LearningSystem {
         Ok(Self {
             enabled,
             self_improvement_enabled,
-            experiences: Mutex::new(Vec::new()),
-            strategies: Mutex::new(HashMap::new()),
+            experiences: RwLock::new(Vec::new()),
+            strategies: RwLock::new(HashMap::new()),
         })
     }
 
@@ -61,7 +61,7 @@ impl LearningSystem {
                 .as_secs(),
         };
 
-        self.experiences.lock().unwrap().push(experience.clone());
+        self.experiences.write().await.push(experience.clone());
 
         self.update_strategy(&experience).await?;
 
@@ -69,7 +69,7 @@ impl LearningSystem {
     }
 
     async fn update_strategy(&self, experience: &Experience) -> Result<()> {
-        let mut strategies = self.strategies.lock().unwrap();
+        let mut strategies = self.strategies.write().await;
         let strategy = strategies
             .entry(experience.tool_id.clone())
             .or_insert_with(|| Strategy {
@@ -85,19 +85,14 @@ impl LearningSystem {
             });
 
         strategy.usage_count += 1;
-        let success_count = self
-            .experiences
-            .lock()
-            .unwrap()
+        let experiences = self.experiences.read().await;
+        let success_count = experiences
             .iter()
             .filter(|e| e.tool_id == experience.tool_id && e.success)
             .count();
         strategy.success_rate = success_count as f64 / strategy.usage_count as f64;
 
-        let total_time: u64 = self
-            .experiences
-            .lock()
-            .unwrap()
+        let total_time: u64 = experiences
             .iter()
             .filter(|e| e.tool_id == experience.tool_id)
             .map(|e| e.execution_time_ms)
@@ -112,7 +107,8 @@ impl LearningSystem {
     }
 
     pub fn get_best_strategy(&self, tool_id: &str) -> Option<Strategy> {
-        self.strategies.lock().unwrap().get(tool_id).cloned()
+        // Use try_read to avoid blocking - return None if lock is held
+        self.strategies.try_read().ok()?.get(tool_id).cloned()
     }
 
     pub async fn update(&self) -> Result<()> {
@@ -121,7 +117,7 @@ impl LearningSystem {
         }
 
         {
-            let mut experiences = self.experiences.lock().unwrap();
+            let mut experiences = self.experiences.write().await;
             if experiences.len() > 10000 {
                 let len = experiences.len();
                 experiences.drain(0..len - 10000);
@@ -135,7 +131,50 @@ impl LearningSystem {
         Ok(())
     }
 
+    /// Optimize strategies based on learned experiences.
+    ///
+    /// Analyzes success/failure patterns and logs performance metrics
+    /// for each strategy to help identify areas for improvement.
     async fn optimize_strategies(&self) -> Result<()> {
+        let strategies = self.strategies.read().await;
+
+        // Log current state for optimization analysis
+        tracing::debug!(
+            "[Learning] Strategy optimization check: {} strategies tracked",
+            strategies.len()
+        );
+
+        // Analyze each strategy's performance
+        for (tool_id, strategy) in strategies.iter() {
+            if strategy.usage_count > 0 {
+                tracing::debug!(
+                    "[Learning] Strategy '{}': success_rate={:.2}%, avg_time={}ms, usage_count={}",
+                    tool_id,
+                    strategy.success_rate * 100.0,
+                    strategy.avg_execution_time_ms,
+                    strategy.usage_count
+                );
+
+                // Flag underperforming strategies
+                if strategy.success_rate < 0.5 && strategy.usage_count >= 5 {
+                    tracing::warn!(
+                        "[Learning] Strategy '{}' has low success rate ({:.1}%) - consider optimization",
+                        tool_id,
+                        strategy.success_rate * 100.0
+                    );
+                }
+
+                // Flag slow strategies
+                if strategy.avg_execution_time_ms > 30000 && strategy.usage_count >= 3 {
+                    tracing::warn!(
+                        "[Learning] Strategy '{}' has high avg execution time ({}ms) - consider optimization",
+                        tool_id,
+                        strategy.avg_execution_time_ms
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 }

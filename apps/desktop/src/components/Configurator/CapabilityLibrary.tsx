@@ -40,7 +40,7 @@ function CapabilityItem({ capability, onDragStart }: CapabilityItemProps) {
         categoryColors[capability.category],
       )}
     >
-      <IconComponent className="h-4 w-4 flex-shrink-0" />
+      <IconComponent className="h-4 w-4 shrink-0" />
       <div className="flex-1 overflow-hidden">
         <div className="truncate text-sm font-medium">{capability.name}</div>
         <div className="truncate text-xs text-muted-foreground">{capability.description}</div>

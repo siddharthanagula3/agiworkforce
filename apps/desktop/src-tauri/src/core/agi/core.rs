@@ -50,6 +50,8 @@ pub struct AGICore {
     process_reasoning: Option<Arc<ProcessReasoning>>,
     process_ontology: Option<Arc<ProcessOntology>>,
     outcome_tracker: Option<Arc<OutcomeTracker>>,
+    /// Reflection engine for multi-turn agentic reasoning
+    reflection_engine: Option<Arc<ReflectionEngine>>,
 }
 
 impl AGICore {
@@ -83,6 +85,13 @@ impl AGICore {
 
         tool_registry.register_all_tools(automation.clone(), router.clone())?;
 
+        // Create reflection engine for multi-turn reasoning
+        let reflection_engine = Arc::new(ReflectionEngine::new(
+            router.clone(),
+            knowledge_base.clone(),
+            learning.clone(),
+        )?);
+
         Ok(Self {
             config,
             capabilities: AGICapabilities::default(),
@@ -103,6 +112,7 @@ impl AGICore {
             process_reasoning: None,
             process_ontology: None,
             outcome_tracker: None,
+            reflection_engine: Some(reflection_engine),
         })
     }
 
@@ -155,6 +165,13 @@ impl AGICore {
 
         tool_registry.register_all_tools(automation.clone(), router.clone())?;
 
+        // Create reflection engine for multi-turn reasoning
+        let reflection_engine = Arc::new(ReflectionEngine::new(
+            router.clone(),
+            knowledge_base.clone(),
+            learning.clone(),
+        )?);
+
         Ok(Self {
             config,
             capabilities: AGICapabilities::default(),
@@ -175,6 +192,7 @@ impl AGICore {
             process_reasoning: Some(process_reasoning),
             process_ontology: Some(process_ontology),
             outcome_tracker: Some(outcome_tracker),
+            reflection_engine: Some(reflection_engine),
         })
     }
 
@@ -450,12 +468,50 @@ impl AGICore {
         tracing::info!("[AGI] Achieving goal: {}", context.goal.description);
 
         let max_iterations = 1000;
+        let max_duration = Duration::from_secs(300); // 5 minute absolute timeout
+        let start_time = std::time::Instant::now();
         let mut iteration = 0;
+        let mut last_reflection: Option<reflection::ReflectionInsight> = None;
+        let mut consecutive_failures = 0;
+        const MAX_CONSECUTIVE_FAILURES: u32 = 3;
 
         loop {
+            // Check cancellation first
             if self.is_goal_cancelled(&goal_id).await {
                 tracing::info!("[AGI] Goal {} cancelled by user", goal_id);
                 self.emit_event("agi:goal:cancelled", json!({ "goal_id": goal_id }));
+                break;
+            }
+
+            // Check pause signal and wait if paused
+            if self.is_paused() {
+                tracing::info!("[AGI] Goal {} paused", goal_id);
+                self.emit_event("agi:goal:paused", json!({ "goal_id": goal_id.clone() }));
+
+                // Wait until unpaused
+                while self.is_paused() {
+                    sleep(Duration::from_millis(100)).await;
+                }
+
+                tracing::info!("[AGI] Goal {} resumed", goal_id);
+                self.emit_event("agi:goal:resumed", json!({ "goal_id": goal_id.clone() }));
+            }
+
+            // Check absolute timeout
+            if start_time.elapsed() > max_duration {
+                tracing::warn!(
+                    "[AGI] Goal {} timed out after {:?}",
+                    goal_id,
+                    start_time.elapsed()
+                );
+                self.emit_event(
+                    "agi:goal:timeout",
+                    json!({
+                        "goal_id": goal_id,
+                        "elapsed_secs": start_time.elapsed().as_secs(),
+                        "iterations": iteration,
+                    }),
+                );
                 break;
             }
 
@@ -465,6 +521,13 @@ impl AGICore {
                     "[AGI] Max iterations ({}) reached for goal {}",
                     max_iterations,
                     goal_id
+                );
+                self.emit_event(
+                    "agi:goal:max_iterations",
+                    json!({
+                        "goal_id": goal_id,
+                        "iterations": iteration,
+                    }),
                 );
                 break;
             }
@@ -476,27 +539,96 @@ impl AGICore {
                 goal_id
             );
 
+            // Emit iteration start event
+            self.emit_event(
+                "agi:goal:iteration_start",
+                json!({
+                    "goal_id": goal_id.clone(),
+                    "iteration": iteration,
+                    "has_prior_reflection": last_reflection.is_some(),
+                }),
+            );
+
             if self.check_goal_achieved(&context).await? {
+                let completed_steps = context.tool_results.len();
                 tracing::info!("[AGI] Goal {} achieved (pre-check)!", goal_id);
                 self.emit_event(
                     "agi:goal:achieved",
                     json!({
                         "goal_id": goal_id,
-                        "total_steps": 0,
-                        "completed_steps": 0,
+                        "total_steps": completed_steps,
+                        "completed_steps": completed_steps,
+                        "iterations": iteration,
                     }),
                 );
                 break;
             }
 
-            let plan = self.planner.create_plan(&context.goal, &context).await?;
+            // Create plan, potentially informed by previous reflection
+            let mut plan = self.planner.create_plan(&context.goal, &context).await?;
 
             tracing::info!("[AGI] Plan created with {} steps", plan.steps.len());
 
             if plan.steps.is_empty() {
                 tracing::warn!("[AGI] Planner returned empty plan. Assuming blocked or done.");
-
                 break;
+            }
+
+            // === MULTI-TURN REFLECTION: Pre-execution plan critique ===
+            if let Some(ref reflection_engine) = self.reflection_engine {
+                // Critique the plan before execution (on iterations > 1 or if we have prior failures)
+                if iteration > 1 || consecutive_failures > 0 {
+                    tracing::info!("[AGI] Critiquing plan before execution");
+                    match reflection_engine
+                        .critique_plan(&context.goal, &plan, &context)
+                        .await
+                    {
+                        Ok(critique) => {
+                            self.emit_event(
+                                "agi:reflection:plan_critique",
+                                json!({
+                                    "goal_id": goal_id.clone(),
+                                    "iteration": iteration,
+                                    "quality_score": critique.quality_score,
+                                    "likely_to_succeed": critique.likely_to_succeed,
+                                    "risks_count": critique.risks.len(),
+                                    "suggestions": critique.suggestions,
+                                }),
+                            );
+
+                            // If plan quality is too low, try to apply corrections from last reflection
+                            if critique.quality_score < 50 && last_reflection.is_some() {
+                                if let Some(ref insight) = last_reflection {
+                                    tracing::info!(
+                                        "[AGI] Applying corrections from previous reflection"
+                                    );
+                                    match reflection_engine
+                                        .apply_corrections(&plan, &insight.corrections)
+                                        .await
+                                    {
+                                        Ok(revised_plan) => {
+                                            plan = revised_plan;
+                                            self.emit_event("agi:reflection:plan_revised", json!({
+                                                "goal_id": goal_id.clone(),
+                                                "iteration": iteration,
+                                                "corrections_applied": insight.corrections.len(),
+                                            }));
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                "[AGI] Failed to apply corrections: {}",
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("[AGI] Plan critique failed: {}", e);
+                        }
+                    }
+                }
             }
 
             let workflow_hash = compute_plan_workflow_hash(&context.goal, &plan);
@@ -517,10 +649,13 @@ impl AGICore {
                     "goal_id": goal_id,
                     "total_steps": plan.steps.len(),
                     "estimated_duration_ms": plan.estimated_duration.as_millis(),
+                    "iteration": iteration,
                 }),
             );
 
             let mut plan_interrupted = false;
+            let mut steps_succeeded = 0;
+            let mut steps_failed = 0;
 
             for (index, step) in plan.steps.iter().enumerate() {
                 tracing::info!(
@@ -586,6 +721,12 @@ impl AGICore {
                     execution_time_ms: execution_time.as_millis() as u64,
                     resources_used: step.estimated_resources.clone(),
                 };
+
+                if success {
+                    steps_succeeded += 1;
+                } else {
+                    steps_failed += 1;
+                }
 
                 if let Some(state) = step_states.get_mut(index) {
                     state.status = if success {
@@ -656,6 +797,7 @@ impl AGICore {
                             "goal_id": goal_id,
                             "total_steps": plan.steps.len(),
                             "completed_steps": index + 1,
+                            "iterations": iteration,
                         }),
                     );
                     plan_interrupted = true;
@@ -667,7 +809,118 @@ impl AGICore {
                 break;
             }
 
-            sleep(Duration::from_secs(2)).await;
+            // === MULTI-TURN REFLECTION: Post-execution reflection ===
+            if let Some(ref reflection_engine) = self.reflection_engine {
+                tracing::info!("[AGI] Starting post-execution reflection");
+
+                match reflection_engine
+                    .reflect(&context.goal, &context, &plan)
+                    .await
+                {
+                    Ok(insight) => {
+                        // Track consecutive failures
+                        if insight.assessment.success_rate < 0.5 {
+                            consecutive_failures += 1;
+                        } else {
+                            consecutive_failures = 0;
+                        }
+
+                        // Emit reflection event
+                        self.emit_event(
+                            "agi:reflection:completed",
+                            json!({
+                                "goal_id": goal_id.clone(),
+                                "iteration": iteration,
+                                "insight_id": insight.id,
+                                "success_rate": insight.assessment.success_rate,
+                                "progress_estimate": insight.assessment.progress_estimate,
+                                "goal_achievable": insight.assessment.goal_achievable,
+                                "failure_patterns_count": insight.failure_patterns.len(),
+                                "corrections_count": insight.corrections.len(),
+                                "sub_goals_count": insight.sub_goals.len(),
+                                "recommendations": insight.recommendations.clone(),
+                                "confidence": insight.confidence,
+                            }),
+                        );
+
+                        // Store insight in context memory
+                        context.context_memory.push(ContextEntry {
+                            timestamp: insight.timestamp,
+                            event: format!("reflection_iteration_{}", iteration),
+                            data: serde_json::to_value(&insight)?,
+                        });
+
+                        // Check if we should give up based on reflection
+                        if !insight.assessment.goal_achievable
+                            && consecutive_failures >= MAX_CONSECUTIVE_FAILURES
+                        {
+                            tracing::warn!(
+                                "[AGI] Goal {} appears unachievable after {} consecutive failures",
+                                goal_id,
+                                consecutive_failures
+                            );
+                            self.emit_event(
+                                "agi:goal:unachievable",
+                                json!({
+                                    "goal_id": goal_id,
+                                    "iterations": iteration,
+                                    "consecutive_failures": consecutive_failures,
+                                    "final_insight": insight,
+                                }),
+                            );
+                            break;
+                        }
+
+                        // Handle sub-goals if any were generated
+                        if !insight.sub_goals.is_empty() {
+                            tracing::info!(
+                                "[AGI] {} sub-goals generated, adding to context",
+                                insight.sub_goals.len()
+                            );
+                            self.emit_event(
+                                "agi:reflection:sub_goals",
+                                json!({
+                                    "goal_id": goal_id.clone(),
+                                    "sub_goals": insight.sub_goals,
+                                }),
+                            );
+                        }
+
+                        // Store for next iteration
+                        last_reflection = Some(insight);
+                    }
+                    Err(e) => {
+                        tracing::warn!("[AGI] Reflection failed: {}", e);
+                    }
+                }
+            } else {
+                // No reflection engine, just track basic failure counts
+                if steps_failed > steps_succeeded {
+                    consecutive_failures += 1;
+                } else {
+                    consecutive_failures = 0;
+                }
+            }
+
+            // Emit iteration complete event
+            self.emit_event(
+                "agi:goal:iteration_complete",
+                json!({
+                    "goal_id": goal_id.clone(),
+                    "iteration": iteration,
+                    "steps_succeeded": steps_succeeded,
+                    "steps_failed": steps_failed,
+                    "consecutive_failures": consecutive_failures,
+                }),
+            );
+
+            // Adaptive delay based on failure rate
+            let delay_secs = if consecutive_failures > 0 {
+                std::cmp::min(2_u64.pow(consecutive_failures), 30)
+            } else {
+                2
+            };
+            sleep(Duration::from_secs(delay_secs)).await;
         }
 
         Ok(())
@@ -685,7 +938,63 @@ impl AGICore {
         Ok(true)
     }
 
+    /// Updates the knowledge base with learnings from execution.
+    /// 1. Consolidates in-memory experiences from the learning system
+    /// 2. Persists high-value strategies to the knowledge base
+    /// 3. Triggers memory cleanup if limits are exceeded
     async fn update_knowledge(&self) -> Result<()> {
+        // Step 1: Consolidate learning system experiences
+        self.learning.update().await?;
+
+        // Step 2: Persist high-performing strategies as knowledge entries
+        let strategies = [
+            "file_operations",
+            "web_search",
+            "code_execution",
+            "api_calls",
+        ];
+
+        for tool_category in strategies {
+            if let Some(strategy) = self.learning.get_best_strategy(tool_category) {
+                // Only persist strategies with meaningful data
+                if strategy.usage_count > 0 && strategy.success_rate > 0.0 {
+                    let entry = super::knowledge::KnowledgeEntry {
+                        id: format!("strategy_{}", tool_category),
+                        category: "strategy".to_string(),
+                        content: format!(
+                            "Tool '{}': success_rate={:.2}%, avg_time={}ms, usage_count={}",
+                            strategy.tool_id,
+                            strategy.success_rate * 100.0,
+                            strategy.avg_execution_time_ms,
+                            strategy.usage_count
+                        ),
+                        metadata: std::collections::HashMap::from([
+                            ("tool_id".to_string(), strategy.tool_id.clone()),
+                            (
+                                "success_rate".to_string(),
+                                strategy.success_rate.to_string(),
+                            ),
+                            (
+                                "avg_execution_time_ms".to_string(),
+                                strategy.avg_execution_time_ms.to_string(),
+                            ),
+                            ("usage_count".to_string(), strategy.usage_count.to_string()),
+                        ]),
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0),
+                        importance: strategy.success_rate, // Higher success = more important
+                    };
+
+                    if let Err(e) = self.knowledge_base.add_entry(entry).await {
+                        tracing::warn!("Failed to persist strategy {}: {}", tool_category, e);
+                    }
+                }
+            }
+        }
+
+        tracing::debug!("Knowledge update completed");
         Ok(())
     }
 
@@ -710,6 +1019,7 @@ impl AGICore {
             process_reasoning: self.process_reasoning.clone(),
             process_ontology: self.process_ontology.clone(),
             outcome_tracker: self.outcome_tracker.clone(),
+            reflection_engine: self.reflection_engine.clone(),
         }
     }
 

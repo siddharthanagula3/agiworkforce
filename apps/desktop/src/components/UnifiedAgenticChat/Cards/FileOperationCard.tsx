@@ -84,7 +84,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
       <div className="flex items-start justify-between p-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {}
-          <div className={`p-2 rounded-lg ${colorClass} flex-shrink-0`}>
+          <div className={`p-2 rounded-lg ${colorClass} shrink-0`}>
             <Icon size={20} />
           </div>
 
@@ -131,7 +131,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
         </div>
 
         {}
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+        <div className="flex items-center gap-1 shrink-0 ml-2">
           {onViewFile && (
             <button
               onClick={onViewFile}

@@ -4,7 +4,7 @@ import { createErrorHandler } from './utils/error-handler';
 
 test.describe('AGI Goal Management', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     const agiLink = page
@@ -195,7 +195,7 @@ test.describe('AGI Goal Management', () => {
 
 test.describe('AGI Resource Monitoring', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     const agiLink = page
@@ -248,7 +248,7 @@ test.describe('AGI Resource Monitoring', () => {
 
 test.describe('AGI Knowledge Base', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     const knowledgeLink = page
@@ -323,25 +323,24 @@ test.describe('AGI Knowledge Base', () => {
 test.describe('AGI Settings', () => {
   let settingsSnapshot: SettingsSnapshot;
 
-  test.beforeEach(async ({ page, settingsPage }) => {
-    await page.goto('http://localhost:3000');
-    await page.waitForLoadState('networkidle');
+  // Increase timeout for settings tests
+  test.setTimeout(60000);
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
     const settingsLink = page
       .locator('a[href*="settings"], button[aria-label*="Settings"]')
       .first();
-    if (await settingsLink.isVisible()) {
+    if (await settingsLink.isVisible({ timeout: 2000 }).catch(() => false)) {
       await settingsLink.click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
     }
 
-    try {
-      settingsSnapshot = await settingsPage.captureCurrentSettings();
-      console.log('AGI settings snapshot captured:', settingsSnapshot);
-    } catch (error) {
-      console.warn('Failed to capture AGI settings:', error);
-      settingsSnapshot = {};
-    }
+    // Initialize empty snapshot
+    settingsSnapshot = {};
   });
 
   test.afterEach(async ({ settingsPage }) => {

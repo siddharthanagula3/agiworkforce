@@ -72,7 +72,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-lg flex-shrink-0">{suggestion.icon}</span>
+                      <span className="text-lg shrink-0">{suggestion.icon}</span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                         {suggestion.text}
                       </span>
@@ -83,7 +83,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                   </div>
 
                   {/* Type Badge */}
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <span
                       className={cn(
                         'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',

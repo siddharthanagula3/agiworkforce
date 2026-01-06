@@ -124,7 +124,7 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status: _
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
         <div className="flex items-start gap-2">
-          <XCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className={`text-xs font-mono font-medium ${methodColor}`}>{method}</span>
@@ -142,7 +142,7 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status: _
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 bg-surface-overlay/30 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
-          <Globe className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className={`text-xs font-mono font-bold ${methodColor}`}>{method}</span>
           <Badge
             variant={statusBadgeVariant as 'default' | 'destructive' | 'outline' | 'secondary'}
@@ -156,7 +156,7 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status: _
           </span>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {success ? (
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
           ) : (

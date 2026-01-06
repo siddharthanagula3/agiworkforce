@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
 import type { CostAnalyticsResponse, CostOverviewResponse } from '../types/chat';
 import { supabaseAuth } from '../services/supabaseAuth';
@@ -30,84 +31,118 @@ function normalizeFilterValue(value?: string): string | undefined {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-export const useCostStore = create<CostState>((set, get) => ({
-  overview: null,
-  analytics: null,
-  filters: DEFAULT_FILTERS,
-  loadingOverview: false,
-  loadingAnalytics: false,
-  error: null,
+// Selectors for optimized component subscriptions
+export const selectCostOverview = (state: CostState) => state.overview;
+export const selectCostAnalytics = (state: CostState) => state.analytics;
+export const selectCostFilters = (state: CostState) => state.filters;
+export const selectCostLoading = (state: CostState) =>
+  state.loadingOverview || state.loadingAnalytics;
+export const selectCostError = (state: CostState) => state.error;
 
-  loadOverview: async () => {
-    set({ loadingOverview: true, error: null });
-    try {
-      const userId = supabaseAuth.getUser()?.id;
-      if (!userId) throw new Error('User not authenticated');
-      const response = await invoke<CostOverviewResponse>('chat_get_cost_overview', { userId });
-      set({ overview: response, loadingOverview: false });
-    } catch (error) {
-      console.error('Failed to load cost overview:', error);
-      set({ loadingOverview: false, error: String(error) });
-    }
-  },
-
-  loadAnalytics: async (overrides) => {
-    const merged: CostFilters = {
-      ...get().filters,
-      ...overrides,
-    };
-
-    const providerNormalized = normalizeFilterValue(merged.provider);
-    const modelNormalized = normalizeFilterValue(merged.model);
-
-    const sanitized: CostFilters = {
-      days: merged.days,
-    };
-    if (providerNormalized) {
-      sanitized.provider = providerNormalized;
-    }
-    if (modelNormalized) {
-      sanitized.model = modelNormalized;
-    }
-
-    set({
-      loadingAnalytics: true,
-      error: null,
-      filters: sanitized,
-    });
-
-    try {
-      const userId = supabaseAuth.getUser()?.id;
-      if (!userId) throw new Error('User not authenticated');
-      const analytics = await invoke<CostAnalyticsResponse>('chat_get_cost_analytics', {
-        userId,
-        days: sanitized.days,
-        provider: sanitized.provider ?? null,
-        model: sanitized.model ?? null,
-      });
-      set({
-        analytics,
+export const useCostStore = create<CostState>()(
+  devtools(
+    persist(
+      subscribeWithSelector((set, get) => ({
+        overview: null,
+        analytics: null,
+        filters: DEFAULT_FILTERS,
+        loadingOverview: false,
         loadingAnalytics: false,
-      });
-    } catch (error) {
-      console.error('Failed to load cost analytics:', error);
-      set({ loadingAnalytics: false, error: String(error) });
-    }
-  },
+        error: null,
 
-  setMonthlyBudget: async (amount) => {
-    try {
-      const userId = supabaseAuth.getUser()?.id;
-      if (!userId) throw new Error('User not authenticated');
-      await invoke('chat_set_monthly_budget', {
-        userId,
-        amount: amount ?? null,
-      });
-      await get().loadOverview();
-    } catch (error) {
-      console.error('Failed to update monthly budget:', error);
-      set({ error: String(error) });
-      throw error;
-    }
-  },
-}));
+        loadOverview: async () => {
+          set({ loadingOverview: true, error: null });
+          try {
+            const userId = supabaseAuth.getUser()?.id;
+            if (!userId) throw new Error('User not authenticated');
+            const response = await invoke<CostOverviewResponse>('chat_get_cost_overview', {
+              userId,
+            });
+            set({ overview: response, loadingOverview: false });
+          } catch (error) {
+            console.error('Failed to load cost overview:', error);
+            set({ loadingOverview: false, error: String(error) });
+          }
+        },
+
+        loadAnalytics: async (overrides) => {
+          const merged: CostFilters = {
+            ...get().filters,
+            ...overrides,
+          };
+
+          const providerNormalized = normalizeFilterValue(merged.provider);
+          const modelNormalized = normalizeFilterValue(merged.model);
+
+          const sanitized: CostFilters = {
+            days: merged.days,
+          };
+          if (providerNormalized) {
+            sanitized.provider = providerNormalized;
+          }
+          if (modelNormalized) {
+            sanitized.model = modelNormalized;
+          }
+
+          set({
+            loadingAnalytics: true,
+            error: null,
+            filters: sanitized,
+          });
+
+          try {
+            const userId = supabaseAuth.getUser()?.id;
+            if (!userId) throw new Error('User not authenticated');
+            const analytics = await invoke<CostAnalyticsResponse>('chat_get_cost_analytics', {
+              userId,
+              days: sanitized.days,
+              provider: sanitized.provider ?? null,
+              model: sanitized.model ?? null,
+            });
+            set({
+              analytics,
+              loadingAnalytics: false,
+            });
+          } catch (error) {
+            console.error('Failed to load cost analytics:', error);
+            set({ loadingAnalytics: false, error: String(error) });
+          }
+        },
+
+        setMonthlyBudget: async (amount) => {
+          try {
+            const userId = supabaseAuth.getUser()?.id;
+            if (!userId) throw new Error('User not authenticated');
+            await invoke('chat_set_monthly_budget', {
+              userId,
+              amount: amount ?? null,
+            });
+            await get().loadOverview();
+          } catch (error) {
+            console.error('Failed to update monthly budget:', error);
+            set({ error: String(error) });
+            throw error;
+          }
+        },
+      })),
+      {
+        name: 'cost-store',
+        version: 1,
+        storage: createJSONStorage(() => {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            return localStorage;
+          }
+          return {
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+          };
+        }),
+        partialize: (state) => ({
+          filters: state.filters,
+        }),
+      },
+    ),
+    { name: 'CostStore', enabled: import.meta.env.DEV },
+  ),
+);

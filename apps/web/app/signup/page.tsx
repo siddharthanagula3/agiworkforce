@@ -1,11 +1,18 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { AlertCircle, Bot, CheckCircle2, Github, Mail } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle2, Github, Mail, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
 import { validatePassword, getPasswordRequirementsText } from '@/lib/password-validator';
+
+// Get the app URL for redirects - use env var for production, fallback to window for dev
+const getAppUrl = () => {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+  );
+};
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('');
@@ -13,15 +20,52 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [signupComplete, setSignupComplete] = useState(false);
   const [existingUser, setExistingUser] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendCount, setResendCount] = useState(0);
+
+  const appUrl = useMemo(() => getAppUrl(), []);
 
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     const validation = validatePassword(value);
     setPasswordErrors(validation.errors);
+  };
+
+  // Resend verification email handler
+  const handleResendVerification = async () => {
+    if (resendCount >= 3) {
+      setResendMessage(
+        'Maximum resend attempts reached. Please wait a few minutes before trying again.',
+      );
+      return;
+    }
+
+    setResendLoading(true);
+    setResendMessage(null);
+
+    const supabase = getSupabaseClient();
+
+    // Use the resend method for email verification
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: `${appUrl}/auth/callback`,
+      },
+    });
+
+    if (resendError) {
+      setResendMessage(`Failed to resend: ${resendError.message}`);
+    } else {
+      setResendCount((prev) => prev + 1);
+      setResendMessage('Verification email sent! Please check your inbox.');
+    }
+    setResendLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -50,7 +94,7 @@ export default function SignupPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${appUrl}/auth/callback`,
         data: {
           full_name: fullName,
           display_name: fullName.split(' ')[0] || fullName,
@@ -111,6 +155,31 @@ export default function SignupPage() {
             <p className="text-sm text-zinc-500">
               Didn&apos;t receive the email? Check your spam folder.
             </p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleResendVerification}
+              disabled={resendLoading || resendCount >= 3}
+            >
+              {resendLoading ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Resend Verification Email
+                </>
+              )}
+            </Button>
+            {resendMessage && (
+              <p
+                className={`text-sm ${resendMessage.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}
+              >
+                {resendMessage}
+              </p>
+            )}
             <Link href="/login">
               <Button variant="outline" className="w-full">
                 Back to Sign In
@@ -147,7 +216,7 @@ export default function SignupPage() {
                 await supabase.auth.signInWithOAuth({
                   provider: 'github',
                   options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: `${appUrl}/auth/callback`,
                   },
                 });
               }}
@@ -163,7 +232,7 @@ export default function SignupPage() {
                 await supabase.auth.signInWithOAuth({
                   provider: 'google',
                   options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: `${appUrl}/auth/callback`,
                   },
                 });
               }}

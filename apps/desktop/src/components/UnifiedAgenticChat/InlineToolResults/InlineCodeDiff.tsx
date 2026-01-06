@@ -71,14 +71,14 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status: _sta
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 bg-surface-overlay/30 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
-          <FileCode className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <FileCode className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className={`text-xs font-mono font-medium truncate ${operationColor}`}>
             {operationLabel}
           </span>
           <span className="text-xs font-mono text-muted-foreground truncate">{filePath}</span>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {additions > 0 && (
             <span className="text-xs text-emerald-400 flex items-center gap-1">
               <Plus className="h-3 w-3" />

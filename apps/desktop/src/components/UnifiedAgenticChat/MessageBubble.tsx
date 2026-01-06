@@ -14,6 +14,7 @@ import {
   Lightbulb,
   Loader2,
   PartyPopper,
+  Pencil,
   RotateCw,
   SmilePlus,
   Terminal as TerminalIcon,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { EditableMessage } from './EditableMessage';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
@@ -52,7 +54,10 @@ export interface MessageBubbleProps {
   showTimestamp?: boolean;
   enableActions?: boolean;
   onRegenerate?: () => void;
+  /** Called when user clicks edit button - passes current content */
   onEdit?: (content: string) => void;
+  /** Called when user saves an edited message - passes messageId and new content */
+  onEditSave?: (messageId: string, newContent: string) => void;
   onDelete?: () => void;
   onCopy?: () => void;
   onToggleSidecar?: (tab: SidecarMode) => void;
@@ -65,6 +70,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   enableActions = true,
   onRegenerate,
   onEdit,
+  onEditSave,
   onDelete,
   onCopy,
   onToggleSidecar,
@@ -74,6 +80,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const [lightboxImage, setLightboxImage] = React.useState<{ src: string; alt: string } | null>(
     null,
   );
+  const [isEditing, setIsEditing] = React.useState(false);
   const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
@@ -195,6 +202,29 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       duration: 2000,
     });
   }, [message.id, message.bookmarked, toggleMessageBookmark]);
+
+  const handleStartEdit = useCallback(() => {
+    setIsEditing(true);
+    setShowActions(false);
+    setContextMenu(null);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const handleSaveEdit = useCallback(
+    (newContent: string) => {
+      setIsEditing(false);
+      if (onEditSave) {
+        onEditSave(message.id, newContent);
+      } else if (onEdit) {
+        // Fallback to legacy onEdit behavior
+        onEdit(newContent);
+      }
+    },
+    [message.id, onEditSave, onEdit],
+  );
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -448,7 +478,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     return (
       <div className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors">
         {showAvatar && (
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-sm font-medium">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-sm font-medium">
             AI
           </div>
         )}
@@ -491,7 +521,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           onMouseLeave={() => setShowActions(false)}
         >
           {showAvatar && (
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-purple-700 text-white text-sm font-medium">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-700 text-white text-sm font-medium">
               AI
             </div>
           )}
@@ -580,19 +610,28 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               </div>
             )}
 
-            {}
+            {/* Action buttons - visible on hover or focus-within for keyboard accessibility */}
             {enableActions && (
               <div
                 className={cn(
-                  'flex items-center gap-1 mt-2 transition-opacity',
-                  showActions ? 'opacity-100' : 'opacity-0',
+                  'flex items-center gap-1 mt-2 transition-opacity focus-within:opacity-100',
+                  showActions ? 'opacity-100' : 'opacity-0 focus-within:opacity-100',
                 )}
+                role="group"
+                aria-label="Message actions"
               >
-                {}
-                <button onClick={handleCopy} className="p-1 text-zinc-500 hover:text-zinc-300">
+                <button
+                  onClick={handleCopy}
+                  className="p-1 text-zinc-500 hover:text-zinc-300"
+                  title="Copy message"
+                >
                   {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
                 </button>
-                <button onClick={handleBookmark} className="p-1 text-zinc-500 hover:text-zinc-300">
+                <button
+                  onClick={handleBookmark}
+                  className="p-1 text-zinc-500 hover:text-zinc-300"
+                  title={message.bookmarked ? 'Remove bookmark' : 'Bookmark message'}
+                >
                   {message.bookmarked ? (
                     <BookmarkCheck size={13} className="text-amber-400" />
                   ) : (
@@ -663,10 +702,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             {message.bookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
             {message.bookmarked ? 'Remove bookmark' : 'Bookmark'}
           </button>
-          {isUser && onEdit && (
+          {isUser && (onEdit || onEditSave) && !message.error && (
             <button
               onClick={() => {
-                onEdit(message.content);
+                handleStartEdit();
                 closeContextMenu();
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
@@ -715,7 +754,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       >
         {showAvatar && !isUser && (
           <div
-            className={`flex-shrink-0 w-8 h-8 rounded-full ${avatarBg} flex items-center justify-center text-white text-sm font-medium`}
+            className={`shrink-0 w-8 h-8 rounded-full ${avatarBg} flex items-center justify-center text-white text-sm font-medium`}
           >
             {isSystem ? 'S' : 'AI'}
           </div>
@@ -727,6 +766,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               {isUser ? 'You' : isSystem ? 'System' : 'Assistant'}
             </span>
             {showTimestamp && <span className="message-meta text-zinc-500">{formattedTime}</span>}
+            {/* Edited indicator */}
+            {message.metadata?.edited && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400 italic">
+                <Pencil size={10} />
+                edited
+              </span>
+            )}
             {/* Model badge for assistant messages */}
             {isAssistant && message.metadata?.model && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[10px] font-medium text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
@@ -769,92 +815,102 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {}
           {message.metadata?.streaming && <StatusTrail messageId={message.id} />}
 
-          <div
-            className={`prose prose-sm dark:prose-invert max-w-none transition-opacity ${
-              message.pending ? 'opacity-60' : 'opacity-100'
-            } ${message.error ? 'text-red-500' : ''}`}
-          >
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-                components={{
-                  code(props) {
-                    const { inline, className, children, ...rest } =
-                      props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
-                    const match = /language-(\w+)/.exec(className || '');
-                    const language = match ? match[1] : 'text';
-                    const code = String(children).replace(/\n$/, '');
+          {/* Edit mode for user messages */}
+          {isUser && isEditing ? (
+            <EditableMessage
+              initialContent={message.content}
+              onSave={handleSaveEdit}
+              onCancel={handleCancelEdit}
+              className="mt-2"
+            />
+          ) : (
+            <div
+              className={`prose prose-sm dark:prose-invert max-w-none transition-opacity ${
+                message.pending ? 'opacity-60' : 'opacity-100'
+              } ${message.error ? 'text-red-500' : ''}`}
+            >
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    code(props) {
+                      const { inline, className, children, ...rest } =
+                        props as React.HTMLAttributes<HTMLElement> & { inline?: boolean };
+                      const match = /language-(\w+)/.exec(className || '');
+                      const language = match ? match[1] : 'text';
+                      const code = String(children).replace(/\n$/, '');
 
-                    return !inline ? (
-                      <CodeBlock
-                        code={code}
-                        language={language || 'text'}
-                        showLineNumbers={true}
-                        enableCopy={true}
-                      />
-                    ) : (
-                      <code
-                        className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
-                        {...rest}
-                      >
-                        {children}
-                      </code>
-                    );
-                  },
-                  table({ children }) {
-                    return (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                      return !inline ? (
+                        <CodeBlock
+                          code={code}
+                          language={language || 'text'}
+                          showLineNumbers={true}
+                          enableCopy={true}
+                        />
+                      ) : (
+                        <code
+                          className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
+                          {...rest}
+                        >
                           {children}
-                        </table>
-                      </div>
-                    );
-                  },
-                  a({ href, children }) {
-                    return (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                      >
-                        {children}
-                      </a>
-                    );
-                  },
+                        </code>
+                      );
+                    },
+                    table({ children }) {
+                      return (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                            {children}
+                          </table>
+                        </div>
+                      );
+                    },
+                    a({ href, children }) {
+                      return (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                        >
+                          {children}
+                        </a>
+                      );
+                    },
 
-                  p({ children }) {
-                    if (typeof children === 'string') {
-                      return <p>{parseCitations(children)}</p>;
-                    }
-                    return <p>{children}</p>;
-                  },
+                    p({ children }) {
+                      if (typeof children === 'string') {
+                        return <p>{parseCitations(children)}</p>;
+                      }
+                      return <p>{children}</p>;
+                    },
 
-                  li({ children }) {
-                    if (typeof children === 'string') {
-                      return <li>{parseCitations(children)}</li>;
-                    }
-                    return <li>{children}</li>;
-                  },
-                }}
-              >
-                {message.content}
-              </ReactMarkdown>
-              {/* Streaming cursor */}
-              {message.metadata?.streaming && (
-                <span
-                  className="inline-block w-2 h-4 ml-0.5 bg-purple-400 animate-pulse rounded-sm"
-                  style={{ animationDuration: '0.5s' }}
-                />
-              )}
+                    li({ children }) {
+                      if (typeof children === 'string') {
+                        return <li>{parseCitations(children)}</li>;
+                      }
+                      return <li>{children}</li>;
+                    },
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+                {/* Streaming cursor */}
+                {message.metadata?.streaming && (
+                  <span
+                    className="inline-block w-2 h-4 ml-0.5 bg-purple-400 animate-pulse rounded-sm"
+                    style={{ animationDuration: '0.5s' }}
+                  />
+                )}
 
-              {/* Sources footer for assistant messages with citations */}
-              {!isUser && !message.metadata?.streaming && (
-                <SourcesFooter content={message.content} />
-              )}
+                {/* Sources footer for assistant messages with citations */}
+                {!isUser && !message.metadata?.streaming && (
+                  <SourcesFooter content={message.content} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {}
           {Array.isArray(message.attachments) && message.attachments.length > 0 && (
@@ -937,13 +993,15 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
-          {}
+          {/* Action buttons - visible on hover or focus-within for keyboard accessibility */}
           {enableActions && (
             <div
               className={cn(
-                'flex items-center justify-center gap-1 mt-2 transition-opacity',
-                showActions ? 'opacity-100' : 'opacity-0',
+                'flex items-center justify-center gap-1 mt-2 transition-opacity focus-within:opacity-100',
+                showActions ? 'opacity-100' : 'opacity-0 focus-within:opacity-100',
               )}
+              role="group"
+              aria-label="Message actions"
             >
               <button
                 onClick={handleCopy}
@@ -1041,11 +1099,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                   <RotateCw size={14} className="text-red-600 dark:text-red-400" />
                 </button>
               )}
-              {isUser && onEdit && !message.error && (
+              {isUser && (onEdit || onEditSave) && !message.error && !isEditing && (
                 <button
-                  onClick={() => onEdit(message.content)}
+                  onClick={handleStartEdit}
                   className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-                  title="Edit"
+                  title="Edit message"
                 >
                   <Edit2 size={14} className="text-zinc-600 dark:text-zinc-400" />
                 </button>

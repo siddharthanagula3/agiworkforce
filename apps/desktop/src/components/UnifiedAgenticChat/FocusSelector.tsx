@@ -19,7 +19,7 @@ function FocusPill({ icon, label, mode: _mode, active, onClick, description }: F
         'group relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium',
         'transition-all duration-200 ease-spring-bouncy',
         'hover:scale-105 active:scale-95',
-        'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-terra-cotta',
+        'focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-terra-cotta',
         active
           ? 'bg-terra-cotta text-white shadow-halo-terra'
           : 'bg-surface-floating text-zinc-400 hover:bg-surface-floating-hover hover:text-zinc-200',

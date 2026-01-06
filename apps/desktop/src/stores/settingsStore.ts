@@ -1,6 +1,19 @@
+/**
+ * Settings Store
+ *
+ * Manages application settings including LLM configuration, window preferences,
+ * chat preferences, and allowed directories.
+ *
+ * Updated to Zustand v5 best practices:
+ * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
+ * - TypeScript: Using create<State>()() pattern for type inference
+ * - Persist middleware: Using createJSONStorage, partialize, version, migrate
+ * - Better devtools integration with store name
+ * - subscribeWithSelector for granular subscriptions
+ */
 import { invoke } from '../lib/tauri-mock';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 
 import type { Provider } from '../types/provider';
 export type { Provider };
@@ -159,276 +172,315 @@ const storageFallback: Storage = {
   setItem: () => undefined,
 };
 
-const settingsStorage = createJSONStorage<{
-  llmConfig: LLMConfig;
-  windowPreferences: WindowPreferences;
-}>(() => (typeof window === 'undefined' ? storageFallback : window.localStorage));
+// Version for storage migration
+const SETTINGS_STORE_VERSION = 1;
 
 export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set, get) => ({
-      ...defaultSettings,
-      loading: false,
-      error: null,
+  devtools(
+    persist(
+      subscribeWithSelector((set, get) => ({
+        ...defaultSettings,
+        loading: false,
+        error: null,
 
-      setDefaultProvider: async (provider: Provider) => {
-        try {
-          await invoke('llm_set_default_provider', { provider });
+        setDefaultProvider: async (provider: Provider) => {
+          try {
+            await invoke('llm_set_default_provider', { provider });
+            set((state) => ({
+              llmConfig: { ...state.llmConfig, defaultProvider: provider },
+            }));
+          } catch (error) {
+            console.error('Failed to set default provider:', error);
+            set({ error: String(error) });
+            throw error;
+          }
+        },
+
+        setTemperature: (temperature: number) => {
           set((state) => ({
-            llmConfig: { ...state.llmConfig, defaultProvider: provider },
+            llmConfig: { ...state.llmConfig, temperature },
           }));
-        } catch (error) {
-          console.error('Failed to set default provider:', error);
-          set({ error: String(error) });
-          throw error;
-        }
-      },
+        },
 
-      setTemperature: (temperature: number) => {
-        set((state) => ({
-          llmConfig: { ...state.llmConfig, temperature },
-        }));
-      },
+        setMaxTokens: (maxTokens: number) => {
+          set((state) => ({
+            llmConfig: { ...state.llmConfig, maxTokens },
+          }));
+        },
 
-      setMaxTokens: (maxTokens: number) => {
-        set((state) => ({
-          llmConfig: { ...state.llmConfig, maxTokens },
-        }));
-      },
-
-      setDefaultModel: (provider: Provider, model: string) => {
-        set((state) => ({
-          llmConfig: {
-            ...state.llmConfig,
-            defaultModels: { ...state.llmConfig.defaultModels, [provider]: model },
-          },
-        }));
-      },
-
-      setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => {
-        set((state) => ({
-          llmConfig: {
-            ...state.llmConfig,
-            taskRouting: {
-              ...state.llmConfig.taskRouting,
-              [category]: { provider, model },
+        setDefaultModel: (provider: Provider, model: string) => {
+          set((state) => ({
+            llmConfig: {
+              ...state.llmConfig,
+              defaultModels: { ...state.llmConfig.defaultModels, [provider]: model },
             },
-          },
-        }));
-      },
+          }));
+        },
 
-      setFavoriteModels: (models: string[]) => {
-        set((state) => ({
-          llmConfig: { ...state.llmConfig, favoriteModels: models },
-        }));
-      },
+        setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => {
+          set((state) => ({
+            llmConfig: {
+              ...state.llmConfig,
+              taskRouting: {
+                ...state.llmConfig.taskRouting,
+                [category]: { provider, model },
+              },
+            },
+          }));
+        },
 
-      addFavoriteModel: (model: string) => {
-        set((state) => {
-          const favoriteModels = [...state.llmConfig.favoriteModels];
-          if (!favoriteModels.includes(model)) {
-            favoriteModels.push(model);
+        setFavoriteModels: (models: string[]) => {
+          set((state) => ({
+            llmConfig: { ...state.llmConfig, favoriteModels: models },
+          }));
+        },
+
+        addFavoriteModel: (model: string) => {
+          set((state) => {
+            const favoriteModels = [...state.llmConfig.favoriteModels];
+            if (!favoriteModels.includes(model)) {
+              favoriteModels.push(model);
+            }
+            return {
+              llmConfig: { ...state.llmConfig, favoriteModels },
+            };
+          });
+        },
+
+        removeFavoriteModel: (model: string) => {
+          set((state) => {
+            const favoriteModels = state.llmConfig.favoriteModels.filter((m) => m !== model);
+            return {
+              llmConfig: { ...state.llmConfig, favoriteModels },
+            };
+          });
+        },
+
+        setTheme: (theme: Theme) => {
+          set((state) => ({
+            windowPreferences: { ...state.windowPreferences, theme },
+          }));
+
+          if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+            if (
+              theme === 'dark' ||
+              (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+            ) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
           }
-          return {
-            llmConfig: { ...state.llmConfig, favoriteModels },
-          };
-        });
-      },
+        },
 
-      removeFavoriteModel: (model: string) => {
-        set((state) => {
-          const favoriteModels = state.llmConfig.favoriteModels.filter((m) => m !== model);
-          return {
-            llmConfig: { ...state.llmConfig, favoriteModels },
-          };
-        });
-      },
+        setStartupPosition: (position: 'center' | 'remember') => {
+          set((state) => ({
+            windowPreferences: { ...state.windowPreferences, startupPosition: position },
+          }));
+        },
 
-      setTheme: (theme: Theme) => {
-        set((state) => ({
-          windowPreferences: { ...state.windowPreferences, theme },
-        }));
+        setDockOnStartup: (dock: 'left' | 'right' | null) => {
+          set((state) => ({
+            windowPreferences: { ...state.windowPreferences, dockOnStartup: dock },
+          }));
+        },
 
-        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-          if (
-            theme === 'dark' ||
-            (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-          ) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
+        setPromptCompletionEnabled: (enabled: boolean) => {
+          set((state) => ({
+            chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
+          }));
+        },
+
+        addAllowedDirectory: (path: string) => {
+          set((state) => {
+            if (state.allowedDirectories.includes(path)) return {};
+            return { allowedDirectories: [...state.allowedDirectories, path] };
+          });
+        },
+
+        removeAllowedDirectory: (path: string) => {
+          set((state) => ({
+            allowedDirectories: state.allowedDirectories.filter((p) => p !== path),
+          }));
+        },
+
+        setAllowedDirectories: (paths: string[]) => {
+          set({ allowedDirectories: paths });
+        },
+
+        loadSettings: async () => {
+          set({ loading: true, error: null });
+
+          try {
+            // Try to load settings from disk first, falling back to in-memory defaults
+            let settings: {
+              llmConfig: LLMConfig;
+              windowPreferences: WindowPreferences;
+              chatPreferences?: ChatPreferences;
+              allowedDirectories: string[];
+            };
+
+            try {
+              settings = await invoke<{
+                llmConfig: LLMConfig;
+                windowPreferences: WindowPreferences;
+                chatPreferences?: ChatPreferences;
+                allowedDirectories: string[];
+              }>('settings_load_from_disk');
+            } catch (diskError) {
+              console.warn(
+                '[settingsStore] Failed to load from disk, using in-memory defaults:',
+                diskError,
+              );
+              settings = await invoke<{
+                llmConfig: LLMConfig;
+                windowPreferences: WindowPreferences;
+                chatPreferences?: ChatPreferences;
+                allowedDirectories: string[];
+              }>('settings_load');
+            }
+
+            if (get().loading === false) {
+              console.warn('[settingsStore] Load cancelled - another operation started');
+              return;
+            }
+
+            const mergedLLMConfig: LLMConfig = {
+              ...defaultSettings.llmConfig,
+              ...(settings.llmConfig ?? defaultSettings.llmConfig),
+              defaultModels: {
+                ...defaultSettings.llmConfig.defaultModels,
+                ...(settings.llmConfig?.defaultModels ?? defaultSettings.llmConfig.defaultModels),
+              },
+              favoriteModels:
+                settings.llmConfig?.favoriteModels ?? defaultSettings.llmConfig.favoriteModels,
+            };
+
+            const mergedWindowPreferences: WindowPreferences = {
+              ...defaultSettings.windowPreferences,
+              ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
+            };
+
+            const mergedChatPreferences: ChatPreferences = {
+              ...defaultSettings.chatPreferences,
+              ...(settings.chatPreferences ?? defaultSettings.chatPreferences),
+            };
+
+            // Configure local Ollama provider
+            try {
+              await invoke('llm_configure_provider', {
+                provider: 'ollama',
+                apiKey: null,
+                baseUrl: 'http://localhost:11434',
+              });
+            } catch (error) {
+              console.error('Failed to configure Ollama provider:', error);
+            }
+
+            if (get().loading === false) {
+              console.warn('[settingsStore] Load cancelled before final update');
+              return;
+            }
+
+            set({
+              llmConfig: mergedLLMConfig,
+              windowPreferences: mergedWindowPreferences,
+              chatPreferences: mergedChatPreferences,
+              allowedDirectories: settings.allowedDirectories ?? [],
+              loading: false,
+            });
+
+            get().setTheme(mergedWindowPreferences.theme);
+
+            try {
+              await invoke('llm_set_default_provider', {
+                provider: mergedLLMConfig.defaultProvider,
+              });
+            } catch (error) {
+              console.error('Failed to restore default provider:', error);
+            }
+          } catch (error) {
+            console.error('Failed to load settings:', error);
+
+            if (get().loading) {
+              set({ error: String(error), loading: false });
+            }
           }
-        }
-      },
+        },
 
-      setStartupPosition: (position: 'center' | 'remember') => {
-        set((state) => ({
-          windowPreferences: { ...state.windowPreferences, startupPosition: position },
-        }));
-      },
-
-      setDockOnStartup: (dock: 'left' | 'right' | null) => {
-        set((state) => ({
-          windowPreferences: { ...state.windowPreferences, dockOnStartup: dock },
-        }));
-      },
-
-      setPromptCompletionEnabled: (enabled: boolean) => {
-        set((state) => ({
-          chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
-        }));
-      },
-
-      addAllowedDirectory: (path: string) => {
-        set((state) => {
-          if (state.allowedDirectories.includes(path)) return {};
-          return { allowedDirectories: [...state.allowedDirectories, path] };
-        });
-      },
-
-      removeAllowedDirectory: (path: string) => {
-        set((state) => ({
-          allowedDirectories: state.allowedDirectories.filter((p) => p !== path),
-        }));
-      },
-
-      setAllowedDirectories: (paths: string[]) => {
-        set({ allowedDirectories: paths });
-      },
-
-      loadSettings: async () => {
-        set({ loading: true, error: null });
-
-        try {
-          const settings = await invoke<{
-            llmConfig: LLMConfig;
-            windowPreferences: WindowPreferences;
-            allowedDirectories: string[];
-          }>('settings_load');
-
-          if (get().loading === false) {
-            console.warn('[settingsStore] Load cancelled - another operation started');
-            return;
+        saveSettings: async () => {
+          set({ loading: true, error: null });
+          try {
+            const { llmConfig, windowPreferences, chatPreferences, allowedDirectories } = get();
+            await invoke('settings_save', {
+              settings: {
+                llmConfig,
+                windowPreferences,
+                chatPreferences,
+                allowedDirectories,
+              },
+            });
+            set({ loading: false });
+          } catch (error) {
+            console.error('Failed to save settings:', error);
+            set({ error: String(error), loading: false });
+            throw error;
           }
-
+        },
+      })),
+      {
+        name: 'agiworkforce-settings',
+        version: SETTINGS_STORE_VERSION,
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
+        ),
+        partialize: (state) => ({
+          llmConfig: state.llmConfig,
+          windowPreferences: state.windowPreferences,
+          chatPreferences: state.chatPreferences,
+          allowedDirectories: state.allowedDirectories,
+        }),
+        merge: (persistedState, currentState) => {
+          const persisted = persistedState as Partial<SettingsState> | undefined;
           const mergedLLMConfig: LLMConfig = {
-            ...defaultSettings.llmConfig,
-            ...(settings.llmConfig ?? defaultSettings.llmConfig),
+            ...currentState.llmConfig,
+            ...(persisted?.llmConfig ?? {}),
             defaultModels: {
-              ...defaultSettings.llmConfig.defaultModels,
-              ...(settings.llmConfig?.defaultModels ?? defaultSettings.llmConfig.defaultModels),
+              ...currentState.llmConfig.defaultModels,
+              ...(persisted?.llmConfig?.defaultModels ?? {}),
             },
             favoriteModels:
-              settings.llmConfig?.favoriteModels ?? defaultSettings.llmConfig.favoriteModels,
+              persisted?.llmConfig?.favoriteModels ?? currentState.llmConfig.favoriteModels,
           };
 
           const mergedWindowPreferences: WindowPreferences = {
-            ...defaultSettings.windowPreferences,
-            ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
+            ...currentState.windowPreferences,
+            ...(persisted?.windowPreferences ?? {}),
           };
 
-          // Configure local Ollama provider
-          try {
-            await invoke('llm_configure_provider', {
-              provider: 'ollama',
-              apiKey: null,
-              baseUrl: 'http://localhost:11434',
-            });
-          } catch (error) {
-            console.error('Failed to configure Ollama provider:', error);
-          }
+          const mergedChatPreferences: ChatPreferences = {
+            ...currentState.chatPreferences,
+            ...(persisted?.chatPreferences ?? {}),
+          };
 
-          if (get().loading === false) {
-            console.warn('[settingsStore] Load cancelled before final update');
-            return;
-          }
-
-          set({
+          return {
+            ...currentState,
+            ...persisted,
             llmConfig: mergedLLMConfig,
             windowPreferences: mergedWindowPreferences,
-            allowedDirectories: settings.allowedDirectories ?? [],
-            loading: false,
-          });
-
-          get().setTheme(mergedWindowPreferences.theme);
-
-          try {
-            await invoke('llm_set_default_provider', {
-              provider: mergedLLMConfig.defaultProvider,
-            });
-          } catch (error) {
-            console.error('Failed to restore default provider:', error);
+            chatPreferences: mergedChatPreferences,
+            allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
+          };
+        },
+        migrate: (persistedState: unknown, version: number) => {
+          // Migration logic for future schema changes
+          if (version === 0) {
+            return persistedState as SettingsState;
           }
-        } catch (error) {
-          console.error('Failed to load settings:', error);
-
-          if (get().loading) {
-            set({ error: String(error), loading: false });
-          }
-        }
+          return persistedState as SettingsState;
+        },
       },
-
-      saveSettings: async () => {
-        set({ loading: true, error: null });
-        try {
-          const { llmConfig, windowPreferences, chatPreferences, allowedDirectories } = get();
-          await invoke('settings_save', {
-            settings: {
-              llmConfig,
-              windowPreferences,
-              chatPreferences,
-              allowedDirectories,
-            },
-          });
-          set({ loading: false });
-        } catch (error) {
-          console.error('Failed to save settings:', error);
-          set({ error: String(error), loading: false });
-          throw error;
-        }
-      },
-    }),
-    {
-      name: 'agiworkforce-settings',
-      storage: settingsStorage,
-      partialize: (state) => ({
-        llmConfig: state.llmConfig,
-        windowPreferences: state.windowPreferences,
-        chatPreferences: state.chatPreferences,
-        allowedDirectories: state.allowedDirectories,
-      }),
-      merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<SettingsState> | undefined;
-        const mergedLLMConfig: LLMConfig = {
-          ...currentState.llmConfig,
-          ...(persisted?.llmConfig ?? {}),
-          defaultModels: {
-            ...currentState.llmConfig.defaultModels,
-            ...(persisted?.llmConfig?.defaultModels ?? {}),
-          },
-          favoriteModels:
-            persisted?.llmConfig?.favoriteModels ?? currentState.llmConfig.favoriteModels,
-        };
-
-        const mergedWindowPreferences: WindowPreferences = {
-          ...currentState.windowPreferences,
-          ...(persisted?.windowPreferences ?? {}),
-        };
-
-        const mergedChatPreferences: ChatPreferences = {
-          ...currentState.chatPreferences,
-          ...(persisted?.chatPreferences ?? {}),
-        };
-
-        return {
-          ...currentState,
-          ...persisted,
-          llmConfig: mergedLLMConfig,
-          windowPreferences: mergedWindowPreferences,
-          chatPreferences: mergedChatPreferences,
-          allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
-        };
-      },
-    },
+    ),
+    { name: 'SettingsStore', enabled: process.env['NODE_ENV'] === 'development' },
   ),
 );

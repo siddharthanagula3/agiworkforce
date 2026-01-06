@@ -48,7 +48,7 @@ export const NodeEditor: React.FC = () => {
             type="text"
             value={selectedNode.data.label}
             onChange={(e) => handleLabelChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -64,7 +64,7 @@ export const NodeEditor: React.FC = () => {
                   data: { ...selectedNode.data, agent_name: e.target.value },
                 })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               placeholder="Enter agent name"
             />
           </div>
@@ -81,7 +81,7 @@ export const NodeEditor: React.FC = () => {
                   data: { ...selectedNode.data, condition: e.target.value },
                 })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               rows={3}
               placeholder="Enter condition"
             />
@@ -103,7 +103,7 @@ export const NodeEditor: React.FC = () => {
                     },
                   })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 <option value="javascript">JavaScript</option>
                 <option value="python">Python</option>
@@ -120,7 +120,7 @@ export const NodeEditor: React.FC = () => {
                     data: { ...selectedNode.data, code: e.target.value },
                   })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                 rows={8}
                 placeholder="Enter code"
               />

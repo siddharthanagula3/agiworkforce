@@ -11,17 +11,20 @@ import {
   X,
   Brain,
   Clock,
+  Radio,
+  Waves,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../../lib/tauri-mock';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { useSlashCommandAutocomplete } from '../../hooks/useSlashCommandAutocomplete';
 import { useApiPromptCompletion } from '../../hooks/useApiPromptCompletion';
 
 import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { useVoiceInput } from '../../hooks/useVoiceInput';
+import { useVoiceTranscription } from '../../hooks/useVoiceTranscription';
 import { cn } from '../../lib/utils';
+import { AudioPreview } from './AudioPreview';
 import { useAccountStore } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
@@ -173,29 +176,43 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const { account: _account, isPro: _isPro } = useAccountStore();
   const prefersReducedMotion = useReducedMotion();
 
+  // Voice transcription state
+  const [preferLocalWhisper, setPreferLocalWhisper] = useState(false);
+  const [showTranscriptionModeSelector, setShowTranscriptionModeSelector] = useState(false);
+
   const {
-    isListening,
+    isRecording: isListening,
+    isTranscribing,
     isSupported: isVoiceSupported,
     interimTranscript,
     error: voiceError,
-    toggleListening,
-  } = useVoiceInput({
-    continuous: false,
-    interimResults: true,
-    language: 'en-US',
+    availableLocalWhisper,
+    toggleRecording,
+    clearTranscript: _resetVoiceTranscript,
+  } = useVoiceTranscription({
+    preferLocal: preferLocalWhisper,
+    language: 'en',
     onResult: useCallback(
-      (transcript: string, isFinal: boolean) => {
-        if (isFinal) {
-          setContent((prev) => {
-            const next = prev + (prev ? ' ' : '') + transcript;
-            setDraftContent(next);
-            return next;
-          });
-        }
+      (transcript: string) => {
+        setContent((prev) => {
+          const next = prev + (prev ? ' ' : '') + transcript;
+          setDraftContent(next);
+          return next;
+        });
       },
       [setDraftContent],
     ),
+    onError: useCallback((error: string) => {
+      console.error('[ChatInputArea] Voice transcription error:', error);
+    }, []),
   });
+
+  // Wrap toggleRecording to handle the async nature
+  const toggleListening = useCallback(() => {
+    toggleRecording().catch((err) => {
+      console.error('[ChatInputArea] Failed to toggle recording:', err);
+    });
+  }, [toggleRecording]);
 
   const modelDisplayName = selectedModel?.startsWith('auto')
     ? (getModelMetadata('managed-cloud-auto')?.name ?? 'Auto (Smart Routing)')
@@ -260,6 +277,59 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     return () => window.removeEventListener('keydown', handleEscape);
   }, []);
 
+  // Listen for auto-send events from pending message queue
+  // This is triggered when the AI finishes processing and pending messages are ready
+  useEffect(() => {
+    const handleAutoSendPending = async (event: Event) => {
+      const customEvent = event as CustomEvent<{ content: string; pendingId: string }>;
+      const { content: pendingContent, pendingId } = customEvent.detail;
+
+      console.log(
+        '[ChatInputArea] Auto-sending pending message:',
+        pendingId,
+        pendingContent.slice(0, 50),
+      );
+
+      // Don't send if we're currently sending or disabled
+      if (isSending || disabled) {
+        console.log('[ChatInputArea] Skipping auto-send - busy or disabled');
+        return;
+      }
+
+      // Don't send if AI is still busy (queue mode)
+      if (isQueueMode) {
+        console.log('[ChatInputArea] Skipping auto-send - still in queue mode');
+        return;
+      }
+
+      try {
+        // Call onSend directly with the pending message content
+        await onSend(pendingContent, {
+          attachments: undefined,
+          context: activeContext.length > 0 ? activeContext : undefined,
+          modelOverride: selectedModel || undefined,
+          providerOverride: selectedProvider || undefined,
+          focusMode: focusMode,
+        });
+        console.log('[ChatInputArea] Successfully sent pending message:', pendingId);
+      } catch (err) {
+        console.error('[ChatInputArea] Failed to auto-send pending message:', err);
+      }
+    };
+
+    window.addEventListener('chat:auto-send-pending', handleAutoSendPending);
+    return () => window.removeEventListener('chat:auto-send-pending', handleAutoSendPending);
+  }, [
+    onSend,
+    isSending,
+    disabled,
+    isQueueMode,
+    activeContext,
+    selectedModel,
+    selectedProvider,
+    focusMode,
+  ]);
+
   const placeholder =
     FOCUS_MODES.find((m) => m.value === focusMode)?.placeholder || defaultPlaceholder;
 
@@ -274,10 +344,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     }
   }, [content]);
 
-  // Track blob URLs to properly clean them up
-  const blobUrlsRef = useRef<Set<string>>(new Set());
-
-  // Cleanup function for blob URLs and FileReaders
+  // Cleanup function for FileReaders (using base64 content instead of blob URLs)
   const cleanup = useCallback(() => {
     // Abort any in-progress FileReaders
     fileReadersRef.current.forEach((reader) => {
@@ -290,16 +357,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       }
     });
     fileReadersRef.current = [];
-
-    // Revoke all tracked blob URLs
-    blobUrlsRef.current.forEach((url) => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        console.error('[ChatInputArea] Error revoking blob URL:', err);
-      }
-    });
-    blobUrlsRef.current.clear();
   }, []);
 
   // Cleanup on component unmount
@@ -307,8 +364,28 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     return cleanup;
   }, [cleanup]);
 
+  // Helper to read a file as base64 data URL
+  const readFileAsBase64 = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      fileReadersRef.current.push(reader);
+
+      reader.onload = () => {
+        fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
+        resolve(reader.result as string);
+      };
+
+      reader.onerror = () => {
+        fileReadersRef.current = fileReadersRef.current.filter((r) => r !== reader);
+        reject(new Error(`Failed to read file: ${file.name}`));
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
   const handleFilesAdded = useCallback(
-    (files: File[]) => {
+    async (files: File[]) => {
       // Validate file sizes
       const oversizedFiles: string[] = [];
       let totalSize = 0;
@@ -354,38 +431,54 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
         if (nonImageFiles.length === 0) return;
 
-        const newAttachments: Attachment[] = nonImageFiles.map((file) => {
-          const blobUrl = URL.createObjectURL(file);
-          blobUrlsRef.current.add(blobUrl);
-          return {
-            id: crypto.randomUUID(),
-            type: 'file',
-            name: file.name,
-            size: file.size,
-            mimeType: file.type,
-            path: blobUrl,
-          };
-        });
+        // Convert non-image files to base64
+        const newAttachments: Attachment[] = await Promise.all(
+          nonImageFiles.map(async (file) => {
+            const base64Content = await readFileAsBase64(file);
+            return {
+              id: crypto.randomUUID(),
+              type: 'file' as const,
+              name: file.name,
+              size: file.size,
+              mimeType: file.type,
+              content: base64Content, // Base64 data URL for backend
+            };
+          }),
+        );
         setAttachments((prev) => [...prev, ...newAttachments]);
         return;
       }
 
-      const newAttachments: Attachment[] = files.map((file) => {
-        const blobUrl = URL.createObjectURL(file);
-        blobUrlsRef.current.add(blobUrl);
-        return {
-          id: crypto.randomUUID(),
-          type: file.type.startsWith('image/') ? 'image' : 'file',
-          name: file.name,
-          size: file.size,
-          mimeType: file.type,
-          path: blobUrl,
-        };
-      });
-      setAttachments((prev) => [...prev, ...newAttachments]);
-      setSubmitError(null); // Clear error on success
+      // Convert all files to base64 for backend compatibility
+      try {
+        const newAttachments: Attachment[] = await Promise.all(
+          files.map(async (file) => {
+            const base64Content = await readFileAsBase64(file);
+            // Determine attachment type based on MIME type
+            let attachmentType: 'image' | 'audio' | 'file' = 'file';
+            if (file.type.startsWith('image/')) {
+              attachmentType = 'image';
+            } else if (file.type.startsWith('audio/')) {
+              attachmentType = 'audio';
+            }
+            return {
+              id: crypto.randomUUID(),
+              type: attachmentType,
+              name: file.name,
+              size: file.size,
+              mimeType: file.type,
+              content: base64Content, // Base64 data URL for backend
+            };
+          }),
+        );
+        setAttachments((prev) => [...prev, ...newAttachments]);
+        setSubmitError(null); // Clear error on success
+      } catch (error) {
+        console.error('[ChatInputArea] Error reading files:', error);
+        setSubmitError('Failed to process one or more files. Please try again.');
+      }
     },
-    [selectedModel, attachments],
+    [selectedModel, attachments, readFileAsBase64],
   );
 
   useEffect(() => {
@@ -785,7 +878,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 {/* Animated border container */}
                 <div className="relative">
                   <motion.div
-                    className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary via-purple-500 to-primary"
+                    className="absolute inset-0 rounded-3xl bg-linear-to-r from-primary via-purple-500 to-primary"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
                     style={{ padding: '3px' }}
@@ -814,7 +907,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*"
+        accept="image/*,audio/*"
         className="hidden"
         onChange={handleFileSelect}
       />
@@ -918,13 +1011,30 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </div>
           )}
 
-          {/* Attachments with image previews */}
+          {/* Attachments with image and audio previews */}
           {attachments.length > 0 && (
             <div className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 {attachments.map((attachment) => {
                   const isImage = attachment.type === 'image' || attachment.type === 'screenshot';
+                  const isAudio =
+                    attachment.type === 'audio' || attachment.mimeType?.startsWith('audio/');
                   const imageUrl = attachment.content || attachment.path;
+                  const audioUrl = attachment.content || attachment.path;
+
+                  // Render audio preview with playback controls
+                  if (isAudio && audioUrl) {
+                    return (
+                      <AudioPreview
+                        key={attachment.id}
+                        src={audioUrl}
+                        name={attachment.name}
+                        duration={attachment.duration}
+                        onRemove={() => removeAttachment(attachment.id)}
+                        compact
+                      />
+                    );
+                  }
 
                   return (
                     <div
@@ -945,11 +1055,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                         </div>
                       ) : (
                         <>
-                          {attachment.mimeType?.startsWith('audio/') ? (
-                            <Mic size={16} className="text-gray-400" />
-                          ) : (
-                            <Paperclip size={16} className="text-gray-400" />
-                          )}
+                          <Paperclip size={16} className="text-gray-400" />
                           <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-300">
                             {attachment.name}
                           </span>
@@ -1007,21 +1113,111 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   <Paperclip size={18} />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={toggleListening}
-                disabled={isInputDisabled || !isVoiceSupported}
-                className={cn(
-                  'p-2 rounded-lg transition-all duration-200',
-                  isListening
-                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                )}
-                title={isListening ? 'Stop recording' : 'Voice input'}
-              >
-                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-              </button>
+              {/* Voice recording button with mode selector */}
+              <div className="relative">
+                <Popover
+                  open={showTranscriptionModeSelector}
+                  onOpenChange={setShowTranscriptionModeSelector}
+                >
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={toggleListening}
+                      disabled={isInputDisabled || !isVoiceSupported || isTranscribing}
+                      className={cn(
+                        'p-2 rounded-l-lg transition-all duration-200',
+                        isListening
+                          ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
+                          : isTranscribing
+                            ? 'bg-amber-500 text-white animate-pulse'
+                            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                        'disabled:opacity-50 disabled:cursor-not-allowed',
+                      )}
+                      title={
+                        isListening
+                          ? 'Stop recording'
+                          : isTranscribing
+                            ? 'Transcribing...'
+                            : `Voice input (${preferLocalWhisper ? 'Whisper' : 'Live'})`
+                      }
+                    >
+                      {isTranscribing ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : isListening ? (
+                        <MicOff size={18} />
+                      ) : (
+                        <Mic size={18} />
+                      )}
+                    </button>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={isInputDisabled || !isVoiceSupported || isListening}
+                        className={cn(
+                          'p-2 rounded-r-lg border-l border-gray-200 dark:border-gray-600 transition-colors',
+                          'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
+                          'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+                          'disabled:opacity-50 disabled:cursor-not-allowed',
+                        )}
+                        title="Select transcription mode"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                    </PopoverTrigger>
+                  </div>
+                  <PopoverContent align="start" side="top" sideOffset={8} className="w-64 p-2">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 pb-1">
+                        Transcription Mode
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferLocalWhisper(false);
+                          setShowTranscriptionModeSelector(false);
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
+                          !preferLocalWhisper
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
+                        )}
+                      >
+                        <Radio size={16} />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">Live (Web Speech)</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Real-time transcription as you speak
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferLocalWhisper(true);
+                          setShowTranscriptionModeSelector(false);
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
+                          preferLocalWhisper
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-gray-100 dark:hover:bg-charcoal-700 text-gray-700 dark:text-gray-300',
+                        )}
+                      >
+                        <Waves size={16} />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">
+                            Whisper {availableLocalWhisper.length > 0 ? '(Local)' : '(Cloud)'}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            More accurate, processes after recording
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             {}
@@ -1040,7 +1236,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 className={cn(
                   'w-full resize-none bg-transparent py-2 px-2 pr-12',
                   'text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500',
-                  'focus:outline-none',
+                  'focus:outline-hidden',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                   'text-[15px] leading-6',
                 )}
@@ -1219,24 +1415,49 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             </div>
           </div>
 
-          {}
+          {/* Recording / Transcribing status indicator */}
           <AnimatePresence>
-            {(isListening || interimTranscript) && (
+            {(isListening || isTranscribing || interimTranscript) && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-red-50 dark:bg-red-900/10"
+                className={cn(
+                  'px-4 py-2 border-t border-gray-100 dark:border-gray-700/50',
+                  isTranscribing
+                    ? 'bg-amber-50 dark:bg-amber-900/10'
+                    : 'bg-red-50 dark:bg-red-900/10',
+                )}
               >
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                      <span
+                        className={cn(
+                          'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
+                          isTranscribing ? 'bg-amber-400' : 'bg-red-400',
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          'relative inline-flex rounded-full h-2 w-2',
+                          isTranscribing ? 'bg-amber-500' : 'bg-red-500',
+                        )}
+                      />
                     </span>
-                    <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                      Recording
+                    <span
+                      className={cn(
+                        'text-xs font-medium',
+                        isTranscribing
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-red-600 dark:text-red-400',
+                      )}
+                    >
+                      {isTranscribing ? 'Transcribing...' : 'Recording'}
                     </span>
+                    {preferLocalWhisper && !isTranscribing && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">(Whisper)</span>
+                    )}
                   </div>
                   {interimTranscript && (
                     <span className="text-xs text-gray-600 dark:text-gray-400 italic truncate flex-1">

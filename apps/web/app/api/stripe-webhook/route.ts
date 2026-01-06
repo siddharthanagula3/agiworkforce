@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { CreditService } from '@/lib/services/credit-service';
 import { resolvePlanTier, isValidPlanTier, getTierMapping } from '@/lib/price-tier-mapping';
 import { logInvalidSignature } from '@/lib/security-audit';
 
@@ -346,13 +347,14 @@ async function upsertSubscriptionFromSession(session: Stripe.Checkout.Session) {
       },
       'CRITICAL: Cannot determine valid plan_tier for subscription - check if Stripe price IDs are registered in environment variables',
     );
-    // Return 400 instead of 500 - this is a configuration issue, not a temporary failure
+    // Return 500 for config errors - allows Stripe to retry the webhook
+    // Once the environment variables are properly configured, the retry will succeed
     return NextResponse.json(
       {
         error:
           'Cannot determine subscription plan tier. Check that STRIPE_PRICE_* environment variables are configured.',
       },
-      { status: 400 },
+      { status: 500 },
     );
   }
   const stripeSubId = session.subscription as string | null;
@@ -1241,6 +1243,21 @@ export async function POST(request: Request) {
               ? new Date(subscription.canceled_at * 1000).toISOString()
               : new Date().toISOString();
 
+            // First, get the subscription to find the user_id for credit revocation
+            const { data: existingSub, error: fetchError } = await supabaseAdmin
+              .from('subscriptions')
+              .select('id, user_id')
+              .eq('stripe_subscription_id', stripeSubId)
+              .maybeSingle();
+
+            if (fetchError) {
+              logger.error(
+                { error: fetchError, stripeSubId },
+                'Failed to fetch subscription for deletion',
+              );
+            }
+
+            // Update subscription status to canceled
             const { error: updateError } = await supabaseAdmin
               .from('subscriptions')
               .update({
@@ -1248,11 +1265,41 @@ export async function POST(request: Request) {
                 canceled_at: canceledAt,
               })
               .eq('stripe_subscription_id', stripeSubId);
+
             if (updateError) {
               logger.error(
                 { error: updateError, stripeSubId },
                 'Failed to update subscription for deleted event',
               );
+            }
+
+            // Revoke remaining credits for the canceled subscription
+            if (existingSub?.user_id) {
+              try {
+                // Set credits to 0 by deducting remaining balance
+                const balance = await CreditService.getBalance(existingSub.user_id);
+                if (balance && balance.credits_remaining_cents > 0) {
+                  await CreditService.deductCredits(
+                    existingSub.user_id,
+                    balance.credits_remaining_cents,
+                    'Credits revoked due to subscription cancellation',
+                    { type: 'revocation', reason: 'subscription_canceled' },
+                  );
+                  logger.info(
+                    {
+                      userId: existingSub.user_id,
+                      revokedCents: balance.credits_remaining_cents,
+                      stripeSubId,
+                    },
+                    'Credits revoked for canceled subscription',
+                  );
+                }
+              } catch (creditError) {
+                logger.error(
+                  { error: creditError, userId: existingSub.user_id, stripeSubId },
+                  'Failed to revoke credits for canceled subscription',
+                );
+              }
             }
           } catch (error) {
             logger.error({ error }, 'Error updating subscription for deleted event');

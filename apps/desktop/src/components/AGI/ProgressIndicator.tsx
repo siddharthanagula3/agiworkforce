@@ -353,7 +353,7 @@ export function ProgressIndicator({
                         )}
 
                         {}
-                        <div className="relative flex-shrink-0">
+                        <div className="relative shrink-0">
                           <div
                             className={cn(
                               'flex h-6 w-6 items-center justify-center rounded-full',
@@ -373,7 +373,7 @@ export function ProgressIndicator({
                               {step.description}
                             </p>
                             {step.executionTimeMs !== undefined && (
-                              <span className="flex-shrink-0 text-xs text-muted-foreground">
+                              <span className="shrink-0 text-xs text-muted-foreground">
                                 {step.executionTimeMs}ms
                               </span>
                             )}

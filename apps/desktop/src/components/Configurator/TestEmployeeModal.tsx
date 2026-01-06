@@ -32,7 +32,7 @@ interface StatCardProps {
 function StatCard({ label, value, icon }: StatCardProps) {
   return (
     <div className="flex items-center gap-3 rounded-md border p-3">
-      <div className="flex-shrink-0 text-muted-foreground">{icon}</div>
+      <div className="shrink-0 text-muted-foreground">{icon}</div>
       <div className="flex-1">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="text-lg font-semibold">{value}</div>

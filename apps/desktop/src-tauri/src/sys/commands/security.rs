@@ -61,7 +61,8 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
-#[tauri::command]
+// Note: auth_register is not exposed via Tauri - registration happens via web/Supabase
+#[allow(dead_code)]
 pub async fn auth_register(
     email: String,
     password: String,
@@ -84,7 +85,8 @@ pub async fn auth_login(
     manager.login(&email, &password)
 }
 
-#[tauri::command]
+// Note: auth_logout is not exposed via Tauri - logout happens via web/Supabase
+#[allow(dead_code)]
 pub async fn auth_logout(
     access_token: String,
     state: State<'_, AuthManagerState>,
@@ -93,7 +95,8 @@ pub async fn auth_logout(
     manager.logout(&access_token)
 }
 
-#[tauri::command]
+// Note: auth_refresh_token is not exposed via Tauri - token refresh happens via web/Supabase
+#[allow(dead_code)]
 pub async fn auth_refresh_token(
     refresh_token: String,
     state: State<'_, AuthManagerState>,
@@ -102,7 +105,8 @@ pub async fn auth_refresh_token(
     manager.refresh_token(&refresh_token)
 }
 
-#[tauri::command]
+// Note: auth_validate_token is not exposed via Tauri - token validation happens via web/Supabase
+#[allow(dead_code)]
 pub async fn auth_validate_token(
     access_token: String,
     state: State<'_, AuthManagerState>,
@@ -114,7 +118,8 @@ pub async fn auth_validate_token(
     }
 }
 
-#[tauri::command]
+// Note: auth_change_password is not exposed via Tauri - password change happens via web/Supabase
+#[allow(dead_code)]
 pub async fn auth_change_password(
     user_id: String,
     old_password: String,
@@ -125,7 +130,8 @@ pub async fn auth_change_password(
     manager.change_password(&user_id, &old_password, &new_password)
 }
 
-#[tauri::command]
+// Note: api_create_key is not exposed via Tauri - API keys managed via web dashboard
+#[allow(dead_code)]
 pub async fn api_create_key(
     name: String,
     permissions: Vec<String>,
@@ -137,7 +143,8 @@ pub async fn api_create_key(
     Ok(serde_json::to_string(&key).unwrap())
 }
 
-#[tauri::command]
+// Note: api_revoke_key is not exposed via Tauri - API keys managed via web dashboard
+#[allow(dead_code)]
 pub async fn api_revoke_key(
     key_id: String,
     state: State<'_, ApiSecurityState>,
@@ -146,14 +153,16 @@ pub async fn api_revoke_key(
     manager.revoke_api_key(&key_id)
 }
 
-#[tauri::command]
+// Note: api_list_keys is not exposed via Tauri - API keys managed via web dashboard
+#[allow(dead_code)]
 pub async fn api_list_keys(state: State<'_, ApiSecurityState>) -> Result<String, String> {
     let manager = state.inner().read();
     let keys = manager.list_api_keys();
     Ok(serde_json::to_string(&keys).unwrap())
 }
 
-#[tauri::command]
+// Note: api_rotate_key is not exposed via Tauri - API keys managed via web dashboard
+#[allow(dead_code)]
 pub async fn api_rotate_key(
     key_id: String,
     state: State<'_, ApiSecurityState>,
@@ -163,7 +172,8 @@ pub async fn api_rotate_key(
     Ok(serde_json::to_string(&key).unwrap())
 }
 
-#[tauri::command]
+// Note: api_validate_signature is not exposed via Tauri - signature validation happens server-side
+#[allow(dead_code)]
 pub async fn api_validate_signature(
     key_id: String,
     timestamp: String,
@@ -178,7 +188,8 @@ pub async fn api_validate_signature(
     }
 }
 
-#[tauri::command]
+// Note: storage_init_with_password is not exposed via Tauri - storage managed internally
+#[allow(dead_code)]
 pub async fn storage_init_with_password(
     password: String,
     state: State<'_, SecureStorageState>,
@@ -187,7 +198,8 @@ pub async fn storage_init_with_password(
     storage.init_with_password(&password)
 }
 
-#[tauri::command]
+// Note: storage_unlock is not exposed via Tauri - storage managed internally
+#[allow(dead_code)]
 pub async fn storage_unlock(
     password: String,
     state: State<'_, SecureStorageState>,
@@ -196,20 +208,23 @@ pub async fn storage_unlock(
     storage.unlock(&password)
 }
 
-#[tauri::command]
+// Note: storage_lock is not exposed via Tauri - storage managed internally
+#[allow(dead_code)]
 pub async fn storage_lock(state: State<'_, SecureStorageState>) -> Result<(), String> {
     let storage = state.inner().read();
     storage.lock();
     Ok(())
 }
 
-#[tauri::command]
+// Note: storage_is_unlocked is not exposed via Tauri - storage managed internally
+#[allow(dead_code)]
 pub async fn storage_is_unlocked(state: State<'_, SecureStorageState>) -> Result<bool, String> {
     let storage = state.inner().read();
     Ok(storage.is_unlocked())
 }
 
-#[tauri::command]
+// Note: storage_store_api_key is not exposed via Tauri - API keys managed via Vercel
+#[allow(dead_code)]
 pub async fn storage_store_api_key(
     _provider: String,
     _api_key: String,
@@ -218,7 +233,8 @@ pub async fn storage_store_api_key(
     Err("Local API key storage is disabled. Please configure secrets via Vercel environment variables.".to_string())
 }
 
-#[tauri::command]
+// Note: storage_retrieve_api_key is not exposed via Tauri - API keys managed via Vercel
+#[allow(dead_code)]
 pub async fn storage_retrieve_api_key(
     _provider: String,
     _state: State<'_, SecureStorageState>,
@@ -226,7 +242,8 @@ pub async fn storage_retrieve_api_key(
     Err("Local API key retrieval is disabled. Use the Managed Cloud provider to access Vercel-hosted secrets.".to_string())
 }
 
-#[tauri::command]
+// Note: storage_delete_api_key is not exposed via Tauri - API keys managed via Vercel
+#[allow(dead_code)]
 pub async fn storage_delete_api_key(
     _provider: String,
     _state: State<'_, SecureStorageState>,
@@ -237,7 +254,8 @@ pub async fn storage_delete_api_key(
     )
 }
 
-#[tauri::command]
+// Note: storage_encrypt_file is not exposed via Tauri - encryption managed internally
+#[allow(dead_code)]
 pub async fn storage_encrypt_file(
     input_path: String,
     output_path: String,
@@ -246,7 +264,8 @@ pub async fn storage_encrypt_file(
     crate::sys::security::storage::encrypt_file(&input_path, &output_path, &password)
 }
 
-#[tauri::command]
+// Note: storage_decrypt_file is not exposed via Tauri - encryption managed internally
+#[allow(dead_code)]
 pub async fn storage_decrypt_file(
     input_path: String,
     output_path: String,
@@ -255,7 +274,8 @@ pub async fn storage_decrypt_file(
     crate::sys::security::storage::decrypt_file(&input_path, &output_path, &password)
 }
 
-#[tauri::command]
+// Note: update_verify_package is not exposed via Tauri - updates managed by tauri-plugin-updater
+#[allow(dead_code)]
 pub async fn update_verify_package(
     file_path: String,
     metadata: String,
@@ -268,7 +288,8 @@ pub async fn update_verify_package(
     manager.verify_update(&file_path, &update_metadata)
 }
 
-#[tauri::command]
+// Note: update_compute_checksum is not exposed via Tauri - updates managed by tauri-plugin-updater
+#[allow(dead_code)]
 pub async fn update_compute_checksum(
     file_path: String,
     state: State<'_, UpdateSecurityState>,
@@ -277,7 +298,8 @@ pub async fn update_compute_checksum(
     manager.compute_file_checksum(&file_path)
 }
 
-#[tauri::command]
+// Note: update_validate_url is not exposed via Tauri - updates managed by tauri-plugin-updater
+#[allow(dead_code)]
 pub async fn update_validate_url(
     url: String,
     state: State<'_, UpdateSecurityState>,
@@ -289,7 +311,8 @@ pub async fn update_validate_url(
     }
 }
 
-#[tauri::command]
+// Note: update_create_backup is not exposed via Tauri - updates managed by tauri-plugin-updater
+#[allow(dead_code)]
 pub async fn update_create_backup(
     source_dir: String,
     backup_dir: String,
@@ -299,7 +322,8 @@ pub async fn update_create_backup(
     manager.create_backup(&source_dir, &backup_dir)
 }
 
-#[tauri::command]
+// Note: update_restore_backup is not exposed via Tauri - updates managed by tauri-plugin-updater
+#[allow(dead_code)]
 pub async fn update_restore_backup(
     backup_dir: String,
     target_dir: String,

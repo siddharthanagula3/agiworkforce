@@ -90,7 +90,7 @@ export function Sidebar({
         className,
       )}
     >
-      <div className="flex items-center justify-between px-3 py-3 border-b border-white/10 bg-gradient-to-r from-teal-500/5 to-transparent">
+      <div className="flex items-center justify-between px-3 py-3 border-b border-white/10 bg-linear-to-r from-teal-500/5 to-transparent">
         <button
           type="button"
           className="flex h-10 w-10 items-center justify-center rounded-xl glass-hover text-white transition"
@@ -267,7 +267,7 @@ const ConversationItem = memo(function ConversationItem({
                 onCancelEdit();
               }
             }}
-            className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary"
             autoFocus
           />
         ) : (

@@ -344,13 +344,13 @@ export function MCPServerManager() {
       await disconnectServer(serverName);
 
       const currentConfig = await invoke<any>('mcp_get_config');
-      const updatedServers = { ...(currentConfig.servers || {}) };
+      const updatedServers = { ...(currentConfig.mcpServers || {}) };
       delete updatedServers[serverName];
 
       await invoke('mcp_update_config', {
         config: {
           ...currentConfig,
-          servers: updatedServers,
+          mcpServers: updatedServers,
         },
       });
 

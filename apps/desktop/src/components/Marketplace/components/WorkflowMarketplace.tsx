@@ -155,7 +155,7 @@ export const WorkflowMarketplace: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Search workflows..."
-            className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
           <button
             onClick={handleSearch}

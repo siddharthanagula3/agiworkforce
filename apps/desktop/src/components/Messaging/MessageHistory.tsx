@@ -102,7 +102,7 @@ export const MessageHistory: React.FC<MessageHistoryProps> = ({ connections }) =
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
             placeholder="Channel / Recipient ID"
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <Button onClick={handleLoadHistory} disabled={loading}>

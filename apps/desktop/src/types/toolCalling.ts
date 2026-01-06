@@ -255,3 +255,225 @@ export interface ToolRegistryEntry {
   usage_count?: number;
   average_duration_ms?: number;
 }
+
+// ============================================
+// Tool Streaming Types
+// ============================================
+
+/**
+ * Output chunk types for streaming tool output
+ */
+export type OutputChunkType = 'stdout' | 'stderr' | 'log' | 'data' | 'binary';
+
+/**
+ * Tool stream event types - matches Rust ToolStreamEvent enum
+ */
+export type ToolStreamEventType =
+  | 'started'
+  | 'progress'
+  | 'output_chunk'
+  | 'completed'
+  | 'error'
+  | 'cancelled';
+
+/**
+ * Base payload for tool stream events
+ */
+export interface ToolStreamEventBase {
+  type: ToolStreamEventType;
+  tool_id: string;
+}
+
+/**
+ * Tool execution started event
+ */
+export interface ToolStreamStartedEvent extends ToolStreamEventBase {
+  type: 'started';
+  tool_name: string;
+  parameters?: Record<string, unknown>;
+  estimated_duration_ms?: number;
+}
+
+/**
+ * Tool execution progress event
+ */
+export interface ToolStreamProgressEvent extends ToolStreamEventBase {
+  type: 'progress';
+  /** Progress value between 0.0 and 1.0 */
+  progress: number;
+  message?: string;
+  bytes_processed?: number;
+  bytes_total?: number;
+}
+
+/**
+ * Tool output chunk event (for streaming output)
+ */
+export interface ToolStreamOutputChunkEvent extends ToolStreamEventBase {
+  type: 'output_chunk';
+  chunk: string;
+  chunk_type?: OutputChunkType;
+  is_final: boolean;
+}
+
+/**
+ * Tool execution completed event
+ */
+export interface ToolStreamCompletedEvent extends ToolStreamEventBase {
+  type: 'completed';
+  result: unknown;
+  duration_ms: number;
+}
+
+/**
+ * Tool execution error event
+ */
+export interface ToolStreamErrorEvent extends ToolStreamEventBase {
+  type: 'error';
+  error: string;
+  error_code?: string;
+  duration_ms: number;
+  retryable: boolean;
+}
+
+/**
+ * Tool execution cancelled event
+ */
+export interface ToolStreamCancelledEvent extends ToolStreamEventBase {
+  type: 'cancelled';
+  reason?: string;
+  duration_ms: number;
+}
+
+/**
+ * Union type for all tool stream events
+ */
+export type ToolStreamEvent =
+  | ToolStreamStartedEvent
+  | ToolStreamProgressEvent
+  | ToolStreamOutputChunkEvent
+  | ToolStreamCompletedEvent
+  | ToolStreamErrorEvent
+  | ToolStreamCancelledEvent;
+
+/**
+ * Payload wrapper for tool stream events (matches Rust ToolStreamEventPayload)
+ */
+export interface ToolStreamEventPayload {
+  event: ToolStreamEvent;
+  timestamp: string;
+  session_id?: string;
+  agent_id?: string;
+}
+
+/**
+ * State for tracking a streaming tool execution
+ */
+export interface ToolStreamState {
+  tool_id: string;
+  tool_name: string;
+  status: 'running' | 'completed' | 'error' | 'cancelled';
+  progress: number;
+  progressMessage?: string;
+  outputChunks: string[];
+  outputBuffer: string;
+  bytesProcessed?: number;
+  bytesTotal?: number;
+  result?: unknown;
+  error?: string;
+  startedAt: Date;
+  completedAt?: Date;
+  duration_ms?: number;
+  retryable?: boolean;
+}
+
+/**
+ * Map of active tool streams by tool_id
+ */
+export type ToolStreamMap = Map<string, ToolStreamState>;
+
+/**
+ * Helper to create initial tool stream state
+ */
+export function createToolStreamState(
+  event: ToolStreamStartedEvent,
+  timestamp: string,
+): ToolStreamState {
+  return {
+    tool_id: event.tool_id,
+    tool_name: event.tool_name,
+    status: 'running',
+    progress: 0,
+    outputChunks: [],
+    outputBuffer: '',
+    startedAt: new Date(timestamp),
+  };
+}
+
+/**
+ * Helper to update tool stream state from an event
+ */
+export function updateToolStreamState(
+  state: ToolStreamState,
+  event: ToolStreamEvent,
+  timestamp: string,
+): ToolStreamState {
+  switch (event.type) {
+    case 'started':
+      return {
+        ...state,
+        tool_name: event.tool_name,
+        status: 'running',
+        progress: 0,
+        startedAt: new Date(timestamp),
+      };
+
+    case 'progress':
+      return {
+        ...state,
+        progress: event.progress,
+        progressMessage: event.message,
+        bytesProcessed: event.bytes_processed,
+        bytesTotal: event.bytes_total,
+      };
+
+    case 'output_chunk':
+      return {
+        ...state,
+        outputChunks: [...state.outputChunks, event.chunk],
+        outputBuffer: state.outputBuffer + event.chunk,
+      };
+
+    case 'completed':
+      return {
+        ...state,
+        status: 'completed',
+        progress: 1.0,
+        result: event.result,
+        completedAt: new Date(timestamp),
+        duration_ms: event.duration_ms,
+      };
+
+    case 'error':
+      return {
+        ...state,
+        status: 'error',
+        error: event.error,
+        completedAt: new Date(timestamp),
+        duration_ms: event.duration_ms,
+        retryable: event.retryable,
+      };
+
+    case 'cancelled':
+      return {
+        ...state,
+        status: 'cancelled',
+        error: event.reason,
+        completedAt: new Date(timestamp),
+        duration_ms: event.duration_ms,
+      };
+
+    default:
+      return state;
+  }
+}

@@ -100,19 +100,14 @@ export function WorkflowDetailModal() {
                 <div className="flex items-center gap-3 mb-2">
                   <DialogTitle className="text-2xl">{selectedWorkflow.title}</DialogTitle>
                   {selectedWorkflow.is_featured && (
-                    <Badge className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white">
+                    <Badge className="bg-linear-to-r from-yellow-400 to-orange-400 text-white">
                       Featured
                     </Badge>
                   )}
                 </div>
                 <p className="text-muted-foreground">{selectedWorkflow.description}</p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={closeDetailModal}
-                className="flex-shrink-0"
-              >
+              <Button variant="ghost" size="icon" onClick={closeDetailModal} className="shrink-0">
                 <X className="h-5 w-5" />
               </Button>
             </div>
@@ -148,7 +143,7 @@ export function WorkflowDetailModal() {
                 <TabsContent value="overview" className="mt-0 space-y-6">
                   {}
                   {selectedWorkflow.thumbnail_url && (
-                    <div className="aspect-video rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5">
+                    <div className="aspect-video rounded-lg overflow-hidden bg-linear-to-br from-primary/20 to-primary/5">
                       <img
                         src={selectedWorkflow.thumbnail_url}
                         alt={selectedWorkflow.title}
@@ -187,7 +182,7 @@ export function WorkflowDetailModal() {
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Creator</h3>
                     <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-lg font-medium">
+                      <div className="h-12 w-12 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-lg font-medium">
                         {selectedWorkflow.creator_name.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -266,7 +261,7 @@ export function WorkflowDetailModal() {
                           className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                         >
                           <div className="flex items-start gap-4">
-                            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-bold flex-shrink-0">
+                            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-bold shrink-0">
                               {index + 1}
                             </div>
                             <div className="flex-1">
@@ -345,7 +340,7 @@ export function WorkflowDetailModal() {
                         <div key={review.id} className="p-4 rounded-lg border bg-card">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center font-medium">
+                              <div className="h-10 w-10 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center font-medium">
                                 {review.user_name.charAt(0).toUpperCase()}
                               </div>
                               <div>
