@@ -187,9 +187,9 @@ mod tests {
 
     #[test]
     fn test_native_messaging_state_wrapper_creation() {
-        let _wrapper = NativeMessagingStateWrapper::new();
-        // Basic instantiation test
-        assert!(true);
+        let wrapper = NativeMessagingStateWrapper::new();
+        // Basic instantiation test - verify extension_id is None by default
+        assert!(wrapper.extension_id.try_read().unwrap().is_none());
     }
 
     #[test]
