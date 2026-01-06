@@ -176,7 +176,7 @@ impl SecretManager {
         #[cfg(test)]
         {
             let _ = secret;
-            return Ok(());
+            Ok(())
         }
 
         #[cfg(not(test))]
