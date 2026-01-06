@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 AGI Workforce is a full-stack monorepo built with:
 
 - **Desktop:** Tauri (Rust backend + React frontend) with local SQLite database
-- **Web:** Next.js 15 with React 19 and Supabase backend
+- **Web:** Next.js 16 with React 19 and Supabase backend
 - **Services:** Node.js/Express API Gateway and WebSocket Signaling Server
 - **Shared:** TypeScript types and utilities via pnpm workspaces
 
@@ -129,7 +129,7 @@ agiworkforce/
 ├── packages/
 │   ├── types/              # Shared TypeScript types
 │   └── utils/              # Shared utilities
-├── supabase/               # Database migrations and schema
+├── apps/web/supabase/      # Database migrations and schema
 └── Configuration files     # pnpm-workspace.yaml, tsconfig.base.json, Cargo.toml
 ```
 
@@ -137,18 +137,18 @@ agiworkforce/
 
 **Frontend (Desktop):**
 
-- React 18 with TypeScript
-- Vite build system
-- Zustand state management
-- Radix UI + Tailwind CSS
-- xterm.js for terminal, Monaco Editor, ReactFlow, Mermaid
+- React 19.2 with TypeScript 5.9
+- Vite 7 build system with SWC
+- Zustand v5 state management (with devtools, persist, subscribeWithSelector middleware)
+- Radix UI + Tailwind CSS v4 (CSS-first configuration)
+- xterm.js v6 for terminal, Monaco Editor, @xyflow/react v12, Mermaid v11
 
 **Frontend (Web):**
 
-- Next.js 15 with React 19
-- Tailwind CSS v4
-- React Query for server state
-- Zod for validation
+- Next.js 16 with React 19
+- Tailwind CSS v4 (CSS-first with `@import "tailwindcss"`)
+- React Query v5 for server state
+- Zod v4 for validation
 
 **Backend (Desktop):**
 
@@ -188,14 +188,15 @@ agiworkforce/
 
 ### Key Architectural Patterns
 
-**Rust Backend (Tauri) Organization:**
+**Rust Backend (Tauri) Organization** (`apps/desktop/src-tauri/src/`):
 
-- `sys/commands/` - Tauri command handlers (entry points)
+- `sys/` - System commands, security, event handling
 - `core/` - Business logic (agents, workflows, approvals)
 - `data/` - Data access layer (DB, settings, state)
 - `automation/` - Workflow and script automation
 - `integrations/` - Third-party API integrations
-- `sys/security/` - Encryption and auth
+- `features/` - Feature-specific modules
+- `ui/` - UI-related Rust code
 
 **React State Management:**
 
@@ -323,11 +324,17 @@ agiworkforce/
 **E2E Tests (Playwright):**
 
 - Tests for smoke, chat, automation, AGI, onboarding, settings, visual regression
-- Base URL: http://localhost:3000
+- Base URL: http://localhost:5175 (Vite dev server)
 - Viewport: 1920×1080
 - Parallel disabled (serial execution)
 - Auto-retries (2x in CI, 0x locally)
 - Screenshots/videos on failure
+
+```bash
+# Run specific E2E project
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=smoke
+pnpm --filter @agiworkforce/desktop test:e2e -- --project=chat
+```
 
 **Location:** `apps/desktop/e2e/` with TypeScript specs
 
@@ -352,9 +359,12 @@ agiworkforce/
 - Types: `import type { YourType } from '@agiworkforce/types'`
 - Utils: `import { helper } from '@agiworkforce/utils'`
 
-**State in Desktop:**
+**State in Desktop (Zustand v5):**
 
-- Use Zustand: `create((set) => ({ state, actions }))`
+- Use middleware stack: `devtools(persist(subscribeWithSelector((set, get) => ({ ... }))))`
+- Export selectors for optimized subscriptions: `export const selectX = (state: State) => state.x`
+- Use `createJSONStorage()` with localStorage fallback for persistence
+- Enable devtools only in dev: `{ name: 'StoreName', enabled: import.meta.env.DEV }`
 - Subscribe to updates via Tauri events
 
 **API Calls in Web:**
@@ -391,13 +401,134 @@ agiworkforce/
 - Monitor message flow in browser DevTools (Network tab → WS)
 - Pairing codes expire after 5 minutes by default
 
+## Modern Stack Patterns
+
+### Tailwind CSS v4 (CSS-First Configuration)
+
+Both desktop and web apps use Tailwind CSS v4 with the new CSS-first configuration:
+
+```css
+/* Use @import instead of @tailwind directives */
+@import 'tailwindcss';
+
+/* Define custom theme in CSS with @theme block */
+@theme {
+  --color-brand: #3b82f6;
+  --font-sans: 'Inter', sans-serif;
+}
+
+/* Use @plugin for plugins */
+@plugin "tailwindcss-animate";
+
+/* Use @source for content detection */
+@source "../components/**/*.{ts,tsx}";
+```
+
+- No `tailwind.config.js` needed - all configuration in CSS
+- PostCSS uses `@tailwindcss/postcss` plugin
+- Vite uses `@tailwindcss/vite` plugin
+
+### React 19 Patterns
+
+**Forms with useActionState and useFormStatus:**
+
+```tsx
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>Submit</button>;
+}
+
+function Form() {
+  const [state, action, isPending] = useActionState(
+    async (prev, formData) => {
+      // Handle form submission
+      return { success: true };
+    },
+    { success: false },
+  );
+
+  return <form action={action}>...</form>;
+}
+```
+
+**Ref as Prop (React 19 - no forwardRef needed):**
+
+```tsx
+// React 19: ref is just a prop
+function Input({ ref, ...props }: { ref?: React.Ref<HTMLInputElement> }) {
+  return <input ref={ref} {...props} />;
+}
+```
+
+### Tauri 2.x Permissions (ACL System)
+
+Capabilities are defined in `src-tauri/capabilities/default.json`:
+
+```json
+{
+  "permissions": ["core:default"] // Simplified permission set
+}
+```
+
+- Use `core:*` prefix for core plugins
+- Modern ACL format with granular controls
+- Window-scoped permissions supported
+
+## SQLite Configuration (Desktop)
+
+The desktop app uses SQLite with optimized pragmas for performance and reliability:
+
+```rust
+// Set on database connection open in lib.rs
+PRAGMA busy_timeout = 5000;     // 5s timeout for concurrent access
+PRAGMA journal_mode = WAL;       // Write-Ahead Logging for better concurrency
+PRAGMA synchronous = NORMAL;     // Balance between safety and speed
+PRAGMA foreign_keys = ON;        // Enforce referential integrity
+PRAGMA cache_size = -64000;      // 64MB cache
+```
+
+## MCP (Model Context Protocol) Integration
+
+MCP tool IDs follow the format: `mcp__{server_name}__{tool_name}` (note: exactly two underscores as separator).
+
+**Key Commands:**
+
+- `mcp_set_credential(server_name, key, value)` - Store credentials in OS keyring
+- `mcp_delete_credential(server_name, key)` - Remove credentials from OS keyring
+- `mcp_get_server_logs(server_name, lines)` - Get server logs (placeholder - full implementation pending)
+
+## AGI Reasoning Loop
+
+The AGI system has built-in safety limits:
+
+- **Max iterations:** 1000 iterations per goal
+- **Absolute timeout:** 5 minutes (300 seconds)
+- **Consecutive failure limit:** 3 failures triggers goal abandonment
+
+Events emitted: `agi:goal:timeout`, `agi:goal:max_iterations`, `agi:goal:cancelled`
+
+## Plan Tier Hierarchy
+
+Plan tiers are ordered from lowest to highest:
+
+1. `free` (0)
+2. `hobby` (1)
+3. `pro` (2)
+4. `max` (3)
+5. `enterprise` (4)
+
+Use `hasPlan(tier)` to check if user has at least the required tier.
+
 ## Important Notes
 
-- **Never commit `.env.local` or secret keys** - use `.env.example` for templates
-- **Database migrations:** Write in SQL; Supabase handles deployment
+- **Never commit `.env.local` or secret keys** - use `.env.example` for templates (available in `apps/desktop/`, `apps/web/`, `services/api-gateway/`)
+- **Database migrations:** Write in SQL in `apps/web/supabase/migrations/`; Supabase handles deployment
 - **Pre-commit hooks** enforce formatting/linting; let them auto-fix when possible
 - **Monorepo:** Use `--filter` flag for targeted commands; `pnpm -r` for all packages
-- **Versioning:** pnpm 9.15.3+, Node 22.12.0+, TypeScript 5.9.3, Rust 1.90.0 are pinned
+- **Versioning:** pnpm 9.15.3+, Node 22.12.0+, TypeScript 5.9.3 are pinned
 
 ## When Starting Work
 

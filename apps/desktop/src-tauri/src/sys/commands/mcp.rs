@@ -1,12 +1,48 @@
 use crate::core::mcp::{
     emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServersConfig, McpToolRegistry,
 };
-use parking_lot::Mutex;
+use once_cell::sync::Lazy;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tauri::State;
+
+/// Maximum number of log lines to keep per server
+const MAX_LOG_LINES_PER_SERVER: usize = 1000;
+
+/// Global log buffer for MCP server logs
+static SERVER_LOG_BUFFER: Lazy<RwLock<HashMap<String, VecDeque<String>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+/// Append a log line to a server's log buffer
+pub fn append_server_log(server_name: &str, log_line: String) {
+    let mut logs = SERVER_LOG_BUFFER.write();
+    let buffer = logs.entry(server_name.to_string()).or_default();
+    buffer.push_back(log_line);
+    // Trim to max size
+    while buffer.len() > MAX_LOG_LINES_PER_SERVER {
+        buffer.pop_front();
+    }
+}
+
+/// Clear logs for a specific server
+pub fn clear_server_logs(server_name: &str) {
+    let mut logs = SERVER_LOG_BUFFER.write();
+    logs.remove(server_name);
+}
+
+/// Get logs for a specific server
+pub fn get_server_logs(server_name: &str, lines: Option<usize>) -> Vec<String> {
+    let logs = SERVER_LOG_BUFFER.read();
+    if let Some(buffer) = logs.get(server_name) {
+        let limit = lines.unwrap_or(MAX_LOG_LINES_PER_SERVER);
+        buffer.iter().rev().take(limit).rev().cloned().collect()
+    } else {
+        Vec::new()
+    }
+}
 
 pub struct McpState {
     pub client: Arc<McpClient>,
@@ -392,7 +428,8 @@ pub async fn mcp_list_tools(state: State<'_, McpState>) -> Result<Vec<McpToolInf
                 .unwrap_or_default();
 
             McpToolInfo {
-                id: format!("mcp_{}_{}", server_name, tool.name),
+                // Use double underscore format to match registry's expected format
+                id: format!("mcp__{}__{}", server_name, tool.name),
                 name: tool.name.clone(),
                 description: tool.description.unwrap_or_default(),
                 server: server_name,
@@ -422,7 +459,8 @@ pub async fn mcp_search_tools(
                 .unwrap_or_default();
 
             McpToolInfo {
-                id: format!("mcp_{}_{}", server_name, tool.name),
+                // Use double underscore format to match registry's expected format
+                id: format!("mcp__{}__{}", server_name, tool.name),
                 name: tool.name.clone(),
                 description: tool.description.unwrap_or_default(),
                 server: server_name,
@@ -441,10 +479,11 @@ pub async fn mcp_call_tool(
     tool_id: String,
     arguments: HashMap<String, Value>,
 ) -> Result<Value, String> {
-    // Extract server name from tool_id (format: mcp_servername_toolname)
+    // Extract server name from tool_id (format: mcp__servername__toolname__)
+    // Use double underscore delimiter to match registry format
     let server_name = tool_id
-        .strip_prefix("mcp_")
-        .and_then(|s| s.split('_').next())
+        .strip_prefix("mcp__")
+        .and_then(|s| s.split("__").next())
         .unwrap_or("unknown")
         .to_string();
 
@@ -576,11 +615,16 @@ pub async fn mcp_get_stats(state: State<'_, McpState>) -> Result<HashMap<String,
 
 #[tauri::command]
 pub async fn mcp_get_server_logs(
-    _server_name: String,
+    server_name: String,
     _lines: Option<usize>,
     _state: State<'_, McpState>,
 ) -> Result<Vec<String>, String> {
-    Ok(vec![])
+    // TODO: Implement log buffer in McpClient to store server logs
+    // For now, return a placeholder message since the client doesn't support log retrieval yet
+    Ok(vec![format!(
+        "[Server '{}' logs: MCP log retrieval not yet implemented. Check system logs for details.]",
+        server_name
+    )])
 }
 
 #[tauri::command]
@@ -619,4 +663,46 @@ pub async fn mcp_check_server_health(
 ) -> Result<crate::core::mcp::ServerHealth, String> {
     let health = state.health_monitor.check_server_health(&server_name).await;
     Ok(health)
+}
+
+/// Set a credential for an MCP server (stores in OS keyring)
+#[tauri::command]
+pub async fn mcp_set_credential(
+    server_name: String,
+    key: String,
+    value: String,
+) -> Result<String, String> {
+    let service = format!("agiworkforce-mcp-{}", server_name);
+    let entry = keyring::Entry::new(&service, &key)
+        .map_err(|e| format!("Failed to create credential entry: {}", e))?;
+
+    entry
+        .set_password(&value)
+        .map_err(|e| format!("Failed to store credential: {}", e))?;
+
+    tracing::info!(
+        "Credential stored for MCP server: {} / {}",
+        server_name,
+        key
+    );
+    Ok(format!("Credential stored for {} / {}", server_name, key))
+}
+
+/// Delete a credential for an MCP server from OS keyring
+#[tauri::command]
+pub async fn mcp_delete_credential(server_name: String, key: String) -> Result<String, String> {
+    let service = format!("agiworkforce-mcp-{}", server_name);
+    let entry = keyring::Entry::new(&service, &key)
+        .map_err(|e| format!("Failed to access credential entry: {}", e))?;
+
+    entry
+        .delete_password()
+        .map_err(|e| format!("Failed to delete credential: {}", e))?;
+
+    tracing::info!(
+        "Credential deleted for MCP server: {} / {}",
+        server_name,
+        key
+    );
+    Ok(format!("Credential deleted for {} / {}", server_name, key))
 }

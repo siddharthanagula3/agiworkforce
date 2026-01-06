@@ -48,7 +48,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
       {}
       <div className="relative overflow-hidden">
         {}
-        <div className="absolute inset-0 bg-gradient-to-b from-violet-500/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-b from-violet-500/10 via-transparent to-transparent" />
         <div className="absolute inset-0">
           <motion.div
             animate={{
@@ -83,7 +83,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center justify-center gap-3 mb-8"
           >
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-linear-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <span className="text-2xl font-bold">AGI Workforce</span>
@@ -101,7 +101,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
           >
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
               The Future of Work is
-              <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-violet-500 to-fuchsia-500 bg-clip-text text-transparent">
                 {' '}
                 Autonomous
               </span>
@@ -178,7 +178,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
                 transition={{ delay: index * 0.1 }}
                 className="flex items-center gap-2 p-3 rounded-lg bg-card border border-border/50"
               >
-                <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
                   <Check className="w-3 h-3 text-green-500" />
                 </div>
                 <span className="text-sm">{benefit}</span>
@@ -214,7 +214,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
                 transition={{ delay: index * 0.1 }}
                 className="p-6 rounded-xl bg-card border border-border/50 hover:border-violet-500/30 transition-colors"
               >
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-lg bg-linear-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center mb-4">
                   <feature.icon className="w-6 h-6 text-violet-500" />
                 </div>
                 <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
@@ -238,7 +238,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
               {[...Array(5)].map((_, i) => (
                 <div
                   key={i}
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-400 border-2 border-background"
+                  className="w-10 h-10 rounded-full bg-linear-to-br from-violet-400 to-fuchsia-400 border-2 border-background"
                 />
               ))}
             </div>
@@ -279,7 +279,7 @@ export function WaitlistPage({ referralCode }: WaitlistPageProps) {
             </p>
             <Button
               size="lg"
-              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+              className="bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
               Join the Waitlist

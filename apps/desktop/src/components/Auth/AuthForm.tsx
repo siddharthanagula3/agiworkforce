@@ -15,7 +15,7 @@ import {
   Sparkles,
   User,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { useActionState, useEffect, useState, useTransition } from 'react';
 import { cn } from '../../lib/utils';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import { useAuthStore } from '../../stores/authStore';
@@ -39,6 +39,13 @@ interface AuthFormProps {
   className?: string;
 }
 
+// Form state type for useActionState
+interface AuthFormState {
+  error: string | null;
+  success: boolean;
+  mode?: AuthMode;
+}
+
 export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthFormProps) {
   const [mode, setMode] = useState<AuthMode>(defaultMode);
   const [email, setEmail] = useState('');
@@ -50,7 +57,85 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
   const [localError, setLocalError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const { signIn, signUp, signInWithMagicLink, resetPassword, isLoading, error } = useAuthStore();
+  const { signIn, signUp, signInWithMagicLink, resetPassword, error } = useAuthStore();
+
+  // React 19: useTransition for async operations with pending state
+  const [isPending, startTransition] = useTransition();
+
+  // React 19: useActionState for form submission with built-in error handling
+  const [formState, submitAction, isSubmitting] = useActionState<AuthFormState, FormData>(
+    async (_prevState, formData) => {
+      const formEmail = formData.get('email') as string;
+      const formPassword = formData.get('password') as string;
+      const formName = formData.get('name') as string;
+      const formConfirmPassword = formData.get('confirmPassword') as string;
+
+      let result: { error: string | null };
+
+      switch (mode) {
+        case 'signin':
+          result = await signIn(formEmail, formPassword);
+          if (!result.error) {
+            onSuccess?.();
+            return { error: null, success: true };
+          }
+          return { error: result.error, success: false };
+
+        case 'signup':
+          if (formPassword.length < 6) {
+            return { error: 'Password must be at least 6 characters', success: false };
+          }
+          result = await signUp(formEmail, formPassword, formName || undefined);
+          if (!result.error) {
+            return { error: null, success: true, mode: 'email-verification-sent' as AuthMode };
+          }
+          return { error: result.error, success: false };
+
+        case 'magic-link':
+          result = await signInWithMagicLink(formEmail);
+          if (!result.error) {
+            return { error: null, success: true, mode: 'magic-link-sent' as AuthMode };
+          }
+          return { error: result.error, success: false };
+
+        case 'reset-password':
+          result = await resetPassword(formEmail);
+          if (!result.error) {
+            return { error: null, success: true, mode: 'reset-link-sent' as AuthMode };
+          }
+          return { error: result.error, success: false };
+
+        case 'set-new-password': {
+          if (formPassword !== formConfirmPassword) {
+            return { error: 'Passwords do not match', success: false };
+          }
+          if (formPassword.length < 6) {
+            return { error: 'Password must be at least 6 characters', success: false };
+          }
+          const { error: updateError } = await supabaseAuth.updatePassword(formPassword);
+          if (updateError) {
+            return { error: updateError.message, success: false };
+          }
+          onSuccess?.();
+          return { error: null, success: true };
+        }
+
+        default:
+          return { error: null, success: false };
+      }
+    },
+    { error: null, success: false },
+  );
+
+  // Handle mode changes from form action results
+  useEffect(() => {
+    if (formState.mode) {
+      setMode(formState.mode);
+    }
+  }, [formState.mode]);
+
+  // Combined loading state: either from form submission or from store
+  const isLoading = isSubmitting || isPending;
 
   useEffect(() => {
     const checkAuthCallback = async () => {
@@ -77,83 +162,27 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
     return undefined;
   }, [resendCooldown]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLocalError(null);
-
-    let result: { error: string | null };
-
-    switch (mode) {
-      case 'signin':
-        result = await signIn(email, password);
-        if (!result.error) {
-          onSuccess?.();
-        }
-        break;
-
-      case 'signup':
-        if (password.length < 6) {
-          setLocalError('Password must be at least 6 characters');
-          return;
-        }
-        result = await signUp(email, password, name || undefined);
-        if (!result.error) {
-          setMode('email-verification-sent');
-        }
-        break;
-
-      case 'magic-link':
-        result = await signInWithMagicLink(email);
-        if (!result.error) {
-          setMode('magic-link-sent');
-        }
-        break;
-
-      case 'reset-password':
-        result = await resetPassword(email);
-        if (!result.error) {
-          setMode('reset-link-sent');
-        }
-        break;
-
-      case 'set-new-password': {
-        if (password !== confirmPassword) {
-          setLocalError('Passwords do not match');
-          return;
-        }
-        if (password.length < 6) {
-          setLocalError('Password must be at least 6 characters');
-          return;
-        }
-        const { error: updateError } = await supabaseAuth.updatePassword(password);
-        if (updateError) {
-          setLocalError(updateError.message);
-        } else {
-          onSuccess?.();
-        }
-        break;
-      }
-    }
-  };
-
-  const handleResendEmail = async () => {
+  // React 19: Use startTransition for resend email action
+  const handleResendEmail = () => {
     if (resendCooldown > 0) return;
 
-    let result: { error: string | null };
+    startTransition(async () => {
+      let result: { error: string | null };
 
-    if (mode === 'email-verification-sent') {
-      result = await signUp(email, password, name || undefined);
-    } else if (mode === 'magic-link-sent') {
-      result = await signInWithMagicLink(email);
-    } else if (mode === 'reset-link-sent') {
-      result = await resetPassword(email);
-    } else {
-      return;
-    }
+      if (mode === 'email-verification-sent') {
+        result = await signUp(email, password, name || undefined);
+      } else if (mode === 'magic-link-sent') {
+        result = await signInWithMagicLink(email);
+      } else if (mode === 'reset-link-sent') {
+        result = await resetPassword(email);
+      } else {
+        return;
+      }
 
-    if (!result.error) {
-      setResendCooldown(60);
-    }
+      if (!result.error) {
+        setResendCooldown(60);
+      }
+    });
   };
 
   const getModeConfig = () => {
@@ -198,7 +227,8 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
   };
 
   const config = getModeConfig();
-  const displayError = localError || error;
+  // React 19: Error comes from form state, local state, or store
+  const displayError = formState.error || localError || error;
 
   if (mode === 'email-verification-sent') {
     return (
@@ -212,7 +242,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 mb-6"
+            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-br from-green-500 to-emerald-500 mb-6"
           >
             <MailCheck className="w-10 h-10 text-white" />
           </motion.div>
@@ -277,7 +307,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 mb-6"
+            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 mb-6"
           >
             <Mail className="w-10 h-10 text-white" />
           </motion.div>
@@ -335,7 +365,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 mb-6"
+            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-br from-amber-500 to-orange-500 mb-6"
           >
             <KeyRound className="w-10 h-10 text-white" />
           </motion.div>
@@ -385,8 +415,8 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
     <div className={cn('w-full max-w-md mx-auto', className)}>
       {}
       <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-violet-500/20 to-fuchsia-500/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-linear-to-tr from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl" />
       </div>
 
       <motion.div
@@ -400,7 +430,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 mb-4"
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-violet-500 to-fuchsia-500 mb-4"
           >
             {mode === 'set-new-password' ? (
               <ShieldCheck className="w-8 h-8 text-white" />
@@ -422,8 +452,8 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
           </AnimatePresence>
         </div>
 
-        {}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* React 19: Using form action prop for native form submission handling */}
+        <form action={submitAction} className="space-y-4">
           <AnimatePresence mode="wait">
             {}
             {mode === 'signup' && (
@@ -441,6 +471,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="name"
+                    name="name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -462,6 +493,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -490,6 +522,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -530,6 +563,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="confirmPassword"
+                    name="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -572,7 +606,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full h-11 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+            className="w-full h-11 bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

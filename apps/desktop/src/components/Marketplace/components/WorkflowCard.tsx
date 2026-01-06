@@ -71,11 +71,11 @@ export const WorkflowCard = memo(function WorkflowCard({
     >
       {}
       {workflow.is_featured && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-400" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-yellow-400 via-orange-400 to-pink-400" />
       )}
 
       {}
-      <div className="relative aspect-video bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 overflow-hidden">
+      <div className="relative aspect-video bg-linear-to-br from-primary/20 via-primary/10 to-primary/5 overflow-hidden">
         {workflow.thumbnail_url ? (
           <img
             src={workflow.thumbnail_url}
@@ -91,13 +91,13 @@ export const WorkflowCard = memo(function WorkflowCard({
         {}
         <div className="absolute top-3 left-3 flex gap-2">
           {workflow.is_featured && (
-            <Badge className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white border-0">
+            <Badge className="bg-linear-to-r from-yellow-400 to-orange-400 text-white border-0">
               <Sparkles className="h-3 w-3 mr-1" />
               Featured
             </Badge>
           )}
           {workflow.is_trending && (
-            <Badge className="bg-gradient-to-r from-pink-500 to-rose-500 text-white border-0">
+            <Badge className="bg-linear-to-r from-pink-500 to-rose-500 text-white border-0">
               🔥 Trending
             </Badge>
           )}
@@ -184,7 +184,7 @@ export const WorkflowCard = memo(function WorkflowCard({
 
         {}
         <div className="flex items-center gap-2 pt-2 border-t">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-sm font-medium">
+          <div className="h-8 w-8 rounded-full bg-linear-to-br from-primary/30 to-primary/10 flex items-center justify-center text-sm font-medium">
             {workflow.creator_name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">

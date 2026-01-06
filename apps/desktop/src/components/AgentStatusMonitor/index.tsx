@@ -82,7 +82,7 @@ export const AgentStatusMonitor: React.FC<AgentStatusMonitorProps> = ({
             {}
             <div className="px-4 py-3 flex items-start justify-between">
               <div className="flex items-start space-x-3 flex-1 min-w-0">
-                <StatusIcon className={`w-5 h-5 ${config.color} flex-shrink-0 mt-0.5`} />
+                <StatusIcon className={`w-5 h-5 ${config.color} shrink-0 mt-0.5`} />
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">
                     {agent.name}

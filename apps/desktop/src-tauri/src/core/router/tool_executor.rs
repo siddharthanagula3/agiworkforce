@@ -191,7 +191,8 @@ impl ToolExecutor {
         );
 
         let in_safe_mode = self.conversation_mode.as_deref() == Some("safe");
-        if tool_call.name.starts_with("mcp_") && in_safe_mode {
+        // Check for MCP tool ID format: mcp__server__tool__
+        if tool_call.name.starts_with("mcp__") && in_safe_mode {
             tracing::warn!(
                 "[Security] MCP tool '{}' requested in safe mode. Emitting approval request.",
                 tool_call.name
@@ -248,7 +249,8 @@ impl ToolExecutor {
             });
         }
 
-        if tool_call.name.starts_with("mcp_") {
+        // Route MCP tools (format: mcp__server__tool__) to MCP executor
+        if tool_call.name.starts_with("mcp__") {
             let result = self.execute_mcp_tool(tool_call, args).await;
             return self.finalize_tool_result(
                 &action_id,
@@ -1110,46 +1112,90 @@ impl ToolExecutor {
                 }
             }
             "search_web" => {
+                use crate::features::search::{SearchType, WebSearchConfig, WebSearchService};
+
                 let query = args
                     .get("query")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing query parameter"))?;
+                    .ok_or_else(|| anyhow!("Missing query parameter"))?
+                    .to_string();
 
-                let search_url = "https://api.agiworkforce.com".to_string();
+                let num_results = args
+                    .get("num_results")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(10)
+                    .min(20) as usize;
 
-                if let Some(ref app) = self.app_handle {
-                    use crate::sys::commands::BrowserStateWrapper;
-                    use tauri::Manager;
+                let search_type = args
+                    .get("search_type")
+                    .and_then(|v| v.as_str())
+                    .map(|s| match s.to_lowercase().as_str() {
+                        "news" => SearchType::News,
+                        "images" => SearchType::Images,
+                        _ => SearchType::Web,
+                    })
+                    .unwrap_or(SearchType::Web);
 
-                    let browser_state = app.state::<BrowserStateWrapper>();
-                    let tab_manager = browser_state.0.tab_manager.lock().await;
+                let config = WebSearchConfig {
+                    num_results,
+                    search_type,
+                    ..Default::default()
+                };
 
-                    match tab_manager.open_tab(&search_url).await {
-                        Ok(tab_id) => Ok(ToolResult {
-                            success: true,
-                            data: json!({
-                                "success": true,
-                                "message": "Opened search results in browser",
-                                "url": search_url,
-                                "tab_id": tab_id
-                            }),
-                            error: None,
-                            metadata: HashMap::from([("query".to_string(), json!(query))]),
-                        }),
+                match WebSearchService::new() {
+                    Ok(service) => match service.search(&query, Some(config)).await {
+                        Ok(response) => {
+                            // Format results for the frontend
+                            let results: Vec<serde_json::Value> = response
+                                .results
+                                .iter()
+                                .map(|r| {
+                                    json!({
+                                        "title": r.title,
+                                        "url": r.url,
+                                        "snippet": r.snippet,
+                                        "favicon": r.favicon,
+                                        "domain": r.domain,
+                                        "position": r.position
+                                    })
+                                })
+                                .collect();
+
+                            Ok(ToolResult {
+                                success: true,
+                                data: json!({
+                                    "query": response.query,
+                                    "results": results,
+                                    "count": response.count,
+                                    "provider": response.provider,
+                                    "duration_ms": response.duration_ms
+                                }),
+                                error: None,
+                                metadata: HashMap::from([
+                                    ("query".to_string(), json!(query)),
+                                    ("provider".to_string(), json!(response.provider)),
+                                    ("result_count".to_string(), json!(response.count)),
+                                ]),
+                            })
+                        }
                         Err(e) => Ok(ToolResult {
                             success: false,
-                            data: json!(null),
-                            error: Some(format!("Failed to open search tab: {}", e)),
-                            metadata: HashMap::new(),
+                            data: json!({
+                                "query": query,
+                                "results": [],
+                                "count": 0,
+                                "error": e.to_string()
+                            }),
+                            error: Some(format!("Web search failed: {}", e)),
+                            metadata: HashMap::from([("query".to_string(), json!(query))]),
                         }),
-                    }
-                } else {
-                    Ok(ToolResult {
+                    },
+                    Err(e) => Ok(ToolResult {
                         success: false,
                         data: json!(null),
-                        error: Some("App handle not available for web search".to_string()),
+                        error: Some(format!("Failed to initialize web search service: {}", e)),
                         metadata: HashMap::new(),
-                    })
+                    }),
                 }
             }
             "browser_navigate" => {

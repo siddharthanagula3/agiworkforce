@@ -1,5 +1,17 @@
+/**
+ * Model Store
+ *
+ * Manages model selection, favorites, recent models, and provider status.
+ *
+ * Updated to Zustand v5 best practices:
+ * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
+ * - TypeScript: Using create<State>()() pattern for type inference
+ * - Persist middleware: Using createJSONStorage, partialize, version, migrate
+ * - Better devtools integration with store name
+ * - subscribeWithSelector for granular subscriptions
+ */
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import type { ModelMetadata } from '../constants/llm';
 import { getAllModels, getModelMetadata, PROVIDERS_IN_ORDER } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
@@ -105,195 +117,214 @@ const storageFallback: Storage = {
   setItem: () => undefined,
 };
 
-const modelStorage = createJSONStorage<{
-  selectedModel: string | null;
-  selectedProvider: Provider | null;
-  favorites: string[];
-  recentModels: string[];
-  thinkingModeEnabled: boolean;
-}>(() => (typeof window === 'undefined' ? storageFallback : window.localStorage));
+// Version for storage migration
+const MODEL_STORE_VERSION = 1;
 
 export const useModelStore = create<ModelState>()(
-  persist(
-    (set, get) => ({
-      selectedModel: 'auto',
-      selectedProvider: null,
-      favorites: [],
-      recentModels: [],
-      providerStatuses: {
-        openai: null,
-        anthropic: null,
-        google: null,
-        ollama: null,
-        xai: null,
-        deepseek: null,
-        qwen: null,
-        moonshot: null,
-        managed_cloud: null,
-      },
-      availableModels: [],
-      usageStats: null,
-      thinkingModeEnabled: false,
-      loading: false,
-      error: null,
+  devtools(
+    persist(
+      subscribeWithSelector((set, get) => ({
+        selectedModel: 'auto',
+        selectedProvider: null,
+        favorites: [],
+        recentModels: [],
+        providerStatuses: {
+          openai: null,
+          anthropic: null,
+          google: null,
+          ollama: null,
+          xai: null,
+          deepseek: null,
+          qwen: null,
+          moonshot: null,
+          managed_cloud: null,
+        },
+        availableModels: [],
+        usageStats: null,
+        thinkingModeEnabled: false,
+        loading: false,
+        error: null,
 
-      selectModel: async (modelId: string, provider: Provider) => {
-        try {
-          useSettingsStore.getState().setDefaultModel(provider, modelId);
+        selectModel: async (modelId: string, provider: Provider) => {
+          try {
+            useSettingsStore.getState().setDefaultModel(provider, modelId);
 
+            set({
+              selectedModel: modelId,
+              selectedProvider: provider,
+            });
+
+            get().addToRecent(modelId);
+          } catch (error) {
+            console.error('Failed to select model:', error);
+            set({ error: String(error) });
+          }
+        },
+
+        toggleFavorite: (modelId: string) => {
+          set((state) => {
+            const favorites = state.favorites.includes(modelId)
+              ? state.favorites.filter((id) => id !== modelId)
+              : [...state.favorites, modelId];
+            return { favorites };
+          });
+        },
+
+        toggleThinkingMode: () => {
+          set((state) => ({ thinkingModeEnabled: !state.thinkingModeEnabled }));
+        },
+
+        addToRecent: (modelId: string) => {
+          set((state) => {
+            const filtered = state.recentModels.filter((id) => id !== modelId);
+            const recentModels = [modelId, ...filtered].slice(0, 5);
+            return { recentModels };
+          });
+        },
+
+        checkProviderStatus: async (provider: Provider) => {
+          try {
+            const status = await invoke<ProviderStatus>('llm_check_provider_status', {
+              provider,
+            });
+
+            set((state) => ({
+              providerStatuses: {
+                ...state.providerStatuses,
+                [provider]: status,
+              },
+            }));
+
+            return status;
+          } catch (error) {
+            const errorStatus: ProviderStatus = {
+              provider,
+              available: false,
+              configured: false,
+              error: String(error),
+            };
+
+            set((state) => ({
+              providerStatuses: {
+                ...state.providerStatuses,
+                [provider]: errorStatus,
+              },
+            }));
+
+            return errorStatus;
+          }
+        },
+
+        checkAllProviders: async () => {
+          set({ loading: true, error: null });
+          try {
+            await Promise.all(PROVIDERS_IN_ORDER.map((p) => get().checkProviderStatus(p)));
+            set({ loading: false });
+          } catch (error) {
+            console.error('Failed to check provider statuses:', error);
+            set({ error: String(error), loading: false });
+          }
+        },
+
+        getUsageStats: async () => {
+          set({ loading: true, error: null });
+          try {
+            const stats = await invoke<UsageStats>('llm_get_usage_stats');
+            set({ usageStats: stats, loading: false });
+            return stats;
+          } catch (error) {
+            console.error('Failed to get usage stats:', error);
+            set({ error: String(error), loading: false, usageStats: defaultUsageStats });
+            return defaultUsageStats;
+          }
+        },
+
+        refreshUsageStats: async () => {
+          await get().getUsageStats();
+        },
+
+        getAvailableModels: async () => {
+          set({ loading: true, error: null });
+          try {
+            const models = await invoke<ModelInfo[]>('llm_get_available_models');
+            set({ loading: false, availableModels: models });
+            return models;
+          } catch (error) {
+            console.error('Failed to get available models:', error);
+            set({ error: String(error), loading: false });
+
+            const allModels = getAllModels();
+            const fallbackModels = allModels.map((model) => ({
+              id: model.id,
+              name: model.name,
+              provider: model.provider,
+              available: true,
+            }));
+            set({ availableModels: fallbackModels });
+            return fallbackModels;
+          }
+        },
+
+        reset: () => {
           set({
-            selectedModel: modelId,
-            selectedProvider: provider,
-          });
-
-          get().addToRecent(modelId);
-        } catch (error) {
-          console.error('Failed to select model:', error);
-          set({ error: String(error) });
-        }
-      },
-
-      toggleFavorite: (modelId: string) => {
-        set((state) => {
-          const favorites = state.favorites.includes(modelId)
-            ? state.favorites.filter((id) => id !== modelId)
-            : [...state.favorites, modelId];
-          return { favorites };
-        });
-      },
-
-      toggleThinkingMode: () => {
-        set((state) => ({ thinkingModeEnabled: !state.thinkingModeEnabled }));
-      },
-
-      addToRecent: (modelId: string) => {
-        set((state) => {
-          const filtered = state.recentModels.filter((id) => id !== modelId);
-          const recentModels = [modelId, ...filtered].slice(0, 5);
-          return { recentModels };
-        });
-      },
-
-      checkProviderStatus: async (provider: Provider) => {
-        try {
-          const status = await invoke<ProviderStatus>('llm_check_provider_status', {
-            provider,
-          });
-
-          set((state) => ({
+            selectedModel: null,
+            selectedProvider: null,
+            favorites: [],
+            recentModels: [],
             providerStatuses: {
-              ...state.providerStatuses,
-              [provider]: status,
+              openai: null,
+              anthropic: null,
+              google: null,
+              ollama: null,
+              xai: null,
+              deepseek: null,
+              qwen: null,
+              moonshot: null,
+              managed_cloud: null,
             },
-          }));
-
-          return status;
-        } catch (error) {
-          const errorStatus: ProviderStatus = {
-            provider,
-            available: false,
-            configured: false,
-            error: String(error),
-          };
-
-          set((state) => ({
-            providerStatuses: {
-              ...state.providerStatuses,
-              [provider]: errorStatus,
-            },
-          }));
-
-          return errorStatus;
-        }
+            usageStats: null,
+            loading: false,
+            error: null,
+          });
+        },
+      })),
+      {
+        name: 'agiworkforce-models',
+        version: MODEL_STORE_VERSION,
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
+        ),
+        partialize: (state) => ({
+          selectedModel: state.selectedModel,
+          selectedProvider: state.selectedProvider,
+          favorites: state.favorites,
+          recentModels: state.recentModels,
+          thinkingModeEnabled: state.thinkingModeEnabled,
+        }),
+        migrate: (persistedState: unknown, version: number) => {
+          // Migration logic for future schema changes
+          if (version === 0) {
+            return persistedState as ModelState;
+          }
+          return persistedState as ModelState;
+        },
       },
-
-      checkAllProviders: async () => {
-        set({ loading: true, error: null });
-        try {
-          await Promise.all(PROVIDERS_IN_ORDER.map((p) => get().checkProviderStatus(p)));
-          set({ loading: false });
-        } catch (error) {
-          console.error('Failed to check provider statuses:', error);
-          set({ error: String(error), loading: false });
-        }
-      },
-
-      getUsageStats: async () => {
-        set({ loading: true, error: null });
-        try {
-          const stats = await invoke<UsageStats>('llm_get_usage_stats');
-          set({ usageStats: stats, loading: false });
-          return stats;
-        } catch (error) {
-          console.error('Failed to get usage stats:', error);
-          set({ error: String(error), loading: false, usageStats: defaultUsageStats });
-          return defaultUsageStats;
-        }
-      },
-
-      refreshUsageStats: async () => {
-        await get().getUsageStats();
-      },
-
-      getAvailableModels: async () => {
-        set({ loading: true, error: null });
-        try {
-          const models = await invoke<ModelInfo[]>('llm_get_available_models');
-          set({ loading: false, availableModels: models });
-          return models;
-        } catch (error) {
-          console.error('Failed to get available models:', error);
-          set({ error: String(error), loading: false });
-
-          const allModels = getAllModels();
-          const fallbackModels = allModels.map((model) => ({
-            id: model.id,
-            name: model.name,
-            provider: model.provider,
-            available: true,
-          }));
-          set({ availableModels: fallbackModels });
-          return fallbackModels;
-        }
-      },
-
-      reset: () => {
-        set({
-          selectedModel: null,
-          selectedProvider: null,
-          favorites: [],
-          recentModels: [],
-          providerStatuses: {
-            openai: null,
-            anthropic: null,
-            google: null,
-            ollama: null,
-            xai: null,
-            deepseek: null,
-            qwen: null,
-            moonshot: null,
-            managed_cloud: null,
-          },
-          usageStats: null,
-          loading: false,
-          error: null,
-        });
-      },
-    }),
-    {
-      name: 'agiworkforce-models',
-      storage: modelStorage,
-      partialize: (state) => ({
-        selectedModel: state.selectedModel,
-        selectedProvider: state.selectedProvider,
-        favorites: state.favorites,
-        recentModels: state.recentModels,
-        thinkingModeEnabled: state.thinkingModeEnabled,
-      }),
-    },
+    ),
+    { name: 'ModelStore', enabled: process.env['NODE_ENV'] === 'development' },
   ),
 );
 
+/**
+ * Selectors for optimized subscriptions via subscribeWithSelector middleware.
+ *
+ * These selectors enable granular state subscriptions, preventing unnecessary re-renders
+ * when only specific parts of the state change. While currently primarily used in tests,
+ * they provide a foundation for performance optimization in complex components.
+ *
+ * Usage example:
+ *   useModelStore.subscribe(selectSelectedModel, (model) => console.log('Model changed:', model));
+ *   const model = useModelStore(selectSelectedModel);
+ */
 export const selectSelectedModel = (state: ModelState) => state.selectedModel;
 export const selectSelectedProvider = (state: ModelState) => state.selectedProvider;
 export const selectFavorites = (state: ModelState) => state.favorites;

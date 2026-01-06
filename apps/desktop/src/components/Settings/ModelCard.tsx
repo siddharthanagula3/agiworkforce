@@ -52,7 +52,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         onClick={onClick}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="flex-shrink-0">{speedIcons[model.speed]}</div>
+          <div className="shrink-0">{speedIcons[model.speed]}</div>
           <div className="flex-1 min-w-0">
             <div className="font-medium text-sm truncate">{model.name}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">{model.provider}</div>
@@ -61,7 +61,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
         {onToggleFavorite && (
           <button
             onClick={handleFavoriteClick}
-            className="flex-shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            className="shrink-0 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           >
             <Star
               className={cn(

@@ -138,7 +138,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.2 }}
-            className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 mb-6"
+            className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-linear-to-br from-green-500 to-emerald-500 mb-6"
           >
             <CheckCircle2 className="w-12 h-12 text-white" />
           </motion.div>
@@ -188,7 +188,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
               setErrorMessage(null);
               window.history.replaceState(null, '', window.location.pathname);
             }}
-            className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+            className="w-full bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
           >
             Try again
           </Button>
@@ -202,7 +202,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       {}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         {}
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-fuchsia-600 to-pink-600" />
+        <div className="absolute inset-0 bg-linear-to-br from-violet-600 via-fuchsia-600 to-pink-600" />
 
         {}
         <div className="absolute inset-0">
@@ -280,7 +280,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
                 transition={{ delay: 0.5 + index * 0.1 }}
                 className="flex items-start gap-4"
               >
-                <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
                   <feature.icon className="w-5 h-5" />
                 </div>
                 <div>
@@ -322,7 +322,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
         {}
         <div className="lg:hidden absolute top-6 left-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <span className="font-bold text-foreground">AGI Workforce</span>

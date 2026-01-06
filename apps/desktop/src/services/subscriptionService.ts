@@ -177,11 +177,29 @@ class SubscriptionService {
     const supabase = getSupabase();
 
     try {
+      // First try to match by stripe_price_id for exact plan match (handles monthly vs annual)
+      if (subscription.stripe_price_id) {
+        const { data, error } = await supabase
+          .from('pricing_plans')
+          .select('*')
+          .eq('stripe_price_id', subscription.stripe_price_id)
+          .eq('is_active', true)
+          .single();
+
+        if (!error && data) {
+          this.updateState({ currentPlan: data });
+          return;
+        }
+      }
+
+      // Fallback: match by tier, preferring monthly interval
       const { data, error } = await supabase
         .from('pricing_plans')
         .select('*')
         .eq('tier', subscription.plan_tier)
         .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .single();
 
       if (error) throw error;

@@ -19,7 +19,7 @@ export const ChatInputToolbar = () => {
       {}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Model:</span>
-        <QuickModelSelector className="flex-shrink-0" />
+        <QuickModelSelector className="shrink-0" />
       </div>
 
       {}

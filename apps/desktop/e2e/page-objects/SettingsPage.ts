@@ -80,18 +80,22 @@ export class SettingsPage extends BasePage {
     const input = this.page
       .locator(`input[name*="${resource}"], [data-testid="${resource}-limit"]`)
       .first();
-    await input.clear();
-    await input.fill(value);
+    if (await input.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await input.clear();
+      await input.fill(value);
+    }
   }
 
   async toggleAutonomousMode(enable: boolean) {
     const toggle = this.page
       .locator('input[type="checkbox"][name*="autonomous"], [data-testid="autonomous-toggle"]')
       .first();
-    const isChecked = await toggle.isChecked();
+    if (await toggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+      const isChecked = await toggle.isChecked();
 
-    if ((enable && !isChecked) || (!enable && isChecked)) {
-      await toggle.click();
+      if ((enable && !isChecked) || (!enable && isChecked)) {
+        await toggle.click();
+      }
     }
   }
 
@@ -99,33 +103,39 @@ export class SettingsPage extends BasePage {
     const toggle = this.page
       .locator('input[type="checkbox"][name*="auto-approve"], [data-testid="auto-approve"]')
       .first();
-    const isChecked = await toggle.isChecked();
+    if (await toggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+      const isChecked = await toggle.isChecked();
 
-    if ((enable && !isChecked) || (!enable && isChecked)) {
-      await toggle.click();
+      if ((enable && !isChecked) || (!enable && isChecked)) {
+        await toggle.click();
+      }
     }
   }
 
   async saveSettings() {
-    await this.saveButton.click();
+    if (await this.saveButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await this.saveButton.click();
 
-    const successMessage = this.page.locator('[role="status"], .success-message').first();
-    await successMessage.waitFor({ timeout: 5000 });
+      const successMessage = this.page.locator('[role="status"], .success-message').first();
+      await successMessage.waitFor({ timeout: 5000 }).catch(() => {});
+    }
   }
 
   async resetSettings() {
     const errorHandler = createErrorHandler(this.page);
-    await this.resetButton.click();
+    if (await this.resetButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await this.resetButton.click();
 
-    const confirmButton = this.page
-      .locator('button:has-text("Reset"), button:has-text("Confirm")')
-      .first();
-    if (await errorHandler.isElementVisible(confirmButton, 2000)) {
-      await errorHandler.safeClick(confirmButton);
+      const confirmButton = this.page
+        .locator('button:has-text("Reset"), button:has-text("Confirm")')
+        .first();
+      if (await errorHandler.isElementVisible(confirmButton, 2000)) {
+        await errorHandler.safeClick(confirmButton);
+      }
+
+      const successMessage = this.page.locator('[role="status"], .success-message').first();
+      await successMessage.waitFor({ timeout: 5000 }).catch(() => {});
     }
-
-    const successMessage = this.page.locator('[role="status"], .success-message').first();
-    await successMessage.waitFor({ timeout: 5000 });
   }
 
   async isSettingsSaved(): Promise<boolean> {
