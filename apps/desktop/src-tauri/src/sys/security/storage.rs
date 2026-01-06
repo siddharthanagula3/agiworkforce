@@ -131,7 +131,7 @@ impl SecureStorage {
         #[cfg(test)]
         {
             let _ = (provider, api_key);
-            return Ok(());
+            Ok(())
         }
 
         #[cfg(not(test))]
@@ -151,7 +151,7 @@ impl SecureStorage {
         #[cfg(test)]
         {
             let _ = provider;
-            return Ok("dummy_api_key".to_string());
+            Ok("dummy_api_key".to_string())
         }
 
         #[cfg(not(test))]
@@ -169,7 +169,7 @@ impl SecureStorage {
         #[cfg(test)]
         {
             let _ = provider;
-            return Ok(());
+            Ok(())
         }
 
         #[cfg(not(test))]
@@ -187,7 +187,7 @@ impl SecureStorage {
         #[cfg(test)]
         {
             let _ = salt;
-            return Ok(());
+            Ok(())
         }
 
         #[cfg(not(test))]
