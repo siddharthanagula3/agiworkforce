@@ -101,11 +101,13 @@ export async function proxy(request: NextRequest) {
       },
     });
 
+    // Use getUser() instead of getSession() to ensure proper session refresh
+    // and cookie updates (important for Next.js 16 proxy pattern)
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!user) {
       const redirectUrl = new URL('/login', request.url);
       redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
@@ -114,7 +116,7 @@ export async function proxy(request: NextRequest) {
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('status, plan_tier, current_period_end')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     const activeStatuses = ['active', 'trialing'];
