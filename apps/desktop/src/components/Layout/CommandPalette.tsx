@@ -120,7 +120,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
             <Command.Input
               autoFocus
               placeholder="Type a command or search..."
-              className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-12 w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
               value={search}
               onValueChange={setSearch}
             />
@@ -184,7 +184,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
                         {item.icon && (
                           <item.icon
                             className={cn(
-                              'h-4 w-4 text-muted-foreground flex-shrink-0',
+                              'h-4 w-4 text-muted-foreground shrink-0',
                               item.active && 'text-primary',
                             )}
                           />
@@ -196,7 +196,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {item.subtitle && <span className="truncate">{item.subtitle}</span>}
                             {stats.lastUsed && (
-                              <span className="flex items-center gap-1 flex-shrink-0">
+                              <span className="flex items-center gap-1 shrink-0">
                                 <Clock className="h-3 w-3" />
                                 {formatLastUsed(stats.lastUsed)}
                               </span>
@@ -204,7 +204,7 @@ export const CommandPalette = ({ open, onOpenChange, options }: CommandPalettePr
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         {stats.executionCount > 1 && (
                           <span className="flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
                             <TrendingUp className="h-3 w-3" />

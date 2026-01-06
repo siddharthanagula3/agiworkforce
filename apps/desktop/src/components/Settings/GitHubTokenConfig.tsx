@@ -1,12 +1,11 @@
 import { invoke } from '@/lib/tauri-mock';
 import { AlertCircle, Check, Eye, EyeOff, Github, Loader2, Trash2 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { Button } from '../ui/Button';
 
 export const GitHubTokenConfig: React.FC = () => {
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [tokenSet, setTokenSet] = useState(false);
   const [validationStatus, setValidationStatus] = useState<
     'idle' | 'validating' | 'valid' | 'invalid'
@@ -14,80 +13,81 @@ export const GitHubTokenConfig: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  const handleValidateToken = async () => {
+  // React 19: useTransition for async operations with built-in pending state
+  const [isPending, startTransition] = useTransition();
+
+  const handleValidateToken = () => {
     if (!token.trim()) {
       setErrorMessage('Please enter a GitHub token');
       setValidationStatus('invalid');
       return;
     }
 
-    setLoading(true);
-    setValidationStatus('validating');
-    setErrorMessage('');
+    startTransition(async () => {
+      setValidationStatus('validating');
+      setErrorMessage('');
 
-    try {
-      // Validate token against GitHub API
-      const response = await fetch('https://api.github.com/user', {
-        headers: {
-          Authorization: `token ${token}`,
-          Accept: 'application/vnd.github.v3+json',
-        },
-      });
+      try {
+        // Validate token against GitHub API
+        const response = await fetch('https://api.github.com/user', {
+          headers: {
+            Authorization: `token ${token}`,
+            Accept: 'application/vnd.github.v3+json',
+          },
+        });
 
-      if (!response.ok) {
-        throw new Error('Invalid token: Unable to authenticate with GitHub');
+        if (!response.ok) {
+          throw new Error('Invalid token: Unable to authenticate with GitHub');
+        }
+
+        const userData = (await response.json()) as { login?: string };
+
+        // Store token in OS keyring via Tauri
+        await invoke('mcp_set_credential', {
+          service: 'github',
+          account: 'github_pat',
+          password: token,
+        });
+
+        setValidationStatus('valid');
+        setSuccessMessage(`Successfully authenticated as ${userData.login}`);
+        setTokenSet(true);
+        setToken('');
+
+        // Clear messages after 5 seconds
+        setTimeout(() => {
+          setSuccessMessage('');
+          setValidationStatus('idle');
+        }, 5000);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to validate token';
+        setErrorMessage(errorMsg);
+        setValidationStatus('invalid');
       }
-
-      const userData = (await response.json()) as { login?: string };
-
-      // Store token in OS keyring via Tauri
-      await invoke('mcp_set_credential', {
-        service: 'github',
-        account: 'github_pat',
-        password: token,
-      });
-
-      setValidationStatus('valid');
-      setSuccessMessage(`Successfully authenticated as ${userData.login}`);
-      setTokenSet(true);
-      setToken('');
-
-      // Clear messages after 5 seconds
-      setTimeout(() => {
-        setSuccessMessage('');
-        setValidationStatus('idle');
-      }, 5000);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to validate token';
-      setErrorMessage(errorMsg);
-      setValidationStatus('invalid');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
-  const handleRemoveToken = async () => {
-    setLoading(true);
-    try {
-      await invoke('mcp_delete_credential', {
-        service: 'github',
-        account: 'github_pat',
-      });
+  const handleRemoveToken = () => {
+    startTransition(async () => {
+      try {
+        await invoke('mcp_delete_credential', {
+          service: 'github',
+          account: 'github_pat',
+        });
 
-      setTokenSet(false);
-      setToken('');
-      setValidationStatus('idle');
-      setSuccessMessage('GitHub token removed');
+        setTokenSet(false);
+        setToken('');
+        setValidationStatus('idle');
+        setSuccessMessage('GitHub token removed');
 
-      setTimeout(() => {
-        setSuccessMessage('');
-      }, 5000);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to remove token';
-      setErrorMessage(errorMsg);
-    } finally {
-      setLoading(false);
-    }
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 5000);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to remove token';
+        setErrorMessage(errorMsg);
+      }
+    });
   };
 
   return (
@@ -138,7 +138,7 @@ export const GitHubTokenConfig: React.FC = () => {
                 }
               }}
               placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              className="w-full rounded-lg border border-border bg-background px-4 py-2 pr-10 text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-background px-4 py-2 pr-10 text-foreground placeholder-muted-foreground focus:border-primary focus:outline-hidden"
             />
             <button
               onClick={() => setShowToken(!showToken)}
@@ -151,7 +151,7 @@ export const GitHubTokenConfig: React.FC = () => {
           {/* Error State */}
           {validationStatus === 'invalid' && errorMessage && (
             <div className="flex items-start gap-2 rounded-lg bg-red-500/10 p-3">
-              <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 shrink-0" />
               <p className="text-sm text-red-300">{errorMessage}</p>
             </div>
           )}
@@ -159,20 +159,20 @@ export const GitHubTokenConfig: React.FC = () => {
           {/* Valid State */}
           {validationStatus === 'valid' && successMessage && (
             <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 p-3">
-              <Check className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+              <Check className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0" />
               <p className="text-sm text-emerald-300">{successMessage}</p>
             </div>
           )}
 
-          {/* Buttons */}
+          {/* Buttons - React 19: isPending replaces manual loading state */}
           <div className="flex gap-2">
             <Button
               onClick={handleValidateToken}
-              disabled={loading || !token.trim() || validationStatus === 'validating'}
+              disabled={isPending || !token.trim() || validationStatus === 'validating'}
               variant="default"
               className="flex-1"
             >
-              {validationStatus === 'validating' ? (
+              {validationStatus === 'validating' || isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Validating...
@@ -198,12 +198,12 @@ export const GitHubTokenConfig: React.FC = () => {
             </div>
             <Button
               onClick={handleRemoveToken}
-              disabled={loading}
+              disabled={isPending}
               variant="outline"
               size="sm"
               className="text-red-400 hover:text-red-300 hover:border-red-400/50"
             >
-              {loading ? (
+              {isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
@@ -223,7 +223,7 @@ export const GitHubTokenConfig: React.FC = () => {
       {/* Success Message (for removal) */}
       {successMessage && tokenSet === false && (
         <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 p-3">
-          <Check className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+          <Check className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0" />
           <p className="text-sm text-emerald-300">{successMessage}</p>
         </div>
       )}

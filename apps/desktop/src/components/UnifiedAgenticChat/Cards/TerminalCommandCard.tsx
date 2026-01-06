@@ -69,7 +69,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
               isSuccess
                 ? 'text-green-500 bg-green-50 dark:bg-green-900/20'
                 : 'text-red-500 bg-red-50 dark:bg-red-900/20'
-            } flex-shrink-0`}
+            } shrink-0`}
           >
             <Terminal size={20} />
           </div>
@@ -100,7 +100,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
               </div>
               <button
                 onClick={handleCopyCommand}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors shrink-0"
                 title="Copy command"
               >
                 <Copy size={14} className="text-gray-600 dark:text-gray-400" />
@@ -133,7 +133,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
         </div>
 
         {}
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+        <div className="flex items-center gap-1 shrink-0 ml-2">
           {enableRerun && onRerun && (
             <button
               onClick={onRerun}

@@ -224,7 +224,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
                 }
               }}
               placeholder="Search terminal output..."
-              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
             <Button size="sm" onClick={handleSearch}>
               Search

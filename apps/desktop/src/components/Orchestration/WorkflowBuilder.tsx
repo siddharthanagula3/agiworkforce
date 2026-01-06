@@ -78,7 +78,7 @@ export const WorkflowBuilder: React.FC = () => {
             type="text"
             value={workflowName}
             onChange={(e) => setWorkflowName(e.target.value)}
-            className="text-xl font-semibold border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2"
+            className="text-xl font-semibold border-none focus:outline-hidden focus:ring-2 focus:ring-blue-500 rounded px-2"
             placeholder="Workflow Name"
           />
           <button
@@ -117,7 +117,7 @@ export const WorkflowBuilder: React.FC = () => {
             <textarea
               value={workflowDescription}
               onChange={(e) => setWorkflowDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               rows={3}
               placeholder="Enter workflow description"
             />

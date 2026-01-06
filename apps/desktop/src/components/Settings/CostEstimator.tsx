@@ -63,7 +63,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
@@ -87,7 +87,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
         {}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {}
-          <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="p-4 bg-linear-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                 Total Usage
@@ -103,7 +103,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </div>
 
           {}
-          <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border border-green-200 dark:border-green-800">
+          <div className="p-4 bg-linear-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border border-green-200 dark:border-green-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-green-700 dark:text-green-300">
                 Monthly Projection
@@ -124,7 +124,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
           </div>
 
           {}
-          <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-800">
+          <div className="p-4 bg-linear-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
                 Avg per Message
@@ -204,7 +204,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
                           {index + 1}
                         </span>
                         <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -220,7 +220,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
-                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all"
+                        className="bg-linear-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>

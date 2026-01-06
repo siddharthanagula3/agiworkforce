@@ -54,21 +54,21 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
           className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-charcoal-700 hover:bg-gray-150 dark:hover:bg-charcoal-650 cursor-pointer transition-colors border-b border-gray-200 dark:border-gray-700"
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-lg flex-shrink-0">{getIcon(panel.type)}</span>
+            <span className="text-lg shrink-0">{getIcon(panel.type)}</span>
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               {getTitle(panel.type)}
             </span>
             {panel.metadata &&
               'duration' in panel.metadata &&
               panel.metadata['duration'] != null && (
-                <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto flex-shrink-0">
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto shrink-0">
                   {String(panel.metadata['duration'])}ms
                 </span>
               )}
             {panel.metadata && 'status' in panel.metadata && panel.metadata['status'] != null && (
               <span
                 className={cn(
-                  'text-xs font-medium px-2 py-0.5 rounded flex-shrink-0',
+                  'text-xs font-medium px-2 py-0.5 rounded shrink-0',
                   String(panel.metadata['status']) === 'success'
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                     : String(panel.metadata['status']) === 'error'
@@ -81,7 +81,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
             )}
           </div>
 
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();

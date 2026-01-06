@@ -39,7 +39,7 @@ impl DraftManager {
         let db = self.db.lock().unwrap();
 
         let mut stmt = db.prepare(
-            "SELECT conversation_id, content, attachments, focus_mode, saved_a
+            "SELECT conversation_id, content, attachments, focus_mode, saved_at
              FROM message_drafts
              WHERE conversation_id = ?1"
         )?;

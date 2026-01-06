@@ -127,12 +127,12 @@ export function MyWorkflowsTab() {
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-xl font-bold">{workflow.title}</h3>
                         {workflow.is_featured && (
-                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white">
+                          <Badge className="bg-linear-to-r from-yellow-400 to-orange-400 text-white">
                             Featured
                           </Badge>
                         )}
                         {workflow.is_trending && (
-                          <Badge className="bg-gradient-to-r from-pink-500 to-rose-500 text-white">
+                          <Badge className="bg-linear-to-r from-pink-500 to-rose-500 text-white">
                             🔥 Trending
                           </Badge>
                         )}

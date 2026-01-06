@@ -153,3 +153,86 @@ export type McpEventPayload =
   | McpConnectionChangedPayload
   | McpToolsUpdatedPayload
   | McpSystemInitializedPayload;
+
+// MCPB Bundle Types
+export interface McpBundle {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  category: McpBundleCategory;
+  iconUrl?: string;
+  npmPackage?: string;
+  githubUrl?: string;
+  documentationUrl?: string;
+  tools: BundleTool[];
+  configTemplate: McpServerConfig;
+  requiredCredentials: RequiredCredential[];
+  rating: number;
+  downloads: number;
+  verified: boolean;
+  featured: boolean;
+  tags: string[];
+  installed: boolean;
+  installedVersion?: string;
+  updateAvailable: boolean;
+}
+
+export type McpBundleCategory =
+  | 'search'
+  | 'automation'
+  | 'data'
+  | 'productivity'
+  | 'development'
+  | 'communication'
+  | 'ai'
+  | 'analytics'
+  | 'other';
+
+export interface BundleTool {
+  name: string;
+  description: string;
+  parameters: BundleToolParam[];
+}
+
+export interface BundleToolParam {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface RequiredCredential {
+  key: string;
+  displayName: string;
+  description: string;
+  required: boolean;
+  envVar?: string;
+  placeholder?: string;
+}
+
+export interface BundleInstallProgress {
+  bundleId: string;
+  status: BundleInstallStatus;
+  progress: number;
+  message: string;
+  error?: string;
+}
+
+export type BundleInstallStatus =
+  | 'pending'
+  | 'downloading'
+  | 'installing'
+  | 'configuring'
+  | 'completed'
+  | 'failed';
+
+export interface McpbEventPayload {
+  type: 'install_started' | 'install_progress' | 'install_completed' | 'install_failed';
+  bundleId: string;
+  bundleName?: string;
+  progress?: number;
+  message?: string;
+  error?: string;
+}

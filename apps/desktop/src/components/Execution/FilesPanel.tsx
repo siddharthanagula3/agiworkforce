@@ -263,7 +263,7 @@ function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
 
         {}
         {file.accepted !== null && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {file.accepted ? (
               <Check className="h-4 w-4 text-green-500" />
             ) : (

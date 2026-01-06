@@ -1,11 +1,23 @@
+/**
+ * Account Store
+ *
+ * Manages user account state including authentication, plan tier, and credits.
+ *
+ * Updated to Zustand v5 best practices:
+ * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
+ * - TypeScript: Using create<State>()() pattern for type inference
+ * - Persist middleware: Using createJSONStorage, partialize, version
+ * - Better devtools integration with store name
+ * - subscribeWithSelector for granular subscriptions
+ */
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
 import { accountApi } from '../api/accountApi';
 
-const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const isTauri = !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
 export type { PlanTier } from '../lib/supabase';
 
@@ -114,228 +126,265 @@ const getDefaultAccount = (): DesktopAccount => {
   };
 };
 
+// Storage fallback for SSR/non-browser environments
+const storageFallback: Storage = {
+  get length() {
+    return 0;
+  },
+  clear: () => undefined,
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
+
+// Version for storage migration
+const ACCOUNT_STORE_VERSION = 1;
+
 export const useAccountStore = create<AccountState>()(
-  persist(
-    (set, get) => ({
-      account: getDefaultAccount(),
-      isAuthenticated: false,
-      isPro: false,
-      isEnterprise: false,
-      _hasHydrated: false,
+  devtools(
+    persist(
+      subscribeWithSelector((set, get) => ({
+        account: getDefaultAccount(),
+        isAuthenticated: false,
+        isPro: false,
+        isEnterprise: false,
+        _hasHydrated: false,
 
-      setAccount: (updates: Partial<DesktopAccount>) => {
-        set((state) => {
-          const updatedAccount = { ...state.account, ...updates };
-          const plan = updatedAccount.plan;
-          return {
-            account: updatedAccount,
-            isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
-            isEnterprise: plan === 'enterprise',
+        setAccount: (updates: Partial<DesktopAccount>) => {
+          set((state) => {
+            const updatedAccount = { ...state.account, ...updates };
+            const plan = updatedAccount.plan;
+            return {
+              account: updatedAccount,
+              isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
+              isEnterprise: plan === 'enterprise',
+            };
+          });
+        },
+
+        setPlan: (plan: PlanTier) => {
+          const planDisplayNames: Record<PlanTier, string> = {
+            hobby: 'Hobby',
+            free: 'Free',
+            pro: 'Pro',
+            max: 'Max',
+            enterprise: 'Enterprise',
           };
-        });
-      },
-
-      setPlan: (plan: PlanTier) => {
-        const planDisplayNames: Record<PlanTier, string> = {
-          hobby: 'Hobby',
-          free: 'Free',
-          pro: 'Pro',
-          max: 'Max',
-          enterprise: 'Enterprise',
-        };
-
-        set((state) => ({
-          account: {
-            ...state.account,
-            plan,
-            planDisplayName: planDisplayNames[plan],
-            subscriptionStatus: plan === 'free' || plan === ('none' as any) ? 'none' : 'active',
-          },
-          isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
-          isEnterprise: plan === 'enterprise',
-        }));
-      },
-
-      setDisplayName: (displayName: string) => {
-        set((state) => ({
-          account: {
-            ...state.account,
-            displayName,
-          },
-        }));
-      },
-
-      setEmail: (email: string) => {
-        set((state) => ({
-          account: {
-            ...state.account,
-            email,
-          },
-        }));
-      },
-
-      setAvatar: (avatar: string | null) => {
-        set((state) => ({
-          account: {
-            ...state.account,
-            avatar,
-          },
-        }));
-      },
-
-      setFeatureFlag: (flag: string, enabled: boolean) => {
-        set((state) => ({
-          account: {
-            ...state.account,
-            featureFlags: {
-              ...state.account.featureFlags,
-              [flag]: enabled,
-            },
-          },
-        }));
-      },
-
-      login: async (tokens: { accessToken: string; refreshToken: string }) => {
-        set((state) => ({
-          account: {
-            ...state.account,
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken,
-          },
-          isAuthenticated: true,
-        }));
-      },
-
-      logout: async () => {
-        await supabaseAuth.signOut();
-
-        set({
-          account: getDefaultAccount(),
-          isAuthenticated: false,
-          isPro: false,
-          isEnterprise: false,
-        });
-      },
-
-      syncWithBackend: async () => {
-        console.log('[Account] Starting syncWithBackend...');
-        await supabaseAuth.refreshUserData();
-
-        const authState = supabaseAuth.getState();
-        console.log('[Account] Auth state after refresh:', {
-          hasUser: !!authState.user,
-          hasSession: !!authState.session,
-          subscription: authState.subscription,
-          planTier: authState.subscription?.plan_tier,
-        });
-
-        if (!authState.user) {
-          console.warn('[Account] No authenticated user - skipping sync');
-          return;
-        }
-
-        try {
-          // Determine plan tier - prefer fetched subscription data, but preserve valid non-free plan if fetch failed
-          let planTier: PlanTier;
-          const currentState = get();
-          if (authState.subscription?.plan_tier) {
-            planTier = asPlanTier(authState.subscription.plan_tier);
-            console.log('[Account] syncWithBackend - Using fetched plan tier:', planTier);
-          } else {
-            // Subscription fetch returned null - preserve non-free plan if same user
-            const currentPlan = currentState.account.plan;
-            const currentUserId = currentState.account.id;
-            if (currentUserId === authState.user.id && currentPlan && currentPlan !== 'free') {
-              planTier = currentPlan;
-              console.log(
-                '[Account] syncWithBackend - Preserving existing non-free plan:',
-                planTier,
-              );
-            } else {
-              planTier = 'free';
-              console.log('[Account] syncWithBackend - Setting plan to free');
-            }
-          }
-
-          // Fetch credits from API if we have a session
-          let credits: CreditBalance | null = null;
-          if (authState.session) {
-            try {
-              const profile = await accountApi.fetchUserProfile(authState.session.access_token);
-              credits = profile.credits || null;
-            } catch (error) {
-              console.warn('[Account] Failed to fetch credits:', error);
-              // Continue without credits - not critical
-            }
-          }
 
           set((state) => ({
             account: {
               ...state.account,
-              id: authState.user?.id || null,
-              email: authState.user?.email || null,
-              displayName: authState.profile?.display_name || null,
-              avatar: authState.profile?.avatar_url || null,
-              plan: planTier,
-              planDisplayName: PLAN_DISPLAY_NAMES[planTier],
-              subscriptionStatus: (authState.subscription?.status as SubscriptionStatus) || 'none',
-              currentPeriodEnd: authState.subscription?.current_period_end
-                ? new Date(authState.subscription.current_period_end).getTime()
-                : null,
-              stripeCustomerId: authState.subscription?.stripe_customer_id || null,
-              featureFlags: authState.featureFlags,
-              credits,
-              lastSyncedAt: Date.now(),
+              plan,
+              planDisplayName: planDisplayNames[plan],
+              subscriptionStatus: plan === 'free' || plan === ('none' as any) ? 'none' : 'active',
+            },
+            isPro: plan === 'hobby' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
+            isEnterprise: plan === 'enterprise',
+          }));
+        },
+
+        setDisplayName: (displayName: string) => {
+          set((state) => ({
+            account: {
+              ...state.account,
+              displayName,
+            },
+          }));
+        },
+
+        setEmail: (email: string) => {
+          set((state) => ({
+            account: {
+              ...state.account,
+              email,
+            },
+          }));
+        },
+
+        setAvatar: (avatar: string | null) => {
+          set((state) => ({
+            account: {
+              ...state.account,
+              avatar,
+            },
+          }));
+        },
+
+        setFeatureFlag: (flag: string, enabled: boolean) => {
+          set((state) => ({
+            account: {
+              ...state.account,
+              featureFlags: {
+                ...state.account.featureFlags,
+                [flag]: enabled,
+              },
+            },
+          }));
+        },
+
+        login: async (tokens: { accessToken: string; refreshToken: string }) => {
+          set((state) => ({
+            account: {
+              ...state.account,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
             },
             isAuthenticated: true,
-            isPro:
-              planTier === 'pro' ||
-              planTier === 'max' ||
-              planTier === 'enterprise' ||
-              planTier === 'hobby',
-            isEnterprise: planTier === 'enterprise',
           }));
-        } catch (error) {
-          console.error('Failed to sync with backend:', error);
-        }
-      },
-
-      simulatePlan: (plan: PlanTier) => {
-        get().setPlan(plan);
-      },
-
-      reset: () => {
-        set({
-          account: getDefaultAccount(),
-          isAuthenticated: false,
-          isPro: false,
-          isEnterprise: false,
-        });
-      },
-    }),
-    {
-      name: 'account-storage',
-      partialize: (state) => ({
-        // Only persist non-subscription fields to avoid stale plan data on reload
-        // Plan/subscription data should always be fetched fresh from backend
-        account: {
-          id: state.account.id,
-          email: state.account.email,
-          displayName: state.account.displayName,
-          avatar: state.account.avatar,
-          featureFlags: state.account.featureFlags,
-          lastSyncedAt: state.account.lastSyncedAt,
-          // DO NOT persist: plan, planDisplayName, subscriptionStatus, currentPeriodEnd,
-          // stripeCustomerId, credits, accessToken, refreshToken
-          // These must be fetched fresh from the backend on each app start
         },
-      }),
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state._hasHydrated = true;
-        }
+
+        logout: async () => {
+          await supabaseAuth.signOut();
+
+          set({
+            account: getDefaultAccount(),
+            isAuthenticated: false,
+            isPro: false,
+            isEnterprise: false,
+          });
+        },
+
+        syncWithBackend: async () => {
+          console.log('[Account] Starting syncWithBackend...');
+          await supabaseAuth.refreshUserData();
+
+          const authState = supabaseAuth.getState();
+          console.log('[Account] Auth state after refresh:', {
+            hasUser: !!authState.user,
+            hasSession: !!authState.session,
+            subscription: authState.subscription,
+            planTier: authState.subscription?.plan_tier,
+          });
+
+          if (!authState.user) {
+            console.warn('[Account] No authenticated user - skipping sync');
+            return;
+          }
+
+          try {
+            // Determine plan tier - ALWAYS use fetched subscription data
+            // If fetch failed, force to free tier for security (prevents stale subscription abuse)
+            let planTier: PlanTier;
+            if (authState.subscription?.plan_tier) {
+              planTier = asPlanTier(authState.subscription.plan_tier);
+              console.log('[Account] syncWithBackend - Using fetched plan tier:', planTier);
+            } else {
+              // Subscription fetch failed or returned null - force to free tier for security
+              // This prevents users from retaining paid features after subscription cancellation
+              // The UI will prompt them to refresh if this is a temporary network issue
+              planTier = 'free';
+              console.log(
+                '[Account] syncWithBackend - Forcing free tier (subscription fetch failed or no subscription found)',
+              );
+            }
+
+            // Fetch credits from API if we have a session
+            let credits: CreditBalance | null = null;
+            if (authState.session) {
+              try {
+                const profile = await accountApi.fetchUserProfile(authState.session.access_token);
+                credits = profile.credits || null;
+              } catch (error) {
+                console.warn('[Account] Failed to fetch credits:', error);
+                // Continue without credits - not critical
+              }
+            }
+
+            set((state) => ({
+              account: {
+                ...state.account,
+                id: authState.user?.id || null,
+                email: authState.user?.email || null,
+                displayName: authState.profile?.display_name || null,
+                avatar: authState.profile?.avatar_url || null,
+                plan: planTier,
+                planDisplayName: PLAN_DISPLAY_NAMES[planTier],
+                subscriptionStatus:
+                  (authState.subscription?.status as SubscriptionStatus) || 'none',
+                currentPeriodEnd: authState.subscription?.current_period_end
+                  ? new Date(authState.subscription.current_period_end).getTime()
+                  : null,
+                stripeCustomerId: authState.subscription?.stripe_customer_id || null,
+                featureFlags: authState.featureFlags,
+                credits,
+                lastSyncedAt: Date.now(),
+              },
+              isAuthenticated: true,
+              isPro:
+                planTier === 'pro' ||
+                planTier === 'max' ||
+                planTier === 'enterprise' ||
+                planTier === 'hobby',
+              isEnterprise: planTier === 'enterprise',
+            }));
+
+            // Sync credits to billing store for pre-flight credit checks
+            if (credits) {
+              const { useBillingStore } = await import('./billingStore');
+              useBillingStore.getState().updateCredits({
+                remaining_cents: credits.remaining_cents ?? 0,
+                daily_used: credits.daily_used_cents,
+                daily_limit: credits.daily_limit_cents,
+                daily_reset_at: credits.daily_reset_at,
+              });
+              console.log('[Account] Synced credits to billing store:', credits.remaining_cents);
+            }
+          } catch (error) {
+            console.error('Failed to sync with backend:', error);
+          }
+        },
+
+        simulatePlan: (plan: PlanTier) => {
+          get().setPlan(plan);
+        },
+
+        reset: () => {
+          set({
+            account: getDefaultAccount(),
+            isAuthenticated: false,
+            isPro: false,
+            isEnterprise: false,
+          });
+        },
+      })),
+      {
+        name: 'account-storage',
+        version: ACCOUNT_STORE_VERSION,
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
+        ),
+        partialize: (state) => ({
+          // Only persist non-subscription fields to avoid stale plan data on reload
+          // Plan/subscription data should always be fetched fresh from backend
+          account: {
+            id: state.account.id,
+            email: state.account.email,
+            displayName: state.account.displayName,
+            avatar: state.account.avatar,
+            lastSyncedAt: state.account.lastSyncedAt,
+            // DO NOT persist: plan, planDisplayName, subscriptionStatus, currentPeriodEnd,
+            // stripeCustomerId, credits, accessToken, refreshToken, featureFlags
+            // These must be fetched fresh from the backend on each app start
+            // featureFlags should NOT be persisted to ensure they are cleared on logout
+            // and refreshed on next login
+          },
+        }),
+        onRehydrateStorage: () => (state) => {
+          if (state) {
+            state._hasHydrated = true;
+          }
+        },
+        migrate: (persistedState: unknown, version: number) => {
+          // Migration logic for future schema changes
+          if (version === 0) {
+            return persistedState as AccountState;
+          }
+          return persistedState as AccountState;
+        },
       },
-    },
+    ),
+    { name: 'AccountStore', enabled: process.env['NODE_ENV'] === 'development' },
   ),
 );
 
@@ -478,18 +527,11 @@ export function initializeAccountStore(): () => void {
           ')',
         );
       } else if (subscriptionFetchStatus === 'failed') {
-        // Fetch failed - preserve non-free plan if same user, else schedule retry
-        const currentPlan = store.account.plan;
-        const currentUserId = store.account.id;
-
-        if (currentUserId === authState.user.id && currentPlan && currentPlan !== 'free') {
-          planTier = currentPlan;
-          console.log('[Account] Preserving existing non-free plan:', planTier, '(fetch failed)');
-        } else {
-          planTier = 'free';
-          console.log('[Account] Setting plan to free (fetch failed, scheduling retry)');
-          scheduleSubscriptionRetry(authState.user.id);
-        }
+        // Fetch failed - force to free tier for security (prevents stale subscription abuse)
+        // Schedule retry to recover if this is a temporary network issue
+        planTier = 'free';
+        console.log('[Account] Forcing free tier for security (fetch failed, scheduling retry)');
+        scheduleSubscriptionRetry(authState.user.id);
       } else {
         // subscriptionFetchStatus === 'succeeded' but no subscription data = genuinely free tier
         planTier = 'free';
@@ -531,6 +573,21 @@ export function initializeAccountStore(): () => void {
         refreshToken: authState.session.refresh_token,
         lastSyncedAt: Date.now(),
       });
+
+      // Sync credits to billing store for pre-flight credit checks
+      if (credits) {
+        const { useBillingStore } = await import('./billingStore');
+        useBillingStore.getState().updateCredits({
+          remaining_cents: credits.remaining_cents ?? 0,
+          daily_used: credits.daily_used_cents,
+          daily_limit: credits.daily_limit_cents,
+          daily_reset_at: credits.daily_reset_at,
+        });
+        console.log(
+          '[Account] Synced credits to billing store on auth change:',
+          credits.remaining_cents,
+        );
+      }
 
       // Sync access token to Rust backend keyring for ManagedCloud provider
       // Auto-initialize ManagedCloud provider if user is authenticated

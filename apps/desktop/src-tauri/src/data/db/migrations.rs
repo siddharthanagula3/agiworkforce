@@ -1,6 +1,35 @@
 use rusqlite::{Connection, Result};
 
-const CURRENT_VERSION: i32 = 42;
+const CURRENT_VERSION: i32 = 45;
+
+/// Run a migration within a transaction for atomicity.
+/// If the migration fails, the transaction is rolled back and the database remains unchanged.
+fn run_migration_in_transaction<F>(conn: &Connection, version: i32, migration_fn: F) -> Result<()>
+where
+    F: FnOnce(&Connection) -> Result<()>,
+{
+    // SQLite doesn't support nested transactions, so we use SAVEPOINT for safety
+    let savepoint_name = format!("migration_v{}", version);
+    conn.execute(&format!("SAVEPOINT {}", savepoint_name), [])?;
+
+    match migration_fn(conn) {
+        Ok(()) => {
+            // Migration succeeded - record the version and release savepoint
+            conn.execute(
+                "INSERT INTO schema_version (version) VALUES (?1)",
+                [version],
+            )?;
+            conn.execute(&format!("RELEASE {}", savepoint_name), [])?;
+            Ok(())
+        }
+        Err(e) => {
+            // Migration failed - rollback to savepoint
+            let _ = conn.execute(&format!("ROLLBACK TO {}", savepoint_name), []);
+            let _ = conn.execute(&format!("RELEASE {}", savepoint_name), []);
+            Err(e)
+        }
+    }
+}
 
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     conn.execute("PRAGMA foreign_keys = ON", [])?;
@@ -24,220 +53,322 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version > CURRENT_VERSION {
         return Ok(());
     }
+
+    // Each migration is wrapped in a transaction for atomicity
     if current_version < 1 {
-        apply_migration_v1(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [1])?;
+        run_migration_in_transaction(conn, 1, apply_migration_v1)?;
     }
 
     if current_version < 2 {
-        apply_migration_v2(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [2])?;
+        run_migration_in_transaction(conn, 2, apply_migration_v2)?;
     }
 
     if current_version < 3 {
-        apply_migration_v3(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [3])?;
+        run_migration_in_transaction(conn, 3, apply_migration_v3)?;
     }
 
     if current_version < 4 {
-        apply_migration_v4(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [4])?;
+        run_migration_in_transaction(conn, 4, apply_migration_v4)?;
     }
 
     if current_version < 5 {
-        apply_migration_v5(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [5])?;
+        run_migration_in_transaction(conn, 5, apply_migration_v5)?;
     }
 
     if current_version < 6 {
-        apply_migration_v6(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [6])?;
+        run_migration_in_transaction(conn, 6, apply_migration_v6)?;
     }
 
     if current_version < 7 {
-        apply_migration_v7(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [7])?;
+        run_migration_in_transaction(conn, 7, apply_migration_v7)?;
     }
 
     if current_version < 8 {
-        apply_migration_v8(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
+        run_migration_in_transaction(conn, 8, apply_migration_v8)?;
     }
 
     if current_version < 9 {
-        apply_migration_v9(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
+        run_migration_in_transaction(conn, 9, apply_migration_v9)?;
     }
 
     if current_version < 10 {
-        apply_migration_v10(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [10])?;
+        run_migration_in_transaction(conn, 10, apply_migration_v10)?;
     }
 
     if current_version < 11 {
-        apply_migration_v11(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [11])?;
+        run_migration_in_transaction(conn, 11, apply_migration_v11)?;
     }
 
     if current_version < 12 {
-        apply_migration_v12(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [12])?;
+        run_migration_in_transaction(conn, 12, apply_migration_v12)?;
     }
 
     if current_version < 13 {
-        apply_migration_v13(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [13])?;
+        run_migration_in_transaction(conn, 13, apply_migration_v13)?;
     }
 
     if current_version < 14 {
-        apply_migration_v14(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [14])?;
+        run_migration_in_transaction(conn, 14, apply_migration_v14)?;
     }
 
     if current_version < 15 {
-        apply_migration_v15(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [15])?;
+        run_migration_in_transaction(conn, 15, apply_migration_v15)?;
     }
 
     if current_version < 16 {
-        apply_migration_v16(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [16])?;
+        run_migration_in_transaction(conn, 16, apply_migration_v16)?;
     }
 
     if current_version < 17 {
-        apply_migration_v17(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [17])?;
+        run_migration_in_transaction(conn, 17, apply_migration_v17)?;
     }
 
     if current_version < 18 {
-        apply_migration_v18(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [18])?;
+        run_migration_in_transaction(conn, 18, apply_migration_v18)?;
     }
 
     if current_version < 19 {
-        apply_migration_v19(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [19])?;
+        run_migration_in_transaction(conn, 19, apply_migration_v19)?;
     }
 
     if current_version < 20 {
-        apply_migration_v20(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [20])?;
+        run_migration_in_transaction(conn, 20, apply_migration_v20)?;
     }
 
     if current_version < 21 {
-        apply_migration_v21(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [21])?;
+        run_migration_in_transaction(conn, 21, apply_migration_v21)?;
     }
 
     if current_version < 22 {
-        apply_migration_v22(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [22])?;
+        run_migration_in_transaction(conn, 22, apply_migration_v22)?;
     }
 
     if current_version < 23 {
-        apply_migration_v23(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [23])?;
+        run_migration_in_transaction(conn, 23, apply_migration_v23)?;
     }
 
     if current_version < 24 {
-        apply_migration_v24(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [24])?;
+        run_migration_in_transaction(conn, 24, apply_migration_v24)?;
     }
 
     if current_version < 25 {
-        apply_migration_v25(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [25])?;
+        run_migration_in_transaction(conn, 25, apply_migration_v25)?;
     }
 
     if current_version < 26 {
-        apply_migration_v26(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [26])?;
+        run_migration_in_transaction(conn, 26, apply_migration_v26)?;
     }
 
     if current_version < 27 {
-        apply_migration_v27(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [27])?;
+        run_migration_in_transaction(conn, 27, apply_migration_v27)?;
     }
 
     if current_version < 28 {
-        apply_migration_v28(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [28])?;
+        run_migration_in_transaction(conn, 28, apply_migration_v28)?;
     }
 
     if current_version < 29 {
-        apply_migration_v29(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [29])?;
+        run_migration_in_transaction(conn, 29, apply_migration_v29)?;
     }
 
     if current_version < 30 {
-        apply_migration_v30(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [30])?;
+        run_migration_in_transaction(conn, 30, apply_migration_v30)?;
     }
 
     if current_version < 31 {
-        apply_migration_v31(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [31])?;
+        run_migration_in_transaction(conn, 31, apply_migration_v31)?;
     }
 
     if current_version < 32 {
-        apply_migration_v32(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [32])?;
+        run_migration_in_transaction(conn, 32, apply_migration_v32)?;
     }
 
     if current_version < 33 {
-        apply_migration_v33(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [33])?;
+        run_migration_in_transaction(conn, 33, apply_migration_v33)?;
     }
 
     if current_version < 34 {
-        apply_migration_v34(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [34])?;
+        run_migration_in_transaction(conn, 34, apply_migration_v34)?;
     }
 
     if current_version < 35 {
-        apply_migration_v35(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [35])?;
+        run_migration_in_transaction(conn, 35, apply_migration_v35)?;
     }
 
     if current_version < 36 {
-        apply_migration_v36(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [36])?;
+        run_migration_in_transaction(conn, 36, apply_migration_v36)?;
     }
 
     if current_version < 37 {
-        apply_migration_v37(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [37])?;
+        run_migration_in_transaction(conn, 37, apply_migration_v37)?;
     }
 
     if current_version < 38 {
-        apply_migration_v38(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [38])?;
+        run_migration_in_transaction(conn, 38, apply_migration_v38)?;
     }
 
     if current_version < 39 {
-        apply_migration_v39(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [39])?;
+        run_migration_in_transaction(conn, 39, apply_migration_v39)?;
     }
 
     if current_version < 40 {
-        apply_migration_v40(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [40])?;
+        run_migration_in_transaction(conn, 40, apply_migration_v40)?;
     }
 
     if current_version < 41 {
-        apply_migration_v41(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [41])?;
+        run_migration_in_transaction(conn, 41, apply_migration_v41)?;
     }
 
     if current_version < 42 {
-        apply_migration_v42(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [42])?;
+        run_migration_in_transaction(conn, 42, apply_migration_v42)?;
     }
 
     if current_version < 43 {
-        apply_migration_v43(conn)?;
-        conn.execute("INSERT INTO schema_version (version) VALUES (?1)", [43])?;
+        run_migration_in_transaction(conn, 43, apply_migration_v43)?;
     }
+
+    if current_version < 44 {
+        run_migration_in_transaction(conn, 44, apply_migration_v44)?;
+    }
+
+    if current_version < 45 {
+        run_migration_in_transaction(conn, 45, apply_migration_v45)?;
+    }
+
+    Ok(())
+}
+
+/// Migration v45: Create FTS sync triggers for messages and conversations
+/// These triggers automatically keep the FTS index in sync with the main tables
+fn apply_migration_v45(conn: &Connection) -> Result<()> {
+    // First ensure the FTS tables exist (they may have been created by fts.rs)
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+            message_id UNINDEXED,
+            conversation_id UNINDEXED,
+            content,
+            sender UNINDEXED,
+            message_type UNINDEXED,
+            timestamp UNINDEXED,
+            tokenize = 'porter unicode61 remove_diacritics 2'
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
+            conversation_id UNINDEXED,
+            title,
+            description,
+            project_id UNINDEXED,
+            timestamp UNINDEXED,
+            tokenize = 'porter unicode61 remove_diacritics 2'
+        )",
+        [],
+    )?;
+
+    // Triggers for messages FTS sync
+    // Note: We use CAST(new.id AS TEXT) because FTS stores text values
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+            INSERT INTO messages_fts(message_id, conversation_id, content, sender, message_type, timestamp)
+            VALUES (CAST(new.id AS TEXT), CAST(new.conversation_id AS TEXT), new.content, new.role, 'text', new.created_at);
+        END",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+            DELETE FROM messages_fts WHERE message_id = CAST(old.id AS TEXT);
+        END",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+            DELETE FROM messages_fts WHERE message_id = CAST(old.id AS TEXT);
+            INSERT INTO messages_fts(message_id, conversation_id, content, sender, message_type, timestamp)
+            VALUES (CAST(new.id AS TEXT), CAST(new.conversation_id AS TEXT), new.content, new.role, 'text', new.created_at);
+        END",
+        [],
+    )?;
+
+    // Triggers for conversations FTS sync
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS conversations_fts_ai AFTER INSERT ON conversations BEGIN
+            INSERT INTO conversations_fts(conversation_id, title, description, project_id, timestamp)
+            VALUES (CAST(new.id AS TEXT), new.title, '', NULL, new.created_at);
+        END",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS conversations_fts_ad AFTER DELETE ON conversations BEGIN
+            DELETE FROM conversations_fts WHERE conversation_id = CAST(old.id AS TEXT);
+        END",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS conversations_fts_au AFTER UPDATE ON conversations BEGIN
+            DELETE FROM conversations_fts WHERE conversation_id = CAST(old.id AS TEXT);
+            INSERT INTO conversations_fts(conversation_id, title, description, project_id, timestamp)
+            VALUES (CAST(new.id AS TEXT), new.title, '', NULL, new.created_at);
+        END",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v44: Create projects and project_settings tables
+fn apply_migration_v44(conn: &Connection) -> Result<()> {
+    // Create projects table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            custom_instructions TEXT NOT NULL DEFAULT '',
+            files TEXT NOT NULL DEFAULT '[]',
+            conversation_ids TEXT NOT NULL DEFAULT '[]',
+            color TEXT,
+            icon TEXT,
+            is_archived INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    // Create project_settings table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS project_settings (
+            project_id TEXT PRIMARY KEY NOT NULL,
+            default_model TEXT,
+            default_provider TEXT,
+            context_window_size INTEGER,
+            auto_archive_after_days INTEGER,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Create indexes for projects
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_updated ON projects(updated_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(is_archived)",
+        [],
+    )?;
 
     Ok(())
 }
@@ -2743,6 +2874,8 @@ fn apply_migration_v31(conn: &Connection) -> Result<()> {
 }
 
 fn apply_migration_v32(conn: &Connection) -> Result<()> {
+    // SECURITY: credentials_encrypted column must store AES-GCM encrypted data
+    // Use the encryption module in sys/security/encryption.rs before storing
     conn.execute(
         "CREATE TABLE IF NOT EXISTS messaging_connections (
             id TEXT PRIMARY KEY,
@@ -2750,7 +2883,7 @@ fn apply_migration_v32(conn: &Connection) -> Result<()> {
             platform TEXT NOT NULL CHECK(platform IN ('slack', 'whatsapp', 'teams')),
             workspace_id TEXT,
             workspace_name TEXT,
-            credentials TEXT NOT NULL,
+            credentials_encrypted TEXT NOT NULL,
             is_active INTEGER DEFAULT 1 CHECK(is_active IN (0, 1)),
             created_at INTEGER NOT NULL,
             last_used_at INTEGER
@@ -3367,14 +3500,16 @@ fn apply_migration_v40(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    // SECURITY: OAuth tokens must be encrypted before storage
+    // Use the encryption module in sys/security/encryption.rs for access_token_encrypted and refresh_token_encrypted
     conn.execute(
         "CREATE TABLE IF NOT EXISTS oauth_providers (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             provider TEXT NOT NULL CHECK(provider IN ('google', 'github', 'microsoft')),
             provider_user_id TEXT NOT NULL,
-            access_token TEXT,
-            refresh_token TEXT,
+            access_token_encrypted TEXT,
+            refresh_token_encrypted TEXT,
             expires_at TEXT,
             scope TEXT,
             created_at TEXT NOT NULL,

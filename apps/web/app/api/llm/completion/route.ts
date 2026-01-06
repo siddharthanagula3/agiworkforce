@@ -15,6 +15,49 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 
 /**
+ * Model tier requirements - maps models to minimum required subscription tier
+ * Models not listed here are available to all paid tiers (hobby+)
+ */
+const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
+  // Premium reasoning and thinking models require Max tier
+  'claude-opus-4-5': ['max', 'enterprise'],
+  'claude-opus-4-5-20251101': ['max', 'enterprise'],
+  o3: ['max', 'enterprise'],
+  'o3-mini': ['max', 'enterprise'],
+  'gpt-5': ['max', 'enterprise'],
+  'gpt-5-turbo': ['max', 'enterprise'],
+  'gemini-2.5-pro': ['max', 'enterprise'],
+  // Pro tier models
+  'claude-sonnet-4': ['pro', 'max', 'enterprise'],
+  'claude-sonnet-4-20250514': ['pro', 'max', 'enterprise'],
+  'gpt-4.5': ['pro', 'max', 'enterprise'],
+  'gpt-4.5-turbo': ['pro', 'max', 'enterprise'],
+};
+
+/**
+ * Check if a subscription tier allows access to a model
+ */
+function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
+  const modelLower = model.toLowerCase();
+  const tierLower = subscriptionTier.toLowerCase();
+
+  // Free tier has no model access through this API
+  if (tierLower === 'free') {
+    return false;
+  }
+
+  // Check if model has tier requirements
+  const requiredTiers = MODEL_TIER_REQUIREMENTS[modelLower];
+  if (!requiredTiers) {
+    // Model not in requirements map - available to all paid tiers
+    return true;
+  }
+
+  // Check if user's tier is in the allowed list
+  return requiredTiers.includes(tierLower as 'pro' | 'max' | 'enterprise');
+}
+
+/**
  * Find a cheaper alternative model when credits are insufficient
  * Returns null if no cheaper alternative is available
  */
@@ -182,6 +225,24 @@ async function handleLLMCompletion(request: NextRequest) {
 
   const llmRequest = validationResult.data;
 
+  // Check if user's subscription tier allows access to the requested model
+  if (!checkModelTierAccess(llmRequest.model, subscription.plan_tier)) {
+    const requiredTiers = MODEL_TIER_REQUIREMENTS[llmRequest.model.toLowerCase()];
+    const requiredTierDisplay = requiredTiers ? requiredTiers[0].toUpperCase() : 'PRO';
+    logger.warn(
+      {
+        userId: user.id,
+        model: llmRequest.model,
+        userTier: subscription.plan_tier,
+        requiredTiers,
+      },
+      'Model access denied due to insufficient subscription tier',
+    );
+    throw createError.forbidden(
+      `Model ${llmRequest.model} requires a ${requiredTierDisplay} subscription or higher. Please upgrade your plan to access this model.`,
+    );
+  }
+
   // Track original model for fallback detection
   const originalModel = llmRequest.model;
   let usedFallback = false;
@@ -346,9 +407,118 @@ async function handleLLMCompletion(request: NextRequest) {
   if (llmRequest.stream) {
     try {
       const stream = await LLMProviderFactory.streamRequest(provider, llmRequest);
-      // Note: For streaming, we cannot easily reconcile credits after the fact
-      // The reservation covers the estimated cost; actual usage may vary slightly
-      return new NextResponse(stream, {
+
+      // Create a transform stream that tracks usage data from SSE events
+      // and reconciles credits after streaming completes
+      const userId = user.id;
+      const modelUsed = llmRequest.model;
+      const providerUsed = provider;
+
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let buffer = '';
+
+      const transformStream = new TransformStream({
+        transform(chunk, controller) {
+          // Pass through the chunk immediately
+          controller.enqueue(chunk);
+
+          // Decode and parse SSE events to extract usage data
+          const text = new TextDecoder().decode(chunk);
+          buffer += text;
+
+          // Process complete lines
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === '[DONE]') continue;
+
+              try {
+                const event = JSON.parse(jsonStr);
+
+                // Anthropic format: message_delta with usage
+                if (event.type === 'message_delta' && event.usage) {
+                  outputTokens = event.usage.output_tokens || outputTokens;
+                }
+                // Anthropic format: message_start with input tokens
+                if (event.type === 'message_start' && event.message?.usage) {
+                  inputTokens = event.message.usage.input_tokens || inputTokens;
+                }
+                // OpenAI format: usage in final chunk
+                if (event.usage) {
+                  inputTokens = event.usage.prompt_tokens || inputTokens;
+                  outputTokens = event.usage.completion_tokens || outputTokens;
+                }
+                // Google/Gemini format
+                if (event.usageMetadata) {
+                  inputTokens = event.usageMetadata.promptTokenCount || inputTokens;
+                  outputTokens = event.usageMetadata.candidatesTokenCount || outputTokens;
+                }
+              } catch {
+                // Ignore JSON parse errors for non-JSON lines
+              }
+            }
+          }
+        },
+        async flush() {
+          // Stream complete - reconcile credits
+          const totalTokens = inputTokens + outputTokens;
+
+          if (totalTokens > 0) {
+            const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
+              promptTokens: inputTokens,
+              completionTokens: outputTokens,
+              totalTokens,
+            });
+
+            const costDifference = actualCostCents - estimatedCostCents;
+
+            if (costDifference !== 0) {
+              const adjustmentDescription =
+                costDifference > 0
+                  ? `Additional charge (streaming): ${providerUsed}/${modelUsed}`
+                  : `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`;
+
+              await CreditService.deductCredits(userId, costDifference, adjustmentDescription, {
+                provider: providerUsed,
+                model: modelUsed,
+                type: 'streaming_reconciliation',
+                estimatedCostCents,
+                actualCostCents,
+                promptTokens: inputTokens,
+                completionTokens: outputTokens,
+                totalTokens,
+              });
+
+              logger.info(
+                {
+                  userId,
+                  estimatedCostCents,
+                  actualCostCents,
+                  costDifference,
+                  inputTokens,
+                  outputTokens,
+                },
+                'Streaming credit reconciliation completed',
+              );
+            }
+          } else {
+            // No usage data received - log warning but don't refund
+            // The reservation covers worst case
+            logger.warn(
+              { userId, model: modelUsed, provider: providerUsed },
+              'No usage data received from streaming response, keeping reserved credits',
+            );
+          }
+        },
+      });
+
+      const reconciledStream = stream.pipeThrough(transformStream);
+
+      return new NextResponse(reconciledStream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',

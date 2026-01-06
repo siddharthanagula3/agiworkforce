@@ -310,7 +310,7 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
                 value={currentRequest.body || ''}
                 onChange={(e) => handleBodyChange(e.target.value)}
                 placeholder='{"key": "value"}'
-                className="w-full h-full p-3 border border-border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full h-full p-3 border border-border rounded-md font-mono text-sm resize-none focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
             </TabsContent>
 

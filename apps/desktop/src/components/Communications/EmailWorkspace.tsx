@@ -300,7 +300,7 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
                   <select
                     value={provider}
                     onChange={(event) => setProvider(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     {PROVIDER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>

@@ -4,6 +4,7 @@ import {
   type SignalingEvent,
 } from '@agiworkforce/utils';
 import { create } from 'zustand';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
 
 const SIGNALING_HTTP_URL =
   (import.meta.env?.['VITE_SIGNALING_HTTP_URL'] as string | undefined) ?? 'http://localhost:3001';
@@ -45,184 +46,201 @@ let peerConnection: RTCPeerConnection | null = null;
 let localStream: MediaStream | null = null;
 let controlChannel: RTCDataChannel | null = null;
 
-export const useConnectionStore = create<MobileCompanionState>((set, get) => {
-  const resetConnection = () => {
-    // Close signaling client
-    if (signalingClient) {
-      try {
-        signalingClient.close();
-      } catch (error) {
-        console.warn('[mobile-companion] Error closing signaling client:', error);
-      }
-      signalingClient = null;
-    }
-
-    // Close data channel
-    if (controlChannel) {
-      try {
-        controlChannel.close();
-      } catch (error) {
-        console.warn('[mobile-companion] Error closing control channel:', error);
-      }
-      controlChannel = null;
-    }
-
-    // Close peer connection
-    if (peerConnection) {
-      try {
-        peerConnection.close();
-      } catch (error) {
-        console.warn('[mobile-companion] Error closing peer connection:', error);
-      }
-      peerConnection = null;
-    }
-
-    // Stop all media tracks and release the stream
-    if (localStream) {
-      try {
-        localStream.getTracks().forEach((track) => {
+export const useConnectionStore = create<MobileCompanionState>()(
+  devtools(
+    subscribeWithSelector((set, get) => {
+      const resetConnection = () => {
+        // Close signaling client
+        if (signalingClient) {
           try {
-            track.stop();
+            signalingClient.close();
           } catch (error) {
-            console.warn('[mobile-companion] Error stopping track:', error);
+            console.warn('[mobile-companion] Error closing signaling client:', error);
           }
-        });
-      } catch (error) {
-        console.warn('[mobile-companion] Error stopping media tracks:', error);
-      }
-      localStream = null;
-    }
-  };
+          signalingClient = null;
+        }
 
-  const handleControlEvent = (message: MessageEvent<string>) => {
-    try {
-      JSON.parse(message.data) as Record<string, unknown>;
-    } catch (error) {
-      console.warn('[mobile-companion] failed to parse control payload', error);
-    }
-  };
+        // Close data channel
+        if (controlChannel) {
+          try {
+            controlChannel.close();
+          } catch (error) {
+            console.warn('[mobile-companion] Error closing control channel:', error);
+          }
+          controlChannel = null;
+        }
 
-  const handleSignalingEvent = async (event: SignalingEvent) => {
-    switch (event.type) {
-      case 'registered':
-        set({
-          status: 'waiting',
-          expiresAt: event.expiresAt,
-          peerConnected: event.peerConnected,
-          error: null,
-        });
-        break;
-      case 'peer_ready':
-        set({ peerConnected: true, status: 'pairing' });
-        await establishPeerConnection();
-        break;
-      case 'signal':
-        if (!peerConnection) {
-          console.warn('[mobile-companion] received signal without peer connection');
+        // Close peer connection
+        if (peerConnection) {
+          try {
+            peerConnection.close();
+          } catch (error) {
+            console.warn('[mobile-companion] Error closing peer connection:', error);
+          }
+          peerConnection = null;
+        }
+
+        // Stop all media tracks and release the stream
+        if (localStream) {
+          try {
+            localStream.getTracks().forEach((track) => {
+              try {
+                track.stop();
+              } catch (error) {
+                console.warn('[mobile-companion] Error stopping track:', error);
+              }
+            });
+          } catch (error) {
+            console.warn('[mobile-companion] Error stopping media tracks:', error);
+          }
+          localStream = null;
+        }
+      };
+
+      const handleControlEvent = (message: MessageEvent<string>) => {
+        try {
+          JSON.parse(message.data) as Record<string, unknown>;
+        } catch (error) {
+          console.warn('[mobile-companion] failed to parse control payload', error);
+        }
+      };
+
+      const handleSignalingEvent = async (event: SignalingEvent) => {
+        switch (event.type) {
+          case 'registered':
+            set({
+              status: 'waiting',
+              expiresAt: event.expiresAt,
+              peerConnected: event.peerConnected,
+              error: null,
+            });
+            break;
+          case 'peer_ready':
+            set({ peerConnected: true, status: 'pairing' });
+            await establishPeerConnection();
+            break;
+          case 'signal':
+            if (!peerConnection) {
+              console.warn('[mobile-companion] received signal without peer connection');
+              return;
+            }
+            if (event.kind === 'answer') {
+              await peerConnection.setRemoteDescription(
+                new RTCSessionDescription(event.payload as RTCSessionDescriptionInit),
+              );
+            } else if (event.kind === 'ice' && event.payload) {
+              const candidate = new RTCIceCandidate(event.payload as RTCIceCandidateInit);
+              await peerConnection.addIceCandidate(candidate);
+            } else if (event.kind === 'control') {
+              // handle control events
+            }
+            break;
+          case 'peer_left':
+            set({ peerConnected: false });
+            break;
+          case 'session_expired':
+          case 'terminated':
+            resetConnection();
+            set({
+              status: 'idle',
+              pairingCode: null,
+              qrData: null,
+              wsUrl: null,
+              expiresAt: null,
+              stream: null,
+              peerConnected: false,
+            });
+            break;
+          case 'error':
+            set({ status: 'error', error: event.error });
+            break;
+          case 'close':
+            if (get().status !== 'idle') {
+              set({
+                status: 'idle',
+                pairingCode: null,
+                qrData: null,
+                wsUrl: null,
+                expiresAt: null,
+                stream: null,
+                peerConnected: false,
+              });
+            }
+            break;
+          default:
+            break;
+        }
+      };
+
+      const establishPeerConnection = async () => {
+        if (!signalingClient) {
+          set({ status: 'error', error: 'signaling_unavailable' });
           return;
         }
-        if (event.kind === 'answer') {
-          await peerConnection.setRemoteDescription(
-            new RTCSessionDescription(event.payload as RTCSessionDescriptionInit),
-          );
-        } else if (event.kind === 'ice' && event.payload) {
-          const candidate = new RTCIceCandidate(event.payload as RTCIceCandidateInit);
-          await peerConnection.addIceCandidate(candidate);
-        } else if (event.kind === 'control') {
-          // handle control events
-        }
-        break;
-      case 'peer_left':
-        set({ peerConnected: false });
-        break;
-      case 'session_expired':
-      case 'terminated':
-        resetConnection();
-        set({
-          status: 'idle',
-          pairingCode: null,
-          qrData: null,
-          wsUrl: null,
-          expiresAt: null,
-          stream: null,
-          peerConnected: false,
-        });
-        break;
-      case 'error':
-        set({ status: 'error', error: event.error });
-        break;
-      case 'close':
-        if (get().status !== 'idle') {
+
+        try {
+          if (!localStream) {
+            localStream = await acquireDisplayStream();
+            set({ stream: localStream });
+          }
+
+          peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+          peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+              signalingClient?.sendSignal('ice', event.candidate);
+            }
+          };
+          peerConnection.onconnectionstatechange = () => {
+            const state = peerConnection?.connectionState;
+            if (state === 'connected') {
+              set({ status: 'streaming' });
+            } else if (state === 'disconnected' || state === 'failed') {
+              set({ status: 'error', error: 'peer_connection_lost' });
+              get().stopSession();
+            }
+          };
+
+          controlChannel = peerConnection.createDataChannel('control', { ordered: true });
+          controlChannel.onmessage = handleControlEvent;
+
+          localStream
+            .getTracks()
+            .forEach((track) => peerConnection?.addTrack(track, localStream as MediaStream));
+
+          const offer = await peerConnection.createOffer({
+            offerToReceiveVideo: false,
+            offerToReceiveAudio: false,
+          });
+          await peerConnection.setLocalDescription(offer);
+          signalingClient.sendSignal('offer', offer);
+        } catch (error) {
+          console.error('[mobile-companion] failed to establish peer connection', error);
           set({
-            status: 'idle',
-            pairingCode: null,
-            qrData: null,
-            wsUrl: null,
-            expiresAt: null,
-            stream: null,
-            peerConnected: false,
+            status: 'error',
+            error: error instanceof Error ? error.message : 'peer_initialization_failed',
           });
         }
-        break;
-      default:
-        break;
-    }
-  };
-
-  const establishPeerConnection = async () => {
-    if (!signalingClient) {
-      set({ status: 'error', error: 'signaling_unavailable' });
-      return;
-    }
-
-    try {
-      if (!localStream) {
-        localStream = await acquireDisplayStream();
-        set({ stream: localStream });
-      }
-
-      peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          signalingClient?.sendSignal('ice', event.candidate);
-        }
-      };
-      peerConnection.onconnectionstatechange = () => {
-        const state = peerConnection?.connectionState;
-        if (state === 'connected') {
-          set({ status: 'streaming' });
-        } else if (state === 'disconnected' || state === 'failed') {
-          set({ status: 'error', error: 'peer_connection_lost' });
-          get().stopSession();
-        }
       };
 
-      controlChannel = peerConnection.createDataChannel('control', { ordered: true });
-      controlChannel.onmessage = handleControlEvent;
-
-      localStream
-        .getTracks()
-        .forEach((track) => peerConnection?.addTrack(track, localStream as MediaStream));
-
-      const offer = await peerConnection.createOffer({
-        offerToReceiveVideo: false,
-        offerToReceiveAudio: false,
-      });
-      await peerConnection.setLocalDescription(offer);
-      signalingClient.sendSignal('offer', offer);
-    } catch (error) {
-      console.error('[mobile-companion] failed to establish peer connection', error);
-      set({
-        status: 'error',
-        error: error instanceof Error ? error.message : 'peer_initialization_failed',
-      });
-    }
-  };
-
-  const acquireDisplayStream = async (): Promise<MediaStream> => {
-    try {
-      if (navigator.mediaDevices?.getDisplayMedia) {
-        return await navigator.mediaDevices.getDisplayMedia({
+      const acquireDisplayStream = async (): Promise<MediaStream> => {
+        try {
+          if (navigator.mediaDevices?.getDisplayMedia) {
+            return await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                frameRate: 15,
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+              audio: false,
+            });
+          }
+        } catch (error) {
+          console.warn(
+            '[mobile-companion] display capture unavailable, falling back to window capture',
+            error,
+          );
+        }
+        return navigator.mediaDevices.getUserMedia({
           video: {
             frameRate: 15,
             width: { ideal: 1280 },
@@ -230,112 +248,100 @@ export const useConnectionStore = create<MobileCompanionState>((set, get) => {
           },
           audio: false,
         });
-      }
-    } catch (error) {
-      console.warn(
-        '[mobile-companion] display capture unavailable, falling back to window capture',
-        error,
-      );
-    }
-    return navigator.mediaDevices.getUserMedia({
-      video: {
-        frameRate: 15,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false,
-    });
-  };
+      };
 
-  const requestPairingCode = async () => {
-    if (signalingClient) {
-      signalingClient.close();
-      signalingClient = null;
-    }
-    set({
-      status: 'requesting',
-      error: null,
-      pairingCode: null,
-      qrData: null,
-      expiresAt: null,
-      peerConnected: false,
-      stream: null,
-      wsUrl: null,
-    });
-    try {
-      const response = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          metadata: {
-            platform: 'desktop',
-            requestedAt: Date.now(),
-          },
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to create pairing (${response.status})`);
-      }
-      const payload = (await response.json()) as PairingResponse;
-      signalingClient = new SignalingClient({
-        wsUrl: payload.signaling.wsUrl,
-        code: payload.code,
-        role: 'desktop',
-        metadata: {
-          platform: 'desktop',
-        },
-        onEvent: handleSignalingEvent,
-      } satisfies SignalingClientOptions);
+      const requestPairingCode = async () => {
+        if (signalingClient) {
+          signalingClient.close();
+          signalingClient = null;
+        }
+        set({
+          status: 'requesting',
+          error: null,
+          pairingCode: null,
+          qrData: null,
+          expiresAt: null,
+          peerConnected: false,
+          stream: null,
+          wsUrl: null,
+        });
+        try {
+          const response = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              metadata: {
+                platform: 'desktop',
+                requestedAt: Date.now(),
+              },
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to create pairing (${response.status})`);
+          }
+          const payload = (await response.json()) as PairingResponse;
+          signalingClient = new SignalingClient({
+            wsUrl: payload.signaling.wsUrl,
+            code: payload.code,
+            role: 'desktop',
+            metadata: {
+              platform: 'desktop',
+            },
+            onEvent: handleSignalingEvent,
+          } satisfies SignalingClientOptions);
 
-      set({
-        status: 'waiting',
-        pairingCode: payload.code,
-        expiresAt: payload.expiresAt,
-        qrData: payload.qrData,
-        wsUrl: payload.signaling.wsUrl,
-        peerConnected: false,
-        stream: null,
+          set({
+            status: 'waiting',
+            pairingCode: payload.code,
+            expiresAt: payload.expiresAt,
+            qrData: payload.qrData,
+            wsUrl: payload.signaling.wsUrl,
+            peerConnected: false,
+            stream: null,
+            error: null,
+          });
+        } catch (error) {
+          console.error('[mobile-companion] failed to request pairing code', error);
+          set({
+            status: 'error',
+            error: error instanceof Error ? error.message : 'pairing_request_failed',
+          });
+        }
+      };
+
+      const stopSession = () => {
+        resetConnection();
+        set({
+          status: 'idle',
+          pairingCode: null,
+          qrData: null,
+          expiresAt: null,
+          peerConnected: false,
+          stream: null,
+          wsUrl: null,
+          error: null,
+        });
+      };
+
+      const clearError = () =>
+        set({ error: null, status: get().status === 'error' ? 'idle' : get().status });
+
+      return {
+        status: 'idle',
+        pairingCode: null,
+        expiresAt: null,
+        qrData: null,
+        wsUrl: null,
         error: null,
-      });
-    } catch (error) {
-      console.error('[mobile-companion] failed to request pairing code', error);
-      set({
-        status: 'error',
-        error: error instanceof Error ? error.message : 'pairing_request_failed',
-      });
-    }
-  };
-
-  const stopSession = () => {
-    resetConnection();
-    set({
-      status: 'idle',
-      pairingCode: null,
-      qrData: null,
-      expiresAt: null,
-      peerConnected: false,
-      stream: null,
-      wsUrl: null,
-      error: null,
-    });
-  };
-
-  const clearError = () =>
-    set({ error: null, status: get().status === 'error' ? 'idle' : get().status });
-
-  return {
-    status: 'idle',
-    pairingCode: null,
-    expiresAt: null,
-    qrData: null,
-    wsUrl: null,
-    error: null,
-    stream: null,
-    peerConnected: false,
-    requestPairingCode,
-    stopSession,
-    clearError,
-  };
-});
+        stream: null,
+        peerConnected: false,
+        requestPairingCode,
+        stopSession,
+        clearError,
+      };
+    }),
+    { name: 'ConnectionStore', enabled: import.meta.env.DEV },
+  ),
+);

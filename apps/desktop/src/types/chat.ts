@@ -29,6 +29,8 @@ export interface Conversation {
   title: string;
   created_at: string;
   updated_at: string;
+  /** Per-conversation custom instructions that override global instructions */
+  custom_instructions?: string;
 }
 
 export interface ConversationStats {
@@ -125,6 +127,8 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   modelOverride?: string;
   enableTools?: boolean;
   conversationMode?: 'safe' | 'full_control';
+  /** Custom instructions to include in the system prompt */
+  customInstructions?: string;
 }
 
 export interface CreditsInfo {
@@ -156,6 +160,8 @@ export interface ConversationUI extends Conversation {
   updatedAt: Date;
   pinned?: boolean;
   unreadCount?: number;
+  /** Per-conversation custom instructions */
+  customInstructions?: string;
 }
 
 export interface CostOverviewResponse {

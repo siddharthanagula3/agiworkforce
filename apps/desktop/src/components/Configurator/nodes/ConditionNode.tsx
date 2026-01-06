@@ -23,7 +23,7 @@ export function ConditionNode({ data, selected, id }: NodeProps) {
 
       {}
       <div className="flex items-center gap-2">
-        <div className="flex-shrink-0 text-yellow-600">
+        <div className="shrink-0 text-yellow-600">
           <GitBranch className="h-4 w-4" />
         </div>
         <div className="flex-1 truncate text-sm font-medium text-gray-900">{data.label}</div>
@@ -31,7 +31,7 @@ export function ConditionNode({ data, selected, id }: NodeProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 flex-shrink-0"
+            className="h-5 w-5 shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               deleteNode(id);

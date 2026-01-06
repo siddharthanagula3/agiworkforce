@@ -123,7 +123,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
               placeholder="Search for help..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-primary"
             />
           </div>
         </div>
@@ -154,9 +154,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          {article.videoUrl && (
-                            <Video className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                          )}
+                          {article.videoUrl && <Video className="h-4 w-4 text-blue-500 shrink-0" />}
                           <h3 className="font-semibold truncate">{article.title}</h3>
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2">
@@ -173,7 +171,7 @@ export const InteractiveHelp = ({ context, onClose }: InteractiveHelpProps) => {
                           ))}
                         </div>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
                     </div>
                   </button>
                 ))}

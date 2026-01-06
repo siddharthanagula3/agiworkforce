@@ -183,7 +183,7 @@ export function BrowserPreview({ contextId, className }: BrowserPreviewProps) {
               className={cn(
                 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-10 py-2 text-sm text-zinc-100',
                 'placeholder:text-zinc-500',
-                'focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20',
+                'focus:border-teal focus:outline-hidden focus:ring-2 focus:ring-teal/20',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
             />

@@ -42,7 +42,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
   return (
     <Card
       className={cn(
-        'w-full overflow-hidden border border-indigo-500/20 bg-gradient-to-br from-zinc-950 to-indigo-950/20',
+        'w-full overflow-hidden border border-indigo-500/20 bg-linear-to-br from-zinc-950 to-indigo-950/20',
         className,
       )}
     >

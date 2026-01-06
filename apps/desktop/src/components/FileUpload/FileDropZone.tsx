@@ -165,7 +165,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
                 className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <File className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  <File className="w-5 h-5 text-gray-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                       {file.name}

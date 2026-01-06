@@ -22,6 +22,15 @@ import type {
   McpToolExecutionCompletedPayload,
   McpConnectionChangedPayload,
 } from '../types/mcp';
+import type {
+  ToolStreamEventPayload,
+  ToolStreamStartedEvent,
+  ToolStreamProgressEvent,
+  ToolStreamOutputChunkEvent,
+  ToolStreamCompletedEvent,
+  ToolStreamErrorEvent,
+  ToolStreamCancelledEvent,
+} from '../types/toolCalling';
 
 export interface FileOperationEvent {
   operation: FileOperation;
@@ -161,6 +170,9 @@ export function useAgenticEvents() {
     updatePlanStep: useUnifiedChatStore.getState().updatePlanStep,
     setWorkflowContext: useUnifiedChatStore.getState().setWorkflowContext,
     setSidecarSectionFromEvent: useUnifiedChatStore.getState().setSidecarSectionFromEvent,
+    // Tool streaming handlers
+    updateToolStream: useUnifiedChatStore.getState().updateToolStream,
+    removeToolStream: useUnifiedChatStore.getState().removeToolStream,
   });
 
   const normalizeActionStatus = (status?: string): ActionLogStatus => {
@@ -264,6 +276,9 @@ export function useAgenticEvents() {
         updatePlanStep: state.updatePlanStep,
         setWorkflowContext: state.setWorkflowContext,
         setSidecarSectionFromEvent: state.setSidecarSectionFromEvent,
+        // Tool streaming handlers
+        updateToolStream: state.updateToolStream,
+        removeToolStream: state.removeToolStream,
       };
     });
     return unsubscribe;
@@ -598,26 +613,119 @@ export function useAgenticEvents() {
       );
       push(unlistenApprovalDenied);
 
-      const unlistenGoalProgress = await listen<GoalProgressEvent>(
-        'agi:goal_progress',
-        (_event) => {
-          if (!isMountedRef.current) return;
-        },
-      );
+      const unlistenGoalProgress = await listen<GoalProgressEvent>('agi:goal_progress', (event) => {
+        if (!isMountedRef.current) return;
+        const { goalId, progress, currentStep } = event.payload;
+
+        // Update agent status with progress
+        const state = useUnifiedChatStore.getState();
+        const existingAgent = state.agents.find((a) => a.currentGoal === goalId || a.id === goalId);
+
+        if (existingAgent) {
+          handlersRef.current.updateAgentStatus(existingAgent.id, {
+            progress,
+            currentStep,
+            status: 'running',
+          });
+        }
+
+        // Update action trail with progress
+        const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+        addActionTrailEntry?.({
+          type: 'running',
+          message: currentStep || `Progress: ${Math.round(progress * 100)}%`,
+          progress: progress * 100,
+          fadeAfter: 10000,
+        });
+      });
       push(unlistenGoalProgress);
 
       const unlistenStepCompleted = await listen<StepCompletedEvent>(
         'agi:step_completed',
-        (_event) => {
+        (event) => {
           if (!isMountedRef.current) return;
+          const { stepId, success, output, error } = event.payload;
+
+          // Update plan step if it exists
+          handlersRef.current.updatePlanStep(stepId, {
+            status: success ? 'success' : 'failed',
+            result: output || error,
+          });
+
+          // Update action log entry
+          upsertActionLogEntry({
+            id: stepId,
+            actionId: stepId,
+            type: 'terminal',
+            title: success ? 'Step completed' : 'Step failed',
+            description: output || error,
+            status: success ? 'success' : 'failed',
+            workflowHash: undefined,
+          });
+
+          // Update action trail
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: success ? 'completed' : 'error',
+            message: success ? output || 'Step completed' : error || 'Step failed',
+            fadeAfter: 5000,
+          });
         },
       );
       push(unlistenStepCompleted);
 
       const unlistenGoalCompleted = await listen<GoalCompletedEvent>(
         'agi:goal_completed',
-        (_event) => {
+        (event) => {
           if (!isMountedRef.current) return;
+          const { goalId, success, result, error } = event.payload;
+
+          // Update agent status to completed
+          const state = useUnifiedChatStore.getState();
+          const existingAgent = state.agents.find(
+            (a) => a.currentGoal === goalId || a.id === goalId,
+          );
+
+          if (existingAgent) {
+            handlersRef.current.updateAgentStatus(existingAgent.id, {
+              status: success ? 'completed' : 'failed',
+              progress: success ? 100 : existingAgent.progress,
+              completedAt: new Date(),
+              error: error,
+            });
+          }
+
+          // Clear current agent status if this was the active one
+          const currentAgentStatus = state.agentStatus;
+          if (
+            currentAgentStatus &&
+            (currentAgentStatus.currentGoal === goalId || currentAgentStatus.id === goalId)
+          ) {
+            useUnifiedChatStore.getState().setAgentStatus({
+              ...currentAgentStatus,
+              status: success ? 'completed' : 'failed',
+              progress: success ? 100 : currentAgentStatus.progress,
+              completedAt: new Date(),
+              error: error,
+            });
+          }
+
+          // Update action trail with completion
+          const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+          addActionTrailEntry?.({
+            type: success ? 'completed' : 'error',
+            message: success ? result || 'Goal completed successfully' : error || 'Goal failed',
+            fadeAfter: 10000,
+          });
+
+          // Log completion in action log
+          upsertActionLogEntry({
+            id: `goal-${goalId}-complete`,
+            type: 'terminal',
+            title: success ? 'Goal completed' : 'Goal failed',
+            description: result || error,
+            status: success ? 'success' : 'failed',
+          });
         },
       );
       push(unlistenGoalCompleted);
@@ -703,6 +811,143 @@ export function useAgenticEvents() {
         },
       );
       push(unlistenMcpConnection);
+
+      // Tool Stream Events - real-time progress for tool executions
+      const unlistenToolStream = await listen<ToolStreamEventPayload>(
+        'agi:tool_stream',
+        (event) => {
+          if (!isMountedRef.current) return;
+          const { event: streamEvent, timestamp } = event.payload;
+
+          switch (streamEvent.type) {
+            case 'started': {
+              const startedEvent = streamEvent as ToolStreamStartedEvent;
+              handlersRef.current.updateToolStream(startedEvent.tool_id, {
+                tool_id: startedEvent.tool_id,
+                tool_name: startedEvent.tool_name,
+                status: 'running',
+                progress: 0,
+                startedAt: new Date(timestamp),
+                parameters: startedEvent.parameters as Record<string, unknown>,
+              });
+
+              // Also update action trail for visibility
+              const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+              addActionTrailEntry?.({
+                type: 'running',
+                message: `Executing ${startedEvent.tool_name}...`,
+              });
+              break;
+            }
+
+            case 'progress': {
+              const progressEvent = streamEvent as ToolStreamProgressEvent;
+              handlersRef.current.updateToolStream(progressEvent.tool_id, {
+                progress: progressEvent.progress,
+                progressMessage: progressEvent.message,
+                bytesProcessed: progressEvent.bytes_processed,
+                bytesTotal: progressEvent.bytes_total,
+              });
+              break;
+            }
+
+            case 'output_chunk': {
+              const chunkEvent = streamEvent as ToolStreamOutputChunkEvent;
+              handlersRef.current.updateToolStream(chunkEvent.tool_id, {
+                outputBuffer: chunkEvent.chunk,
+                outputChunks: [chunkEvent.chunk],
+              });
+              break;
+            }
+
+            case 'completed': {
+              const completedEvent = streamEvent as ToolStreamCompletedEvent;
+              handlersRef.current.updateToolStream(completedEvent.tool_id, {
+                status: 'completed',
+                progress: 1.0,
+                result: completedEvent.result,
+                completedAt: new Date(timestamp),
+                duration_ms: completedEvent.duration_ms,
+              });
+
+              // Update action trail
+              const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+              const state = useUnifiedChatStore.getState();
+              const stream = state.activeToolStreams.get(completedEvent.tool_id);
+              addActionTrailEntry?.({
+                type: 'completed',
+                message: `${stream?.tool_name || 'Tool'} completed (${completedEvent.duration_ms}ms)`,
+              });
+
+              // Clean up after a delay
+              setTimeout(() => {
+                handlersRef.current.removeToolStream(completedEvent.tool_id);
+              }, 5000);
+              break;
+            }
+
+            case 'error': {
+              const errorEvent = streamEvent as ToolStreamErrorEvent;
+              handlersRef.current.updateToolStream(errorEvent.tool_id, {
+                status: 'error',
+                error: errorEvent.error,
+                completedAt: new Date(timestamp),
+                duration_ms: errorEvent.duration_ms,
+                retryable: errorEvent.retryable,
+              });
+
+              // Update action trail
+              const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
+              const state = useUnifiedChatStore.getState();
+              const stream = state.activeToolStreams.get(errorEvent.tool_id);
+              addActionTrailEntry?.({
+                type: 'error',
+                message: `${stream?.tool_name || 'Tool'} failed: ${errorEvent.error}`,
+              });
+              break;
+            }
+
+            case 'cancelled': {
+              const cancelledEvent = streamEvent as ToolStreamCancelledEvent;
+              handlersRef.current.updateToolStream(cancelledEvent.tool_id, {
+                status: 'cancelled',
+                error: cancelledEvent.reason,
+                completedAt: new Date(timestamp),
+                duration_ms: cancelledEvent.duration_ms,
+              });
+              break;
+            }
+          }
+        },
+      );
+      push(unlistenToolStream);
+
+      // MCP server health and system events - sync with mcpStore
+      const { useMcpStore } = await import('../stores/mcpStore');
+
+      const unlistenMcpServerUnhealthy = await listen<any>('mcp:server_unhealthy', (_event) => {
+        if (!isMountedRef.current) return;
+        // Refresh servers when a server becomes unhealthy
+        useMcpStore.getState().refreshServers();
+      });
+      push(unlistenMcpServerUnhealthy);
+
+      const unlistenMcpToolsUpdated = await listen<any>('mcp:tools_updated', (_event) => {
+        if (!isMountedRef.current) return;
+        // Refresh tools when tools are updated on any server
+        useMcpStore.getState().refreshTools();
+      });
+      push(unlistenMcpToolsUpdated);
+
+      const unlistenMcpSystemInitialized = await listen<any>('mcp:system_initialized', (_event) => {
+        if (!isMountedRef.current) return;
+        // When MCP system is initialized, refresh everything
+        const mcpState = useMcpStore.getState();
+        mcpState.refreshServers();
+        mcpState.refreshTools();
+        mcpState.refreshStats();
+      });
+      push(unlistenMcpSystemInitialized);
 
       setupInProgressRef.current = false;
     };

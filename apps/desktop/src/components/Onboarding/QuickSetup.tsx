@@ -120,7 +120,7 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({ initialSettings, onCompl
                             {provider.recommended && (
                               <Badge
                                 variant="default"
-                                className="bg-gradient-to-r from-green-500 to-emerald-500 border-none"
+                                className="bg-linear-to-r from-green-500 to-emerald-500 border-none"
                               >
                                 {provider.badge}
                               </Badge>
@@ -140,7 +140,7 @@ export const QuickSetup: React.FC<QuickSetupProps> = ({ initialSettings, onCompl
                       </div>
 
                       {}
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         {isSelected ? (
                           <div className="bg-primary rounded-full p-1">
                             <Check className="h-4 w-4 text-primary-foreground" />

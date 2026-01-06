@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ticket, Check, Loader2, ArrowRight, Gift, Percent } from 'lucide-react';
 import { waitlistService, type BetaInvite } from '../../services/waitlistService';
@@ -15,33 +15,34 @@ interface BetaInviteCodeProps {
 
 export function BetaInviteCode({ onSuccess, className }: BetaInviteCodeProps) {
   const [code, setCode] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validatedInvite, setValidatedInvite] = useState<BetaInvite | null>(null);
   const [redeemed, setRedeemed] = useState(false);
 
-  const handleValidate = async () => {
+  // React 19: useTransition for async validation and redeem operations
+  const [isPending, startTransition] = useTransition();
+
+  const handleValidate = () => {
     if (!code.trim()) {
       setError('Please enter an invite code');
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-    setValidatedInvite(null);
+    startTransition(async () => {
+      setError(null);
+      setValidatedInvite(null);
 
-    const result = await waitlistService.validateInviteCode(code);
+      const result = await waitlistService.validateInviteCode(code);
 
-    if (result.valid && result.invite) {
-      setValidatedInvite(result.invite);
-    } else {
-      setError(result.error || 'Invalid invite code');
-    }
-
-    setIsLoading(false);
+      if (result.valid && result.invite) {
+        setValidatedInvite(result.invite);
+      } else {
+        setError(result.error || 'Invalid invite code');
+      }
+    });
   };
 
-  const handleRedeem = async () => {
+  const handleRedeem = () => {
     if (!validatedInvite) return;
 
     const user = supabaseAuth.getUser();
@@ -50,21 +51,20 @@ export function BetaInviteCode({ onSuccess, className }: BetaInviteCodeProps) {
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    startTransition(async () => {
+      setError(null);
 
-    const result = await waitlistService.redeemInviteCode(code, user.id);
+      const result = await waitlistService.redeemInviteCode(code, user.id);
 
-    if (result.success) {
-      setRedeemed(true);
-      onSuccess?.(validatedInvite);
+      if (result.success) {
+        setRedeemed(true);
+        onSuccess?.(validatedInvite);
 
-      await supabaseAuth.refreshUserData();
-    } else {
-      setError(result.error || 'Failed to redeem invite');
-    }
-
-    setIsLoading(false);
+        await supabaseAuth.refreshUserData();
+      } else {
+        setError(result.error || 'Failed to redeem invite');
+      }
+    });
   };
 
   const getPlanColor = (tier: string) => {
@@ -164,7 +164,7 @@ export function BetaInviteCode({ onSuccess, className }: BetaInviteCodeProps) {
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className={cn(
-                    'w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br',
+                    'w-10 h-10 rounded-lg flex items-center justify-center bg-linear-to-br',
                     getPlanColor(validatedInvite.planTier),
                   )}
                 >
@@ -197,15 +197,16 @@ export function BetaInviteCode({ onSuccess, className }: BetaInviteCodeProps) {
         </AnimatePresence>
 
         {}
+        {/* React 19: isPending from useTransition replaces manual isLoading state */}
         {!validatedInvite ? (
           <Button
             type="button"
             onClick={handleValidate}
-            disabled={isLoading || !code.trim()}
+            disabled={isPending || !code.trim()}
             className="w-full h-11"
             variant="outline"
           >
-            {isLoading ? (
+            {isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
@@ -218,10 +219,10 @@ export function BetaInviteCode({ onSuccess, className }: BetaInviteCodeProps) {
           <Button
             type="button"
             onClick={handleRedeem}
-            disabled={isLoading}
-            className="w-full h-11 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+            disabled={isPending}
+            className="w-full h-11 bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
           >
-            {isLoading ? (
+            {isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>

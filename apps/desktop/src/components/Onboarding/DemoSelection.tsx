@@ -74,7 +74,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
                       {demo.isPopular && (
                         <Badge
                           variant="default"
-                          className="bg-gradient-to-r from-amber-500 to-orange-500 border-none"
+                          className="bg-linear-to-r from-amber-500 to-orange-500 border-none"
                         >
                           <Sparkles className="h-3 w-3 mr-1" />
                           Popular
@@ -97,7 +97,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
                 <div className="grid grid-cols-4 gap-4">
                   {}
                   <div className="flex items-center gap-2 bg-secondary/50 rounded-lg p-3">
-                    <Clock className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <Clock className="h-4 w-4 text-blue-500 shrink-0" />
                     <div>
                       <div className="text-sm font-bold">{demo.estimatedTimeSeconds}s</div>
                       <div className="text-xs text-muted-foreground">Demo Time</div>
@@ -106,7 +106,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
 
                   {}
                   <div className="flex items-center gap-2 bg-secondary/50 rounded-lg p-3">
-                    <TrendingUp className="h-4 w-4 text-purple-500 flex-shrink-0" />
+                    <TrendingUp className="h-4 w-4 text-purple-500 shrink-0" />
                     <div>
                       <div className="text-sm font-bold">{demo.valueSavedMinutes} min</div>
                       <div className="text-xs text-muted-foreground">Time Saved</div>
@@ -115,7 +115,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
 
                   {}
                   <div className="flex items-center gap-2 bg-secondary/50 rounded-lg p-3">
-                    <DollarSign className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <DollarSign className="h-4 w-4 text-green-500 shrink-0" />
                     <div>
                       <div className="text-sm font-bold">${demo.valueSavedUsd}</div>
                       <div className="text-xs text-muted-foreground">Per Run</div>
@@ -124,7 +124,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
 
                   {}
                   <div className="flex items-center gap-2 bg-primary/10 rounded-lg p-3 border border-primary/20">
-                    <DollarSign className="h-4 w-4 text-primary flex-shrink-0" />
+                    <DollarSign className="h-4 w-4 text-primary shrink-0" />
                     <div>
                       <div className="text-sm font-bold text-primary">
                         ${monthlySavings.toFixed(0)}
@@ -145,7 +145,7 @@ export const DemoSelection: React.FC<DemoSelectionProps> = ({
       </div>
 
       {}
-      <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+      <Card className="bg-linear-to-br from-primary/5 to-primary/10 border-primary/20">
         <CardContent className="pt-6">
           <div className="text-center space-y-2">
             <p className="text-sm font-semibold">💡 All demos use sample data and run instantly</p>

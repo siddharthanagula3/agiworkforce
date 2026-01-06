@@ -226,7 +226,7 @@ export const ApprovalModal = () => {
 
           {}
           <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 flex items-start gap-3">
-            <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0 mt-0.5" />
             <p className="text-xs text-yellow-800 dark:text-yellow-400">
               Only approve if you trust this operation. Rejecting will stop the agent from
               proceeding with this action.

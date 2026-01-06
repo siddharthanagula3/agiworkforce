@@ -236,7 +236,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
               <div className="grid gap-2">
                 <label className="text-sm font-medium">Provider</label>
                 <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={connectConfig.provider}
                   onChange={(e) =>
                     setConnectConfig({
@@ -344,7 +344,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <select
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               value={selectedAccountId || ''}
               onChange={(e) => selectAccount(e.target.value)}
             >
@@ -355,7 +355,7 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
               ))}
             </select>
             <select
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               value={selectedCalendarId || ''}
               onChange={(e) => selectCalendar(e.target.value)}
             >

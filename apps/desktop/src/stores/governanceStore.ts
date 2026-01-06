@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
 
 export interface AuditEvent {
@@ -109,204 +110,212 @@ interface GovernanceState {
   setAuditFilters: (filters: AuditFilters) => void;
 }
 
-export const useGovernanceStore = create<GovernanceState>((set, get) => ({
-  auditEvents: [],
-  auditFilters: {},
-  auditIntegrityReport: null,
-  isLoadingAudit: false,
-  auditError: null,
+export const useGovernanceStore = create<GovernanceState>()(
+  devtools(
+    subscribeWithSelector((set, get) => ({
+      auditEvents: [],
+      auditFilters: {},
+      auditIntegrityReport: null,
+      isLoadingAudit: false,
+      auditError: null,
 
-  approvalRequests: [],
-  approvalStatistics: null,
-  isLoadingApprovals: false,
-  approvalError: null,
+      approvalRequests: [],
+      approvalStatistics: null,
+      isLoadingApprovals: false,
+      approvalError: null,
 
-  fetchAuditEvents: async (filters?: AuditFilters) => {
-    set({ isLoadingAudit: true, auditError: null });
-    try {
-      const events = await invoke<AuditEvent[]>('get_audit_events', {
-        filters: filters || get().auditFilters,
-      });
-      set({ auditEvents: events, isLoadingAudit: false });
-    } catch (error) {
-      set({
-        auditError: error instanceof Error ? error.message : 'Failed to fetch audit events',
-        isLoadingAudit: false,
-      });
-    }
-  },
+      fetchAuditEvents: async (filters?: AuditFilters) => {
+        set({ isLoadingAudit: true, auditError: null });
+        try {
+          const events = await invoke<AuditEvent[]>('get_audit_events', {
+            filters: filters || get().auditFilters,
+          });
+          set({ auditEvents: events, isLoadingAudit: false });
+        } catch (error) {
+          set({
+            auditError: error instanceof Error ? error.message : 'Failed to fetch audit events',
+            isLoadingAudit: false,
+          });
+        }
+      },
 
-  verifyAuditEvent: async (eventId: string): Promise<boolean> => {
-    try {
-      const isValid = await invoke<boolean>('verify_audit_event', { eventId });
-      return isValid;
-    } catch (error) {
-      console.error('Failed to verify audit event:', error);
-      return false;
-    }
-  },
+      verifyAuditEvent: async (eventId: string): Promise<boolean> => {
+        try {
+          const isValid = await invoke<boolean>('verify_audit_event', { eventId });
+          return isValid;
+        } catch (error) {
+          console.error('Failed to verify audit event:', error);
+          return false;
+        }
+      },
 
-  verifyAuditIntegrity: async () => {
-    set({ isLoadingAudit: true, auditError: null });
-    try {
-      const report = await invoke<AuditIntegrityReport>('verify_audit_integrity');
-      set({ auditIntegrityReport: report, isLoadingAudit: false });
-    } catch (error) {
-      set({
-        auditError: error instanceof Error ? error.message : 'Failed to verify audit integrity',
-        isLoadingAudit: false,
-      });
-    }
-  },
+      verifyAuditIntegrity: async () => {
+        set({ isLoadingAudit: true, auditError: null });
+        try {
+          const report = await invoke<AuditIntegrityReport>('verify_audit_integrity');
+          set({ auditIntegrityReport: report, isLoadingAudit: false });
+        } catch (error) {
+          set({
+            auditError: error instanceof Error ? error.message : 'Failed to verify audit integrity',
+            isLoadingAudit: false,
+          });
+        }
+      },
 
-  logToolExecution: async (
-    userId: string | null,
-    teamId: string | null,
-    toolName: string,
-    success: boolean,
-    metadata?: Record<string, unknown>,
-  ) => {
-    try {
-      await invoke('log_tool_execution', {
-        userId,
-        teamId,
-        toolName,
-        success,
-        metadata: metadata || null,
-      });
-    } catch (error) {
-      console.error('Failed to log tool execution:', error);
-    }
-  },
+      logToolExecution: async (
+        userId: string | null,
+        teamId: string | null,
+        toolName: string,
+        success: boolean,
+        metadata?: Record<string, unknown>,
+      ) => {
+        try {
+          await invoke('log_tool_execution', {
+            userId,
+            teamId,
+            toolName,
+            success,
+            metadata: metadata || null,
+          });
+        } catch (error) {
+          console.error('Failed to log tool execution:', error);
+        }
+      },
 
-  logWorkflowExecution: async (
-    userId: string | null,
-    teamId: string | null,
-    workflowId: string,
-    status: string,
-    metadata?: Record<string, unknown>,
-  ) => {
-    try {
-      await invoke('log_workflow_execution', {
-        userId,
-        teamId,
-        workflowId,
-        status,
-        metadata: metadata || null,
-      });
-    } catch (error) {
-      console.error('Failed to log workflow execution:', error);
-    }
-  },
+      logWorkflowExecution: async (
+        userId: string | null,
+        teamId: string | null,
+        workflowId: string,
+        status: string,
+        metadata?: Record<string, unknown>,
+      ) => {
+        try {
+          await invoke('log_workflow_execution', {
+            userId,
+            teamId,
+            workflowId,
+            status,
+            metadata: metadata || null,
+          });
+        } catch (error) {
+          console.error('Failed to log workflow execution:', error);
+        }
+      },
 
-  createApprovalRequest: async (
-    requesterId: string,
-    teamId: string | null,
-    action: ApprovalAction,
-    riskLevel: string,
-    justification: string | null,
-    timeoutMinutes: number,
-  ): Promise<string> => {
-    try {
-      const requestId = await invoke<string>('create_approval_request', {
-        requesterId,
-        teamId,
-        action,
-        riskLevel,
-        justification,
-        timeoutMinutes,
-      });
-      return requestId;
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Failed to create approval request');
-    }
-  },
+      createApprovalRequest: async (
+        requesterId: string,
+        teamId: string | null,
+        action: ApprovalAction,
+        riskLevel: string,
+        justification: string | null,
+        timeoutMinutes: number,
+      ): Promise<string> => {
+        try {
+          const requestId = await invoke<string>('create_approval_request', {
+            requesterId,
+            teamId,
+            action,
+            riskLevel,
+            justification,
+            timeoutMinutes,
+          });
+          return requestId;
+        } catch (error) {
+          throw new Error(
+            error instanceof Error ? error.message : 'Failed to create approval request',
+          );
+        }
+      },
 
-  fetchPendingApprovals: async (teamId?: string) => {
-    set({ isLoadingApprovals: true, approvalError: null });
-    try {
-      const requests = await invoke<ApprovalRequest[]>('get_pending_approvals', {
-        teamId: teamId || null,
-      });
-      set({ approvalRequests: requests, isLoadingApprovals: false });
-    } catch (error) {
-      set({
-        approvalError: error instanceof Error ? error.message : 'Failed to fetch pending approvals',
-        isLoadingApprovals: false,
-      });
-    }
-  },
+      fetchPendingApprovals: async (teamId?: string) => {
+        set({ isLoadingApprovals: true, approvalError: null });
+        try {
+          const requests = await invoke<ApprovalRequest[]>('get_pending_approvals', {
+            teamId: teamId || null,
+          });
+          set({ approvalRequests: requests, isLoadingApprovals: false });
+        } catch (error) {
+          set({
+            approvalError:
+              error instanceof Error ? error.message : 'Failed to fetch pending approvals',
+            isLoadingApprovals: false,
+          });
+        }
+      },
 
-  approveRequest: async (requestId: string, reviewerId: string, reason?: string) => {
-    try {
-      await invoke('approve_request', {
-        requestId,
-        reviewerId,
-        reason: reason || null,
-      });
+      approveRequest: async (requestId: string, reviewerId: string, reason?: string) => {
+        try {
+          await invoke('approve_request', {
+            requestId,
+            reviewerId,
+            reason: reason || null,
+          });
 
-      await get().fetchPendingApprovals();
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Failed to approve request');
-    }
-  },
+          await get().fetchPendingApprovals();
+        } catch (error) {
+          throw new Error(error instanceof Error ? error.message : 'Failed to approve request');
+        }
+      },
 
-  rejectRequest: async (requestId: string, reviewerId: string, reason: string) => {
-    try {
-      await invoke('reject_request', {
-        requestId,
-        reviewerId,
-        reason,
-      });
+      rejectRequest: async (requestId: string, reviewerId: string, reason: string) => {
+        try {
+          await invoke('reject_request', {
+            requestId,
+            reviewerId,
+            reason,
+          });
 
-      await get().fetchPendingApprovals();
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Failed to reject request');
-    }
-  },
+          await get().fetchPendingApprovals();
+        } catch (error) {
+          throw new Error(error instanceof Error ? error.message : 'Failed to reject request');
+        }
+      },
 
-  requiresApproval: async (action: ApprovalAction): Promise<boolean> => {
-    try {
-      const required = await invoke<boolean>('requires_approval', { action });
-      return required;
-    } catch (error) {
-      console.error('Failed to check if approval is required:', error);
-      return false;
-    }
-  },
+      requiresApproval: async (action: ApprovalAction): Promise<boolean> => {
+        try {
+          const required = await invoke<boolean>('requires_approval', { action });
+          return required;
+        } catch (error) {
+          console.error('Failed to check if approval is required:', error);
+          return false;
+        }
+      },
 
-  calculateRiskLevel: async (action: ApprovalAction): Promise<string> => {
-    try {
-      const riskLevel = await invoke<string>('calculate_risk_level', { action });
-      return riskLevel;
-    } catch (error) {
-      console.error('Failed to calculate risk level:', error);
-      return 'medium';
-    }
-  },
+      calculateRiskLevel: async (action: ApprovalAction): Promise<string> => {
+        try {
+          const riskLevel = await invoke<string>('calculate_risk_level', { action });
+          return riskLevel;
+        } catch (error) {
+          console.error('Failed to calculate risk level:', error);
+          return 'medium';
+        }
+      },
 
-  fetchApprovalStatistics: async (teamId?: string) => {
-    try {
-      const stats = await invoke<ApprovalStatistics>('get_approval_statistics', {
-        teamId: teamId || null,
-      });
-      set({ approvalStatistics: stats });
-    } catch (error) {
-      console.error('Failed to fetch approval statistics:', error);
-    }
-  },
+      fetchApprovalStatistics: async (teamId?: string) => {
+        try {
+          const stats = await invoke<ApprovalStatistics>('get_approval_statistics', {
+            teamId: teamId || null,
+          });
+          set({ approvalStatistics: stats });
+        } catch (error) {
+          console.error('Failed to fetch approval statistics:', error);
+        }
+      },
 
-  expireTimedOutRequests: async (): Promise<number> => {
-    try {
-      const count = await invoke<number>('expire_timed_out_requests');
-      return count;
-    } catch (error) {
-      console.error('Failed to expire timed-out requests:', error);
-      return 0;
-    }
-  },
+      expireTimedOutRequests: async (): Promise<number> => {
+        try {
+          const count = await invoke<number>('expire_timed_out_requests');
+          return count;
+        } catch (error) {
+          console.error('Failed to expire timed-out requests:', error);
+          return 0;
+        }
+      },
 
-  setAuditFilters: (filters: AuditFilters) => {
-    set({ auditFilters: filters });
-  },
-}));
+      setAuditFilters: (filters: AuditFilters) => {
+        set({ auditFilters: filters });
+      },
+    })),
+    { name: 'GovernanceStore', enabled: import.meta.env.DEV },
+  ),
+);

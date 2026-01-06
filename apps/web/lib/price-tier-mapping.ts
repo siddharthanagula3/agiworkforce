@@ -137,7 +137,7 @@ export function resolvePlanTier(
  */
 export function isValidPlanTier(tier: string | null | undefined): tier is string {
   if (!tier) return false;
-  return ['hobby', 'pro', 'max', 'enterprise'].includes(tier.toLowerCase());
+  return ['free', 'hobby', 'pro', 'max', 'enterprise'].includes(tier.toLowerCase());
 }
 
 /**

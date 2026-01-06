@@ -51,7 +51,7 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
       <div className="flex items-start justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {}
-          <div className="p-2 rounded-lg text-purple-500 bg-purple-50 dark:bg-purple-900/20 flex-shrink-0">
+          <div className="p-2 rounded-lg text-purple-500 bg-purple-50 dark:bg-purple-900/20 shrink-0">
             <Camera size={20} />
           </div>
 
@@ -90,7 +90,7 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
         </div>
 
         {}
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+        <div className="flex items-center gap-1 shrink-0 ml-2">
           <button
             onClick={handleCopyImage}
             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"

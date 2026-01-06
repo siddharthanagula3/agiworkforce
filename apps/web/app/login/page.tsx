@@ -8,16 +8,22 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useMemo } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
 
+// Get the app URL for redirects - use env var for production, fallback to window for dev
+const getAppUrl = () => {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+  );
+};
+
 function LoginForm() {
   const searchParams = useSearchParams();
+  const appUrl = useMemo(() => getAppUrl(), []);
 
   // Validate and sanitize the redirect URL to prevent open redirect attacks
   const redirectTo = useMemo(() => {
     const rawRedirect = searchParams.get('redirectTo');
-    // Use window.location.origin on client side
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return getSafeRedirectUrl(rawRedirect, origin, '/dashboard');
-  }, [searchParams]);
+    return getSafeRedirectUrl(rawRedirect, appUrl, '/dashboard');
+  }, [searchParams, appUrl]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,9 +78,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-          redirectTo,
-        )}`,
+        emailRedirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
 
@@ -94,7 +98,7 @@ function LoginForm() {
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        redirectTo: `${appUrl}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
   };

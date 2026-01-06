@@ -163,7 +163,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search conversations and messages..."
               className={cn(
-                'flex-1 bg-transparent text-sm text-zinc-100 outline-none',
+                'flex-1 bg-transparent text-sm text-zinc-100 outline-hidden',
                 'placeholder:text-zinc-500',
               )}
               autoFocus

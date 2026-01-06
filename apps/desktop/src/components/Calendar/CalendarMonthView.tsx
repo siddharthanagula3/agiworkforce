@@ -105,7 +105,7 @@ export function CalendarMonthView({
               type="button"
               onClick={() => onSelectDate(day)}
               className={cn(
-                'relative h-20 w-full border-b border-r border-border/60 p-2 text-left transition-colors focus:outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-primary',
+                'relative h-20 w-full border-b border-r border-border/60 p-2 text-left transition-colors focus:outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-primary',
                 !isInMonth && 'bg-background/70 text-muted-foreground/70',
                 isSelected && 'bg-primary/10 ring-1 ring-primary',
               )}

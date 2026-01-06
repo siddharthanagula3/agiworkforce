@@ -47,7 +47,7 @@ export function BudgetAlertsPanel() {
               alertConfig.border,
             )}
           >
-            <Icon className={cn('h-5 w-5 flex-shrink-0', alertConfig.text)} />
+            <Icon className={cn('h-5 w-5 shrink-0', alertConfig.text)} />
             <div className="min-w-0 flex-1">
               <p className={cn('text-sm font-medium', alertConfig.text)}>{alert.message}</p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -56,7 +56,7 @@ export function BudgetAlertsPanel() {
             </div>
             <button
               onClick={() => dismissAlert(alert.id)}
-              className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
               aria-label="Dismiss alert"
             >
               <X className="h-4 w-4" />

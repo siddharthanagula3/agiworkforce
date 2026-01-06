@@ -45,7 +45,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           )}
         >
           {}
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-xs font-semibold text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-purple-500 text-xs font-semibold text-white">
             {avatar ? (
               <img src={avatar} alt={name} className="h-full w-full rounded-full object-cover" />
             ) : (
@@ -75,7 +75,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           {}
           <div className="border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-sm font-semibold text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-purple-500 text-sm font-semibold text-white">
                 {avatar ? (
                   <img
                     src={avatar}
@@ -126,7 +126,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all"
+                          className="h-full bg-linear-to-r from-blue-500 to-blue-400 transition-all"
                           style={{
                             width: `${Math.min(
                               getUsagePercentage(
@@ -176,7 +176,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all"
+                          className="h-full bg-linear-to-r from-amber-500 to-amber-400 transition-all"
                           style={{
                             width: `${Math.min(getUsagePercentage(credits.used_cents || 0, credits.allocated_cents), 100)}%`,
                           }}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useActionState, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail,
@@ -18,6 +18,13 @@ import { Label } from '../ui/Label';
 import { Checkbox } from '../ui/Checkbox';
 import { cn } from '../../lib/utils';
 
+// React 19: Form state type for useActionState
+interface WaitlistFormState {
+  error: string | null;
+  success: boolean;
+  position: number | null;
+}
+
 interface WaitlistFormProps {
   referralCode?: string;
   onSuccess?: () => void;
@@ -25,51 +32,51 @@ interface WaitlistFormProps {
 }
 
 export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFormProps) {
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [company, setCompany] = useState('');
-  const [role, setRole] = useState('');
-  const [useCase, setUseCase] = useState('');
-  const [marketingConsent, setMarketingConsent] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [position, setPosition] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(true);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
+  // React 19: useActionState for form submission with built-in pending state
+  const [formState, submitAction, isLoading] = useActionState<WaitlistFormState, FormData>(
+    async (_prevState, formData) => {
+      const email = formData.get('email') as string;
+      const name = formData.get('name') as string;
+      const company = formData.get('company') as string;
+      const role = formData.get('role') as string;
+      const useCase = formData.get('useCase') as string;
 
-    const entry: WaitlistEntry = {
-      email,
-      name: name || undefined,
-      company: company || undefined,
-      role: role || undefined,
-      useCase: useCase || undefined,
-      referralCode: referralCode,
-      marketingConsent,
-    };
+      const entry: WaitlistEntry = {
+        email,
+        name: name || undefined,
+        company: company || undefined,
+        role: role || undefined,
+        useCase: useCase || undefined,
+        referralCode: referralCode,
+        marketingConsent,
+      };
 
-    const result = await waitlistService.joinWaitlist(entry);
+      const result = await waitlistService.joinWaitlist(entry);
 
-    if (result.success) {
-      setSuccess(true);
-
-      const status = await waitlistService.checkWaitlistStatus(email);
-      if (status.position) {
-        setPosition(status.position);
+      if (result.success) {
+        const status = await waitlistService.checkWaitlistStatus(email);
+        onSuccess?.();
+        return {
+          error: null,
+          success: true,
+          position: status.position ?? null,
+        };
+      } else {
+        return {
+          error: result.error || 'Something went wrong',
+          success: false,
+          position: null,
+        };
       }
-      onSuccess?.();
-    } else {
-      setError(result.error || 'Something went wrong');
-    }
+    },
+    { error: null, success: false, position: null },
+  );
 
-    setIsLoading(false);
-  };
-
-  if (success) {
+  // React 19: Success state comes from formState
+  if (formState.success) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -90,7 +97,7 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
           Thanks for joining the AGI Workforce beta waitlist.
         </p>
 
-        {position && (
+        {formState.position && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -98,7 +105,7 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 text-violet-500 font-medium mb-6"
           >
             <Sparkles className="w-4 h-4" />
-            You're #{position} on the waitlist
+            You're #{formState.position} on the waitlist
           </motion.div>
         )}
 
@@ -124,7 +131,8 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
 
   return (
     <div className={cn('w-full', className)}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* React 19: Using form action prop for native form submission handling */}
+      <form action={submitAction} className="space-y-4">
         {}
         <div>
           <Label htmlFor="waitlist-email" className="text-sm font-medium">
@@ -134,9 +142,8 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               id="waitlist-email"
+              name="email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
               required
               className="pl-10 h-11 bg-background/50"
@@ -170,9 +177,8 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="waitlist-name"
+                    name="name"
                     type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
                     placeholder="John Doe"
                     className="pl-10 h-11 bg-background/50"
                   />
@@ -188,9 +194,8 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
                   <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="waitlist-company"
+                    name="company"
                     type="text"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
                     placeholder="Acme Inc."
                     className="pl-10 h-11 bg-background/50"
                   />
@@ -206,9 +211,8 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
                   <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="waitlist-role"
+                    name="role"
                     type="text"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
                     placeholder="Product Manager"
                     className="pl-10 h-11 bg-background/50"
                   />
@@ -222,11 +226,10 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
                 </Label>
                 <textarea
                   id="waitlist-usecase"
-                  value={useCase}
-                  onChange={(e) => setUseCase(e.target.value)}
+                  name="useCase"
                   placeholder="Tell us about your automation needs..."
                   rows={3}
-                  className="mt-1.5 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-1.5 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
             </motion.div>
@@ -249,15 +252,16 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
         </div>
 
         {}
+        {/* React 19: Error state comes from formState */}
         <AnimatePresence>
-          {error && (
+          {formState.error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm"
             >
-              {error}
+              {formState.error}
             </motion.div>
           )}
         </AnimatePresence>
@@ -266,7 +270,7 @@ export function WaitlistForm({ referralCode, onSuccess, className }: WaitlistFor
         <Button
           type="submit"
           disabled={isLoading}
-          className="w-full h-11 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+          className="w-full h-11 bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
         >
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />

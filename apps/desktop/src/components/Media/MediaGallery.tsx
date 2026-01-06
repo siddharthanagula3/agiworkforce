@@ -111,7 +111,7 @@ export const MediaGallery: React.FC = () => {
                     </span>
                     <span className="text-[11px] text-zinc-500">{item.createdAt}</span>
                   </div>
-                  <div className="relative aspect-video overflow-hidden rounded-xl bg-gradient-to-br from-indigo-900/60 via-fuchsia-700/40 to-slate-900">
+                  <div className="relative aspect-video overflow-hidden rounded-xl bg-linear-to-br from-indigo-900/60 via-fuchsia-700/40 to-slate-900">
                     {item.status === 'processing' ? (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 text-xs text-amber-100">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -137,7 +137,7 @@ export const MediaGallery: React.FC = () => {
             >
               Close
             </button>
-            <div className="aspect-video w-full bg-gradient-to-br from-zinc-900 via-indigo-900 to-fuchsia-900" />
+            <div className="aspect-video w-full bg-linear-to-br from-zinc-900 via-indigo-900 to-fuchsia-900" />
             <div className="space-y-1 px-4 py-3">
               <div className="text-sm font-semibold text-zinc-50">{selected.title}</div>
               <div className="text-xs text-zinc-400">Prompt: {selected.prompt}</div>

@@ -76,7 +76,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6 py-8 px-4">
       {}
-      <Card className="border-2 border-primary bg-gradient-to-br from-primary/5 to-primary/10">
+      <Card className="border-2 border-primary bg-linear-to-br from-primary/5 to-primary/10">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -174,7 +174,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
                   }`}
                 >
                   {}
-                  <div className="flex-shrink-0 mt-0.5">
+                  <div className="shrink-0 mt-0.5">
                     {action.completed ? (
                       <div className="bg-green-500 rounded-full p-1">
                         <Check className="h-3 w-3 text-white" />
@@ -201,7 +201,7 @@ export const DemoRunner: React.FC<DemoRunnerProps> = ({ demo, progress, isRunnin
                   </div>
 
                   {}
-                  <div className="text-xs text-muted-foreground flex-shrink-0">
+                  <div className="text-xs text-muted-foreground shrink-0">
                     {new Date(action.timestamp).toLocaleTimeString()}
                   </div>
                 </div>

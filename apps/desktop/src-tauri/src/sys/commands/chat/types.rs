@@ -70,6 +70,11 @@ pub struct ChatSendMessageRequest {
     // Frontend message ID for event coordination
     #[serde(default, alias = "frontendMessageId")]
     pub frontend_message_id: Option<String>,
+
+    /// Custom instructions to include in the system prompt
+    /// These are merged from global, conversation, and project instructions
+    #[serde(default, alias = "customInstructions")]
+    pub custom_instructions: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

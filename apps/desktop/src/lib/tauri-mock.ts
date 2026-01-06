@@ -21,18 +21,31 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_onboarding_status':
       return { completed: false } as T;
 
-    case 'get_templates':
+    case 'get_all_templates':
     case 'get_installed_templates':
-    case 'get_workflows':
+    case 'get_user_workflows':
     case 'get_user_teams':
     case 'get_conversations':
-    case 'load_conversations':
     case 'chat_get_conversations':
     case 'get_messages':
-    case 'load_messages':
     case 'chat_get_messages':
     case 'orchestrator_list_agents':
+    case 'project_list':
       return [] as T;
+
+    case 'project_create':
+      return args?.['project'] as T;
+
+    case 'project_get':
+      return null as T;
+
+    case 'project_update':
+    case 'project_delete':
+    case 'project_update_settings':
+      return undefined as T;
+
+    case 'project_get_settings':
+      return {} as T;
 
     case 'get_settings':
       return {

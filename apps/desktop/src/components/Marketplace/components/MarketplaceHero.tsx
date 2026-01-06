@@ -23,7 +23,7 @@ export function MarketplaceHero() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-b">
+    <div className="bg-linear-to-br from-primary/10 via-primary/5 to-background border-b">
       <div className="container mx-auto px-6 py-12">
         {}
         <div className="text-center mb-8">

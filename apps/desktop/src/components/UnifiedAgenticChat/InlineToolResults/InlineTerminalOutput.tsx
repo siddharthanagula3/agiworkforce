@@ -44,7 +44,7 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-surface-overlay/50 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
-          <Terminal className="h-4 w-4 flex-shrink-0 text-emerald-400" />
+          <Terminal className="h-4 w-4 shrink-0 text-emerald-400" />
           <span className="text-xs font-mono text-emerald-400 truncate">$ {command}</span>
         </div>
 

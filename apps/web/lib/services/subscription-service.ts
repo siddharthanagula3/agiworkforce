@@ -16,12 +16,12 @@ function getSupabaseClient() {
 }
 
 // Credit allocation in cents per month (dollar amount * 100)
-// Based on 35% rule from PRICING_STRATEGY.md
+// Based on desktop pricing.ts tokenCredits values
 const PLAN_CREDITS: Record<string, number> = {
   free: 0,
-  hobby: 350, // $3.50/month (was $1)
-  pro: 1050, // $10.50/month (was $20)
-  max: 10500, // $105.00/month (was $250)
+  hobby: 350, // $3.50/month
+  pro: 1200, // $12.00/month (matches desktop pricing.ts tokenCredits: 12)
+  max: 15000, // $150.00/month (matches desktop pricing.ts tokenCredits: 150)
   enterprise: 0, // Custom - handled separately
 };
 

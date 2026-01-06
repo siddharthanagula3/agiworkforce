@@ -213,20 +213,20 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               Craft an image prompt
             </div>
             <textarea
-              className="min-h-[120px] w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-none focus:border-emerald-400"
+              className="min-h-[120px] w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-hidden focus:border-emerald-400"
               placeholder="Product hero shot with neon reflections..."
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
             />
             <input
-              className="w-full rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-white outline-none focus:border-emerald-400"
+              className="w-full rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-white outline-hidden focus:border-emerald-400"
               placeholder="Negative prompt (optional)"
               value={imageNegative}
               onChange={(e) => setImageNegative(e.target.value)}
             />
             <div className="grid grid-cols-2 gap-2">
               <input
-                className="rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-white outline-none focus:border-emerald-400"
+                className="rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-white outline-hidden focus:border-emerald-400"
                 value={imageStyle}
                 onChange={(e) => setImageStyle(e.target.value)}
                 placeholder="Style e.g. photorealistic, 3D, diagram"
@@ -237,7 +237,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   type="number"
                   min={1}
                   max={4}
-                  className="w-16 rounded bg-black/40 p-1 text-right text-sm text-white outline-none"
+                  className="w-16 rounded bg-black/40 p-1 text-right text-sm text-white outline-hidden"
                   value={imageCount}
                   onChange={(e) => setImageCount(Number(e.target.value))}
                 />
@@ -400,13 +400,13 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               Veo 3.1 prompt
             </div>
             <textarea
-              className="min-h-[120px] w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-none focus:border-purple-400"
+              className="min-h-[120px] w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-hidden focus:border-purple-400"
               placeholder="8s cinematic b-roll of a robotic assembly line..."
               value={videoPrompt}
               onChange={(e) => setVideoPrompt(e.target.value)}
             />
             <input
-              className="w-full rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-white outline-none focus:border-purple-400"
+              className="w-full rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-white outline-hidden focus:border-purple-400"
               placeholder="Negative prompt (optional)"
               value={videoNegative}
               onChange={(e) => setVideoNegative(e.target.value)}

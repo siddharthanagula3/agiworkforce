@@ -8,6 +8,9 @@ use crate::core::router::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences,
 use crate::data::cache::ToolResultCache;
 use crate::features::calendar::EventDateTime;
 use crate::sys::security::ToolExecutionGuard;
+use crate::ui::events::tool_stream::{
+    emit_tool_completed, emit_tool_error, emit_tool_progress, emit_tool_started, OutputChunkType,
+};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde_json::json;
@@ -100,6 +103,54 @@ impl AGIExecutor {
 
     pub fn prune_cache(&self) -> Result<usize> {
         self.tool_cache.prune_expired()
+    }
+
+    /// Get the list of allowed directories for file operations.
+    /// This is used to prevent path traversal attacks by ensuring all file
+    /// operations are restricted to explicitly allowed directories.
+    ///
+    /// Returns an empty Vec if no restrictions are configured (backwards compatibility),
+    /// which will trigger a security warning but allow access.
+    fn get_allowed_directories(&self) -> Vec<std::path::PathBuf> {
+        // Try to get allowed directories from settings via app_handle
+        if let Some(ref app) = self.app_handle {
+            use tauri::Manager;
+
+            // Try to get from settings state if available
+            if let Some(settings_state) =
+                app.try_state::<crate::sys::commands::settings::SettingsState>()
+            {
+                if let Ok(settings) = settings_state.settings.try_lock() {
+                    // Return allowed directories from settings if configured and non-empty
+                    if !settings.allowed_directories.is_empty() {
+                        return settings
+                            .allowed_directories
+                            .iter()
+                            .filter_map(|p| std::fs::canonicalize(p).ok())
+                            .collect();
+                    }
+                }
+            }
+        }
+
+        // Fallback: Return common safe directories as defaults
+        // This provides reasonable security while maintaining backwards compatibility
+        let mut defaults = Vec::new();
+
+        // User's home directory
+        if let Some(home) = dirs::home_dir() {
+            defaults.push(home);
+        }
+
+        // Current working directory
+        if let Ok(cwd) = std::env::current_dir() {
+            defaults.push(cwd);
+        }
+
+        // Temp directory (for sandbox operations)
+        defaults.push(std::env::temp_dir());
+
+        defaults
     }
 
     fn normalized_step_id(step_id: &str) -> String {
@@ -243,7 +294,19 @@ impl AGIExecutor {
         _context: &ExecutionContext,
     ) -> Result<serde_json::Value> {
         let session_id = uuid::Uuid::new_v4().to_string();
+        let tool_id = format!("{}_{}", tool_name, &session_id[..8]);
         let start_time = std::time::Instant::now();
+
+        // Emit tool stream started event
+        if let Some(ref app_handle) = self.app_handle {
+            emit_tool_started(
+                app_handle,
+                &tool_id,
+                tool_name,
+                Some(serde_json::to_value(parameters).unwrap_or_default()),
+            );
+        }
+
         crate::ui::hooks::emit_event(crate::ui::hooks::HookEvent::pre_tool_use(
             session_id.clone(),
             tool_name.to_string(),
@@ -264,6 +327,17 @@ impl AGIExecutor {
                 e
             );
 
+            // Emit tool stream error event
+            if let Some(ref app_handle) = self.app_handle {
+                emit_tool_error(
+                    app_handle,
+                    &tool_id,
+                    &format!("Security validation failed: {}", e),
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+            }
+
             crate::ui::hooks::emit_event(crate::ui::hooks::HookEvent::tool_error(
                 session_id,
                 tool_name.to_string(),
@@ -280,25 +354,64 @@ impl AGIExecutor {
             tool_name
         );
 
+        // Clone tool_id for use in streaming within tool execution
+        let tool_id_for_stream = tool_id.clone();
+
         let result = match tool_name {
             "file_read" => {
                 let path = parameters["path"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing path parameter"))?;
 
-                let result = std::fs::read_to_string(path);
+                // SECURITY: Canonicalize the path to resolve symlinks and prevent path traversal attacks
+                // This converts relative paths to absolute and resolves "..", ".", and symlinks
+                let canonical_path = std::fs::canonicalize(path).map_err(|e| {
+                    anyhow::anyhow!("Invalid or inaccessible path '{}': {}", path, e)
+                })?;
+
+                // SECURITY: Validate the canonicalized path is within allowed directories
+                // This prevents path traversal attacks like "../../../etc/passwd"
+                let allowed_directories = self.get_allowed_directories();
+                let path_allowed = if allowed_directories.is_empty() {
+                    // If no restrictions configured, allow access (backwards compatibility)
+                    // but log a security warning
+                    tracing::warn!(
+                        "[Executor] No allowed_directories configured - file access unrestricted. \
+                        Consider configuring allowed directories for security."
+                    );
+                    true
+                } else {
+                    allowed_directories
+                        .iter()
+                        .any(|allowed_dir| canonical_path.starts_with(allowed_dir))
+                };
+
+                if !path_allowed {
+                    tracing::error!(
+                        "[Executor] Path traversal attempt blocked: '{}' resolved to '{}' which is outside allowed directories",
+                        path,
+                        canonical_path.display()
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Access denied: path '{}' is outside allowed directories",
+                        path
+                    ));
+                }
+
+                let result = std::fs::read_to_string(&canonical_path);
 
                 if let Some(ref app_handle) = self.app_handle {
+                    let display_path = canonical_path.to_string_lossy().to_string();
                     let file_op = match &result {
                         Ok(content) => crate::ui::events::create_file_read_event(
-                            path,
+                            &display_path,
                             content,
                             true,
                             None,
                             Some(session_id.clone()),
                         ),
                         Err(e) => crate::ui::events::create_file_read_event(
-                            path,
+                            &display_path,
                             "",
                             false,
                             Some(e.to_string()),
@@ -309,7 +422,7 @@ impl AGIExecutor {
                 }
 
                 let content = result?;
-                Ok(json!({ "content": content, "path": path }))
+                Ok(json!({ "content": content, "path": canonical_path.to_string_lossy() }))
             }
             "file_write" => {
                 let path = parameters["path"]
@@ -651,72 +764,197 @@ impl AGIExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing code parameter"))?;
 
+                // Optional parameters for sandbox execution
+                let timeout_secs = parameters
+                    .get("timeout")
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| parameters.get("timeout_secs").and_then(|v| v.as_u64()));
+                let stdin = parameters
+                    .get("stdin")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let allow_network = parameters
+                    .get("allow_network")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                // Parse environment variables if provided
+                let env_vars = parameters
+                    .get("env")
+                    .or_else(|| parameters.get("env_vars"))
+                    .and_then(|v| v.as_object())
+                    .map(|obj| {
+                        obj.iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect::<HashMap<String, String>>()
+                    });
+
+                // Parse additional files if provided
+                let files = parameters
+                    .get("files")
+                    .and_then(|v| v.as_object())
+                    .map(|obj| {
+                        obj.iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect::<HashMap<String, String>>()
+                    });
+
+                use crate::ui::events::tool_stream::emit_tool_output_chunk;
+
+                // Emit progress: creating sandbox
                 if let Some(ref app) = self.app_handle {
-                    use crate::features::terminal::SessionManager;
-                    use crate::features::terminal::ShellType;
-                    use tauri::Manager;
+                    emit_tool_progress(
+                        app,
+                        &tool_id_for_stream,
+                        0.1,
+                        Some("Creating isolated sandbox..."),
+                    );
+                }
 
-                    let session_manager = app.state::<SessionManager>();
-                    let start_time = std::time::Instant::now();
+                // Create sandbox manager and execute code in isolation
+                let sandbox_manager = crate::core::agi::SandboxManager::new()
+                    .map_err(|e| anyhow!("Failed to create sandbox manager: {}", e))?;
 
-                    let shell_type = match language.to_lowercase().as_str() {
-                        "powershell" | "ps1" => ShellType::PowerShell,
-                        "bash" | "sh" | "shell" => ShellType::Wsl,
-                        "cmd" | "batch" => ShellType::Cmd,
-                        _ => ShellType::PowerShell,
-                    };
+                // Emit progress: executing code
+                if let Some(ref app) = self.app_handle {
+                    emit_tool_progress(
+                        app,
+                        &tool_id_for_stream,
+                        0.3,
+                        Some(&format!("Executing {} code in sandbox...", language)),
+                    );
+                }
 
-                    let sessions = session_manager.list_sessions().await;
-                    let session_id_result = if sessions.is_empty() {
-                        session_manager
-                            .create_session(shell_type, None)
-                            .await
-                            .map_err(|e| anyhow!("Failed to create session: {}", e))?
-                    } else {
-                        sessions[0].clone()
-                    };
+                // Build execution config
+                let exec_config = crate::core::agi::ExecutionConfig {
+                    language: language.to_string(),
+                    code: code.to_string(),
+                    stdin,
+                    timeout_secs,
+                    env_vars,
+                    allow_network,
+                    memory_limit_mb: Some(512), // Default 512MB limit
+                    files,
+                };
 
-                    let command = format!("{}\r\n", code);
-                    let execution_result = session_manager
-                        .send_input(&session_id_result, &command)
-                        .await;
+                // Execute code in sandbox
+                let exec_result = sandbox_manager
+                    .execute_code(exec_config)
+                    .await
+                    .map_err(|e| anyhow!("Sandbox execution failed: {}", e))?;
 
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                // Emit progress: processing result
+                if let Some(ref app) = self.app_handle {
+                    emit_tool_progress(
+                        app,
+                        &tool_id_for_stream,
+                        0.9,
+                        Some("Processing execution result..."),
+                    );
+                }
 
-                    let duration_ms = start_time.elapsed().as_millis() as u64;
+                // Emit output chunks for streaming display
+                if let Some(ref app) = self.app_handle {
+                    // Emit command that was executed
+                    emit_tool_output_chunk(
+                        app,
+                        &tool_id_for_stream,
+                        &format!(
+                            "$ {} [{}]\n",
+                            language,
+                            if exec_result.success { "OK" } else { "FAILED" }
+                        ),
+                        OutputChunkType::Stdout,
+                        false,
+                    );
 
-                    let cwd = std::env::current_dir()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|_| "/".to_string());
+                    // Emit stdout if present
+                    if !exec_result.stdout.is_empty() {
+                        emit_tool_output_chunk(
+                            app,
+                            &tool_id_for_stream,
+                            &exec_result.stdout,
+                            OutputChunkType::Stdout,
+                            false,
+                        );
+                    }
 
+                    // Emit stderr if present
+                    if !exec_result.stderr.is_empty() {
+                        emit_tool_output_chunk(
+                            app,
+                            &tool_id_for_stream,
+                            &exec_result.stderr,
+                            OutputChunkType::Stderr,
+                            false,
+                        );
+                    }
+
+                    // Emit completion marker
+                    emit_tool_output_chunk(
+                        app,
+                        &tool_id_for_stream,
+                        &format!(
+                            "\n[Exit code: {}] [Time: {}ms]\n",
+                            exec_result
+                                .exit_code
+                                .map(|c| c.to_string())
+                                .unwrap_or_else(|| "N/A".to_string()),
+                            exec_result.execution_time_ms
+                        ),
+                        OutputChunkType::Stdout,
+                        true,
+                    );
+                }
+
+                // Emit terminal command event for UI
+                if let Some(ref app) = self.app_handle {
                     let terminal_cmd = crate::ui::events::TerminalCommand {
                         id: uuid::Uuid::new_v4().to_string(),
                         command: code.to_string(),
-                        cwd,
-                        exit_code: if execution_result.is_ok() {
-                            Some(0)
-                        } else {
-                            Some(1)
-                        },
-                        stdout: None,
-                        stderr: if let Err(ref e) = execution_result {
-                            Some(e.to_string())
-                        } else {
+                        cwd: exec_result.working_directory.clone(),
+                        exit_code: exec_result.exit_code,
+                        stdout: Some(exec_result.stdout.clone()),
+                        stderr: if exec_result.stderr.is_empty() {
                             None
+                        } else {
+                            Some(exec_result.stderr.clone())
                         },
-                        duration: Some(duration_ms),
-                        session_id: Some(session_id_result.clone()),
+                        duration: Some(exec_result.execution_time_ms),
+                        session_id: None, // Sandbox execution doesn't use terminal sessions
                         agent_id: None,
                     };
                     crate::ui::events::emit_terminal_command(app, terminal_cmd);
+                }
 
-                    execution_result.map_err(|e| anyhow!("Failed to execute code: {}", e))?;
-
-                    Ok(
-                        json!({ "success": true, "language": language, "session_id": session_id_result, "code": &code[..code.len().min(100)] }),
-                    )
+                // Return structured result
+                if exec_result.success {
+                    Ok(json!({
+                        "success": true,
+                        "language": exec_result.language,
+                        "output": exec_result.output,
+                        "stdout": exec_result.stdout,
+                        "stderr": exec_result.stderr,
+                        "exit_code": exec_result.exit_code,
+                        "execution_time_ms": exec_result.execution_time_ms,
+                        "timed_out": exec_result.timed_out,
+                        "working_directory": exec_result.working_directory,
+                        "code_preview": &code[..code.len().min(100)]
+                    }))
                 } else {
-                    Err(anyhow!("App handle not available for code execution"))
+                    // Return error information but still as a valid JSON response
+                    Ok(json!({
+                        "success": false,
+                        "language": exec_result.language,
+                        "output": exec_result.output,
+                        "stdout": exec_result.stdout,
+                        "stderr": exec_result.stderr,
+                        "error": exec_result.error,
+                        "exit_code": exec_result.exit_code,
+                        "execution_time_ms": exec_result.execution_time_ms,
+                        "timed_out": exec_result.timed_out,
+                        "working_directory": exec_result.working_directory
+                    }))
                 }
             }
             "db_query" => {
@@ -728,6 +966,125 @@ impl AGIExecutor {
                     .get("query")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing query parameter"))?;
+
+                // SECURITY: SQL injection protection
+                // Block dangerous SQL statements that could modify or destroy data.
+                // The db_query tool is intended for READ-ONLY operations.
+                // For write operations, use db_execute with proper authorization.
+                const DANGEROUS_SQL_KEYWORDS: &[&str] = &[
+                    // Data destruction
+                    "DROP",
+                    "TRUNCATE",
+                    "DELETE",
+                    // Schema modification
+                    "ALTER",
+                    "CREATE",
+                    "RENAME",
+                    // Data modification (use db_execute for these)
+                    "INSERT",
+                    "UPDATE",
+                    "REPLACE",
+                    "MERGE",
+                    "UPSERT",
+                    // Permission/security changes
+                    "GRANT",
+                    "REVOKE",
+                    // Database administration
+                    "VACUUM",
+                    "ANALYZE",
+                    "REINDEX",
+                    "CLUSTER",
+                    // Transaction control (should be explicit via db_transaction_* tools)
+                    "BEGIN",
+                    "COMMIT",
+                    "ROLLBACK",
+                    "SAVEPOINT",
+                    // Dangerous operations
+                    "EXEC",
+                    "EXECUTE",
+                    "CALL",
+                    // File system access
+                    "COPY",
+                    "LOAD",
+                    "ATTACH",
+                    "DETACH",
+                    // SQLite specific
+                    "PRAGMA",
+                ];
+
+                // Normalize query for keyword detection (uppercase, collapse whitespace)
+                let normalized_query = query.to_uppercase();
+                let query_words: Vec<&str> = normalized_query.split_whitespace().collect();
+
+                // Check for dangerous keywords at word boundaries
+                for keyword in DANGEROUS_SQL_KEYWORDS {
+                    // Check if keyword appears as a standalone word (not part of a string literal)
+                    // This prevents false positives like "SELECT description FROM items"
+                    // where "description" contains "DROP"
+                    for word in query_words.iter() {
+                        // Remove common SQL punctuation for comparison
+                        let clean_word = word.trim_matches(|c: char| !c.is_alphanumeric());
+                        if clean_word == *keyword {
+                            // Additional check: don't block if it's clearly inside a string
+                            // (basic heuristic - proper parsing would require SQL parser)
+                            let keyword_pos = normalized_query.find(keyword);
+                            if let Some(pos) = keyword_pos {
+                                // Count quotes before this position
+                                let prefix = &query[..pos.min(query.len())];
+                                let single_quotes = prefix.matches('\'').count();
+                                let double_quotes = prefix.matches('"').count();
+
+                                // If odd number of quotes, we're inside a string literal
+                                if single_quotes % 2 == 0 && double_quotes % 2 == 0 {
+                                    tracing::error!(
+                                        "[Executor] SQL injection attempt blocked: dangerous keyword '{}' in query",
+                                        keyword
+                                    );
+                                    return Err(anyhow!(
+                                        "Dangerous SQL operation '{}' is not allowed in db_query. \
+                                        Use db_execute for write operations with proper authorization.",
+                                        keyword
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Additional check for SQL comment-based injection attempts
+                if normalized_query.contains("--") || normalized_query.contains("/*") {
+                    tracing::warn!(
+                        "[Executor] SQL query contains comment syntax which may indicate injection attempt"
+                    );
+                    // Don't block, but log for monitoring
+                }
+
+                // Check for multiple statements (semicolon outside strings)
+                let mut in_string = false;
+                let mut string_char = ' ';
+                for (i, c) in query.chars().enumerate() {
+                    if !in_string && (c == '\'' || c == '"') {
+                        in_string = true;
+                        string_char = c;
+                    } else if in_string && c == string_char {
+                        // Check for escaped quote
+                        let prev_char = query.chars().nth(i.saturating_sub(1));
+                        if prev_char != Some('\\') {
+                            in_string = false;
+                        }
+                    } else if !in_string && c == ';' {
+                        // Found semicolon outside string - check if there's more SQL after it
+                        let remaining = query[i + 1..].trim();
+                        if !remaining.is_empty() {
+                            tracing::error!(
+                                "[Executor] SQL injection attempt blocked: multiple statements detected"
+                            );
+                            return Err(anyhow!(
+                                "Multiple SQL statements are not allowed. Use separate db_query calls."
+                            ));
+                        }
+                    }
+                }
 
                 if let Some(ref app) = self.app_handle {
                     use crate::sys::commands::DatabaseState;
@@ -1552,6 +1909,25 @@ impl AGIExecutor {
         };
 
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
+
+        // Emit tool stream completed/error event
+        if let Some(ref app_handle) = self.app_handle {
+            match &result {
+                Ok(res) => {
+                    emit_tool_completed(app_handle, &tool_id, res.clone(), execution_time_ms);
+                }
+                Err(e) => {
+                    emit_tool_error(
+                        app_handle,
+                        &tool_id,
+                        &e.to_string(),
+                        execution_time_ms,
+                        true,
+                    );
+                }
+            }
+        }
+
         match &result {
             Ok(res) => {
                 crate::ui::hooks::emit_event(crate::ui::hooks::HookEvent::post_tool_use(

@@ -76,11 +76,11 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2 flex-1">
                           {isExpanded ? (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                           )}
-                          <Wrench className="w-4 h-4 text-primary flex-shrink-0" />
+                          <Wrench className="w-4 h-4 text-primary shrink-0" />
                           <div className="flex-1 min-w-0">
                             <CardTitle className="text-sm truncate">{tool.name}</CardTitle>
                             {tool.description && (

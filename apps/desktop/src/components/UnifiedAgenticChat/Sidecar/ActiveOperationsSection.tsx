@@ -158,9 +158,9 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
                   className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded text-xs"
                 >
                   {op.success ? (
-                    <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                    <CheckCircle size={14} className="text-green-500 shrink-0" />
                   ) : (
-                    <XCircle size={14} className="text-red-500 flex-shrink-0" />
+                    <XCircle size={14} className="text-red-500 shrink-0" />
                   )}
                   <span className="text-gray-600 dark:text-gray-400 uppercase">{op.type}</span>
                   <span className="flex-1 truncate text-gray-900 dark:text-gray-100 font-mono">
@@ -186,9 +186,9 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
                   className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded text-xs"
                 >
                   {cmd.exitCode === 0 || cmd.exitCode === undefined ? (
-                    <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                    <CheckCircle size={14} className="text-green-500 shrink-0" />
                   ) : (
-                    <XCircle size={14} className="text-red-500 flex-shrink-0" />
+                    <XCircle size={14} className="text-red-500 shrink-0" />
                   )}
                   <span className="flex-1 truncate text-gray-900 dark:text-gray-100 font-mono">
                     {cmd.command}
@@ -220,9 +220,9 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
                   className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded text-xs"
                 >
                   {exec.success ? (
-                    <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                    <CheckCircle size={14} className="text-green-500 shrink-0" />
                   ) : (
-                    <XCircle size={14} className="text-red-500 flex-shrink-0" />
+                    <XCircle size={14} className="text-red-500 shrink-0" />
                   )}
                   <span className="flex-1 truncate text-gray-900 dark:text-gray-100 font-mono">
                     {exec.toolName}

@@ -62,15 +62,13 @@ export function BaseNode({
 
       {}
       <div className="flex items-center gap-2">
-        <div className={cn('flex-shrink-0', variant === 'ai' && 'text-purple-600')}>
-          {data.icon}
-        </div>
+        <div className={cn('shrink-0', variant === 'ai' && 'text-purple-600')}>{data.icon}</div>
         <div className="flex-1 truncate text-sm font-medium text-gray-900">{data.label}</div>
         {selected && onDelete && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 flex-shrink-0"
+            className="h-5 w-5 shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();

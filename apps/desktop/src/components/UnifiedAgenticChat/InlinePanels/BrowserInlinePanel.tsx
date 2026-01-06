@@ -139,7 +139,7 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
               <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
                 {browserContent.actions.slice(-5).map((action, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" />
                     <span>
                       {action.type} •{' '}
                       {new Date(action.timestamp).toLocaleTimeString([], {
