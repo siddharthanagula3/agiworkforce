@@ -548,7 +548,8 @@ mod tests {
         // Note: This test may fail if DuckDuckGo blocks the request
         // In production, we handle this gracefully
         if let Ok(results) = results {
-            assert!(!results.is_empty() || true); // Allow empty results in CI
+            // Results may be empty in CI due to rate limiting, which is acceptable
+            let _ = results;
         }
     }
 
