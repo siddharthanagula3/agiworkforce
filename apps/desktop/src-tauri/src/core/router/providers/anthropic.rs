@@ -237,16 +237,22 @@ impl LLMProvider for AnthropicProvider {
             .collect();
 
         let (thinking, temperature, max_tokens) = if request.thinking_mode.unwrap_or(false) {
+            // Extended thinking mode: Claude 4.5 supports up to 128K output tokens
             (
                 Some(AnthropicThinking {
                     thinking_type: "enabled".to_string(),
-                    budget_tokens: 16000,
+                    budget_tokens: 32000, // Increased for deeper reasoning
                 }),
                 None,
-                request.max_tokens.or(Some(64000)),
+                request.max_tokens.or(Some(128000)), // Max output for Claude 4.5
             )
         } else {
-            (None, request.temperature, request.max_tokens.or(Some(4096)))
+            // Standard mode: 16K default for quality responses
+            (
+                None,
+                request.temperature,
+                request.max_tokens.or(Some(16384)),
+            )
         };
 
         let anthropic_request = AnthropicRequest {
@@ -264,7 +270,7 @@ impl LLMProvider for AnthropicProvider {
             .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
+            .header("anthropic-version", "2024-10-22")
             .header("Content-Type", "application/json")
             .json(&anthropic_request)
             .send()
@@ -404,16 +410,22 @@ impl LLMProvider for AnthropicProvider {
             .collect();
 
         let (thinking, temperature, max_tokens) = if request.thinking_mode.unwrap_or(false) {
+            // Extended thinking mode: Claude 4.5 supports up to 128K output tokens
             (
                 Some(AnthropicThinking {
                     thinking_type: "enabled".to_string(),
-                    budget_tokens: 16000,
+                    budget_tokens: 32000, // Increased for deeper reasoning
                 }),
                 None,
-                request.max_tokens.or(Some(64000)),
+                request.max_tokens.or(Some(128000)), // Max output for Claude 4.5
             )
         } else {
-            (None, request.temperature, request.max_tokens.or(Some(4096)))
+            // Standard mode: 16K default for quality responses
+            (
+                None,
+                request.temperature,
+                request.max_tokens.or(Some(16384)),
+            )
         };
 
         let anthropic_request = AnthropicRequest {
@@ -436,7 +448,7 @@ impl LLMProvider for AnthropicProvider {
             .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
+            .header("anthropic-version", "2024-10-22")
             .header("Content-Type", "application/json")
             .json(&anthropic_request)
             .send()

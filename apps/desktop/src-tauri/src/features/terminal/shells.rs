@@ -5,8 +5,21 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ShellInfo {
     pub shell_type: ShellType,
+    pub name: String,
     pub path: String,
     pub available: bool,
+}
+
+impl ShellInfo {
+    /// Create a new ShellInfo with the name derived from the shell type
+    fn new(shell_type: ShellType, path: String) -> Self {
+        Self {
+            name: shell_type.to_string(),
+            shell_type,
+            path,
+            available: true,
+        }
+    }
 }
 
 pub fn detect_available_shells() -> Vec<ShellInfo> {
@@ -15,68 +28,60 @@ pub fn detect_available_shells() -> Vec<ShellInfo> {
     #[cfg(unix)]
     {
         if let Ok(path) = which::which("zsh") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::Zsh,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::Zsh,
+                path.to_string_lossy().to_string(),
+            ));
         }
 
         if let Ok(path) = which::which("bash") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::Bash,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::Bash,
+                path.to_string_lossy().to_string(),
+            ));
         }
 
         if let Ok(path) = which::which("fish") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::Fish,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::Fish,
+                path.to_string_lossy().to_string(),
+            ));
         }
 
         if let Ok(path) = which::which("sh") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::Sh,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::Sh,
+                path.to_string_lossy().to_string(),
+            ));
         }
     }
 
     #[cfg(windows)]
     {
         if let Ok(path) = which::which("pwsh") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::PowerShell,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::PowerShell,
+                path.to_string_lossy().to_string(),
+            ));
         } else if let Ok(path) = which::which("powershell.exe") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::PowerShell,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::PowerShell,
+                path.to_string_lossy().to_string(),
+            ));
         }
 
         if let Ok(path) = which::which("cmd.exe") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::Cmd,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::Cmd,
+                path.to_string_lossy().to_string(),
+            ));
         }
 
         if let Ok(path) = which::which("wsl.exe") {
-            shells.push(ShellInfo {
-                shell_type: ShellType::Wsl,
-                path: path.to_string_lossy().to_string(),
-                available: true,
-            });
+            shells.push(ShellInfo::new(
+                ShellType::Wsl,
+                path.to_string_lossy().to_string(),
+            ));
         }
 
         let git_bash_paths = vec![
@@ -86,11 +91,7 @@ pub fn detect_available_shells() -> Vec<ShellInfo> {
 
         for path in git_bash_paths {
             if PathBuf::from(path).exists() {
-                shells.push(ShellInfo {
-                    shell_type: ShellType::GitBash,
-                    path: path.to_string(),
-                    available: true,
-                });
+                shells.push(ShellInfo::new(ShellType::GitBash, path.to_string()));
                 break;
             }
         }

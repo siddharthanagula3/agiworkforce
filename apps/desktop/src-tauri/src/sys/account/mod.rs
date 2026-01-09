@@ -77,8 +77,7 @@ pub async fn device_link_initiate(
     request: DeviceLinkRequest,
     state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
-    let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    let api_base = get_api_base_url();
 
     let url = format!("{}/api/device/link", api_base);
 
@@ -114,8 +113,7 @@ pub async fn device_link_poll(
     request: DevicePollRequest,
     state: State<'_, ApiState>,
 ) -> Result<DevicePollResponse, String> {
-    let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    let api_base = get_api_base_url();
 
     let url = format!("{}/api/device/poll", api_base);
 
@@ -157,8 +155,7 @@ pub async fn fetch_user_profile(
     access_token: String,
     state: State<'_, ApiState>,
 ) -> Result<UserProfile, String> {
-    let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    let api_base = get_api_base_url();
 
     let url = format!("{}/api/me", api_base);
 
@@ -189,8 +186,7 @@ pub async fn oauth_refresh(
     refresh_token: String,
     state: State<'_, ApiState>,
 ) -> Result<serde_json::Value, String> {
-    let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    let api_base = get_api_base_url();
 
     let url = format!("{}/oauth/refresh", api_base);
 
@@ -231,6 +227,43 @@ use std::sync::RwLock;
 // This avoids keyring permission prompts while still allowing Rust to make API calls
 static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
+static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
+
+/// Get the API base URL for desktop -> backend calls.
+///
+/// Priority:
+/// 1) In-memory override set by the frontend (best for local dev, where Vite reads `.env` but Rust does not)
+/// 2) `AGI_API_URL` environment variable
+/// 3) Production default
+pub fn get_api_base_url() -> String {
+    if let Ok(url) = API_BASE_URL_OVERRIDE.read() {
+        if let Some(value) = url.clone() {
+            return value;
+        }
+    }
+
+    let raw =
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    raw.trim_end_matches('/').to_string()
+}
+
+/// Store API base URL from frontend (called on startup so Rust and the UI share the same backend base).
+#[tauri::command]
+#[allow(non_snake_case)]
+pub fn account_store_api_base_url(apiBaseUrl: String) -> Result<(), String> {
+    let sanitized = apiBaseUrl.trim().trim_end_matches('/').to_string();
+
+    if sanitized.is_empty() {
+        return Err("API base URL cannot be empty".to_string());
+    }
+    if !(sanitized.starts_with("http://") || sanitized.starts_with("https://")) {
+        return Err("API base URL must start with http:// or https://".to_string());
+    }
+
+    let mut url = API_BASE_URL_OVERRIDE.write().map_err(|e| e.to_string())?;
+    *url = Some(sanitized);
+    Ok(())
+}
 
 /// Store access token from frontend (called when Supabase auth state changes)
 #[tauri::command]
@@ -299,8 +332,7 @@ pub async fn fetch_credit_balance(
     state: State<'_, ApiState>,
 ) -> Result<CreditBalanceResponse, String> {
     let token = get_access_token()?;
-    let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    let api_base = get_api_base_url();
 
     let url = format!("{}/api/credits/balance", api_base);
 
@@ -357,8 +389,7 @@ pub async fn report_llm_usage(
     state: State<'_, ApiState>,
 ) -> Result<DeductCreditsResponse, String> {
     let token = get_access_token()?;
-    let api_base =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    let api_base = get_api_base_url();
 
     let url = format!("{}/api/credits/deduct", api_base);
 

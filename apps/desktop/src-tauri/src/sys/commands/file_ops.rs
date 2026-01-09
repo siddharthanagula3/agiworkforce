@@ -505,11 +505,44 @@ pub async fn file_move(
 ) -> Result<(), String> {
     debug!("Moving file: {} -> {}", src, dest);
 
+    validate_path_security(&src)?;
+    validate_path_security(&dest)?;
+
+    match fs::metadata(&src) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err(format!("Source is not a file: {}", src));
+            }
+
+            if metadata.len() > 1_000_000_000 {
+                return Err(format!(
+                    "File too large to move: {} bytes. Maximum is 1GB",
+                    metadata.len()
+                ));
+            }
+        }
+        Err(_) => return Err(format!("Source file does not exist: {}", src)),
+    }
+
+    if Path::new(&dest).exists() {
+        return Err(format!(
+            "Destination already exists: {}. Cannot overwrite",
+            dest
+        ));
+    }
+
     if !check_file_permission(&src, FileOperation::Delete, &state).await? {
         return Err("Permission denied for source file".to_string());
     }
     if !check_file_permission(&dest, FileOperation::Write, &state).await? {
         return Err("Permission denied for destination file".to_string());
+    }
+
+    if let Some(parent) = Path::new(&dest).parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create destination directory: {}", e))?;
+        }
     }
 
     match fs::rename(&src, &dest) {
@@ -830,6 +863,25 @@ pub async fn fs_read_file_content(
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<FileContextContent, String> {
     debug!("Reading file content for context: {}", file_path);
+
+    validate_path_security(&file_path)?;
+
+    match fs::metadata(&file_path) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err(format!("Path is not a file: {}", file_path));
+            }
+
+            // Smaller safety cap for context reads (prevents huge file ingestion)
+            if metadata.len() > 10_000_000 {
+                return Err(format!(
+                    "File too large for context read: {} bytes. Maximum is 10MB",
+                    metadata.len()
+                ));
+            }
+        }
+        Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
+    }
 
     if !check_file_permission(&file_path, FileOperation::Read, &state).await? {
         let error = "Permission denied".to_string();

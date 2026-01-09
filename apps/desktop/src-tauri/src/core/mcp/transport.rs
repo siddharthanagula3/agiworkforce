@@ -1,3 +1,4 @@
+use super::logs::append_server_log;
 use super::protocol::{JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId};
 use crate::core::mcp::{McpError, McpResult};
 use parking_lot::Mutex;
@@ -39,11 +40,17 @@ pub struct StdioTransport {
 
 impl StdioTransport {
     pub async fn new(
+        server_name: String,
         command: &str,
         args: &[String],
         env: &HashMap<String, String>,
     ) -> McpResult<Self> {
-        tracing::info!("[MCP Transport] Starting server: {} {:?}", command, args);
+        tracing::info!(
+            "[MCP Transport] Starting server '{}': {} {:?}",
+            server_name,
+            command,
+            args
+        );
 
         let mut cmd = Command::new(command);
         cmd.args(args)
@@ -137,9 +144,10 @@ impl StdioTransport {
             }
         });
 
-        // Reader task
+        // Reader task (stdout: protocol + potential stray logs)
         let pending_read = pending.clone();
         let is_shutdown_read = is_shutdown.clone();
+        let server_name_for_stdout = server_name.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
@@ -184,6 +192,7 @@ impl StdioTransport {
                     }
                     Err(e) => {
                         tracing::error!("[MCP Transport] Failed to parse message: {}", e);
+                        append_server_log(&server_name_for_stdout, format!("[stdout] {}", line));
                     }
                 }
             }
@@ -206,13 +215,15 @@ impl StdioTransport {
             }
         });
 
-        // Stderr reader task
+        // Stderr reader task (server logs)
+        let server_name_for_stderr = server_name.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
 
             while let Ok(Some(line)) = lines.next_line().await {
                 tracing::debug!("[MCP Server stderr] {}", line);
+                append_server_log(&server_name_for_stderr, format!("[stderr] {}", line));
             }
         });
 

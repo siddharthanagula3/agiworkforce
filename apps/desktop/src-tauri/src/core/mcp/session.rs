@@ -35,7 +35,8 @@ impl McpSession {
     pub async fn connect(name: String, config: McpServerConfig) -> McpResult<Self> {
         tracing::info!("[MCP Session] Connecting to server '{}'", name);
 
-        let transport = StdioTransport::new(&config.command, &config.args, &config.env).await?;
+        let transport =
+            StdioTransport::new(name.clone(), &config.command, &config.args, &config.env).await?;
 
         let session = Self {
             name,
