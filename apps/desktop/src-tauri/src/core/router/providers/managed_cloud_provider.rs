@@ -1,6 +1,6 @@
 use crate::core::router::sse_parser::StreamChunk;
 use crate::core::router::{LLMProvider, LLMRequest, LLMResponse};
-use crate::sys::account::get_access_token;
+use crate::sys::account::{get_access_token, get_api_base_url};
 use async_trait::async_trait;
 use futures_util::Stream;
 use reqwest::Client;
@@ -11,6 +11,22 @@ use std::time::Duration;
 
 pub struct ManagedCloudProvider {
     client: Client,
+}
+
+fn managed_cloud_base_url() -> String {
+    get_api_base_url()
+}
+
+fn managed_cloud_llm_url() -> String {
+    format!("{}/api/llm/completion", managed_cloud_base_url())
+}
+
+fn auth_failed_message() -> &'static str {
+    if cfg!(debug_assertions) {
+        "Authentication failed (401). In local dev, ensure AGI_API_URL points to the same environment as your Supabase project, then sign in again."
+    } else {
+        "Authentication failed. Please sign in again."
+    }
 }
 
 impl Default for ManagedCloudProvider {
@@ -40,7 +56,7 @@ impl LLMProvider for ManagedCloudProvider {
         let token = get_access_token()
             .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
-        let url = "https://agiworkforce.com/api/llm/completion";
+        let url = managed_cloud_llm_url();
 
         let res = self
             .client
@@ -127,7 +143,7 @@ impl LLMProvider for ManagedCloudProvider {
             }
             401 => Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
-                "Authentication failed. Please sign in again.",
+                auth_failed_message(),
             ))),
             _ => Err(Box::new(std::io::Error::other(format!(
                 "Cloud provider error: {}",
@@ -147,7 +163,7 @@ impl LLMProvider for ManagedCloudProvider {
         let token = get_access_token()
             .map_err(|e| format!("Failed to get access token: {}. Please sign in again.", e))?;
 
-        let url = "https://agiworkforce.com/api/llm/completion";
+        let url = managed_cloud_llm_url();
 
         let mut streaming_request = request.clone();
         streaming_request.stream = true;
@@ -191,7 +207,7 @@ impl LLMProvider for ManagedCloudProvider {
             } else if status == 401 {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::PermissionDenied,
-                    "Authentication failed. Please sign in again.",
+                    auth_failed_message(),
                 )));
             } else {
                 return Err(Box::new(std::io::Error::other(format!(

@@ -592,34 +592,34 @@ impl LLMRouter {
         if let Some(strategy) = candidate.strategy {
             let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
 
-            // Resolve logic based on strategy and tokens
+            // Resolve logic based on strategy and tokens (Updated January 2026)
             let resolved_model = match strategy {
                 RoutingStrategy::AutoEconomy => {
                     // Cost-optimized: simple queries use cheap models, complex use capable
                     if token_count < 1000 {
-                        "gpt-4o-mini" // Cheap, fast, capable enough for short contexts
+                        "gpt-5-nano" // $0.05/$0.40 per 1M - cheapest OpenAI
                     } else if token_count < 8000 {
-                        "deepseek-v3.2" // Best value for medium context
+                        "deepseek-v3.2" // $0.28/$0.42 per 1M - best value for medium context
                     } else {
-                        "gemini-3-flash" // Long context value
+                        "gemini-3-flash" // $0.50/$3.00 per 1M - long context value
                     }
                 }
                 RoutingStrategy::AutoBalanced => {
-                    // Balance: gpt-4o-mini for very simple, claude-3.5-sonnet/gpt-4o for complex
+                    // Balance: cheap for simple, quality for complex
                     if token_count < 500 {
-                        "gpt-4o-mini"
+                        "gpt-5-nano" // $0.05/$0.40 per 1M - fast and cheap
                     } else if token_count < 4000 {
-                        "claude-3-5-sonnet-20240620"
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent quality
                     } else {
-                        "gpt-4o"
+                        "gpt-5" // $1.25/$10 per 1M - strong performance
                     }
                 }
                 RoutingStrategy::AutoPremium => {
                     // Premium: Always best models, switch based on context window needs
                     if token_count < 16000 {
-                        "claude-3-5-sonnet-20240620"
+                        "claude-sonnet-4-5" // $3/$15 per 1M - excellent coding
                     } else {
-                        "claude-3-opus-20240229" // Opus for heavy lifting, or Gemini 1.5 Pro for massive context
+                        "claude-opus-4-5" // $5/$25 per 1M - best for heavy lifting
                     }
                 }
                 _ => candidate.model.as_str(),
@@ -635,8 +635,8 @@ impl LLMRouter {
             routed_request.model = resolved_model.to_string();
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
-            // Use a safe default
-            routed_request.model = "gpt-4o".to_string();
+            // Use a safe default (January 2026: GPT-5 is the balanced default)
+            routed_request.model = "gpt-5".to_string();
         } else {
             routed_request.model = candidate.model.clone();
         }

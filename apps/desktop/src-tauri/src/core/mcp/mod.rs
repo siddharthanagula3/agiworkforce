@@ -3,6 +3,7 @@ pub mod config;
 pub mod error;
 pub mod events;
 pub mod health;
+pub mod logs;
 pub mod manager;
 pub mod protocol;
 pub mod registry;
