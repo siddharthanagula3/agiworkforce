@@ -12,7 +12,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
-      'anthropic-version': '2023-06-01', // Latest stable version per documentation
+      'anthropic-version': '2024-10-22', // Updated for Claude 4.5 features
     };
   }
 
@@ -56,7 +56,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       model: request.model,
-      max_tokens: request.max_tokens || 4096,
+      max_tokens: request.max_tokens || 16384, // Increased for Claude 4.5 quality outputs
       messages,
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(request.tools && { tools: request.tools }),
@@ -163,7 +163,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       model: request.model,
-      max_tokens: request.max_tokens || 4096,
+      max_tokens: request.max_tokens || 16384, // Increased for Claude 4.5 quality outputs
       messages,
       stream: true,
       ...(request.temperature !== undefined && { temperature: request.temperature }),

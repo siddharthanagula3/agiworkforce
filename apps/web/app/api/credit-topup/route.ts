@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 
 // Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
 function getStripeClient(): Stripe {
@@ -19,7 +20,13 @@ function getStripeClient(): Stripe {
  * Create a Stripe Checkout session for purchasing additional credits
  * This is primarily for Max plan users who need more credits
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Apply rate limiting
+  const rateLimitResponse = await withRateLimit(request, 'credit-topup');
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const stripe = getStripeClient();
     const supabase = await createSupabaseServerClient();
@@ -31,14 +38,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { amount_cents } = body;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    const amount_cents = (body as { amount_cents?: unknown } | null | undefined)?.amount_cents;
 
     // Validate amount (default to $100 if not specified)
-    const creditAmount = amount_cents || 10000; // 10000 cents = $100
+    const creditAmount =
+      typeof amount_cents === 'number' && Number.isFinite(amount_cents) ? amount_cents : 10000; // 10000 cents = $100
 
     // Validate amount is reasonable ($10 min, $1000 max)
-    if (creditAmount < 1000 || creditAmount > 100000) {
+    if (!Number.isInteger(creditAmount) || creditAmount < 1000 || creditAmount > 100000) {
       return NextResponse.json(
         { error: 'Invalid top-up amount. Must be between $10 and $1,000.' },
         { status: 400 },
@@ -46,11 +60,18 @@ export async function POST(request: Request) {
     }
 
     // Get user's profile to check for existing Stripe customer
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('stripe_customer_id')
       .eq('id', session.user.id)
-      .single();
+      .maybeSingle();
+
+    if (profileError) {
+      logger.warn(
+        { error: profileError, userId: session.user.id },
+        'Failed to fetch profile for top-up',
+      );
+    }
 
     let customerId = profile?.stripe_customer_id;
 
@@ -65,14 +86,34 @@ export async function POST(request: Request) {
       customerId = customer.id;
 
       // Update profile with customer ID
-      await supabase
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({ stripe_customer_id: customerId })
         .eq('id', session.user.id);
+      if (updateError) {
+        // Non-fatal: proceed with checkout even if we fail to persist mapping
+        logger.warn(
+          { error: updateError, userId: session.user.id, customerId },
+          'Failed to store stripe_customer_id on profile',
+        );
+      }
     }
 
     // Get the success and cancel URLs
-    const baseUrl = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL;
+    const baseUrl =
+      request.headers.get('origin') ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL;
+    if (!baseUrl) {
+      throw new Error('Missing base URL for redirect (set NEXT_PUBLIC_APP_URL)');
+    }
+
+    // Basic validation to avoid returning malformed redirect URLs
+    try {
+      new URL(baseUrl);
+    } catch {
+      throw new Error('Invalid base URL for redirect');
+    }
     const successUrl = `${baseUrl}/dashboard/billing?topup=success`;
     const cancelUrl = `${baseUrl}/dashboard/billing?topup=cancelled`;
 
@@ -120,6 +161,10 @@ export async function POST(request: Request) {
       },
       'Credit top-up checkout session created',
     );
+
+    if (!checkoutSession.url) {
+      throw new Error('Stripe did not return a checkout URL');
+    }
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {

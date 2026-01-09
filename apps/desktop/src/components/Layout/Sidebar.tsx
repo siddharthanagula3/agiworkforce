@@ -22,24 +22,25 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
-  const {
-    conversations,
-    activeConversationId,
-    createConversation,
-    selectConversation,
-    renameConversation,
-    deleteConversation,
-    togglePinnedConversation,
-  } = useUnifiedChatStore();
+  // Use individual selectors to avoid re-renders on unrelated state changes
+  const conversations = useUnifiedChatStore((state) => state.conversations);
+  const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
+  const createConversation = useUnifiedChatStore((state) => state.createConversation);
+  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
+  const renameConversation = useUnifiedChatStore((state) => state.renameConversation);
+  const deleteConversation = useUnifiedChatStore((state) => state.deleteConversation);
+  const togglePinnedConversation = useUnifiedChatStore((state) => state.togglePinnedConversation);
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
+  // Run once on mount - ensureActiveConversation is a stable store function
   useEffect(() => {
     ensureActiveConversation();
-  }, [ensureActiveConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();

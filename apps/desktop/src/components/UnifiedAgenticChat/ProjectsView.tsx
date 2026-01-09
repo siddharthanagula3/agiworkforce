@@ -10,6 +10,7 @@
  * - Show project conversations and files
  */
 import { useState, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Layers,
   Plus,
@@ -60,10 +61,10 @@ export function ProjectsView() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
-  // Store
+  // Store - use useShallow for array-returning selectors to prevent re-renders
   const projects = useProjectStore((state) => state.projects);
-  const activeProjects = useProjectStore(selectActiveProjects);
-  const archivedProjects = useProjectStore(selectArchivedProjects);
+  const activeProjects = useProjectStore(useShallow(selectActiveProjects));
+  const archivedProjects = useProjectStore(useShallow(selectArchivedProjects));
   const isLoading = useProjectStore((state) => state.isLoading);
   const loadProjects = useProjectStore((state) => state.loadProjects);
   const deleteProject = useProjectStore((state) => state.deleteProject);

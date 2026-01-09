@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-const REPO_OWNER = 'siddharthanagula3';
-const REPO_NAME = 'agiworkforce-desktop-app';
+const REPO_OWNER = process.env.DESKTOP_GITHUB_OWNER || 'siddharthanagula3';
+const REPO_NAME = process.env.DESKTOP_GITHUB_REPO || 'agiworkforce-desktop-app';
 
 /**
  * PUBLIC ENDPOINT: Download route for desktop application installers.

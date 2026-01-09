@@ -1,5 +1,5 @@
 import { FileText, Globe, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCustomInstructionsStore } from '../stores/customInstructionsStore';
 import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 import { Button } from './ui/Button';
@@ -29,16 +29,13 @@ export function CustomInstructionsDialog({
   conversationId,
   initialTab = 'conversation',
 }: CustomInstructionsDialogProps) {
-  const {
-    globalInstructions,
-    globalInstructionsEnabled,
-    maxInstructionsLength,
-    setGlobalInstructions,
-    setGlobalInstructionsEnabled,
-  } = useCustomInstructionsStore();
+  // Use selectors to prevent unnecessary re-renders
+  const globalInstructions = useCustomInstructionsStore((s) => s.globalInstructions);
+  const globalInstructionsEnabled = useCustomInstructionsStore((s) => s.globalInstructionsEnabled);
+  const maxInstructionsLength = useCustomInstructionsStore((s) => s.maxInstructionsLength);
 
-  const { getConversationCustomInstructions, setConversationCustomInstructions } =
-    useUnifiedChatStore();
+  // Track if we've initialized local state for this dialog open
+  const hasInitialized = useRef(false);
 
   const [activeTab, setActiveTab] = useState<'conversation' | 'global'>(
     conversationId ? initialTab : 'global',
@@ -51,26 +48,36 @@ export function CustomInstructionsDialog({
   const [isGlobalDirty, setIsGlobalDirty] = useState(false);
 
   // Load initial values when dialog opens or conversation changes
+  // Only run once when dialog opens to prevent infinite loops
   useEffect(() => {
-    if (open) {
+    if (open && !hasInitialized.current) {
+      hasInitialized.current = true;
       setLocalGlobalInstructions(globalInstructions);
       setIsGlobalDirty(false);
 
       if (conversationId) {
-        const convInstructions = getConversationCustomInstructions(conversationId) || '';
+        // Access store function directly to avoid dependency issues
+        const convInstructions =
+          useUnifiedChatStore.getState().getConversationCustomInstructions(conversationId) || '';
         setLocalConversationInstructions(convInstructions);
         setIsConversationDirty(false);
       }
     }
-  }, [open, conversationId, globalInstructions, getConversationCustomInstructions]);
+
+    // Reset initialization flag when dialog closes
+    if (!open) {
+      hasInitialized.current = false;
+    }
+  }, [open, conversationId, globalInstructions]);
 
   const handleConversationInstructionsChange = useCallback(
     (value: string) => {
       setLocalConversationInstructions(value);
-      const currentInstructions = getConversationCustomInstructions(conversationId) || '';
+      const currentInstructions =
+        useUnifiedChatStore.getState().getConversationCustomInstructions(conversationId) || '';
       setIsConversationDirty(value !== currentInstructions);
     },
-    [conversationId, getConversationCustomInstructions],
+    [conversationId],
   );
 
   const handleGlobalInstructionsChange = useCallback(
@@ -84,13 +91,15 @@ export function CustomInstructionsDialog({
   const handleSave = useCallback(() => {
     // Save conversation instructions if dirty
     if (conversationId && isConversationDirty) {
-      setConversationCustomInstructions(conversationId, localConversationInstructions);
+      useUnifiedChatStore
+        .getState()
+        .setConversationCustomInstructions(conversationId, localConversationInstructions);
       setIsConversationDirty(false);
     }
 
     // Save global instructions if dirty
     if (isGlobalDirty) {
-      setGlobalInstructions(localGlobalInstructions);
+      useCustomInstructionsStore.getState().setGlobalInstructions(localGlobalInstructions);
       setIsGlobalDirty(false);
     }
 
@@ -101,8 +110,6 @@ export function CustomInstructionsDialog({
     isGlobalDirty,
     localConversationInstructions,
     localGlobalInstructions,
-    setConversationCustomInstructions,
-    setGlobalInstructions,
     onOpenChange,
   ]);
 
@@ -112,13 +119,14 @@ export function CustomInstructionsDialog({
     setIsGlobalDirty(false);
 
     if (conversationId) {
-      const convInstructions = getConversationCustomInstructions(conversationId) || '';
+      const convInstructions =
+        useUnifiedChatStore.getState().getConversationCustomInstructions(conversationId) || '';
       setLocalConversationInstructions(convInstructions);
       setIsConversationDirty(false);
     }
 
     onOpenChange(false);
-  }, [conversationId, globalInstructions, getConversationCustomInstructions, onOpenChange]);
+  }, [conversationId, globalInstructions, onOpenChange]);
 
   const hasChanges = isConversationDirty || isGlobalDirty;
 
@@ -204,7 +212,11 @@ export function CustomInstructionsDialog({
                       id="global-enabled"
                       type="checkbox"
                       checked={globalInstructionsEnabled}
-                      onChange={(e) => setGlobalInstructionsEnabled(e.target.checked)}
+                      onChange={(e) =>
+                        useCustomInstructionsStore
+                          .getState()
+                          .setGlobalInstructionsEnabled(e.target.checked)
+                      }
                       className="h-4 w-4 rounded border-gray-300"
                     />
                   </div>
@@ -246,7 +258,11 @@ export function CustomInstructionsDialog({
                     id="global-enabled"
                     type="checkbox"
                     checked={globalInstructionsEnabled}
-                    onChange={(e) => setGlobalInstructionsEnabled(e.target.checked)}
+                    onChange={(e) =>
+                      useCustomInstructionsStore
+                        .getState()
+                        .setGlobalInstructionsEnabled(e.target.checked)
+                    }
                     className="h-4 w-4 rounded border-gray-300"
                   />
                 </div>

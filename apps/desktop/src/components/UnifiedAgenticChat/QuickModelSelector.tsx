@@ -1,4 +1,4 @@
-import { Brain, Check, Search, Sparkles, Wand2, X } from 'lucide-react';
+import { Brain, Check, Loader2, Search, Sparkles, Wand2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -10,7 +10,7 @@ import {
 } from '../../constants/llm';
 import { canUseModel } from '../../constants/planModels';
 import { cn } from '../../lib/utils';
-import { useAccountStore } from '../../stores/accountStore';
+import { useAccountStore, selectIsTierLoading } from '../../stores/accountStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
 import { Button } from '../ui/Button';
@@ -59,14 +59,17 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     })),
   );
 
-  const { account } = useAccountStore(
+  const { account, isTierLoading } = useAccountStore(
     useShallow((state) => ({
       account: state.account,
+      isTierLoading: selectIsTierLoading(state),
     })),
   );
 
-  // Get user's plan tier (defaults to 'free' if not subscribed)
-  const userPlanTier = account.plan || 'free';
+  // Get user's plan tier - when loading/unknown, use 'hobby' as a safe default
+  // This ensures users can see some models while we confirm their actual tier
+  // NEVER default to 'free' as it would block paid users from their models
+  const userPlanTier = account.plan ?? 'hobby';
 
   const modelsLoaded = useRef(false);
 
@@ -231,6 +234,16 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         className,
       )}
     >
+      {/* Loading banner when subscription tier is being fetched */}
+      {isTierLoading && (
+        <div className="mb-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 px-3 py-2 flex items-center gap-2">
+          <Loader2 size={12} className="animate-spin text-blue-500 dark:text-blue-400" />
+          <span className="text-[10px] text-blue-700 dark:text-blue-300">
+            Setting up your workspace...
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between pb-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           Models

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireEnv } from '@/utils/env';
 
 export const runtime = 'edge';
 
@@ -31,6 +32,31 @@ interface GitHubRelease {
   assets: GitHubAsset[];
 }
 
+function parseSemver(version: string): [number, number, number] | null {
+  // Strip leading "v" and pre-release/build metadata.
+  const clean = version.trim().replace(/^v/i, '').split('-')[0].split('+')[0];
+  const parts = clean.split('.');
+  if (parts.length < 1 || parts.length > 3) return null;
+
+  const nums = parts.map((p) => Number.parseInt(p, 10));
+  if (nums.some((n) => Number.isNaN(n) || n < 0)) return null;
+
+  return [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0];
+}
+
+function isNewerVersion(latest: string, current: string): boolean {
+  const a = parseSemver(latest);
+  const b = parseSemver(current);
+  if (!a || !b) {
+    // Fallback: if we can't parse, only treat identical strings as "not newer".
+    return latest.trim().replace(/^v/i, '') !== current.trim().replace(/^v/i, '');
+  }
+
+  if (a[0] !== b[0]) return a[0] > b[0];
+  if (a[1] !== b[1]) return a[1] > b[1];
+  return a[2] > b[2];
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ target: string; version: string }> },
@@ -54,33 +80,12 @@ export async function GET(
       headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
     }
 
-    // Replace with your actual repo details
-    const OWNER = 'siddharthanagula3'; // Inferred from context or user needs to set this
-    const REPO = 'agiworkforce-desktop-app'; // Inferred from context
-
-    // First try to find a release by the specific version tag if checking for updates (usually we check 'latest', but if the user asks for a specific logic...)
-    // Tauri updater usually hits this endpoint to FIND an update FROM context.
-    // Logic: We should fetch the LATEST release. If its version > current_version, return it.
-
-    // Note: The user might have a private repo. 'agiworkforce' seemed to be the name.
-    // Let's use 'siddharthanagula3/agiworkforce', derived from the workspace URI in user info:
-    // /Users/siddhartha/Desktop/agiworkforce -> siddharthanagula3/agiworkforce-desktop-app?
-    // Wait, let me check package.json "repository" field or git config if possible.
-    // For now, I'll assume 'siddharthanagula3/agiworkforce' (based on corpus name: agiworkforce-desktop-app but usually repo is simpler).
-    // Actually, I'll search for the repo URL in package.json to be sure.
-
-    // TEMPORARY placeholder logic - I will look up the repo URL in a separate step or assume I need to fetch it dynamically.
-    // Let's assume passed in ENV or hardcoded for now.
-    // Since I can't restart easily, hardcoding based on best guess:
-    // User: "siddharthanagula3", Repo: "agiworkforce"?
-    // I'll check package.json first in next step? No, I'm writing the file now.
-    // Let's use process.env.GITHUB_REPO if available, else derive.
-    // I will use a placeholder that the user can confirm, or I'll quickly check existing git config via `git remote -v`.
-
-    // I'll execute a check first? No, I am committed to this tool call.
-    // I will assume reading `package.json` earlier showed "repository" field?
-    // Step 861 showed `apps/desktop/package.json` but no repository field was visible in the slice (lines 1-147).
-    // I entered specific OWNER/REPO for now.
+    // Desktop release repo configuration (required for updater)
+    // Set these in Vercel/production env:
+    // - DESKTOP_GITHUB_OWNER
+    // - DESKTOP_GITHUB_REPO
+    const OWNER = requireEnv('DESKTOP_GITHUB_OWNER');
+    const REPO = requireEnv('DESKTOP_GITHUB_REPO');
 
     const GITHUB_API_URL = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
 
@@ -95,9 +100,7 @@ export async function GET(
     const latestVersion = release.tag_name.replace(/^v/, '');
 
     // 2. Compare versions
-    // Simple semver check: if latest != current (and presumably newer), return update.
-    // Tauri handles the "is it actually newer" check too, but good to filter.
-    if (latestVersion === version) {
+    if (!isNewerVersion(latestVersion, version)) {
       return NextResponse.json({}, { status: 204 }); // Up to date
     }
 
