@@ -106,10 +106,21 @@ pub async fn execute_terminal_command(
         }
     }
 
-    let audit_operators = ['|', ';', '&', '<', '>'];
-    for op in &audit_operators {
+    // Block shell operators for this "one-shot" execution path.
+    // If complex shell syntax is needed, it should go through an interactive session
+    // with explicit user visibility/approval.
+    let blocked_operators = ['|', ';', '&', '<', '>'];
+    for op in &blocked_operators {
         if command.contains(*op) {
-            tracing::info!("Command contains shell operator '{}': {}", op, command);
+            tracing::warn!(
+                "Blocked command containing shell operator '{}': {}",
+                op,
+                command
+            );
+            return Err(format!(
+                "Command blocked for security: contains shell operator '{}'. Use a terminal session instead.",
+                op
+            ));
         }
     }
 
@@ -264,6 +275,54 @@ pub async fn terminal_send_input(
     data: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    // Validate session_id format (prevent injection via session ID)
+    if session_id.is_empty() || session_id.len() > 128 {
+        return Err("Invalid session_id: must be 1-128 characters".to_string());
+    }
+
+    // Validate session_id contains only safe characters (alphanumeric, dash, underscore)
+    if !session_id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("Invalid session_id: contains invalid characters".to_string());
+    }
+
+    // Validate data length to prevent DoS via large payloads
+    const MAX_INPUT_SIZE: usize = 1024 * 1024; // 1MB max
+    if data.len() > MAX_INPUT_SIZE {
+        tracing::warn!(
+            "Blocked oversized terminal input: {} bytes (max: {})",
+            data.len(),
+            MAX_INPUT_SIZE
+        );
+        return Err(format!(
+            "Input too large: {} bytes exceeds maximum of {} bytes",
+            data.len(),
+            MAX_INPUT_SIZE
+        ));
+    }
+
+    // Log suspicious patterns (similar to execute_terminal_command) for audit
+    let normalized = data.to_lowercase();
+    let suspicious_patterns = [
+        "rm -rf",
+        "dd if=",
+        "mkfs",
+        "shutdown",
+        "reboot",
+        ":(){ :|:& };:",
+    ];
+    for pattern in &suspicious_patterns {
+        if normalized.contains(pattern) {
+            tracing::warn!(
+                "Suspicious pattern '{}' detected in terminal input for session {}",
+                pattern,
+                session_id
+            );
+        }
+    }
+
     state
         .send_input(&session_id, &data)
         .await

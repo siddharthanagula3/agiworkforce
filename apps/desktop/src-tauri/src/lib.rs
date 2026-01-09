@@ -813,6 +813,7 @@ pub fn run() {
             crate::sys::account::oauth_refresh,
             crate::sys::account::fetch_credit_balance,
             crate::sys::account::report_llm_usage,
+            crate::sys::account::account_store_api_base_url,
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,
             crate::sys::account::account_clear_tokens,
@@ -1369,6 +1370,8 @@ pub fn run() {
 
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,
+            crate::sys::commands::privacy::privacy_export_data,
+            crate::sys::commands::privacy::settings_update_privacy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

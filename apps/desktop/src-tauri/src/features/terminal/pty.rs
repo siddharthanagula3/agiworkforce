@@ -16,6 +16,22 @@ pub enum ShellType {
     Sh,
 }
 
+impl std::fmt::Display for ShellType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            ShellType::PowerShell => "PowerShell",
+            ShellType::Cmd => "Command Prompt",
+            ShellType::Wsl => "WSL",
+            ShellType::GitBash => "Git Bash",
+            ShellType::Zsh => "Zsh",
+            ShellType::Bash => "Bash",
+            ShellType::Fish => "Fish",
+            ShellType::Sh => "Sh",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 pub struct PtySession {
     pub id: String,
     pub shell_type: ShellType,

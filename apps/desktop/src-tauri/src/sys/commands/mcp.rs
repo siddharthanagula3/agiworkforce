@@ -1,48 +1,12 @@
 use crate::core::mcp::{
     emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServersConfig, McpToolRegistry,
 };
-use once_cell::sync::Lazy;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::State;
-
-/// Maximum number of log lines to keep per server
-const MAX_LOG_LINES_PER_SERVER: usize = 1000;
-
-/// Global log buffer for MCP server logs
-static SERVER_LOG_BUFFER: Lazy<RwLock<HashMap<String, VecDeque<String>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
-
-/// Append a log line to a server's log buffer
-pub fn append_server_log(server_name: &str, log_line: String) {
-    let mut logs = SERVER_LOG_BUFFER.write();
-    let buffer = logs.entry(server_name.to_string()).or_default();
-    buffer.push_back(log_line);
-    // Trim to max size
-    while buffer.len() > MAX_LOG_LINES_PER_SERVER {
-        buffer.pop_front();
-    }
-}
-
-/// Clear logs for a specific server
-pub fn clear_server_logs(server_name: &str) {
-    let mut logs = SERVER_LOG_BUFFER.write();
-    logs.remove(server_name);
-}
-
-/// Get logs for a specific server
-pub fn get_server_logs(server_name: &str, lines: Option<usize>) -> Vec<String> {
-    let logs = SERVER_LOG_BUFFER.read();
-    if let Some(buffer) = logs.get(server_name) {
-        let limit = lines.unwrap_or(MAX_LOG_LINES_PER_SERVER);
-        buffer.iter().rev().take(limit).rev().cloned().collect()
-    } else {
-        Vec::new()
-    }
-}
 
 pub struct McpState {
     pub client: Arc<McpClient>,
@@ -615,16 +579,11 @@ pub async fn mcp_get_stats(state: State<'_, McpState>) -> Result<HashMap<String,
 
 #[tauri::command]
 pub async fn mcp_get_server_logs(
-    server_name: String,
-    _lines: Option<usize>,
+    #[allow(non_snake_case)] serverName: String,
+    lines: Option<usize>,
     _state: State<'_, McpState>,
 ) -> Result<Vec<String>, String> {
-    // TODO: Implement log buffer in McpClient to store server logs
-    // For now, return a placeholder message since the client doesn't support log retrieval yet
-    Ok(vec![format!(
-        "[Server '{}' logs: MCP log retrieval not yet implemented. Check system logs for details.]",
-        server_name
-    )])
+    Ok(crate::core::mcp::logs::get_server_logs(&serverName, lines))
 }
 
 #[tauri::command]
