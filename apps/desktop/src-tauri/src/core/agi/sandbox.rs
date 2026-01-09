@@ -210,9 +210,45 @@ impl Sandbox {
         // Create additional files if provided
         if let Some(files) = &config.files {
             for (filename, content) in files {
+                // SECURITY: Validate filename to prevent path traversal attacks
+                // Reject any filename containing ".." or starting with absolute path
+                if filename.contains("..") {
+                    return Err(anyhow!(
+                        "Invalid filename '{}': path traversal sequences (..) not allowed",
+                        filename
+                    ));
+                }
+                if filename.starts_with('/') || filename.starts_with('\\') {
+                    return Err(anyhow!(
+                        "Invalid filename '{}': absolute paths not allowed",
+                        filename
+                    ));
+                }
+                // Also check for Windows-style absolute paths (e.g., "C:\")
+                if filename.len() >= 2 && filename.chars().nth(1) == Some(':') {
+                    return Err(anyhow!(
+                        "Invalid filename '{}': absolute paths not allowed",
+                        filename
+                    ));
+                }
+
                 let file_path = self.workspace_path.join(filename);
+
+                // SECURITY: Verify the resolved path is still within workspace
+                // Use canonicalize on the parent (which must exist) and check containment
                 if let Some(parent) = file_path.parent() {
                     std::fs::create_dir_all(parent)?;
+                    // Canonicalize the parent directory and verify it's within workspace
+                    if let Ok(canonical_parent) = parent.canonicalize() {
+                        if let Ok(canonical_workspace) = self.workspace_path.canonicalize() {
+                            if !canonical_parent.starts_with(&canonical_workspace) {
+                                return Err(anyhow!(
+                                    "Invalid filename '{}': resolved path escapes sandbox workspace",
+                                    filename
+                                ));
+                            }
+                        }
+                    }
                 }
                 std::fs::write(&file_path, content)?;
             }
@@ -907,5 +943,67 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Unsupported language"));
+    }
+
+    #[tokio::test]
+    async fn test_path_traversal_blocked() {
+        let manager = SandboxManager::new().unwrap();
+
+        // Test 1: Block ".." in filename
+        let mut files = HashMap::new();
+        files.insert("../../../etc/passwd".to_string(), "malicious".to_string());
+
+        let config = ExecutionConfig {
+            language: "python".to_string(),
+            code: "print('test')".to_string(),
+            files: Some(files),
+            ..Default::default()
+        };
+
+        let result = manager.execute_code(config).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("path traversal sequences"));
+
+        // Test 2: Block absolute paths
+        let mut files2 = HashMap::new();
+        files2.insert("/etc/passwd".to_string(), "malicious".to_string());
+
+        let config2 = ExecutionConfig {
+            language: "python".to_string(),
+            code: "print('test')".to_string(),
+            files: Some(files2),
+            ..Default::default()
+        };
+
+        let result2 = manager.execute_code(config2).await;
+        assert!(result2.is_err());
+        assert!(result2
+            .unwrap_err()
+            .to_string()
+            .contains("absolute paths not allowed"));
+
+        // Test 3: Allow valid relative paths
+        let mut files3 = HashMap::new();
+        files3.insert(
+            "subdir/valid_file.txt".to_string(),
+            "safe content".to_string(),
+        );
+
+        let config3 = ExecutionConfig {
+            language: "python".to_string(),
+            code: "print(open('subdir/valid_file.txt').read())".to_string(),
+            files: Some(files3),
+            ..Default::default()
+        };
+
+        let result3 = manager.execute_code(config3).await;
+        // Skip if Python not installed
+        if let Ok(res) = result3 {
+            assert!(res.success);
+            assert!(res.stdout.contains("safe content"));
+        }
     }
 }
