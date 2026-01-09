@@ -72,14 +72,9 @@ export default defineConfig({
     },
   ],
 
-  webServer: process.env['CI']
-    ? {
-        command: 'pnpm tauri dev',
-        url: 'http://localhost:1420',
-        reuseExistingServer: false,
-        timeout: 300000,
-      }
-    : undefined,
+  // In CI, we start the dev server manually in the workflow
+  // This allows faster startup and better control over the process
+  webServer: process.env['CI'] ? undefined : undefined,
 
   globalTimeout: process.env['CI'] ? 1800000 : 3600000,
 

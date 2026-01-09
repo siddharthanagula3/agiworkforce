@@ -57,7 +57,7 @@ const ChatCompletionRequestSchema = z.object({
   max_completion_tokens: z.number().int().positive().optional(),
   presence_penalty: z.number().min(-2).max(2).optional(),
   frequency_penalty: z.number().min(-2).max(2).optional(),
-  logit_bias: z.record(z.number()).optional(),
+  logit_bias: z.record(z.string(), z.number()).optional(),
   user: z.string().optional(),
   tools: z.array(z.unknown()).optional(),
   tool_choice: z.unknown().optional(),
@@ -296,7 +296,7 @@ async function handleChatCompletions(request: NextRequest) {
         error: {
           message: validationResult.error.message,
           type: 'invalid_request_error',
-          param: validationResult.error.errors[0]?.path.join('.'),
+          param: validationResult.error.issues[0]?.path.join('.'),
         },
       },
       { status: 400 },
