@@ -71,18 +71,18 @@ jobs:
           cat app.log
           exit 1
 
-      - name: Run comprehensive E2E tests
+      - name: Run smoke E2E tests
         run: |
-          pnpm exec playwright test e2e/comprehensive-flows.spec.ts \
+          pnpm exec playwright test --project=smoke \
             --reporter=html,json \
             --retries=2 \
             --workers=1
         working-directory: apps/desktop
 
-      - name: Run advanced integration E2E tests
+      - name: Run chat E2E tests
         if: always()
         run: |
-          pnpm exec playwright test e2e/advanced-integration-flows.spec.ts \
+          pnpm exec playwright test --project=chat \
             --reporter=html,json \
             --retries=2 \
             --workers=1
