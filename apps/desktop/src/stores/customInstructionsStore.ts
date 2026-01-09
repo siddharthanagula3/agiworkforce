@@ -18,7 +18,7 @@
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauriContext } from '../lib/tauri-mock';
 
 export interface CustomInstructionsState {
   /** Global instructions that apply to all conversations */
@@ -133,6 +133,7 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
         },
 
         saveToBackend: async () => {
+          if (!isTauriContext()) return;
           const state = get();
           const instructions = JSON.stringify({
             globalInstructions: state.globalInstructions,
@@ -146,6 +147,7 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
         },
 
         loadFromBackend: async () => {
+          if (!isTauriContext()) return;
           try {
             const result = await invoke<string>('load_custom_instructions');
             if (result) {
@@ -221,6 +223,6 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
         },
       },
     ),
-    { name: 'CustomInstructionsStore', enabled: process.env['NODE_ENV'] === 'development' },
+    { name: 'CustomInstructionsStore', enabled: import.meta.env.DEV },
   ),
 );

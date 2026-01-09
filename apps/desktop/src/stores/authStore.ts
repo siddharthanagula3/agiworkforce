@@ -147,15 +147,23 @@ export const useAuthStore = create<AuthState>()(
         resetPassword: async (email: string) => {
           set({ isLoading: true, error: null });
 
-          const { error } = await supabaseAuth.resetPassword(email);
+          try {
+            const { error } = await supabaseAuth.resetPassword(email);
 
-          if (error) {
-            set({ isLoading: false, error: error.message });
-            return { error: error.message };
+            if (error) {
+              set({ error: error.message });
+              return { error: error.message };
+            }
+
+            return { error: null };
+          } catch (error) {
+            console.error('[AuthStore] Reset password exception:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            set({ error: message });
+            return { error: message };
+          } finally {
+            set({ isLoading: false });
           }
-
-          set({ isLoading: false });
-          return { error: null };
         },
 
         signInWithOAuth: async (provider: 'github' | 'google') => {

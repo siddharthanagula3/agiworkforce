@@ -32,7 +32,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
 
   const selectedCapability = React.useMemo(() => {
     if (!selectedNode) return null;
-    const capabilityId = selectedNode.data.capabilityId;
+    const capabilityId = selectedNode.data['capabilityId'] as string | undefined;
     return capabilities.find((cap) => cap.id === capabilityId);
   }, [selectedNode, capabilities]);
 
@@ -44,9 +44,10 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
 
   const handleConfigChange = (fieldName: string, value: any) => {
     if (!selectedNode) return;
+    const existingConfig = (selectedNode.data['config'] as Record<string, unknown>) || {};
     updateNode(selectedNode.id, {
       config: {
-        ...selectedNode.data.config,
+        ...existingConfig,
         [fieldName]: value,
       },
     });
@@ -60,7 +61,8 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
   };
 
   const renderConfigField = (field: ConfigField) => {
-    const value = selectedNode?.data.config?.[field.name] ?? field.defaultValue ?? '';
+    const nodeConfig = (selectedNode?.data['config'] as Record<string, unknown>) || {};
+    const value = nodeConfig[field.name] ?? field.defaultValue ?? '';
 
     switch (field.type) {
       case 'text':
@@ -144,7 +146,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
             <SelectContent>
               {previousNodes.map((node) => (
                 <SelectItem key={node.id} value={node.id}>
-                  {node.data.label} output
+                  {node.data['label'] as string} output
                 </SelectItem>
               ))}
             </SelectContent>
@@ -221,7 +223,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
         <ScrollArea className="flex-1">
           <div className="space-y-4 p-4">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{selectedNode.data.label}</h3>
+              <h3 className="text-lg font-semibold">{selectedNode.data['label'] as string}</h3>
               <Button variant="ghost" size="icon" onClick={handleDeleteNode}>
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -258,7 +260,7 @@ export function ConfigurationPanel({ className }: ConfigurationPanelProps) {
                   <SelectContent>
                     {previousNodes.map((node) => (
                       <SelectItem key={node.id} value={node.id}>
-                        {node.data.label} output
+                        {node.data['label'] as string} output
                       </SelectItem>
                     ))}
                   </SelectContent>

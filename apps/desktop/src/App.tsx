@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
+import { API_BASE_URL } from './api/client';
 
 import CommandPalette, { type CommandOption } from './components/Layout/CommandPalette';
 import { useThemeContext } from './providers/ThemeProvider';
@@ -132,16 +133,46 @@ const DesktopShell = () => {
       const { useSettingsStore } = await import('./stores/settingsStore');
       await useSettingsStore.getState().loadSettings();
 
+      // Apply window preferences on startup (dock/position)
+      if (isTauri) {
+        try {
+          const settings = useSettingsStore.getState();
+          const prefs = settings.windowPreferences;
+
+          // Dock takes precedence over centering.
+          if (prefs?.dockOnStartup === 'left' || prefs?.dockOnStartup === 'right') {
+            await invoke('window_dock', { position: prefs.dockOnStartup });
+          } else if (prefs?.startupPosition === 'center') {
+            const { getCurrentWindow } = await import('@tauri-apps/api/window');
+            const win = getCurrentWindow();
+            // Small delay so any window-state restore has already run.
+            setTimeout(() => {
+              void win.center();
+            }, 50);
+          }
+        } catch (error) {
+          console.warn('[App] Failed to apply window preferences on startup:', error);
+        }
+      }
+
       const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
       await initializeModelStoreFromSettings();
+
+      // Load custom instructions from backend (syncs with stored data)
+      const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
+      await useCustomInstructionsStore.getState().loadFromBackend();
 
       // Sync access token to keyring if user is already authenticated
       if (isTauri) {
         try {
           const { supabaseAuth } = await import('./services/supabaseAuth');
           const authState = supabaseAuth.getState();
+          const { invoke } = await import('@tauri-apps/api/core');
+
+          // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
+          await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+
           if (authState.session?.access_token) {
-            const { invoke } = await import('@tauri-apps/api/core');
             await invoke('account_store_access_token', {
               accessToken: authState.session.access_token,
             });
@@ -163,9 +194,11 @@ const DesktopShell = () => {
     };
   }, []);
 
+  // Run once on mount - ensureActiveConversation is a stable store function
   useEffect(() => {
     ensureActiveConversation();
-  }, [ensureActiveConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -191,35 +224,53 @@ const DesktopShell = () => {
   useEffect(() => {
     if (!isTauri) return;
 
-    let unlisten: (() => void) | undefined;
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
 
     const setupListener = async () => {
-      unlisten = await listen<string>('shortcut_action', (event) => {
-        const action = event.payload;
-        switch (action) {
-          case 'floating_window':
-            void invoke('window_toggle_floating');
-            break;
-          case 'new_composer':
-            void startNewChat();
-            break;
-          case 'open_chat':
-            setCommandPaletteOpen(true);
-            break;
-          case 'voice_input':
-            // Handle voice input
-            break;
-          case 'quick_capture':
-            // Handle quick capture
-            break;
+      try {
+        const unlisten = await listen<string>('shortcut_action', (event) => {
+          if (!isMounted) return; // Guard against unmounted callbacks
+          const action = event.payload;
+          switch (action) {
+            case 'floating_window':
+              void invoke('window_toggle_floating');
+              break;
+            case 'new_composer':
+              void startNewChat();
+              break;
+            case 'open_chat':
+              setCommandPaletteOpen(true);
+              break;
+            case 'voice_input':
+              // Handle voice input
+              break;
+            case 'quick_capture':
+              // Handle quick capture
+              break;
+          }
+        });
+
+        // Only store unlisten if we're still mounted
+        if (isMounted) {
+          unlistenFn = unlisten;
+        } else {
+          // Component unmounted while setting up - cleanup immediately
+          unlisten();
         }
-      });
+      } catch (error) {
+        console.error('[App] Failed to setup shortcut listener:', error);
+      }
     };
 
     void setupListener();
 
     return () => {
-      unlisten?.();
+      isMounted = false;
+      if (unlistenFn) {
+        unlistenFn();
+        unlistenFn = null;
+      }
     };
   }, [startNewChat]);
 

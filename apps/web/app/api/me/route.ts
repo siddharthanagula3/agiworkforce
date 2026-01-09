@@ -107,7 +107,9 @@ async function handleGetMe(request: NextRequest) {
     const feature_flags = {
       beta_features: true,
       advanced_model_access:
-        subscription?.plan_tier === 'pro' || subscription?.plan_tier === 'enterprise',
+        subscription?.plan_tier === 'pro' ||
+        subscription?.plan_tier === 'max' ||
+        subscription?.plan_tier === 'enterprise',
     };
 
     const plan = {

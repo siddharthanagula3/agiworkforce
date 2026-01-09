@@ -1,6 +1,5 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { getEnv, requireEnv } from '@/utils/env';
 import { DevicePollRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -40,20 +39,12 @@ async function handleDevicePoll(request: NextRequest) {
 
     const { device_id, device_fingerprint } = validationResult.data;
 
-    const cookieStore = await cookies();
-
     // Safe environment variable access
     const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL', '') || requireEnv('SUPABASE_URL');
     const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-    const supabase = createServerClient(supabaseUrl, serviceRoleKey, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set() {},
-        remove() {},
-      },
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
     });
 
     const { data, error } = await supabase
@@ -66,34 +57,96 @@ async function handleDevicePoll(request: NextRequest) {
       return NextResponse.json({ status: 'pending' });
     }
 
-    // Device ownership verification: ensure the fingerprint matches
-    if (data.device_fingerprint && data.device_fingerprint !== device_fingerprint) {
-      logger.warn(
-        {
-          deviceId: device_id,
-          expectedFingerprint: data.device_fingerprint,
-          providedFingerprint: device_fingerprint,
-        },
-        'Device fingerprint mismatch - potential unauthorized access attempt',
-      );
-      throw createError.forbidden('Device fingerprint does not match');
+    // Expiry check first (also treat already-consumed codes as expired)
+    if (data.status === 'consumed' || new Date(data.expires_at) < new Date()) {
+      if (data.status === 'pending') {
+        // Best-effort: mark pending codes as expired
+        await supabase
+          .from('device_authorization_codes')
+          .update({ status: 'expired', updated_at: new Date().toISOString() })
+          .eq('device_id', device_id);
+      }
+      return NextResponse.json({ status: 'expired' });
+    }
+
+    // Device ownership verification: if a fingerprint was recorded, require a matching fingerprint.
+    if (data.device_fingerprint) {
+      if (!device_fingerprint || data.device_fingerprint !== device_fingerprint) {
+        logger.warn(
+          {
+            deviceId: device_id,
+            expectedFingerprint: data.device_fingerprint,
+            providedFingerprint: device_fingerprint,
+          },
+          'Device fingerprint mismatch - potential unauthorized access attempt',
+        );
+        throw createError.forbidden('Device fingerprint does not match');
+      }
     }
 
     if (data.status === 'approved' && data.user_id) {
+      // Atomically consume tokens (approved -> consumed) and return them exactly once.
+      // This prevents double-poll races from leaking tokens multiple times.
+      const { data: consumedRows, error: consumeError } = await supabase.rpc(
+        'consume_device_authorization_tokens',
+        { p_device_id: device_id },
+      );
+
+      if (consumeError) {
+        logger.error(
+          { error: consumeError, deviceId: device_id },
+          'Failed to consume device tokens',
+        );
+        throw createError.internal('Failed to consume device authorization tokens');
+      }
+
+      const consumed = (Array.isArray(consumedRows) ? consumedRows[0] : consumedRows) as {
+        status?: string;
+        user_id?: string | null;
+        user_email?: string | null;
+        user_name?: string | null;
+        access_token?: string | null;
+        refresh_token?: string | null;
+      } | null;
+
+      if (!consumed?.status) {
+        return NextResponse.json({ status: 'pending' });
+      }
+
+      if (consumed.status === 'expired' || consumed.status === 'consumed') {
+        return NextResponse.json({ status: 'expired' });
+      }
+
+      if (consumed.status === 'denied' || consumed.status === 'revoked') {
+        return NextResponse.json({ status: 'denied' });
+      }
+
+      if (consumed.status !== 'approved') {
+        return NextResponse.json({ status: 'pending' });
+      }
+
+      if (!consumed.access_token || !consumed.refresh_token || !consumed.user_id) {
+        logger.warn(
+          { deviceId: device_id, status: consumed.status },
+          'Device code approved but tokens missing after consumption',
+        );
+        return NextResponse.json({ status: 'pending' });
+      }
+
       return NextResponse.json({
         status: 'approved',
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
+        access_token: consumed.access_token,
+        refresh_token: consumed.refresh_token,
         user: {
-          id: data.user_id,
-          email: data.user_email,
-          name: data.user_name,
+          id: consumed.user_id,
+          email: consumed.user_email,
+          name: consumed.user_name,
         },
       });
     } else if (data.status === 'denied') {
       return NextResponse.json({ status: 'denied' });
-    } else if (new Date(data.expires_at) < new Date()) {
-      return NextResponse.json({ status: 'expired' });
+    } else if (data.status === 'revoked') {
+      return NextResponse.json({ status: 'denied' });
     }
 
     return NextResponse.json({ status: 'pending' });
